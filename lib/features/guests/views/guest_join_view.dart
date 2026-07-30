@@ -6,6 +6,8 @@ import 'package:poker_night/core/widgets/pn_button.dart';
 import 'package:poker_night/core/widgets/pn_card.dart';
 import 'package:poker_night/features/guests/controllers/guest_controller.dart';
 import 'package:poker_night/features/live_game/controllers/live_game_controller.dart';
+import 'package:poker_night/services/storage_service.dart';
+import 'package:poker_night/services/voice_service.dart';
 
 class GuestJoinView extends StatefulWidget {
   final String tournamentId;
@@ -87,7 +89,9 @@ class _GuestJoinViewState extends State<GuestJoinView> {
 
   @override
   Widget build(BuildContext context) {
-    final liveGameController = Get.find<LiveGameController>(tag: widget.tournamentId);
+    final liveGameController = Get.isRegistered<LiveGameController>(tag: widget.tournamentId)
+        ? Get.find<LiveGameController>(tag: widget.tournamentId)
+        : Get.put(LiveGameController(Get.find<StorageService>(), Get.find<VoiceService>(), widget.tournamentId), tag: widget.tournamentId);
     final gameState = liveGameController.state;
     final registeredPlayers = gameState.players.where((p) => !p.isGuest).toList();
     final theme = Theme.of(context);

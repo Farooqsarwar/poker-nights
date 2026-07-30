@@ -47,6 +47,12 @@ export class AnnotationEditorUIManager {
     updateComment(editor: any): void;
     updatePopupColor(editor: any): void;
     removeComment(editor: any): void;
+    /**
+     * Delete a comment from an editor with undo support.
+     * @param {AnnotationEditor} editor - The editor whose comment to delete.
+     * @param {Object} savedData - The comment data to save for undo.
+     */
+    deleteComment(editor: AnnotationEditor, savedData: Object): void;
     toggleComment(editor: any, isSelected: any, visibility?: undefined): void;
     makeCommentColor(color: any, opacity: any): any;
     getCommentDialogElement(): any;
@@ -62,6 +68,7 @@ export class AnnotationEditorUIManager {
     onPageChanging({ pageNumber }: {
         pageNumber: any;
     }): void;
+    deletePage(id: any): void;
     focusMainContainer(): void;
     findParent(x: any, y: any): any;
     disableUserSelect(value?: boolean): void;
@@ -75,6 +82,7 @@ export class AnnotationEditorUIManager {
     }): void;
     highlightSelection(methodOfCreation?: string, comment?: boolean): void;
     commentSelection(methodOfCreation?: string): void;
+    endCurrentEditing(): void;
     /**
      * Some annotations may have been modified in the annotation layer
      * (e.g. comments added or modified).
@@ -133,6 +141,11 @@ export class AnnotationEditorUIManager {
     onEditingAction({ name }: {
         name: any;
     }): void;
+    updatePageIndex(oldPageIndex: any, newPageIndex: any): void;
+    startUpdatePages(): void;
+    endUpdatePages(): void;
+    clonePage(pageIndex: any, newPageIndex: any): void;
+    findClonesForPage(layer: any): Promise<any[]>;
     /**
      * Set the editing state.
      * It can be useful to temporarily disable it when the user is editing a
@@ -163,6 +176,8 @@ export class AnnotationEditorUIManager {
      * Change the editor mode (None, FreeText, Ink, ...)
      * @param {number} mode
      * @param {string|null} editId
+     * @param {boolean} [isFromUser] - true if the mode change is due to a
+     *   user action.
      * @param {boolean} [isFromKeyboard] - true if the mode change is due to a
      *   keyboard action.
      * @param {boolean} [mustEnterInEditMode] - true if the editor must enter in
@@ -170,7 +185,7 @@ export class AnnotationEditorUIManager {
      * @param {boolean} [editComment] - true if the mode change is due to a
      *   comment edit.
      */
-    updateMode(mode: number, editId?: string | null, isFromKeyboard?: boolean, mustEnterInEditMode?: boolean, editComment?: boolean): Promise<void>;
+    updateMode(mode: number, editId?: string | null, isFromUser?: boolean, isFromKeyboard?: boolean, mustEnterInEditMode?: boolean, editComment?: boolean): Promise<void>;
     addNewEditorFromKeyboard(): void;
     /**
      * Update the toolbar if it's required to reflect the tool currently used.
@@ -246,11 +261,6 @@ export class AnnotationEditorUIManager {
      * @param {AnnotationEditor} editor
      */
     setSelected(editor: AnnotationEditor): void;
-    /**
-     * Check if the editor is selected.
-     * @param {AnnotationEditor} editor
-     */
-    isSelected(editor: AnnotationEditor): boolean;
     get firstSelectedEditor(): any;
     /**
      * Unselect an editor.
@@ -422,20 +432,65 @@ export class CommandManager {
     #private;
 }
 /**
+ * Class to store current pointers used by the editor to be able to handle
+ * multiple pointers (e.g. two fingers, a pen, a mouse, ...).
+ */
+export class CurrentPointers {
+    static #pointerId: number;
+    static #pointerIds: null;
+    static #moveTimestamp: number;
+    static #pointerType: null;
+    static initializeAndAddPointerId(pointerId: any): void;
+    static setPointer(pointerType: any, pointerId: any): void;
+    static setTimeStamp(timeStamp: any): void;
+    static isSamePointerId(pointerId: any): boolean;
+    static isSamePointerIdOrRemove(pointerId: any): boolean;
+    static isSamePointerType(pointerType: any): boolean;
+    static isInitializedAndDifferentPointerType(pointerType: any): boolean;
+    static isSameTimeStamp(timeStamp: any): boolean;
+    static isUsingMultiplePointers(): boolean;
+    static clearPointerType(): void;
+    static clearPointerIds(): void;
+    static clearTimeStamp(): void;
+}
+/**
  * Class to handle the different keyboards shortcuts we can have on mac or
  * non-mac OSes.
  */
 export class KeyboardManager {
+    static ALT: number;
+    static CTRL: number;
+    static META: number;
+    static SHIFT: number;
+    /**
+     * Parse a shortcut string like "ctrl+shift+a" into a `[key, modifiers]`
+     * pair. Modifier names are case-insensitive and may appear in any order;
+     * the key part is matched against `event.key` so `Space` is normalized to
+     * `" "` but other names like `ArrowLeft`, `Enter`, `Backspace`, and
+     * single-letter keys (`a`, `Z`) are preserved.
+     * @param {string} value
+     * @returns {[string|null, number]}
+     */
+    static #parseShortcut(value: string): [string | null, number];
+    /**
+     * Translate `event.code` (a layout-independent physical key identifier) to
+     * the equivalent `event.key` value on a US layout, so a Ctrl+A shortcut
+     * still fires when the user is on a layout where the "A" key produces a
+     * non-Latin character.
+     * @param {string} code
+     * @returns {string|null}
+     */
+    static #codeToKey(code: string): string | null;
     /**
      * Create a new keyboard manager class.
      * @param {Array<Array>} callbacks - an array containing an array of shortcuts
-     * and a callback to call.
-     * A shortcut is a string like `ctrl+c` or `mac+ctrl+c` for mac OS.
+     * and a callback to call. If the array contains no `mac+`-prefixed entry,
+     * every shortcut applies on all platforms. As soon as it contains at least
+     * one `mac+` entry, the `mac+` ones become the macOS-only set and the bare
+     * entries apply only on non-Mac.
      */
     constructor(callbacks: Array<any[]>);
-    buffer: any[];
     callbacks: Map<any, any>;
-    allKeys: Set<any>;
     /**
      * Execute a callback, if any, for a given keyboard event.
      * The self is used as `this` in the callback.
@@ -444,5 +499,4 @@ export class KeyboardManager {
      * @returns
      */
     exec(self: Object, event: KeyboardEvent): void;
-    #private;
 }

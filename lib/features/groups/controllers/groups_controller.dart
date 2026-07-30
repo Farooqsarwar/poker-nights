@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import 'package:poker_night/features/groups/models/group_model.dart';
@@ -31,7 +32,7 @@ class GroupsController extends GetxController {
   Future<void> loadGroups() async {
     final userId = _currentUserId;
     if (userId.isEmpty) return;
-    print('GroupsController: loadGroups for user $userId');
+    debugPrint('GroupsController: loadGroups for user $userId');
     isLoading.value = true;
     error.value = '';
     try {
@@ -57,7 +58,7 @@ class GroupsController extends GetxController {
   Future<GroupModel?> createGroup(String name) async {
     final userId = _currentUserId;
     if (userId.isEmpty) return null;
-    print('GroupsController: createGroup $name');
+    debugPrint('GroupsController: createGroup $name');
     final groupId = const Uuid().v4();
     final code = _generateJoinCode();
     final group = GroupModel(
@@ -88,13 +89,13 @@ class GroupsController extends GetxController {
   Future<GroupModel?> joinGroup(String code) async {
     final userId = _currentUserId;
     if (userId.isEmpty) return null;
-    print('GroupsController: attempting to join group with code $code');
+    debugPrint('GroupsController: attempting to join group with code $code');
     final doc = await _storage.getJson(_storageKey);
     final data = doc?['data'] as List<dynamic>?;
     final allGroups = data?.map((e) => GroupModel.fromJson(e as Map<String, dynamic>)).toList() ?? [];
     
     final group = allGroups.where((g) => g.joinCode == code).firstOrNull;
-    print('GroupsController: joinGroup found group ${group?.id} for code $code');
+    debugPrint('GroupsController: joinGroup found group ${group?.id} for code $code');
     if (group == null) return null;
 
     final membership = GroupMembership(

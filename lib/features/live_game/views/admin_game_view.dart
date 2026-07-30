@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:poker_night/core/widgets/pn_timer_display.dart';
 import 'package:poker_night/core/widgets/pn_button.dart';
 import 'package:poker_night/core/widgets/pn_card.dart';
@@ -11,6 +12,7 @@ import 'package:poker_night/features/live_game/controllers/live_game_controller.
 import 'package:poker_night/features/live_game/models/game_state_model.dart';
 import 'package:poker_night/services/storage_service.dart';
 import 'package:poker_night/services/voice_service.dart';
+import 'package:poker_night/core/theme/app_colors.dart';
 
 class AdminGameView extends StatelessWidget {
   final String tournamentId;
@@ -139,8 +141,8 @@ class AdminGameView extends StatelessWidget {
               seconds: controller.remainingSeconds,
               fontSize: 64,
               showLabel: true,
-              color: controller.remainingSeconds < 60 ? Colors.red : null,
-            ),
+              color: controller.remainingSeconds < 60 ? Colors.red : AppColors.primary,
+            ).animate().scale(duration: 300.ms, curve: Curves.easeOutBack),
             const SizedBox(height: 12),
           ],
           if (!isCompleted) Row(
@@ -174,21 +176,23 @@ class AdminGameView extends StatelessWidget {
             ],
           ),
           if (isCompleted) ...[
-            Icon(Icons.check_circle, size: 64, color: Colors.green),
+            Icon(Icons.check_circle, size: 64, color: Colors.green).animate().scale(delay: 200.ms),
             const SizedBox(height: 8),
-            Text('Game Completed', style: theme.textTheme.titleLarge?.copyWith(color: Colors.green)),
-            const SizedBox(height: 8),
+            Text('Game Completed', style: theme.textTheme.titleLarge?.copyWith(color: Colors.green)).animate().fadeIn(delay: 400.ms),
+            const SizedBox(height: 16),
             PNButton(
               label: 'Reopen Game',
               icon: Icons.lock_open,
               outlined: true,
               onPressed: () => controller.reopenGame(),
-            ),
+            ).animate().fadeIn(delay: 600.ms),
           ],
           if (!isCompleted && !isPending) ...[
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
               children: [
                 PNButton(
                   label: 'Speed Up',
@@ -196,14 +200,12 @@ class AdminGameView extends StatelessWidget {
                   outlined: true,
                   onPressed: () => _showPacePreview(context, controller, 'speedUp'),
                 ),
-                const SizedBox(width: 8),
                 PNButton(
                   label: 'Slow Down',
                   icon: Icons.fast_rewind,
                   outlined: true,
                   onPressed: () => _showPacePreview(context, controller, 'slowDown'),
                 ),
-                const SizedBox(width: 8),
                 if (controller.canUndo)
                   PNButton(
                     label: 'Undo',
@@ -214,7 +216,7 @@ class AdminGameView extends StatelessWidget {
               ],
             ),
             if (!isPending) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               PNButton(
                 label: 'End Rebuy Period',
                 icon: Icons.shopping_cart_checkout,
@@ -225,7 +227,7 @@ class AdminGameView extends StatelessWidget {
           ],
         ],
       ),
-    );
+    ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.05, end: 0);
   }
 
   Widget _buildPreStartChecklist(ThemeData theme, GameState gameState, LiveGameController controller) {
@@ -267,7 +269,7 @@ class AdminGameView extends StatelessWidget {
         children: [
           Text(
             'LEVEL ${gameState.currentLevel}',
-            style: theme.textTheme.titleMedium?.copyWith(color: Colors.grey),
+            style: theme.textTheme.titleMedium?.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold, letterSpacing: 1.2),
           ),
           const SizedBox(height: 12),
           PNBlindsDisplay(
@@ -275,10 +277,10 @@ class AdminGameView extends StatelessWidget {
             bigBlind: gameState.currentBlinds.bigBlind,
             ante: gameState.currentBlinds.ante,
             fontSize: 32,
-          ),
+          ).animate(key: ValueKey('blinds_${gameState.currentLevel}')).fadeIn().scale(),
         ],
       ),
-    );
+    ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.05, end: 0);
   }
 
   Widget _buildNextLevelSection(ThemeData theme, GameState gameState) {
@@ -287,13 +289,17 @@ class AdminGameView extends StatelessWidget {
       margin: const EdgeInsets.all(16),
       child: Row(
         children: [
-          const Icon(Icons.skip_next, color: Colors.grey),
-          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest, shape: BoxShape.circle),
+            child: const Icon(Icons.skip_next, color: AppColors.primary),
+          ),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Next Level', style: theme.textTheme.titleSmall),
+                Text('Next Level', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 PNBlindsDisplay(
                   smallBlind: next.smallBlind,
@@ -306,7 +312,7 @@ class AdminGameView extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.05, end: 0);
   }
 
   Widget _buildStatsSection(ThemeData theme, GameState gameState) {
@@ -321,7 +327,7 @@ class AdminGameView extends StatelessWidget {
           _statItem(theme, 'Total Chips', '\$${gameState.totalChips}'),
         ],
       ),
-    );
+    ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.05, end: 0);
   }
 
   Widget _buildPrizePoolSection(ThemeData theme, GameState gameState) {
@@ -329,13 +335,17 @@ class AdminGameView extends StatelessWidget {
       margin: const EdgeInsets.all(16),
       child: Row(
         children: [
-          const Icon(Icons.monetization_on, color: Colors.amber),
-          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: const Icon(Icons.monetization_on, color: Colors.amber, size: 28),
+          ),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Prize Pool'),
+                Text('Prize Pool', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
                 Text(
                   '\$${gameState.prizePool}',
                   style: theme.textTheme.headlineSmall?.copyWith(
@@ -348,7 +358,7 @@ class AdminGameView extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.05, end: 0);
   }
 
   Widget _buildPlayerPanel(

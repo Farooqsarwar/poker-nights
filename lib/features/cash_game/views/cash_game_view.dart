@@ -188,7 +188,7 @@ class _CashGameViewState extends State<CashGameView> {
     if (_selectedIndex >= 0 && _selectedIndex < sessions.length) {
       return PopScope(
         canPop: false,
-        onPopInvoked: (didPop) {
+        onPopInvokedWithResult: (didPop, _) {
           if (!didPop) {
             setState(() => _selectedIndex = -1);
           }

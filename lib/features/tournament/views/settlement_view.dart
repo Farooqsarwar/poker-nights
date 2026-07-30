@@ -224,9 +224,13 @@ class _SettlementViewState extends State<SettlementView> {
     Color rankColor;
     if (pos.position == 1) {
       rankColor = AppColors.gold;
-    } else if (pos.position == 2) rankColor = const Color(0xFFC0C0C0); // Silver
-    else if (pos.position == 3) rankColor = const Color(0xFFCD7F32); // Bronze
-    else rankColor = AppColors.textSecondary;
+    } else if (pos.position == 2) {
+      rankColor = const Color(0xFFC0C0C0);
+    } else if (pos.position == 3) {
+      rankColor = const Color(0xFFCD7F32);
+    } else {
+      rankColor = AppColors.textSecondary;
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),

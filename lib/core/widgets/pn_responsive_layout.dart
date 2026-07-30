@@ -16,10 +16,10 @@ class PNResponsiveLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth >= 1024 && desktop != null) {
+        if (constraints.maxWidth >= 800 && desktop != null) {
           return desktop!;
         }
-        if (constraints.maxWidth >= 600 && tablet != null) {
+        if (constraints.maxWidth >= 451 && tablet != null) {
           return tablet!;
         }
         return mobile;
@@ -47,10 +47,10 @@ class PNAdaptivePadding extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         EdgeInsetsGeometry padding;
-        if (constraints.maxWidth >= 1024) {
-          padding = desktopPadding ?? const EdgeInsets.symmetric(horizontal: 64, vertical: 24);
-        } else if (constraints.maxWidth >= 600) {
-          padding = tabletPadding ?? const EdgeInsets.symmetric(horizontal: 32, vertical: 16);
+        if (constraints.maxWidth >= 800) {
+          padding = desktopPadding ?? const EdgeInsets.symmetric(horizontal: 48, vertical: 24);
+        } else if (constraints.maxWidth >= 451) {
+          padding = tabletPadding ?? const EdgeInsets.symmetric(horizontal: 24, vertical: 16);
         } else {
           padding = mobilePadding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 12);
         }

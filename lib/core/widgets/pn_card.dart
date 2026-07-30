@@ -19,15 +19,21 @@ class PNCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 451;
+    final defaultPadding = isMobile ? 16.0 : 20.0;
+    final defaultHMargin = isMobile ? 8.0 : 16.0;
+    final defaultVMargin = isMobile ? 6.0 : 8.0;
+
     Widget content = Padding(
-      padding: padding ?? const EdgeInsets.all(20),
+      padding: padding ?? EdgeInsets.all(defaultPadding),
       child: child,
     );
 
     content = Container(
       decoration: BoxDecoration(
         color: color ?? AppColors.cardDark,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(isMobile ? 14 : 16),
         border: Border.all(
           color: AppColors.borderDark,
           width: 1.5,
@@ -38,12 +44,12 @@ class PNCard extends StatelessWidget {
 
     if (onTap != null) {
       return Padding(
-        padding: margin ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: margin ?? EdgeInsets.symmetric(horizontal: defaultHMargin, vertical: defaultVMargin),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(isMobile ? 14 : 16),
             splashColor: AppColors.accent.withValues(alpha: 0.1),
             highlightColor: AppColors.accent.withValues(alpha: 0.05),
             child: content,
@@ -53,7 +59,7 @@ class PNCard extends StatelessWidget {
     }
 
     return Padding(
-      padding: margin ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: margin ?? EdgeInsets.symmetric(horizontal: defaultHMargin, vertical: defaultVMargin),
       child: content,
     );
   }

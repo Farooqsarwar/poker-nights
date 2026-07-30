@@ -151,8 +151,11 @@ class _ResultsViewState extends State<ResultsView> {
     Color color;
     if (rank == 1) {
       color = AppColors.gold;
-    } else if (rank == 2) color = const Color(0xFFC0C0C0);
-    else color = const Color(0xFFCD7F32);
+    } else if (rank == 2) {
+      color = const Color(0xFFC0C0C0);
+    } else {
+      color = const Color(0xFFCD7F32);
+    }
     
     return Column(
       children: [

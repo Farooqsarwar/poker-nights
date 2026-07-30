@@ -16,6 +16,14 @@ class LiveGameController extends GetxController {
   Timer? _warningTimer;
   DateTime? _resumedAt;
   BlindStructure? _structure;
+
+  /// Remaining seconds captured when the clock last started/resumed. The value
+  /// shown is always derived as `_anchorRemaining - elapsedSinceResume`, so the
+  /// clock can neither drift nor accelerate across pauses, sleeps or reloads
+  /// (spec 4.3 — persist timestamps, never a per-second counter).
+  int _anchorRemaining = 0;
+  bool _spokeFiveMin = false;
+  bool _spokeOneMin = false;
   final List<GameAction> _actionHistory = [];
   final List<String> _bountyLog = [];
 
@@ -96,37 +104,55 @@ class LiveGameController extends GetxController {
 
   void _startTimer() {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_resumedAt == null) return;
-      final elapsed = DateTime.now().difference(_resumedAt!).inSeconds;
-      final remaining = max(0, state.pausedRemainingSeconds - elapsed);
-      if (remaining <= 0) {
-        advanceLevel();
-        return;
-      }
-      state = state.copyWith(pausedRemainingSeconds: remaining);
-    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
   void _startWarningTimer() {
     _warningTimer?.cancel();
-    if (_structure == null) return;
-    final levelDuration = _structure!.levels.isNotEmpty ? _structure!.levels.first.durationMinutes * 60 : 900;
-    final fiveMinMark = levelDuration - 300;
-    final oneMinMark = levelDuration - 60;
-    int fiveMinFired = 0;
-    int oneMinFired = 0;
-    _warningTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      final remaining = state.pausedRemainingSeconds;
-      if (remaining <= fiveMinMark && fiveMinFired == 0 && remaining > oneMinMark) {
-        fiveMinFired++;
-        _voiceService.announceFiveMinutes();
-      }
-      if (remaining <= oneMinMark && oneMinFired == 0 && remaining > 0) {
-        oneMinFired++;
-        _voiceService.announceOneMinute();
-      }
-    });
+    // Warnings are evaluated in _tick(), so no separate timer is needed here.
+  }
+
+  /// Derives remaining time from the resume timestamp rather than decrementing
+  /// a counter, so backgrounding or sleeping never double-counts elapsed time.
+  void _tick() {
+    if (_resumedAt == null) return;
+    final elapsed = DateTime.now().difference(_resumedAt!).inSeconds;
+    final remaining = max(0, _anchorRemaining - elapsed);
+
+    if (remaining != state.pausedRemainingSeconds) {
+      state = state.copyWith(pausedRemainingSeconds: remaining);
+    }
+    _maybeAnnounceWarnings(remaining);
+
+    if (remaining <= 0) {
+      advanceLevel();
+    }
+  }
+
+  void _maybeAnnounceWarnings(int remaining) {
+    if (!_spokeFiveMin && remaining <= 300 && remaining > 60) {
+      _spokeFiveMin = true;
+      _voiceService.announceFiveMinutes();
+    }
+    if (!_spokeOneMin && remaining <= 60 && remaining > 0) {
+      _spokeOneMin = true;
+      _voiceService.announceOneMinute();
+    }
+  }
+
+  /// Anchors the clock to `remaining` and starts counting down from now.
+  void _anchorAndRun(int remaining, {bool resetWarnings = false}) {
+    if (resetWarnings) {
+      _spokeFiveMin = false;
+      _spokeOneMin = false;
+    }
+    _anchorRemaining = remaining;
+    _resumedAt = DateTime.now();
+    state = state.copyWith(
+      pausedRemainingSeconds: remaining,
+      resumedAt: _resumedAt!.toIso8601String(),
+    );
+    _startTimer();
   }
 
   void advanceLevel() {

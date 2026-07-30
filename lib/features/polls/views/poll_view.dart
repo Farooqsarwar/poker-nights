@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:poker_night/core/widgets/pn_button.dart';
 import 'package:poker_night/core/widgets/pn_card.dart';
 import 'package:poker_night/core/widgets/pn_empty_state.dart';
@@ -7,6 +8,7 @@ import 'package:poker_night/core/widgets/pn_text_field.dart';
 import 'package:poker_night/features/auth/controllers/auth_controller.dart';
 import 'package:poker_night/features/polls/controllers/polls_controller.dart';
 import 'package:poker_night/features/polls/models/poll_model.dart';
+import 'package:poker_night/core/theme/app_colors.dart';
 
 class PollView extends StatefulWidget {
   final String groupId;
@@ -146,26 +148,28 @@ class _PollViewState extends State<PollView> {
                         subtitle: 'Create a poll to get feedback from the group!',
                         actionLabel: 'Create Poll',
                         onAction: _showCreatePollDialog,
-                      )
+                      ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.9, 0.9))
                     : RefreshIndicator(
                         onRefresh: () => controller.loadPolls(),
                         child: ListView.builder(
                           padding: const EdgeInsets.all(16),
                           itemCount: polls.length,
-                          itemBuilder: (context, index) => _buildPollCard(polls[index]),
+                          itemBuilder: (context, index) => _buildPollCard(polls[index], index),
                         ),
                       ),
           ),
         ),
-        floatingActionButton: FloatingActionButton(
+        floatingActionButton: FloatingActionButton.extended(
           onPressed: _showCreatePollDialog,
-          child: const Icon(Icons.poll),
-        ),
+          icon: const Icon(Icons.add_chart),
+          label: const Text('Create Poll'),
+          backgroundColor: AppColors.primary,
+        ).animate().scale(delay: 200.ms),
       );
     });
   }
 
-  Widget _buildPollCard(Poll poll) {
+  Widget _buildPollCard(Poll poll, int index) {
     final theme = Theme.of(context);
     final totalVotes = _totalVotes(poll);
     final hasVoted = _votedPollIds.contains(poll.id);
@@ -173,47 +177,61 @@ class _PollViewState extends State<PollView> {
 
     return PNCard(
       margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Expanded(
-                child: Text(poll.question, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                child: Text(poll.question, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, fontSize: 18)),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isActive ? Colors.green.shade100 : Colors.grey.shade300,
+                  color: isActive ? Colors.green.shade100 : theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   isActive ? 'Active' : 'Closed',
-                  style: TextStyle(fontSize: 12, color: isActive ? Colors.green.shade800 : Colors.black54),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isActive ? Colors.green.shade800 : theme.colorScheme.onSurface.withValues(alpha: 0.7)),
                 ),
               ),
-              if (!isActive && poll.closedAt != null)
+              if (!isActive && poll.closedAt != null) ...[
+                const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 18),
+                  icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
                   onPressed: () => controller.deletePoll(poll.id),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
+              ],
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Row(
             children: [
-              Text('by ${poll.createdBy}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
-              const SizedBox(width: 8),
-              Text(_formatDate(poll.createdAt), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.4))),
+              Icon(Icons.person_outline, size: 14, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+              const SizedBox(width: 4),
+              Text(poll.createdBy, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6), fontWeight: FontWeight.w500)),
+              const SizedBox(width: 12),
+              Icon(Icons.access_time, size: 14, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+              const SizedBox(width: 4),
+              Text(_formatDate(poll.createdAt), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
             ],
           ),
-          if (isActive)
-            TextButton.icon(
-              icon: const Icon(Icons.lock_outline, size: 16),
-              label: const Text('Close Poll'),
-              onPressed: () => controller.closePoll(poll.id),
-            ),
           const SizedBox(height: 16),
+          if (isActive) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                icon: const Icon(Icons.lock_outline, size: 16),
+                label: const Text('Close Poll'),
+                onPressed: () => controller.closePoll(poll.id),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           ...poll.options.asMap().entries.map((entry) {
             final optionIndex = entry.key;
             final option = entry.value;
@@ -222,48 +240,69 @@ class _PollViewState extends State<PollView> {
             final disabled = !isActive || hasVoted;
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: PNCard(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: InkWell(
                 onTap: disabled ? null : () => _castVote(poll, optionIndex),
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(option.text, style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: hasVoted ? FontWeight.w600 : FontWeight.w400,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: hasVoted ? AppColors.primary.withValues(alpha: 0.3) : theme.colorScheme.surfaceContainerHighest, width: 1.5),
+                    borderRadius: BorderRadius.circular(12),
+                    color: hasVoted ? AppColors.primary.withValues(alpha: 0.05) : theme.colorScheme.surface,
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(option.text, style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: hasVoted ? FontWeight.w600 : FontWeight.w500,
+                              fontSize: 15,
+                            )),
+                          ),
+                          Text('$voteCount vote${voteCount == 1 ? '' : 's'}', style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                            fontWeight: FontWeight.w600,
                           )),
-                        ),
-                        Text('$voteCount vote${voteCount == 1 ? '' : 's'}', style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                        )),
-                      ],
-                    ),
-                    if (totalVotes > 0) ...[
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: percentage / 100,
-                          minHeight: 8,
-                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text('${percentage.toStringAsFixed(1)}%', style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                      )),
+                      if (totalVotes > 0) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: LinearProgressIndicator(
+                                  value: percentage / 100,
+                                  minHeight: 8,
+                                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                                  valueColor: AlwaysStoppedAnimation<Color>(hasVoted ? AppColors.primary : Colors.grey.shade400),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              width: 40,
+                              child: Text('${percentage.toStringAsFixed(0)}%', textAlign: TextAlign.end, style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                fontWeight: FontWeight.bold,
+                              )),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             );
           }),
         ],
       ),
-    );
+    ).animate().fadeIn(delay: (index * 100).ms).slideY(begin: 0.1, end: 0);
   }
 }

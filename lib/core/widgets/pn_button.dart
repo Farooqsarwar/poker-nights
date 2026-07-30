@@ -29,11 +29,16 @@ class PNButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDisabled = disabled || loading;
     final theme = Theme.of(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 451;
+    final btnHeight = height ?? (isMobile ? 50.0 : 56.0);
+    final btnRadius = 12.0;
+    final fontSize = isMobile ? 15.0 : 16.0;
 
     if (outlined) {
       return SizedBox(
         width: width,
-        height: height ?? 56,
+        height: btnHeight,
         child: OutlinedButton(
           onPressed: isDisabled ? null : onPressed,
           style: OutlinedButton.styleFrom(
@@ -42,7 +47,7 @@ class PNButton extends StatelessWidget {
               color: destructive ? AppColors.red : AppColors.secondaryAccent,
               width: 2,
             ),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(btnRadius)),
           ),
           child: loading
               ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5))
@@ -62,16 +67,16 @@ class PNButton extends StatelessWidget {
 
     return Container(
       width: width,
-      height: height ?? 56,
+      height: btnHeight,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(btnRadius),
         color: isDisabled ? theme.disabledColor.withValues(alpha: 0.15) : bgColor,
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: isDisabled ? null : onPressed,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(btnRadius),
           child: Center(
             child: loading
                 ? SizedBox(
@@ -89,7 +94,7 @@ class PNButton extends StatelessWidget {
                       Text(
                         label,
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: fontSize,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
                           color: isDisabled ? theme.disabledColor : textColor,

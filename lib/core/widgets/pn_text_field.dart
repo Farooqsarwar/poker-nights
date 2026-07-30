@@ -34,11 +34,17 @@ class PNTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 451;
+    final labelSize = isMobile ? 13.0 : 14.0;
+    final inputPadding = isMobile ? 14.0 : 16.0;
+    final inputRadius = isMobile ? 10.0 : 12.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurface)),
+        Text(label, style: TextStyle(fontSize: labelSize, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurface)),
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
@@ -49,11 +55,28 @@ class PNTextField extends StatelessWidget {
           maxLength: maxLength,
           onChanged: onChanged,
           enabled: enabled,
+          style: TextStyle(fontSize: isMobile ? 15 : 16),
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: prefixIcon,
             suffixIcon: suffixIcon,
             counterText: '',
+            contentPadding: EdgeInsets.symmetric(horizontal: inputPadding, vertical: inputPadding),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(inputRadius),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(inputRadius),
+              borderSide: BorderSide(color: AppColors.borderDark),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(inputRadius),
+              borderSide: const BorderSide(color: AppColors.accent, width: 2),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(inputRadius),
+              borderSide: const BorderSide(color: AppColors.red),
+            ),
           ),
         ),
       ],

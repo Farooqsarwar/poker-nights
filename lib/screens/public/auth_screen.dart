@@ -1,0 +1,414 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../app/colors.dart';
+import '../../app/route_paths.dart';
+import '../../app/typography.dart';
+import '../../constants/app_constants.dart';
+import '../../providers/app_provider.dart';
+import '../../responsive/responsive.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_text_field.dart';
+import '../../widgets/backgrounds.dart';
+import '../../widgets/brand_lockup.dart';
+
+enum AuthMode { login, register, forgotPassword }
+
+/// Auth screens (login / register / forgot password) mirroring `AuthPage`.
+class AuthScreen extends StatefulWidget {
+  const AuthScreen({super.key, required this.mode});
+
+  final AuthMode mode;
+
+  @override
+  State<AuthScreen> createState() => _AuthScreenState();
+}
+
+class _AuthScreenState extends State<AuthScreen> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmController = TextEditingController();
+
+  String? _error;
+  String? _success;
+  bool _loading = false;
+  bool _showPw = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  bool get _isRegister => widget.mode == AuthMode.register;
+  bool get _isForgot => widget.mode == AuthMode.forgotPassword;
+
+  String get _title {
+    switch (widget.mode) {
+      case AuthMode.login:
+        return 'Sign In';
+      case AuthMode.register:
+        return 'Create Account';
+      case AuthMode.forgotPassword:
+        return 'Reset Password';
+    }
+  }
+
+  void _handleSubmit() async {
+    setState(() {
+      _error = null;
+      _success = null;
+    });
+
+    final email = _emailController.text.trim();
+    final emailOk = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email);
+
+    if (!emailOk) {
+      setState(() => _error = 'Enter a valid email address.');
+      return;
+    }
+
+    if (_isForgot) {
+      setState(() => _success = 'If an account exists for that email, a reset link has been sent.');
+      return;
+    }
+
+    if (_passwordController.text.length < 8) {
+      setState(() => _error = 'Password must be at least 8 characters.');
+      return;
+    }
+
+    if (_isRegister && _nameController.text.trim().length < 2) {
+      setState(() => _error = 'Name must be at least 2 characters.');
+      return;
+    }
+
+    if (_isRegister && _confirmController.text != _passwordController.text) {
+      setState(() => _error = 'Passwords do not match.');
+      return;
+    }
+
+    setState(() => _loading = true);
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+
+    final app = context.read<AppProvider>();
+    if (widget.mode == AuthMode.login) {
+      final ok = app.login(email, _passwordController.text);
+      if (!ok) {
+        setState(() => _error = 'Incorrect email or password.');
+      } else {
+        context.go(RoutePaths.home);
+      }
+    } else {
+      app.register(_nameController.text.trim(), email, _passwordController.text);
+      context.go(RoutePaths.home);
+    }
+    setState(() => _loading = false);
+  }
+
+  /// A leading field icon padded to sit inside the input pill.
+  Widget _leading(IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.sm),
+      child: Icon(icon, size: 18, color: AppColors.mutedForeground),
+    );
+  }
+
+  /// The trailing eye toggle shared by password / confirm fields.
+  Widget _eyeToggle() {
+    return IconButton(
+      icon: Icon(
+        _showPw ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        size: 18,
+        color: AppColors.mutedForeground,
+      ),
+      tooltip: _showPw ? 'Hide password' : 'Show password',
+      onPressed: () => setState(() => _showPw = !_showPw),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final device = AppBreakpoints.deviceOf(context);
+    final twoColumn = device.isDesktop || device.isLargeDesktop;
+
+    final logo = const BrandLockup(
+      vertical: true,
+      iconCircleSize: 120,
+      textSize: 28,
+    );
+
+    final card = _buildCard(context);
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: FeltBackground(
+        child: Stack(
+          children: [
+            twoColumn
+                ? Row(
+                    children: [
+                      Expanded(child: Center(child: logo)),
+                      Expanded(
+                        child: Center(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(AppSpacing.xxl),
+                            child: card,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(height: AppSpacing.huge),
+                          logo,
+                          const SizedBox(height: AppSpacing.xxl),
+                          card,
+                          const SizedBox(height: AppSpacing.huge),
+                        ],
+                      ),
+                    ),
+                  ),
+            Positioned(
+              top: AppSpacing.xl,
+              left: AppSpacing.xl,
+              child: Semantics(
+                button: true,
+                label: 'Back',
+                child: InkWell(
+                  onTap: () => context.go(RoutePaths.landing),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.arrow_back,
+                          size: 18,
+                          color: AppColors.mutedForeground,
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          'Back',
+                          style: AppTypography.bodySm
+                              .copyWith(color: AppColors.mutedForeground),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCard(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.border),
+          boxShadow: AppShadows.cardGlow,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(_title, style: AppTypography.display(size: AppFontSizes.xxl)),
+            const SizedBox(height: AppSpacing.xl),
+            if (_isRegister) ...[
+              AppTextField(
+                controller: _nameController,
+                label: null,
+                placeholder: 'Full Name',
+                textCapitalization: TextCapitalization.words,
+                prefixIcon: _leading(Icons.person_outline),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+            ],
+            AppTextField(
+              controller: _emailController,
+              label: null,
+              placeholder: 'Email address',
+              keyboardType: TextInputType.emailAddress,
+              prefixIcon: _leading(Icons.mail_outline),
+            ),
+            if (!_isForgot) ...[
+              const SizedBox(height: AppSpacing.lg),
+              AppTextField(
+                controller: _passwordController,
+                label: null,
+                placeholder: 'Password',
+                obscureText: !_showPw,
+                prefixIcon: _leading(Icons.lock_outline),
+                suffixIcon: _eyeToggle(),
+              ),
+              if (_isRegister) ...[
+                const SizedBox(height: AppSpacing.lg),
+                AppTextField(
+                  controller: _confirmController,
+                  label: null,
+                  placeholder: 'Confirm Password',
+                  obscureText: !_showPw,
+                  prefixIcon: _leading(Icons.lock_outline),
+                  suffixIcon: _eyeToggle(),
+                ),
+              ],
+            ],
+            if (widget.mode == AuthMode.login) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Align(
+                alignment: Alignment.centerRight,
+                child: InkWell(
+                  onTap: () => context.go(RoutePaths.forgotPassword),
+                  child: Text(
+                    'Forgot Password?',
+                    style: AppTypography.bodySm.copyWith(color: AppColors.primary),
+                  ),
+                ),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                _error!,
+                style: AppTypography.bodySm.copyWith(color: AppColors.destructive),
+              ),
+            ],
+            if (_success != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                _success!,
+                style: AppTypography.bodySm.copyWith(color: AppColors.success),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(
+              variant: AppButtonVariant.light,
+              size: AppButtonSize.lg,
+              fullWidth: true,
+              loading: _loading,
+              onPressed: _handleSubmit,
+              child: Text(
+                _loading
+                    ? 'Please wait…'
+                    : _isForgot
+                        ? 'Send reset link'
+                        : _isRegister
+                            ? 'Create Account'
+                            : 'Sign In',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            if (widget.mode == AuthMode.login) ...[
+              _switchLine(
+                context,
+                prompt: "Don't have an account? ",
+                action: 'Create Account',
+                onTap: () => context.go(RoutePaths.register),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Center(
+                child: SelectableText.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Demo: ',
+                        style: AppTypography.bodyXs
+                            .copyWith(color: AppColors.mutedForeground),
+                      ),
+                      TextSpan(
+                        text: 'daniel@example.com',
+                        style: AppTypography.monoXs.copyWith(color: AppColors.primary),
+                      ),
+                      TextSpan(
+                        text: ' / any password',
+                        style: AppTypography.bodyXs
+                            .copyWith(color: AppColors.mutedForeground),
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ] else if (_isRegister) ...[
+              _switchLine(
+                context,
+                prompt: 'Already have an account? ',
+                action: 'Sign In',
+                onTap: () => context.go(RoutePaths.login),
+              ),
+            ] else ...[
+              Center(
+                child: InkWell(
+                  onTap: () => context.go(RoutePaths.login),
+                  child: Text(
+                    'Back to Sign In',
+                    style: AppTypography.bodySm.copyWith(color: AppColors.primary),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      )
+          .animate()
+          .fadeIn(duration: 400.ms)
+          .slideY(begin: 0.08, end: 0, curve: Curves.easeOut),
+    );
+  }
+
+  Widget _switchLine(
+    BuildContext context, {
+    required String prompt,
+    required String action,
+    required VoidCallback onTap,
+  }) {
+    return Center(
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: prompt,
+              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            ),
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: InkWell(
+                onTap: onTap,
+                child: Text(
+                  action,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+}

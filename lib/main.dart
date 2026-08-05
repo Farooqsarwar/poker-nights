@@ -1,20 +1,31 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'app.dart';
-import 'services/storage_service.dart';
-import 'services/auth_service.dart';
-import 'services/voice_service.dart';
-import 'features/auth/controllers/auth_controller.dart';
+import 'package:provider/provider.dart';
 
-void main() async {
+import 'app/router.dart';
+import 'app/theme.dart';
+import 'providers/app_provider.dart';
+
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await StorageService.instance.initialize();
-  
-  // Inject Services and Controllers
-  Get.put(StorageService.instance);
-  Get.put(VoiceService.instance);
-  Get.put<AuthService>(LocalAuthService(Get.find()));
-  Get.put(AuthController(Get.find()));
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => AppProvider(),
+      child: const PokerNightApp(),
+    ),
+  );
+}
 
-  runApp(const PokerNightApp());
+/// Root widget — wires the dark casino theme, the app provider, and the router.
+class PokerNightApp extends StatelessWidget {
+  const PokerNightApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      title: 'Poker Night',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.dark,
+      routerConfig: appRouter,
+    );
+  }
 }

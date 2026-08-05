@@ -1,0 +1,288 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../app/colors.dart';
+import '../../app/route_paths.dart';
+import '../../app/typography.dart';
+import '../../constants/app_constants.dart';
+import '../../providers/app_provider.dart';
+import '../../widgets/app_badge.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_divider.dart';
+import '../../widgets/app_page.dart';
+import '../../widgets/app_toggle.dart';
+
+/// Settings mirroring the account area of the web app.
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _compactSummary = false;
+  bool _enableSounds = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
+    final user = app.user;
+
+    return AppPage(
+      maxWidth: 720,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Settings', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Preferences for your account',
+            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          // Appearance
+          Text('Appearance', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                const _SettingRow(
+                  icon: '🌙',
+                  title: 'Dark theme',
+                  subtitle: 'Always on — the club house only looks right in the dark',
+                  trailing: _SettingLocked(),
+                  showDivider: true,
+                ),
+                _SettingRow(
+                  icon: '💵',
+                  title: 'Currency',
+                  subtitle: 'Display amounts in US dollars',
+                  trailing: _SettingValue('USD'),
+                  showDivider: false,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          // Notifications
+          Text('Gameplay', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _SettingRow(
+                  icon: '🔊',
+                  title: 'Voice announcements',
+                  subtitle: 'Spoken blinds and level updates',
+                  trailing: AppToggle(
+                    value: app.voiceEnabled,
+                    onChanged: (v) => app.setVoiceEnabled(v),
+                  ),
+                  showDivider: true,
+                ),
+                _SettingRow(
+                  icon: '🔔',
+                  title: 'Sound effects',
+                  subtitle: 'Chip sounds and level-up chimes',
+                  trailing: AppToggle(
+                    value: _enableSounds,
+                    onChanged: (v) => setState(() => _enableSounds = v),
+                  ),
+                  showDivider: true,
+                ),
+                _SettingRow(
+                  icon: '📄',
+                  title: 'Compact results',
+                  subtitle: 'Show fewer details in game summaries',
+                  trailing: AppToggle(
+                    value: _compactSummary,
+                    onChanged: (v) => setState(() => _compactSummary = v),
+                  ),
+                  showDivider: false,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          // Game Assets
+          Text('Game Assets', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _SettingRow(
+                  icon: '🎰',
+                  title: 'Chip sets',
+                  subtitle: 'Manage saved chip denominations and colours',
+                  trailing: const Icon(Icons.chevron_right, color: AppColors.mutedForeground),
+                  showDivider: false,
+                  onTap: () => context.push(RoutePaths.chipSets),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          // Account
+          Text('Account', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Row(
+              children: [
+                const Text('👤', style: TextStyle(fontSize: AppFontSizes.lg)),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user?.name ?? 'Guest',
+                        style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        user?.email ?? 'Not signed in',
+                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                      ),
+                    ],
+                  ),
+                ),
+                if (user?.isAdmin == true) const AppBadge(label: 'Admin', variant: AppBadgeVariant.gold),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppButton(
+            variant: AppButtonVariant.danger,
+            onPressed: () => _confirmSignOut(context, app),
+            child: const Text('Sign out'),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppDivider(label: 'About'),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Poker Night v1.0.0',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmSignOut(BuildContext context, AppProvider app) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Sign out?'),
+        content: Text(
+          'You will need to log in again to see your games.',
+          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('Cancel', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              app.logout();
+              context.go(RoutePaths.landing);
+            },
+            child: Text('Sign out', style: AppTypography.bodySm.copyWith(color: AppColors.destructive)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingRow extends StatelessWidget {
+  const _SettingRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.trailing,
+    required this.showDivider,
+    this.onTap,
+  });
+
+  final String icon;
+  final String title;
+  final String subtitle;
+  final Widget trailing;
+  final bool showDivider;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          border: showDivider ? const Border(bottom: BorderSide(color: AppColors.border)) : null,
+        ),
+      child: Row(
+        children: [
+          Text(icon, style: const TextStyle(fontSize: AppFontSizes.lg)),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          trailing,
+        ],
+      ),
+      ),
+    );
+  }
+}
+
+class _SettingValue extends StatelessWidget {
+  const _SettingValue(this.value);
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      value,
+      style: AppTypography.mono(size: AppFontSizes.sm, weight: FontWeight.w600, color: AppColors.mutedForeground),
+    );
+  }
+}
+
+class _SettingLocked extends StatelessWidget {
+  const _SettingLocked();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.muted,
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+      ),
+      child: Text(
+        'On',
+        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+}

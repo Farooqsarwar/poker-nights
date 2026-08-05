@@ -1,0 +1,471 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+
+import '../models/chip_color.dart';
+import '../models/tournament.dart';
+
+/// Tournament structure engine — a faithful Dart port of the web app's
+/// `src/engine/tournament.ts`. Used to generate mock structures for the UI.
+class TournamentEngine {
+  TournamentEngine._();
+
+  static const Map<String, List<ChipColor>> chipPresets = {
+    'Standard 300': [
+      ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 1, quantity: 100),
+      ChipColor(color: 'Red', hex: 0xFFC0392B, value: 5, quantity: 100),
+      ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 25, quantity: 50),
+      ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 100, quantity: 30),
+      ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 500, quantity: 20),
+    ],
+    'Standard 500': [
+      ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 1, quantity: 150),
+      ChipColor(color: 'Red', hex: 0xFFC0392B, value: 5, quantity: 150),
+      ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 25, quantity: 100),
+      ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 100, quantity: 60),
+      ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 500, quantity: 40),
+    ],
+    'Home Set (4 colour)': [
+      ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 5, quantity: 100),
+      ChipColor(color: 'Red', hex: 0xFFC0392B, value: 25, quantity: 80),
+      ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 100, quantity: 60),
+      ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 500, quantity: 30),
+    ],
+  };
+
+  static List<String> get presetNames => chipPresets.keys.toList();
+
+  static List<ChipColor> getPreset(String name) =>
+      chipPresets[name] ?? chipPresets['Standard 300']!;
+
+  static int _levelDurationFor(double hours) => hours <= 5 ? 15 : 20;
+
+  static int _snapToPracticalBlind(double raw, List<ChipColor> chips) {
+    final values = chips.map((c) => c.value).toList()..sort();
+    final minChip = values.first;
+    final rounded = (raw / minChip).round() * minChip;
+    return math.max(rounded, minChip);
+  }
+
+  static int _snapSb(int bb, List<ChipColor> chips) {
+    final minChip = chips.map((c) => c.value).reduce(math.min);
+    final target = bb * 0.45;
+    final snapped = (target / minChip).round() * minChip;
+    return math.max(snapped, minChip);
+  }
+
+  static List<ChipPlanEntry> _buildChipPlan(
+    int targetStack,
+    List<ChipColor> chips,
+    int playerCount,
+    double reserveMultiplier,
+  ) {
+    final sorted = [...chips]..sort((a, b) => a.value - b.value);
+    final plan = <ChipPlanEntry>[];
+    var remaining = targetStack;
+
+    final reversed = sorted.reversed.toList();
+    for (final chip in reversed) {
+      final maxPerPlayer = (chip.quantity / (playerCount * reserveMultiplier)).floor();
+      final need = remaining ~/ chip.value;
+      final use = math.min(need, math.max(1, maxPerPlayer));
+      if (use > 0) {
+        plan.add(ChipPlanEntry(
+          color: chip.color,
+          hex: chip.hex,
+          value: chip.value,
+          count: use,
+        ));
+        remaining -= use * chip.value;
+      }
+    }
+
+    if (remaining > 0) {
+      final small = sorted.first;
+      final extra = (remaining / small.value).ceil();
+      final index = plan.indexWhere((p) => p.color == small.color);
+      if (index >= 0) {
+        plan[index] = ChipPlanEntry(
+          color: small.color,
+          hex: small.hex,
+          value: small.value,
+          count: plan[index].count + extra,
+        );
+      } else {
+        plan.add(ChipPlanEntry(
+          color: small.color,
+          hex: small.hex,
+          value: small.value,
+          count: extra,
+        ));
+      }
+    }
+
+    plan.sort((a, b) => b.value - a.value);
+    return plan;
+  }
+
+  /// Decides how many places get paid.
+  ///
+  /// Depends on BOTH the size of the field AND the prize pool (checklist
+  /// 14-019 / 14-027):
+  ///  * base tier from unique player count: >=6 -> 2, >=10 -> 3, >=18 -> 4;
+  ///  * clamped to the reference-style pool thresholds (section 25): never pay
+  ///    3+ places under a 100 pool, never pay 4 under a 400 pool;
+  ///  * finally capped so every paid place can still receive at least the
+  ///    minimum award of 10 (`paidPlaces <= prizePool ~/ 10`), which prevents a
+  ///    "paid" place from ever landing on 0.
+  static int _paidPlacesFor(int prizePool, int players) {
+    var places = 1;
+    if (players >= 6) places = 2;
+    if (players >= 10) places = 3;
+    if (players >= 18) places = 4;
+
+    // Clamp to the reference payout style: small pools simply do not spread
+    // across many places.
+    if (prizePool < 100 && places > 2) places = 2;
+    if (prizePool < 400 && places > 3) places = 3;
+
+    // Never promise more places than can each clear the 10 minimum.
+    final maxByPool = prizePool ~/ 10;
+    if (places > maxByPool) places = maxByPool;
+    if (places < 1) places = prizePool > 0 ? 1 : 0;
+
+    return places;
+  }
+
+  /// Splits [prizePool] across the paid places.
+  ///
+  /// Guarantees (checklist section 14):
+  ///  * 14-022 every award is a multiple of 10;
+  ///  * 14-023 no award ends in 5;
+  ///  * 14-024 the awards sum EXACTLY to [prizePool] — this is absolute;
+  ///  * 14-025 place 1 is the largest;
+  ///  * 14-026 amounts are monotonic non-increasing down the places;
+  ///  * no paid place pays 0 (paidPlaces is reduced until every place clears
+  ///    the 10 minimum).
+  ///
+  /// Approach: compute weighted amounts for places 2..N as multiples of 10,
+  /// assign place 1 the remainder, then fix any place-1 digit that lands on 5
+  /// by transferring 5 to/from an adjacent place while preserving the sum and
+  /// monotonicity.
+  ///
+  /// Tradeoff (documented): the split is computed on [prizePool] directly. The
+  /// caller normally hands us a pool that is already a multiple of 10 (the
+  /// organizer cut is snapped to a multiple of 10 before the pool is derived),
+  /// so every place comes out a clean multiple of 10. Should [prizePool] ever
+  /// carry a units digit (i.e. `prizePool % 10 != 0`), sum-exactness (14-024)
+  /// is honoured absolutely: places 2..N stay multiples of 10 and the leftover
+  /// — including the stray units — lands on place 1, which then cannot be a
+  /// multiple of 10. In that (production-unreachable) case the multiple-of-10
+  /// and no-5 rules necessarily bend for place 1 alone; the sum stays exact.
+  /// The approved reference payout schedule (checklist section 25, 25-001 …
+  /// 25-066): pool -> award for place 1, 2, … This is the intended style
+  /// (14-028); the engine uses it verbatim whenever the computed place count
+  /// matches, and falls back to the weighted approximation for pools that fall
+  /// outside the 50..700 grid or fields too small to unlock all places.
+  static const Map<int, List<int>> _referencePayouts = {
+    50: [40, 10],
+    60: [40, 20],
+    70: [50, 20],
+    80: [50, 30],
+    90: [60, 30],
+    100: [60, 30, 10],
+    110: [70, 30, 10],
+    120: [70, 40, 10],
+    130: [80, 40, 10],
+    140: [80, 40, 20],
+    150: [90, 40, 20],
+    160: [90, 50, 20],
+    170: [100, 50, 20],
+    180: [110, 50, 20],
+    190: [110, 60, 20],
+    200: [110, 60, 30],
+    210: [120, 60, 30],
+    220: [130, 60, 30],
+    230: [130, 70, 30],
+    240: [140, 70, 30],
+    250: [140, 80, 30],
+    260: [150, 80, 30],
+    270: [150, 80, 40],
+    280: [160, 80, 40],
+    290: [160, 90, 40],
+    300: [170, 90, 40],
+    310: [180, 90, 40],
+    320: [180, 100, 40],
+    330: [190, 100, 40],
+    340: [190, 100, 50],
+    350: [200, 100, 50],
+    360: [200, 110, 50],
+    370: [210, 110, 50],
+    380: [210, 120, 50],
+    390: [220, 120, 50],
+    400: [220, 120, 40, 20],
+    410: [230, 120, 40, 20],
+    420: [240, 120, 40, 20],
+    430: [240, 130, 40, 20],
+    440: [250, 130, 40, 20],
+    450: [250, 140, 40, 20],
+    460: [260, 140, 40, 20],
+    470: [260, 140, 50, 20],
+    480: [270, 140, 50, 20],
+    490: [270, 150, 50, 20],
+    500: [280, 150, 50, 20],
+    510: [290, 150, 50, 20],
+    520: [290, 160, 50, 20],
+    530: [300, 160, 50, 20],
+    540: [300, 160, 60, 20],
+    550: [310, 160, 60, 20],
+    560: [310, 170, 60, 20],
+    570: [320, 170, 60, 20],
+    580: [320, 180, 60, 20],
+    590: [330, 180, 60, 20],
+    600: [330, 180, 70, 20],
+    610: [340, 180, 70, 20],
+    620: [340, 190, 70, 20],
+    630: [350, 190, 70, 20],
+    640: [350, 190, 80, 20],
+    650: [360, 190, 80, 20],
+    660: [360, 200, 80, 20],
+    670: [370, 200, 80, 20],
+    680: [370, 210, 80, 20],
+    690: [380, 210, 80, 20],
+    700: [390, 210, 80, 20],
+  };
+
+  static List<Prize> _calcPrizes(int prizePool, int players) {
+    if (prizePool <= 0) return const [];
+
+    var paidPlaces = _paidPlacesFor(prizePool, players);
+    if (paidPlaces <= 1) {
+      return [Prize(place: 1, amount: prizePool)];
+    }
+
+    // Reference style wins whenever the field size allows the same number of
+    // places the schedule intends for this pool (14-028).
+    final reference = _referencePayouts[prizePool];
+    if (reference != null && reference.length == paidPlaces) {
+      return [
+        for (var i = 0; i < reference.length; i++)
+          Prize(place: i + 1, amount: reference[i]),
+      ];
+    }
+
+    // Whether every place can, in principle, be a multiple of 10. Only false
+    // for the rare non-round pool; drives how strictly we validate below.
+    final poolIsRound = prizePool % 10 == 0;
+
+    // Distribution weights approximating the section-25 reference style.
+    // Index 0 is place 1 (largest). Chosen per place count:
+    //   2 places ~ 73/27, 3 places ~ 57/30/13, 4 places ~ 55/30/11/4.
+    List<double> weightsFor(int n) {
+      switch (n) {
+        case 2:
+          return [0.73, 0.27];
+        case 3:
+          return [0.57, 0.30, 0.13];
+        default:
+          return [0.55, 0.30, 0.11, 0.04];
+      }
+    }
+
+    while (paidPlaces >= 2) {
+      final weights = weightsFor(paidPlaces);
+      final amounts = List<int>.filled(paidPlaces, 0);
+
+      // Floor every lower place (2..N) to a multiple of 10, enforcing the
+      // per-place minimum of 10 so no paid place is ever 0.
+      var allocatedToLower = 0;
+      for (var i = paidPlaces - 1; i >= 1; i--) {
+        var amt = ((weights[i] * prizePool) / 10).floor() * 10;
+        if (amt < 10) amt = 10;
+        amounts[i] = amt;
+        allocatedToLower += amt;
+      }
+
+      // Place 1 absorbs the exact remainder so the total is always [prizePool].
+      amounts[0] = prizePool - allocatedToLower;
+
+      // When the pool is round, place 1 is already a multiple of 10 — but a 5
+      // digit can still surface if a lower place absorbed odd units. Fix it by
+      // transferring 5 to/from place 2, preserving the sum.
+      if (poolIsRound && amounts[0] % 10 == 5) {
+        if (amounts[1] >= 15) {
+          amounts[0] += 5;
+          amounts[1] -= 5;
+        } else if (amounts[0] >= 15) {
+          amounts[0] -= 5;
+          amounts[1] += 5;
+        }
+      }
+
+      // Validate all guarantees; drop a place and retry if any fails. When the
+      // pool is not round, place 1 is exempt from the multiple-of-10 check (the
+      // documented tradeoff — sum-exactness wins).
+      var valid = amounts[0] >= amounts[1] && amounts[0] > 0;
+      for (var i = 1; i < paidPlaces - 1 && valid; i++) {
+        if (amounts[i] < amounts[i + 1]) valid = false;
+      }
+      for (var i = 0; i < paidPlaces && valid; i++) {
+        if (amounts[i] <= 0) valid = false;
+        final mustBeRound = i != 0 || poolIsRound;
+        if (mustBeRound && amounts[i] % 10 != 0) valid = false;
+      }
+      if (!valid) {
+        paidPlaces--;
+        continue;
+      }
+
+      final prizes = <Prize>[
+        for (var i = 0; i < paidPlaces; i++)
+          Prize(place: i + 1, amount: amounts[i]),
+      ];
+      prizes.sort((a, b) => a.place - b.place);
+      return prizes;
+    }
+
+    // Fell through to a single payout.
+    return [Prize(place: 1, amount: prizePool)];
+  }
+
+  /// Test-only wrapper exposing [_calcPrizes] for the payout acceptance tests.
+  @visibleForTesting
+  static List<Prize> calcPrizesForTest(int prizePool, int players) =>
+      _calcPrizes(prizePool, players);
+
+  static TournamentStructure generate(TournamentParams params) {
+    final warnings = <String>[];
+    final levelDuration = _levelDurationFor(params.durationHours);
+    final playingMinutes = params.durationHours * 60 * 0.9;
+    final numLevels = math.max(6, (playingMinutes / levelDuration).floor());
+
+    final targetBBDepth = math.min(
+      240,
+      math.max(
+        80,
+        125 + 28 * (params.durationHours - 3.5) - 2.5 * math.max(0, params.players - 8),
+      ),
+    );
+
+    final sortedChips = [...params.chipSet]..sort((a, b) => a.value - b.value);
+    final minChip = sortedChips.isNotEmpty ? sortedChips.first.value : 1;
+    final openingBB = sortedChips.length >= 2
+        ? sortedChips[1].value * 2
+        : minChip * 10;
+    final openingSB = _snapSb(openingBB, sortedChips);
+
+    final startingStack = (targetBBDepth * openingBB / 100).round() * 100;
+
+    final expectedRebuys = params.rebuys ? params.players * 0.35 : 0;
+    final addOnStack = params.addOn ? startingStack : 0;
+    final rebuyStack = startingStack;
+    final expectedReEntries = params.reEntry ? params.players * 0.20 : 0;
+    final expectedAddOns = params.addOn ? params.players * 0.65 : 0;
+    final totalExpectedChips = (startingStack * params.players).round() +
+        (rebuyStack * expectedRebuys).round() +
+        (rebuyStack * expectedReEntries).round() +
+        (addOnStack * expectedAddOns).round();
+
+    final targetFinalBB =
+        totalExpectedChips / (2 * 15 * math.max(1, params.players * 0.25));
+    final growthFactor = math.pow(
+      math.max(2, targetFinalBB / openingBB),
+      1 / math.max(1, numLevels - 1),
+    );
+
+    final levels = <BlindLevel>[];
+    var prevBB = 0;
+
+    for (var i = 0; i < numLevels; i++) {
+      final rawBB = openingBB * math.pow(growthFactor, i);
+      final snapped = _snapToPracticalBlind(rawBB.toDouble(), sortedChips);
+      final bb = math.max(snapped, math.max(prevBB + minChip, i == 0 ? openingBB : 0));
+      final sb = i == 0 ? openingSB : _snapSb(bb, sortedChips);
+      final useAnte = params.anteEnabled && i >= params.anteAfterLevel;
+      levels.add(BlindLevel(
+        level: i + 1,
+        sb: sb,
+        bb: bb,
+        ante: useAnte ? bb : null,
+        durationMins: levelDuration,
+      ));
+      prevBB = bb;
+    }
+
+    final chipPlan = _buildChipPlan(
+        startingStack, params.chipSet, params.players, params.rebuys ? 2 : 1.2);
+    final rebuyChipPlan =
+        _buildChipPlan(rebuyStack, params.chipSet, params.players, 2);
+
+    final colorUpInstructions = <String>[];
+    if (params.rebuys && sortedChips.isNotEmpty) {
+      final smallest = sortedChips.first;
+      colorUpInstructions.add(
+        'Exchange all ${smallest.value}-value ${smallest.color} chips for the next denomination',
+      );
+    }
+
+    final expectedRebuysTotal = params.rebuys ? (params.players * 0.35).round() : 0;
+    final expectedReEntriesTotal = params.reEntry ? (params.players * 0.20).round() : 0;
+    final expectedAddOnsTotal = params.addOn ? (params.players * 0.65).round() : 0;
+    final grossEligible = params.buyIn * params.players +
+        rebuyStack * expectedRebuysTotal +
+        rebuyStack * expectedReEntriesTotal +
+        addOnStack * expectedAddOnsTotal;
+    final targetOrganizer = grossEligible * (params.organizerPct / 100);
+
+    // 14-014/14-015/14-016 (UAT-054): the retained amount must leave a prize
+    // pool divisible by 10 (clean, distributable in tens), be the multiple
+    // closest to the target percentage, and — when two choices are equally
+    // close — retain less and return more to the pool. Since pool is a multiple
+    // of 10 exactly when organizer ≡ gross (mod 10), pick the nearest valid
+    // organizer around the target; ties keep the smaller amount.
+    final mod = grossEligible % 10;
+    var organizerAmount = 0;
+    if (params.organizerPct > 0) {
+      final base = ((targetOrganizer - mod) / 10);
+      final candidates = [
+        base.floor() * 10 + mod,
+        base.ceil() * 10 + mod,
+      ];
+      var bestDist = double.infinity;
+      for (final c in candidates) {
+        if (c < 0 || c > grossEligible) continue;
+        final d = (targetOrganizer - c).abs();
+        if (d < bestDist - 1e-9 || (d <= bestDist + 1e-9 && c < organizerAmount)) {
+          bestDist = d;
+          organizerAmount = c;
+        }
+      }
+    }
+    var prizePool = grossEligible - organizerAmount;
+    if (prizePool < 0) prizePool = 0;
+
+    final prizes = _calcPrizes(prizePool, params.players);
+
+    final expectedFinishMins = (numLevels * levelDuration * 1.05).round();
+
+    if (params.players < 4) {
+      warnings.add('Very small field — consider a shorter structure.');
+    }
+    if (startingStack < openingBB * 50) {
+      warnings.add('Short starting depth — players will be short-stacked early.');
+    }
+
+    return TournamentStructure(
+      startingStack: startingStack,
+      chipPlan: chipPlan,
+      rebuyStack: rebuyStack,
+      rebuyChipPlan: rebuyChipPlan,
+      addOnStack: addOnStack,
+      levels: levels,
+      levelDuration: levelDuration,
+      expectedFinishMins: expectedFinishMins,
+      prizes: prizes,
+      prizePool: prizePool,
+      organizerAmount: organizerAmount,
+      colorUpInstructions: colorUpInstructions,
+      warnings: warnings,
+    );
+  }
+}

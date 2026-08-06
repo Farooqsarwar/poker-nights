@@ -14,8 +14,8 @@ class AppTypography {
   AppTypography._();
 
   // ── Font family names ──────────────────────────────────────────────────────
-  static const String displayFamily = 'Fraunces';
-  static const String bodyFamily = 'Outfit';
+  static const String displayFamily = 'Nunito';
+  static const String bodyFamily = 'Inter';
   static const String monoFamily = 'JetBrains Mono';
 
   static TextStyle display({
@@ -25,7 +25,7 @@ class AppTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.fraunces(
+    return GoogleFonts.nunito(
       fontSize: size,
       fontWeight: weight,
       color: color,
@@ -41,7 +41,7 @@ class AppTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.outfit(
+    return GoogleFonts.inter(
       fontSize: size,
       fontWeight: weight,
       color: color,
@@ -87,7 +87,7 @@ class AppTypography {
     double size = AppFontSizes.lg,
     FontWeight weight = FontWeight.w700,
   }) {
-    return GoogleFonts.fraunces(
+    return GoogleFonts.nunito(
       fontSize: size,
       fontWeight: weight,
       foreground: Paint()
@@ -123,7 +123,7 @@ class AppTypography {
           // Give every default style the Outfit family fallback via apply.
           bodyLarge: base.bodyLarge!.copyWith(
             fontFamily: bodyFamily,
-            fontFamilyFallback: ['Outfit'],
+            fontFamilyFallback: ['Inter'],
           ),
         );
   }

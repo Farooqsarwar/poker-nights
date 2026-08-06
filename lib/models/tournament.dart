@@ -36,6 +36,10 @@ class ChipPlanEntry {
   int get total => value * count;
 }
 
+/// How the ante is posted once enabled (technical §11: Off, big blind ante,
+/// individual ante). The big blind ante is the recommended default.
+enum AnteStyle { bigBlind, individual }
+
 /// Parameters used to generate a tournament structure.
 class TournamentParams {
   const TournamentParams({
@@ -49,6 +53,7 @@ class TournamentParams {
     required this.addOn,
     required this.anteEnabled,
     required this.anteAfterLevel,
+    this.anteStyle = AnteStyle.bigBlind,
     required this.koEnabled,
     required this.koAmount,
     required this.organizerPct,
@@ -68,6 +73,7 @@ class TournamentParams {
   final bool addOn;
   final bool anteEnabled;
   final int anteAfterLevel;
+  final AnteStyle anteStyle;
   final bool koEnabled;
   final int koAmount;
   final int organizerPct;
@@ -89,6 +95,7 @@ class TournamentStructure {
     required this.rebuyStack,
     required this.rebuyChipPlan,
     required this.addOnStack,
+    required this.addOnChipPlan,
     required this.levels,
     required this.levelDuration,
     required this.expectedFinishMins,
@@ -104,6 +111,10 @@ class TournamentStructure {
   final int rebuyStack;
   final List<ChipPlanEntry> rebuyChipPlan;
   final int addOnStack;
+
+  /// Recommended physical composition of one add-on (checklist 12-060).
+  final List<ChipPlanEntry> addOnChipPlan;
+
   final List<BlindLevel> levels;
   final int levelDuration;
   final int expectedFinishMins;
@@ -115,5 +126,41 @@ class TournamentStructure {
 
   int get expectedFinishHours => expectedFinishMins ~/ 60;
   int get expectedFinishRemainderMins => expectedFinishMins % 60;
+
+  /// Returns a copy with only the prize-related fields updated.
+  /// All blind levels and manual overrides remain intact.
+  TournamentStructure copyWith({
+    int? startingStack,
+    List<ChipPlanEntry>? chipPlan,
+    int? rebuyStack,
+    List<ChipPlanEntry>? rebuyChipPlan,
+    int? addOnStack,
+    List<ChipPlanEntry>? addOnChipPlan,
+    List<BlindLevel>? levels,
+    int? levelDuration,
+    int? expectedFinishMins,
+    List<Prize>? prizes,
+    int? prizePool,
+    int? organizerAmount,
+    List<String>? colorUpInstructions,
+    List<String>? warnings,
+  }) {
+    return TournamentStructure(
+      startingStack: startingStack ?? this.startingStack,
+      chipPlan: chipPlan ?? this.chipPlan,
+      rebuyStack: rebuyStack ?? this.rebuyStack,
+      rebuyChipPlan: rebuyChipPlan ?? this.rebuyChipPlan,
+      addOnStack: addOnStack ?? this.addOnStack,
+      addOnChipPlan: addOnChipPlan ?? this.addOnChipPlan,
+      levels: levels ?? this.levels,
+      levelDuration: levelDuration ?? this.levelDuration,
+      expectedFinishMins: expectedFinishMins ?? this.expectedFinishMins,
+      prizes: prizes ?? this.prizes,
+      prizePool: prizePool ?? this.prizePool,
+      organizerAmount: organizerAmount ?? this.organizerAmount,
+      colorUpInstructions: colorUpInstructions ?? this.colorUpInstructions,
+      warnings: warnings ?? this.warnings,
+    );
+  }
 }
 

@@ -7,12 +7,14 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/game.dart';
+import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_page.dart';
 
 class _PodiumResult {
@@ -25,19 +27,36 @@ class _PodiumResult {
 
 /// Results podium mirroring the web `ResultPodiumPage`.
 class ResultPodiumScreen extends StatelessWidget {
-  const ResultPodiumScreen({super.key});
+  const ResultPodiumScreen({super.key, this.gameId});
+
+  /// Id of the game to show; falls back to the current live game when null.
+  final String? gameId;
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final game = app.currentGame;
+    final game = gameId != null ? app.gameById(gameId!) : app.currentGame;
 
-    if (game == null) return const SizedBox.shrink();
+    if (game == null || game.status != LiveGameStatus.completed) {
+      // Guard: only show the podium once the game is fully completed.
+      // A null game means it was deleted; a non-completed game means the user
+      // navigated here manually while the tournament is still running.
+      // Use the standardized AppEmptyState for UI consistency (checklist 20-008).
+      return const AppEmptyState(
+        icon: '🏆',
+        title: 'Result unavailable',
+        description: 'This game may have been deleted or is not finished.',
+      );
+    }
 
     final finishOrder = game.finishOrder;
     final players = game.players;
     final prizes = game.structure.prizes;
     final user = app.user;
+
+    // Individual payout amounts are private: only organisers see them
+    // (checklist 14-042, 19-020). Public completed results carry no money.
+    final showAmounts = user?.isAdmin == true;
 
     final ranked = [
       for (var i = 0; i < finishOrder.length; i++)
@@ -102,7 +121,7 @@ class ResultPodiumScreen extends StatelessWidget {
                 children: [
                   for (final vi in [1, 0, 2])
                     if (vi < podium.length)
-                      Expanded(child: _PodiumSlot(result: podium[vi], isWinner: vi == 0)),
+                      Expanded(child: _PodiumSlot(result: podium[vi], isWinner: vi == 0, showAmounts: showAmounts)),
                 ],
               ),
             ),
@@ -140,7 +159,7 @@ class ResultPodiumScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (myResult.prize != null)
+                      if (myResult.prize != null && showAmounts)
                         Text(
                           Formatters.chips(myResult.prize!.amount),
                           style: AppTypography.monoXl.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
@@ -215,9 +234,11 @@ class ResultPodiumScreen extends StatelessWidget {
                         ),
                         const SizedBox(width: AppSpacing.md),
                         Text(
-                          r.prize != null ? Formatters.chips(r.prize!.amount) : '—',
+                          showAmounts && r.prize != null
+                              ? Formatters.chips(r.prize!.amount)
+                              : '—',
                           style: AppTypography.monoSm.copyWith(
-                            color: r.prize != null ? AppColors.primary : AppColors.mutedForeground,
+                            color: showAmounts && r.prize != null ? AppColors.primary : AppColors.mutedForeground,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -291,10 +312,11 @@ class ResultPodiumScreen extends StatelessWidget {
 }
 
 class _PodiumSlot extends StatelessWidget {
-  const _PodiumSlot({required this.result, required this.isWinner});
+  const _PodiumSlot({required this.result, required this.isWinner, required this.showAmounts});
 
   final _PodiumResult result;
   final bool isWinner;
+  final bool showAmounts;
 
   @override
   Widget build(BuildContext context) {
@@ -334,7 +356,7 @@ class _PodiumSlot extends StatelessWidget {
                   labels[result.pos - 1],
                   style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                 ),
-                if (result.prize != null)
+                if (result.prize != null && showAmounts)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(

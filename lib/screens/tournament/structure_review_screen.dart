@@ -13,7 +13,10 @@ import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_select.dart';
+import '../../widgets/structure_editor.dart';
 
 /// Structure review mirroring the web `StructureReviewPage`.
 class StructureReviewScreen extends StatelessWidget {
@@ -162,9 +165,43 @@ class StructureReviewScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Blind schedule — ${structure.levelDuration}-minute levels',
-                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Blind schedule — ${structure.levelDuration}-minute levels',
+                      style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: () {
+                        showAppModal(
+                          context: context,
+                          title: 'Edit future structure',
+                          maxWidth: 560,
+                          child: StructureEditor(
+                            structure: structure,
+                            currentLevel: 0,
+                            anteStyle: settings.anteStyle,
+                            onSpeedUp: () {
+                              app.acceptSpeedRecommendation(rec: SpeedRecommendation.speedUp);
+                              Navigator.of(context).pop();
+                            },
+                            onSlowDown: () {
+                              app.acceptSpeedRecommendation(rec: SpeedRecommendation.slowDown);
+                              Navigator.of(context).pop();
+                            },
+                            onApply: (edits) {
+                              if (edits.isNotEmpty) app.applyLevelEdits(edits);
+                              Navigator.of(context).pop();
+                            },
+                          ),
+                        );
+                      },
+                      child: const Text('Edit'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 // Header
@@ -250,7 +287,25 @@ class StructureReviewScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Prize distribution (admin only)', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Prize distribution (admin only)', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                    SizedBox(
+                      width: 140,
+                      child: AppSelect<int?>(
+                        value: settings.forcePaidPlaces,
+                        hint: 'Auto-calculate',
+                        items: [
+                          const DropdownMenuItem<int?>(value: null, child: Text('Auto')),
+                          for (var i = 1; i <= 10; i++)
+                            DropdownMenuItem<int?>(value: i, child: Text('$i paid places')),
+                        ],
+                        onChanged: (v) => app.overridePaidPlaces(v),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   'Based on ${settings.players} players + estimated rebuys${settings.addOn ? ' + add-ons' : ''}. Players will see prize pool total only.',

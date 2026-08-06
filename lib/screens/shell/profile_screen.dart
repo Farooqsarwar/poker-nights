@@ -79,6 +79,17 @@ class ProfileScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                InkWell(
+                  onTap: () => _editProfile(context, app),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    child: Text(
+                      '✏️ Edit',
+                      style: AppTypography.bodySm.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -123,6 +134,13 @@ class ProfileScreen extends StatelessWidget {
                   title: 'Your group',
                   subtitle: app.currentGroup.name,
                   onTap: () => context.go(RoutePaths.group),
+                  showDivider: true,
+                ),
+                _ProfileRow(
+                  icon: '🗑️',
+                  title: 'Delete account',
+                  subtitle: 'Permanently remove your account and all sessions',
+                  onTap: () => _confirmDeleteAccount(context, app),
                   showDivider: false,
                 ),
               ],
@@ -133,6 +151,75 @@ class ProfileScreen extends StatelessWidget {
             variant: AppButtonVariant.danger,
             onPressed: () => _confirmSignOut(context, app),
             child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editProfile(BuildContext context, AppProvider app) {
+    final user = app.user;
+    if (user == null) return;
+    final nameController = TextEditingController(text: user.name);
+    final emailController = TextEditingController(text: user.email);
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Edit profile'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(labelText: 'Email'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('Cancel', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          ),
+          TextButton(
+            onPressed: () {
+              app.updateProfile(name: nameController.text, email: emailController.text);
+              Navigator.of(dialogContext).pop();
+            },
+            child: Text('Save', style: AppTypography.bodySm.copyWith(color: AppColors.primary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteAccount(BuildContext context, AppProvider app) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Delete account?'),
+        content: Text(
+          'This permanently removes your account and invalidates any live session. This cannot be undone.',
+          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('Cancel', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              app.deleteAccount();
+              context.go(RoutePaths.landing);
+            },
+            child: Text('Delete', style: AppTypography.bodySm.copyWith(color: AppColors.destructive)),
           ),
         ],
       ),

@@ -133,12 +133,20 @@ class _GroupScreenState extends State<GroupScreen> {
                   ],
                 ),
               ),
-              if (isAdmin)
+              if (isAdmin) ...[
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => context.go(RoutePaths.presets),
+                  child: const Text('Presets'),
+                ),
+                const SizedBox(width: AppSpacing.sm),
                 AppButton(
                   size: AppButtonSize.sm,
                   onPressed: () => context.go(RoutePaths.createTournament),
                   child: const Text('+ New game'),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -288,40 +296,39 @@ class _GroupScreenState extends State<GroupScreen> {
                           RSVPBadge(
                             rsvp: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp,
                           ),
-                          if (user != null) ...[
-                            const SizedBox(width: AppSpacing.md),
-                            for (final opt in const [Rsvp.going, Rsvp.maybe, Rsvp.cant])
-                              Padding(
-                                padding: const EdgeInsets.only(right: AppSpacing.xs),
-                                child: InkWell(
-                                  onTap: () => app.setRSVP(opt, gameId: game.id),
-                                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp == opt
-                                          ? AppColors.primarySoft
-                                          : AppColors.muted,
-                                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                                      border: Border.all(
-                                        color: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp == opt
-                                            ? AppColors.primary
-                                            : AppColors.border,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      opt.label,
-                                      style: AppTypography.bodyXs.copyWith(
-                                        color: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp == opt
-                                            ? AppColors.primary
-                                            : AppColors.mutedForeground,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
+                            if (user != null) ...[
+                              const SizedBox(width: AppSpacing.md),
+                              PopupMenuButton<Rsvp>(
+                                initialValue: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp,
+                                onSelected: (val) => app.setRSVP(val, gameId: game.id),
+                                itemBuilder: (context) => [
+                                  for (final opt in [
+                                    Rsvp.going,
+                                    Rsvp.goingPlus1,
+                                    Rsvp.goingPlus2,
+                                    Rsvp.goingPlus3,
+                                    Rsvp.goingPlus4,
+                                  ])
+                                    PopupMenuItem(value: opt, child: Text(opt.label)),
+                                ],
+                                child: _RsvpBtn(
+                                  opt: Rsvp.going,
+                                  current: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp,
+                                  overrideLabel: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp?.isGoing == true
+                                      ? game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp?.label
+                                      : 'Going ▾',
                                 ),
                               ),
-                          ],
+                              for (final opt in const [Rsvp.maybe, Rsvp.cant])
+                                Padding(
+                                  padding: const EdgeInsets.only(left: AppSpacing.xs),
+                                  child: InkWell(
+                                    onTap: () => app.setRSVP(opt, gameId: game.id),
+                                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                                    child: _RsvpBtn(opt: opt, current: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp),
+                                  ),
+                                ),
+                            ],
                         ],
                       ),
                     ],
@@ -368,7 +375,7 @@ class _GroupScreenState extends State<GroupScreen> {
                           ],
                         ),
                       ),
-                      if (m.id == group.ownerId) ...[
+                      if (m.isAdmin) ...[
                         const AppBadge(label: 'Admin', variant: AppBadgeVariant.accent),
                         const SizedBox(width: AppSpacing.sm),
                       ],
@@ -376,6 +383,21 @@ class _GroupScreenState extends State<GroupScreen> {
                         '${m.stats.played}G · ${m.stats.wins}W',
                         style: AppTypography.mono(size: AppFontSizes.xs, color: AppColors.mutedForeground),
                       ),
+                      if (context.read<AppProvider>().user?.id == group.ownerId && m.id != group.ownerId)
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert, size: 18, color: AppColors.mutedForeground),
+                          onSelected: (val) {
+                            if (val == 'toggle_admin') {
+                              context.read<AppProvider>().toggleAdminRole(m.id, !m.isAdmin);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: 'toggle_admin',
+                              child: Text(m.isAdmin ? 'Revoke Admin' : 'Make Admin'),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -787,6 +809,32 @@ class _PollOption extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RsvpBtn extends StatelessWidget {
+  const _RsvpBtn({required this.opt, this.current, this.overrideLabel});
+  final Rsvp opt;
+  final Rsvp? current;
+  final String? overrideLabel;
+  @override
+  Widget build(BuildContext context) {
+    final active = current != null && (opt == Rsvp.going ? current!.isGoing : current == opt);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+      decoration: BoxDecoration(
+        color: active ? AppColors.primarySoft : AppColors.muted,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: active ? AppColors.primary : AppColors.border),
+      ),
+      child: Text(
+        overrideLabel ?? opt.label,
+        style: AppTypography.bodyXs.copyWith(
+          color: active ? AppColors.primary : AppColors.mutedForeground,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );

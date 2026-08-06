@@ -202,8 +202,6 @@ abstract final class _HeroPalette {
   static const chipWhite = Color(0xFFEDEAE2);
   static const chipRed = Color(0xFFC7273D);
   static const chipBlue = Color(0xFF2C5CC7);
-  static const chipGreen = Color(0xFF1F8A5C);
-  static const chipDark = Color(0xFF2A2A30);
 }
 
 class _TablePainter extends CustomPainter {
@@ -559,12 +557,6 @@ class _TablePainter extends CustomPainter {
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
       );
     }
-  }
-
-  Offset _pointOnEllipse(Rect rect, double angle, double scale) {
-    final rx = rect.width / 2 * scale;
-    final ry = rect.height / 2 * scale;
-    return rect.center + Offset(rx * math.cos(angle), ry * math.sin(angle));
   }
 
   @override

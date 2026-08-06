@@ -6,6 +6,7 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
+import '../../models/cash_game.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
@@ -38,12 +39,52 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   final _newPlayerName = TextEditingController();
   bool _showEndModal = false;
   bool _showReconcile = false;
+  bool _forceEnd = false;
+
+  String? _editPlayerId;
+  final _editStack = TextEditingController();
+  final _editTotal = TextEditingController();
+  final _editBuyInCount = TextEditingController();
+  final _editCashedOut = TextEditingController();
 
   @override
   void dispose() {
     _amount.dispose();
     _newPlayerName.dispose();
+    _editStack.dispose();
+    _editTotal.dispose();
+    _editBuyInCount.dispose();
+    _editCashedOut.dispose();
     super.dispose();
+  }
+
+  void _openEdit(CashPlayer p) {
+    setState(() {
+      _editPlayerId = p.id;
+      _editStack.text = _num(p.stack);
+      _editTotal.text = _num(p.totalBuyIns);
+      _editBuyInCount.text = '${p.buyInCount}';
+      _editCashedOut.text = _num(p.cashedOut);
+      _forceEnd = false;
+    });
+  }
+
+  void _saveEdit(AppProvider app) {
+    final id = _editPlayerId;
+    if (id == null) return;
+    final stack = num.tryParse(_editStack.text.trim())?.toDouble();
+    final total = num.tryParse(_editTotal.text.trim())?.toDouble();
+    final count = num.tryParse(_editBuyInCount.text.trim())?.toInt();
+    final cashedOut = num.tryParse(_editCashedOut.text.trim())?.toDouble();
+    if (stack == null || total == null || count == null || cashedOut == null) return;
+    app.cashEditPlayer(
+      id,
+      stack: stack,
+      totalBuyIns: total,
+      buyInCount: count,
+      cashedOut: cashedOut,
+    );
+    setState(() => _editPlayerId = null);
   }
 
   void _openAction(_CashAction action, {double? preset}) {
@@ -298,6 +339,13 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                             ],
                           ),
                         ],
+                        const SizedBox(width: AppSpacing.xs),
+                        AppButton(
+                          size: AppButtonSize.sm,
+                          variant: AppButtonVariant.ghost,
+                          onPressed: () => _openEdit(p),
+                          child: const Text('Edit'),
+                        ),
                       ],
                     ),
                   ),
@@ -383,6 +431,85 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 ],
               ),
             ),
+          // Edit player modal
+          if (_editPlayerId != null)
+            Builder(builder: (context) {
+              final p = players.where((x) => x.id == _editPlayerId).firstOrNull;
+              if (p == null) return const SizedBox.shrink();
+              return AppModal(
+                open: true,
+                onClose: () => setState(() => _editPlayerId = null),
+                title: 'Edit ${p.name}',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Correct an incorrectly entered buy-in, top-up or cash-out. Totals are recalculated from these fields.',
+                      style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppTextField(
+                            controller: _editStack,
+                            label: 'Stack in play ($currency)',
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: AppTextField(
+                            controller: _editTotal,
+                            label: 'Total bought ($currency)',
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppTextField(
+                            controller: _editBuyInCount,
+                            label: 'Buy-in count',
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: AppTextField(
+                            controller: _editCashedOut,
+                            label: 'Cashed out ($currency)',
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppButton(
+                            variant: AppButtonVariant.secondary,
+                            onPressed: () => setState(() => _editPlayerId = null),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: AppButton(
+                            onPressed: () => _saveEdit(app),
+                            child: const Text('Save corrections'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
           // Reconcile modal
           if (_showReconcile)
             AppModal(
@@ -451,7 +578,10 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
           if (_showEndModal)
             AppModal(
               open: true,
-              onClose: () => setState(() => _showEndModal = false),
+              onClose: () => setState(() {
+                _showEndModal = false;
+                _forceEnd = false;
+              }),
               title: 'End cash game?',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -475,13 +605,62 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                       ),
                     ),
                   ],
+                  if (session.difference.abs() > 0.01) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: AppColors.destructive.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(color: AppColors.destructive.withValues(alpha: 0.4)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Reconciliation mismatch of ${Formatters.money(currency, session.difference.abs())}',
+                            style: AppTypography.bodySm.copyWith(color: AppColors.destructive, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Chips in play do not equal buy-ins minus cash-outs. Resolve it in the reconciliation screen, or explicitly confirm ending with the mismatch.',
+                            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          InkWell(
+                            onTap: () => setState(() => _forceEnd = !_forceEnd),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _forceEnd ? Icons.check_box : Icons.check_box_outline_blank,
+                                  size: 18,
+                                  color: _forceEnd ? AppColors.destructive : AppColors.mutedForeground,
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Flexible(
+                                  child: Text(
+                                    'I understand — end with the mismatch recorded',
+                                    style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   Row(
                     children: [
                       Expanded(
                         child: AppButton(
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => setState(() => _showEndModal = false),
+                          onPressed: () => setState(() {
+                            _showEndModal = false;
+                            _forceEnd = false;
+                          }),
                           child: const Text('Cancel'),
                         ),
                       ),
@@ -489,6 +668,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                       Expanded(
                         child: AppButton(
                           variant: AppButtonVariant.danger,
+                          disabled: session.difference.abs() > 0.01 && !_forceEnd,
                           onPressed: () => _endGame(app),
                           child: const Text('End game'),
                         ),

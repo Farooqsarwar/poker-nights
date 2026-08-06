@@ -5,7 +5,7 @@ import '../constants/app_constants.dart';
 import '../app/typography.dart';
 
 /// Select dropdown mirroring the web `Select` component.
-class AppSelect extends StatelessWidget {
+class AppSelect<T> extends StatelessWidget {
   const AppSelect({
     super.key,
     this.label,
@@ -16,9 +16,9 @@ class AppSelect extends StatelessWidget {
   });
 
   final String? label;
-  final String? value;
-  final List<DropdownMenuItem<String>> items;
-  final ValueChanged<String?> onChanged;
+  final T? value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
   final String? hint;
 
   @override
@@ -33,8 +33,8 @@ class AppSelect extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
         ],
-        DropdownButtonFormField<String>(
-          initialValue: value,
+        DropdownButtonFormField<T>(
+          value: value,
           items: items,
           onChanged: onChanged,
           isExpanded: true,

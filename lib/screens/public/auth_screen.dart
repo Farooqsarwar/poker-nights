@@ -18,9 +18,13 @@ enum AuthMode { login, register, forgotPassword }
 
 /// Auth screens (login / register / forgot password) mirroring `AuthPage`.
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key, required this.mode});
+  const AuthScreen({super.key, required this.mode, this.next});
 
   final AuthMode mode;
+
+  /// Route to land on after a successful sign-in (e.g. the page the user was
+  /// trying to reach before being sent to auth). Defaults to `/home`.
+  final String? next;
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -75,7 +79,13 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     if (_isForgot) {
-      setState(() => _success = 'If an account exists for that email, a reset link has been sent.');
+      final app = context.read<AppProvider>();
+      final exists = app.requestPasswordReset(email);
+      if (!exists) {
+        setState(() => _error = 'No account found for that email.');
+        return;
+      }
+      setState(() => _success = 'A password reset link has been sent to $email.');
       return;
     }
 
@@ -99,18 +109,28 @@ class _AuthScreenState extends State<AuthScreen> {
     if (!mounted) return;
 
     final app = context.read<AppProvider>();
+    final dest = widget.next ?? RoutePaths.home;
     if (widget.mode == AuthMode.login) {
       final ok = app.login(email, _passwordController.text);
       if (!ok) {
-        setState(() => _error = 'Incorrect email or password.');
-      } else {
-        context.go(RoutePaths.home);
+        setState(() {
+          _loading = false;
+          _error = 'Incorrect email or password.';
+        });
+        return;
       }
     } else {
-      app.register(_nameController.text.trim(), email, _passwordController.text);
-      context.go(RoutePaths.home);
+      final ok = app.register(
+          _nameController.text.trim(), email, _passwordController.text);
+      if (!ok) {
+        setState(() {
+          _loading = false;
+          _error = 'An account already exists for that email.';
+        });
+        return;
+      }
     }
-    setState(() => _loading = false);
+    context.go(dest);
   }
 
   /// A leading field icon padded to sit inside the input pill.
@@ -342,7 +362,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         style: AppTypography.monoXs.copyWith(color: AppColors.primary),
                       ),
                       TextSpan(
-                        text: ' / any password',
+                        text: ' / ${AppProvider.seedPassword}',
                         style: AppTypography.bodyXs
                             .copyWith(color: AppColors.mutedForeground),
                       ),

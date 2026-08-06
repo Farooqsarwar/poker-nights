@@ -7,6 +7,7 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
+import '../../models/chip_color.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
@@ -14,6 +15,38 @@ import '../../widgets/chip_token.dart';
 
 class ChipSetsScreen extends StatelessWidget {
   const ChipSetsScreen({super.key});
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    AppProvider app,
+    ({String id, String name, List<ChipColor> chips}) cs,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Delete chip set?'),
+        content: Text(
+          '"${cs.name}" will be removed. Games already played with it stay in history unchanged.',
+          style: AppTypography.bodySm,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancel', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Delete',
+              style: AppTypography.bodySm.copyWith(color: AppColors.destructive),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) app.deleteChipSet(cs.id);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +86,7 @@ class ChipSetsScreen extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: chipSets.length,
-              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
               itemBuilder: (context, index) {
                 final cs = chipSets[index];
                 return AppCard(
@@ -86,9 +119,7 @@ class ChipSetsScreen extends StatelessWidget {
                       if (cs.id != 'cs-default')
                         IconButton(
                           icon: const Icon(Icons.delete, color: AppColors.destructive),
-                          onPressed: () {
-                            app.deleteChipSet(cs.id);
-                          },
+                          onPressed: () => _confirmDelete(context, app, cs),
                         ),
                     ],
                   ),

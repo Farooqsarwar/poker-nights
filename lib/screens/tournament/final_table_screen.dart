@@ -42,9 +42,11 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
     final game = app.currentGame;
     if (game != null) {
       final active = game.activePlayers.toList()..shuffle(_random);
+      // Final table seats at most 9 players (checklist 13-025).
+      final finalists = active.length > 9 ? active.sublist(0, 9) : active;
       _seating = [
-        for (var i = 0; i < active.length; i++)
-          _SeatEntry(id: active[i].id, name: active[i].name, seat: i + 1),
+        for (var i = 0; i < finalists.length; i++)
+          _SeatEntry(id: finalists[i].id, name: finalists[i].name, seat: i + 1),
       ];
     }
   }
@@ -79,6 +81,8 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
       return const SizedBox.shrink();
     }
 
+    final tooMany = game.activePlayers.length > 9;
+
     return AppPage(
       maxWidth: 560,
       child: Column(
@@ -112,6 +116,13 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
             type: AppAlertType.info,
             message: 'All remaining players draw new seats at the final table. This cannot be undone.',
           ),
+          if (tooMany) ...[
+            const SizedBox(height: AppSpacing.md),
+            const AppAlertBanner(
+              type: AppAlertType.warning,
+              message: 'More than 9 players are still in. The final table holds a maximum of 9 seats.',
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           if (_confirmed)
             AppCard(
@@ -212,8 +223,9 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: AppButton(
+                    disabled: tooMany,
                     onPressed: () => _confirm(app),
-                    child: const Text('♠ Confirm seating'),
+                    child: Text(tooMany ? 'Eliminate to 9 first' : '♠ Confirm seating'),
                   ),
                 ),
               ],

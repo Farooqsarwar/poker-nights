@@ -6,6 +6,7 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
+import '../../models/cash_game.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
@@ -31,6 +32,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final group = app.currentGroup;
     final pastGames = group.pastGames;
     final userId = app.user?.id;
+    final isAdmin = app.user?.isAdmin ?? false;
     final medals = const ['🥇', '🥈', '🥉'];
 
     final myGames = pastGames.where((g) => g.players.any((p) => p.id == userId)).toList();
@@ -62,10 +64,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
               _MiniStat(label: 'Podium', value: '${myStats.podium}'),
               _MiniStat(label: 'Rebuys', value: '${myStats.rebuys}'),
               _MiniStat(label: 'KOs', value: '${myStats.knockouts}'),
+              // Earnings derive from individual payouts, which are private
+              // (14-042/19-020) — non-admins see no monetary P&L.
               _MiniStat(
                 label: 'P&L',
-                value: '${myStats.earnings >= 0 ? '+' : ''}${Formatters.chips(myStats.earnings)}',
-                color: myStats.earnings >= 0 ? AppColors.success : AppColors.destructive,
+                value: isAdmin
+                    ? '${myStats.earnings >= 0 ? '+' : ''}${Formatters.chips(myStats.earnings)}'
+                    : '—',
+                color: isAdmin
+                    ? (myStats.earnings >= 0 ? AppColors.success : AppColors.destructive)
+                    : AppColors.mutedForeground,
               ),
             ],
           ),
@@ -74,15 +82,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
             tabs: const [
               AppTabItem(id: 'games', label: 'Games'),
               AppTabItem(id: 'leaderboard', label: 'Leaderboard'),
+              AppTabItem(id: 'cash', label: 'Cash games'),
             ],
             active: _tab,
             onChanged: (t) => setState(() => _tab = t),
           ),
           const SizedBox(height: AppSpacing.lg),
           if (_tab == 'games')
-            _buildGames(pastGames, userId, medals)
+            _buildGames(pastGames, userId, medals, isAdmin)
+          else if (_tab == 'leaderboard')
+            _buildLeaderboard(pastGames, userId, medals)
           else
-            _buildLeaderboard(pastGames, userId, medals),
+            _buildCash(app.cashHistory, isAdmin),
         ],
       ),
     );
@@ -119,7 +130,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return (played: played, wins: wins, podium: podium, rebuys: rebuys, knockouts: knockouts, earnings: earnings);
   }
 
-  Widget _buildGames(List<LiveGame> pastGames, String? userId, List<String> medals) {
+  Widget _buildGames(List<LiveGame> pastGames, String? userId, List<String> medals, bool isAdmin) {
     if (pastGames.isEmpty) {
       return AppCard(
         padding: const EdgeInsets.all(AppSpacing.xxl),
@@ -135,7 +146,30 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Column(
       children: [
         for (final game in pastGames) ...[
-          _HistoryRow(game: game, userId: userId, medals: medals),
+          _HistoryRow(game: game, userId: userId, medals: medals, showAmounts: isAdmin),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCash(List<CashSession> sessions, bool isAdmin) {
+    if (sessions.isEmpty) {
+      return AppCard(
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        child: Column(
+          children: [
+            const Text('🃏', style: TextStyle(fontSize: AppFontSizes.xxxl)),
+            const SizedBox(height: AppSpacing.sm),
+            Text('No completed cash games yet.', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          ],
+        ),
+      );
+    }
+    return Column(
+      children: [
+        for (final session in sessions) ...[
+          _CashHistoryRow(session: session, showAmounts: isAdmin),
           const SizedBox(height: AppSpacing.sm),
         ],
       ],
@@ -308,12 +342,73 @@ class _LbStat extends StatelessWidget {
   }
 }
 
+class _CashHistoryRow extends StatelessWidget {
+  const _CashHistoryRow({required this.session, required this.showAmounts});
+
+  final CashSession session;
+  final bool showAmounts;
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = session.settings.currency;
+    final elapsedMins = session.elapsed.inMinutes;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.secondary,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+            ),
+            alignment: Alignment.center,
+            child: const Text('💵', style: TextStyle(fontSize: AppFontSizes.xl)),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  session.settings.name,
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '${session.settings.date} · ${session.players.length} players',
+                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${elapsedMins ~/ 60}h ${elapsedMins % 60}m',
+                style: AppTypography.mono(size: AppFontSizes.xs, color: AppColors.primary),
+              ),
+              Text(
+                showAmounts ? Formatters.money(currency, session.totalBuyIns) : 'Completed',
+                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HistoryRow extends StatelessWidget {
-  const _HistoryRow({required this.game, required this.userId, required this.medals});
+  const _HistoryRow({required this.game, required this.userId, required this.medals, required this.showAmounts});
 
   final LiveGame game;
   final String? userId;
   final List<String> medals;
+  final bool showAmounts;
 
   @override
   Widget build(BuildContext context) {
@@ -370,7 +465,7 @@ class _HistoryRow extends StatelessWidget {
                       placement == 1 ? '🥇 1st' : '#$placement',
                       style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
                     ),
-                  if (game.structure.prizePool > 0)
+                  if (game.structure.prizePool > 0 && showAmounts)
                     Text(
                       Formatters.chips(game.structure.prizePool),
                       style: AppTypography.mono(size: AppFontSizes.xs, color: AppColors.primary),

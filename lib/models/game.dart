@@ -179,3 +179,19 @@ class Announcement {
   final DateTime timestamp;
 }
 
+/// An audit record of a system or administrator event.
+class AuditRecord {
+  const AuditRecord({
+    required this.id,
+    required this.timestamp,
+    required this.type,
+    required this.actor,
+    required this.details,
+  });
+
+  final String id;
+  final DateTime timestamp;
+  final String type;
+  final String actor;
+  final String details;
+}

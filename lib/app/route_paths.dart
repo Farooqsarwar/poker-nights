@@ -9,6 +9,10 @@ abstract final class RoutePaths {
   static const String forgotPassword = '/forgot-password';
   static const String tvMode = '/tv-mode';
   static const String guestFlow = '/guest-flow';
+  static const String privacy = '/privacy';
+  static const String terms = '/terms';
+  static const String support = '/support';
+  static const String join = '/join';
 
   // ── App shell ──────────────────────────────────────────────────────────────
   static const String home = '/home';
@@ -38,4 +42,5 @@ abstract final class RoutePaths {
   static const String stats = '/stats';
   static const String chipSets = '/chip-sets';
   static const String editChipSet = '/edit-chip-set';
+  static const String presets = '/presets';
 }

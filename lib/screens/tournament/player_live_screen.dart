@@ -17,6 +17,8 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_timer.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_progress_bar.dart';
+import '../../widgets/chat_sheet.dart';
+import '../../models/game.dart';
 
 /// Player live view mirroring the web `PlayerLivePage`.
 class PlayerLiveScreen extends StatelessWidget {
@@ -47,7 +49,12 @@ class PlayerLiveScreen extends StatelessWidget {
     final level = game.currentLevelData;
     final next = game.nextLevelData;
     final activePlayers = game.activePlayers;
-    final myPlayer = game.players.where((p) => p.id == app.user?.id).firstOrNull;
+    Player? myPlayer = game.players.where((p) => p.id == app.user?.id).firstOrNull;
+    if (myPlayer == null && app.guestSession != null) {
+      final s = app.guestSession!;
+      myPlayer = game.players.where((p) => p.isGuest && p.name == s.name && p.inviterId == s.inviterId && p.guestSlot == s.slot).firstOrNull;
+    }
+    
     final avgStack = Formatters.averageStack(game.totalChipsInPlay, activePlayers.length);
     final timerDanger = game.secondsRemaining <= 60;
     final timerWarning = game.secondsRemaining <= 300;
@@ -96,11 +103,23 @@ class PlayerLiveScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.ghost,
-                onPressed: () => context.go(RoutePaths.tvMode),
-                child: const Text('📺 TV Mode'),
+              Wrap(
+                spacing: AppSpacing.sm,
+                children: [
+                  if (app.user != null)
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: () => ChatSheet.show(context, game.id),
+                      child: const Text('💬 Chat'),
+                    ),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    variant: AppButtonVariant.ghost,
+                    onPressed: () => context.go(RoutePaths.tvMode),
+                    child: const Text('📺 TV Mode'),
+                  ),
+                ],
               ),
             ],
           ),

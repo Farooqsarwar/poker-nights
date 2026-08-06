@@ -9,6 +9,7 @@ import '../models/game.dart';
 import '../models/group.dart';
 import '../models/live_game.dart';
 import '../models/tournament.dart';
+import '../models/tournament_preset.dart';
 import '../models/user.dart';
 import '../models/chip_color.dart';
 import '../utils/formatters.dart';
@@ -17,12 +18,38 @@ import '../utils/tournament_engine.dart';
 import '../utils/voice_service.dart';
 import '../services/recovery_service.dart';
 
+/// One future-level edit produced by the admin structure editor.
+typedef LevelEdit = ({int level, int sb, int bb, int? ante, int durationMins});
+
 /// Result of looking up a game / TV code.
 enum CodeLookupResult { game, tv, notFound }
 
 /// How the admin wants checked-in players distributed to tables/seats
 /// (checklist §13.1). Mirrored by the screen's `SeatingMode`.
 enum TableSeatingMode { random, manual, keepGuests, separateGuests }
+
+/// A suggested seat move that balances table counts. Produced by
+/// [AppProvider.requestSeatingBalance]; the admin must confirm it before it is
+/// applied (checklist §13.2).
+class SeatMoveRecommendation {
+  const SeatMoveRecommendation({
+    required this.fromPlayerId,
+    required this.fromPlayerName,
+    required this.fromTable,
+    required this.fromSeat,
+    required this.toTable,
+    required this.toSeat,
+    required this.reason,
+  });
+
+  final String fromPlayerId;
+  final String fromPlayerName;
+  final int fromTable;
+  final int fromSeat;
+  final int toTable;
+  final int toSeat;
+  final String reason;
+}
 
 /// Application-level UI state (no business logic / backend).
 class AppProvider extends ChangeNotifier {
@@ -34,24 +61,95 @@ class AppProvider extends ChangeNotifier {
 
   bool _isTickUpdate = false;
 
+  // ── Connectivity / recovery state (offline indicator, checklist 12-075) ────
+  bool _isOffline = false;
+  bool get isOffline => _isOffline;
+
+  /// True when the active game was restored from local storage on startup.
+  bool _restoredFromRecovery = false;
+  bool get restoredFromRecovery => _restoredFromRecovery;
+  DateTime? _recoveryTime;
+  DateTime? get recoveryTime => _recoveryTime;
+
+  /// Timestamp of the last non-clock data sync. TV/player/guest views use it
+  /// to show "last updated" and distinguish a live feed from a stale one
+  /// (checklist 15-039, 18-028, 20-038). Clock ticks do not count as syncs.
+  DateTime _lastSync = DateTime.now();
+  DateTime get lastSync => _lastSync;
+
+  /// Demo-only toggle: flips the connectivity indicator. While offline every
+  /// change is still persisted to local storage (RecoveryService), so nothing
+  /// is lost and the app "reconnects" on tap.
+  void toggleOffline() {
+    _isOffline = !_isOffline;
+    notifyListeners();
+  }
+
   @override
   void notifyListeners() {
     super.notifyListeners();
-    if (!_isTickUpdate) {
-      if (_currentGame != null) {
-        RecoveryService.saveGame(_currentGame!);
-      } else {
-        RecoveryService.clearGame();
-      }
+    if (_isTickUpdate) return;
+    _lastSync = DateTime.now();
+    if (_currentGame != null) {
+      RecoveryService.saveGame(_currentGame!);
+    } else {
+      RecoveryService.clearGame();
     }
+    final session = _cashSession;
+    if (session != null && !session.isCompleted) {
+      RecoveryService.saveCashSession(session);
+    } else {
+      RecoveryService.clearCashSession();
+    }
+  }
+
+  // ── Preferences ────────────────────────────────────────────────────────────
+  bool _notificationsEnabled = false;
+  bool get notificationsEnabled => _notificationsEnabled;
+
+  void setNotificationsEnabled(bool value) {
+    _notificationsEnabled = value;
+    notifyListeners();
   }
 
   Future<void> _loadRecovery() async {
     final recovered = await RecoveryService.loadGame();
     if (recovered != null) {
       _currentGame = recovered;
-      notifyListeners();
+      _restoredFromRecovery = true;
+      _recoveryTime = DateTime.now();
     }
+    final cash = await RecoveryService.loadCashSession();
+    if (cash != null && !cash.isCompleted) {
+      _cashSession = cash;
+    }
+    final guest = await RecoveryService.loadGuestSession();
+    if (guest != null) {
+      _guestSession = guest;
+    }
+    notifyListeners();
+  }
+
+  /// True if the locally recovered game state differs from the "cloud" state.
+  bool get hasOfflineConflict {
+    if (_currentGame == null || !_restoredFromRecovery) return false;
+    final cloudGame = _currentGroup.games.where((g) => g.id == _currentGame!.id).firstOrNull;
+    if (cloudGame == null) return false;
+    // Simple mock comparison: if local has more audit records or different level, it's out of sync
+    return _currentGame!.auditHistory.length != cloudGame.auditHistory.length ||
+           _currentGame!.currentLevel != cloudGame.currentLevel;
+  }
+
+  void resolveOfflineConflict({required bool keepLocal}) {
+    if (!keepLocal && _currentGame != null) {
+      final cloudGame = _currentGroup.games.where((g) => g.id == _currentGame!.id).firstOrNull;
+      if (cloudGame != null) {
+        _currentGame = cloudGame;
+        RecoveryService.saveGame(cloudGame);
+      }
+    }
+    _restoredFromRecovery = false;
+    notifyListeners();
   }
 
   // ── Auth ───────────────────────────────────────────────────────────────────
@@ -60,26 +158,54 @@ class AppProvider extends ChangeNotifier {
 
   bool get isAuthenticated => _user != null;
 
+  /// Shared demo password for every seeded mock account.
+  static const seedPassword = 'password123';
+
+  /// Emails → passwords for every account that can sign in (seeded members
+  /// plus anything created via `register`). Acts as the dummy auth store.
+  final Map<String, String> _passwords = {
+    for (final m in MockData.members) m.email.toLowerCase(): seedPassword,
+  };
+
+  int _userIdSeq = 100;
+
   bool login(String email, String password) {
-    final found = MockData.members
-        .where((m) => m.email.toLowerCase() == email.trim().toLowerCase())
-        .toList();
-    if (found.isNotEmpty) {
+    final key = email.trim().toLowerCase();
+    final found = MockData.members.where((m) => m.email.toLowerCase() == key);
+    if (found.isNotEmpty && _passwords[key] == password) {
       _user = found.first;
-      notifyListeners();
-      return true;
-    }
-    if (email.trim().toLowerCase() == MockData.demoUser.email) {
-      _user = MockData.demoUser;
       notifyListeners();
       return true;
     }
     return false;
   }
 
-  void register(String name, String email, String password) {
-    _user = MockData.demoUser;
+  /// Returns `true` when a new account was created, `false` when the email
+  /// is already registered (duplicate).
+  bool register(String name, String email, String password) {
+    final key = email.trim().toLowerCase();
+    if (MockData.members.any((m) => m.email.toLowerCase() == key) ||
+        _passwords.containsKey(key)) {
+      return false;
+    }
+    final user = AppUser(
+      id: 'u-${_userIdSeq++}',
+      name: name.trim(),
+      email: email.trim(),
+      isAdmin: false,
+      stats: const UserStats(played: 0, wins: 0, podium: 0, avgFinish: 0, knockouts: 0),
+    );
+    _passwords[key] = password;
+    _user = user;
     notifyListeners();
+    return true;
+  }
+
+  /// True when an account exists for [email], so a reset "link" can be sent.
+  bool requestPasswordReset(String email) {
+    final key = email.trim().toLowerCase();
+    return MockData.members.any((m) => m.email.toLowerCase() == key) ||
+        _passwords.containsKey(key);
   }
 
   void logout() {
@@ -88,7 +214,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── Chip Sets ──────────────────────────────────────────────────────────────
-  List<({String id, String name, List<ChipColor> chips})> _savedChipSets = [
+  final List<({String id, String name, List<ChipColor> chips})> _savedChipSets = [
     (id: 'cs-default', name: 'Home Set (4 colour)', chips: MockData.defaultChipSet),
   ];
 
@@ -119,6 +245,99 @@ class AppProvider extends ChangeNotifier {
       email: email?.trim().isNotEmpty == true ? email!.trim() : current.email,
     );
     notifyListeners();
+  }
+
+  // ── Tournament Presets (checklist §9.1) ──────────────────────────────────
+  final List<TournamentPreset> _presets = [
+    TournamentPreset(
+      id: 'pr-friday',
+      name: 'Friday Night Regular',
+      buyIn: 15,
+      koEnabled: false,
+      koAmount: 5,
+      rebuys: true,
+      rebuysCloseLevel: 6,
+      reEntry: true,
+      addOn: true,
+      durationHours: 3.5,
+      anteEnabled: true,
+      anteAfterLevel: 6,
+      organizerPct: 10,
+      chipSetName: 'Home Set (4 colour)',
+      chipSet: List.of(MockData.defaultChipSet),
+    ),
+    TournamentPreset(
+      id: 'pr-deep',
+      name: 'Deep Stack Turbo',
+      buyIn: 25,
+      koEnabled: true,
+      koAmount: 10,
+      rebuys: false,
+      rebuysCloseLevel: 5,
+      reEntry: false,
+      addOn: false,
+      durationHours: 5,
+      anteEnabled: true,
+      anteAfterLevel: 5,
+      organizerPct: 0,
+      chipSetName: 'Standard 500',
+      chipSet: List.of(TournamentEngine.getPreset('Standard 500')),
+    ),
+  ];
+
+  List<TournamentPreset> get presets => List.unmodifiable(_presets);
+
+  TournamentPreset? presetById(String? id) {
+    if (id == null) return null;
+    for (final p in _presets) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  void savePreset(TournamentPreset preset) {
+    final idx = _presets.indexWhere((p) => p.id == preset.id);
+    if (idx >= 0) {
+      _presets[idx] = preset;
+    } else {
+      _presets.add(preset);
+    }
+    notifyListeners();
+  }
+
+  void deletePreset(String id) {
+    _presets.removeWhere((p) => p.id == id);
+    notifyListeners();
+  }
+
+  /// Suggests up to two presets that match the signals parsed from closed
+  /// polls (e.g. "What buy-in?" → 15, "How long?" → 3.5h). Used by the
+  /// create-tournament wizard (09-007 / 09-008 / 09-009).
+  List<TournamentPreset> suggestPresets({
+    required int expectedPlayers,
+    List<num> pollSignals = const [],
+  }) {
+    if (_presets.isEmpty) return const [];
+
+    int scoreFor(TournamentPreset p) {
+      var score = 0;
+      for (final s in pollSignals) {
+        if (s == p.buyIn) score += 40;
+        if (s == p.durationHours) score += 30;
+        if ((s - p.buyIn).abs() <= 2 && s != p.buyIn) score += 10;
+      }
+      if (expectedPlayers >= 2 && expectedPlayers <= 10 && p.rebuys) score += 5;
+      if (expectedPlayers > 10 && !p.rebuys) score += 5;
+      return score;
+    }
+
+    final scored = _presets
+        .map((p) => (preset: p, score: scoreFor(p)))
+        .where((e) => e.score >= 15)
+        .toList()
+      ..sort((a, b) => b.score.compareTo(a.score));
+
+    return scored.take(2).map((e) => e.preset).toList();
   }
 
   // ── Group ──────────────────────────────────────────────────────────────────
@@ -156,6 +375,19 @@ class AppProvider extends ChangeNotifier {
     return group;
   }
 
+  void toggleAdminRole(String userId, bool isAdmin) {
+    if (_user?.id != _currentGroup.ownerId) return; // Only owner can do this
+    if (userId == _currentGroup.ownerId) return; // Cannot change owner's role
+    final members = _currentGroup.members.map((m) {
+      if (m.id == userId) {
+        return m.copyWith(isAdmin: isAdmin);
+      }
+      return m;
+    }).toList();
+    _currentGroup = _currentGroup.copyWith(members: members);
+    notifyListeners();
+  }
+
   // ── Game ───────────────────────────────────────────────────────────────────
   LiveGame? _currentGame;
   LiveGame? get currentGame => _currentGame;
@@ -166,6 +398,9 @@ class AppProvider extends ChangeNotifier {
   final List<LiveGame?> _undoStack = [];
 
   bool get canUndo => _undoStack.isNotEmpty;
+
+  /// Pending seat-balance recommendation (checklist §13.2), if any.
+  SeatMoveRecommendation? _pendingSeatMove;
 
   void _pushUndo() {
     if (_currentGame == null) return;
@@ -181,6 +416,15 @@ class AppProvider extends ChangeNotifier {
     _clearUndoStack();
     _currentGame = game;
     notifyListeners();
+  }
+
+  /// Resolves a game (live or past) by id from the group's synced list,
+  /// falling back to the current active game (checklist 16-007).
+  LiveGame? gameById(String id) {
+    for (final g in _currentGroup.games) {
+      if (g.id == id) return g;
+    }
+    return _currentGame?.id == id ? _currentGame : null;
   }
 
   LiveGame createGame(GameSettings settings) {
@@ -254,7 +498,7 @@ class AppProvider extends ChangeNotifier {
     final games = _currentGroup.games;
     final idx = games.indexWhere((g) => g.id == game.id);
     _currentGroup = _currentGroup.copyWith(
-      games: idx == -1 ? [...games, game] : [...games]..[idx] = game,
+      games: idx == -1 ? [...games, game] : ([...games]..[idx] = game),
     );
   }
 
@@ -279,6 +523,24 @@ class AppProvider extends ChangeNotifier {
   // ── Timer ──────────────────────────────────────────────────────────────────
   Timer? _ticker;
 
+  /// Marks already announced per level (checklist 15-047/15-048) so the
+  /// five-minute and one-minute warnings fire only once per level.
+  final Set<String> _levelAnnouncementMarks = <String>{};
+
+  void _announceLevelMark(int remaining) {
+    final game = _currentGame;
+    if (game == null || !game.timerRunning) return;
+    final level = game.currentLevel;
+    final mark = '$level';
+    if (remaining == 300 && !_levelAnnouncementMarks.contains('$mark:300')) {
+      _levelAnnouncementMarks.add('$mark:300');
+      addAnnouncement('Five minutes remaining in level $level.', true);
+    } else if (remaining == 60 && !_levelAnnouncementMarks.contains('$mark:60')) {
+      _levelAnnouncementMarks.add('$mark:60');
+      addAnnouncement('One minute remaining in level $level.', true);
+    }
+  }
+
   void _startTick() {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -298,6 +560,7 @@ class AppProvider extends ChangeNotifier {
         _evaluateSpeedRecommendation();
         return;
       }
+      _announceLevelMark(remaining);
       _currentGame = _currentGame!.copyWith(secondsRemaining: remaining);
       _isTickUpdate = true;
       notifyListeners();
@@ -310,9 +573,15 @@ class AppProvider extends ChangeNotifier {
   /// falling behind schedule the tournament runs long → suggest shorter future
   /// levels; if it is ahead → suggest longer ones. Never mutates blinds, level
   /// count or duration on its own.
+  /// Manually forces recalculation of finish time/speed recommendations
+  void forceEvaluateSpeedRecommendation() {
+    _evaluateSpeedRecommendation();
+    addAnnouncement('Recalculated speed recommendation.', false);
+  }
+
   void _evaluateSpeedRecommendation() {
     final game = _currentGame;
-    if (game == null || game.structure.levels.isEmpty) return;
+    if (game == null || game.status != LiveGameStatus.running) return;
     final total = game.players.where((p) => !p.isGuest).length;
     if (total < 2) return;
     final levels = game.structure.levels.length;
@@ -333,6 +602,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void startTimer() {
+    _levelAnnouncementMarks.clear();
     final level = _currentGame!.currentLevelData;
     _currentGame = _currentGame!.copyWith(
       timerRunning: true,
@@ -365,6 +635,7 @@ class AppProvider extends ChangeNotifier {
     final next = _currentGame!.currentLevel + 1;
     if (next > _currentGame!.structure.levels.length) return;
     _pushUndo();
+    _levelAnnouncementMarks.clear();
     final level = _currentGame!.structure.levels[next - 1];
     _currentGame = _currentGame!.copyWith(
       currentLevel: next,
@@ -414,16 +685,40 @@ class AppProvider extends ChangeNotifier {
       _currentGame = _currentGame!.copyWith(players: updated);
     }
     final p = _currentGame!.players.firstWhere((pl) => pl.id == playerId);
+    // Elimination names are optional per tournament and disabled by default
+    // (15-053) — spoken only when the admin enabled the setting.
+    final speakElimination = _currentGame!.settings.announceEliminations;
     if (koRecipientId != null && bounty > 0) {
       final koPlayer =
           _currentGame!.players.where((pl) => pl.id == koRecipientId).firstOrNull;
       addAnnouncement(
         '${p.name} eliminated by ${koPlayer?.name ?? '?'} — $bounty bounty awarded.',
-        false,
+        speakElimination,
       );
     } else {
-      addAnnouncement('${p.name} eliminated.', false);
+      addAnnouncement('${p.name} eliminated.', speakElimination);
     }
+  }
+
+  /// Explicitly corrects a past elimination without using Undo (which is unsafe
+  /// if dependent actions occurred). Adds a compensating audit action.
+  void correctElimination(String playerId) {
+    if (_currentGame == null) return;
+    
+    // We intentionally bypass `_pushUndo()` for audit preservation, 
+    // but the spec says "never delete audit history", so we just append.
+    final players = _currentGame!.players.map((p) {
+      if (p.id == playerId) {
+        return p.copyWith(eliminated: false, eliminationPos: null);
+      }
+      return p;
+    }).toList();
+
+    _currentGame = _currentGame!.copyWith(players: players);
+    final correctedPlayer = players.firstWhere((p) => p.id == playerId);
+    
+    addAuditRecord('correction', 'Corrected elimination for ${correctedPlayer.name}');
+    addAnnouncement('Correction: ${correctedPlayer.name} has been reinstated to the game.', false);
   }
 
   void grantRebuy(String playerId) {
@@ -441,6 +736,10 @@ class AppProvider extends ChangeNotifier {
           .toList(),
       totalChipsInPlay: _currentGame!.totalChipsInPlay + rebuyStack,
     );
+    // Recalculate prize pool/prizes after money enters the game.
+    // This updates only prizePool, organizerAmount and prizes on the structure,
+    // leaving blind levels and any manual edits completely intact.
+    _updatePrizePool();
   }
 
   /// Records a re-entry (checklist §12.5): a separate, secondary option that
@@ -474,6 +773,8 @@ class AppProvider extends ChangeNotifier {
           .toList(),
       totalChipsInPlay: _currentGame!.totalChipsInPlay + addOnStack,
     );
+    // Recalculate prize pool/prizes after money enters the game.
+    _updatePrizePool();
   }
 
   void undoLast() {
@@ -531,6 +832,8 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// Guest flow: attach a brand-new guest to a game and mark them pending.
+  /// The guest's own session is persisted so the same device can recover the
+  /// request after a refresh (checklist 07-030).
   void requestGuestCheckIn(String name, String inviterId, int slot) {
     _pushUndo();
     final id = 'g-${DateTime.now().millisecondsSinceEpoch}';
@@ -555,6 +858,35 @@ class AppProvider extends ChangeNotifier {
       players: [..._currentGame!.players, guest],
       pendingGuests: [..._currentGame!.pendingGuests, guest],
     );
+    _saveGuestSession(
+      GuestSession(
+        gameId: _currentGame!.id,
+        name: name.trim(),
+        inviterId: inviterId,
+        slot: slot,
+      ),
+    );
+    notifyListeners();
+  }
+
+  // ── Guest session (device-local, checklist 07-030) ─────────────────────────
+  GuestSession? _guestSession;
+  GuestSession? get guestSession => _guestSession;
+
+  /// True while this device holds an approved/requested guest session
+  /// (used by the router guard to allow guests into player-live without an
+  /// account — checklist 15-014).
+  bool get hasGuestSession => _guestSession != null;
+
+  void _saveGuestSession(GuestSession session) {
+    _guestSession = session;
+    RecoveryService.saveGuestSession(session);
+  }
+
+  /// Clears the stored guest session (e.g. the guest was rejected or left).
+  void clearGuestSession() {
+    _guestSession = null;
+    RecoveryService.clearGuestSession();
     notifyListeners();
   }
 
@@ -626,7 +958,281 @@ class AppProvider extends ChangeNotifier {
         return a == null ? p : p.copyWith(table: a.table, seat: a.seat);
       }).toList(),
       dealerPlayerId: dealer?.id,
+      // A new draw invalidates any previous confirmation (13-013).
+      seatingConfirmed: false,
     );
+    notifyListeners();
+  }
+
+  /// Marks the generated physical seating as confirmed before play starts
+  /// (checklist 13-013). Seats remain editable afterwards via the move flow.
+  void confirmSeating() {
+    if (_currentGame == null) return;
+    _currentGame = _currentGame!.copyWith(seatingConfirmed: true);
+    addAnnouncement('Seating confirmed. Shuffle up and deal!', true);
+  }
+
+  /// Assigns one player to an explicit (table, seat) — used by Manual seating
+  /// (13-002) and validated to prevent duplicate seats (13-021). Clearing the
+  /// previous confirmation forces a re-confirm of the physical layout.
+  String? assignSeat(String playerId, int table, int seat) {
+    final game = _currentGame;
+    if (game == null) return null;
+    if (table < 1 || seat < 1) return 'Choose a valid table and seat.';
+    final occupied = game.players.any((p) =>
+        p.id != playerId && p.table == table && p.seat == seat && !p.eliminated);
+    if (occupied) return 'That seat is already taken — choose another.';
+    _pushUndo();
+    _currentGame = game.copyWith(
+      players: game.players
+          .map((p) =>
+              p.id == playerId ? p.copyWith(table: table, seat: seat) : p)
+          .toList(),
+      seatingConfirmed: false,
+    );
+    notifyListeners();
+    return null;
+  }
+
+  /// Detects when tables differ by more than one active player and builds a
+  /// recommendation for the administrator (checklist 13-015/13-016/13-017).
+  SeatMoveRecommendation? _buildSeatMoveRecommendation() {
+    final game = _currentGame;
+    if (game == null) return null;
+    final seated = game.players.where((p) => p.active && p.table > 0).toList();
+    if (seated.length < 2) return null;
+    final counts = <int, int>{};
+    for (final p in seated) {
+      counts[p.table] = (counts[p.table] ?? 0) + 1;
+    }
+    final tables = counts.keys.toList();
+    if (tables.length < 2) return null;
+    
+    // Sort tables by player count
+    final sortedByCount = tables.toList()..sort((a, b) => counts[a]!.compareTo(counts[b]!));
+    final minTable = sortedByCount.first;
+    final maxTable = sortedByCount.last;
+    
+    final minCount = counts[minTable]!;
+    final maxCount = counts[maxTable]!;
+    if (maxCount - minCount <= 1) return null;
+    // Pick the player with the smallest seat number on the largest table so the
+    // recommendation is deterministic and understandable.
+    final mover = seated.where((p) => p.table == maxTable).toList()
+      ..sort((a, b) => a.seat.compareTo(b.seat));
+    final from = mover.first;
+    // Find the first free seat on the destination table.
+    final taken = seated
+        .where((p) => p.table == minTable)
+        .map((p) => p.seat)
+        .toSet();
+    var toSeat = 1;
+    while (taken.contains(toSeat)) {
+      toSeat++;
+    }
+    return SeatMoveRecommendation(
+      fromPlayerId: from.id,
+      fromPlayerName: from.name,
+      fromTable: from.table,
+      fromSeat: from.seat,
+      toTable: minTable,
+      toSeat: toSeat,
+      reason:
+          'Table $maxTable has $maxCount players while Table $minTable has '
+          '$minCount. Moving ${from.name} balances the tables.',
+    );
+  }
+
+  /// Current pending seat-move recommendation, if any (checklist §13.2).
+  SeatMoveRecommendation? get seatingRecommendation => _pendingSeatMove;
+
+  bool get hasSeatingImbalance => seatingRecommendation != null;
+
+  /// Asks the engine for a fresh table-balance recommendation. Nothing is
+  /// applied — the admin must review and confirm (13-018).
+  void requestSeatingBalance() {
+    _pendingSeatMove = _buildSeatMoveRecommendation();
+    notifyListeners();
+  }
+
+  /// Clears the pending recommendation without changing any seats (13-020).
+  void dismissSeatMove() {
+    if (_pendingSeatMove == null) return;
+    _pendingSeatMove = null;
+    notifyListeners();
+  }
+
+  /// Applies the confirmed recommendation: the player moves, source and
+  /// destination seats update consistently (13-018/13-019).
+  void confirmSeatMove() {
+    final rec = _pendingSeatMove;
+    if (rec == null) return;
+    final game = _currentGame;
+    if (game == null) return;
+    final occupied = game.players.any((p) =>
+        p.id != rec.fromPlayerId &&
+        p.table == rec.toTable &&
+        p.seat == rec.toSeat &&
+        !p.eliminated);
+    if (occupied) {
+      _pendingSeatMove = null;
+      notifyListeners();
+      return;
+    }
+    _pushUndo();
+    _currentGame = game.copyWith(
+      players: game.players
+          .map((p) => p.id == rec.fromPlayerId
+              ? p.copyWith(table: rec.toTable, seat: rec.toSeat)
+              : p)
+          .toList(),
+      seatingConfirmed: false,
+    );
+    _pendingSeatMove = null;
+    addAnnouncement(
+      '${rec.fromPlayerName} moved to Table ${rec.toTable} seat ${rec.toSeat}.',
+      true,
+    );
+    notifyListeners();
+  }
+
+  // ── Late registration (checklist §12.3) ────────────────────────────────────
+
+  /// Late registration stays open until the rebuy period ends — the configured
+  /// closing level, normally the end of Level 6 (07-039, 12-028, 20-023).
+  bool get lateRegistrationOpen {
+    final game = _currentGame;
+    if (game == null) return false;
+    final live = game.status == LiveGameStatus.running ||
+        game.status == LiveGameStatus.paused;
+    return live &&
+        !game.settlementConfirmed &&
+        game.currentLevel <= game.settings.rebuysCloseLevel;
+  }
+
+  /// Adds a registered player during late registration (12-022/12-023).
+  /// The late player receives a full fresh starting stack (12-024) and is
+  /// assigned to the recommended balanced table and an available seat
+  /// (12-025). Totals are recalculated (12-026).
+  void addLatePlayer(String name) {
+    if (!lateRegistrationOpen) return;
+    _pushUndo();
+    final game = _currentGame!;
+    final id = 'p-${DateTime.now().millisecondsSinceEpoch}';
+    final (table: table, seat: seat) = _findAvailableSeat();
+    final player = Player(
+      id: id,
+      name: name.trim(),
+      isGuest: false,
+      rsvp: null,
+      checkedIn: true,
+      confirmed: true,
+      eliminated: false,
+      rebuys: 0,
+      hasAddOn: false,
+      knockouts: 0,
+      table: table,
+      seat: seat,
+      active: true,
+    );
+    _currentGame = game.copyWith(
+      players: [...game.players, player],
+      totalChipsInPlay: game.totalChipsInPlay + game.structure.startingStack,
+    );
+    // Recalculate prize pool/prizes after money enters the game.
+    _updatePrizePool();
+    _syncGroupGame();
+    addAnnouncement('${player.name} has joined the tournament.', true);
+    notifyListeners();
+  }
+
+  /// Finds the table with the fewest active players and its first free seat.
+  ({int table, int seat}) _findAvailableSeat() {
+    final game = _currentGame;
+    if (game == null) return (table: 1, seat: 1);
+    final seated = game.players.where((p) => p.active && p.table > 0).toList();
+    if (seated.isEmpty) return (table: 1, seat: 1);
+    final counts = <int, int>{};
+    for (final p in seated) {
+      counts[p.table] = (counts[p.table] ?? 0) + 1;
+    }
+    final tableCount = (game.activePlayers.length / 9).ceil().clamp(1, 9);
+    var bestTable = 1;
+    var bestCount = 1 << 30;
+    for (var t = 1; t <= tableCount; t++) {
+      final c = counts[t] ?? 0;
+      if (c < 9 && c < bestCount) {
+        bestTable = t;
+        bestCount = c;
+      }
+    }
+    final taken = seated
+        .where((p) => p.table == bestTable)
+        .map((p) => p.seat)
+        .toSet();
+    var seat = 1;
+    while (taken.contains(seat)) {
+      seat++;
+    }
+    return (table: bestTable, seat: seat);
+  }
+
+  /// Re-computes prizePool, organizerAmount and prize distribution after any
+  /// money enters the game (late registration, rebuy, re-entry, add-on).
+  ///
+  /// This is surgical update on the structure only: it uses
+  /// [TournamentStructure.copyWith] to update the three financial fields while
+  /// leaving every blind level — including manual edits from StructureEditor —
+  /// completely unchanged (fixes checklist 12-026).
+  void _updatePrizePool() {
+    final game = _currentGame;
+    if (game == null) return;
+
+    final s = game.settings;
+    final structure = game.structure;
+
+    // Gross eligible = all actual money that entered the game:
+    //   confirmed players × buy-in  +  all rebuys × buy-in (rebuy price)
+    //   +  all re-entries × buy-in  +  all add-ons × buy-in (add-on price).
+    // We use buy-in as the unit price since the engine uses that convention.
+    final confirmedCount = game.players.where((p) => p.confirmed).length;
+    final totalRebuys = game.players.fold<int>(0, (sum, p) => sum + p.rebuys);
+    final totalReEntries = game.players.fold<int>(0, (sum, p) => sum + p.reEntries);
+    final totalAddOns = game.players.where((p) => p.hasAddOn).length;
+
+    final grossEligible =
+        (confirmedCount + totalRebuys + totalReEntries) * s.buyIn +
+        totalAddOns * (s.addOn ? s.buyIn : 0);
+
+    // Delegate the organizer-cut and prize-split maths to the shared helper in
+    // TournamentEngine so the rules stay consistent everywhere.
+    final recalculated = TournamentEngine.recalculatePrizes(
+      grossEligible,
+      confirmedCount,
+      s.organizerPct.toDouble(),
+      forcePaidPlaces: s.forcePaidPlaces,
+    );
+
+    // Patch only the financial fields; levels and all other structure data
+    // remain exactly as they were (including any StructureEditor overrides).
+    _currentGame = game.copyWith(
+      structure: structure.copyWith(
+        prizePool: recalculated.prizePool,
+        organizerAmount: recalculated.organizerAmount,
+        prizes: recalculated.prizes,
+      ),
+    );
+  }
+
+  /// Manually overrides the number of paid places and recalculates prizes.
+  void overridePaidPlaces(int? count) {
+    if (_currentGame == null) return;
+    _pushUndo();
+    _currentGame = _currentGame!.copyWith(
+      settings: _currentGame!.settings.copyWith(forcePaidPlaces: count),
+    );
+    _updatePrizePool();
+    addAuditRecord('structure_edit', 'Paid places overridden to ${count ?? 'auto'}');
     notifyListeners();
   }
 
@@ -687,6 +1293,7 @@ class AppProvider extends ChangeNotifier {
         rebuyStack: structure.rebuyStack,
         rebuyChipPlan: structure.rebuyChipPlan,
         addOnStack: structure.addOnStack,
+        addOnChipPlan: structure.addOnChipPlan,
         levels: levels,
         levelDuration: clamped,
         expectedFinishMins: structure.expectedFinishMins,
@@ -707,7 +1314,118 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
+  TournamentStructure _structureWithLevels(
+    TournamentStructure s,
+    List<BlindLevel> levels,
+  ) {
+    return TournamentStructure(
+      startingStack: s.startingStack,
+      chipPlan: s.chipPlan,
+      rebuyStack: s.rebuyStack,
+      rebuyChipPlan: s.rebuyChipPlan,
+      addOnStack: s.addOnStack,
+      addOnChipPlan: s.addOnChipPlan,
+      levels: levels,
+      levelDuration: s.levelDuration,
+      expectedFinishMins: s.expectedFinishMins,
+      prizes: s.prizes,
+      prizePool: s.prizePool,
+      organizerAmount: s.organizerAmount,
+      colorUpInstructions: s.colorUpInstructions,
+      warnings: s.warnings,
+    );
+  }
+
+  /// Regenerates the whole structure for the actual confirmed attendance
+  /// (checklist 09-003 / 22-006: the engine always regenerates rather than
+  /// reusing a fixed template). Keeps the current level and resets its clock.
+  void recalculateStructure() {
+    final game = _currentGame;
+    if (game == null) return;
+    _pushUndo();
+
+    final confirmed = game.players.where((p) => p.confirmed).length;
+    final count = confirmed >= 2 ? confirmed : game.settings.players;
+    final s = game.settings;
+    final structure = TournamentEngine.generate(TournamentParams(
+      players: count,
+      durationHours: s.durationHours,
+      buyIn: s.buyIn,
+      chipSet: s.chipSet,
+      rebuys: s.rebuys,
+      rebuysCloseLevel: s.rebuysCloseLevel,
+      reEntry: s.reEntry,
+      addOn: s.addOn,
+      anteEnabled: s.anteEnabled,
+      anteAfterLevel: s.anteAfterLevel,
+      anteStyle: s.anteStyle,
+      koEnabled: s.koEnabled,
+      koAmount: s.koAmount,
+      organizerPct: s.organizerPct,
+    ));
+
+    final newLevel = game.currentLevel.clamp(1, structure.levels.length);
+    _currentGame = game.copyWith(
+      settings: GameSettings(
+        name: s.name,
+        date: s.date,
+        time: s.time,
+        location: s.location,
+        players: count,
+        durationHours: s.durationHours,
+        buyIn: s.buyIn,
+        koEnabled: s.koEnabled,
+        koAmount: s.koAmount,
+        rebuys: s.rebuys,
+        rebuysCloseLevel: s.rebuysCloseLevel,
+        reEntry: s.reEntry,
+        addOn: s.addOn,
+        anteEnabled: s.anteEnabled,
+        anteAfterLevel: s.anteAfterLevel,
+        anteStyle: s.anteStyle,
+        organizerPct: s.organizerPct,
+        chipSet: s.chipSet,
+        chipSetName: s.chipSetName,
+      ),
+      structure: structure,
+      currentLevel: newLevel,
+      secondsRemaining: structure.levels[newLevel - 1].durationMins * 60,
+      speedRecommendation: null,
+    );
+    addAnnouncement(
+      'Structure recalculated for $count confirmed player${count != 1 ? 's' : ''}.',
+      true,
+    );
+  }
+
+  /// Applies admin edits to future levels (the structure editor modal).
+  /// The active and already-finished levels are left untouched.
+  void applyLevelEdits(List<LevelEdit> edits) {
+    final game = _currentGame;
+    if (game == null || edits.isEmpty) return;
+    _pushUndo();
+    final byLevel = {for (final e in edits) e.level: e};
+    final levels = game.structure.levels.map((l) {
+      final e = byLevel[l.level];
+      if (e == null) return l;
+      return BlindLevel(
+        level: l.level,
+        sb: e.sb,
+        bb: e.bb,
+        ante: e.ante,
+        durationMins: e.durationMins,
+      );
+    }).toList();
+    _currentGame = game.copyWith(
+      structure: _structureWithLevels(game.structure, levels),
+    );
+    addAnnouncement('Level structure updated by admin.', false);
+  }
+
   void confirmFinalTable({List<({String playerId, int seat})>? seating}) {
+    final finalists = _currentGame!.players.where((p) => p.active && !p.eliminated).toList();
+    // The final table seats at most 9 players (checklist 13-025).
+    if (finalists.length > 9) return;
     _pushUndo();
     final players = seating == null
         ? _currentGame!.players
@@ -719,7 +1437,6 @@ class AppProvider extends ChangeNotifier {
             }
             return p;
           }).toList();
-    final finalists = players.where((p) => p.active && !p.eliminated).toList();
     final dealer = finalists.isEmpty ? null : finalists[Random().nextInt(finalists.length)];
     _currentGame = _currentGame!.copyWith(
       players: players,
@@ -753,10 +1470,27 @@ class AppProvider extends ChangeNotifier {
       announcements: [..._currentGame!.announcements, announcement],
     );
     // Speak key tournament announcements when the admin has enabled voice
-    // (checklist §15.4). Failure is swallowed by VoiceService (15-054).
-    if (speakOutLoud && _voiceEnabled) {
+    // and this device is the Audio Master (checklist §15.4). Failure is
+    // swallowed by VoiceService (15-054).
+    if (speakOutLoud && _voiceEnabled && thisDeviceIsAudioMaster) {
       VoiceService.instance.speak(text);
     }
+    notifyListeners();
+  }
+
+  /// Appends a new audit record to the history. This history is never deleted.
+  void addAuditRecord(String type, String details) {
+    if (_currentGame == null || _user == null) return;
+    final record = AuditRecord(
+      id: 'audit-${DateTime.now().millisecondsSinceEpoch}',
+      timestamp: DateTime.now(),
+      type: type,
+      actor: _user!.name,
+      details: details,
+    );
+    _currentGame = _currentGame!.copyWith(
+      auditHistory: [..._currentGame!.auditHistory, record],
+    );
     notifyListeners();
   }
 
@@ -902,6 +1636,10 @@ class AppProvider extends ChangeNotifier {
               .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
               .toList(),
         );
+        // Lowering the guest count releases extra unused guest slots safely
+        // and surfaces a conflict when a confirmed guest exceeds the new count
+        // (07-015, 20-030, 20-031).
+        _reconcileExcessGuestSlots(userId, rsvp?.guestCount ?? 0);
       }
     }
     // Keep the group's copy of the game in sync so badges update on the hub.
@@ -919,6 +1657,41 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Checklist 07-015 / 20-030 / 20-031: when a player lowers their guest
+  /// count, unused guest slots beyond the new count are released safely.
+  /// Unconfirmed requests are removed; guests already confirmed on an excess
+  /// slot are kept but surfaced to the administrator as a conflict.
+  void _reconcileExcessGuestSlots(String userId, int newCount) {
+    final game = _currentGame;
+    if (game == null) return;
+    final excess = game.players
+        .where((p) => p.isGuest && p.inviterId == userId && (p.guestSlot ?? 0) > newCount)
+        .toList();
+    if (excess.isEmpty) return;
+    final excessIds = excess.map((p) => p.id).toSet();
+    final confirmed = excess.where((p) => p.confirmed).toList();
+    _currentGame = _currentGame!.copyWith(
+      players: game.players.where((p) => !excessIds.contains(p.id)).toList(),
+      pendingGuests:
+          game.pendingGuests.where((p) => !excessIds.contains(p.id)).toList(),
+    );
+    if (confirmed.isNotEmpty) {
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'RSVP reduced after guest check-in',
+          body: '${confirmed.map((p) => p.name).join(', ')} '
+              '${confirmed.length == 1 ? 'is' : 'are'} confirmed on a guest slot '
+              'the inviter just removed. Review before seating.',
+          type: NotificationType.admin,
+          link: '/check-in',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+    }
+  }
+
   // ── Code lookup ────────────────────────────────────────────────────────────
   CodeLookupResult enterGameCode(String code) {
     final c = code.trim().toUpperCase();
@@ -934,6 +1707,20 @@ class AppProvider extends ChangeNotifier {
   CashSession? _cashSession;
   CashSession? get cashSession => _cashSession;
 
+  /// Completed cash sessions shown in history (checklist 16-002). Seeded with
+  /// a demo record so the section is populated out of the box.
+  List<CashSession> _cashHistory = [
+    MockData.demoCashSession.copyWith(
+      isCompleted: true,
+      players: const [
+        CashPlayer(id: 'cp-0', name: 'Daniel', stack: 0, totalBuyIns: 60, buyInCount: 2, cashedOut: 82),
+        CashPlayer(id: 'cp-1', name: 'Marcus', stack: 0, totalBuyIns: 20, buyInCount: 1, cashedOut: 14),
+        CashPlayer(id: 'cp-2', name: 'Sophia', stack: 0, totalBuyIns: 40, buyInCount: 2, cashedOut: 38),
+      ],
+    ),
+  ];
+  List<CashSession> get cashHistory => List.unmodifiable(_cashHistory);
+
   void startCashGame(CashSessionSettings settings, List<String> playerNames) {
     _cashSession = CashSession(
       id: 'cash-${DateTime.now().millisecondsSinceEpoch}',
@@ -941,7 +1728,7 @@ class AppProvider extends ChangeNotifier {
       isCompleted: false,
       startTime: DateTime.now(),
       players: List.generate(playerNames.length, (i) => CashPlayer(
-            id: 'cp-$i',
+            id: 'cp-${DateTime.now().millisecondsSinceEpoch}-$i',
             name: playerNames[i],
             stack: settings.minBuyIn,
             totalBuyIns: settings.minBuyIn,
@@ -1002,16 +1789,46 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Corrects an incorrectly entered buy-in, top-up or cash-out (checklist
+  /// 17-020 / 17-028 / 20-047). All totals are recomputed from the corrected
+  /// fields; stack/total/buyInCount/cashedOut that are null are left as-is.
+  void cashEditPlayer(
+    String playerId, {
+    double? stack,
+    double? totalBuyIns,
+    int? buyInCount,
+    double? cashedOut,
+  }) {
+    final session = _cashSession;
+    if (session == null) return;
+    _cashSession = session.copyWith(players: session.players
+        .map((p) => p.id == playerId
+            ? CashPlayer(
+                id: p.id,
+                name: p.name,
+                stack: stack ?? p.stack,
+                totalBuyIns: totalBuyIns ?? p.totalBuyIns,
+                buyInCount: buyInCount ?? p.buyInCount,
+                cashedOut: cashedOut ?? p.cashedOut,
+              )
+            : p)
+        .toList());
+    notifyListeners();
+  }
+
   void endCashGame() {
     final session = _cashSession;
     if (session == null) return;
     _cashSession = session.copyWith(isCompleted: true);
+    _cashHistory = [_cashSession!, ..._cashHistory];
     notifyListeners();
+    clearCashSession();
   }
 
   /// Discards the current cash session so a fresh game can be started.
   void clearCashSession() {
     _cashSession = null;
+    RecoveryService.clearCashSession();
     notifyListeners();
   }
 
@@ -1054,6 +1871,91 @@ class AppProvider extends ChangeNotifier {
   void setVoiceEnabled(bool value) {
     if (_voiceEnabled == value) return;
     _voiceEnabled = value;
+    notifyListeners();
+  }
+
+  /// Audio Master (checklist 15-041/15-042/15-043): the administrator manually
+  /// selects which connected device plays announcements. When no master is
+  /// chosen (`null`) every device with voice enabled may announce — the
+  /// backwards-compatible default.
+  ///
+  /// `_audioMasterDeviceId` is `null` when no master is selected; otherwise it
+  /// holds the device id of the chosen Audio Master. `thisDeviceIsAudioMaster`
+  /// is true when this device may speak.
+  String? _audioMasterDeviceId;
+
+  /// Stable per-session id for the current browser/device.
+  String? _thisDeviceId;
+  String get thisDeviceId => _thisDeviceId ??= 'dev-${DateTime.now().millisecondsSinceEpoch}';
+
+  String? get audioMasterDeviceId => _audioMasterDeviceId;
+
+  /// Whether announcements may play on this device (no master selected, or
+  /// this device is the master).
+  bool get thisDeviceIsAudioMaster =>
+      _audioMasterDeviceId == null || _audioMasterDeviceId == thisDeviceId;
+
+  /// Selects this device as the Audio Master. Only this device will announce.
+  void setAudioMasterDevice() {
+    if (_audioMasterDeviceId == thisDeviceId) return;
+    _audioMasterDeviceId = thisDeviceId;
+    notifyListeners();
+  }
+
+  /// Clears the Audio Master selection — every device with voice enabled may
+  /// announce again.
+  void clearAudioMasterDevice() {
+    if (_audioMasterDeviceId == null) return;
+    _audioMasterDeviceId = null;
+    notifyListeners();
+  }
+
+  /// Whether eliminated-player names are announced (checklist 15-053) —
+  /// optional per tournament and disabled by default.
+  bool get announceEliminations =>
+      _currentGame?.settings.announceEliminations ?? false;
+
+  void setAnnounceEliminations(bool value) {
+    final game = _currentGame;
+    if (game == null || game.settings.announceEliminations == value) return;
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(announceEliminations: value),
+    );
+    _syncGroupGame();
+    notifyListeners();
+  }
+
+  // ── Account preferences (settings screen) ─────────────────────────────────
+  bool _soundsEnabled = true;
+  bool get soundsEnabled => _soundsEnabled;
+
+  void setSoundsEnabled(bool value) {
+    if (_soundsEnabled == value) return;
+    _soundsEnabled = value;
+    notifyListeners();
+  }
+
+  bool _compactSummary = false;
+  bool get compactSummary => _compactSummary;
+
+  void setCompactSummary(bool value) {
+    if (_compactSummary == value) return;
+    _compactSummary = value;
+    notifyListeners();
+  }
+
+  /// Deletes the signed-in account and invalidates every session so a deleted
+  /// account cannot keep using a stale live game (checklist 05-014).
+  void deleteAccount() {
+    _user = null;
+    _currentGame = null;
+    _cashSession = null;
+    _guestSession = null;
+    _restoredFromRecovery = false;
+    _recoveryTime = null;
+    RecoveryService.clearGame();
+    RecoveryService.clearCashSession();
+    RecoveryService.clearGuestSession();
     notifyListeners();
   }
 

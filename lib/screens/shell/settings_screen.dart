@@ -15,16 +15,8 @@ import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
 
 /// Settings mirroring the account area of the web app.
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  bool _compactSummary = false;
-  bool _enableSounds = true;
 
   @override
   Widget build(BuildContext context) {
@@ -41,31 +33,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             'Preferences for your account',
             style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          // Appearance
-          Text('Appearance', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: AppSpacing.sm),
-          AppCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                const _SettingRow(
-                  icon: '🌙',
-                  title: 'Dark theme',
-                  subtitle: 'Always on — the club house only looks right in the dark',
-                  trailing: _SettingLocked(),
-                  showDivider: true,
-                ),
-                _SettingRow(
-                  icon: '💵',
-                  title: 'Currency',
-                  subtitle: 'Display amounts in US dollars',
-                  trailing: _SettingValue('USD'),
-                  showDivider: false,
-                ),
-              ],
-            ),
           ),
           const SizedBox(height: AppSpacing.xl),
           // Notifications
@@ -87,11 +54,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _SettingRow(
                   icon: '🔔',
+                  title: 'Push notifications',
+                  subtitle: 'Get alerts for RSVPs and game events',
+                  trailing: AppToggle(
+                    value: app.notificationsEnabled,
+                    onChanged: (v) => app.setNotificationsEnabled(v),
+                  ),
+                  showDivider: true,
+                ),
+                _SettingRow(
+                  icon: '🎵',
                   title: 'Sound effects',
                   subtitle: 'Chip sounds and level-up chimes',
                   trailing: AppToggle(
-                    value: _enableSounds,
-                    onChanged: (v) => setState(() => _enableSounds = v),
+                    value: app.soundsEnabled,
+                    onChanged: (v) => app.setSoundsEnabled(v),
                   ),
                   showDivider: true,
                 ),
@@ -100,8 +77,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Compact results',
                   subtitle: 'Show fewer details in game summaries',
                   trailing: AppToggle(
-                    value: _compactSummary,
-                    onChanged: (v) => setState(() => _compactSummary = v),
+                    value: app.compactSummary,
+                    onChanged: (v) => app.setCompactSummary(v),
                   ),
                   showDivider: false,
                 ),

@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
-import '../../providers/app_provider.dart';
 import '../../responsive/responsive.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/backgrounds.dart';
@@ -22,31 +20,8 @@ class LandingScreen extends StatefulWidget {
 }
 
 class _LandingScreenState extends State<LandingScreen> {
-  final TextEditingController _codeController = TextEditingController();
-  String? _codeError;
-
-  @override
-  void dispose() {
-    _codeController.dispose();
-    super.dispose();
-  }
-
-  void _submitCode() {
-    final code = _codeController.text.trim();
-    if (code.isEmpty) {
-      setState(() => _codeError = 'Please enter a game code.');
-      return;
-    }
-    final result = context.read<AppProvider>().enterGameCode(code);
-    if (result == CodeLookupResult.notFound) {
-      setState(() => _codeError = 'Game not found. Check the code and try again.');
-      return;
-    }
-    if (result == CodeLookupResult.tv) {
-      context.go(RoutePaths.tvMode);
-    } else {
-      context.go(RoutePaths.guestFlow);
-    }
+  void _joinAsGuest() {
+    context.go('/join');
   }
 
   @override
@@ -83,7 +58,7 @@ class _LandingScreenState extends State<LandingScreen> {
           const BrandLockup(),
           const Spacer(),
           AppButton(
-            variant: AppButtonVariant.ghost,
+            variant: AppButtonVariant.secondary,
             onPressed: () => context.go(RoutePaths.login),
             child: const Text('Sign in'),
           ),
@@ -100,7 +75,7 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 
   Widget _buildHero(BuildContext context, bool isDesktop) {
-    final headingSize = isDesktop ? 64.0 : 42.0;
+    final headingSize = isDesktop ? 48.0 : 32.0;
     return Stack(
       children: [
         // Decorative suits
@@ -189,7 +164,7 @@ class _LandingScreenState extends State<LandingScreen> {
                 child: Text(
                   'One host, one app. Tournament structure generated from your real chips. Timer, blinds, seating and prizes — handled.',
                   textAlign: TextAlign.center,
-                  style: AppTypography.bodyLg.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodyStyle.copyWith(color: AppColors.mutedForeground),
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
@@ -208,121 +183,27 @@ class _LandingScreenState extends State<LandingScreen> {
                 ].map((f) => _FeaturePill(label: f)).toList(),
               ).animate().fadeIn(delay: 200.ms, duration: 800.ms).slideY(begin: 0.2),
               const SizedBox(height: AppSpacing.xl),
-              // Code entry
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 384),
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.xxl),
-                  decoration: BoxDecoration(
-                    color: AppColors.card.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: AppShadows.cardGlow,
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        'Have a game code? Join now — no account needed.',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _codeController,
-                              maxLength: 8,
-                              textCapitalization: TextCapitalization.characters,
-                              textAlign: TextAlign.center,
-                              style: AppTypography.monoLg.copyWith(letterSpacing: 3),
-                              onChanged: (_) {
-                                if (_codeError != null) setState(() => _codeError = null);
-                              },
-                              decoration: InputDecoration(
-                                counterText: '',
-                                hintText: 'ENTER CODE',
-                                hintStyle: AppTypography.monoLg.copyWith(
-                                  color: AppColors.onSurfaceHint,
-                                  letterSpacing: 3,
-                                ),
-                                isDense: true,
-                                filled: true,
-                                fillColor: AppColors.card,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                                  borderSide: const BorderSide(color: AppColors.border),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                                  borderSide: const BorderSide(color: AppColors.ring),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          AppButton(
-                            onPressed: _submitCode,
-                            child: const Text('Join'),
-                          ),
-                        ],
-                      ),
-                      if (_codeError != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: AppSpacing.sm),
-                          child: Text(
-                            _codeError!,
-                            style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
-                          ),
-                        ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'Demo code: ',
-                              style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                            ),
-                            WidgetSpan(
-                              alignment: PlaceholderAlignment.baseline,
-                              baseline: TextBaseline.alphabetic,
-                              child: InkWell(
-                                onTap: () {
-                                  _codeController.text = 'FP2608';
-                                  setState(() {});
-                                },
-                                child: Text(
-                                  'FP2608',
-                                  style: AppTypography.monoSm.copyWith(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
+              // Main CTA
+              AppButton(
+                variant: AppButtonVariant.primary,
+                size: AppButtonSize.xl,
+                onPressed: _joinAsGuest,
+                child: const Text('Join a game as guest'),
               ),
               const SizedBox(height: AppSpacing.xl),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   AppButton(
-                    variant: AppButtonVariant.primary,
-                    size: AppButtonSize.lg,
+                    variant: AppButtonVariant.secondary,
+                    size: AppButtonSize.md,
                     onPressed: () => context.go(RoutePaths.register),
                     child: const Text('Create free account'),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   AppButton(
                     variant: AppButtonVariant.secondary,
-                    size: AppButtonSize.lg,
+                    size: AppButtonSize.md,
                     onPressed: () => context.go(RoutePaths.login),
                     child: const Text('Sign in'),
                   ),
@@ -403,9 +284,24 @@ class _LandingScreenState extends State<LandingScreen> {
               for (final l in ['Privacy Policy', 'Terms of Service', 'Support'])
                 Padding(
                   padding: const EdgeInsets.only(left: AppSpacing.lg),
-                  child: Text(
-                    l,
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  child: InkWell(
+                    onTap: () {
+                      if (l == 'Privacy Policy') {
+                        context.go(RoutePaths.privacy);
+                      } else if (l == 'Terms of Service') {
+                        context.go(RoutePaths.terms);
+                      } else {
+                        context.go(RoutePaths.support);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0),
+                      child: Text(
+                        l,
+                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -523,23 +419,41 @@ class _SpinningRays extends StatelessWidget {
   }
 }
 
-class _FeaturePill extends StatelessWidget {
+class _FeaturePill extends StatefulWidget {
   const _FeaturePill({required this.label});
 
   final String label;
 
   @override
+  State<_FeaturePill> createState() => _FeaturePillState();
+}
+
+class _FeaturePillState extends State<_FeaturePill> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.card.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      cursor: SystemMouseCursors.click,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        transform: Matrix4.identity()
+          ..scaleByDouble(_hover ? 1.03 : 1.0, _hover ? 1.03 : 1.0, _hover ? 1.03 : 1.0, 1.0),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.card.withValues(alpha: _hover ? 0.7 : 0.5),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: AppColors.border),
+          boxShadow: _hover
+              ? [BoxShadow(color: AppColors.shadowSoft, blurRadius: 10, offset: Offset(0, 4))]
+              : null,
+        ),
+        child: Text(
+          widget.label,
+          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+        ),
       ),
     );
   }

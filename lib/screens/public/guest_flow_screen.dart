@@ -10,6 +10,7 @@ import '../../models/game.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
+import '../../services/recovery_service.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
@@ -18,7 +19,7 @@ import '../../widgets/app_timer.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/brand_lockup.dart';
 
-enum _GuestStep { enterCode, chooseInviter, chooseSlot, enterName, waiting, confirmed }
+enum _GuestStep { enterCode, chooseInviter, chooseSlot, enterName, waiting, confirmed, rejected }
 
 /// Guest join flow mirroring the web `GuestFlowPage`.
 class GuestFlowScreen extends StatefulWidget {
@@ -39,9 +40,42 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   @override
   void initState() {
     super.initState();
-    _step = context.read<AppProvider>().currentGame == null
-        ? _GuestStep.enterCode
-        : _GuestStep.chooseInviter;
+    final app = context.read<AppProvider>();
+    final session = app.guestSession;
+    final game = app.currentGame;
+    if (session != null && game != null && session.gameId == game.id) {
+      // Restore the guest's own check-in session (checklist 07-030).
+      _selectedInviter = session.inviterId;
+      _selectedSlot = session.slot;
+      _nameController.text = session.name;
+      final guest = _matchGuest(game, session);
+      _step = guest != null && guest.confirmed ? _GuestStep.confirmed : _GuestStep.waiting;
+    } else {
+      _step = game == null ? _GuestStep.enterCode : _GuestStep.chooseInviter;
+    }
+  }
+
+  /// Finds the guest in [game]'s player list that matches the stored session.
+  static Player? _matchGuest(LiveGame game, GuestSession session) {
+    for (final p in game.players) {
+      if (p.isGuest &&
+          p.inviterId == session.inviterId &&
+          p.guestSlot == session.slot &&
+          p.name.trim() == session.name.trim()) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  /// Looks up the guest's current state from the live game so the flow reacts
+  /// to admin confirmation or rejection in real time (07-027/07-028).
+  Player? _currentGuest() {
+    final app = context.read<AppProvider>();
+    final session = app.guestSession;
+    final game = app.currentGame;
+    if (session == null || game == null || session.gameId != game.id) return null;
+    return _matchGuest(game, session);
   }
 
   @override
@@ -56,10 +90,24 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     if (result == CodeLookupResult.notFound) {
       setState(() => _codeError = 'Game not found — check the code and try again.');
     } else if (result == CodeLookupResult.game) {
-      setState(() {
-        _codeError = null;
-        _step = _GuestStep.chooseInviter;
-      });
+      final app = context.read<AppProvider>();
+      final session = app.guestSession;
+      final game = app.currentGame;
+      if (session != null && game != null && session.gameId == game.id) {
+        _selectedInviter = session.inviterId;
+        _selectedSlot = session.slot;
+        _nameController.text = session.name;
+        final guest = _matchGuest(game, session);
+        setState(() {
+          _codeError = null;
+          _step = guest != null && guest.confirmed ? _GuestStep.confirmed : _GuestStep.waiting;
+        });
+      } else {
+        setState(() {
+          _codeError = null;
+          _step = _GuestStep.chooseInviter;
+        });
+      }
     } else {
       setState(() => _codeError = 'That code opens the TV display — ask the host for the player code.');
     }
@@ -71,8 +119,16 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       app.requestGuestCheckIn(_nameController.text.trim(), _selectedInviter!, _selectedSlot!);
     }
     setState(() => _step = _GuestStep.waiting);
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _step = _GuestStep.confirmed);
+  }
+
+  void _startOver() {
+    context.read<AppProvider>().clearGuestSession();
+    setState(() {
+      _step = _GuestStep.enterCode;
+      _selectedInviter = null;
+      _selectedSlot = null;
+      _nameController.clear();
+      _codeError = null;
     });
   }
 
@@ -112,6 +168,19 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         : 0;
     final level = game.currentLevelData;
 
+    // While waiting, react to the admin's decision in real time: the guest is
+    // confirmed once their player record is confirmed, and rejected once it is
+    // removed from the game (07-027/07-028).
+    var view = _step;
+    if (view == _GuestStep.waiting) {
+      final guest = _currentGuest();
+      if (guest == null) {
+        view = _GuestStep.rejected;
+      } else if (guest.confirmed) {
+        view = _GuestStep.confirmed;
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -143,7 +212,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                   height: 4,
                   margin: const EdgeInsets.symmetric(horizontal: 3),
                   decoration: BoxDecoration(
-                    color: _step.index > s.index ? AppColors.primary : AppColors.border,
+                    color: view.index > s.index ? AppColors.primary : AppColors.border,
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                 ),
@@ -152,12 +221,13 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         ),
         const SizedBox(height: AppSpacing.xl),
 
-        switch (_step) {
+        switch (view) {
           _GuestStep.chooseInviter => _buildChooseInviter(registeredPlayers),
           _GuestStep.chooseSlot => _buildChooseSlot(inviter, availableSlots, game.players),
           _GuestStep.enterName => _buildEnterName(inviter),
           _GuestStep.waiting => _buildWaiting(inviter),
           _GuestStep.confirmed => _buildConfirmed(level),
+          _GuestStep.rejected => _buildRejected(),
           _GuestStep.enterCode => const SizedBox.shrink(),
         },
       ],
@@ -438,7 +508,11 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       padding: const EdgeInsets.all(AppSpacing.xxxl),
       child: Column(
         children: [
-          Text(AppAssets.spade, style: AppTypography.display(size: 36)),
+          const SizedBox(
+            width: 36,
+            height: 36,
+            child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary),
+          ),
           const SizedBox(height: AppSpacing.lg),
           Text('Waiting for host', style: AppTypography.display(size: AppFontSizes.xl)),
           const SizedBox(height: AppSpacing.sm),
@@ -471,7 +545,41 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     );
   }
 
+  Widget _buildRejected() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppCard(
+          borderColor: AppColors.destructive.withValues(alpha: 0.4),
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: Column(
+            children: [
+              const Text('✕', style: TextStyle(fontSize: AppFontSizes.displayLg, color: AppColors.destructive)),
+              const SizedBox(height: AppSpacing.md),
+              Text("Request declined", style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w600, color: AppColors.destructive)),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'The host could not confirm your guest slot. This can happen when the slot was already taken or registration has closed.',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          variant: AppButtonVariant.secondary,
+          size: AppButtonSize.lg,
+          fullWidth: true,
+          onPressed: _startOver,
+          child: const Text('Start over'),
+        ),
+      ],
+    );
+  }
+
   Widget _buildConfirmed(BlindLevel? level) {
+    final guest = _currentGuest();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -497,9 +605,16 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             children: [
               Text('Your seat', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
               Text(
-                'Table 1 · Seat ${_selectedSlot ?? 1}',
+                guest != null && guest.table > 0 && guest.seat > 0
+                    ? 'Table ${guest.table} · Seat ${guest.seat}'
+                    : 'Table 1 · Seat ${_selectedSlot ?? 1}',
                 style: AppTypography.mono(size: AppFontSizes.xxl, weight: FontWeight.w700),
               ),
+              if (!(guest != null && guest.table > 0 && guest.seat > 0))
+                Text(
+                  'Seats are assigned once the host generates the seating plan.',
+                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                ),
             ],
           ),
         ),

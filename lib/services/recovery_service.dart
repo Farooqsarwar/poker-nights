@@ -1,9 +1,44 @@
-import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:localstore/localstore.dart';
+import '../models/cash_game.dart';
 import '../models/live_game.dart';
 import '../models/game.dart';
 import '../models/tournament.dart';
 import '../models/chip_color.dart';
+
+/// A guest's own check-in session stored on the guest device so the guest can
+/// recover the same approved session after a refresh (checklist 07-030).
+class GuestSession {
+  const GuestSession({
+    required this.gameId,
+    required this.name,
+    required this.inviterId,
+    required this.slot,
+  });
+
+  final String gameId;
+  final String name;
+  final String inviterId;
+  final int slot;
+
+  Map<String, dynamic> toMap() => {
+        'gameId': gameId,
+        'name': name,
+        'inviterId': inviterId,
+        'slot': slot,
+      };
+
+  static GuestSession? fromMap(Map<String, dynamic> map) {
+    final gameId = map['gameId'] as String?;
+    final name = map['name'] as String?;
+    final inviterId = map['inviterId'] as String?;
+    final slot = map['slot'] as int?;
+    if (gameId == null || name == null || inviterId == null || slot == null) {
+      return null;
+    }
+    return GuestSession(gameId: gameId, name: name, inviterId: inviterId, slot: slot);
+  }
+}
 
 class RecoveryService {
   static final _db = Localstore.instance;
@@ -14,6 +49,52 @@ class RecoveryService {
     final data = _liveGameToMap(game);
     data['lastSavedAt'] = DateTime.now().toIso8601String();
     await _db.collection(_collection).doc(_docId).set(data);
+  }
+
+  // ── Cash session (active, admin device) ────────────────────────────────────
+  static const _cashDocId = 'active_cash';
+
+  static Future<void> saveCashSession(CashSession session) async {
+    final data = _cashSessionToMap(session);
+    data['lastSavedAt'] = DateTime.now().toIso8601String();
+    await _db.collection(_collection).doc(_cashDocId).set(data);
+  }
+
+  static Future<void> clearCashSession() async {
+    await _db.collection(_collection).doc(_cashDocId).delete();
+  }
+
+  static Future<CashSession?> loadCashSession() async {
+    final data = await _db.collection(_collection).doc(_cashDocId).get();
+    if (data == null) return null;
+    try {
+      return _cashSessionFromMap(data);
+    } catch (e) {
+      debugPrint('Error recovering cash session: $e');
+      return null;
+    }
+  }
+
+  // ── Guest check-in session (guest device) ──────────────────────────────────
+  static const _guestDocId = 'guest_session';
+
+  static Future<void> saveGuestSession(GuestSession session) async {
+    await _db.collection(_collection).doc(_guestDocId).set(session.toMap());
+  }
+
+  static Future<void> clearGuestSession() async {
+    await _db.collection(_collection).doc(_guestDocId).delete();
+  }
+
+  static Future<GuestSession?> loadGuestSession() async {
+    final data = await _db.collection(_collection).doc(_guestDocId).get();
+    if (data == null) return null;
+    try {
+      return GuestSession.fromMap(data);
+    } catch (e) {
+      debugPrint('Error recovering guest session: $e');
+      return null;
+    }
   }
 
   static Future<void> clearGame() async {
@@ -39,7 +120,7 @@ class RecoveryService {
       return game;
     } catch (e) {
       // In case of parsing error, return null to avoid breaking the app.
-      print('Error recovering game: $e');
+      debugPrint('Error recovering game: $e');
       return null;
     }
   }
@@ -66,6 +147,7 @@ class RecoveryService {
       'finishOrder': game.finishOrder,
       'speedRecommendation': game.speedRecommendation?.name,
       'settlementConfirmed': game.settlementConfirmed,
+      'seatingConfirmed': game.seatingConfirmed,
       'dealerPlayerId': game.dealerPlayerId,
     };
   }
@@ -92,6 +174,7 @@ class RecoveryService {
           ? SpeedRecommendation.values.firstWhere((e) => e.name == map['speedRecommendation'])
           : null,
       settlementConfirmed: map['settlementConfirmed'] ?? false,
+      seatingConfirmed: map['seatingConfirmed'] ?? false,
       dealerPlayerId: map['dealerPlayerId'],
     );
   }
@@ -113,9 +196,11 @@ class RecoveryService {
       'addOn': settings.addOn,
       'anteEnabled': settings.anteEnabled,
       'anteAfterLevel': settings.anteAfterLevel,
+      'anteStyle': settings.anteStyle.name,
       'organizerPct': settings.organizerPct,
       'chipSet': settings.chipSet.map(_chipColorToMap).toList(),
       'chipSetName': settings.chipSetName,
+      'announceEliminations': settings.announceEliminations,
     };
   }
 
@@ -136,9 +221,11 @@ class RecoveryService {
       addOn: map['addOn'] ?? false,
       anteEnabled: map['anteEnabled'] ?? false,
       anteAfterLevel: map['anteAfterLevel'] ?? 0,
+      anteStyle: AnteStyle.values.asNameMap()[map['anteStyle']] ?? AnteStyle.bigBlind,
       organizerPct: map['organizerPct'] ?? 0,
       chipSet: (map['chipSet'] as List).map((e) => _chipColorFromMap(e)).toList(),
       chipSetName: map['chipSetName'] ?? '',
+      announceEliminations: map['announceEliminations'] ?? false,
     );
   }
 
@@ -149,6 +236,7 @@ class RecoveryService {
       'rebuyStack': struct.rebuyStack,
       'rebuyChipPlan': struct.rebuyChipPlan.map(_chipPlanEntryToMap).toList(),
       'addOnStack': struct.addOnStack,
+      'addOnChipPlan': struct.addOnChipPlan.map(_chipPlanEntryToMap).toList(),
       'levels': struct.levels.map(_blindLevelToMap).toList(),
       'levelDuration': struct.levelDuration,
       'expectedFinishMins': struct.expectedFinishMins,
@@ -167,6 +255,7 @@ class RecoveryService {
       rebuyStack: map['rebuyStack'],
       rebuyChipPlan: (map['rebuyChipPlan'] as List).map((e) => _chipPlanEntryFromMap(e)).toList(),
       addOnStack: map['addOnStack'],
+      addOnChipPlan: (map['addOnChipPlan'] as List?)?.map((e) => _chipPlanEntryFromMap(e)).toList() ?? const [],
       levels: (map['levels'] as List).map((e) => _blindLevelFromMap(e)).toList(),
       levelDuration: map['levelDuration'],
       expectedFinishMins: map['expectedFinishMins'],
@@ -329,6 +418,80 @@ class RecoveryService {
       hex: map['hex'],
       value: map['value'],
       quantity: map['quantity'],
+    );
+  }
+
+  // --- Cash session mappers ---
+
+  static Map<String, dynamic> _cashSessionToMap(CashSession session) {
+    return {
+      'id': session.id,
+      'settings': _cashSettingsToMap(session.settings),
+      'isCompleted': session.isCompleted,
+      'startTime': session.startTime.toIso8601String(),
+      'players': session.players.map(_cashPlayerToMap).toList(),
+    };
+  }
+
+  static CashSession _cashSessionFromMap(Map<String, dynamic> map) {
+    return CashSession(
+      id: map['id'],
+      settings: _cashSettingsFromMap(map['settings']),
+      isCompleted: map['isCompleted'] ?? false,
+      startTime: DateTime.parse(map['startTime']),
+      players: (map['players'] as List).map((e) => _cashPlayerFromMap(e)).toList(),
+    );
+  }
+
+  static Map<String, dynamic> _cashSettingsToMap(CashSessionSettings s) {
+    return {
+      'name': s.name,
+      'date': s.date,
+      'location': s.location,
+      'smallBlind': s.smallBlind,
+      'bigBlind': s.bigBlind,
+      'minBuyIn': s.minBuyIn,
+      'maxBuyIn': s.maxBuyIn,
+      'currency': s.currency,
+      'maxPlayers': s.maxPlayers,
+      'rakePct': s.rakePct,
+    };
+  }
+
+  static CashSessionSettings _cashSettingsFromMap(Map<String, dynamic> map) {
+    return CashSessionSettings(
+      name: map['name'],
+      date: map['date'],
+      location: map['location'],
+      smallBlind: (map['smallBlind'] as num).toDouble(),
+      bigBlind: (map['bigBlind'] as num).toDouble(),
+      minBuyIn: (map['minBuyIn'] as num).toDouble(),
+      maxBuyIn: (map['maxBuyIn'] as num).toDouble(),
+      currency: map['currency'],
+      maxPlayers: map['maxPlayers'] ?? 10,
+      rakePct: (map['rakePct'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  static Map<String, dynamic> _cashPlayerToMap(CashPlayer p) {
+    return {
+      'id': p.id,
+      'name': p.name,
+      'stack': p.stack,
+      'totalBuyIns': p.totalBuyIns,
+      'buyInCount': p.buyInCount,
+      'cashedOut': p.cashedOut,
+    };
+  }
+
+  static CashPlayer _cashPlayerFromMap(Map<String, dynamic> map) {
+    return CashPlayer(
+      id: map['id'],
+      name: map['name'],
+      stack: (map['stack'] as num).toDouble(),
+      totalBuyIns: (map['totalBuyIns'] as num).toDouble(),
+      buyInCount: map['buyInCount'] ?? 1,
+      cashedOut: (map['cashedOut'] as num?)?.toDouble() ?? 0,
     );
   }
 }

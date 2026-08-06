@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../app/colors.dart';
 import '../app/route_paths.dart';
 import '../app/typography.dart';
-import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 
 /// Mobile bottom navigation mirroring the web `Nav` bottom bar.

@@ -64,6 +64,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final pendingGuests = players.where((p) => p.isGuest && !p.confirmed && p.name.isNotEmpty).toList();
     final confirmedGuests = players.where((p) => p.isGuest && p.confirmed).toList();
     final canStart = checkedIn.length >= 2;
+    final seatedYet = checkedIn.any((p) => p.table > 0 && p.seat > 0);
+    final seatingConfirmed = game.seatingConfirmed;
 
     return AppPage(
       maxWidth: 560,
@@ -337,8 +339,56 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 );
               },
             ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.lg),
           // Start game
+          if (!seatedYet)
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Text(
+                'Generate the seating plan above, then confirm it before starting the game.',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              ),
+            )
+          else if (!seatingConfirmed)
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              borderColor: AppColors.warning.withValues(alpha: 0.4),
+              child: Column(
+                children: [
+                  Text(
+                    'Seating has been generated but not yet confirmed.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodySm.copyWith(color: AppColors.warning),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppButton(
+                    variant: AppButtonVariant.primary,
+                    fullWidth: true,
+                    onPressed: app.confirmSeating,
+                    child: const Text('✓ Confirm physical seating'),
+                  ),
+                ],
+              ),
+            )
+          else
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              borderColor: AppColors.successSoftBorder,
+              child: Row(
+                children: [
+                  const Text('✅', style: TextStyle(fontSize: AppFontSizes.xl)),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      'Seating confirmed. You can start the game.',
+                      style: AppTypography.bodySm.copyWith(color: AppColors.success),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: AppSpacing.md),
           Row(
             children: [
               Expanded(
@@ -351,13 +401,19 @@ class _CheckInScreenState extends State<CheckInScreen> {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: AppButton(
-                  onPressed: canStart
+                  onPressed: canStart && seatingConfirmed
                       ? () {
                           app.updateGameStatus(LiveGameStatus.running);
                           context.go(RoutePaths.adminDashboard);
                         }
                       : null,
-                  child: Text(canStart ? 'Start with ${checkedIn.length} players →' : 'Need at least 2 checked in'),
+                  child: Text(
+                    !canStart
+                        ? 'Need at least 2 checked in'
+                        : !seatingConfirmed
+                            ? 'Confirm seating first'
+                            : 'Start with ${checkedIn.length} players →',
+                  ),
                 ),
               ),
             ],

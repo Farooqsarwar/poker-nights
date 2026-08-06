@@ -101,7 +101,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
             _AddOnsStep(
               activePlayers: activePlayers,
               addOnStack: structure.addOnStack,
-              addOnChipPlan: structure.chipPlan,
+              addOnChipPlan: structure.addOnChipPlan,
               selections: _addOnSelections,
               onToggle: (id) => setState(() {
                 if (!_addOnSelections.remove(id)) _addOnSelections.add(id);
@@ -116,6 +116,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
             _ColorUpStep(
               instructions: structure.colorUpInstructions,
               anteEnabled: settings.anteEnabled,
+              anteStyle: settings.anteStyle,
               onNext: () => setState(() => _step = _SettlementStep.confirm),
             ),
           // Step 3: Confirm
@@ -312,12 +313,16 @@ class _ColorUpStep extends StatelessWidget {
   const _ColorUpStep({
     required this.instructions,
     required this.anteEnabled,
+    required this.anteStyle,
     required this.onNext,
   });
 
   final List<String> instructions;
   final bool anteEnabled;
+  final AnteStyle anteStyle;
   final VoidCallback onNext;
+
+  String get _anteName => anteStyle == AnteStyle.individual ? 'individual ante' : 'big blind ante';
 
   @override
   Widget build(BuildContext context) {
@@ -329,7 +334,7 @@ class _ColorUpStep extends StatelessWidget {
           Text('Color-up instructions', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Exchange small chips before continuing. The ${anteEnabled ? 'big blind ante' : 'ante'} will begin next level.',
+            'Exchange small chips before continuing. The $_anteName will begin next level.',
             style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -373,7 +378,9 @@ class _ColorUpStep extends StatelessWidget {
                   Text('Ante starts next level', style: AppTypography.bodySm.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),
                   Text(
-                    'Big blind ante equal to the big blind value. Confirm with all players before starting.',
+                    anteStyle == AnteStyle.individual
+                        ? 'Every player posts an individual ante (half the big blind). Confirm with all players before starting.'
+                        : 'Big blind ante equal to the big blind value. Confirm with all players before starting.',
                     style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                   ),
                 ],

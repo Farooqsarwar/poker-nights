@@ -38,48 +38,54 @@ class AppButton extends StatelessWidget {
     final colors = _colorsFor(context);
     final sizes = _sizesFor();
 
-    return InteractiveScale(
-      enabled: isEnabled,
-      child: AnimatedOpacity(
-        duration: AppDurations.fast,
-        opacity: disabled ? 0.4 : 1,
-        child: SizedBox(
-          width: width ?? (fullWidth ? double.infinity : null),
-          height: sizes.height,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: isEnabled ? onPressed : null,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              splashColor: AppColors.primarySoftStrong,
-              highlightColor: Colors.transparent,
-              child: Ink(
-                width: width ?? (fullWidth ? double.infinity : null),
-                height: sizes.height,
-                decoration: BoxDecoration(
-                  color: colors.background,
-                  border: colors.border,
+    return MouseRegion(
+      cursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: Semantics(
+        button: true,
+        enabled: isEnabled,
+        child: InteractiveScale(
+          enabled: isEnabled,
+          child: AnimatedOpacity(
+            duration: AppDurations.fast,
+            opacity: disabled ? 0.4 : 1,
+            child: SizedBox(
+              width: width ?? (fullWidth ? double.infinity : null),
+              height: sizes.height,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: isEnabled ? onPressed : null,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                  boxShadow: variant == AppButtonVariant.primary && size == AppButtonSize.xl
-                      ? AppShadows.primaryGlow
-                      : null,
-                ),
-                child: Container(
-                  padding: sizes.padding,
-                  alignment: Alignment.center,
-                  child: loading
-                      ? _spinner(colors)
-                      : DefaultTextStyle(
-                          style: AppTypography.buttonStyle.copyWith(
-                            fontSize: sizes.fontSize,
-                            color: colors.foreground,
-                            fontWeight: variant == AppButtonVariant.gold
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
-                          textAlign: TextAlign.center,
-                          child: child,
-                        ),
+                  splashColor: AppColors.primarySoftStrong,
+                  highlightColor: Colors.transparent,
+                  hoverColor: colors.hover ?? AppColors.surfaceHover,
+                  child: Ink(
+                    width: width ?? (fullWidth ? double.infinity : null),
+                    height: sizes.height,
+                    decoration: BoxDecoration(
+                      color: colors.background,
+                      border: colors.border,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      boxShadow: variant == AppButtonVariant.primary && size == AppButtonSize.xl
+                          ? AppShadows.primaryGlow
+                          : null,
+                    ),
+                    child: Container(
+                      padding: sizes.padding,
+                      alignment: Alignment.center,
+                      child: loading
+                          ? _spinner(colors)
+                          : DefaultTextStyle(
+                              style: AppTypography.buttonStyle.copyWith(
+                                fontSize: sizes.fontSize,
+                                color: colors.foreground,
+                                fontWeight: variant == AppButtonVariant.gold ? FontWeight.w700 : FontWeight.w500,
+                              ),
+                              textAlign: TextAlign.center,
+                              child: child,
+                            ),
+                    ),
+                  ),
                 ),
               ),
             ),

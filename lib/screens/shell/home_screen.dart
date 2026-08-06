@@ -160,6 +160,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: const PokerNightHero(),
               ).animate().fadeIn(duration: 800.ms).slideY(begin: 0.1, curve: Curves.easeOutBack),
               const SizedBox(height: AppSpacing.xl),
+              // Offline Conflict Banner
+              if (app.hasOfflineConflict) ...[
+                AppAlertBanner(
+                  type: AppAlertType.warning,
+                  message: 'Local offline progress detected that is out of sync with the cloud. Would you like to keep the local offline data or revert to cloud?',
+                  actionLabel: 'Review Conflict',
+                  onAction: () => context.go(RoutePaths.adminDashboard),
+                ).animate().fadeIn(duration: 400.ms),
+                const SizedBox(height: AppSpacing.xl),
+              ] else if (app.restoredFromRecovery && activeGame != null) ...[
+                AppAlertBanner(
+                  type: AppAlertType.info,
+                  message: 'Active tournament was successfully recovered from local storage.',
+                  actionLabel: 'Dismiss',
+                  onAction: () => app.resolveOfflineConflict(keepLocal: true), // dismisses by clearing flag
+                ).animate().fadeIn(duration: 400.ms),
+                const SizedBox(height: AppSpacing.xl),
+              ],
               // Active game banner
               if (activeGame != null) ...[
                 AppAlertBanner(

@@ -20,9 +20,12 @@ class GameSettings {
     required this.addOn,
     required this.anteEnabled,
     required this.anteAfterLevel,
+    this.anteStyle = AnteStyle.bigBlind,
     required this.organizerPct,
     required this.chipSet,
     required this.chipSetName,
+    this.announceEliminations = false,
+    this.forcePaidPlaces,
   });
 
   final String name;
@@ -45,9 +48,51 @@ class GameSettings {
   final bool addOn;
   final bool anteEnabled;
   final int anteAfterLevel;
+  final AnteStyle anteStyle;
   final int organizerPct;
   final List<ChipColor> chipSet;
   final String chipSetName;
+
+  /// Whether eliminated-player names are announced by voice (checklist
+  /// 15-053). Optional per tournament and disabled by default.
+  final bool announceEliminations;
+
+  /// The manually overridden number of paid places (if not null).
+  final int? forcePaidPlaces;
+
+  GameSettings copyWith({
+    String? name,
+    bool? koEnabled,
+    bool? anteEnabled,
+    int? anteAfterLevel,
+    AnteStyle? anteStyle,
+    bool? announceEliminations,
+    int? forcePaidPlaces,
+  }) {
+    return GameSettings(
+      name: name ?? this.name,
+      date: date,
+      time: time,
+      location: location,
+      players: players,
+      durationHours: durationHours,
+      buyIn: buyIn,
+      koEnabled: koEnabled ?? this.koEnabled,
+      koAmount: koAmount,
+      rebuys: rebuys,
+      rebuysCloseLevel: rebuysCloseLevel,
+      reEntry: reEntry,
+      addOn: addOn,
+      anteEnabled: anteEnabled ?? this.anteEnabled,
+      anteAfterLevel: anteAfterLevel ?? this.anteAfterLevel,
+      anteStyle: anteStyle ?? this.anteStyle,
+      organizerPct: organizerPct,
+      chipSet: chipSet,
+      chipSetName: chipSetName,
+      announceEliminations: announceEliminations ?? this.announceEliminations,
+      forcePaidPlaces: forcePaidPlaces ?? this.forcePaidPlaces,
+    );
+  }
 
   /// The scheduled start parsed from the configured date/time fields.
   DateTime? get scheduledStart => DateTime.tryParse('${date}T$time');
@@ -124,11 +169,13 @@ class LiveGame {
     required this.players,
     required this.chat,
     required this.announcements,
+    this.auditHistory = const [],
     required this.totalChipsInPlay,
     required this.pendingGuests,
     required this.finishOrder,
     this.speedRecommendation,
     this.settlementConfirmed = false,
+    this.seatingConfirmed = false,
     this.dealerPlayerId,
   });
 
@@ -145,6 +192,7 @@ class LiveGame {
   final List<Player> players;
   final List<ChatMessage> chat;
   final List<Announcement> announcements;
+  final List<AuditRecord> auditHistory;
   final int totalChipsInPlay;
   final List<Player> pendingGuests;
   final List<String> finishOrder; // playerIds, first-out first
@@ -154,6 +202,10 @@ class LiveGame {
   /// label then changes from "Estimated Prize Pool" to "Prize Pool"
   /// (checklist 12-068, 14-038/14-039, 15-009, 15-030).
   final bool settlementConfirmed;
+
+  /// True once the admin has confirmed the generated physical seating before
+  /// play starts (checklist 13-013). Seating changes clear it again.
+  final bool seatingConfirmed;
 
   /// Randomly assigned initial dealer for the current seating (13-012,
   /// 13-026). The system does not track subsequent dealer-button rotation
@@ -190,6 +242,13 @@ class LiveGame {
     return structure.levels[currentLevel];
   }
 
+  bool get rebuysClosed {
+    if (!settings.rebuys) return true;
+    if (status.index > LiveGameStatus.rebuypause.index) return true;
+    if (status == LiveGameStatus.rebuypause) return false;
+    return currentLevel > settings.rebuysCloseLevel;
+  }
+
   LiveGame copyWith({
     String? id,
     GameSettings? settings,
@@ -202,12 +261,14 @@ class LiveGame {
     List<Player>? players,
     List<ChatMessage>? chat,
     List<Announcement>? announcements,
+    List<AuditRecord>? auditHistory,
     int? totalChipsInPlay,
     List<Player>? pendingGuests,
     List<String>? finishOrder,
     SpeedRecommendation? speedRecommendation,
     TournamentStructure? structure,
     bool? settlementConfirmed,
+    bool? seatingConfirmed,
     String? dealerPlayerId,
   }) {
     return LiveGame(
@@ -224,13 +285,14 @@ class LiveGame {
       players: players ?? this.players,
       chat: chat ?? this.chat,
       announcements: announcements ?? this.announcements,
+      auditHistory: auditHistory ?? this.auditHistory,
       totalChipsInPlay: totalChipsInPlay ?? this.totalChipsInPlay,
       pendingGuests: pendingGuests ?? this.pendingGuests,
       finishOrder: finishOrder ?? this.finishOrder,
       speedRecommendation: speedRecommendation ?? this.speedRecommendation,
       settlementConfirmed: settlementConfirmed ?? this.settlementConfirmed,
+      seatingConfirmed: seatingConfirmed ?? this.seatingConfirmed,
       dealerPlayerId: dealerPlayerId ?? this.dealerPlayerId,
     );
   }
 }
-

@@ -1,11 +1,4 @@
-import 'dart:convert';
-import '../models/app_notification.dart';
-import '../models/cash_game.dart';
 import '../models/chip_color.dart';
-import '../models/game.dart';
-import '../models/group.dart';
-import '../models/live_game.dart';
-import '../models/tournament.dart';
 import '../models/user.dart';
 
 extension UserStatsJson on UserStats {

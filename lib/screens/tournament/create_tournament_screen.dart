@@ -8,6 +8,8 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
 import '../../models/live_game.dart';
+import '../../models/tournament.dart';
+import '../../models/tournament_preset.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
@@ -16,13 +18,18 @@ import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
+import '../../widgets/chip_loading_animation.dart';
 import '../../widgets/chip_token.dart';
 
 enum _ChipMode { preset, quick, exact }
 
 /// 4-step tournament creation wizard mirroring the web `CreateTournamentPage`.
 class CreateTournamentScreen extends StatefulWidget {
-  const CreateTournamentScreen({super.key});
+  const CreateTournamentScreen({super.key, this.presetId});
+
+  /// Optional `?preset=` query param: pre-fills the form from a saved
+  /// tournament preset (checklist 09-006).
+  final String? presetId;
 
   @override
   State<CreateTournamentScreen> createState() => _CreateTournamentScreenState();
@@ -57,7 +64,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   final _koAmount = TextEditingController(text: '5');
   bool _anteEnabled = true;
   int _anteAfterLevel = 6;
+  AnteStyle _anteStyle = AnteStyle.bigBlind;
   double _orgPct = 10;
+
+  // Preset support (checklist §9.1)
+  List<TournamentPreset> _suggestions = const [];
+  bool _suggestionsDismissed = false;
+  String? _appliedPresetId;
 
   static String get _todayIso {
     final now = DateTime.now();
@@ -73,6 +86,81 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ? TournamentEngine.presetNames[2]
         : TournamentEngine.presetNames.firstOrNull ?? '';
     _chipSet = List.of(TournamentEngine.getPreset(_presetName));
+
+    // Auto-fill players from group + apply preset / suggestions
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final app = context.read<AppProvider>();
+      final group = app.currentGroup;
+
+      int expected = group.members.length;
+      for (final poll in group.polls) {
+        if (poll.question.toLowerCase().contains('going') || poll.question.toLowerCase().contains('play')) {
+          int yesVotes = poll.votes.values.where((v) => 
+            v.toLowerCase() == 'yes' || v.toLowerCase() == 'going' || v.toLowerCase() == 'in'
+          ).length;
+          if (yesVotes > 0) {
+            expected = yesVotes;
+            break;
+          }
+        }
+      }
+      setState(() {
+        _players.text = expected.toString();
+      });
+
+      if (widget.presetId != null) {
+        final preset = app.presetById(widget.presetId);
+        if (preset != null) {
+          setState(() => _applyPreset(preset));
+          return;
+        }
+      }
+
+      setState(() {
+        _suggestions = _matchSuggestions(app, expected);
+      });
+    });
+  }
+
+  /// Scores presets against signals parsed from closed polls (buy-in, duration,
+  /// etc.) so the wizard can suggest a match (09-007 / 09-008).
+  List<TournamentPreset> _matchSuggestions(AppProvider app, int expected) {
+    final signals = <num>[];
+    for (final poll in app.currentGroup.polls) {
+      if (!poll.closed) continue;
+      for (final opt in poll.options) {
+        final cleaned = opt.trim().replaceAll(RegExp(r'[hH]$'), '').trim();
+        final n = num.tryParse(cleaned);
+        if (n != null && n > 0) signals.add(n);
+      }
+    }
+    return app.suggestPresets(expectedPlayers: expected, pollSignals: signals);
+  }
+
+  /// Fills every field of the wizard from a saved preset (09-006).
+  void _applyPreset(TournamentPreset p) {
+    _name.text = p.name;
+    _buyIn.text = p.buyIn.toString();
+    _duration = p.durationHours;
+    _rebuys = p.rebuys;
+    _rebuysClose = p.rebuysCloseLevel;
+    _reEntry = p.reEntry;
+    _addOn = p.addOn;
+    _koEnabled = p.koEnabled;
+    _koAmount.text = p.koAmount.toString();
+    _anteEnabled = p.anteEnabled;
+    _anteAfterLevel = p.anteAfterLevel;
+    _anteStyle = AnteStyle.bigBlind;
+    _orgPct = p.organizerPct.toDouble();
+    _chipSet = List.of(p.chipSet);
+    if (TournamentEngine.presetNames.contains(p.chipSetName)) {
+      _chipMode = _ChipMode.preset;
+      _presetName = p.chipSetName;
+    } else {
+      _chipMode = _ChipMode.exact;
+    }
+    _appliedPresetId = p.id;
   }
 
   @override
@@ -100,7 +188,21 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     setState(() => _step++);
   }
 
-  void _generate(AppProvider app) {
+  void _generate(AppProvider app) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: ChipLoadingAnimation(),
+      ),
+    );
+
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (!mounted) return;
+    Navigator.of(context).pop();
+
     final game = app.createGame(GameSettings(
       name: _name.text.trim(),
       date: _date.text.trim(),
@@ -117,6 +219,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       addOn: _addOn,
       anteEnabled: _anteEnabled,
       anteAfterLevel: _anteAfterLevel,
+      anteStyle: _anteStyle,
       organizerPct: _orgPct.round(),
       chipSet: _chipSet,
       chipSetName: _chipMode == _ChipMode.preset ? _presetName : 'Custom',
@@ -177,6 +280,11 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          if (_step == 1 && _suggestions.isNotEmpty &&
+              !_suggestionsDismissed && _appliedPresetId == null) ...[
+            _buildSuggestionBanner(app),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // Steps
           if (_step == 1) _buildStep1(),
           if (_step == 2) _buildStep2(),
@@ -250,6 +358,15 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   controller: _players,
                   label: 'Expected players',
                   error: _errors['players'],
+                  onChanged: (_) {
+                    final app = context.read<AppProvider>();
+                    setState(() {
+                      _suggestions = _matchSuggestions(
+                        app,
+                        int.tryParse(_players.text) ?? 0,
+                      );
+                    });
+                  },
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -290,6 +407,74 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Suggestion banner shown before starting from scratch (09-007). When two
+  /// presets match, both are offered so the admin can choose (09-008), or
+  /// ignore them and start from zero (09-009).
+  Widget _buildSuggestionBanner(AppProvider app) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.auto_awesome, size: 16, color: AppColors.primary),
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              'Matching preset${_suggestions.length > 1 ? 's' : ''} from your poll results',
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            InkWell(
+              onTap: () => setState(() => _suggestionsDismissed = true),
+              child: Text(
+                'Ignore',
+                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        for (final p in _suggestions)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(p.name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Buy-in ${p.buyIn} · ${p.durationHours}h · '
+                          '${p.rebuys ? 'Rebuys to L${p.rebuysCloseLevel}' : 'No rebuys'} · '
+                          '${p.anteEnabled ? 'Ante L${p.anteAfterLevel}+' : 'No ante'}',
+                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                        ),
+                      ],
+                    ),
+                  ),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    onPressed: () {
+                      setState(() => _applyPreset(p));
+                    },
+                    child: const Text('Use preset'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -533,13 +718,45 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           if (_anteEnabled)
             Padding(
               padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
-              child: AppSelect(
-                label: 'Activate ante',
-                value: '$_anteAfterLevel',
-                onChanged: (v) => setState(() => _anteAfterLevel = int.tryParse(v ?? '') ?? 6),
-                items: [
-                  for (var n = 4; n <= 8; n++)
-                    DropdownMenuItem(value: '$n', child: Text('After Level $n')),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AppSelect(
+                    label: 'Activate ante',
+                    value: '$_anteAfterLevel',
+                    onChanged: (v) => setState(() => _anteAfterLevel = int.tryParse(v ?? '') ?? 6),
+                    items: [
+                      for (var n = 4; n <= 8; n++)
+                        DropdownMenuItem(value: '$n', child: Text('After Level $n')),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text('Ante style', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      for (final style in AnteStyle.values) ...[
+                        Expanded(
+                          child: _ModeButton(
+                            label: switch (style) {
+                              AnteStyle.bigBlind => 'Big blind',
+                              AnteStyle.individual => 'Individual',
+                            },
+                            active: _anteStyle == style,
+                            onTap: () => setState(() => _anteStyle = style),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    _anteStyle == AnteStyle.individual
+                        ? 'Every player posts an ante (half the big blind) at each level.'
+                        : 'One ante per table, equal to the big blind. Recommended.',
+                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  ),
                 ],
               ),
             ),
@@ -641,11 +858,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 }
 
 class _NumberField extends StatelessWidget {
-  const _NumberField({required this.controller, required this.label, this.error});
+  const _NumberField({required this.controller, required this.label, this.error, this.onChanged});
 
   final TextEditingController controller;
   final String label;
   final String? error;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -658,6 +876,7 @@ class _NumberField extends StatelessWidget {
           controller: controller,
           keyboardType: TextInputType.number,
           error: error,
+          onChanged: onChanged,
         ),
       ],
     );

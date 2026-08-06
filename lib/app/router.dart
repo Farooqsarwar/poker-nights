@@ -9,6 +9,10 @@ import '../screens/public/guest_flow_screen.dart';
 import '../screens/public/landing_screen.dart';
 import '../screens/public/splash_screen.dart';
 import '../screens/public/tv_mode_screen.dart';
+import '../screens/public/privacy_screen.dart';
+import '../screens/public/terms_screen.dart';
+import '../screens/public/support_screen.dart';
+import '../screens/public/join_screen.dart';
 import '../screens/shell/group_screen.dart';
 import '../screens/shell/history_screen.dart';
 import '../screens/shell/home_screen.dart';
@@ -18,6 +22,7 @@ import '../screens/shell/settings_screen.dart';
 import '../screens/shell/stats_screen.dart';
 import '../screens/shell/chip_sets_screen.dart';
 import '../screens/shell/edit_chip_set_screen.dart';
+import '../screens/shell/presets_screen.dart';
 import '../screens/tournament/admin_dashboard_screen.dart';
 import '../screens/tournament/check_in_screen.dart';
 import '../screens/tournament/complete_tournament_screen.dart';
@@ -47,15 +52,18 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: RoutePaths.login,
-      builder: (context, state) => const AuthScreen(mode: AuthMode.login),
+      builder: (context, state) =>
+          AuthScreen(mode: AuthMode.login, next: _nextParam(state)),
     ),
     GoRoute(
       path: RoutePaths.register,
-      builder: (context, state) => const AuthScreen(mode: AuthMode.register),
+      builder: (context, state) =>
+          AuthScreen(mode: AuthMode.register, next: _nextParam(state)),
     ),
     GoRoute(
       path: RoutePaths.forgotPassword,
-      builder: (context, state) => const AuthScreen(mode: AuthMode.forgotPassword),
+      builder: (context, state) =>
+          AuthScreen(mode: AuthMode.forgotPassword, next: _nextParam(state)),
     ),
     GoRoute(
       path: RoutePaths.tvMode,
@@ -64,6 +72,22 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: RoutePaths.guestFlow,
       builder: (context, state) => const GuestFlowScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.privacy,
+      builder: (context, state) => const PrivacyScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.terms,
+      builder: (context, state) => const TermsScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.support,
+      builder: (context, state) => const SupportScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.join,
+      builder: (context, state) => const JoinScreen(),
     ),
 
     // ── App shell ────────────────────────────────────────────────────────────
@@ -100,6 +124,10 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => shell(const ChipSetsScreen()),
     ),
     GoRoute(
+      path: RoutePaths.presets,
+      builder: (context, state) => shell(const PresetsScreen()),
+    ),
+    GoRoute(
       path: RoutePaths.editChipSet,
       builder: (context, state) {
         final id = state.extra as String?;
@@ -110,7 +138,9 @@ final GoRouter appRouter = GoRouter(
     // ── Tournament flow ──────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.createTournament,
-      builder: (context, state) => shell(const CreateTournamentScreen()),
+      builder: (context, state) => shell(CreateTournamentScreen(
+        presetId: state.uri.queryParameters['preset'],
+      )),
     ),
     GoRoute(
       path: RoutePaths.structureReview,
@@ -168,3 +198,10 @@ Widget shell(Widget child) => ScreenShell(
           .fadeIn(duration: 300.ms, curve: Curves.easeOut)
           .slideY(begin: 0.05),
     );
+
+/// Reads the `?next=` query param so auth can redirect back to the page the
+/// user originally tried to reach.
+String? _nextParam(GoRouterState state) {
+  final next = state.uri.queryParameters['next'];
+  return (next == null || !next.startsWith('/')) ? null : next;
+}

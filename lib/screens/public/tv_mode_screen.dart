@@ -239,7 +239,7 @@ class _TVLayout extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (game.status == LiveGameStatus.running)
+                  if (game.status == LiveGameStatus.running && !app.isOffline)
                     const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -248,7 +248,16 @@ class _TVLayout extends StatelessWidget {
                         Text('LIVE', style: TextStyle(color: AppColors.success, fontSize: AppFontSizes.sm, fontWeight: FontWeight.w600)),
                       ],
                     ),
-                  if (isBreak)
+                  if (app.isOffline)
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _StaleDot(),
+                        SizedBox(width: AppSpacing.xs),
+                        Text('STALE', style: TextStyle(color: AppColors.warning, fontSize: AppFontSizes.sm, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  if (isBreak && !app.isOffline)
                     const Text(
                       '⏸ BREAK',
                       style: TextStyle(color: AppColors.warning, fontSize: AppFontSizes.sm, fontWeight: FontWeight.w600),
@@ -269,6 +278,13 @@ class _TVLayout extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.xxl),
+
+              // Stale/offline banner — preserves the last safe display while
+              // making the disconnected state unmistakable (15-039, 18-028).
+              if (app.isOffline) ...[
+                _StaleBanner(lastSync: app.lastSync, onReconnect: app.toggleOffline),
+                const SizedBox(height: AppSpacing.xl),
+              ],
 
               // Body
               Expanded(
@@ -309,6 +325,13 @@ class _TVLayout extends StatelessWidget {
               Row(
                 children: [
                   Text('CODE: ${game.publicCode}', style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground)),
+                  const SizedBox(width: AppSpacing.lg),
+                  Text(
+                    'Last sync ${_timeOf(app.lastSync)}',
+                    style: AppTypography.monoXs.copyWith(
+                      color: app.isOffline ? AppColors.warning : AppColors.mutedForeground,
+                    ),
+                  ),
                   const Spacer(),
                   Text('pokernight.app', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
                   const SizedBox(width: AppSpacing.lg),
@@ -321,6 +344,68 @@ class _TVLayout extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+String _timeOf(DateTime t) {
+  final h = t.hour.toString().padLeft(2, '0');
+  final m = t.minute.toString().padLeft(2, '0');
+  final s = t.second.toString().padLeft(2, '0');
+  return '$h:$m:$s';
+}
+
+class _StaleDot extends StatelessWidget {
+  const _StaleDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.warning, shape: BoxShape.circle));
+  }
+}
+
+class _StaleBanner extends StatelessWidget {
+  const _StaleBanner({required this.lastSync, required this.onReconnect});
+
+  final DateTime lastSync;
+  final VoidCallback onReconnect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.warningSoft,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.warningSoftBorder),
+      ),
+      child: Row(
+        children: [
+          const Text('⚠️', style: TextStyle(fontSize: AppFontSizes.lg)),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Connection lost',
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.warning),
+                ),
+                Text(
+                  'Showing the last synced display from ${_timeOf(lastSync)}. Reconnecting…',
+                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                ),
+              ],
+            ),
+          ),
+          AppButton(
+            size: AppButtonSize.sm,
+            onPressed: onReconnect,
+            child: const Text('Reconnect'),
+          ),
+        ],
       ),
     );
   }
@@ -450,88 +535,109 @@ class _StatsGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 768 ? 4 : 2;
+        final isDesktop = constraints.maxWidth >= 768;
         final lvl = level;
         final nxt = next;
         final ante = lvl?.ante;
-        final tiles = [
-          _Tile(
-            label: 'Blinds',
-            span: columns >= 4 ? 2 : 1,
-            child: Column(
-              children: [
-                Text(
-                  lvl == null ? '—' : '${Formatters.chips(lvl.sb)} / ${Formatters.chips(lvl.bb)}',
-                  style: AppTypography.mono(size: 48, weight: FontWeight.w700),
-                ),
-                if (ante != null)
-                  Text(
-                    '+ ${Formatters.chips(ante)} ante',
-                    style: AppTypography.bodySm.copyWith(color: AppColors.accent),
-                  ),
-                if (nxt != null)
-                  Text(
-                    'Next: ${Formatters.chips(nxt.sb)} / ${Formatters.chips(nxt.bb)}'
-                    '${nxt.ante != null ? ' + ${Formatters.chips(nxt.ante!)} ante' : ''}',
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                  ),
-              ],
-            ),
-          ),
-          _Tile(
-            label: 'Players',
-            child: Text('${game.activePlayers.length}', style: AppTypography.mono(size: 56, weight: FontWeight.w700)),
-          ),
-          _Tile(
-            label: 'Avg Stack',
-            child: Column(
-              children: [
-                Text(Formatters.chips(avgStack), style: AppTypography.mono(size: 40, weight: FontWeight.w700)),
-                if (avgBB > 0)
-                  Text('$avgBB BB', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-              ],
-            ),
-          ),
-        ];
 
-        // Prize pool is a separate highlighted tile
+        final blindsTile = _Tile(
+          label: 'Blinds',
+          child: Column(
+            children: [
+              Text(
+                lvl == null ? '—' : '${Formatters.chips(lvl.sb)} / ${Formatters.chips(lvl.bb)}',
+                style: AppTypography.mono(size: 48, weight: FontWeight.w700),
+              ),
+              if (ante != null)
+                Text(
+                  '+ ${Formatters.chips(ante)} ante',
+                  style: AppTypography.bodySm.copyWith(color: AppColors.accent),
+                ),
+              if (nxt != null)
+                Text(
+                  'Next: ${Formatters.chips(nxt.sb)} / ${Formatters.chips(nxt.bb)}'
+                  '${nxt.ante != null ? ' + ${Formatters.chips(nxt.ante!)} ante' : ''}',
+                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                ),
+            ],
+          ),
+        );
+
+        final playersTile = _Tile(
+          label: 'Players',
+          child: Text('${game.activePlayers.length}', style: AppTypography.mono(size: 56, weight: FontWeight.w700)),
+        );
+
+        final avgStackTile = _Tile(
+          label: 'Avg Stack',
+          child: Column(
+            children: [
+              Text(Formatters.chips(avgStack), style: AppTypography.mono(size: 40, weight: FontWeight.w700)),
+              if (avgBB > 0)
+                Text('$avgBB BB', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+            ],
+          ),
+        );
+
         return Column(
           children: [
-            LayoutBuilder(
-              builder: (context, c) {
-                final tileWidth = (c.maxWidth - AppSpacing.lg * (columns - 1)) / columns;
-                final rows = <Widget>[];
-                for (var i = 0; i < tiles.length; i += columns) {
-                  final slice = tiles.sublist(i, (i + columns).clamp(0, tiles.length));
-                  rows.add(Row(
-                    children: [
-                      for (var j = 0; j < slice.length; j++) ...[
-                        if (j > 0) const SizedBox(width: AppSpacing.lg),
-                        SizedBox(width: tileWidth, child: slice[j]),
-                      ],
-                    ],
-                  ));
-                  if (i + columns < tiles.length) rows.add(const SizedBox(height: AppSpacing.lg));
-                }
-                return Column(children: rows);
-              },
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            LayoutBuilder(
-              builder: (context, c) {
-                final isWide = c.maxWidth >= 768;
-                return Row(
+            if (isDesktop)
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _PrizePoolTile(width: isWide ? c.maxWidth / 2 - 8 : c.maxWidth),
-                    if (isWide) ...[
-                      const SizedBox(width: AppSpacing.lg),
-                      if (game.announcements.isNotEmpty)
-                        _AnnouncementTile(width: c.maxWidth / 2 - 8, game: game),
-                    ],
+                    Expanded(flex: 2, child: blindsTile),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(flex: 1, child: playersTile),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(flex: 1, child: avgStackTile),
                   ],
-                );
-              },
+                ),
+              )
+            else ...[
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: blindsTile),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(child: playersTile),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: avgStackTile),
+                    const SizedBox(width: AppSpacing.lg),
+                    const Spacer(),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Expanded(child: _PrizePoolTile()),
+                  if (isDesktop && game.announcements.isNotEmpty) ...[
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(child: _AnnouncementTile(game: game)),
+                  ],
+                ],
+              ),
             ),
+            if (!isDesktop && game.announcements.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.lg),
+              Row(
+                children: [
+                  Expanded(child: _AnnouncementTile(game: game)),
+                ],
+              ),
+            ],
           ],
         );
       },
@@ -570,16 +676,13 @@ class _Tile extends StatelessWidget {
 }
 
 class _PrizePoolTile extends StatelessWidget {
-  const _PrizePoolTile({required this.width});
-
-  final double width;
+  const _PrizePoolTile();
 
   @override
   Widget build(BuildContext context) {
     final game = context.watch<AppProvider>().currentGame;
     final pool = game?.structure.prizePool ?? 0;
     return Container(
-      width: width,
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: AppColors.card.withValues(alpha: 0.6),
@@ -604,16 +707,14 @@ class _PrizePoolTile extends StatelessWidget {
 }
 
 class _AnnouncementTile extends StatelessWidget {
-  const _AnnouncementTile({required this.width, required this.game});
+  const _AnnouncementTile({required this.game});
 
-  final double width;
   final LiveGame game;
 
   @override
   Widget build(BuildContext context) {
     final latest = game.announcements.last;
     return Container(
-      width: width,
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: AppColors.card.withValues(alpha: 0.6),

@@ -222,7 +222,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         const SizedBox(height: AppSpacing.xl),
 
         switch (view) {
-          _GuestStep.chooseInviter => _buildChooseInviter(registeredPlayers),
+          _GuestStep.chooseInviter => _buildChooseInviter(game, registeredPlayers),
           _GuestStep.chooseSlot => _buildChooseSlot(inviter, availableSlots, game.players),
           _GuestStep.enterName => _buildEnterName(inviter),
           _GuestStep.waiting => _buildWaiting(inviter),
@@ -334,8 +334,26 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     );
   }
 
-  Widget _buildChooseInviter(List<Player> registeredPlayers) {
-    final invited = registeredPlayers.where((p) => p.rsvp != null && p.rsvp!.isGoing).toList();
+  /// Number of still-free guest seats under [inviter]. Prefers the persisted
+  /// [GuestSlot] records (07-014); falls back to the RSVP guest count minus
+  /// guests already claimed so the flow works even without slot records.
+  int _freeSlotsFor(LiveGame game, Player inviter) {
+    final slots = game.guestSlots.where((s) => s.inviterId == inviter.id).toList();
+    if (slots.isNotEmpty) return slots.where((s) => s.available).length;
+    final taken = game.players
+        .where((p) => p.isGuest && p.inviterId == inviter.id)
+        .length;
+    return (inviter.rsvp?.guestCount ?? 0) - taken;
+  }
+
+  Widget _buildChooseInviter(LiveGame game, List<Player> registeredPlayers) {
+    // Only members with at least one free guest seat are shown — players whose
+    // "+N" seats are all taken (or who said "Going" with no guests) cannot be
+    // chosen (§6.3, checklist 07-014).
+    final invited = registeredPlayers
+        .where((p) =>
+            p.rsvp != null && p.rsvp!.isGoing && _freeSlotsFor(game, p) > 0)
+        .toList();
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
@@ -375,7 +393,10 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                         Expanded(
                           child: Text(p.name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
                         ),
-                        AppBadge(label: p.rsvp!.label, variant: AppBadgeVariant.muted),
+                        AppBadge(
+                          label: '${_freeSlotsFor(game, p)} free',
+                          variant: AppBadgeVariant.green,
+                        ),
                       ],
                     ),
                   ),
@@ -388,7 +409,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             onPressed: _selectedInviter == null
                 ? null
                 : () => setState(() => _step = _GuestStep.chooseSlot),
-            child: const Text('Continue →'),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Continue'),
+                SizedBox(width: 6),
+                Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+              ],
+            ),
           ),
         ],
       ),
@@ -446,7 +474,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             onPressed: _selectedSlot == null
                 ? null
                 : () => setState(() => _step = _GuestStep.enterName),
-            child: const Text('Select slot →'),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Select slot'),
+                SizedBox(width: 6),
+                Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+              ],
+            ),
           ),
         ],
       ),
@@ -554,7 +589,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           padding: const EdgeInsets.all(AppSpacing.xxl),
           child: Column(
             children: [
-              const Text('✕', style: TextStyle(fontSize: AppFontSizes.displayLg, color: AppColors.destructive)),
+              const Icon(Icons.close, size: AppFontSizes.displayLg, color: AppColors.destructive),
               const SizedBox(height: AppSpacing.md),
               Text("Request declined", style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w600, color: AppColors.destructive)),
               const SizedBox(height: AppSpacing.xs),
@@ -589,7 +624,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           padding: const EdgeInsets.all(AppSpacing.xxl),
           child: Column(
             children: [
-              const Text('✅', style: TextStyle(fontSize: AppFontSizes.displayLg)),
+              const Icon(Icons.check_circle, size: AppFontSizes.displayLg, color: AppColors.success),
               const SizedBox(height: AppSpacing.md),
               Text("You're in!", style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w600, color: AppColors.success)),
               const SizedBox(height: AppSpacing.xs),
@@ -670,7 +705,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           size: AppButtonSize.lg,
           fullWidth: true,
           onPressed: () => context.go(RoutePaths.playerLive),
-          child: const Text('Watch live game →'),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Watch live game'),
+              SizedBox(width: 6),
+              Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text.rich(
@@ -703,7 +745,14 @@ class _BackLink extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      child: Text('← Back', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
+          const SizedBox(width: 4),
+          Text('Back', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+        ],
+      ),
     );
   }
 }

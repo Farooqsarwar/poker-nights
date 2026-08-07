@@ -16,6 +16,7 @@ import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/chip_token.dart';
 
@@ -301,7 +302,7 @@ class _AddOnsStep extends StatelessWidget {
           AppButton(
             fullWidth: true,
             onPressed: onConfirm,
-            child: const Text('Confirm add-ons →'),
+            child: const AppIconLabel(label: 'Confirm add-ons', trailing: Icons.arrow_forward),
           ),
         ],
       ),
@@ -391,7 +392,7 @@ class _ColorUpStep extends StatelessWidget {
           AppButton(
             fullWidth: true,
             onPressed: onNext,
-            child: const Text('Color-up complete →'),
+            child: const AppIconLabel(label: 'Color-up complete', trailing: Icons.arrow_forward),
           ),
         ],
       ),
@@ -459,7 +460,7 @@ class _ConfirmStep extends StatelessWidget {
             size: AppButtonSize.lg,
             fullWidth: true,
             onPressed: onStart,
-            child: const Text('▶ Start next level'),
+            child: const AppIconLabel(label: 'Start next level', icon: Icons.play_arrow),
           ),
         ],
       ),

@@ -17,6 +17,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
+import '../../widgets/medal_icon.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_tabs.dart';
 import '../../widgets/app_text_field.dart';
@@ -248,7 +249,7 @@ class _GroupScreenState extends State<GroupScreen> {
   Widget _buildGames(AppProvider app, Group group, List<LiveGame> games, bool isAdmin, AppUser? user) {
     if (games.isEmpty) {
       return AppEmptyState(
-        icon: '🎰',
+        icon: Icons.casino_outlined,
         title: 'No upcoming games',
         description: 'Create a new tournament to get started.',
         action: isAdmin
@@ -276,7 +277,8 @@ class _GroupScreenState extends State<GroupScreen> {
                       Text(game.settings.name, style: AppTypography.bodyStyle.copyWith(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
                       Text(
-                        '${game.settings.date} at ${game.settings.time} · ${game.settings.location}',
+                        '${game.settings.date} at ${game.settings.time} · '
+                        '${game.settings.locationPrivate ? 'Address shared at check-in' : game.settings.location}',
                         style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                       ),
                       const SizedBox(height: 2),
@@ -514,7 +516,7 @@ class _GroupScreenState extends State<GroupScreen> {
               ),
             ),
           AppEmptyState(
-            icon: '📊',
+            icon: Icons.poll_outlined,
             title: 'No polls yet',
             description: 'Create a poll to help plan the next game.',
           ),
@@ -548,7 +550,7 @@ class _GroupScreenState extends State<GroupScreen> {
   Widget _buildHistory(Group group) {
     if (group.pastGames.isEmpty) {
       return const AppEmptyState(
-        icon: '📜',
+        icon: Icons.history_outlined,
         title: 'No past games',
         description: 'Completed games will appear here.',
       );
@@ -586,9 +588,16 @@ class _GroupScreenState extends State<GroupScreen> {
                               for (var i = 0;
                                   i < game.finishOrder.length.clamp(0, 3);
                                   i++)
-                                Text(
-                                  '${const ['🥇', '🥈', '🥉'][i]} ${names[game.finishOrder[game.finishOrder.length - 1 - i]] ?? game.finishOrder[game.finishOrder.length - 1 - i]}',
-                                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    MedalIcon(i + 1, size: AppFontSizes.sm),
+                                    const SizedBox(width: AppSpacing.xs),
+                                    Text(
+                                      names[game.finishOrder[game.finishOrder.length - 1 - i]] ?? game.finishOrder[game.finishOrder.length - 1 - i],
+                                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                                    ),
+                                  ],
                                 ),
                             ],
                           ),
@@ -615,6 +624,55 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Pinned system messages (published games / edits) render as an event card
+    // rather than a chat bubble (§4.3) and are never deletable by members.
+    if (message.pinned) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppColors.primary.withValues(alpha: 0.12),
+                AppColors.secondary.withValues(alpha: 0.06),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.push_pin, size: 14, color: AppColors.primary),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(
+                    'Pinned event',
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                message.body,
+                style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Posted by ${message.authorName} · ${Formatters.relativeTime(message.timestamp)}',
+                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(

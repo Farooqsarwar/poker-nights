@@ -14,6 +14,7 @@ import '../../utils/formatters.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_timer.dart';
 import '../../widgets/backgrounds.dart';
+import '../../widgets/medal_icon.dart';
 
 /// Full-screen TV display mirroring the web `TVModePage`.
 class TVModeScreen extends StatefulWidget {
@@ -259,7 +260,7 @@ class _TVLayout extends StatelessWidget {
                     ),
                   if (isBreak && !app.isOffline)
                     const Text(
-                      '⏸ BREAK',
+                      'BREAK',
                       style: TextStyle(color: AppColors.warning, fontSize: AppFontSizes.sm, fontWeight: FontWeight.w600),
                     ),
                   InkWell(
@@ -267,9 +268,20 @@ class _TVLayout extends StatelessWidget {
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                     child: Padding(
                       padding: const EdgeInsets.all(AppSpacing.xs),
-                      child: Text(
-                        app.voiceEnabled ? '🔊 Voice on' : '🔇 Voice off',
-                        style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            app.voiceEnabled ? Icons.volume_up_outlined : Icons.volume_off_outlined,
+                            size: AppFontSizes.md,
+                            color: AppColors.mutedForeground,
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(
+                            app.voiceEnabled ? 'Voice on' : 'Voice off',
+                            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -337,7 +349,14 @@ class _TVLayout extends StatelessWidget {
                   const SizedBox(width: AppSpacing.lg),
                   InkWell(
                     onTap: () => context.go(RoutePaths.landing),
-                    child: Text('✕ Exit', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.close, size: AppFontSizes.sm, color: AppColors.mutedForeground),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text('Exit', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -383,7 +402,7 @@ class _StaleBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Text('⚠️', style: TextStyle(fontSize: AppFontSizes.lg)),
+          const Icon(Icons.warning_amber_rounded, size: AppFontSizes.lg, color: AppColors.warning),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -646,11 +665,10 @@ class _StatsGrid extends StatelessWidget {
 }
 
 class _Tile extends StatelessWidget {
-  const _Tile({required this.label, required this.child, this.span = 1});
+  const _Tile({required this.label, required this.child});
 
   final String label;
   final Widget child;
-  final int span;
 
   @override
   Widget build(BuildContext context) {
@@ -723,7 +741,7 @@ class _AnnouncementTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Text('📢', style: TextStyle(fontSize: AppFontSizes.xxl)),
+          const Icon(Icons.campaign_outlined, size: AppFontSizes.xxl, color: AppColors.icon),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -812,7 +830,7 @@ class _BreakBanner extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text('⏸ BREAK', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700, color: AppColors.warning)),
+          Text('BREAK', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700, color: AppColors.warning)),
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Rebuy period has ended. Add-ons available. Resume when ready.',
@@ -832,7 +850,6 @@ class _Podium extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Columns display [2nd, 1st, 3rd] left → right (winner centred, tallest).
-    const medals = ['🥈', '🥇', '🥉'];
     const labels = ['2nd', '1st', '3rd'];
     const places = [2, 1, 3];
     final heights = [170.0, 240.0, 140.0];
@@ -854,7 +871,7 @@ class _Podium extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                   child: _PodiumStep(
-                    medal: medals[i],
+                    place: places[i],
                     label: labels[i],
                     name: _podiumName(game, places[i]),
                     height: heights[i],
@@ -880,9 +897,9 @@ class _Podium extends StatelessWidget {
 }
 
 class _PodiumStep extends StatelessWidget {
-  const _PodiumStep({required this.medal, required this.label, required this.name, required this.height});
+  const _PodiumStep({required this.place, required this.label, required this.name, required this.height});
 
-  final String medal;
+  final int place;
   final String label;
   final String? name;
   final double height;
@@ -901,7 +918,7 @@ class _PodiumStep extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Text(medal, style: const TextStyle(fontSize: AppFontSizes.display)),
+          MedalIcon(place, size: AppFontSizes.display),
           const SizedBox(height: AppSpacing.sm),
           Text(
             name ?? '—',

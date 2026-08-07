@@ -40,6 +40,11 @@ class ChipPlanEntry {
 /// individual ante). The big blind ante is the recommended default.
 enum AnteStyle { bigBlind, individual }
 
+/// The admin's ante choice at creation (checklist 09-010). "recommend" keeps
+/// the system recommendation (big blind ante from a fixed level onward),
+/// while the other values override it explicitly.
+enum AntePreference { recommend, none, bigBlind, individual }
+
 /// Parameters used to generate a tournament structure.
 class TournamentParams {
   const TournamentParams({

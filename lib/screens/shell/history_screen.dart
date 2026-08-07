@@ -14,6 +14,7 @@ import '../../widgets/app_badge.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_tabs.dart';
+import '../../widgets/medal_icon.dart';
 
 /// History + leaderboard mirroring the web `HistoryPage`.
 class HistoryScreen extends StatefulWidget {
@@ -33,7 +34,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final pastGames = group.pastGames;
     final userId = app.user?.id;
     final isAdmin = app.user?.isAdmin ?? false;
-    final medals = const ['🥇', '🥈', '🥉'];
 
     final myGames = pastGames.where((g) => g.players.any((p) => p.id == userId)).toList();
     final myStats = _computeMyStats(myGames, userId);
@@ -89,9 +89,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           if (_tab == 'games')
-            _buildGames(pastGames, userId, medals, isAdmin)
+            _buildGames(pastGames, userId, isAdmin)
           else if (_tab == 'leaderboard')
-            _buildLeaderboard(pastGames, userId, medals)
+            _buildLeaderboard(pastGames, userId)
           else
             _buildCash(app.cashHistory, isAdmin),
         ],
@@ -130,13 +130,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return (played: played, wins: wins, podium: podium, rebuys: rebuys, knockouts: knockouts, earnings: earnings);
   }
 
-  Widget _buildGames(List<LiveGame> pastGames, String? userId, List<String> medals, bool isAdmin) {
+  Widget _buildGames(List<LiveGame> pastGames, String? userId, bool isAdmin) {
     if (pastGames.isEmpty) {
       return AppCard(
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           children: [
-            const Text('🃏', style: TextStyle(fontSize: AppFontSizes.xxxl)),
+            const Icon(Icons.style_outlined, size: AppFontSizes.xxxl, color: AppColors.icon),
             const SizedBox(height: AppSpacing.sm),
             Text('No completed games yet.', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
           ],
@@ -146,7 +146,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Column(
       children: [
         for (final game in pastGames) ...[
-          _HistoryRow(game: game, userId: userId, medals: medals, showAmounts: isAdmin),
+          _HistoryRow(game: game, userId: userId, showAmounts: isAdmin),
           const SizedBox(height: AppSpacing.sm),
         ],
       ],
@@ -159,7 +159,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           children: [
-            const Text('🃏', style: TextStyle(fontSize: AppFontSizes.xxxl)),
+            const Icon(Icons.payments_outlined, size: AppFontSizes.xxxl, color: AppColors.icon),
             const SizedBox(height: AppSpacing.sm),
             Text('No completed cash games yet.', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
           ],
@@ -176,7 +176,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Widget _buildLeaderboard(List<LiveGame> pastGames, String? userId, List<String> medals) {
+  Widget _buildLeaderboard(List<LiveGame> pastGames, String? userId) {
     final statsMap = <String, _LbEntry>{};
     for (final game in pastGames) {
       for (final p in game.players) {
@@ -230,11 +230,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   children: [
                     SizedBox(
                       width: 28,
-                      child: Text(
-                        i < 3 ? medals[i] : '#${i + 1}',
-                        textAlign: TextAlign.center,
-                        style: i < 3 ? null : AppTypography.mono(size: AppFontSizes.xs, color: AppColors.mutedForeground),
-                      ),
+                      child: i < 3
+                          ? MedalIcon(i + 1, size: 20)
+                          : Text(
+                              '#${i + 1}',
+                              textAlign: TextAlign.center,
+                              style: AppTypography.mono(size: AppFontSizes.xs, color: AppColors.mutedForeground),
+                            ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     Container(
@@ -364,7 +366,7 @@ class _CashHistoryRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             alignment: Alignment.center,
-            child: const Text('💵', style: TextStyle(fontSize: AppFontSizes.xl)),
+            child: const Icon(Icons.payments_outlined, size: 20, color: AppColors.icon),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -403,11 +405,10 @@ class _CashHistoryRow extends StatelessWidget {
 }
 
 class _HistoryRow extends StatelessWidget {
-  const _HistoryRow({required this.game, required this.userId, required this.medals, required this.showAmounts});
+  const _HistoryRow({required this.game, required this.userId, required this.showAmounts});
 
   final LiveGame game;
   final String? userId;
-  final List<String> medals;
   final bool showAmounts;
 
   @override
@@ -435,10 +436,9 @@ class _HistoryRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  placement == 1 ? '🥇' : placement == 2 ? '🥈' : placement == 3 ? '🥉' : '🃏',
-                  style: const TextStyle(fontSize: AppFontSizes.xl),
-                ),
+                child: placement != null && placement <= 3
+                    ? MedalIcon(placement, size: AppFontSizes.xl)
+                    : const Icon(Icons.style_outlined, size: AppFontSizes.xl, color: AppColors.icon),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -462,7 +462,7 @@ class _HistoryRow extends StatelessWidget {
                 children: [
                   if (placement != null)
                     Text(
-                      placement == 1 ? '🥇 1st' : '#$placement',
+                      placement == 1 ? '1st' : '#$placement',
                       style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
                     ),
                   if (game.structure.prizePool > 0 && showAmounts)
@@ -491,10 +491,7 @@ class _HistoryRow extends StatelessWidget {
               if (placement != null && placement <= 3)
                 Padding(
                   padding: const EdgeInsets.only(left: AppSpacing.sm),
-                  child: Text(
-                    medals[placement - 1],
-                    style: const TextStyle(fontSize: AppFontSizes.xs),
-                  ),
+                  child: MedalIcon(placement, size: AppFontSizes.xs),
                 ),
             ],
           ),

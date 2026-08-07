@@ -366,7 +366,14 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     variant: AppButtonVariant.primary,
                     fullWidth: true,
                     onPressed: app.confirmSeating,
-                    child: const Text('✓ Confirm physical seating'),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle, size: 14, color: AppColors.icon),
+                        SizedBox(width: 6),
+                        Text('Confirm physical seating'),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -377,7 +384,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
               borderColor: AppColors.successSoftBorder,
               child: Row(
                 children: [
-                  const Text('✅', style: TextStyle(fontSize: AppFontSizes.xl)),
+                  const Icon(Icons.check_circle, size: AppFontSizes.xl, color: AppColors.success),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Text(
@@ -395,7 +402,14 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 child: AppButton(
                   variant: AppButtonVariant.secondary,
                   onPressed: () => context.go(RoutePaths.invitation),
-                  child: const Text('← Back'),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
+                      SizedBox(width: 6),
+                      Text('Back'),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -407,12 +421,21 @@ class _CheckInScreenState extends State<CheckInScreen> {
                           context.go(RoutePaths.adminDashboard);
                         }
                       : null,
-                  child: Text(
-                    !canStart
-                        ? 'Need at least 2 checked in'
-                        : !seatingConfirmed
-                            ? 'Confirm seating first'
-                            : 'Start with ${checkedIn.length} players →',
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        !canStart
+                            ? 'Need at least 2 checked in'
+                            : !seatingConfirmed
+                                ? 'Confirm seating first'
+                                : 'Start with ${checkedIn.length} players',
+                      ),
+                      if (canStart && seatingConfirmed) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+                      ],
+                    ],
                   ),
                 ),
               ),

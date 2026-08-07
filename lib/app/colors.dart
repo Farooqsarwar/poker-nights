@@ -46,6 +46,12 @@ class AppColors {
   static const Color feltGlow = Color(0xFF220505);
   static const Color glassOverlay = Color(0x99000000);
 
+  // ── Icons ──────────────────────────────────────────────────────────────────
+  /// Solid icons rendered across the app use this light red so they stay
+  /// legible on the near-black surfaces while keeping the casino theme.
+  static const Color icon = Color(0xFFE57373); // Light red (Material Red 300)
+  static const Color iconMuted = Color(0xFFEF9A9A); // Softer light red
+
   // ── Low-level alpha variants ──
   static const Color hairlineWhite = Color(0x33FFFFFF);
   static const Color hairlineBorder = Color(0x4D333333);

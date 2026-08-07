@@ -10,6 +10,7 @@ import '../../utils/formatters.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_progress_bar.dart';
+import '../../widgets/medal_icon.dart';
 
 /// Detailed statistics mirroring the account area of the web app.
 class StatsScreen extends StatelessWidget {
@@ -183,7 +184,6 @@ class _RecentResults extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final medals = const ['🥇', '🥈', '🥉'];
     final pastGames = app.currentGroup.pastGames;
     final mine = pastGames
         .where((g) => g.players.any((p) => p.id == userId))
@@ -195,7 +195,7 @@ class _RecentResults extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           children: [
-            const Text('🃏', style: TextStyle(fontSize: AppFontSizes.xxxl)),
+            const Icon(Icons.style_outlined, size: AppFontSizes.xxxl, color: AppColors.icon),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'No completed games yet. Finish a tournament and your results will show here.',
@@ -216,7 +216,6 @@ class _RecentResults extends StatelessWidget {
             _ResultRow(
               game: mine[i],
               userId: userId,
-              medals: medals,
               showDivider: i < mine.length - 1,
             ),
         ],
@@ -229,13 +228,11 @@ class _ResultRow extends StatelessWidget {
   const _ResultRow({
     required this.game,
     required this.userId,
-    required this.medals,
     required this.showDivider,
   });
 
   final LiveGame game;
   final String userId;
-  final List<String> medals;
   final bool showDivider;
 
   @override
@@ -253,17 +250,19 @@ class _ResultRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 32,
-            child: Text(
-              placement == null
-                  ? '—'
-                  : placement <= 3
-                      ? medals[placement - 1]
-                      : '#$placement',
-              textAlign: TextAlign.center,
-              style: placement != null && placement > 3
-                  ? AppTypography.mono(size: AppFontSizes.sm, weight: FontWeight.w600)
-                  : const TextStyle(fontSize: AppFontSizes.sm),
-            ),
+            child: placement == null
+                ? Text(
+                    '—',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.mono(size: AppFontSizes.sm, weight: FontWeight.w600),
+                  )
+                : placement <= 3
+                    ? MedalIcon(placement, size: AppFontSizes.lg)
+                    : Text(
+                        '#$placement',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.mono(size: AppFontSizes.sm, weight: FontWeight.w600),
+                      ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(

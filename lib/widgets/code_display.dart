@@ -62,11 +62,20 @@ class _CodeDisplayState extends State<CodeDisplay> {
             borderRadius: BorderRadius.circular(AppRadius.sm),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-              child: Text(
-                _copied ? '✓ Copied' : 'Copy',
-                style: AppTypography.bodyXs.copyWith(
-                  color: _copied ? AppColors.success : AppColors.mutedForeground,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_copied) ...[
+                    const Icon(Icons.check_circle, size: AppFontSizes.sm, color: AppColors.success),
+                    const SizedBox(width: AppSpacing.xs),
+                  ],
+                  Text(
+                    _copied ? 'Copied' : 'Copy',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: _copied ? AppColors.success : AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

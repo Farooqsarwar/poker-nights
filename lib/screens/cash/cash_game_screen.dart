@@ -107,7 +107,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: const Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Text('←', style: TextStyle(color: AppColors.mutedForeground, fontSize: AppFontSizes.xl)),
+                  child: Icon(Icons.arrow_back, size: AppFontSizes.xl, color: AppColors.mutedForeground),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -351,7 +351,14 @@ class _SetupForm extends StatelessWidget {
           AppButton(
             fullWidth: true,
             onPressed: onContinue,
-            child: const Text('Continue → Players'),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Continue to Players'),
+                SizedBox(width: 6),
+                Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+              ],
+            ),
           ),
         ],
       ),
@@ -414,9 +421,10 @@ class _PlayersForm extends StatelessWidget {
                       onTap: () => onRemove(i),
                       child: Padding(
                         padding: const EdgeInsets.all(AppSpacing.sm),
-                        child: Text(
-                          '✕',
-                          style: AppTypography.bodyLg.copyWith(color: AppColors.destructive),
+                        child: Icon(
+                          Icons.close,
+                          size: 18,
+                          color: AppColors.destructive,
                         ),
                       ),
                     ),
@@ -452,7 +460,14 @@ class _PlayersForm extends StatelessWidget {
             size: AppButtonSize.lg,
             fullWidth: true,
             onPressed: validCount >= 2 ? onStart : null,
-            child: const Text('▶ Start cash game'),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.play_arrow, size: 16, color: AppColors.icon),
+                SizedBox(width: 6),
+                Text('Start cash game'),
+              ],
+            ),
           ),
         ],
       ),

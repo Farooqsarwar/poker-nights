@@ -14,7 +14,7 @@ class AppEmptyState extends StatelessWidget {
     this.action,
   });
 
-  final String? icon;
+  final IconData? icon;
   final String title;
   final String? description;
   final Widget? action;
@@ -27,10 +27,10 @@ class AppEmptyState extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (icon != null)
-            Text(
-              icon!,
-              style: const TextStyle(fontSize: AppFontSizes.display),
-              textAlign: TextAlign.center,
+            Icon(
+              icon,
+              size: AppFontSizes.display,
+              color: AppColors.icon,
             ),
           const SizedBox(height: AppSpacing.md),
           Text(

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../app/colors.dart';
+import '../app/route_paths.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 import '../responsive/responsive.dart';
+import 'app_button.dart';
 import 'bottom_nav.dart';
 import 'nav_drawer.dart';
 import 'sidebar.dart';
@@ -14,13 +17,32 @@ import 'sidebar.dart';
 ///
 ///  - Desktop (≥768px): fixed left sidebar + content.
 ///  - Mobile (<768px): slim top bar + content + bottom nav + slide-in drawer.
+///
+/// Also acts as a lightweight route guard: signed-in and data guest-less users
+/// are redirected to sign-in, and a guest session is only allowed through to
+/// the live-game view (checklist §6.4/§15.14).
 class ScreenShell extends StatelessWidget {
-  const ScreenShell({super.key, required this.child});
+  const ScreenShell({super.key, required this.child, required this.requiredPath});
 
   final Widget child;
 
+  /// The route path this shell wraps (e.g. `/group`), used for access control.
+  final String requiredPath;
+
+  /// Routes a guest (no account) may access inside the shell.
+  static const _guestAllowed = {RoutePaths.playerLive};
+
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
+    final signedIn = app.isAuthenticated;
+    final guestOk = app.hasGuestSession && _guestAllowed.contains(requiredPath);
+
+    // Route guard: block access when the user cannot enter this path.
+    if (!signedIn && !guestOk) {
+      return _Gate(path: requiredPath);
+    }
+
     return ResponsiveBuilder(
       builder: (context, device) {
         if (device.isMobile || device.isTablet) {
@@ -36,6 +58,60 @@ class ScreenShell extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Shown when a user (or guest) lands on a route they can't access — the
+/// effective route guard. Offers a way back to sign-in or the live game.
+class _Gate extends StatelessWidget {
+  const _Gate({required this.path});
+
+  final String path;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(Icons.lock_outline, size: 40, color: AppColors.mutedForeground),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Signed out',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.display(size: AppFontSizes.xl),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'This page needs a signed-in account. Guests can only watch the live game.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                AppButton(
+                  fullWidth: true,
+                  onPressed: () => context.go('${RoutePaths.login}?next=$path'),
+                  child: const Text('Sign in'),
+                ),
+                AppButton(
+                  fullWidth: true,
+                  variant: AppButtonVariant.ghost,
+                  onPressed: () => context.go(RoutePaths.landing),
+                  child: const Text('Back to start'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

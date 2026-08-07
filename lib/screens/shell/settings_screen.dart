@@ -43,7 +43,7 @@ class SettingsScreen extends StatelessWidget {
             child: Column(
               children: [
                 _SettingRow(
-                  icon: '🔊',
+                  icon: Icons.volume_up_outlined,
                   title: 'Voice announcements',
                   subtitle: 'Spoken blinds and level updates',
                   trailing: AppToggle(
@@ -53,7 +53,7 @@ class SettingsScreen extends StatelessWidget {
                   showDivider: true,
                 ),
                 _SettingRow(
-                  icon: '🔔',
+                  icon: Icons.notifications_outlined,
                   title: 'Push notifications',
                   subtitle: 'Get alerts for RSVPs and game events',
                   trailing: AppToggle(
@@ -63,7 +63,7 @@ class SettingsScreen extends StatelessWidget {
                   showDivider: true,
                 ),
                 _SettingRow(
-                  icon: '🎵',
+                  icon: Icons.music_note_outlined,
                   title: 'Sound effects',
                   subtitle: 'Chip sounds and level-up chimes',
                   trailing: AppToggle(
@@ -73,7 +73,7 @@ class SettingsScreen extends StatelessWidget {
                   showDivider: true,
                 ),
                 _SettingRow(
-                  icon: '📄',
+                  icon: Icons.description_outlined,
                   title: 'Compact results',
                   subtitle: 'Show fewer details in game summaries',
                   trailing: AppToggle(
@@ -94,7 +94,7 @@ class SettingsScreen extends StatelessWidget {
             child: Column(
               children: [
                 _SettingRow(
-                  icon: '🎰',
+                  icon: Icons.casino_outlined,
                   title: 'Chip sets',
                   subtitle: 'Manage saved chip denominations and colours',
                   trailing: const Icon(Icons.chevron_right, color: AppColors.mutedForeground),
@@ -112,7 +112,7 @@ class SettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Row(
               children: [
-                const Text('👤', style: TextStyle(fontSize: AppFontSizes.lg)),
+                const Icon(Icons.person_outline, size: 22, color: AppColors.icon),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
@@ -192,7 +192,7 @@ class _SettingRow extends StatelessWidget {
     this.onTap,
   });
 
-  final String icon;
+  final IconData icon;
   final String title;
   final String subtitle;
   final Widget trailing;
@@ -210,7 +210,7 @@ class _SettingRow extends StatelessWidget {
         ),
       child: Row(
         children: [
-          Text(icon, style: const TextStyle(fontSize: AppFontSizes.lg)),
+          Icon(icon, size: 20, color: AppColors.icon),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -226,39 +226,6 @@ class _SettingRow extends StatelessWidget {
           trailing,
         ],
       ),
-      ),
-    );
-  }
-}
-
-class _SettingValue extends StatelessWidget {
-  const _SettingValue(this.value);
-
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      value,
-      style: AppTypography.mono(size: AppFontSizes.sm, weight: FontWeight.w600, color: AppColors.mutedForeground),
-    );
-  }
-}
-
-class _SettingLocked extends StatelessWidget {
-  const _SettingLocked();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppColors.muted,
-        borderRadius: BorderRadius.circular(AppRadius.xs),
-      ),
-      child: Text(
-        'On',
-        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, fontWeight: FontWeight.w500),
       ),
     );
   }

@@ -14,6 +14,7 @@ import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_timer.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_progress_bar.dart';
@@ -61,9 +62,9 @@ class PlayerLiveScreen extends StatelessWidget {
     final latestAnn = game.announcements.isEmpty ? null : game.announcements.last;
     final statusText = switch (game.status) {
       LiveGameStatus.running => '● RUNNING',
-      LiveGameStatus.paused => '⏸ PAUSED',
-      LiveGameStatus.rebuypause => '⏸ REBUY CLOSE — BREAK',
-      LiveGameStatus.finaltable => '♠ FINAL TABLE',
+      LiveGameStatus.paused => 'PAUSED',
+      LiveGameStatus.rebuypause => 'REBUY CLOSE — BREAK',
+      LiveGameStatus.finaltable => 'FINAL TABLE',
       _ => '',
     };
 
@@ -111,13 +112,13 @@ class PlayerLiveScreen extends StatelessWidget {
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
                       onPressed: () => ChatSheet.show(context, game.id),
-                      child: const Text('💬 Chat'),
+                      child: const AppIconLabel(label: 'Chat', icon: Icons.chat_bubble_outline),
                     ),
                   AppButton(
                     size: AppButtonSize.sm,
                     variant: AppButtonVariant.ghost,
                     onPressed: () => context.go(RoutePaths.tvMode),
-                    child: const Text('📺 TV Mode'),
+                    child: const AppIconLabel(label: 'TV Mode', icon: Icons.tv_outlined),
                   ),
                 ],
               ),
@@ -355,7 +356,7 @@ class PlayerLiveScreen extends StatelessWidget {
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('→', style: AppTypography.bodySm.copyWith(color: AppColors.primary)),
+                                  Icon(Icons.arrow_forward, size: AppFontSizes.xs, color: AppColors.primary),
                                   const SizedBox(width: AppSpacing.sm),
                                   Expanded(
                                     child: Text(

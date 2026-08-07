@@ -17,22 +17,22 @@ import '../../widgets/app_page.dart';
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
-  String _iconFor(NotificationType type) {
+  IconData _iconFor(NotificationType type) {
     switch (type) {
       case NotificationType.game:
-        return '🃏';
+        return Icons.style_outlined;
       case NotificationType.invite:
-        return '📨';
+        return Icons.mail_outlined;
       case NotificationType.rsvp:
-        return '✅';
+        return Icons.check_circle_outlined;
       case NotificationType.chat:
-        return '💬';
+        return Icons.chat_bubble_outline;
       case NotificationType.admin:
-        return '⚙️';
+        return Icons.settings_outlined;
       case NotificationType.result:
-        return '🏆';
+        return Icons.emoji_events_outlined;
       case NotificationType.system:
-        return '🔔';
+        return Icons.notifications_outlined;
     }
   }
 
@@ -132,7 +132,8 @@ class NotificationsScreen extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.xxl),
               child: Column(
                 children: [
-                  const Text('🔔', style: TextStyle(fontSize: AppFontSizes.display)),
+                  const Icon(Icons.notifications_outlined,
+                      size: AppFontSizes.display, color: AppColors.icon),
                   const SizedBox(height: AppSpacing.md),
                   Text('No notifications yet.', style: AppTypography.bodyStyle.copyWith(color: AppColors.mutedForeground)),
                   const SizedBox(height: AppSpacing.xs),
@@ -186,7 +187,7 @@ class _NotificationRow extends StatelessWidget {
   });
 
   final AppNotification notification;
-  final String icon;
+  final IconData icon;
   final bool showDivider;
   final VoidCallback onTap;
 
@@ -213,7 +214,7 @@ class _NotificationRow extends StatelessWidget {
                 border: Border.all(color: unread ? AppColors.primary.withValues(alpha: 0.3) : AppColors.border),
               ),
               alignment: Alignment.center,
-              child: Text(icon, style: const TextStyle(fontSize: AppFontSizes.lg)),
+              child: Icon(icon, size: 20, color: AppColors.icon),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -259,7 +260,11 @@ class _NotificationRow extends StatelessWidget {
             if (notification.link != null)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: Text('→', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground.withValues(alpha: 0.5))),
+                child: Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: AppColors.iconMuted.withValues(alpha: 0.6),
+                ),
               ),
           ],
         ),

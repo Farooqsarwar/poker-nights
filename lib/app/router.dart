@@ -93,106 +93,120 @@ final GoRouter appRouter = GoRouter(
     // ── App shell ────────────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.home,
-      builder: (context, state) => shell(const HomeScreen()),
+      builder: (context, state) => shell(const HomeScreen(), path: RoutePaths.home),
     ),
     GoRoute(
       path: RoutePaths.group,
-      builder: (context, state) => shell(const GroupScreen()),
+      builder: (context, state) => shell(const GroupScreen(), path: RoutePaths.group),
     ),
     GoRoute(
       path: RoutePaths.notifications,
-      builder: (context, state) => shell(const NotificationsScreen()),
+      builder: (context, state) =>
+          shell(const NotificationsScreen(), path: RoutePaths.notifications),
     ),
     GoRoute(
       path: RoutePaths.history,
-      builder: (context, state) => shell(const HistoryScreen()),
+      builder: (context, state) => shell(const HistoryScreen(), path: RoutePaths.history),
     ),
     GoRoute(
       path: RoutePaths.profile,
-      builder: (context, state) => shell(const ProfileScreen()),
+      builder: (context, state) => shell(const ProfileScreen(), path: RoutePaths.profile),
     ),
     GoRoute(
       path: RoutePaths.settings,
-      builder: (context, state) => shell(const SettingsScreen()),
+      builder: (context, state) => shell(const SettingsScreen(), path: RoutePaths.settings),
     ),
     GoRoute(
       path: RoutePaths.stats,
-      builder: (context, state) => shell(const StatsScreen()),
+      builder: (context, state) => shell(const StatsScreen(), path: RoutePaths.stats),
     ),
     GoRoute(
       path: RoutePaths.chipSets,
-      builder: (context, state) => shell(const ChipSetsScreen()),
+      builder: (context, state) => shell(const ChipSetsScreen(), path: RoutePaths.chipSets),
     ),
     GoRoute(
       path: RoutePaths.presets,
-      builder: (context, state) => shell(const PresetsScreen()),
+      builder: (context, state) => shell(const PresetsScreen(), path: RoutePaths.presets),
     ),
     GoRoute(
       path: RoutePaths.editChipSet,
       builder: (context, state) {
         final id = state.extra as String?;
-        return shell(EditChipSetScreen(chipSetId: id));
+        return shell(EditChipSetScreen(chipSetId: id), path: RoutePaths.editChipSet);
       },
     ),
 
     // ── Tournament flow ──────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.createTournament,
-      builder: (context, state) => shell(CreateTournamentScreen(
-        presetId: state.uri.queryParameters['preset'],
-      )),
+      builder: (context, state) => shell(
+        CreateTournamentScreen(
+          presetId: state.uri.queryParameters['preset'],
+        ),
+        path: RoutePaths.createTournament,
+      ),
     ),
     GoRoute(
       path: RoutePaths.structureReview,
-      builder: (context, state) => shell(const StructureReviewScreen()),
+      builder: (context, state) =>
+          shell(const StructureReviewScreen(), path: RoutePaths.structureReview),
     ),
     GoRoute(
       path: RoutePaths.invitation,
-      builder: (context, state) => shell(const InvitationScreen()),
+      builder: (context, state) =>
+          shell(const InvitationScreen(), path: RoutePaths.invitation),
     ),
     GoRoute(
       path: RoutePaths.checkIn,
-      builder: (context, state) => shell(const CheckInScreen()),
+      builder: (context, state) => shell(const CheckInScreen(), path: RoutePaths.checkIn),
     ),
     GoRoute(
       path: RoutePaths.adminDashboard,
-      builder: (context, state) => shell(const AdminDashboardScreen()),
+      builder: (context, state) =>
+          shell(const AdminDashboardScreen(), path: RoutePaths.adminDashboard),
     ),
     GoRoute(
       path: RoutePaths.playerLive,
-      builder: (context, state) => shell(const PlayerLiveScreen()),
+      builder: (context, state) =>
+          shell(const PlayerLiveScreen(), path: RoutePaths.playerLive),
     ),
     GoRoute(
       path: RoutePaths.rebuySettlement,
-      builder: (context, state) => shell(const RebuySettlementScreen()),
+      builder: (context, state) =>
+          shell(const RebuySettlementScreen(), path: RoutePaths.rebuySettlement),
     ),
     GoRoute(
       path: RoutePaths.finalTable,
-      builder: (context, state) => shell(const FinalTableScreen()),
+      builder: (context, state) => shell(const FinalTableScreen(), path: RoutePaths.finalTable),
     ),
     GoRoute(
       path: RoutePaths.completeTournament,
-      builder: (context, state) => shell(const CompleteTournamentScreen()),
+      builder: (context, state) =>
+          shell(const CompleteTournamentScreen(), path: RoutePaths.completeTournament),
     ),
     GoRoute(
       path: RoutePaths.resultPodium,
-      builder: (context, state) => shell(const ResultPodiumScreen()),
+      builder: (context, state) =>
+          shell(const ResultPodiumScreen(), path: RoutePaths.resultPodium),
     ),
 
     // ── Cash game ────────────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.cashGame,
-      builder: (context, state) => shell(const CashGameScreen()),
+      builder: (context, state) => shell(const CashGameScreen(), path: RoutePaths.cashGame),
     ),
     GoRoute(
       path: RoutePaths.cashGameLive,
-      builder: (context, state) => shell(const CashGameLiveScreen()),
+      builder: (context, state) =>
+          shell(const CashGameLiveScreen(), path: RoutePaths.cashGameLive),
     ),
   ],
 );
 
-/// Wraps a content page in the persistent app shell with a smooth entrance animation.
-Widget shell(Widget child) => ScreenShell(
+/// Wraps a content page in the persistent app shell with a smooth entrance
+/// animation and records the route path for the shell's access guard.
+Widget shell(Widget child, {required String path}) => ScreenShell(
+      requiredPath: path,
       child: child
           .animate(key: ValueKey(child.runtimeType))
           .fadeIn(duration: 300.ms, curve: Curves.easeOut)

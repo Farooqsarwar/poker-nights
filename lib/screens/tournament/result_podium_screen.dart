@@ -16,6 +16,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/medal_icon.dart';
 
 class _PodiumResult {
   const _PodiumResult({required this.player, required this.pos, required this.prize});
@@ -43,7 +44,7 @@ class ResultPodiumScreen extends StatelessWidget {
       // navigated here manually while the tournament is still running.
       // Use the standardized AppEmptyState for UI consistency (checklist 20-008).
       return const AppEmptyState(
-        icon: '🏆',
+        icon: Icons.emoji_events_outlined,
         title: 'Result unavailable',
         description: 'This game may have been deleted or is not finished.',
       );
@@ -81,7 +82,7 @@ class ResultPodiumScreen extends StatelessWidget {
             padding: const EdgeInsets.only(top: AppSpacing.lg),
             child: Column(
               children: [
-                const Text('🏆', style: TextStyle(fontSize: AppFontSizes.displayLg)),
+                const Icon(Icons.emoji_events, size: AppFontSizes.displayLg, color: AppColors.icon),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   game.settings.name,
@@ -139,10 +140,7 @@ class ResultPodiumScreen extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xs),
                   Row(
                     children: [
-                      Text(
-                        _medal(myResult.pos),
-                        style: const TextStyle(fontSize: AppFontSizes.xxxl),
-                      ),
+                      _medalFor(myResult.pos, AppFontSizes.xxxl),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Column(
@@ -188,13 +186,13 @@ class ResultPodiumScreen extends StatelessWidget {
                       children: [
                         SizedBox(
                           width: 32,
-                          child: Text(
-                            r.pos <= 3 ? _medal(r.pos) : '#${r.pos}',
-                            textAlign: TextAlign.center,
-                            style: r.pos <= 3
-                                ? const TextStyle(fontSize: AppFontSizes.lg)
-                                : AppTypography.monoSm.copyWith(color: AppColors.mutedForeground),
-                          ),
+                          child: r.pos <= 3
+                              ? MedalIcon(r.pos, size: AppFontSizes.lg)
+                              : Text(
+                                  '#${r.pos}',
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.monoSm.copyWith(color: AppColors.mutedForeground),
+                                ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Container(
@@ -228,7 +226,7 @@ class ResultPodiumScreen extends StatelessWidget {
                           [
                             if (r.player.rebuys > 0) '${r.player.rebuys}R',
                             if (r.player.hasAddOn) 'AO',
-                            if (r.player.knockouts > 0) '💀${r.player.knockouts}',
+                            if (r.player.knockouts > 0) '${r.player.knockouts} KO',
                           ].join(' · '),
                           style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                         ),
@@ -272,7 +270,14 @@ class ResultPodiumScreen extends StatelessWidget {
                 child: AppButton(
                   variant: AppButtonVariant.secondary,
                   onPressed: () => context.go(RoutePaths.group),
-                  child: const Text('← Group'),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
+                      const SizedBox(width: 6),
+                      const Text('Group'),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -290,17 +295,12 @@ class ResultPodiumScreen extends StatelessWidget {
     );
   }
 
-  String _medal(int pos) {
-    switch (pos) {
-      case 1:
-        return '🥇';
-      case 2:
-        return '🥈';
-      case 3:
-        return '🥉';
-      default:
-        return '#$pos';
-    }
+  Widget _medalFor(int pos, double size) {
+    if (pos <= 3) return MedalIcon(pos, size: size);
+    return Text(
+      '#$pos',
+      style: AppTypography.monoSm.copyWith(color: AppColors.mutedForeground),
+    );
   }
 
   String _ordinal(int pos) {
@@ -331,7 +331,7 @@ class _PodiumSlot extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Text(_medal(result.pos), style: const TextStyle(fontSize: AppFontSizes.xxxl)),
+          MedalIcon(result.pos, size: AppFontSizes.xxxl),
           const SizedBox(height: 4),
           Container(
             width: double.infinity,
@@ -370,17 +370,6 @@ class _PodiumSlot extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _medal(int pos) {
-    switch (pos) {
-      case 1:
-        return '🥇';
-      case 2:
-        return '🥈';
-      default:
-        return '🥉';
-    }
   }
 }
 

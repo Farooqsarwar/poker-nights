@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../constants/app_constants.dart';
+import '../responsive/responsive.dart';
 import 'colors.dart';
 
 /// Centralized typography for the Poker Night app.
@@ -26,7 +27,7 @@ class AppTypography {
     double? letterSpacing,
   }) {
     return GoogleFonts.nunito(
-      fontSize: size,
+      fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color,
       height: height,
@@ -42,7 +43,7 @@ class AppTypography {
     double? letterSpacing,
   }) {
     return GoogleFonts.inter(
-      fontSize: size,
+      fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color,
       height: height,
@@ -58,7 +59,7 @@ class AppTypography {
     double? letterSpacing,
   }) {
     return GoogleFonts.jetBrainsMono(
-      fontSize: size,
+      fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color,
       height: height,
@@ -88,7 +89,7 @@ class AppTypography {
     FontWeight weight = FontWeight.w700,
   }) {
     return GoogleFonts.nunito(
-      fontSize: size,
+      fontSize: AppScale.sp(size),
       fontWeight: weight,
       foreground: Paint()
         ..shader = AppColors.crimsonShimmer.createShader(

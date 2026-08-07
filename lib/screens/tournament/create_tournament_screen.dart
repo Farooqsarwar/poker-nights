@@ -47,6 +47,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   final _location = TextEditingController();
   final _players = TextEditingController();
   final _buyIn = TextEditingController();
+  bool _locationPrivate = false;
   double _duration = 3.5;
   final Map<String, String> _errors = {};
 
@@ -58,13 +59,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   // Step 3
   bool _rebuys = true;
   int _rebuysClose = 6;
+  final _rebuyCost = TextEditingController();
   bool _reEntry = true;
   bool _addOn = true;
+  final _addOnCost = TextEditingController();
   bool _koEnabled = false;
   final _koAmount = TextEditingController(text: '5');
-  bool _anteEnabled = true;
+  AntePreference _antePreference = AntePreference.recommend;
   int _anteAfterLevel = 6;
-  AnteStyle _anteStyle = AnteStyle.bigBlind;
+  AnteStyle get _anteStyle => switch (_antePreference) {
+        AntePreference.recommend || AntePreference.bigBlind => AnteStyle.bigBlind,
+        AntePreference.none || AntePreference.individual => AnteStyle.individual,
+      };
+  bool get _anteEnabled => _antePreference != AntePreference.none;
   double _orgPct = 10;
 
   // Preset support (checklist §9.1)
@@ -145,13 +152,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     _duration = p.durationHours;
     _rebuys = p.rebuys;
     _rebuysClose = p.rebuysCloseLevel;
+    _rebuyCost.text = p.rebuyCost?.toString() ?? '';
     _reEntry = p.reEntry;
     _addOn = p.addOn;
+    _addOnCost.text = p.addOnCost?.toString() ?? '';
     _koEnabled = p.koEnabled;
     _koAmount.text = p.koAmount.toString();
-    _anteEnabled = p.anteEnabled;
+    _antePreference = p.anteEnabled ? AntePreference.bigBlind : AntePreference.none;
     _anteAfterLevel = p.anteAfterLevel;
-    _anteStyle = AnteStyle.bigBlind;
     _orgPct = p.organizerPct.toDouble();
     _chipSet = List.of(p.chipSet);
     if (TournamentEngine.presetNames.contains(p.chipSetName)) {
@@ -165,7 +173,17 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _date, _time, _location, _players, _buyIn, _koAmount]) {
+    for (final c in [
+      _name,
+      _date,
+      _time,
+      _location,
+      _players,
+      _buyIn,
+      _koAmount,
+      _rebuyCost,
+      _addOnCost,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -215,14 +233,18 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       koAmount: num.tryParse(_koAmount.text)?.toInt() ?? 5,
       rebuys: _rebuys,
       rebuysCloseLevel: _rebuysClose,
+      rebuyCost: num.tryParse(_rebuyCost.text)?.toInt(),
       reEntry: _reEntry,
       addOn: _addOn,
+      addOnCost: num.tryParse(_addOnCost.text)?.toInt(),
       anteEnabled: _anteEnabled,
       anteAfterLevel: _anteAfterLevel,
       anteStyle: _anteStyle,
+      antePreference: _antePreference,
       organizerPct: _orgPct.round(),
       chipSet: _chipSet,
       chipSetName: _chipMode == _ChipMode.preset ? _presetName : 'Custom',
+      locationPrivate: _locationPrivate,
     ));
     app.setCurrentGame(game);
     context.go(RoutePaths.structureReview);
@@ -244,7 +266,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: const Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Text('←', style: TextStyle(color: AppColors.mutedForeground, fontSize: AppFontSizes.xl)),
+                  child: Icon(Icons.arrow_back, size: AppFontSizes.xl, color: AppColors.mutedForeground),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -298,12 +320,28 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               AppButton(
                 variant: AppButtonVariant.secondary,
                 onPressed: () => _step == 1 ? context.go(RoutePaths.group) : setState(() => _step--),
-                child: Text(_step == 1 ? 'Cancel' : '← Back'),
+                child: _step == 1
+                    ? const Text('Cancel')
+                    : const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
+                          SizedBox(width: 6),
+                          Text('Back'),
+                        ],
+                      ),
               ),
               if (_step < 4)
                 AppButton(
                   onPressed: _next,
-                  child: const Text('Next →'),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Next'),
+                      SizedBox(width: 6),
+                      Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+                    ],
+                  ),
                 ),
             ],
           ),
@@ -349,6 +387,15 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             label: 'Location (optional)',
             placeholder: "e.g. Daniel's place",
           ),
+          if (_location.text.trim().isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _ToggleRow(
+              title: 'Keep address private',
+              subtitle: 'Guests see the address only after check-in (11-014/11-015)',
+              value: _locationPrivate,
+              onChanged: (v) => setState(() => _locationPrivate = v),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -643,7 +690,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             value: _rebuys,
             onChanged: (v) => setState(() => _rebuys = v),
           ),
-          if (_rebuys)
+          if (_rebuys) ...[
             Padding(
               padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
               child: AppSelect(
@@ -656,6 +703,30 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Rebuy price', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                  const SizedBox(height: AppSpacing.xs),
+                  SizedBox(
+                    width: 130,
+                    child: AppTextField(
+                      controller: _rebuyCost,
+                      keyboardType: TextInputType.number,
+                      placeholder: 'Default (${_buyIn.text})',
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Unlimited rebuys per player until they close (09-050).',
+                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const Divider(color: AppColors.border),
           _ToggleRow(
             title: 'Re-entry',
@@ -678,6 +749,30 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             value: _addOn,
             onChanged: (v) => setState(() => _addOn = v),
           ),
+          if (_addOn)
+            Padding(
+              padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Add-on price', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                  const SizedBox(height: AppSpacing.xs),
+                  SizedBox(
+                    width: 130,
+                    child: AppTextField(
+                      controller: _addOnCost,
+                      keyboardType: TextInputType.number,
+                      placeholder: 'Default (${_buyIn.text})',
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Add-on matches the starting stack (12-060).',
+                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  ),
+                ],
+              ),
+            ),
           const Divider(color: AppColors.border),
           _ToggleRow(
             title: 'KO bounty',
@@ -709,18 +804,47 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               ),
             ),
           const Divider(color: AppColors.border),
-          _ToggleRow(
-            title: 'Ante',
-            subtitle: 'Big blind ante recommended',
-            value: _anteEnabled,
-            onChanged: (v) => setState(() => _anteEnabled = v),
-          ),
-          if (_anteEnabled)
-            Padding(
-              padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Ante', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text('Choose how the ante is posted (09-010)', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    for (final pref in AntePreference.values) ...[
+                      Expanded(
+                        child: _ModeButton(
+                          label: switch (pref) {
+                            AntePreference.recommend => 'Recommended',
+                            AntePreference.none => 'No ante',
+                            AntePreference.bigBlind => 'Big blind',
+                            AntePreference.individual => 'Individual',
+                          },
+                          active: _antePreference == pref,
+                          onTap: () => setState(() => _antePreference = pref),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  switch (_antePreference) {
+                    AntePreference.recommend =>
+                      'One ante per table equal to the big blind, starting at a fixed level. Recommended.',
+                    AntePreference.none => 'No antes during the tournament.',
+                    AntePreference.bigBlind => 'One ante per table, equal to the big blind.',
+                    AntePreference.individual => 'Every player posts an ante (half the big blind) each hand.',
+                  },
+                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                ),
+                if (_antePreference != AntePreference.none) ...[
+                  const SizedBox(height: AppSpacing.md),
                   AppSelect(
                     label: 'Activate ante',
                     value: '$_anteAfterLevel',
@@ -730,36 +854,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                         DropdownMenuItem(value: '$n', child: Text('After Level $n')),
                     ],
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text('Ante style', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    children: [
-                      for (final style in AnteStyle.values) ...[
-                        Expanded(
-                          child: _ModeButton(
-                            label: switch (style) {
-                              AnteStyle.bigBlind => 'Big blind',
-                              AnteStyle.individual => 'Individual',
-                            },
-                            active: _anteStyle == style,
-                            onTap: () => setState(() => _anteStyle = style),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    _anteStyle == AnteStyle.individual
-                        ? 'Every player posts an ante (half the big blind) at each level.'
-                        : 'One ante per table, equal to the big blind. Recommended.',
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                  ),
                 ],
-              ),
+              ],
             ),
+          ),
           const Divider(color: AppColors.border),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -807,7 +905,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('🎰', textAlign: TextAlign.center, style: TextStyle(fontSize: AppFontSizes.display)),
+          const Icon(Icons.casino_outlined, size: AppFontSizes.display, color: AppColors.icon),
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Ready to generate',
@@ -826,10 +924,11 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
           ),
           Text(
-            '${_rebuys ? 'Rebuys until Level $_rebuysClose' : 'No rebuys'} ·'
+            '${_rebuys ? 'Rebuys until Level $_rebuysClose${_rebuyCost.text.trim().isNotEmpty ? ' @ ${_rebuyCost.text}' : ''}' : 'No rebuys'} ·'
             '${_reEntry ? ' Re-entry enabled' : ' No re-entry'} ·'
             '${_addOn ? ' Add-on enabled' : ' No add-on'} ·'
-            '${_anteEnabled ? ' Ante after Level $_anteAfterLevel' : ' No ante'}',
+            '${_antePreference == AntePreference.none ? ' No ante' : ' Ante after Level $_anteAfterLevel (${_anteStyle == AnteStyle.individual ? 'individual' : 'big blind'})'}'
+            '${_locationPrivate ? ' · Private address' : ''}',
             textAlign: TextAlign.center,
             style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
           ),

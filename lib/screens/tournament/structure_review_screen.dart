@@ -7,6 +7,7 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
+import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_alert_banner.dart';
@@ -16,6 +17,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
+import '../../widgets/medal_icon.dart';
 import '../../widgets/structure_editor.dart';
 
 /// Structure review mirroring the web `StructureReviewPage`.
@@ -55,7 +57,7 @@ class StructureReviewScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: const Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Text('←', style: TextStyle(color: AppColors.mutedForeground, fontSize: AppFontSizes.xl)),
+                  child: Icon(Icons.arrow_back, size: AppFontSizes.xl, color: AppColors.mutedForeground),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -74,6 +76,15 @@ class StructureReviewScreen extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: AppAlertBanner(type: AppAlertType.warning, message: w),
             ),
+          // Chip inventory check (§4.5): compare the plan's total chip demand
+          // (starting stacks + expected rebuys + expected add-ons) against the
+          // physical chips the host owns. Shortages are flagged before publish.
+          ..._chipShortages(structure, settings).map(
+            (s) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: AppAlertBanner(type: AppAlertType.error, message: s),
+            ),
+          ),
           // Summary cards
           Row(
             children: [
@@ -192,8 +203,8 @@ class StructureReviewScreen extends StatelessWidget {
                               app.acceptSpeedRecommendation(rec: SpeedRecommendation.slowDown);
                               Navigator.of(context).pop();
                             },
-                            onApply: (edits) {
-                              if (edits.isNotEmpty) app.applyLevelEdits(edits);
+                            onApply: (levels) {
+                              if (levels.isNotEmpty) app.applyFutureLevels(levels);
                               Navigator.of(context).pop();
                             },
                           ),
@@ -317,11 +328,24 @@ class StructureReviewScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       children: [
-                        Text(const ['🥇', '🥈', '🥉', '4th'][p.place - 1], style: const TextStyle(fontSize: AppFontSizes.md)),
+                        p.place <= 3
+                            ? SizedBox(
+                                width: 24,
+                                child: Center(child: MedalIcon(p.place, size: AppFontSizes.md)),
+                              )
+                            : SizedBox(
+                                width: 24,
+                                child: Center(
+                                  child: Text(
+                                    _placeLabel(p.place),
+                                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                                  ),
+                                ),
+                              ),
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Text(
-                            const ['1st Place', '2nd Place', '3rd Place', '4th Place'][p.place - 1],
+                            _placeName(p.place),
                             style: AppTypography.bodySm,
                           ),
                         ),
@@ -378,7 +402,7 @@ class StructureReviewScreen extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('→', style: AppTypography.bodySm.copyWith(color: AppColors.primary)),
+                          Icon(Icons.arrow_forward, size: 14, color: AppColors.primary),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: Text(ins, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
@@ -398,7 +422,14 @@ class StructureReviewScreen extends StatelessWidget {
                 child: AppButton(
                   variant: AppButtonVariant.secondary,
                   onPressed: () => context.go(RoutePaths.createTournament),
-                  child: const Text('← Edit settings'),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
+                      SizedBox(width: 6),
+                      Text('Edit settings'),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -409,17 +440,31 @@ class StructureReviewScreen extends StatelessWidget {
                     // Regenerate with same params
                     app.setCurrentGame(app.createGame(settings));
                   },
-                  child: const Text('↻ Regenerate'),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.refresh, size: 14, color: AppColors.icon),
+                      SizedBox(width: 6),
+                      Text('Regenerate'),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: AppButton(
                   onPressed: () {
-                    app.updateGameStatus(LiveGameStatus.published);
+                    app.publishGame();
                     context.go(RoutePaths.invitation);
                   },
-                  child: const Text('Confirm & Publish →'),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Confirm & Publish'),
+                      SizedBox(width: 6),
+                      Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -454,6 +499,53 @@ class _SummaryCard extends StatelessWidget {
     );
   }
 }
+
+String _placeLabel(int place) => switch (place) {
+      1 => '1st',
+      2 => '2nd',
+      3 => '3rd',
+      _ => '${place}th',
+    };
+
+/// Computes the total chips required for the plan (starting stacks for every
+/// expected player + expected rebuys + expected add-ons) and flags any
+/// denomination where the host owns fewer chips than required (§4.5, 12-059).
+List<String> _chipShortages(TournamentStructure structure, GameSettings settings) {
+  final players = settings.players;
+  final expectedRebuys = settings.rebuys ? (players * 0.35).round() : 0;
+  final expectedAddOns = settings.addOn ? (players * 0.65).round() : 0;
+
+  final required = <int, int>{};
+  void add(List<ChipPlanEntry> plan, int factor) {
+    for (final e in plan) {
+      required[e.value] = (required[e.value] ?? 0) + e.count * factor;
+    }
+  }
+
+  add(structure.chipPlan, players);
+  add(structure.rebuyChipPlan, expectedRebuys);
+  add(structure.addOnChipPlan, expectedAddOns);
+
+  final shortages = <String>[];
+  for (final chip in settings.chipSet) {
+    final need = required[chip.value] ?? 0;
+    if (chip.quantity < need) {
+      shortages.add(
+        'Chip shortage: you own ${chip.quantity} × ${chip.value} '
+        '(${chip.color}) but the plan needs $need. '
+        'Buy more, lower the buy-in, or reduce player count.',
+      );
+    }
+  }
+  return shortages;
+}
+
+String _placeName(int place) => switch (place) {
+      1 => '1st Place',
+      2 => '2nd Place',
+      3 => '3rd Place',
+      _ => '${place}th Place',
+    };
 
 class _LevelCell extends StatelessWidget {
   const _LevelCell({required this.label, required this.align});

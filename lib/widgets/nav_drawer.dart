@@ -21,12 +21,12 @@ class NavDrawer extends StatelessWidget {
     final unread = app.unreadCount;
 
     final items = [
-      _DrawerItem(RoutePaths.home, 'Home', '⌂', null),
-      _DrawerItem(RoutePaths.group, app.currentGroup.name, '♦', null),
-      _DrawerItem(RoutePaths.notifications, 'Alerts', '🔔', unread),
-      _DrawerItem(RoutePaths.history, 'History', '📊', null),
-      _DrawerItem(RoutePaths.profile, 'Profile', '👤', null),
-      _DrawerItem(RoutePaths.settings, 'Settings', '⚙', null),
+      _DrawerItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
+      _DrawerItem(RoutePaths.group, app.currentGroup.name, Icons.groups_outlined, null),
+      _DrawerItem(RoutePaths.notifications, 'Alerts', Icons.notifications_outlined, unread),
+      _DrawerItem(RoutePaths.history, 'History', Icons.bar_chart_outlined, null),
+      _DrawerItem(RoutePaths.profile, 'Profile', Icons.person_outline, null),
+      _DrawerItem(RoutePaths.settings, 'Settings', Icons.settings_outlined, null),
     ];
 
     final panel = Container(
@@ -92,7 +92,7 @@ class NavDrawer extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          Text(item.icon, style: AppTypography.body(size: AppFontSizes.md)),
+                          Icon(item.icon, size: 20, color: AppColors.icon),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
                             child: Text(
@@ -178,6 +178,6 @@ class _DrawerItem {
 
   final String path;
   final String label;
-  final String icon;
+  final IconData icon;
   final int? badge;
 }

@@ -204,7 +204,14 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                     size: AppButtonSize.sm,
                     variant: AppButtonVariant.ghost,
                     onPressed: () => setState(() => _showReconcile = true),
-                    child: const Text('⚖ Reconcile'),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.scale_outlined, size: 14, color: AppColors.icon),
+                        SizedBox(width: 6),
+                        Text('Reconcile'),
+                      ],
+                    ),
                   ),
                   AppButton(
                     size: AppButtonSize.sm,

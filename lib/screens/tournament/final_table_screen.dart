@@ -12,6 +12,7 @@ import '../../providers/app_provider.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_page.dart';
 
 class _SeatEntry {
@@ -95,7 +96,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: const Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Text('←', style: TextStyle(color: AppColors.mutedForeground, fontSize: AppFontSizes.xl)),
+                  child: Icon(Icons.arrow_back, color: AppColors.mutedForeground, size: AppFontSizes.xl),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -130,7 +131,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
               padding: const EdgeInsets.all(AppSpacing.xxxl),
               child: Column(
                 children: [
-                  const Text('♠', style: TextStyle(fontSize: AppFontSizes.displayLg)),
+                  const Icon(Icons.casino, color: AppColors.primary, size: AppFontSizes.displayLg),
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     'Final Table Set!',
@@ -217,7 +218,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                   child: AppButton(
                     variant: AppButtonVariant.secondary,
                     onPressed: _redraw,
-                    child: const Text('↻ Redraw'),
+                    child: const AppIconLabel(label: 'Redraw', icon: Icons.refresh),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -225,7 +226,10 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                   child: AppButton(
                     disabled: tooMany,
                     onPressed: () => _confirm(app),
-                    child: Text(tooMany ? 'Eliminate to 9 first' : '♠ Confirm seating'),
+                    child: AppIconLabel(
+                      label: tooMany ? 'Eliminate to 9 first' : 'Confirm seating',
+                      icon: tooMany ? null : Icons.event_seat,
+                    ),
                   ),
                 ),
               ],

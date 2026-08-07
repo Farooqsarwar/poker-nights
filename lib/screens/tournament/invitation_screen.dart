@@ -14,9 +14,14 @@ import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_icon_label.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_text_field.dart';
+import '../../widgets/app_toggle.dart';
 import '../../widgets/code_display.dart';
 import '../../widgets/rsvp_badge.dart';
 
@@ -58,6 +63,10 @@ class _InvitationScreenState extends State<InvitationScreen> {
     final total = game.players
         .where((p) => p.rsvp != null && p.rsvp!.isGoing)
         .fold<int>(0, (s, p) => s + 1 + p.rsvp!.guestCount);
+    // Private addresses are hidden until the viewer is confirmed (11-015).
+    final showAddress = !settings.locationPrivate ||
+        (user?.isAdmin ?? false) ||
+        (myPlayer?.confirmed ?? false);
 
     return AppPage(
       maxWidth: 560,
@@ -74,7 +83,9 @@ class _InvitationScreenState extends State<InvitationScreen> {
                   children: [
                     Text(settings.name, style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
                     Text(
-                      '${settings.date} at ${settings.time} · ${settings.location}',
+                      showAddress
+                          ? '${settings.date} at ${settings.time} · ${settings.location}'
+                          : '${settings.date} at ${settings.time} · Address shared at check-in',
                       style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
                     ),
                   ],
@@ -95,8 +106,16 @@ class _InvitationScreenState extends State<InvitationScreen> {
                   _Detail(label: 'KO bounty', value: '${settings.buyIn} + ${settings.koAmount}', valueColor: AppColors.primary, mono: true),
                 _Detail(label: 'Duration', value: '${settings.durationHours == settings.durationHours.roundToDouble() ? settings.durationHours.round() : settings.durationHours}h', mono: true),
                 _Detail(label: 'Confirmed', value: '$total players', valueColor: AppColors.success, mono: true),
-                _Detail(label: 'Rebuys', value: settings.rebuys ? 'Until Level ${settings.rebuysCloseLevel}' : 'None'),
-                _Detail(label: 'Add-on', value: settings.addOn ? 'Enabled' : 'None'),
+                _Detail(
+                  label: 'Rebuys',
+                  value: settings.rebuys
+                      ? 'Until L${settings.rebuysCloseLevel} @ ${settings.effectiveRebuyCost}'
+                      : 'None',
+                ),
+                _Detail(
+                  label: 'Add-on',
+                  value: settings.addOn ? 'Enabled @ ${settings.effectiveAddOnCost}' : 'None',
+                ),
               ],
             ),
           ),
@@ -135,7 +154,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
-                        const Text('🔒', style: TextStyle(fontSize: AppFontSizes.sm)),
+                        const Icon(Icons.lock_outline, size: AppFontSizes.sm, color: AppColors.warning),
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Text(
@@ -174,7 +193,9 @@ class _InvitationScreenState extends State<InvitationScreen> {
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.secondary,
                       onPressed: () => _copyLink(game),
-                      child: Text(_copied ? '✓ Link copied' : 'Copy link'),
+                      child: _copied
+                          ? const AppIconLabel(label: 'Link copied', icon: Icons.check_circle, color: AppColors.success)
+                          : const Text('Copy link'),
                     ),
                     AppButton(
                       size: AppButtonSize.sm,
@@ -231,6 +252,43 @@ class _InvitationScreenState extends State<InvitationScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Guest slots (07-014) — the persisted named seats for "Going +N"
+          // RSVPs, shown with their current status so the host can see which
+          // guest seats are still open.
+          if (game.guestSlots.isNotEmpty) ...[
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Guest seats', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (final slot in game.guestSlots) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.event_seat_outlined, size: 16, color: AppColors.icon),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Text(
+                              '${_memberName(game, slot.inviterId)}\'s Guest ${slot.slot}'
+                              '${slot.guestName != null ? ' — ${slot.guestName}' : ''}',
+                              style: AppTypography.bodySm,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          _GuestSlotBadge(status: slot.status),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // Admin actions
           if (user?.isAdmin == true) ...[
             AppCard(
@@ -243,12 +301,19 @@ class _InvitationScreenState extends State<InvitationScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   Wrap(
                     spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
                     children: [
                       AppButton(
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.secondary,
                         onPressed: () => context.go(RoutePaths.checkIn),
                         child: const Text('Open check-in'),
+                      ),
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => _openEditModal(context, app, game),
+                        child: const Text('Edit details'),
                       ),
                       AppButton(
                         size: AppButtonSize.sm,
@@ -337,6 +402,200 @@ class _RsvpOption extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
+      ),
+    );
+  }
+}
+
+String _memberName(LiveGame game, String id) {
+  for (final p in game.players) {
+    if (p.id == id) return p.name;
+  }
+  return 'Member';
+}
+
+class _GuestSlotBadge extends StatelessWidget {
+  const _GuestSlotBadge({required this.status});
+
+  final GuestSlotStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, variant) = switch (status) {
+      GuestSlotStatus.unclaimed => ('Free', AppBadgeVariant.muted),
+      GuestSlotStatus.reserved => ('Pending', AppBadgeVariant.accent),
+      GuestSlotStatus.checkedIn => ('Checked in', AppBadgeVariant.green),
+      GuestSlotStatus.cancelled => ('Cancelled', AppBadgeVariant.red),
+    };
+    return AppBadge(label: label, variant: variant, border: true);
+  }
+}
+
+void _openEditModal(BuildContext context, AppProvider app, LiveGame game) {
+  showAppModal(
+    context: context,
+    title: 'Edit event details',
+    maxWidth: 520,
+    child: _EditEventForm(
+      settings: game.settings,
+      onSave: (next) {
+        app.updateEventSettings(next);
+        Navigator.of(context).pop();
+      },
+    ),
+  );
+}
+
+/// Admin form to edit an existing event's details. Changes are audited and
+/// members are notified via [AppProvider.updateEventSettings] (checklist §10.4).
+class _EditEventForm extends StatefulWidget {
+  const _EditEventForm({required this.settings, required this.onSave});
+
+  final GameSettings settings;
+  final ValueChanged<GameSettings> onSave;
+
+  @override
+  State<_EditEventForm> createState() => _EditEventFormState();
+}
+
+class _EditEventFormState extends State<_EditEventForm> {
+  late final TextEditingController _name;
+  late final TextEditingController _date;
+  late final TextEditingController _time;
+  late final TextEditingController _location;
+  late final TextEditingController _buyIn;
+  late final TextEditingController _players;
+  late bool _locationPrivate;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.settings;
+    _name = TextEditingController(text: s.name);
+    _date = TextEditingController(text: s.date);
+    _time = TextEditingController(text: s.time);
+    _location = TextEditingController(text: s.location);
+    _buyIn = TextEditingController(text: '${s.buyIn}');
+    _players = TextEditingController(text: '${s.players}');
+    _locationPrivate = s.locationPrivate;
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_name, _date, _time, _location, _buyIn, _players]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _save() {
+    final s = widget.settings;
+    widget.onSave(s.copyWith(
+      name: _name.text.trim().isEmpty ? s.name : _name.text.trim(),
+      date: _date.text.trim().isEmpty ? s.date : _date.text.trim(),
+      time: _time.text.trim().isEmpty ? s.time : _time.text.trim(),
+      location: _location.text.trim(),
+      buyIn: num.tryParse(_buyIn.text)?.toInt() ?? s.buyIn,
+      players: num.tryParse(_players.text)?.toInt() ?? s.players,
+      locationPrivate: _locationPrivate,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppTextField(controller: _name, label: 'Name'),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: AppTextField(controller: _date, label: 'Date'),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: AppTextField(controller: _time, label: 'Start time'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(controller: _location, label: 'Location'),
+        const SizedBox(height: AppSpacing.sm),
+        _ToggleRow(
+          title: 'Keep address private',
+          subtitle: 'Hidden on public views until check-in',
+          value: _locationPrivate,
+          onChanged: (v) => setState(() => _locationPrivate = v),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: AppTextField(
+                controller: _buyIn,
+                label: 'Buy-in',
+                keyboardType: TextInputType.number,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: AppTextField(
+                controller: _players,
+                label: 'Expected players',
+                keyboardType: TextInputType.number,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Changing buy-in or player count regenerates the structure. '
+          'All edits are recorded in the audit log and shared with members.',
+          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        AppButton(
+          fullWidth: true,
+          onPressed: _save,
+          child: const Text('Save changes'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+              ],
+            ),
+          ),
+          AppToggle(value: value, onChanged: onChanged),
+        ],
       ),
     );
   }

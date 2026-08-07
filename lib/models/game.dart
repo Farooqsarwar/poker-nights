@@ -135,6 +135,7 @@ class ChatMessage {
     required this.body,
     required this.timestamp,
     required this.deleted,
+    this.pinned = false,
   });
 
   final String id;
@@ -143,6 +144,47 @@ class ChatMessage {
   final String body;
   final DateTime timestamp;
   final bool deleted;
+
+  /// True when the message is a system-pinned event card (published game,
+  /// edit notice). Pinned messages render as a card and are not deletable by
+  /// members.
+  final bool pinned;
+}
+
+/// Status of a reserved guest slot under an inviter.
+enum GuestSlotStatus { unclaimed, reserved, checkedIn, cancelled }
+
+/// A named guest seat reserved through a "Going +N" RSVP. Slots are created
+/// when the member RSVPs and are persisted until the event starts, so the
+/// admin can see exactly which guest seats are still open (checklist 07-014).
+class GuestSlot {
+  const GuestSlot({
+    required this.id,
+    required this.inviterId,
+    required this.slot,
+    required this.status,
+    this.guestName,
+  });
+
+  final String id;
+  final String inviterId;
+
+  /// 1-based guest seat number under the inviter (1..guestCount).
+  final int slot;
+  final String? guestName;
+  final GuestSlotStatus status;
+
+  bool get available => status == GuestSlotStatus.unclaimed;
+
+  GuestSlot copyWith({String? guestName, GuestSlotStatus? status}) {
+    return GuestSlot(
+      id: id,
+      inviterId: inviterId,
+      slot: slot,
+      guestName: guestName ?? this.guestName,
+      status: status ?? this.status,
+    );
+  }
 }
 
 /// A poll inside a group.

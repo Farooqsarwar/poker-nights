@@ -84,9 +84,16 @@ class ProfileScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                   child: Padding(
                     padding: const EdgeInsets.all(AppSpacing.sm),
-                    child: Text(
-                      '✏️ Edit',
-                      style: AppTypography.bodySm.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Edit',
+                          style: AppTypography.bodySm.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -116,28 +123,28 @@ class ProfileScreen extends StatelessWidget {
             child: Column(
               children: [
                 _ProfileRow(
-                  icon: '📊',
+                  icon: Icons.bar_chart_outlined,
                   title: 'Statistics',
                   subtitle: 'Win rate, finishes and recent results',
                   onTap: () => context.go(RoutePaths.stats),
                   showDivider: true,
                 ),
                 _ProfileRow(
-                  icon: '⚙️',
+                  icon: Icons.settings_outlined,
                   title: 'Settings',
                   subtitle: 'Voice announcements and preferences',
                   onTap: () => context.go(RoutePaths.settings),
                   showDivider: true,
                 ),
                 _ProfileRow(
-                  icon: '🏠',
+                  icon: Icons.home_outlined,
                   title: 'Your group',
                   subtitle: app.currentGroup.name,
                   onTap: () => context.go(RoutePaths.group),
                   showDivider: true,
                 ),
                 _ProfileRow(
-                  icon: '🗑️',
+                  icon: Icons.delete_outline,
                   title: 'Delete account',
                   subtitle: 'Permanently remove your account and all sessions',
                   onTap: () => _confirmDeleteAccount(context, app),
@@ -264,7 +271,7 @@ class _ProfileRow extends StatelessWidget {
     required this.showDivider,
   });
 
-  final String icon;
+  final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
@@ -281,7 +288,7 @@ class _ProfileRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Text(icon, style: const TextStyle(fontSize: AppFontSizes.lg)),
+            Icon(icon, size: 20, color: AppColors.icon),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(

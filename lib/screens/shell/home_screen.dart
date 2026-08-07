@@ -478,7 +478,7 @@ class _UpcomingGames extends StatelessWidget {
             color: Colors.transparent,
             borderColor: AppColors.border,
             child: AppEmptyState(
-              icon: '🗓️', // Keeping emoji here unless AppEmptyState is updated
+              icon: Icons.calendar_today_outlined,
               title: 'No upcoming games',
               description: 'The tables are empty. Create a tournament to get the action started.',
               action: isAdmin

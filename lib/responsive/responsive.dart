@@ -61,23 +61,45 @@ class ResponsiveBuilder extends StatelessWidget {
 
 /// Scaled spacing/text helpers.
 ///
-/// Keeps pixel-perfect sizes on mobile and clamps up-scaling on large
-/// screens so desktop layouts stay proportionate (uses flutter_screenutil).
+/// Uses flutter_screenutil for fluid sizing, clamping up-scaling on large
+/// screens so desktop layouts stay proportionate. Falls back to the raw design
+/// value when screenutil has not been initialized yet (e.g. isolated widget
+/// tests that pump [PokerNightApp] without [ScreenUtilInit]).
 class AppScale {
   AppScale._();
 
-  static double _clamp(double value) => value > 1.5 ? 1.5 : value;
+  static const double maxWidthScale = 1.5;
+  static const double maxHeightScale = 1.5;
+
+  /// Font sizes grow to at most [maxTextScale]x the design value.
+  static const double maxTextScale = 1.35;
+
+  static double _rawOr(double Function() compute, num value) {
+    try {
+      return compute();
+    } catch (_) {
+      return value.toDouble();
+    }
+  }
+
+  static double _clamped(num value, double scaled, double maxScale) =>
+      scaled > value * maxScale ? value * maxScale : scaled;
 
   /// Fluid width (clamped to avoid runaway growth on desktop).
-  static double w(num value) => ScreenUtil().setWidth(value) * _clamp(1);
+  static double w(num value) => _rawOr(
+        () => _clamped(value, ScreenUtil().setWidth(value), maxWidthScale),
+        value,
+      );
 
   /// Fluid height (clamped).
-  static double h(num value) => ScreenUtil().setHeight(value);
+  static double h(num value) => _rawOr(
+        () => _clamped(value, ScreenUtil().setHeight(value), maxHeightScale),
+        value,
+      );
 
   /// Fluid font size, capped at [maxScale]x the design value.
-  static double sp(num value, {double maxScale = 1.35}) {
-    final scaled = ScreenUtil().setSp(value);
-    final cap = value * maxScale;
-    return scaled > cap ? cap : scaled;
-  }
+  static double sp(num value, {double maxScale = maxTextScale}) => _rawOr(
+        () => _clamped(value, ScreenUtil().setSp(value), maxScale),
+        value,
+      );
 }

@@ -149,6 +149,8 @@ class RecoveryService {
       'settlementConfirmed': game.settlementConfirmed,
       'seatingConfirmed': game.seatingConfirmed,
       'dealerPlayerId': game.dealerPlayerId,
+      'guestSlots': game.guestSlots.map(_guestSlotToMap).toList(),
+      'originalLevels': game.originalLevels?.map(_blindLevelToMap).toList(),
     };
   }
 
@@ -176,6 +178,13 @@ class RecoveryService {
       settlementConfirmed: map['settlementConfirmed'] ?? false,
       seatingConfirmed: map['seatingConfirmed'] ?? false,
       dealerPlayerId: map['dealerPlayerId'],
+      guestSlots: (map['guestSlots'] as List?)
+              ?.map((e) => _guestSlotFromMap(e))
+              .toList() ??
+          const [],
+      originalLevels: (map['originalLevels'] as List?)
+          ?.map((e) => _blindLevelFromMap(e))
+          .toList(),
     );
   }
 
@@ -197,10 +206,15 @@ class RecoveryService {
       'anteEnabled': settings.anteEnabled,
       'anteAfterLevel': settings.anteAfterLevel,
       'anteStyle': settings.anteStyle.name,
+      'antePreference': settings.antePreference.name,
       'organizerPct': settings.organizerPct,
       'chipSet': settings.chipSet.map(_chipColorToMap).toList(),
       'chipSetName': settings.chipSetName,
       'announceEliminations': settings.announceEliminations,
+      'forcePaidPlaces': settings.forcePaidPlaces,
+      'rebuyCost': settings.rebuyCost,
+      'addOnCost': settings.addOnCost,
+      'locationPrivate': settings.locationPrivate,
     };
   }
 
@@ -222,10 +236,16 @@ class RecoveryService {
       anteEnabled: map['anteEnabled'] ?? false,
       anteAfterLevel: map['anteAfterLevel'] ?? 0,
       anteStyle: AnteStyle.values.asNameMap()[map['anteStyle']] ?? AnteStyle.bigBlind,
+      antePreference: AntePreference.values.asNameMap()[map['antePreference']] ??
+          AntePreference.recommend,
       organizerPct: map['organizerPct'] ?? 0,
       chipSet: (map['chipSet'] as List).map((e) => _chipColorFromMap(e)).toList(),
       chipSetName: map['chipSetName'] ?? '',
       announceEliminations: map['announceEliminations'] ?? false,
+      forcePaidPlaces: map['forcePaidPlaces'],
+      rebuyCost: map['rebuyCost'],
+      addOnCost: map['addOnCost'],
+      locationPrivate: map['locationPrivate'] ?? false,
     );
   }
 
@@ -321,6 +341,7 @@ class RecoveryService {
       'body': msg.body,
       'timestamp': msg.timestamp.toIso8601String(),
       'deleted': msg.deleted,
+      'pinned': msg.pinned,
     };
   }
 
@@ -332,6 +353,30 @@ class RecoveryService {
       body: map['body'],
       timestamp: DateTime.parse(map['timestamp']),
       deleted: map['deleted'] ?? false,
+      pinned: map['pinned'] ?? false,
+    );
+  }
+
+  static Map<String, dynamic> _guestSlotToMap(GuestSlot s) {
+    return {
+      'id': s.id,
+      'inviterId': s.inviterId,
+      'slot': s.slot,
+      'guestName': s.guestName,
+      'status': s.status.name,
+    };
+  }
+
+  static GuestSlot _guestSlotFromMap(Map<String, dynamic> map) {
+    return GuestSlot(
+      id: map['id'],
+      inviterId: map['inviterId'],
+      slot: map['slot'],
+      guestName: map['guestName'],
+      status: GuestSlotStatus.values.firstWhere(
+        (e) => e.name == map['status'],
+        orElse: () => GuestSlotStatus.unclaimed,
+      ),
     );
   }
 

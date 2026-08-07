@@ -153,7 +153,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
           const SizedBox(height: AppSpacing.lg),
           if (presets.isEmpty)
             const AppEmptyState(
-              icon: '📋',
+              icon: Icons.list_alt_outlined,
               title: 'No presets yet',
               description: 'Save a tournament configuration to reuse it later.',
             )

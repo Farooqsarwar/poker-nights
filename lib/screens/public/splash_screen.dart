@@ -43,21 +43,18 @@ class _SplashScreenState extends State<SplashScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 96,
+              height: 96,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: AppColors.primary,
+                color: AppColors.card,
                 shape: BoxShape.circle,
                 boxShadow: AppShadows.cardGlowActive,
               ),
-              child: Text(
-                AppAssets.spade,
-                style: AppTypography.display(
-                  size: 36,
-                  weight: FontWeight.w700,
-                  color: AppColors.primaryForeground,
-                ),
+              child: const Icon(
+                Icons.style,
+                size: 56,
+                color: AppColors.primary,
               ),
             )
                 .animate()

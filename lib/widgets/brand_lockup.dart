@@ -37,7 +37,7 @@ class BrandLockup extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(AppAssets.spade, style: AppTypography.body(size: suitSize)),
+        Icon(Icons.style, size: suitSize * 1.3, color: AppColors.primary),
         const SizedBox(width: AppSpacing.sm),
         Text(
           'Poker Night',
@@ -58,16 +58,13 @@ class BrandLockup extends StatelessWidget {
           height: circleSize,
           decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            color: AppColors.secondary,
+            color: AppColors.card,
           ),
           alignment: Alignment.center,
-          child: Text(
-            AppAssets.spade,
-            style: AppTypography.body(
-              size: circleSize * 0.42,
-              color: AppColors.primary,
-              weight: FontWeight.w700,
-            ),
+          child: Icon(
+            Icons.style,
+            size: circleSize * 0.65,
+            color: AppColors.primary,
           ),
         ),
         const SizedBox(height: AppSpacing.lg),

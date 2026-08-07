@@ -79,7 +79,7 @@ class _CodeEntry extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(AppAssets.spade, style: AppTypography.body(size: 48)),
+                      const Icon(Icons.style, size: 60, color: AppColors.primary),
                       const SizedBox(width: AppSpacing.md),
                       Text(
                         'POKER NIGHT',
@@ -218,7 +218,7 @@ class _TVLayout extends StatelessWidget {
                 spacing: AppSpacing.lg,
                 runSpacing: AppSpacing.md,
                 children: [
-                  Text(AppAssets.spade, style: AppTypography.body(size: 28)),
+                  const Icon(Icons.style, size: 36, color: AppColors.primary),
                   const SizedBox(width: AppSpacing.md),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 480),
@@ -778,7 +778,7 @@ class _FinalTableBoard extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(AppAssets.spade, style: AppTypography.body(size: AppFontSizes.xxl)),
+              const Icon(Icons.style, size: AppFontSizes.xxxl, color: AppColors.primary),
               const SizedBox(width: AppSpacing.sm),
               Text('FINAL TABLE', style: AppTypography.crimsonShimmer(size: AppFontSizes.xxl)),
             ],

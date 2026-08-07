@@ -43,33 +43,39 @@ class NavDrawer extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Text(AppAssets.spade, style: AppTypography.body(size: AppFontSizes.xxl)),
+                const Icon(Icons.style, size: AppFontSizes.xxxl, color: AppColors.primary),
                 const SizedBox(width: AppSpacing.sm),
                 Text('Poker Night', style: AppTypography.crimsonShimmer(size: AppFontSizes.lg)),
               ],
             ),
           ),
           if (user != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Row(
-                children: [
-                  AppAvatar(name: user.name),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(user.name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
-                        Text(
-                          user.isAdmin ? 'Admin' : 'Player',
-                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                        ),
-                      ],
+            InkWell(
+              onTap: () {
+                app.closeDrawer();
+                context.go(RoutePaths.profile);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Row(
+                  children: [
+                    AppAvatar(name: user.name),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(user.name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                          Text(
+                            user.isAdmin ? 'Admin' : 'Player',
+                            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           const Divider(color: AppColors.border, height: 1),

@@ -169,7 +169,7 @@ class _MobileTopBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.md),
-            Text(AppAssets.spade, style: AppTypography.body(size: AppFontSizes.lg)),
+            const Icon(Icons.style, size: AppFontSizes.xxl, color: AppColors.primary),
             const SizedBox(width: AppSpacing.xs),
             Text(
               'Poker Night',

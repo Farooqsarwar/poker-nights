@@ -48,7 +48,7 @@ class StatsScreen extends StatelessWidget {
           const SizedBox(height: AppSpacing.xl),
           // Headline cards
           GridView.count(
-            crossAxisCount: 6,
+            crossAxisCount: MediaQuery.of(context).size.width < 600 ? 3 : 6,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: AppSpacing.sm,

@@ -20,6 +20,8 @@ class TournamentPreset {
     required this.organizerPct,
     required this.chipSetName,
     required this.chipSet,
+    this.rebuyCost,
+    this.addOnCost,
   });
 
   final String id;
@@ -38,6 +40,13 @@ class TournamentPreset {
   final String chipSetName;
   final List<ChipColor> chipSet;
 
+  /// Optional custom rebuy price (defaults to buy-in when null, checklist
+  /// 09-050/12-051).
+  final int? rebuyCost;
+
+  /// Optional custom add-on price (defaults to buy-in when null, 12-060).
+  final int? addOnCost;
+
   TournamentPreset copyWith({
     String? id,
     String? name,
@@ -54,6 +63,8 @@ class TournamentPreset {
     int? organizerPct,
     String? chipSetName,
     List<ChipColor>? chipSet,
+    int? rebuyCost,
+    int? addOnCost,
   }) {
     return TournamentPreset(
       id: id ?? this.id,
@@ -71,6 +82,8 @@ class TournamentPreset {
       organizerPct: organizerPct ?? this.organizerPct,
       chipSetName: chipSetName ?? this.chipSetName,
       chipSet: chipSet ?? this.chipSet,
+      rebuyCost: rebuyCost ?? this.rebuyCost,
+      addOnCost: addOnCost ?? this.addOnCost,
     );
   }
 }

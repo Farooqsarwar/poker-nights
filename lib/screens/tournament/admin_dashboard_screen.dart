@@ -110,65 +110,140 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Top bar
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          if (device.isMobile) ...[
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(settings.name, style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Row(
                   children: [
-                    Text(settings.name, style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const StatusDot(status: AppStatus.online),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          statusSpec.label,
-                          style: AppTypography.monoXs.copyWith(
-                            color: statusSpec.color,
-                            fontWeight: FontWeight.w600,
-                          ),
+                    const StatusDot(status: AppStatus.online),
+                    const SizedBox(width: AppSpacing.sm),
+                    Flexible(
+                      child: Text(
+                        statusSpec.label,
+                        style: AppTypography.monoXs.copyWith(
+                          color: statusSpec.color,
+                          fontWeight: FontWeight.w600,
                         ),
-                      ],
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              Wrap(
-                spacing: AppSpacing.sm,
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.sm),
+              child: Row(
                 children: [
-                  AppButton(
-                    size: AppButtonSize.sm,
-                    variant: AppButtonVariant.ghost,
-                    onPressed: () => context.go(RoutePaths.tvMode),
-                    child: const AppIconLabel(label: 'TV', icon: Icons.tv_outlined),
-                  ),
-                  AppButton(
-                    size: AppButtonSize.sm,
-                    variant: AppButtonVariant.ghost,
-                    onPressed: () => ChatSheet.show(context, game.id),
-                    child: const AppIconLabel(label: 'Chat', icon: Icons.chat_bubble_outline),
-                  ),
-                  AppButton(
-                    size: AppButtonSize.sm,
-                    variant: AppButtonVariant.ghost,
-                    onPressed: app.toggleVoice,
-                    child: AppIconLabel(
-                      label: 'Voice',
-                      icon: app.voiceEnabled ? Icons.volume_up_outlined : Icons.volume_off_outlined,
+                  Expanded(
+                    child: AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: () => context.go(RoutePaths.tvMode),
+                      child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'TV', icon: Icons.tv_outlined)),
                     ),
                   ),
-                  AppButton(
-                    size: AppButtonSize.sm,
-                    variant: AppButtonVariant.secondary,
-                    onPressed: app.canUndo ? app.undoLast : null,
-                    child: const AppIconLabel(label: 'Undo', icon: Icons.undo),
+                  Expanded(
+                    child: AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: () => ChatSheet.show(context, game.id),
+                      child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Chat', icon: Icons.chat_bubble_outline)),
+                    ),
+                  ),
+                  Expanded(
+                    child: AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: app.toggleVoice,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: AppIconLabel(
+                          label: 'Voice',
+                          icon: app.voiceEnabled ? Icons.volume_up_outlined : Icons.volume_off_outlined,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: app.canUndo ? app.undoLast : null,
+                      child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Undo', icon: Icons.undo)),
+                    ),
                   ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(settings.name, style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const StatusDot(status: AppStatus.online),
+                          const SizedBox(width: AppSpacing.sm),
+                          Flexible(
+                            child: Text(
+                              statusSpec.label,
+                              style: AppTypography.monoXs.copyWith(
+                                color: statusSpec.color,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  children: [
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: () => context.go(RoutePaths.tvMode),
+                      child: const AppIconLabel(label: 'TV', icon: Icons.tv_outlined),
+                    ),
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: () => ChatSheet.show(context, game.id),
+                      child: const AppIconLabel(label: 'Chat', icon: Icons.chat_bubble_outline),
+                    ),
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: app.toggleVoice,
+                      child: AppIconLabel(
+                        label: 'Voice',
+                        icon: app.voiceEnabled ? Icons.volume_up_outlined : Icons.volume_off_outlined,
+                      ),
+                    ),
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: app.canUndo ? app.undoLast : null,
+                      child: const AppIconLabel(label: 'Undo', icon: Icons.undo),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.xxl),
           // Speed recommendation
           if (game.speedRecommendation != null)
             Padding(
@@ -313,50 +388,64 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: AppSpacing.lg),
             
             // Row 2: Controls beautifully presented
-            AppCard(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.lg),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Play/Pause
-                  if (status == LiveGameStatus.checkin || status == LiveGameStatus.published)
-                    AppButton(size: AppButtonSize.lg, onPressed: app.startTimer, child: const AppIconLabel(label: 'Start Timer', icon: Icons.play_arrow))
-                  else if (status == LiveGameStatus.running)
-                    AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.primary, onPressed: app.pauseTimer, child: const AppIconLabel(label: 'Pause Timer', icon: Icons.pause))
-                  else if (status == LiveGameStatus.paused || status == LiveGameStatus.rebuypause)
-                    AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.primary, onPressed: app.resumeTimer, child: const AppIconLabel(label: 'Resume Timer', icon: Icons.play_arrow)),
-                  
-                  const SizedBox(width: AppSpacing.xl),
-                  
-                  // Next Level
-                  if (status == LiveGameStatus.running || status == LiveGameStatus.paused) ...[
-                    AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: currentLevel >= (structure.levels.length) ? null : app.nextLevel, child: const AppIconLabel(label: 'Next level', trailing: Icons.arrow_forward)),
-                    const SizedBox(width: AppSpacing.md),
-                  ],
-                  
-                  AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.ghost, onPressed: () => setState(() => _showStructureModal = true), child: const AppIconLabel(label: 'Speed Up', icon: Icons.bolt)),
-                  const SizedBox(width: AppSpacing.xs),
-                  AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.ghost, onPressed: () => setState(() => _showStructureModal = true), child: const AppIconLabel(label: 'Slow Down', icon: Icons.trending_down)),
-                  const SizedBox(width: AppSpacing.xs),
-                  AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.ghost, onPressed: app.forceEvaluateSpeedRecommendation, child: const AppIconLabel(label: 'Recalculate', icon: Icons.timer_outlined)),
-                  
-                  // Specific actions
-                  if (status == LiveGameStatus.rebuypause) ...[
-                    const SizedBox(width: AppSpacing.md),
-                    AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: () => context.go(RoutePaths.rebuySettlement), child: const AppIconLabel(label: 'Settlement', trailing: Icons.arrow_forward)),
-                  ],
-                  if (status == LiveGameStatus.finaltable) ...[
-                    const SizedBox(width: AppSpacing.md),
-                    AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: () => context.go(RoutePaths.finalTable), child: const AppIconLabel(label: 'Redraw table', trailing: Icons.arrow_forward)),
-                  ],
-                  
-                  const Spacer(),
-                  // Settings / Seats
-                  AppButton(size: AppButtonSize.md, variant: AppButtonVariant.ghost, onPressed: () => setState(() => _showStructureModal = true), child: const AppIconLabel(label: 'Levels', icon: Icons.edit_outlined)),
-                  const SizedBox(width: AppSpacing.xs),
-                  AppButton(size: AppButtonSize.md, variant: AppButtonVariant.ghost, onPressed: () => context.go(RoutePaths.checkIn), child: const AppIconLabel(label: 'Seats', icon: Icons.people_outline)),
-                ],
-              ),
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: AppCard(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.lg),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Play/Pause
+                        if (status == LiveGameStatus.checkin || status == LiveGameStatus.published)
+                          Expanded(child: AppButton(size: AppButtonSize.lg, onPressed: app.startTimer, child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Start Timer', icon: Icons.play_arrow))))
+                        else if (status == LiveGameStatus.running)
+                          Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.primary, onPressed: app.pauseTimer, child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Pause Timer', icon: Icons.pause))))
+                        else if (status == LiveGameStatus.paused || status == LiveGameStatus.rebuypause)
+                          Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.primary, onPressed: app.resumeTimer, child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Resume Timer', icon: Icons.play_arrow)))),
+                        
+                        // Next Level
+                        if (status == LiveGameStatus.running || status == LiveGameStatus.paused) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: currentLevel >= (structure.levels.length) ? null : app.nextLevel, child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Next level', trailing: Icons.arrow_forward)))),
+                        ],
+                        
+                        // Specific actions
+                        if (status == LiveGameStatus.rebuypause) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: () => context.go(RoutePaths.rebuySettlement), child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Settlement', trailing: Icons.arrow_forward)))),
+                        ],
+                        if (status == LiveGameStatus.finaltable) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: () => context.go(RoutePaths.finalTable), child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Redraw table', trailing: Icons.arrow_forward)))),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  flex: 5,
+                  child: AppCard(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.lg),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: () => setState(() => _showStructureModal = true), child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Speed Up', icon: Icons.bolt)))),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: () => setState(() => _showStructureModal = true), child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Slow Down', icon: Icons.trending_down)))),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: app.forceEvaluateSpeedRecommendation, child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Recalculate', icon: Icons.timer_outlined)))),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: () => setState(() => _showStructureModal = true), child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Levels', icon: Icons.edit_outlined)))),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: () => context.go(RoutePaths.checkIn), child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Seats', icon: Icons.people_outline)))),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.xl),
             
@@ -515,41 +604,65 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(height: AppSpacing.lg),
             // Speed / structure quick actions
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.ghost,
-                  onPressed: () => setState(() => _showStructureModal = true),
-                  child: const AppIconLabel(label: 'Speed Up', icon: Icons.bolt),
-                ),
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.ghost,
-                  onPressed: () => setState(() => _showStructureModal = true),
-                  child: const AppIconLabel(label: 'Slow Down', icon: Icons.trending_down),
-                ),
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.ghost,
-                  onPressed: app.forceEvaluateSpeedRecommendation,
-                  child: const AppIconLabel(label: 'Recalculate', icon: Icons.timer_outlined),
-                ),
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.ghost,
-                  onPressed: () => setState(() => _showStructureModal = true),
-                  child: const AppIconLabel(label: 'Edit Future Levels', icon: Icons.edit_outlined),
-                ),
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.ghost,
-                  onPressed: () => context.go(RoutePaths.checkIn),
-                  child: const AppIconLabel(label: 'Seats', icon: Icons.people_outline),
-                ),
-              ],
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.md,
+                          variant: AppButtonVariant.secondary,
+                          onPressed: () => setState(() => _showStructureModal = true),
+                          child: const AppIconLabel(label: 'Speed Up', icon: Icons.bolt),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.md,
+                          variant: AppButtonVariant.secondary,
+                          onPressed: () => setState(() => _showStructureModal = true),
+                          child: const AppIconLabel(label: 'Slow Down', icon: Icons.trending_down),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.md,
+                          variant: AppButtonVariant.secondary,
+                          onPressed: app.forceEvaluateSpeedRecommendation,
+                          child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Recalculate', icon: Icons.timer_outlined)),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.md,
+                          variant: AppButtonVariant.secondary,
+                          onPressed: () => setState(() => _showStructureModal = true),
+                          child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Levels', icon: Icons.edit_outlined)),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.md,
+                          variant: AppButtonVariant.secondary,
+                          onPressed: () => context.go(RoutePaths.checkIn),
+                          child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Seats', icon: Icons.people_outline)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
             // TV code + announcement
@@ -829,15 +942,19 @@ class _TimerInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final device = AppBreakpoints.deviceOf(context);
+    final isMobile = device.isMobile;
+    
     final level = game.currentLevelData;
     final next = game.nextLevelData;
     final active = game.activePlayers.length;
     final avgStack = Formatters.averageStack(game.totalChipsInPlay, active);
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.start,
       children: [
         Row(
+          mainAxisAlignment: isMobile ? MainAxisAlignment.center : MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
@@ -874,24 +991,41 @@ class _TimerInfo extends StatelessWidget {
         ),
         if (level != null) ...[
           const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.lg,
-            runSpacing: AppSpacing.sm,
+          Column(
             children: [
-              _BlindStat(
-                label: 'Blinds',
-                value: '${Formatters.chips(level.sb)} / ${Formatters.chips(level.bb)}',
-                extra: level.ante != null ? '+ ${Formatters.chips(level.ante!)} ante' : null,
+              Row(
+                children: [
+                  Expanded(
+                    child: _BlindStat(
+                      label: 'Blinds',
+                      value: '${Formatters.chips(level.sb)} / ${Formatters.chips(level.bb)}',
+                      extra: level.ante != null ? '+ ${Formatters.chips(level.ante!)} ante' : null,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: _BlindStat(label: 'Players', value: '$active'),
+                  ),
+                ],
               ),
-              _BlindStat(label: 'Players', value: '$active'),
-              _BlindStat(
-                label: 'Avg stack',
-                value: Formatters.chips(avgStack),
-              ),
-              _BlindStat(
-                label: game.prizePoolLabel,
-                value: Formatters.chips(game.structure.prizePool),
-                valueColor: AppColors.primary,
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Expanded(
+                    child: _BlindStat(
+                      label: 'Avg stack',
+                      value: Formatters.chips(avgStack),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: _BlindStat(
+                      label: game.prizePoolLabel,
+                      value: Formatters.chips(game.structure.prizePool),
+                      valueColor: AppColors.primary,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -911,29 +1045,40 @@ class _BlindStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-        const SizedBox(height: 2),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(
-              value,
-              style: AppTypography.monoLg.copyWith(fontWeight: FontWeight.w700, color: valueColor ?? AppColors.foreground),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.background.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  value,
+                  style: AppTypography.monoLg.copyWith(fontWeight: FontWeight.w700, color: valueColor ?? AppColors.foreground),
+                ),
+                if (extra != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    extra!,
+                    style: AppTypography.bodySm.copyWith(color: AppColors.accent),
+                  ),
+                ],
+              ],
             ),
-            if (extra != null) ...[
-              const SizedBox(width: AppSpacing.sm),
-              Text(
-                extra!,
-                style: AppTypography.bodySm.copyWith(color: AppColors.accent),
-              ),
-            ],
-          ],
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 }

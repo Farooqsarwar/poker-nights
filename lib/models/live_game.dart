@@ -21,11 +21,15 @@ class GameSettings {
     required this.anteEnabled,
     required this.anteAfterLevel,
     this.anteStyle = AnteStyle.bigBlind,
+    this.antePreference = AntePreference.recommend,
     required this.organizerPct,
     required this.chipSet,
     required this.chipSetName,
     this.announceEliminations = false,
     this.forcePaidPlaces,
+    this.rebuyCost,
+    this.addOnCost,
+    this.locationPrivate = false,
   });
 
   final String name;
@@ -49,6 +53,10 @@ class GameSettings {
   final bool anteEnabled;
   final int anteAfterLevel;
   final AnteStyle anteStyle;
+
+  /// The admin's ante choice made at creation (checklist 09-010).
+  final AntePreference antePreference;
+
   final int organizerPct;
   final List<ChipColor> chipSet;
   final String chipSetName;
@@ -60,37 +68,75 @@ class GameSettings {
   /// The manually overridden number of paid places (if not null).
   final int? forcePaidPlaces;
 
+  /// Price charged for a single rebuy. Defaults to the buy-in when not set
+  /// (checklist 09-050, 12-051).
+  final int? rebuyCost;
+
+  /// Price charged for the add-on. Defaults to the buy-in when not set
+  /// (checklist 12-060).
+  final int? addOnCost;
+
+  /// When true, the address is hidden on the public/invite views and only
+  /// shown to confirmed players shortly before the event (checklist 11-014,
+  /// 11-015).
+  final bool locationPrivate;
+
+  int get effectiveRebuyCost => rebuyCost ?? buyIn;
+  int get effectiveAddOnCost => addOnCost ?? buyIn;
+
   GameSettings copyWith({
     String? name,
+    String? date,
+    String? time,
+    String? location,
+    int? players,
+    double? durationHours,
+    int? buyIn,
     bool? koEnabled,
+    int? koAmount,
+    bool? rebuys,
+    int? rebuysCloseLevel,
+    bool? reEntry,
+    bool? addOn,
     bool? anteEnabled,
     int? anteAfterLevel,
     AnteStyle? anteStyle,
+    AntePreference? antePreference,
+    int? organizerPct,
+    List<ChipColor>? chipSet,
+    String? chipSetName,
     bool? announceEliminations,
     int? forcePaidPlaces,
+    int? rebuyCost,
+    int? addOnCost,
+    bool? locationPrivate,
   }) {
     return GameSettings(
       name: name ?? this.name,
-      date: date,
-      time: time,
-      location: location,
-      players: players,
-      durationHours: durationHours,
-      buyIn: buyIn,
+      date: date ?? this.date,
+      time: time ?? this.time,
+      location: location ?? this.location,
+      players: players ?? this.players,
+      durationHours: durationHours ?? this.durationHours,
+      buyIn: buyIn ?? this.buyIn,
       koEnabled: koEnabled ?? this.koEnabled,
-      koAmount: koAmount,
-      rebuys: rebuys,
-      rebuysCloseLevel: rebuysCloseLevel,
-      reEntry: reEntry,
-      addOn: addOn,
+      koAmount: koAmount ?? this.koAmount,
+      rebuys: rebuys ?? this.rebuys,
+      rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
+      reEntry: reEntry ?? this.reEntry,
+      addOn: addOn ?? this.addOn,
       anteEnabled: anteEnabled ?? this.anteEnabled,
       anteAfterLevel: anteAfterLevel ?? this.anteAfterLevel,
       anteStyle: anteStyle ?? this.anteStyle,
-      organizerPct: organizerPct,
-      chipSet: chipSet,
-      chipSetName: chipSetName,
+      antePreference: antePreference ?? this.antePreference,
+      organizerPct: organizerPct ?? this.organizerPct,
+      chipSet: chipSet ?? this.chipSet,
+      chipSetName: chipSetName ?? this.chipSetName,
       announceEliminations: announceEliminations ?? this.announceEliminations,
       forcePaidPlaces: forcePaidPlaces ?? this.forcePaidPlaces,
+      rebuyCost: rebuyCost ?? this.rebuyCost,
+      addOnCost: addOnCost ?? this.addOnCost,
+      locationPrivate: locationPrivate ?? this.locationPrivate,
     );
   }
 
@@ -177,6 +223,8 @@ class LiveGame {
     this.settlementConfirmed = false,
     this.seatingConfirmed = false,
     this.dealerPlayerId,
+    this.guestSlots = const [],
+    this.originalLevels,
   });
 
   final String id;
@@ -211,6 +259,42 @@ class LiveGame {
   /// 13-026). The system does not track subsequent dealer-button rotation
   /// (13-032).
   final String? dealerPlayerId;
+
+  /// Persisted named guest seats for the event. Kept in sync with "Going +N"
+  /// RSVPs so unclaimed guest slots survive re-entry into the invite flow
+  /// (checklist 07-014).
+  final List<GuestSlot> guestSlots;
+
+  List<GuestSlot> get availableGuestSlots =>
+      guestSlots.where((s) => s.available).toList();
+
+  /// Number of roster members who have not RSVP'd yet (checklist 04-023/04-024).
+  int get noResponseCount =>
+      players.where((p) => !p.isGuest && p.rsvp == null).length;
+
+  /// Snapshot of the blind levels as published. Compared against the live
+  /// levels to show what the admin has changed since going live (§12.4 diff).
+  final List<BlindLevel>? originalLevels;
+
+  /// Level numbers whose blinds/ante/duration differ from the published
+  /// snapshot — empty before the game is published or when nothing changed.
+  List<int> get modifiedLevels {
+    final orig = originalLevels;
+    if (orig == null) return const [];
+    final byLevel = {for (final l in orig) l.level: l};
+    final changed = <int>[];
+    for (final l in structure.levels) {
+      final o = byLevel[l.level];
+      if (o == null) continue;
+      if (o.sb != l.sb ||
+          o.bb != l.bb ||
+          o.ante != l.ante ||
+          o.durationMins != l.durationMins) {
+        changed.add(l.level);
+      }
+    }
+    return changed;
+  }
 
   /// Public prize-pool label: estimated until settlement is confirmed.
   String get prizePoolLabel =>
@@ -270,6 +354,8 @@ class LiveGame {
     bool? settlementConfirmed,
     bool? seatingConfirmed,
     String? dealerPlayerId,
+    List<GuestSlot>? guestSlots,
+    List<BlindLevel>? originalLevels,
   }) {
     return LiveGame(
       id: id ?? this.id,
@@ -293,6 +379,8 @@ class LiveGame {
       settlementConfirmed: settlementConfirmed ?? this.settlementConfirmed,
       seatingConfirmed: seatingConfirmed ?? this.seatingConfirmed,
       dealerPlayerId: dealerPlayerId ?? this.dealerPlayerId,
+      guestSlots: guestSlots ?? this.guestSlots,
+      originalLevels: originalLevels ?? this.originalLevels,
     );
   }
 }

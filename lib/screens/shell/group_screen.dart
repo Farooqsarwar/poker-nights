@@ -11,6 +11,7 @@ import '../../models/group.dart';
 import '../../models/live_game.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/formatters.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
@@ -282,7 +283,8 @@ class _GroupScreenState extends State<GroupScreen> {
                         style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                       ),
                       const SizedBox(height: 2),
-                      Row(
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text('Buy-in: ${game.settings.buyIn}', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
                           const SizedBox(width: AppSpacing.sm),
@@ -293,13 +295,15 @@ class _GroupScreenState extends State<GroupScreen> {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      Row(
+                      Wrap(
+                        spacing: AppSpacing.xs,
+                        runSpacing: AppSpacing.xs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           RSVPBadge(
                             rsvp: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp,
                           ),
-                            if (user != null) ...[
-                              const SizedBox(width: AppSpacing.md),
+                          if (user != null) ...[
                               PopupMenuButton<Rsvp>(
                                 initialValue: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp,
                                 onSelected: (val) => app.setRSVP(val, gameId: game.id),

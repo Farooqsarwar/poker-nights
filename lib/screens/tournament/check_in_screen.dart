@@ -421,21 +421,24 @@ class _CheckInScreenState extends State<CheckInScreen> {
                           context.go(RoutePaths.adminDashboard);
                         }
                       : null,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        !canStart
-                            ? 'Need at least 2 checked in'
-                            : !seatingConfirmed
-                                ? 'Confirm seating first'
-                                : 'Start with ${checkedIn.length} players',
-                      ),
-                      if (canStart && seatingConfirmed) ...[
-                        const SizedBox(width: 6),
-                        const Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          !canStart
+                              ? 'Need at least 2 checked in'
+                              : !seatingConfirmed
+                                  ? 'Confirm seating first'
+                                  : 'Start with ${checkedIn.length} players',
+                        ),
+                        if (canStart && seatingConfirmed) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),

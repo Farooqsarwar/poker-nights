@@ -427,11 +427,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       error: _errors['buyIn'],
                       keyboardType: TextInputType.number,
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'No currency symbol in game UI',
-                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                    ),
+
                   ],
                 ),
               ),
@@ -446,9 +442,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               for (final d in [3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0])
                 DropdownMenuItem(
                   value: d.toString(),
-                  child: Text(
-                    d == 3.5 ? '3.5 hours (recommended)' : '${d == d.roundToDouble() ? d.round() : d} hours',
-                  ),
+                  child: Text('${d == d.roundToDouble() ? d.round() : d}h'),
                 ),
             ],
           ),
@@ -533,19 +527,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         children: [
           Row(
             children: [
-              for (final m in _ChipMode.values) ...[
+              for (int i = 0; i < _ChipMode.values.length; i++) ...[
                 Expanded(
                   child: _ModeButton(
-                    label: switch (m) {
+                    label: switch (_ChipMode.values[i]) {
                       _ChipMode.preset => 'Saved preset',
                       _ChipMode.quick => 'Quick setup',
                       _ChipMode.exact => 'Exact count',
                     },
-                    active: _chipMode == m,
-                    onTap: () => setState(() => _chipMode = m),
+                    active: _chipMode == _ChipMode.values[i],
+                    onTap: () => setState(() => _chipMode = _ChipMode.values[i]),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
+                if (i < _ChipMode.values.length - 1) const SizedBox(width: AppSpacing.sm),
               ],
             ],
           ),
@@ -813,23 +807,47 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 const SizedBox(height: 2),
                 Text('Choose how the ante is posted (09-010)', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
                 const SizedBox(height: AppSpacing.sm),
-                Row(
+                Column(
                   children: [
-                    for (final pref in AntePreference.values) ...[
-                      Expanded(
-                        child: _ModeButton(
-                          label: switch (pref) {
-                            AntePreference.recommend => 'Recommended',
-                            AntePreference.none => 'No ante',
-                            AntePreference.bigBlind => 'Big blind',
-                            AntePreference.individual => 'Individual',
-                          },
-                          active: _antePreference == pref,
-                          onTap: () => setState(() => _antePreference = pref),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ModeButton(
+                            label: 'Recommended',
+                            active: _antePreference == AntePreference.recommend,
+                            onTap: () => setState(() => _antePreference = AntePreference.recommend),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                    ],
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: _ModeButton(
+                            label: 'No ante',
+                            active: _antePreference == AntePreference.none,
+                            onTap: () => setState(() => _antePreference = AntePreference.none),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ModeButton(
+                            label: 'Big blind',
+                            active: _antePreference == AntePreference.bigBlind,
+                            onTap: () => setState(() => _antePreference = AntePreference.bigBlind),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: _ModeButton(
+                            label: 'Individual',
+                            active: _antePreference == AntePreference.individual,
+                            onTap: () => setState(() => _antePreference = AntePreference.individual),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -1002,12 +1020,15 @@ class _ModeButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: active ? AppColors.primary : AppColors.border),
         ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: AppTypography.bodySm.copyWith(
-            color: active ? AppColors.primary : AppColors.mutedForeground,
-            fontWeight: FontWeight.w500,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(
+              color: active ? AppColors.primary : AppColors.mutedForeground,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),

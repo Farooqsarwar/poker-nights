@@ -301,7 +301,7 @@ class StructureReviewScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Prize distribution (admin only)', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                    Expanded(child: Text('Prize distribution (admin only)', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600))),
                     SizedBox(
                       width: 140,
                       child: AppSelect<int?>(
@@ -422,13 +422,16 @@ class StructureReviewScreen extends StatelessWidget {
                 child: AppButton(
                   variant: AppButtonVariant.secondary,
                   onPressed: () => context.go(RoutePaths.createTournament),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
-                      SizedBox(width: 6),
-                      Text('Edit settings'),
-                    ],
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
+                        SizedBox(width: 6),
+                        Text('Edit settings'),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -440,13 +443,16 @@ class StructureReviewScreen extends StatelessWidget {
                     // Regenerate with same params
                     app.setCurrentGame(app.createGame(settings));
                   },
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.refresh, size: 14, color: AppColors.icon),
-                      SizedBox(width: 6),
-                      Text('Regenerate'),
-                    ],
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.refresh, size: 14, color: AppColors.icon),
+                        SizedBox(width: 6),
+                        Text('Regenerate'),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -457,13 +463,16 @@ class StructureReviewScreen extends StatelessWidget {
                     app.publishGame();
                     context.go(RoutePaths.invitation);
                   },
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Confirm & Publish'),
-                      SizedBox(width: 6),
-                      Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
-                    ],
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Confirm & Publish'),
+                        SizedBox(width: 6),
+                        Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+                      ],
+                    ),
                   ),
                 ),
               ),

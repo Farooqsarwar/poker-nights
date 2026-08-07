@@ -508,6 +508,145 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Publishes the tournament (checklist §4.3): the game opens for RSVP, a
+  /// pinned event card is posted to the group chat, every member is notified,
+  /// and the published structure is snapshotted for the §12.4 live diff.
+  void publishGame() {
+    final game = _currentGame;
+    if (game == null || _user == null) return;
+    _pushUndo();
+    final card = ChatMessage(
+      id: 'pinned-${DateTime.now().millisecondsSinceEpoch}',
+      authorId: _user!.id,
+      authorName: _user!.name,
+      body: '${game.settings.name} — ${game.settings.date} at '
+          '${game.settings.time} · Buy-in ${game.settings.buyIn} · '
+          'Code ${game.publicCode}',
+      timestamp: DateTime.now(),
+      deleted: false,
+      pinned: true,
+    );
+    _currentGame = game.copyWith(
+      status: LiveGameStatus.published,
+      chat: [...game.chat, card],
+      originalLevels: List.of(game.structure.levels),
+    );
+    _currentGroup = _currentGroup.copyWith(
+      chat: [..._currentGroup.chat, card],
+      games: _currentGroup.games
+          .map((g) => g.id == game.id
+              ? g.copyWith(
+                  status: LiveGameStatus.published,
+                  chat: [...g.chat, card],
+                  originalLevels: List.of(game.structure.levels),
+                )
+              : g)
+          .toList(),
+    );
+    _syncGroupGame();
+    addAuditRecord(
+      'publish',
+      'Published ${game.settings.name} '
+      '(${game.settings.date} ${game.settings.time}) for RSVP.',
+    );
+    pushNotification(
+      AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'New game published',
+        body: '${game.settings.name} is open for RSVP — '
+            '${game.settings.date} at ${game.settings.time}.',
+        type: NotificationType.game,
+        link: '/invitation',
+        read: false,
+        timestamp: DateTime.now(),
+      ),
+    );
+    addAnnouncement('${game.settings.name} is now open for RSVP.', true);
+    notifyListeners();
+  }
+
+  /// Admin edits an already-created event's details. Records an audit entry,
+  /// notifies members, and re-generates the structure when the field change
+  /// would affect it (checklist §10.4). RSVP validity is surfaced in the audit.
+  void updateEventSettings(GameSettings next) {
+    final game = _currentGame;
+    if (game == null || _user == null) return;
+    final prev = game.settings;
+    if (prev == next) return;
+    _pushUndo();
+
+    var s = next;
+    // The structure only depends on players, buy-in, duration and ante rules;
+    // cosmetic fields (name/date/time/location/privacy) keep the structure.
+    final affectsStructure =
+        prev.players != s.players ||
+        prev.buyIn != s.buyIn ||
+        prev.durationHours != s.durationHours ||
+        prev.anteEnabled != s.anteEnabled ||
+        prev.anteAfterLevel != s.anteAfterLevel ||
+        prev.anteStyle != s.anteStyle ||
+        prev.koEnabled != s.koEnabled ||
+        prev.koAmount != s.koAmount;
+
+    final edits = <String>[];
+    if (prev.name != s.name) edits.add('name → ${s.name}');
+    if (prev.date != s.date) edits.add('date → ${s.date}');
+    if (prev.time != s.time) edits.add('time → ${s.time}');
+    if (prev.location != s.location) {
+      edits.add('location ${s.locationPrivate ? '(private) ' : ''}updated');
+    }
+    if (prev.buyIn != s.buyIn) edits.add('buy-in → ${s.buyIn}');
+    if (prev.locationPrivate != s.locationPrivate) {
+      edits.add(s.locationPrivate ? 'address hidden' : 'address visible');
+    }
+
+    if (affectsStructure) {
+      final structure = TournamentEngine.generate(TournamentParams(
+        players: s.players,
+        durationHours: s.durationHours,
+        buyIn: s.buyIn,
+        chipSet: s.chipSet,
+        rebuys: s.rebuys,
+        rebuysCloseLevel: s.rebuysCloseLevel,
+        reEntry: s.reEntry,
+        addOn: s.addOn,
+        anteEnabled: s.anteEnabled,
+        anteAfterLevel: s.anteAfterLevel,
+        anteStyle: s.anteStyle,
+        koEnabled: s.koEnabled,
+        koAmount: s.koAmount,
+        organizerPct: s.organizerPct,
+      ));
+      _currentGame = game.copyWith(
+        settings: s,
+        structure: structure,
+        secondsRemaining: structure.levelDuration * 60,
+        speedRecommendation: null,
+      );
+      edits.add('structure regenerated');
+    } else {
+      _currentGame = game.copyWith(settings: s);
+    }
+
+    _syncGroupGame();
+    addAuditRecord('event_edit', 'Event updated: ${edits.join('; ')}.');
+    if (edits.isNotEmpty) {
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Event updated',
+          body: '${s.name} — ${edits.take(2).join('; ')}.',
+          type: NotificationType.game,
+          link: '/invitation',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+    }
+    addAnnouncement('Event details updated.', false);
+    notifyListeners();
+  }
+
   /// Records that the end-of-rebuy settlement has been confirmed. From this
   /// point the public label reads "Prize Pool" instead of "Estimated Prize
   /// Pool" (12-068, 14-038/14-039, 15-009, 15-030), and no more rebuys,
@@ -802,24 +941,58 @@ class AppProvider extends ChangeNotifier {
 
   void confirmGuest(String guestId) {
     _pushUndo();
-    final updated = _currentGame!.players
+    final game = _currentGame!;
+    
+    // Find a generic placeholder to replace (so we don't exceed expected active players)
+    final placeholderIdx = game.players.indexWhere((p) => !p.checkedIn && !p.isGuest && p.name.startsWith('Player'));
+    
+    final updated = game.players
+        .where((p) => placeholderIdx == -1 || p.id != game.players[placeholderIdx].id)
         .map((p) => p.id == guestId
-            ? p.copyWith(confirmed: true, checkedIn: true)
+            ? p.copyWith(confirmed: true, checkedIn: true, active: true)
             : p)
         .toList();
-    _currentGame = _currentGame!.copyWith(
+        
+    final extraChips = placeholderIdx == -1 ? game.structure.startingStack : 0;
+    final guest = game.players.where((p) => p.id == guestId).firstOrNull;
+
+    final inviterId = guest?.inviterId;
+    final guestSlot = guest?.guestSlot;
+    final canTagSlot = guest != null && inviterId != null && guestSlot != null;
+
+    _currentGame = game.copyWith(
       players: updated,
-      pendingGuests: _currentGame!.pendingGuests
-          .where((p) => p.id != guestId)
-          .toList(),
+      pendingGuests: game.pendingGuests.where((p) => p.id != guestId).toList(),
+      totalChipsInPlay: game.totalChipsInPlay + extraChips,
+      guestSlots: canTagSlot
+          ? game.guestSlots.map((s) {
+              if (s.inviterId == inviterId && s.slot == guestSlot) {
+                return s.copyWith(
+                  guestName: guest.name,
+                  status: GuestSlotStatus.checkedIn,
+                );
+              }
+              return s;
+            }).toList()
+          : game.guestSlots,
     );
+    
+    if (extraChips > 0) {
+      _updatePrizePool();
+    }
+    
     addAnnouncement('Guest confirmed and seated.', false);
   }
 
   /// Admin rejects a pending guest request — the guest is removed from the
-  /// players list and no longer sits at the table (07-026).
+  /// players list and no longer sits at the table (07-026). Their slot is
+  /// freed so another guest can claim it.
   void rejectGuest(String guestId) {
     _pushUndo();
+    final guest = _currentGame!.players.where((p) => p.id == guestId).firstOrNull;
+    final inviterId = guest?.inviterId;
+    final guestSlot = guest?.guestSlot;
+    final canFree = guest != null && inviterId != null && guestSlot != null;
     _currentGame = _currentGame!.copyWith(
       players: _currentGame!.players
           .where((p) => p.id != guestId)
@@ -827,8 +1000,46 @@ class AppProvider extends ChangeNotifier {
       pendingGuests: _currentGame!.pendingGuests
           .where((p) => p.id != guestId)
           .toList(),
+      guestSlots: canFree
+          ? _currentGame!.guestSlots
+              .map((s) =>
+                  s.inviterId == inviterId && s.slot == guestSlot
+                      ? s.copyWith(
+                          guestName: null,
+                          status: GuestSlotStatus.unclaimed,
+                        )
+                      : s)
+              .toList()
+          : _currentGame!.guestSlots,
     );
     addAnnouncement('Guest request rejected.', false);
+  }
+
+  /// Marks the matching guest slot as reserved/claimed so the free-slot count
+  /// on the guest flow and invitation screens stays accurate.
+  List<GuestSlot> _markSlotReserved(
+    List<GuestSlot> slots,
+    String inviterId,
+    int slot, {
+    String? name,
+  }) {
+    final updated = slots.map((s) {
+      if (s.inviterId == inviterId && s.slot == slot && s.available) {
+        return s.copyWith(guestName: name, status: GuestSlotStatus.reserved);
+      }
+      return s;
+    }).toList();
+    // Safety net: the inviter somehow has no persisted slot record.
+    if (!updated.any((s) => s.inviterId == inviterId && s.slot == slot)) {
+      updated.add(GuestSlot(
+        id: 'slot-${DateTime.now().millisecondsSinceEpoch}-$inviterId-$slot',
+        inviterId: inviterId,
+        slot: slot,
+        guestName: name,
+        status: GuestSlotStatus.reserved,
+      ));
+    }
+    return updated;
   }
 
   /// Guest flow: attach a brand-new guest to a game and mark them pending.
@@ -857,6 +1068,12 @@ class AppProvider extends ChangeNotifier {
     _currentGame = _currentGame!.copyWith(
       players: [..._currentGame!.players, guest],
       pendingGuests: [..._currentGame!.pendingGuests, guest],
+      guestSlots: _markSlotReserved(
+        _currentGame!.guestSlots,
+        inviterId,
+        slot,
+        name: name.trim(),
+      ),
     );
     _saveGuestSession(
       GuestSession(
@@ -866,6 +1083,10 @@ class AppProvider extends ChangeNotifier {
         slot: slot,
       ),
     );
+    
+    // Automatically bypass the host confirmation step
+    confirmGuest(id);
+    
     notifyListeners();
   }
 
@@ -961,6 +1182,14 @@ class AppProvider extends ChangeNotifier {
       // A new draw invalidates any previous confirmation (13-013).
       seatingConfirmed: false,
     );
+    // Announce the drawn dealer out loud so the room hears who deals first
+    // (checklist 13-026). Falls back quietly if voice is disabled.
+    if (dealer != null) {
+      addAnnouncement(
+        'Seating drawn. ${dealer.name} deals first.',
+        true,
+      );
+    }
     notifyListeners();
   }
 
@@ -1192,17 +1421,20 @@ class AppProvider extends ChangeNotifier {
     final structure = game.structure;
 
     // Gross eligible = all actual money that entered the game:
-    //   confirmed players × buy-in  +  all rebuys × buy-in (rebuy price)
-    //   +  all re-entries × buy-in  +  all add-ons × buy-in (add-on price).
-    // We use buy-in as the unit price since the engine uses that convention.
+    //   confirmed players × buy-in  +  all rebuys × rebuy price
+    //   +  all re-entries × buy-in  +  all add-ons × add-on price.
+    // Rebuy/add-on prices default to the buy-in unless the admin set a custom
+    // price (09-050/12-051, 12-060).
     final confirmedCount = game.players.where((p) => p.confirmed).length;
     final totalRebuys = game.players.fold<int>(0, (sum, p) => sum + p.rebuys);
     final totalReEntries = game.players.fold<int>(0, (sum, p) => sum + p.reEntries);
     final totalAddOns = game.players.where((p) => p.hasAddOn).length;
 
     final grossEligible =
-        (confirmedCount + totalRebuys + totalReEntries) * s.buyIn +
-        totalAddOns * (s.addOn ? s.buyIn : 0);
+        confirmedCount * s.buyIn +
+        totalRebuys * s.effectiveRebuyCost +
+        totalReEntries * s.effectiveRebuyCost +
+        totalAddOns * (s.addOn ? s.effectiveAddOnCost : 0);
 
     // Delegate the organizer-cut and prize-split maths to the shared helper in
     // TournamentEngine so the rules stay consistent everywhere.
@@ -1422,6 +1654,44 @@ class AppProvider extends ChangeNotifier {
     addAnnouncement('Level structure updated by admin.', false);
   }
 
+  /// Replaces the future levels (everything from the current level onward)
+  /// with a renumbered list produced by the structure editor. Inserting or
+  /// removing levels is supported because the whole future segment is swapped,
+  /// not patched by level number (checklist §12.4).
+  void applyFutureLevels(List<BlindLevel> futureLevels) {
+    final game = _currentGame;
+    if (game == null || futureLevels.isEmpty) return;
+    _pushUndo();
+    final startIdx = game.currentLevel - 1;
+    final prefix = startIdx > 0
+        ? game.structure.levels.take(startIdx).toList()
+        : <BlindLevel>[];
+    // Renumber sequentially so inserting a level shifts the rest correctly.
+    var n = startIdx + 1;
+    final renumbered = [
+      for (final l in futureLevels)
+        BlindLevel(
+          level: n++,
+          sb: l.sb,
+          bb: l.bb,
+          ante: l.ante,
+          durationMins: l.durationMins,
+        ),
+    ];
+    final levels = [...prefix, ...renumbered];
+    _currentGame = game.copyWith(
+      structure: _structureWithLevels(game.structure, levels),
+      secondsRemaining: game.secondsRemaining,
+    );
+    addAuditRecord(
+      'structure_edit',
+      'Future levels updated: ${renumbered.length} future level'
+      '${renumbered.length == 1 ? '' : 's'} (was ${
+          (game.structure.levels.length - prefix.length).clamp(0, 999)})',
+    );
+    addAnnouncement('Level structure updated by admin.', false);
+  }
+
   void confirmFinalTable({List<({String playerId, int seat})>? seating}) {
     final finalists = _currentGame!.players.where((p) => p.active && !p.eliminated).toList();
     // The final table seats at most 9 players (checklist 13-025).
@@ -1636,6 +1906,9 @@ class AppProvider extends ChangeNotifier {
               .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
               .toList(),
         );
+        // Persist named guest slots for the new count so unclaimed seats are
+        // visible even before a guest claims them (checklist 07-014).
+        _syncGuestSlots(userId, rsvp?.guestCount ?? 0);
         // Lowering the guest count releases extra unused guest slots safely
         // and surfaces a conflict when a confirmed guest exceeds the new count
         // (07-015, 20-030, 20-031).
@@ -1655,6 +1928,48 @@ class AppProvider extends ChangeNotifier {
           .toList(),
     );
     notifyListeners();
+  }
+
+  /// Keeps the persisted [GuestSlot] records aligned with a member's "Going +N"
+  /// RSVP count (checklist 07-014). Missing slots are created as unclaimed;
+  /// slots beyond the new count that are still unclaimed are removed. Claimed
+  /// slots are never deleted here — excess claims are handled by
+  /// [_reconcileExcessGuestSlots].
+  void _syncGuestSlots(String userId, int newCount) {
+    final game = _currentGame;
+    if (game == null) return;
+    final existing = game.guestSlots
+        .where((s) => s.inviterId == userId)
+        .toList();
+    final claimed = existing.where((s) => !s.available).toList();
+    final keep = <GuestSlot>[];
+    for (var slot = 1; slot <= newCount; slot++) {
+      final existingForSlot = existing.where((s) => s.slot == slot).firstOrNull;
+      if (existingForSlot != null) {
+        keep.add(existingForSlot);
+      } else {
+        keep.add(GuestSlot(
+          id: 'slot-${DateTime.now().millisecondsSinceEpoch}-$userId-$slot',
+          inviterId: userId,
+          slot: slot,
+          status: GuestSlotStatus.unclaimed,
+        ));
+      }
+    }
+    // Unclaimed slots beyond the new count are dropped; claimed ones remain.
+    final rest = game.guestSlots
+        .where((s) =>
+            s.inviterId != userId ||
+            (s.inviterId == userId && s.slot > newCount && !s.available))
+        .toList();
+    final slots = [...rest, ...keep, ...claimed.where((s) => s.slot <= newCount)];
+    // Deduplicate (id-based) to be safe.
+    final seen = <String>{};
+    final merged = <GuestSlot>[];
+    for (final s in slots) {
+      if (seen.add(s.id)) merged.add(s);
+    }
+    _currentGame = game.copyWith(guestSlots: merged);
   }
 
   /// Checklist 07-015 / 20-030 / 20-031: when a player lowers their guest
@@ -1690,6 +2005,46 @@ class AppProvider extends ChangeNotifier {
         ),
       );
     }
+  }
+
+  /// Sends an RSVP reminder to every member who has not yet responded
+  /// (checklist 04-023/04-024). Pushes a notification per member so the
+  /// (dummy) inbox shows the reminders, and logs the action for the admin.
+  void sendRSVPReminders(String gameId) {
+    final game = gameById(gameId);
+    if (game == null || _user == null) return;
+    final target = _currentGame?.id == gameId ? _currentGame : game;
+    if (target == null) return;
+    final pending = target.players
+        .where((p) => !p.isGuest && p.rsvp == null)
+        .toList();
+    if (pending.isEmpty) return;
+    for (final _ in pending) {
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'RSVP reminder',
+          body: 'You haven\'t responded to ${target.settings.name} '
+              '(${target.settings.date} at ${target.settings.time}). '
+              'Let the host know if you\'re in.',
+          type: NotificationType.rsvp,
+          link: '/invitation',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+    }
+    addAuditRecord(
+      'rsvp_reminder',
+      'Reminder sent to ${pending.length} member'
+      '${pending.length == 1 ? '' : 's'} who have not responded.',
+    );
+    addAnnouncement(
+      'Reminder sent to ${pending.length} player'
+      '${pending.length == 1 ? '' : 's'} without an RSVP.',
+      false,
+    );
+    notifyListeners();
   }
 
   // ── Code lookup ────────────────────────────────────────────────────────────

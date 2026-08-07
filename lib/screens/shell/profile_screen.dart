@@ -316,7 +316,7 @@ class _StatsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GridView.count(
-      crossAxisCount: 6,
+      crossAxisCount: MediaQuery.of(context).size.width < 600 ? 3 : 6,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: AppSpacing.sm,

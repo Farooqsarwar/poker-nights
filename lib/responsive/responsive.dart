@@ -49,10 +49,10 @@ class ResponsiveBuilder extends StatelessWidget {
         final device = width > AppBreakpoints.largeDesktop
             ? AppDevice.largeDesktop
             : width > AppBreakpoints.desktop
-                ? AppDevice.desktop
-                : width > AppBreakpoints.tablet
-                    ? AppDevice.tablet
-                    : AppDevice.mobile;
+            ? AppDevice.desktop
+            : width > AppBreakpoints.tablet
+            ? AppDevice.tablet
+            : AppDevice.mobile;
         return builder(context, device);
       },
     );
@@ -72,7 +72,7 @@ class AppScale {
   static const double maxHeightScale = 1.5;
 
   /// Font sizes grow to at most [maxTextScale]x the design value.
-  static const double maxTextScale = 1.35;
+  static const double maxTextScale = 1.15;
 
   static double _rawOr(double Function() compute, num value) {
     try {
@@ -87,19 +87,17 @@ class AppScale {
 
   /// Fluid width (clamped to avoid runaway growth on desktop).
   static double w(num value) => _rawOr(
-        () => _clamped(value, ScreenUtil().setWidth(value), maxWidthScale),
-        value,
-      );
+    () => _clamped(value, ScreenUtil().setWidth(value), maxWidthScale),
+    value,
+  );
 
   /// Fluid height (clamped).
   static double h(num value) => _rawOr(
-        () => _clamped(value, ScreenUtil().setHeight(value), maxHeightScale),
-        value,
-      );
+    () => _clamped(value, ScreenUtil().setHeight(value), maxHeightScale),
+    value,
+  );
 
   /// Fluid font size, capped at [maxScale]x the design value.
-  static double sp(num value, {double maxScale = maxTextScale}) => _rawOr(
-        () => _clamped(value, ScreenUtil().setSp(value), maxScale),
-        value,
-      );
+  static double sp(num value, {double maxScale = maxTextScale}) =>
+      _rawOr(() => _clamped(value, ScreenUtil().setSp(value), maxScale), value);
 }

@@ -127,6 +127,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
@@ -134,7 +135,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                   children: [
                     Text(
                       'Tournament Presets',
-                      style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700),
+                      style: AppTypography.display(size: AppFontSizes.xxl, weight: FontWeight.w700),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
@@ -144,9 +145,12 @@ class _PresetsScreenState extends State<PresetsScreen> {
                   ],
                 ),
               ),
-              AppButton(
-                onPressed: () => _editPreset(app, null),
-                child: const Text('+ New preset'),
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: AppButton(
+                  onPressed: () => _editPreset(app, null),
+                  child: const Text('+ New preset'),
+                ),
               ),
             ],
           ),
@@ -398,7 +402,7 @@ class _PresetFormState extends State<_PresetForm> {
         ),
         const SizedBox(height: AppSpacing.lg),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
               child: AppTextField(
@@ -437,7 +441,7 @@ class _PresetFormState extends State<_PresetForm> {
                       for (final d in [3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0])
                         DropdownMenuItem(
                           value: d.toString(),
-                          child: Text(d == 3.5 ? '3.5h (recommended)' : '$d'),
+                          child: Text('${d == d.roundToDouble() ? d.round() : d}h'),
                         ),
                     ],
                     onChanged: (v) => setState(() => _duration = double.tryParse(v ?? '') ?? 3.5),

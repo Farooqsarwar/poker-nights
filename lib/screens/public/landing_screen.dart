@@ -218,11 +218,11 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Widget _buildFeatures(BuildContext context, bool isDesktop) {
     final features = [
-      ('🎰', 'Smart tournament engine',
+      (Icons.casino_outlined, 'Smart tournament engine',
           'Enter your chip set and target duration — Poker Night works out stack sizes, blind levels and payouts that actually fit.'),
-      ('📺', 'TV mode & voice',
+      (Icons.tv_outlined, 'TV mode & voice',
           'Open the TV page on any browser. Clean full-screen timer with voice announcements for level changes and eliminations.'),
-      ('👥', 'Group management',
+      (Icons.groups_outlined, 'Group management',
           'Private group with RSVP, chat, polls and game history. Guests join with a code — no account required.'),
     ];
     return Container(
@@ -251,7 +251,7 @@ class _LandingScreenState extends State<LandingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(icon, style: const TextStyle(fontSize: AppFontSizes.xxxl)),
+                    Icon(icon, size: AppFontSizes.xxxl, color: AppColors.icon),
                     const SizedBox(height: AppSpacing.md),
                     Text(title, style: AppTypography.display(size: AppFontSizes.lg)),
                     const SizedBox(height: AppSpacing.sm),

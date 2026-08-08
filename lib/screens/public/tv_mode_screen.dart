@@ -338,10 +338,14 @@ class _TVLayout extends StatelessWidget {
                 children: [
                   Text('CODE: ${game.publicCode}', style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground)),
                   const SizedBox(width: AppSpacing.lg),
-                  Text(
-                    'Last sync ${_timeOf(app.lastSync)}',
-                    style: AppTypography.monoXs.copyWith(
-                      color: app.isOffline ? AppColors.warning : AppColors.mutedForeground,
+                  Flexible(
+                    child: Text(
+                      'Last sync ${_timeOf(app.lastSync)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.monoXs.copyWith(
+                        color: app.isOffline ? AppColors.warning : AppColors.mutedForeground,
+                      ),
                     ),
                   ),
                   const Spacer(),

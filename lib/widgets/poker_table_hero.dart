@@ -138,7 +138,7 @@ class _PokerTableHeroState extends State<PokerTableHero>
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
-                        'Blinds, buy-ins, seating and settlement — one app for the whole table.',
+                        'Blinds, buy-ins, seating and settlement \n one app for the whole table.',
                         style: AppTypography.bodyXs.copyWith(color: Colors.white.withValues(alpha: 0.75)),
                       ),
                     ],

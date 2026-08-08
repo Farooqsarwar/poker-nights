@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -18,8 +19,9 @@ import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
-import '../../widgets/chip_loading_animation.dart';
+import '../../widgets/app_badge.dart';
 import '../../widgets/chip_token.dart';
+import '../../widgets/coin_shuffle_animation.dart';
 
 enum _ChipMode { preset, quick, exact }
 
@@ -39,6 +41,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   static const _steps = ['Game info', 'Chip set', 'Rules', 'Generate'];
 
   int _step = 1;
+  bool _isGenerating = false;
 
   // Step 1
   final _name = TextEditingController();
@@ -207,19 +210,11 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   }
 
   void _generate(AppProvider app) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Dialog(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        child: ChipLoadingAnimation(),
-      ),
-    );
-
-    await Future.delayed(const Duration(milliseconds: 1500));
+    setState(() => _isGenerating = true);
+    
+    // Give time for the animation to play
+    await Future.delayed(const Duration(milliseconds: 6000));
     if (!mounted) return;
-    Navigator.of(context).pop();
 
     final game = app.createGame(GameSettings(
       name: _name.text.trim(),
@@ -918,6 +913,33 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   }
 
   Widget _buildStep4(AppProvider app) {
+    if (_isGenerating) {
+      return AppCard(
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(
+              height: 240,
+              child: ClipRRect(
+                borderRadius: BorderRadius.all(Radius.circular(16)),
+                child: Center(
+                  child: CoinShuffleAnimation(),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Generating tournament...',
+              textAlign: TextAlign.center,
+              style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w600),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+        ),
+      );
+    }
+
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xxl),
       child: Column(
@@ -930,32 +952,78 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             textAlign: TextAlign.center,
             style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w600),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             '${_name.text.trim()} · ${_date.text} at ${_time.text}',
             textAlign: TextAlign.center,
-            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.bodySm.copyWith(color: AppColors.primary),
           ),
-          Text(
-            '${_players.text} players · ${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h · Buy-in ${_buyIn.text}',
-            textAlign: TextAlign.center,
-            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryStatCard(
+                  icon: Icons.people_outline,
+                  label: 'Players',
+                  value: _players.text,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _SummaryStatCard(
+                  icon: Icons.timer_outlined,
+                  label: 'Duration',
+                  value: '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h',
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _SummaryStatCard(
+                  icon: Icons.attach_money,
+                  label: 'Buy-in',
+                  value: _buyIn.text,
+                ),
+              ),
+            ],
           ),
-          Text(
-            '${_rebuys ? 'Rebuys until Level $_rebuysClose${_rebuyCost.text.trim().isNotEmpty ? ' @ ${_rebuyCost.text}' : ''}' : 'No rebuys'} ·'
-            '${_reEntry ? ' Re-entry enabled' : ' No re-entry'} ·'
-            '${_addOn ? ' Add-on enabled' : ' No add-on'} ·'
-            '${_antePreference == AntePreference.none ? ' No ante' : ' Ante after Level $_anteAfterLevel (${_anteStyle == AnteStyle.individual ? 'individual' : 'big blind'})'}'
-            '${_locationPrivate ? ' · Private address' : ''}',
-            textAlign: TextAlign.center,
-            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          const SizedBox(height: AppSpacing.lg),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            alignment: WrapAlignment.center,
+            children: [
+              AppBadge(
+                label: _rebuys
+                    ? 'Rebuys to L$_rebuysClose${_rebuyCost.text.trim().isNotEmpty ? ' @ ${_rebuyCost.text}' : ''}'
+                    : 'No rebuys',
+                variant: _rebuys ? AppBadgeVariant.gold : AppBadgeVariant.muted,
+              ),
+              AppBadge(
+                label: _reEntry ? 'Re-entry' : 'No re-entry',
+                variant: _reEntry ? AppBadgeVariant.gold : AppBadgeVariant.muted,
+              ),
+              AppBadge(
+                label: _addOn ? 'Add-on' : 'No add-on',
+                variant: _addOn ? AppBadgeVariant.gold : AppBadgeVariant.muted,
+              ),
+              AppBadge(
+                label: _antePreference == AntePreference.none
+                    ? 'No ante'
+                    : 'Ante L$_anteAfterLevel (${_antePreference == AntePreference.individual ? 'Ind' : 'BB'})',
+                variant: _antePreference != AntePreference.none ? AppBadgeVariant.gold : AppBadgeVariant.muted,
+              ),
+              AppBadge(
+                label: 'Chips: ${_chipMode == _ChipMode.preset ? _presetName : 'Custom'}',
+                variant: AppBadgeVariant.default_,
+              ),
+              if (_locationPrivate)
+                const AppBadge(
+                  label: 'Private Address',
+                  variant: AppBadgeVariant.accent,
+                ),
+            ],
           ),
-          Text(
-            'Chip set: ${_chipMode == _ChipMode.preset ? _presetName : 'Custom'}',
-            textAlign: TextAlign.center,
-            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-          ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             'Poker Night will calculate starting stack, blind levels, chip composition and prize distribution. You can review and edit before confirming.',
             textAlign: TextAlign.center,
@@ -1106,6 +1174,34 @@ class _ExactInput extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SummaryStatCard extends StatelessWidget {
+  const _SummaryStatCard({required this.icon, required this.label, required this.value});
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 24, color: AppColors.primary),
+          const SizedBox(height: AppSpacing.xs),
+          Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          const SizedBox(height: 2),
+          Text(value, style: AppTypography.display(size: AppFontSizes.md, weight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 }

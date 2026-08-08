@@ -20,6 +20,20 @@ class VoiceService {
       await tts.setSpeechRate(0.5);
       await tts.setVolume(1.0);
       await tts.setPitch(1.0);
+      await tts.awaitSpeakCompletion(true);
+
+      // Force playback even if the silent switch is on (crucial for iOS)
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        await tts.setIosAudioCategory(
+          IosTextToSpeechAudioCategory.playback,
+          [
+            IosTextToSpeechAudioCategoryOptions.allowBluetooth,
+            IosTextToSpeechAudioCategoryOptions.allowBluetoothA2DP,
+            IosTextToSpeechAudioCategoryOptions.mixWithOthers,
+          ],
+        );
+      }
+
       _tts = tts;
     } catch (e) {
       // Speech synthesis unavailable on this platform/device — degrade quietly.

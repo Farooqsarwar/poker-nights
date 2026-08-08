@@ -68,7 +68,10 @@ class ResultPodiumScreen extends StatelessWidget {
             prize: prizes.where((pr) => pr.place == finishOrder.length - i).firstOrNull,
           ),
     ];
-    final podium = ranked.take(3).toList();
+    // finishOrder is "first-out first" so ranked is worst-first. The podium
+    // shows the top three (1st/2nd/3rd), not the first three entries.
+    final podium = ranked.where((r) => r.pos <= 3).toList()
+      ..sort((a, b) => a.pos.compareTo(b.pos));
     final myResult = ranked.where((r) => r.player.id == user?.id).firstOrNull;
     final totalRebuys = players.fold<int>(0, (s, p) => s + p.rebuys);
 
@@ -323,7 +326,7 @@ class _PodiumSlot extends StatelessWidget {
     // Heights must stay well under the parent SizedBox(220) minus the medal
     // row (~32px) so the winner column never triggers a RenderFlex overflow.
     final heights = [150.0, 118.0, 86.0];
-    final labels = ['2nd', '1st', '3rd'];
+    final labels = ['1st', '2nd', '3rd'];
     final isFirst = result.pos == 1;
 
     return Padding(

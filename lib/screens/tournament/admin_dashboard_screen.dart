@@ -42,6 +42,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String _tab = 'players';
   final _announcementController = TextEditingController();
   bool _showStructureModal = false;
+  bool _showRestartModal = false;
+  bool _showCancelModal = false;
 
   @override
   void dispose() {
@@ -244,6 +246,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           ],
           const SizedBox(height: AppSpacing.xxl),
+          // Blocking cancelled state — blocking states take priority (spec §12).
+          if (status == LiveGameStatus.cancelled)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: const AppAlertBanner(
+                type: AppAlertType.error,
+                message: 'This tournament has been cancelled. Live controls are disabled.',
+              ),
+            ),
           // Speed recommendation
           if (game.speedRecommendation != null)
             Padding(
@@ -409,6 +420,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         if (status == LiveGameStatus.running || status == LiveGameStatus.paused) ...[
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: currentLevel >= (structure.levels.length) ? null : app.nextLevel, child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Next level', trailing: Icons.arrow_forward)))),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: () => setState(() => _showRestartModal = true), child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Restart level', icon: Icons.replay)))),
                         ],
                         
                         // Specific actions
@@ -588,6 +601,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     onPressed: currentLevel >= (structure.levels.length) ? null : app.nextLevel,
                     child: const AppIconLabel(label: 'Next level', trailing: Icons.arrow_forward),
                   ),
+                if (status == LiveGameStatus.running || status == LiveGameStatus.paused)
+                  AppButton(
+                    size: AppButtonSize.md,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => setState(() => _showRestartModal = true),
+                    child: const AppIconLabel(label: 'Restart level', icon: Icons.replay),
+                  ),
                 if (status == LiveGameStatus.rebuypause)
                   AppButton(
                     size: AppButtonSize.md,
@@ -729,6 +749,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             if (_tab == 'audit') _AuditTab(auditHistory: game.auditHistory),
           ],
           const SizedBox(height: AppSpacing.xxl),
+          // Danger zone: cancel tournament (spec §12 — confirmation + reason)
+          if (status != LiveGameStatus.completed && status != LiveGameStatus.cancelled) ...[
+            AppCard(
+              borderColor: AppColors.destructive.withValues(alpha: 0.3),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cancel tournament',
+                          style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.destructive),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Requires confirmation and a reason, which is recorded in the audit log and shared with members.',
+                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  AppButton(
+                    variant: AppButtonVariant.danger,
+                    onPressed: () => setState(() => _showCancelModal = true),
+                    child: const Text('Cancel tournament'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           // Structure edit modal
           AppModal(
             open: _showStructureModal,
@@ -748,10 +801,62 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               onApply: () => setState(() => _showStructureModal = false),
             ),
           ),
+          // Restart level confirmation (spec §12: shows exact effect)
+          AppModal(
+            open: _showRestartModal,
+            onClose: () => setState(() => _showRestartModal = false),
+            title: 'Restart level ${game.currentLevel}?',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppAlertBanner(
+                  type: AppAlertType.warning,
+                  message: level == null
+                      ? 'The timer resets to the full level duration and restarts running.'
+                      : 'Level ${game.currentLevel} (${Formatters.chips(level.sb)}/${Formatters.chips(level.bb)}) — the timer resets to ${game.structure.levelDuration} minutes and restarts running.',
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppButton(
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => setState(() => _showRestartModal = false),
+                        child: const Text('Keep going'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: AppButton(
+                        onPressed: () {
+                          app.restartLevel();
+                          setState(() => _showRestartModal = false);
+                        },
+                        child: const Text('Restart level'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Cancel tournament confirmation (spec §12: reason required)
+          AppModal(
+            open: _showCancelModal,
+            onClose: () => setState(() => _showCancelModal = false),
+            title: 'Cancel tournament',
+            child: _CancelTournamentForm(
+              gameName: settings.name,
+              onCancel: (reason) {
+                app.cancelGame(reason);
+                setState(() => _showCancelModal = false);
+              },
+            ),
+          ),
           // Offline Conflict Modal
           AppModal(
             open: app.hasOfflineConflict,
-            onClose: () => {}, // Force user to choose
+            onClose: () => app.resolveOfflineConflict(keepLocal: true),
             title: 'Offline Conflict Detected',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1803,6 +1908,71 @@ class _StructureEditor extends StatelessWidget {
           fullWidth: true,
           onPressed: onApply,
           child: const Text('Apply & close'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Cancel-tournament confirmation form. A reason is required and is recorded
+/// in the audit log and shared with members (spec §12).
+class _CancelTournamentForm extends StatefulWidget {
+  const _CancelTournamentForm({required this.gameName, required this.onCancel});
+
+  final String gameName;
+  final ValueChanged<String> onCancel;
+
+  @override
+  State<_CancelTournamentForm> createState() => _CancelTournamentFormState();
+}
+
+class _CancelTournamentFormState extends State<_CancelTournamentForm> {
+  final _reason = TextEditingController();
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reason = _reason.text.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Cancelling ${widget.gameName} stops the timer and removes it from live view. '
+          'Members are notified. This cannot be undone from the dashboard.',
+          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          controller: _reason,
+          label: 'Reason (required)',
+          hint: 'e.g. venue closed, not enough players',
+          maxLines: 2,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Row(
+          children: [
+            Expanded(
+              child: AppButton(
+                variant: AppButtonVariant.secondary,
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Keep tournament'),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: AppButton(
+                variant: AppButtonVariant.danger,
+                onPressed: reason.isEmpty ? null : () => widget.onCancel(reason),
+                child: const Text('Cancel tournament'),
+              ),
+            ),
+          ],
         ),
       ],
     );

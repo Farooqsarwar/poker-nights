@@ -141,11 +141,22 @@ class AppProvider extends ChangeNotifier {
   }
 
   void resolveOfflineConflict({required bool keepLocal}) {
-    if (!keepLocal && _currentGame != null) {
-      final cloudGame = _currentGroup.games.where((g) => g.id == _currentGame!.id).firstOrNull;
-      if (cloudGame != null) {
-        _currentGame = cloudGame;
-        RecoveryService.saveGame(cloudGame);
+    if (_currentGame != null) {
+      if (keepLocal) {
+        // Sync local up to cloud
+        final games = _currentGroup.games.toList();
+        final idx = games.indexWhere((g) => g.id == _currentGame!.id);
+        if (idx != -1) {
+          games[idx] = _currentGame!;
+          _currentGroup = _currentGroup.copyWith(games: games);
+        }
+      } else {
+        // Revert local down to cloud
+        final cloudGame = _currentGroup.games.where((g) => g.id == _currentGame!.id).firstOrNull;
+        if (cloudGame != null) {
+          _currentGame = cloudGame;
+          RecoveryService.saveGame(cloudGame);
+        }
       }
     }
     _restoredFromRecovery = false;
@@ -508,6 +519,42 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Cancels the tournament. Requires a reason: it is recorded in the audit
+  /// log and members are notified (spec §12, checklist 10-042). Blocking —
+  /// once cancelled the game cannot be started again.
+  void cancelGame(String reason) {
+    final game = _currentGame;
+    if (game == null || _user == null) return;
+    if (game.status == LiveGameStatus.completed ||
+        game.status == LiveGameStatus.cancelled) {
+      return;
+    }
+    _pushUndo();
+    _ticker?.cancel();
+    _currentGame = game.copyWith(
+      status: LiveGameStatus.cancelled,
+      timerRunning: false,
+    );
+    _syncGroupGame();
+    addAuditRecord(
+      'cancel',
+      'Cancelled ${game.settings.name}. Reason: ${reason.trim().isEmpty ? 'Not provided' : reason.trim()}',
+    );
+    pushNotification(
+      AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Tournament cancelled',
+        body: '${game.settings.name} has been cancelled.',
+        type: NotificationType.game,
+        link: '/invitation',
+        read: false,
+        timestamp: DateTime.now(),
+      ),
+    );
+    addAnnouncement('${game.settings.name} has been cancelled.', true);
+    notifyListeners();
+  }
+
   /// Publishes the tournament (checklist §4.3): the game opens for RSVP, a
   /// pinned event card is posted to the group chat, every member is notified,
   /// and the published structure is snapshotted for the §12.4 live diff.
@@ -788,6 +835,34 @@ class AppProvider extends ChangeNotifier {
       '${level.ante != null ? ', ante ${level.ante}' : ''}.',
       true,
     );
+  }
+
+  /// Restarts the clock for the current level (spec §12: requires
+  /// confirmation showing its exact effect — the admin UI gates this behind a
+  /// confirm dialog). Resets to the full level duration and resumes running.
+  void restartLevel() {
+    final game = _currentGame;
+    if (game == null) return;
+    if (game.status != LiveGameStatus.running &&
+        game.status != LiveGameStatus.paused) {
+      return;
+    }
+    _pushUndo();
+    _levelAnnouncementMarks.clear();
+    final level = game.currentLevelData;
+    _currentGame = game.copyWith(
+      secondsRemaining: game.structure.levelDuration * 60,
+      timerRunning: true,
+      status: LiveGameStatus.running,
+      speedRecommendation: null,
+    );
+    _syncGroupGame();
+    addAuditRecord(
+      'restart-level',
+      'Restarted level ${game.currentLevel} (blinds ${level?.sb ?? 0}/${level?.bb ?? 0}).',
+    );
+    addAnnouncement('Level ${game.currentLevel} restarted.', true);
+    notifyListeners();
   }
 
   // ── Player management ──────────────────────────────────────────────────────
@@ -1083,10 +1158,9 @@ class AppProvider extends ChangeNotifier {
         slot: slot,
       ),
     );
-    
-    // Automatically bypass the host confirmation step
-    confirmGuest(id);
-    
+
+    // The guest stays pending until the host confirms them at check-in
+    // (spec §6 "waiting for admin confirmation", checklist 07-027/07-028).
     notifyListeners();
   }
 

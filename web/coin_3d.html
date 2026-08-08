@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1.0" name="viewport"/>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #threejs-container-COIN_UPGRADE {
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+<div style="width:100%;height:100%">
+<script src="https://ajax.googleapis.com/ajax/libs/threejs/r125/three.min.js"></script>
+<div id="threejs-container-COIN_UPGRADE"></div>
+<script>
+(function() {
+  const container = document.getElementById('threejs-container-COIN_UPGRADE');
+  const width = container.clientWidth || window.innerWidth;
+  const height = container.clientHeight || window.innerHeight;
+
+  const scene = new THREE.Scene();
+  const aspect = width / height;
+  const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+  
+  let camZ = 12;
+  if (aspect < 1) {
+    camZ = 12 / aspect;
+  } else if (aspect > 2) {
+    camZ = 10;
+  }
+  camera.position.set(0, 2, camZ);
+  camera.lookAt(0, 1.5, 0);
+
+  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  renderer.setClearColor(0x000000, 0);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+
+  // Clean, professional lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+  scene.add(ambientLight);
+
+  const mainLight = new THREE.SpotLight(0xffffff, 2.0);
+  mainLight.position.set(5, 15, 10);
+  mainLight.castShadow = true;
+  mainLight.shadow.mapSize.width = 1024;
+  mainLight.shadow.mapSize.height = 1024;
+  scene.add(mainLight);
+
+  const backLight = new THREE.PointLight(0xffffff, 0.8, 20);
+  backLight.position.set(-5, -2, -5);
+  scene.add(backLight);
+
+  const textureLoader = new THREE.TextureLoader();
+  const coinTexture = textureLoader.load('https://lh3.googleusercontent.com/aida-public/AB6AXuBmwAU1BgM-ECLiTbo4G7wjArVnXiH5q_RgvTCa_z4-ils5mUfYH0garp12Ul-0Vn4FfCPbRcgipg2aJnEA5A5Xopd_l1ehhLicwTmVFjiKvjGNkWO_5Fv19CubnbfiHuyzuF5PhSBf9XJmfzuSR2n-CrvJ4WZSZJqbMbRwPZunM1EbHXqS7hzooLs1RpbdmbkGk0TgH4guzOlCimpuIPTzif4GmLzQ1wgdZkXlBEx21A02zMgCZ5SCsjgrEBb7VUFV-44');
+
+  const colors = [0x1E88E5, 0xFBC02D, 0xE53935, 0xFFFFFF, 0x1E88E5, 0xE53935];
+
+  function createChip(yPos, colorHex) {
+    const group = new THREE.Group();
+    // Authentic thick clay chip geometry
+    const geometry = new THREE.CylinderGeometry(1.5, 1.5, 0.25, 64);
+    const material = new THREE.MeshStandardMaterial({
+      color: colorHex,
+      map: coinTexture,
+      metalness: 0.1, // Matte finish
+      roughness: 0.9,
+    });
+    const coin = new THREE.Mesh(geometry, material);
+    coin.castShadow = true;
+    coin.receiveShadow = true;
+    group.add(coin);
+    group.position.y = yPos;
+    return group;
+  }
+
+  const leftStack = new THREE.Group();
+  const rightStack = new THREE.Group();
+  const centerGroup = new THREE.Group();
+
+  // Advanced interlocking shuffle setup
+  for (let i = 0; i < 12; i++) {
+    const chip = createChip(i * 0.26, colors[i % colors.length]);
+    if (i % 2 === 0) {
+      leftStack.add(chip); // Even chips
+    } else {
+      rightStack.add(chip); // Odd chips
+    }
+  }
+
+  centerGroup.add(leftStack);
+  centerGroup.add(rightStack);
+  scene.add(centerGroup);
+
+  let startTime = Date.now();
+  const duration = 6000; 
+
+  function animate() {
+    requestAnimationFrame(animate);
+    
+    const elapsed = (Date.now() - startTime) % duration;
+    const progress = elapsed / duration;
+
+    // Maintain stable camera
+    camera.position.set(0, 2.5, camZ);
+    camera.lookAt(0, 1.5, 0);
+
+    const mergeEnd = 0.25; // First 1.5 seconds is the slide in
+    
+    if (progress < mergeEnd) {
+      const p = progress / mergeEnd;
+      // Smooth ease-out, no violent snap
+      const ease = 1 - Math.pow(1 - p, 3);
+      
+      const startX = Math.max(10, 6 * aspect);
+      
+      // Clean horizontal sliding
+      leftStack.position.x = -startX * (1 - ease);
+      rightStack.position.x = startX * (1 - ease);
+      
+      // Keep rotation flat while sliding
+      centerGroup.rotation.y = 0;
+      centerGroup.position.y = 0;
+    } else {
+      // Fully interlocked
+      leftStack.position.x = 0;
+      rightStack.position.x = 0;
+      
+      // Luxurious slow rotation of the full 12-chip stack
+      const rotateP = (progress - mergeEnd) / (1 - mergeEnd);
+      centerGroup.rotation.y = rotateP * Math.PI * 2;
+      
+      // Fall down through floor right at the end to reset loop smoothly
+      if (rotateP > 0.95) {
+         const fallP = (rotateP - 0.95) / 0.05;
+         centerGroup.position.y = -10 * fallP;
+      } else {
+         centerGroup.position.y = 0;
+      }
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  window.addEventListener('resize', () => {
+    const w = container.clientWidth || window.innerWidth;
+    const h = container.clientHeight || window.innerHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  });
+
+  animate();
+})();
+</script>
+</div>
+</body>
+</html>

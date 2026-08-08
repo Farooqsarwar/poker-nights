@@ -46,62 +46,17 @@ class _JoinScreenState extends State<JoinScreen> {
     }
   }
 
-  void _scanQRCode() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Scan Game QR Code', style: AppTypography.display(size: AppFontSizes.lg)),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: AppColors.foreground),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.md)),
-                child: MobileScanner(
-                  onDetect: (capture) {
-                    final List<Barcode> barcodes = capture.barcodes;
-                    if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
-                      final code = barcodes.first.rawValue!;
-                      // Extract code if it's a URL
-                      String extracted = code;
-                      if (code.contains('code=')) {
-                        extracted = code.split('code=').last.split('&').first;
-                      } else if (code.contains('/game/')) {
-                        extracted = code.split('/game/').last;
-                      }
-                      
-                      Navigator.pop(context);
-                      setState(() {
-                        _codeController.text = extracted;
-                      });
-                      _submitCode();
-                    }
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+  Future<void> _scanQRCode() async {
+    final scannedCode = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const ScanQRScreen()),
     );
+    if (scannedCode != null && mounted) {
+      setState(() {
+        _codeController.text = scannedCode;
+      });
+      _submitCode();
+    }
   }
 
   @override
@@ -227,6 +182,49 @@ class _JoinScreenState extends State<JoinScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class ScanQRScreen extends StatefulWidget {
+  const ScanQRScreen({super.key});
+
+  @override
+  State<ScanQRScreen> createState() => _ScanQRScreenState();
+}
+
+class _ScanQRScreenState extends State<ScanQRScreen> {
+  bool _hasScanned = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Scan Game QR Code'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: MobileScanner(
+        onDetect: (capture) {
+          if (_hasScanned) return;
+          final List<Barcode> barcodes = capture.barcodes;
+          if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
+            _hasScanned = true;
+            final code = barcodes.first.rawValue!;
+            
+            // Extract code if it's a URL
+            String extracted = code;
+            if (code.contains('code=')) {
+              extracted = code.split('code=').last.split('&').first;
+            } else if (code.contains('/game/')) {
+              extracted = code.split('/game/').last;
+            }
+            
+            Navigator.pop(context, extracted);
+          }
+        },
       ),
     );
   }

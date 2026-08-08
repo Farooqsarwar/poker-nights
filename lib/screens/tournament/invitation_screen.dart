@@ -63,6 +63,18 @@ class _InvitationScreenState extends State<InvitationScreen> {
     final total = game.players
         .where((p) => p.rsvp != null && p.rsvp!.isGoing)
         .fold<int>(0, (s, p) => s + 1 + p.rsvp!.guestCount);
+    // Categorized attendance (spec §4.4) — people and seats are both shown.
+    final members = game.players.where((p) => !p.isGuest).toList();
+    final confirmedMembers =
+        members.where((p) => p.rsvp != null && p.rsvp!.isGoing).toList();
+    final confirmedMemberCount = confirmedMembers.length;
+    final memberSeats =
+        confirmedMembers.fold<int>(0, (s, p) => s + 1 + p.rsvp!.guestCount);
+    final claimedGuestSlots = game.guestSlots.where((s) => !s.available).length;
+    final guestSlotsTotal = game.guestSlots.length;
+    final maybeCount = members.where((p) => p.rsvp == Rsvp.maybe).length;
+    final cantCount = members.where((p) => p.rsvp == Rsvp.cant).length;
+    final noResponseCount = members.where((p) => p.rsvp == null).length;
     // Private addresses are hidden until the viewer is confirmed (11-015).
     final showAddress = !settings.locationPrivate ||
         (user?.isAdmin ?? false) ||
@@ -120,6 +132,85 @@ class _InvitationScreenState extends State<InvitationScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Attendance summary (spec §4.4) — people and seats
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Attendance', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: AppSpacing.sm),
+                _AttendanceRow(label: 'Confirmed members', value: '$confirmedMemberCount people · $memberSeats seats', highlight: true),
+                _AttendanceRow(
+                  label: 'Confirmed guest slots',
+                  value: guestSlotsTotal > 0 ? '$claimedGuestSlots of $guestSlotsTotal claimed' : '0',
+                  highlight: true,
+                ),
+                _AttendanceRow(label: 'Maybe', value: '$maybeCount'),
+                _AttendanceRow(label: 'Can\u2019t come', value: '$cantCount'),
+                _AttendanceRow(label: 'No response', value: '$noResponseCount'),
+                const Divider(color: AppColors.border, height: 24),
+                _AttendanceRow(
+                  label: 'Expected attendance',
+                  value: '$memberSeats people',
+                  valueColor: AppColors.success,
+                  bold: true,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          // Event-day preparation checklist (spec §4.6) — admin only, pre-live.
+          if (user?.isAdmin == true &&
+              game.status != LiveGameStatus.running &&
+              game.status != LiveGameStatus.paused &&
+              game.status != LiveGameStatus.finaltable &&
+              game.status != LiveGameStatus.completed &&
+              game.status != LiveGameStatus.cancelled) ...[
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              borderColor: AppColors.primary.withValues(alpha: 0.2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Event-day checklist', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.primary)),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Walk through preparation in order — no need to remember the sequence.',
+                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _ChecklistRow(
+                    label: 'Open check-in',
+                    done: game.status == LiveGameStatus.checkin ||
+                        game.players.any((p) => p.checkedIn),
+                    actionLabel: 'Open',
+                    onAction: () => context.go(RoutePaths.checkIn),
+                  ),
+                  _ChecklistRow(
+                    label: 'Configure chip set',
+                    done: app.savedChipSets.isNotEmpty,
+                    actionLabel: 'Configure',
+                    onAction: () => context.go(RoutePaths.chipSets),
+                  ),
+                  _ChecklistRow(
+                    label: 'Generate seating plan',
+                    done: game.seatingConfirmed,
+                    actionLabel: 'Seating',
+                    onAction: () => context.go(RoutePaths.checkIn),
+                  ),
+                  _ChecklistRow(
+                    label: 'Start the tournament',
+                    done: game.status == LiveGameStatus.running ||
+                        game.status == LiveGameStatus.paused,
+                    actionLabel: 'Dashboard',
+                    onAction: () => context.go(RoutePaths.adminDashboard),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // My RSVP
           if (user != null) ...[
             AppCard(
@@ -661,4 +752,95 @@ void showAppLinkModal(BuildContext context, LiveGame game) {
       ),
     ),
   );
+}
+
+class _AttendanceRow extends StatelessWidget {
+  const _AttendanceRow({
+    required this.label,
+    required this.value,
+    this.highlight = false,
+    this.valueColor,
+    this.bold = false,
+  });
+
+  final String label;
+  final String value;
+  final bool highlight;
+  final Color? valueColor;
+  final bool bold;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.bodySm.copyWith(
+                color: highlight ? AppColors.foreground : AppColors.mutedForeground,
+                fontWeight: highlight ? FontWeight.w500 : null,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: AppTypography.monoXs.copyWith(
+              color: valueColor ?? (highlight ? AppColors.foreground : AppColors.mutedForeground),
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChecklistRow extends StatelessWidget {
+  const _ChecklistRow({
+    required this.label,
+    required this.done,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String label;
+  final bool done;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        children: [
+          Icon(
+            done ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 18,
+            color: done ? AppColors.success : AppColors.mutedForeground,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.bodySm.copyWith(
+                color: done ? AppColors.foreground : AppColors.mutedForeground,
+                fontWeight: done ? FontWeight.w500 : null,
+              ),
+            ),
+          ),
+          if (actionLabel != null && onAction != null && !done) ...[
+            AppButton(
+              size: AppButtonSize.sm,
+              variant: AppButtonVariant.secondary,
+              onPressed: onAction,
+              child: Text(actionLabel!),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

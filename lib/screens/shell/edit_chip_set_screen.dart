@@ -505,11 +505,11 @@ class _ChipRowState extends State<_ChipRow> {
           TextButton(
             child: const Text('Got it'),
             onPressed: () {
-              final hexName = '#${pickerColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+              final hexName = '#${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
               final inputName = nameController.text.trim();
               widget.onChanged(widget.chip.copyWith(
                 color: inputName.isEmpty ? hexName : inputName,
-                hex: pickerColor.value,
+                hex: pickerColor.toARGB32(),
               ));
               Navigator.of(context).pop();
             },

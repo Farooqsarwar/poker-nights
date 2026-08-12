@@ -34,7 +34,7 @@ class AppSelect<T> extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
         ],
         DropdownButtonFormField<T>(
-          value: value,
+          initialValue: value,
           items: items,
           onChanged: onChanged,
           isExpanded: true,

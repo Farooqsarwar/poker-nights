@@ -732,14 +732,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           TextButton(
             child: const Text('Add'),
             onPressed: () {
-              final hexName = '#${pickerColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+              final hexName = '#${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
               final inputName = nameController.text.trim();
               final val = int.tryParse(valueController.text.trim()) ?? 100;
               final qty = int.tryParse(qtyController.text.trim()) ?? 50;
               setState(() {
                 _chipSet.add(ChipColor(
                   color: inputName.isEmpty ? hexName : inputName,
-                  hex: pickerColor.value,
+                  hex: pickerColor.toARGB32(),
                   value: val,
                   quantity: qty,
                 ));

@@ -43,12 +43,10 @@ class GameSettings {
   final int koAmount;
   final bool rebuys;
   final int rebuysCloseLevel;
-
   /// Re-entry is a separate, secondary option (checklist 09-030, §12.5).
   /// A re-entering player receives the approved entry stack and is recorded
   /// separately from rebuys (12-046/12-047).
   final bool reEntry;
-
   final bool addOn;
   final bool anteEnabled;
   final int anteAfterLevel;

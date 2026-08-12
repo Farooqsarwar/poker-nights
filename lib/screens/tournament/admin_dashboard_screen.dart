@@ -891,6 +891,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final canRebuy = settings.rebuys && currentLevel <= settings.rebuysCloseLevel;
 
     return [
+      if (app.lateRegistrationOpen)
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: AppButton(
+            fullWidth: true,
+            size: AppButtonSize.md,
+            variant: AppButtonVariant.secondary,
+            onPressed: () => _showAddLatePlayerModal(context, app),
+            child: const Text('+ Add Late Player (Late Reg)'),
+          ),
+        ),
       for (final p in game.activePlayers)
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -925,6 +936,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 Wrap(
                   spacing: AppSpacing.xs,
                   runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     AppButton(
                       size: AppButtonSize.sm,
@@ -946,6 +958,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         onPressed: () => app.grantAddOn(p.id),
                         child: const Text('Add-on'),
                       ),
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: () => _confirmRemovePlayer(context, app, p),
+                      child: const Icon(Icons.delete_outline, color: AppColors.destructive, size: 16),
+                    ),
                   ],
                 ),
               ],
@@ -953,6 +971,74 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         ),
     ];
+  }
+
+  void _confirmRemovePlayer(BuildContext context, AppProvider app, Player p) {
+    showAppModal(
+      context: context,
+      title: 'Remove Player',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Are you sure you want to completely remove ${p.name} from this tournament?\n\n'
+            'This will delete their seat assignment and deduct their starting stack (${app.currentGame!.structure.startingStack} chips) and any rebuys/add-ons from the total chips in play.',
+            style: AppTypography.bodySm,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              AppButton(
+                variant: AppButtonVariant.ghost,
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AppButton(
+                variant: AppButtonVariant.danger,
+                onPressed: () {
+                  app.removePlayer(p.id);
+                  Navigator.pop(context);
+                },
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddLatePlayerModal(BuildContext context, AppProvider app) {
+    final nameCtrl = TextEditingController();
+    showAppModal(
+      context: context,
+      title: 'Add Late Player',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppTextField(
+            controller: nameCtrl,
+            label: 'Player Name',
+            hint: 'Enter name (e.g. David)',
+            autofocus: true,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppButton(
+            fullWidth: true,
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              if (name.isNotEmpty) {
+                app.addLatePlayer(name);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Add Player'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showEliminateModal(BuildContext context, AppProvider app, Player player) {
@@ -1314,7 +1400,7 @@ class _EliminatedTab extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (canRebuy && p.rebuys == 0)
+                    if (canRebuy)
                       AppButton(
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.secondary,
@@ -1339,6 +1425,47 @@ class _EliminatedTab extends StatelessWidget {
                         onPressed: () => context.read<AppProvider>().correctElimination(p.id),
                         child: const Text('Correct Result', style: TextStyle(color: AppColors.destructive)),
                       ),
+                    ),
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: () {
+                        showAppModal(
+                          context: context,
+                          title: 'Remove Player',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Are you sure you want to completely remove ${p.name} from this tournament?\n\n'
+                                'This will delete their seat assignment, result record, and deduct their starting stack and any rebuys/add-ons from the total chips in play.',
+                                style: AppTypography.bodySm,
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  AppButton(
+                                    variant: AppButtonVariant.ghost,
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  AppButton(
+                                    variant: AppButtonVariant.danger,
+                                    onPressed: () {
+                                      context.read<AppProvider>().removePlayer(p.id);
+                                      Navigator.pop(context);
+                                    },
+                                    child: const Text('Remove'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      child: const Icon(Icons.delete_outline, color: AppColors.destructive, size: 16),
                     ),
                   ],
                 ),

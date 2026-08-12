@@ -1,5 +1,5 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -662,6 +662,92 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
               ),
           ],
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton(
+              size: AppButtonSize.sm,
+              variant: AppButtonVariant.secondary,
+              onPressed: _showAddChipDialog,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add, size: 14),
+                  SizedBox(width: 4),
+                  Text('Add Chip Color'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddChipDialog() {
+    Color pickerColor = const Color(0xFFE8E4D9);
+    final nameController = TextEditingController(text: 'Custom');
+    final valueController = TextEditingController(text: '100');
+    final qtyController = TextEditingController(text: '50');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Custom Color'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ColorPicker(
+                pickerColor: pickerColor,
+                onColorChanged: (color) {
+                  pickerColor = color;
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: nameController,
+                label: 'Color Name',
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: valueController,
+                label: 'Value',
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: qtyController,
+                label: 'Quantity',
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          TextButton(
+            child: const Text('Add'),
+            onPressed: () {
+              final hexName = '#${pickerColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+              final inputName = nameController.text.trim();
+              final val = int.tryParse(valueController.text.trim()) ?? 100;
+              final qty = int.tryParse(qtyController.text.trim()) ?? 50;
+              setState(() {
+                _chipSet.add(ChipColor(
+                  color: inputName.isEmpty ? hexName : inputName,
+                  hex: pickerColor.value,
+                  value: val,
+                  quantity: qty,
+                ));
+                _chipMode = _ChipMode.exact;
+              });
+              Navigator.pop(context);
+            },
+          ),
         ],
       ),
     );

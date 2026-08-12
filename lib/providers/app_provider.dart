@@ -562,13 +562,24 @@ class AppProvider extends ChangeNotifier {
     final game = _currentGame;
     if (game == null || _user == null) return;
     _pushUndo();
+
+    final anteText = game.settings.anteEnabled 
+        ? 'Ante: L${game.settings.anteAfterLevel}+' 
+        : 'No ante';
+    final rebuyText = game.settings.rebuysCloseLevel > 0 
+        ? 'Rebuys: until L${game.settings.rebuysCloseLevel}' 
+        : 'No rebuys';
+    final addonText = game.settings.addOn 
+        ? 'Add-on: Yes' 
+        : 'No add-on';
+
     final card = ChatMessage(
       id: 'pinned-${DateTime.now().millisecondsSinceEpoch}',
       authorId: _user!.id,
       authorName: _user!.name,
-      body: '${game.settings.name} — ${game.settings.date} at '
-          '${game.settings.time} · Buy-in ${game.settings.buyIn} · '
-          'Code ${game.publicCode}',
+      body: '${game.settings.name} — ${game.settings.date} at ${game.settings.time}\n'
+          'Buy-in: ${game.settings.buyIn} · Code: ${game.publicCode}\n'
+          '$anteText · $rebuyText · $addonText',
       timestamp: DateTime.now(),
       deleted: false,
       pinned: true,
@@ -615,7 +626,7 @@ class AppProvider extends ChangeNotifier {
   /// Admin edits an already-created event's details. Records an audit entry,
   /// notifies members, and re-generates the structure when the field change
   /// would affect it (checklist §10.4). RSVP validity is surfaced in the audit.
-  void updateEventSettings(GameSettings next) {
+  void updateEventSettings(GameSettings next, {bool clearRsvps = false}) {
     final game = _currentGame;
     if (game == null || _user == null) return;
     final prev = game.settings;
@@ -669,10 +680,14 @@ class AppProvider extends ChangeNotifier {
         structure: structure,
         secondsRemaining: structure.levelDuration * 60,
         speedRecommendation: null,
+        players: clearRsvps ? game.players.map((p) => p.copyWithClearRsvp()).toList() : game.players,
       );
       edits.add('structure regenerated');
     } else {
-      _currentGame = game.copyWith(settings: s);
+      _currentGame = game.copyWith(
+        settings: s,
+        players: clearRsvps ? game.players.map((p) => p.copyWithClearRsvp()).toList() : game.players,
+      );
     }
 
     _syncGroupGame();
@@ -768,7 +783,7 @@ class AppProvider extends ChangeNotifier {
   void _evaluateSpeedRecommendation() {
     final game = _currentGame;
     if (game == null || game.status != LiveGameStatus.running) return;
-    final total = game.players.where((p) => !p.isGuest).length;
+    final total = game.players.length;
     if (total < 2) return;
     final levels = game.structure.levels.length;
     final progress = (game.currentLevel - 1) / levels;
@@ -975,6 +990,7 @@ class AppProvider extends ChangeNotifier {
           .toList(),
       totalChipsInPlay: _currentGame!.totalChipsInPlay + entryStack,
     );
+    _updatePrizePool();
   }
 
   void grantAddOn(String playerId) {
@@ -1003,6 +1019,17 @@ class AppProvider extends ChangeNotifier {
     addAnnouncement('Last action undone.', false);
   }
 
+  void requestCheckIn(String playerId) {
+    _currentGame = _currentGame!.copyWith(
+      players: _currentGame!.players
+          .map((p) => p.id == playerId
+              ? p.copyWith(checkedIn: true, confirmed: false)
+              : p)
+          .toList(),
+    );
+    notifyListeners();
+  }
+
   void checkInPlayer(String playerId) {
     _pushUndo();
     _currentGame = _currentGame!.copyWith(
@@ -1012,6 +1039,17 @@ class AppProvider extends ChangeNotifier {
               : p)
           .toList(),
     );
+  }
+
+  void cancelCheckIn(String playerId) {
+    _currentGame = _currentGame!.copyWith(
+      players: _currentGame!.players
+          .map((p) => p.id == playerId
+              ? p.copyWith(checkedIn: false, confirmed: false)
+              : p)
+          .toList(),
+    );
+    notifyListeners();
   }
 
   void confirmGuest(String guestId) {
@@ -1449,6 +1487,37 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Completely removes a player from the active tournament.
+  /// Deducts starting stack, rebuys, and add-ons from total chips.
+  /// Recalculates prize pool and distribution.
+  void removePlayer(String playerId) {
+    if (_currentGame == null) return;
+    _pushUndo();
+    final game = _currentGame!;
+    final p = game.players.where((pl) => pl.id == playerId).firstOrNull;
+    if (p == null) return;
+
+    int chipsToRemove = game.structure.startingStack;
+    if (p.rebuys > 0) {
+      chipsToRemove += p.rebuys * game.structure.startingStack;
+    }
+    if (p.hasAddOn) {
+      chipsToRemove += game.structure.startingStack;
+    }
+
+    final newPlayers = game.players.where((pl) => pl.id != playerId).toList();
+
+    _currentGame = game.copyWith(
+      players: newPlayers,
+      totalChipsInPlay: (game.totalChipsInPlay - chipsToRemove).clamp(0, 99999999),
+    );
+
+    _updatePrizePool();
+    _syncGroupGame();
+    addAnnouncement('${p.name} has been removed from the tournament.', true);
+    notifyListeners();
+  }
+
   /// Finds the table with the fewest active players and its first free seat.
   ({int table, int seat}) _findAvailableSeat() {
     final game = _currentGame;
@@ -1507,7 +1576,7 @@ class AppProvider extends ChangeNotifier {
     final grossEligible =
         confirmedCount * s.buyIn +
         totalRebuys * s.effectiveRebuyCost +
-        totalReEntries * s.effectiveRebuyCost +
+        totalReEntries * s.buyIn +
         totalAddOns * (s.addOn ? s.effectiveAddOnCost : 0);
 
     // Delegate the organizer-cut and prize-split maths to the shared helper in

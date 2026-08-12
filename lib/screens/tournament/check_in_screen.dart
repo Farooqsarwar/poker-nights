@@ -61,7 +61,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final players = game.players;
     final checkedIn = players.where((p) => p.checkedIn && p.confirmed).toList();
     final notCheckedIn = players.where((p) => !p.checkedIn && !p.isGuest).toList();
-    final pendingGuests = players.where((p) => p.isGuest && !p.confirmed && p.name.isNotEmpty).toList();
+    final pendingRequests = players.where((p) => !p.confirmed && (p.checkedIn || (p.isGuest && p.name.isNotEmpty))).toList();
     final confirmedGuests = players.where((p) => p.isGuest && p.confirmed).toList();
     final canStart = checkedIn.length >= 2;
     final seatedYet = checkedIn.any((p) => p.table > 0 && p.seat > 0);
@@ -94,7 +94,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: _SummaryCard(label: 'Pending guests', value: '${pendingGuests.length}', color: AppColors.warning),
+                child: _SummaryCard(label: 'Pending requests', value: '${pendingRequests.length}', color: AppColors.warning),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -103,31 +103,31 @@ class _CheckInScreenState extends State<CheckInScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          if (pendingGuests.isNotEmpty) ...[
+          if (pendingRequests.isNotEmpty) ...[
             AppAlertBanner(
               type: AppAlertType.warning,
-              message: '${pendingGuests.length} guest${pendingGuests.length > 1 ? 's' : ''} waiting for confirmation',
+              message: '${pendingRequests.length} player${pendingRequests.length > 1 ? 's' : ''} waiting for confirmation',
             ),
             const SizedBox(height: AppSpacing.lg),
           ],
-          // Pending guest requests
-          if (pendingGuests.isNotEmpty) ...[
+          // Pending requests
+          if (pendingRequests.isNotEmpty) ...[
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Pending guest requests',
+                    'Pending check-in requests',
                     style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.warning),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  for (final g in pendingGuests) ...[
+                  for (final g in pendingRequests) ...[
                     _PendingGuestRow(
                       guest: g,
-                      inviter: players.where((p) => p.id == g.inviterId).firstOrNull,
-                      onConfirm: () => app.confirmGuest(g.id),
-                      onReject: () => app.rejectGuest(g.id),
+                      inviter: g.isGuest ? players.where((p) => p.id == g.inviterId).firstOrNull : null,
+                      onConfirm: () => g.isGuest ? app.confirmGuest(g.id) : app.checkInPlayer(g.id),
+                      onReject: () => g.isGuest ? app.rejectGuest(g.id) : app.cancelCheckIn(g.id),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                   ],
@@ -417,6 +417,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 child: AppButton(
                   onPressed: canStart && seatingConfirmed
                       ? () {
+                          app.updateEventSettings(game.settings.copyWith(players: checkedIn.length));
                           app.updateGameStatus(LiveGameStatus.running);
                           context.go(RoutePaths.adminDashboard);
                         }

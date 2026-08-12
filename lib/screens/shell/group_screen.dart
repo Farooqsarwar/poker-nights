@@ -633,46 +633,50 @@ class _ChatBubble extends StatelessWidget {
     if (message.pinned) {
       return Padding(
         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.primary.withValues(alpha: 0.12),
-                AppColors.secondary.withValues(alpha: 0.06),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.push_pin, size: 14, color: AppColors.primary),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    'Pinned event',
-                    style: AppTypography.monoXs.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+        child: InkWell(
+          onTap: () => context.go(RoutePaths.invitation),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.12),
+                  AppColors.secondary.withValues(alpha: 0.06),
                 ],
               ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                message.body,
-                style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Posted by ${message.authorName} · ${Formatters.relativeTime(message.timestamp)}',
-                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, fontSize: 10),
-              ),
-            ],
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.push_pin, size: 14, color: AppColors.primary),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      'Pinned event',
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  message.body,
+                  style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Posted by ${message.authorName} · ${Formatters.relativeTime(message.timestamp)}',
+                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, fontSize: 10),
+                ),
+              ],
+            ),
           ),
         ),
       );

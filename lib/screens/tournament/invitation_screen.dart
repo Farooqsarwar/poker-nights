@@ -10,8 +10,8 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/game.dart';
 import '../../models/live_game.dart';
+import '../../models/user.dart';
 import '../../providers/app_provider.dart';
-import '../../utils/formatters.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badge.dart';
@@ -86,6 +86,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AppBackButton(onTap: () => context.go(RoutePaths.group)),
               const SizedBox(width: AppSpacing.md),
@@ -103,6 +104,14 @@ class _InvitationScreenState extends State<InvitationScreen> {
                   ],
                 ),
               ),
+              if (user?.isAdmin == true) ...[
+                const SizedBox(width: AppSpacing.sm),
+                IconButton(
+                  onPressed: () => _openEditModal(context, app, game),
+                  icon: const Icon(Icons.edit_outlined, color: AppColors.mutedForeground),
+                  tooltip: 'Edit details',
+                ),
+              ],
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -131,6 +140,9 @@ class _InvitationScreenState extends State<InvitationScreen> {
               ],
             ),
           ),
+          const SizedBox(height: AppSpacing.lg),
+          _ContextualMainButton(game: game, user: user, myPlayer: myPlayer),
+
           const SizedBox(height: AppSpacing.lg),
           // Attendance summary (spec §4.4) — people and seats
           AppCard(
@@ -212,61 +224,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
             const SizedBox(height: AppSpacing.lg),
           ],
           // My RSVP
-          if (user != null) ...[
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Your RSVP', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: AppSpacing.md),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
-                    children: [
-                      for (final opt in const [
-                        Rsvp.going,
-                        Rsvp.maybe,
-                        Rsvp.cant,
-                        Rsvp.goingPlus1,
-                        Rsvp.goingPlus2,
-                        Rsvp.goingPlus3,
-                        Rsvp.goingPlus4,
-                      ])
-                        _RsvpOption(
-                          label: opt.label,
-                          active: myPlayer?.rsvp == opt,
-                          enabled: !game.settings.rsvpCutoffPassed,
-                          onTap: () => app.setRSVP(opt),
-                        ),
-                    ],
-                  ),
-                  if (game.settings.rsvpCutoffPassed) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        const Icon(Icons.lock_outline, size: AppFontSizes.sm, color: AppColors.warning),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Text(
-                            'RSVP changes closed — one hour before the game. Contact the organiser for changes.',
-                            style: AppTypography.bodyXs.copyWith(color: AppColors.warning),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ] else if (myPlayer?.rsvp != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'RSVP deadline: ${_deadlineLabel(settings)}',
-                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-          ],
+
           // Share codes
           AppCard(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -381,55 +339,10 @@ class _InvitationScreenState extends State<InvitationScreen> {
             const SizedBox(height: AppSpacing.lg),
           ],
           // Admin actions
-          if (user?.isAdmin == true) ...[
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              borderColor: AppColors.primary.withValues(alpha: 0.2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Admin actions', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.primary)),
-                  const SizedBox(height: AppSpacing.sm),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
-                    children: [
-                      AppButton(
-                        size: AppButtonSize.sm,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => context.go(RoutePaths.checkIn),
-                        child: const Text('Open check-in'),
-                      ),
-                      AppButton(
-                        size: AppButtonSize.sm,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => _openEditModal(context, app, game),
-                        child: const Text('Edit details'),
-                      ),
-                      AppButton(
-                        size: AppButtonSize.sm,
-                        onPressed: () => context.go(RoutePaths.adminDashboard),
-                        child: const Text('Dashboard'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-          ],
+
         ],
       ),
     );
-  }
-
-  String _deadlineLabel(GameSettings settings) {
-    final parts = settings.date.split('-');
-    if (parts.length != 3) return '1 hour before game';
-    final dt = DateTime.tryParse('${settings.date}T${settings.time}');
-    if (dt == null) return '1 hour before game';
-    final deadline = dt.subtract(const Duration(hours: 1));
-    return Formatters.shortDateTime(deadline);
   }
 }
 
@@ -529,8 +442,8 @@ void _openEditModal(BuildContext context, AppProvider app, LiveGame game) {
     maxWidth: 520,
     child: _EditEventForm(
       settings: game.settings,
-      onSave: (next) {
-        app.updateEventSettings(next);
+      onSave: (next, {bool clearRsvps = false}) {
+        app.updateEventSettings(next, clearRsvps: clearRsvps);
         Navigator.of(context).pop();
       },
     ),
@@ -543,7 +456,7 @@ class _EditEventForm extends StatefulWidget {
   const _EditEventForm({required this.settings, required this.onSave});
 
   final GameSettings settings;
-  final ValueChanged<GameSettings> onSave;
+  final void Function(GameSettings, {bool clearRsvps}) onSave;
 
   @override
   State<_EditEventForm> createState() => _EditEventFormState();
@@ -581,15 +494,50 @@ class _EditEventFormState extends State<_EditEventForm> {
 
   void _save() {
     final s = widget.settings;
-    widget.onSave(s.copyWith(
+    final newDate = _date.text.trim().isEmpty ? s.date : _date.text.trim();
+    final newTime = _time.text.trim().isEmpty ? s.time : _time.text.trim();
+    final newS = s.copyWith(
       name: _name.text.trim().isEmpty ? s.name : _name.text.trim(),
-      date: _date.text.trim().isEmpty ? s.date : _date.text.trim(),
-      time: _time.text.trim().isEmpty ? s.time : _time.text.trim(),
+      date: newDate,
+      time: newTime,
       location: _location.text.trim(),
       buyIn: num.tryParse(_buyIn.text)?.toInt() ?? s.buyIn,
       players: num.tryParse(_players.text)?.toInt() ?? s.players,
       locationPrivate: _locationPrivate,
-    ));
+    );
+
+    if (s.date != newDate || s.time != newTime) {
+      showAppModal(
+        context: context,
+        title: 'Date or Time Changed',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('You have changed the scheduled date or time. Would you like to clear existing RSVPs so players must confirm they can still make it?'),
+            const SizedBox(height: AppSpacing.lg),
+            AppButton(
+              variant: AppButtonVariant.destructive,
+              onPressed: () {
+                Navigator.pop(context);
+                widget.onSave(newS, clearRsvps: true);
+              },
+              child: const Text('Clear RSVPs'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              variant: AppButtonVariant.secondary,
+              onPressed: () {
+                Navigator.pop(context);
+                widget.onSave(newS, clearRsvps: false);
+              },
+              child: const Text('Keep RSVPs'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      widget.onSave(newS);
+    }
   }
 
   @override
@@ -842,5 +790,200 @@ class _ChecklistRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _ContextualMainButton extends StatelessWidget {
+  const _ContextualMainButton({required this.game, required this.user, required this.myPlayer});
+
+  final LiveGame game;
+  final AppUser? user;
+  final Player? myPlayer;
+
+  void _showRsvpModal(BuildContext context, AppProvider app) {
+    // If cutoff passed, we don't allow RSVP changes, only check-in.
+    // We check the status to ensure it's still in the invitation phase.
+    final cutoffPassed = game.settings.rsvpCutoffPassed;
+    if (cutoffPassed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('RSVP window has closed. Please check in at the venue.'),
+          backgroundColor: AppColors.mutedForeground,
+        ),
+      );
+      return;
+    }
+
+    showAppModal(
+      context: context,
+      title: 'Update your RSVP',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final opt in const [Rsvp.going, Rsvp.maybe, Rsvp.cant, Rsvp.goingPlus1, Rsvp.goingPlus2, Rsvp.goingPlus3, Rsvp.goingPlus4])
+                _RsvpOption(
+                  label: opt.label,
+                  active: myPlayer?.rsvp == opt,
+                  enabled: true,
+                  onTap: () {
+                    app.setRSVP(opt);
+                    Navigator.pop(context);
+                  },
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (user == null) return const SizedBox.shrink();
+    final app = context.read<AppProvider>();
+    final isAdmin = user!.isAdmin;
+
+    if (isAdmin) {
+      switch (game.status) {
+        case LiveGameStatus.draft:
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            onPressed: () => _openEditModal(context, app, game),
+            child: const Text('Edit Event'),
+          );
+        case LiveGameStatus.published:
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            onPressed: () => context.go(RoutePaths.checkIn),
+            child: const Text('Review RSVPs'),
+          );
+        case LiveGameStatus.checkin:
+          final checkedInCount = game.players.where((p) => p.checkedIn && p.confirmed).length;
+          final seatingConfirmed = game.seatingConfirmed;
+          if (checkedInCount >= 2 && seatingConfirmed) {
+            return AppButton(
+              fullWidth: true,
+              size: AppButtonSize.xl,
+              onPressed: () {
+                app.updateEventSettings(game.settings.copyWith(players: checkedInCount));
+                app.updateGameStatus(LiveGameStatus.running);
+                context.go(RoutePaths.adminDashboard);
+              },
+              child: const Text('Start Tournament'),
+            );
+          } else {
+            return AppButton(
+              fullWidth: true,
+              size: AppButtonSize.xl,
+              onPressed: () => context.go(RoutePaths.checkIn),
+              child: const Text('Open Check-in'),
+            );
+          }
+        case LiveGameStatus.running:
+        case LiveGameStatus.paused:
+        case LiveGameStatus.finaltable:
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            onPressed: () => context.go(RoutePaths.adminDashboard),
+            child: const Text('Manage Tournament'),
+          );
+        case LiveGameStatus.rebuypause:
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            onPressed: () => context.go(RoutePaths.rebuySettlement),
+            child: const Text('Complete Rebuy & Add-on Break'),
+          );
+        case LiveGameStatus.completed:
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            onPressed: () => context.go(RoutePaths.resultPodium),
+            child: const Text('View Results'),
+          );
+        case LiveGameStatus.cancelled:
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            onPressed: null,
+            child: const Text('Tournament Cancelled'),
+          );
+      }
+    } else {
+      // Member flow
+      if (game.status == LiveGameStatus.completed) {
+        return AppButton(
+          fullWidth: true,
+          size: AppButtonSize.xl,
+          onPressed: () => context.go(RoutePaths.resultPodium),
+          child: const Text('View Results'),
+        );
+      }
+      
+      final isRunning = game.status == LiveGameStatus.running || game.status == LiveGameStatus.paused || game.status == LiveGameStatus.finaltable || game.status == LiveGameStatus.rebuypause;
+      if (isRunning) {
+        return AppButton(
+          fullWidth: true,
+          size: AppButtonSize.xl,
+          onPressed: () => context.go(RoutePaths.playerLive),
+          child: const Text('Open Live Tournament'),
+        );
+      }
+
+      final p = myPlayer;
+      if (p != null) {
+        if (p.checkedIn && p.confirmed) {
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            variant: AppButtonVariant.secondary,
+            onPressed: () => showAppModal(
+              context: context,
+              title: 'Your Seat Assignment',
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Center(
+                  child: Text(
+                    'Table ${p.table} · Seat ${p.seat}',
+                    style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+            child: const Text('View My Seat'),
+          );
+        } else if (p.checkedIn && !p.confirmed) {
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            variant: AppButtonVariant.secondary,
+            onPressed: null,
+            child: const Text('Waiting for Confirmation'),
+          );
+        } else if (game.status == LiveGameStatus.checkin) {
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            onPressed: () => app.requestCheckIn(p.id),
+            child: const Text('Check In'),
+          );
+        } else {
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            onPressed: () => _showRsvpModal(context, app),
+            child: Text(p.rsvp != null ? 'Update RSVP' : 'Respond to Invitation'),
+          );
+        }
+      }
+    }
+    return const SizedBox.shrink();
   }
 }

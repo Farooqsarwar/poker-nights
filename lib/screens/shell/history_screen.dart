@@ -15,6 +15,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_tabs.dart';
 import '../../widgets/medal_icon.dart';
+import '../../responsive/responsive.dart';
 
 /// History + leaderboard mirroring the web `HistoryPage`.
 class HistoryScreen extends StatefulWidget {
@@ -37,6 +38,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     final myGames = pastGames.where((g) => g.players.any((p) => p.id == userId)).toList();
     final myStats = _computeMyStats(myGames, userId);
+    final isMobile = AppBreakpoints.deviceOf(context).isMobile;
 
     return AppPage(
       maxWidth: 760,
@@ -52,12 +54,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
           const SizedBox(height: AppSpacing.xl),
           // Personal stats
           GridView.count(
-            crossAxisCount: 6,
+            crossAxisCount: isMobile ? 3 : 6,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: AppSpacing.sm,
             crossAxisSpacing: AppSpacing.sm,
-            childAspectRatio: 1.1,
+            childAspectRatio: isMobile ? 1.4 : 1.1,
             children: [
               _MiniStat(label: 'Played', value: '${myStats.played}'),
               _MiniStat(label: 'Wins', value: '${myStats.wins}'),
@@ -308,7 +310,7 @@ class _MiniStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.xs),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -316,11 +318,14 @@ class _MiniStat extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              style: AppTypography.mono(size: AppFontSizes.lg, weight: FontWeight.w700, color: color ?? AppColors.foreground),
+              style: AppTypography.mono(size: AppFontSizes.md, weight: FontWeight.w700, color: color ?? AppColors.foreground),
             ),
           ),
           const SizedBox(height: 2),
-          Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          ),
         ],
       ),
     );

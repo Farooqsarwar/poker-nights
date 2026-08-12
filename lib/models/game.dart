@@ -124,6 +124,28 @@ class Player {
       active: active ?? this.active,
     );
   }
+
+  Player copyWithClearRsvp() {
+    return Player(
+      id: id,
+      name: name,
+      isGuest: isGuest,
+      inviterId: inviterId,
+      guestSlot: guestSlot,
+      rsvp: null,
+      checkedIn: checkedIn,
+      confirmed: confirmed,
+      eliminated: eliminated,
+      eliminationPos: eliminationPos,
+      rebuys: rebuys,
+      reEntries: reEntries,
+      hasAddOn: hasAddOn,
+      knockouts: knockouts,
+      table: table,
+      seat: seat,
+      active: active,
+    );
+  }
 }
 
 /// A chat message inside a group or game.

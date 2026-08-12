@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -36,19 +37,6 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
 
   String? _nameError;
   String? _dupError;
-
-  final _predefinedColors = <String, int>{
-    'White': 0xFFE8E4D9,
-    'Red': 0xFFC0392B,
-    'Blue': 0xFF2980B9,
-    'Black': 0xFF2C2C2C,
-    'Green': 0xFF27AE60,
-    'Purple': 0xFF8E44AD,
-    'Yellow': 0xFFF1C40F,
-    'Orange': 0xFFE67E22,
-    'Pink': 0xFFFD79A8,
-    'Brown': 0xFF834C24,
-  };
 
   @override
   void initState() {
@@ -309,11 +297,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
               index: i,
               showQuantity: !(_mode == _EditorMode.quick && _quickKind == _QuickKind.numbered),
               showDragHandle: false,
-              takenColors: _predefinedColors.keys
-                  .where((c) => _chips.any((e) => e != _chips[i] && e.color == c))
-                  .toSet(),
               duplicateValue: _duplicateValues.contains(_chips[i].value),
-              colorMap: _predefinedColors,
               onChanged: (c) => _onChipChanged(i, c),
               onDelete: () => _removeChip(i),
             ),
@@ -347,11 +331,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
           index: i,
           showQuantity: false,
           showDragHandle: true,
-          takenColors: _predefinedColors.keys
-              .where((c) => _chips.any((e) => e != _chips[i] && e.color == c))
-              .toSet(),
           duplicateValue: _duplicateValues.contains(_chips[i].value),
-          colorMap: _predefinedColors,
           onChanged: (c) => _onChipChanged(i, c),
           onDelete: () => _removeChip(i),
         ),
@@ -423,9 +403,7 @@ class _ChipRow extends StatefulWidget {
     required this.index,
     required this.showQuantity,
     required this.showDragHandle,
-    required this.takenColors,
     required this.duplicateValue,
-    required this.colorMap,
     required this.onChanged,
     required this.onDelete,
   });
@@ -434,9 +412,7 @@ class _ChipRow extends StatefulWidget {
   final int index;
   final bool showQuantity;
   final bool showDragHandle;
-  final Set<String> takenColors;
   final bool duplicateValue;
-  final Map<String, int> colorMap;
   final ValueChanged<ChipColor> onChanged;
   final VoidCallback onDelete;
 
@@ -495,6 +471,54 @@ class _ChipRowState extends State<_ChipRow> {
     widget.onChanged(widget.chip.copyWith(quantity: valid ? q : 0));
   }
 
+  void _pickColor() {
+    Color pickerColor = Color(widget.chip.hex);
+    final nameController = TextEditingController(text: widget.chip.color);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pick a color'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ColorPicker(
+                pickerColor: pickerColor,
+                onColorChanged: (color) {
+                  pickerColor = color;
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: nameController,
+                label: 'Color Name',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          TextButton(
+            child: const Text('Got it'),
+            onPressed: () {
+              final hexName = '#${pickerColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+              final inputName = nameController.text.trim();
+              widget.onChanged(widget.chip.copyWith(
+                color: inputName.isEmpty ? hexName : inputName,
+                hex: pickerColor.value,
+              ));
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final chip = widget.chip;
@@ -523,44 +547,34 @@ class _ChipRowState extends State<_ChipRow> {
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: chip.color,
-                isExpanded: true,
-                dropdownColor: AppColors.card,
-                items: [
-                  for (final entry in widget.colorMap.entries)
-                    DropdownMenuItem(
-                      value: entry.key,
-                      enabled: !widget.takenColors.contains(entry.key),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 16,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: Color(entry.value),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              entry.key,
-                              style: AppTypography.bodySm,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (widget.takenColors.contains(entry.key)) const Icon(Icons.check, size: 14, color: AppColors.mutedForeground),
-                        ],
+            child: GestureDetector(
+              onTap: _pickColor,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: Color(chip.hex),
+                        shape: BoxShape.circle,
                       ),
                     ),
-                ],
-                onChanged: (val) {
-                  if (val != null) {
-                    widget.onChanged(chip.copyWith(color: val, hex: widget.colorMap[val]!));
-                  }
-                },
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        chip.color,
+                        style: AppTypography.bodySm,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

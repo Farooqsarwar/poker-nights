@@ -6,7 +6,7 @@ import '../app/typography.dart';
 import 'interactive_scale.dart';
 
 /// Button mirroring the web `Btn` component.
-enum AppButtonVariant { primary, secondary, danger, ghost, gold, light }
+enum AppButtonVariant { primary, secondary, danger, ghost, gold, light, destructive }
 
 enum AppButtonSize { sm, md, lg, xl }
 
@@ -125,6 +125,11 @@ class AppButton extends StatelessWidget {
           background: Colors.transparent,
           foreground: AppColors.destructive,
           border: Border.all(color: AppColors.destructive.withValues(alpha: 0.3)),
+        );
+      case AppButtonVariant.destructive:
+        return const _BtnColors(
+          background: AppColors.destructive,
+          foreground: AppColors.destructiveForeground,
         );
       case AppButtonVariant.ghost:
         return const _BtnColors(

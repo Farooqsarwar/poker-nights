@@ -83,6 +83,7 @@ class PlayerLiveScreen extends StatelessWidget {
         children: [
           // Header
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
@@ -98,22 +99,20 @@ class PlayerLiveScreen extends StatelessWidget {
                           decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
                         ),
                         const SizedBox(width: AppSpacing.sm),
-                        Text('Live', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                        Text(game.status.label, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
                       ],
                     ),
                   ],
                 ),
               ),
+              IconButton(
+                onPressed: () => ChatSheet.show(context, game.id),
+                icon: const Icon(Icons.chat_bubble_outline, color: AppColors.mutedForeground),
+                tooltip: 'Chat',
+              ),
               Wrap(
                 spacing: AppSpacing.sm,
                 children: [
-                  if (app.user != null)
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: () => ChatSheet.show(context, game.id),
-                      child: const AppIconLabel(label: 'Chat', icon: Icons.chat_bubble_outline),
-                    ),
                   AppButton(
                     size: AppButtonSize.sm,
                     variant: AppButtonVariant.ghost,
@@ -380,6 +379,33 @@ class PlayerLiveScreen extends StatelessWidget {
             const AppAlertBanner(
               type: AppAlertType.info,
               message: 'Rebuy period has ended. Add-ons are available. Wait for the host to start the next level.',
+            ),
+          ],
+          // Guest account prompt
+          if (game.status == LiveGameStatus.completed && myPlayer != null && myPlayer.isGuest) ...[
+            const SizedBox(height: AppSpacing.md),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              borderColor: AppColors.primary.withValues(alpha: 0.5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Join the Group', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Create an account to track your stats and get invited to future games directly.',
+                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppButton(
+                    onPressed: () {
+                      app.logout();
+                      context.go(RoutePaths.landing);
+                    },
+                    child: const Text('Create Account'),
+                  ),
+                ],
+              ),
             ),
           ],
           const SizedBox(height: AppSpacing.xxl),

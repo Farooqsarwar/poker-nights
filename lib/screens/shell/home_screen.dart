@@ -537,16 +537,18 @@ class _GameRow extends StatelessWidget {
       onTap: onOpen,
       padding: EdgeInsets.zero,
       glow: game.status == LiveGameStatus.running,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
               width: 5,
-              decoration: BoxDecoration(
-                color: game.status == LiveGameStatus.running ? AppColors.success : AppColors.primary.withValues(alpha: 0.5),
-              ),
+              color: game.status == LiveGameStatus.running ? AppColors.success : AppColors.primary.withValues(alpha: 0.5),
             ),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.lg),
@@ -630,20 +632,17 @@ class _GameRow extends StatelessWidget {
                 ),
               ),
             ),
-            Align(
-              alignment: Alignment.center,
-              child: Padding(
-                padding: const EdgeInsets.only(right: AppSpacing.lg),
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: AppColors.secondary,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.mutedForeground),
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.lg),
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.secondary,
+                  shape: BoxShape.circle,
                 ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.mutedForeground),
               ),
             ),
           ],

@@ -26,14 +26,22 @@ class AppIconLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (icon != null) ...[
           Icon(icon, size: iconSize, color: color),
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
         ],
-        Text(label, style: textStyle),
+        Flexible(
+          child: Text(
+            label,
+            style: textStyle,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
         if (trailing != null) ...[
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
           Icon(trailing, size: iconSize, color: color),
         ],
       ],

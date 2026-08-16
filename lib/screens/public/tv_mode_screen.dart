@@ -202,7 +202,7 @@ class _TVLayout extends StatelessWidget {
     }
 
     return Scaffold(
-      backgroundColor: TournamentDisplayBlock.pureBlack,
+      backgroundColor: AppColors.background,
       body: LayoutBuilder(
         builder: (context, constraints) {
           if (constraints.maxWidth >= 900) {
@@ -417,7 +417,7 @@ class _LeaderboardPanel extends StatelessWidget {
                     style: TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 12,
-                      color: p.active ? Colors.white : TournamentDisplayBlock.textGrey,
+                      color: p.active ? Colors.white : AppColors.mutedForeground,
                     ),
                   ),
                 ),
@@ -427,7 +427,7 @@ class _LeaderboardPanel extends StatelessWidget {
                   style: const TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 11,
-                    color: TournamentDisplayBlock.textGrey,
+                    color: AppColors.mutedForeground,
                   ),
                 ),
               ],
@@ -487,7 +487,7 @@ class _PayoutsPanel extends StatelessWidget {
             style: const TextStyle(
               fontFamily: 'monospace',
               fontSize: 12,
-              color: TournamentDisplayBlock.textGrey,
+              color: AppColors.mutedForeground,
             ),
           ),
         ],
@@ -559,7 +559,7 @@ class _UpcomingPanel extends StatelessWidget {
                       style: const TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 11,
-                        color: TournamentDisplayBlock.textGrey,
+                        color: AppColors.mutedForeground,
                       ),
                     ),
                   ],

@@ -72,9 +72,9 @@ class MockData {
         date: '2026-08-07',
         time: '20:00',
         location: "Daniel's Place",
-        players: 8,
+        players: 18,
         durationHours: 3.5,
-        buyIn: 15,
+        buyIn: 25,
         koEnabled: false,
         koAmount: 0,
         rebuys: true,
@@ -89,9 +89,9 @@ class MockData {
 
   static TournamentStructure get demoStructure => TournamentEngine.generate(
         const TournamentParams(
-          players: 8,
+          players: 18,
           durationHours: 3.5,
-          buyIn: 15,
+          buyIn: 25,
           chipSet: defaultChipSet,
           rebuys: true,
           rebuysCloseLevel: 6,
@@ -153,12 +153,12 @@ class MockData {
         groupId: 'grp1',
         settings: demoSettings,
         structure: demoStructure,
-        status: LiveGameStatus.checkin,
+        status: LiveGameStatus.running,
         publicCode: 'FP2608',
         tvCode: 'TV-FP',
-        currentLevel: 1,
-        timerRunning: false,
-        secondsRemaining: 15 * 60,
+        currentLevel: 7,
+        timerRunning: true,
+        secondsRemaining: 10 * 60 + 55,  // 10:55 — matches reference image
         players: demoPlayers,
         chat: [
           ChatMessage(

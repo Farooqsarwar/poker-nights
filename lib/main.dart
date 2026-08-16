@@ -31,10 +31,17 @@ class PokerNightApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
     return MaterialApp.router(
       title: 'Poker Night',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: switch (app.themePreference) {
+        'light' => ThemeMode.light,
+        'system' => ThemeMode.system,
+        _ => ThemeMode.dark,
+      },
       routerConfig: appRouter,
       // Exposes responsive_framework breakpoints to every screen via
       // ResponsiveBreakpoints.of(context), matching the app's AppBreakpoints.

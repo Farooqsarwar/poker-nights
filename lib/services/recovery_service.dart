@@ -46,22 +46,34 @@ class RecoveryService {
   static const _docId = 'active_game';
 
   static Future<void> saveGame(LiveGame game) async {
-    final data = _liveGameToMap(game);
-    data['lastSavedAt'] = DateTime.now().toIso8601String();
-    await _db.collection(_collection).doc(_docId).set(data);
+    try {
+      final data = _liveGameToMap(game);
+      data['lastSavedAt'] = DateTime.now().toIso8601String();
+      await _db.collection(_collection).doc(_docId).set(data);
+    } catch (e) {
+      debugPrint('RecoveryService: could not persist active game: $e');
+    }
   }
 
   // ── Cash session (active, admin device) ────────────────────────────────────
   static const _cashDocId = 'active_cash';
 
   static Future<void> saveCashSession(CashSession session) async {
-    final data = _cashSessionToMap(session);
-    data['lastSavedAt'] = DateTime.now().toIso8601String();
-    await _db.collection(_collection).doc(_cashDocId).set(data);
+    try {
+      final data = _cashSessionToMap(session);
+      data['lastSavedAt'] = DateTime.now().toIso8601String();
+      await _db.collection(_collection).doc(_cashDocId).set(data);
+    } catch (e) {
+      debugPrint('RecoveryService: could not persist cash session: $e');
+    }
   }
 
   static Future<void> clearCashSession() async {
-    await _db.collection(_collection).doc(_cashDocId).delete();
+    try {
+      await _db.collection(_collection).doc(_cashDocId).delete();
+    } catch (e) {
+      debugPrint('RecoveryService: could not clear cash session: $e');
+    }
   }
 
   static Future<CashSession?> loadCashSession() async {
@@ -79,11 +91,19 @@ class RecoveryService {
   static const _guestDocId = 'guest_session';
 
   static Future<void> saveGuestSession(GuestSession session) async {
-    await _db.collection(_collection).doc(_guestDocId).set(session.toMap());
+    try {
+      await _db.collection(_collection).doc(_guestDocId).set(session.toMap());
+    } catch (e) {
+      debugPrint('RecoveryService: could not persist guest session: $e');
+    }
   }
 
   static Future<void> clearGuestSession() async {
-    await _db.collection(_collection).doc(_guestDocId).delete();
+    try {
+      await _db.collection(_collection).doc(_guestDocId).delete();
+    } catch (e) {
+      debugPrint('RecoveryService: could not clear guest session: $e');
+    }
   }
 
   static Future<GuestSession?> loadGuestSession() async {
@@ -98,7 +118,11 @@ class RecoveryService {
   }
 
   static Future<void> clearGame() async {
-    await _db.collection(_collection).doc(_docId).delete();
+    try {
+      await _db.collection(_collection).doc(_docId).delete();
+    } catch (e) {
+      debugPrint('RecoveryService: could not clear active game: $e');
+    }
   }
 
   static Future<LiveGame?> loadGame() async {
@@ -203,6 +227,7 @@ class RecoveryService {
       'rebuysCloseLevel': settings.rebuysCloseLevel,
       'reEntry': settings.reEntry,
       'addOn': settings.addOn,
+      'addOnCloseLevel': settings.addOnCloseLevel,
       'anteEnabled': settings.anteEnabled,
       'anteAfterLevel': settings.anteAfterLevel,
       'anteStyle': settings.anteStyle.name,
@@ -233,6 +258,7 @@ class RecoveryService {
       rebuysCloseLevel: map['rebuysCloseLevel'] ?? 0,
       reEntry: map['reEntry'] ?? false,
       addOn: map['addOn'] ?? false,
+      addOnCloseLevel: map['addOnCloseLevel'] ?? 6,
       anteEnabled: map['anteEnabled'] ?? false,
       anteAfterLevel: map['anteAfterLevel'] ?? 0,
       anteStyle: AnteStyle.values.asNameMap()[map['anteStyle']] ?? AnteStyle.bigBlind,

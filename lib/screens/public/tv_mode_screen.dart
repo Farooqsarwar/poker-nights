@@ -1,20 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
-import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
-import '../../utils/formatters.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_timer.dart';
 import '../../widgets/backgrounds.dart';
 import '../../widgets/medal_icon.dart';
+import '../../widgets/tournament_display_block.dart';
+import '../../utils/formatters.dart';
 
 /// Full-screen TV display mirroring the web `TVModePage`.
 class TVModeScreen extends StatefulWidget {
@@ -192,655 +192,41 @@ class _TVLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final level = game.currentLevelData;
-    final next = game.nextLevelData;
-    final activePlayers = game.activePlayers;
-    final avgStack = Formatters.averageStack(game.totalChipsInPlay, activePlayers.length);
-    final avgBB = level != null ? (avgStack / level.bb).round() : 0;
-
-    final timerDanger = game.secondsRemaining <= 60;
-    final timerWarning = game.secondsRemaining <= 300;
-
-    final isFinalTable = game.status == LiveGameStatus.finaltable;
     final isCompleted = game.status == LiveGameStatus.completed;
-    final isBreak = game.status == LiveGameStatus.rebuypause;
+
+    if (isCompleted && game.finishOrder.length >= 3) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: _Podium(game: game),
+      );
+    }
 
     return Scaffold(
-      backgroundColor: AppColors.black,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl, vertical: AppSpacing.lg),
-          child: Column(
-            children: [
-              // Header
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: AppSpacing.lg,
-                runSpacing: AppSpacing.md,
-                children: [
-                  const Icon(Icons.style, size: 36, color: AppColors.primary),
-                  const SizedBox(width: AppSpacing.md),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 480),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          game.settings.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.crimsonShimmer(size: AppFontSizes.xxl),
-                        ),
-                        Text(
-                          '${game.settings.date} · ${game.settings.location}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (game.status == LiveGameStatus.running && !app.isOffline)
-                    const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _LiveDot(),
-                        SizedBox(width: AppSpacing.xs),
-                        Text('LIVE', style: TextStyle(color: AppColors.success, fontSize: AppFontSizes.sm, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  if (app.isOffline)
-                    const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _StaleDot(),
-                        SizedBox(width: AppSpacing.xs),
-                        Text('STALE', style: TextStyle(color: AppColors.warning, fontSize: AppFontSizes.sm, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  if (isBreak && !app.isOffline)
-                    const Text(
-                      'BREAK',
-                      style: TextStyle(color: AppColors.warning, fontSize: AppFontSizes.sm, fontWeight: FontWeight.w600),
-                    ),
-                  InkWell(
-                    onTap: app.toggleVoice,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.xs),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            app.voiceEnabled ? Icons.volume_up_outlined : Icons.volume_off_outlined,
-                            size: AppFontSizes.md,
-                            color: AppColors.mutedForeground,
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          Text(
-                            app.voiceEnabled ? 'Voice on' : 'Voice off',
-                            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Join QR — players scan to open the game join page (15-021).
-                  _JoinQR(game: game),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-
-              // Stale/offline banner — preserves the last safe display while
-              // making the disconnected state unmistakable (15-039, 18-028).
-              if (app.isOffline) ...[
-                _StaleBanner(lastSync: app.lastSync, onReconnect: app.toggleOffline),
-                const SizedBox(height: AppSpacing.xl),
-              ],
-
-              // Body
-              Expanded(
-                child: isCompleted && game.finishOrder.length >= 3
-                    ? _Podium(game: game)
-                    : SingleChildScrollView(
-                        child: Column(
-                          children: [
-                            _TimerBlock(
-                              game: game,
-                              level: level,
-                              timerDanger: timerDanger,
-                              timerWarning: timerWarning,
-                            ),
-                            const SizedBox(height: AppSpacing.xl),
-                            _StatsGrid(
-                              game: game,
-                              level: level,
-                              next: next,
-                              avgStack: avgStack,
-                              avgBB: avgBB,
-                            ),
-                            if (isFinalTable) ...[
-                              const SizedBox(height: AppSpacing.xl),
-                              _FinalTableBoard(players: activePlayers),
-                            ],
-                            if (isBreak) ...[
-                              const SizedBox(height: AppSpacing.xl),
-                              const _BreakBanner(),
-                            ],
-                          ],
-                        ),
-                      ),
-              ),
-
-              // Footer
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  Text('CODE: ${game.publicCode}', style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground)),
-                  const SizedBox(width: AppSpacing.lg),
-                  Flexible(
-                    child: Text(
-                      'Last sync ${_timeOf(app.lastSync)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.monoXs.copyWith(
-                        color: app.isOffline ? AppColors.warning : AppColors.mutedForeground,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text('pokernight.app', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-                  const SizedBox(width: AppSpacing.lg),
-                  InkWell(
-                    onTap: () => context.go(RoutePaths.landing),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.close, size: AppFontSizes.sm, color: AppColors.mutedForeground),
-                        const SizedBox(width: AppSpacing.xs),
-                        Text('Exit', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _timeOf(DateTime t) {
-  final h = t.hour.toString().padLeft(2, '0');
-  final m = t.minute.toString().padLeft(2, '0');
-  final s = t.second.toString().padLeft(2, '0');
-  return '$h:$m:$s';
-}
-
-class _StaleDot extends StatelessWidget {
-  const _StaleDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.warning, shape: BoxShape.circle));
-  }
-}
-
-class _StaleBanner extends StatelessWidget {
-  const _StaleBanner({required this.lastSync, required this.onReconnect});
-
-  final DateTime lastSync;
-  final VoidCallback onReconnect;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.warningSoft,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.warningSoftBorder),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber_rounded, size: AppFontSizes.lg, color: AppColors.warning),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Connection lost',
-                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.warning),
-                ),
-                Text(
-                  'Showing the last synced display from ${_timeOf(lastSync)}. Reconnecting…',
-                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                ),
-              ],
-            ),
-          ),
-          AppButton(
-            size: AppButtonSize.sm,
-            onPressed: onReconnect,
-            child: const Text('Reconnect'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LiveDot extends StatelessWidget {
-  const _LiveDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle));
-  }
-}
-
-/// Scannable join QR for the TV display. Encodes the public game link so
-/// players can open the join page directly instead of typing the code.
-class _JoinQR extends StatelessWidget {
-  const _JoinQR({required this.game});
-
-  final LiveGame game;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Scan QR to join the game ${game.publicCode}',
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.xs),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-        ),
-        child: QrImageView(
-          data: 'https://pokernight.app/game/${game.publicCode}',
-          version: QrVersions.auto,
-          size: 64,
-          gapless: false,
-          backgroundColor: Colors.white,
-          errorCorrectionLevel: QrErrorCorrectLevel.M,
-        ),
-      ),
-    );
-  }
-}
-
-class _TimerBlock extends StatelessWidget {
-  const _TimerBlock({
-    required this.game,
-    required this.level,
-    required this.timerDanger,
-    required this.timerWarning,
-  });
-
-  final LiveGame game;
-  final BlindLevel? level;
-  final bool timerDanger;
-  final bool timerWarning;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = timerDanger ? AppColors.destructive : (timerWarning ? AppColors.warning : AppColors.primary);
-    final lvl = level;
-    final pct = lvl == null
-        ? 0.0
-        : ((lvl.durationMins * 60 - game.secondsRemaining) / (lvl.durationMins * 60)).clamp(0.0, 1.0);
-
-    return Column(
-      children: [
-        Text(
-          'LEVEL ${game.currentLevel}',
-          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground, letterSpacing: 2),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: AppTimer(
-            secondsRemaining: game.secondsRemaining,
-            size: 96,
-            danger: timerDanger,
-            warning: timerWarning,
-          ),
-        ),
-        if (level != null) ...[
-          const SizedBox(height: AppSpacing.md),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 576),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              child: SizedBox(
-                height: 8,
-                child: Stack(
-                  children: [
-                    Container(width: double.infinity, color: AppColors.muted),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: pct,
-                        child: ColoredBox(color: color),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _StatsGrid extends StatelessWidget {
-  const _StatsGrid({
-    required this.game,
-    required this.level,
-    required this.next,
-    required this.avgStack,
-    required this.avgBB,
-  });
-
-  final LiveGame game;
-  final BlindLevel? level;
-  final BlindLevel? next;
-  final int avgStack;
-  final int avgBB;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth >= 768;
-        final lvl = level;
-        final nxt = next;
-        final ante = lvl?.ante;
-
-        final blindsTile = _Tile(
-          label: 'Blinds',
-          child: Column(
-            children: [
-              Text(
-                lvl == null ? '—' : '${Formatters.chips(lvl.sb)} / ${Formatters.chips(lvl.bb)}',
-                style: AppTypography.mono(size: 48, weight: FontWeight.w700),
-              ),
-              if (ante != null)
-                Text(
-                  '+ ${Formatters.chips(ante)} ante',
-                  style: AppTypography.bodySm.copyWith(color: AppColors.accent),
-                ),
-              if (nxt != null)
-                Text(
-                  'Next: ${Formatters.chips(nxt.sb)} / ${Formatters.chips(nxt.bb)}'
-                  '${nxt.ante != null ? ' + ${Formatters.chips(nxt.ante!)} ante' : ''}',
-                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                ),
-            ],
-          ),
-        );
-
-        final playersTile = _Tile(
-          label: 'Players',
-          child: Text('${game.activePlayers.length}', style: AppTypography.mono(size: 56, weight: FontWeight.w700)),
-        );
-
-        final avgStackTile = _Tile(
-          label: 'Avg Stack',
-          child: Column(
-            children: [
-              Text(Formatters.chips(avgStack), style: AppTypography.mono(size: 40, weight: FontWeight.w700)),
-              if (avgBB > 0)
-                Text('$avgBB BB', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-            ],
-          ),
-        );
-
-        return Column(
-          children: [
-            if (isDesktop)
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(flex: 2, child: blindsTile),
-                    const SizedBox(width: AppSpacing.lg),
-                    Expanded(flex: 1, child: playersTile),
-                    const SizedBox(width: AppSpacing.lg),
-                    Expanded(flex: 1, child: avgStackTile),
-                  ],
-                ),
-              )
-            else ...[
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: blindsTile),
-                    const SizedBox(width: AppSpacing.lg),
-                    Expanded(child: playersTile),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: avgStackTile),
-                    const SizedBox(width: AppSpacing.lg),
-                    const Spacer(),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            IntrinsicHeight(
+      backgroundColor: TournamentDisplayBlock.pureBlack,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth >= 900) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Expanded(child: _PrizePoolTile()),
-                  if (isDesktop && game.announcements.isNotEmpty) ...[
-                    const SizedBox(width: AppSpacing.lg),
-                    Expanded(child: _AnnouncementTile(game: game)),
-                  ],
+                  Expanded(
+                    flex: 3,
+                    child: SingleChildScrollView(
+                      child: TournamentDisplayBlock(game: game),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  SizedBox(width: 340, child: _RotatingPanel(game: game)),
                 ],
               ),
-            ),
-            if (!isDesktop && game.announcements.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  Expanded(child: _AnnouncementTile(game: game)),
-                ],
-              ),
-            ],
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _Tile extends StatelessWidget {
-  const _Tile({required this.label, required this.child});
-
-  final String label;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: AppColors.card.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, letterSpacing: 1),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _PrizePoolTile extends StatelessWidget {
-  const _PrizePoolTile();
-
-  @override
-  Widget build(BuildContext context) {
-    final game = context.watch<AppProvider>().currentGame;
-    final pool = game?.structure.prizePool ?? 0;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: AppColors.card.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.primarySoftBorder),
-      ),
-      child: Column(
-        children: [
-          Text(
-            (game?.prizePoolLabel ?? 'Prize Pool').toUpperCase(),
-            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, letterSpacing: 1),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            Formatters.chips(pool),
-            style: AppTypography.mono(size: 48, weight: FontWeight.w700, color: AppColors.primary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AnnouncementTile extends StatelessWidget {
-  const _AnnouncementTile({required this.game});
-
-  final LiveGame game;
-
-  @override
-  Widget build(BuildContext context) {
-    final latest = game.announcements.last;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: AppColors.card.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.campaign_outlined, size: AppFontSizes.xxl, color: AppColors.icon),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Announcement', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-                const SizedBox(height: AppSpacing.xs),
-                Text(latest.text, style: AppTypography.body(size: AppFontSizes.lg, weight: FontWeight.w500)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FinalTableBoard extends StatelessWidget {
-  const _FinalTableBoard({required this.players});
-
-  final List players;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: AppColors.card.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.primarySoftBorder),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.style, size: AppFontSizes.xxxl, color: AppColors.primary),
-              const SizedBox(width: AppSpacing.sm),
-              Text('FINAL TABLE', style: AppTypography.crimsonShimmer(size: AppFontSizes.xxl)),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
-            alignment: WrapAlignment.center,
-            children: [
-              for (var i = 0; i < players.length; i++)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: AppColors.muted,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(color: AppColors.primarySoftBorder),
-                  ),
-                  child: Column(
-                    children: [
-                      Text('Seat ${i + 1}', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-                      Text(
-                        '${(players[i] as dynamic).name}',
-                        style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BreakBanner extends StatelessWidget {
-  const _BreakBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.xxl),
-      decoration: BoxDecoration(
-        color: AppColors.warningSoft,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.warningSoftBorder),
-      ),
-      child: Column(
-        children: [
-          Text('BREAK', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700, color: AppColors.warning)),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Rebuy period has ended. Add-ons available. Resume when ready.',
-            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-          ),
-        ],
+            );
+          }
+          return SingleChildScrollView(
+            child: TournamentDisplayBlock(game: game),
+          );
+        },
       ),
     );
   }
@@ -931,6 +317,255 @@ class _PodiumStep extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(label, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+        ],
+      ),
+    );
+  }
+}
+
+class _RotatingPanel extends StatefulWidget {
+  const _RotatingPanel({required this.game});
+
+  final LiveGame game;
+
+  @override
+  State<_RotatingPanel> createState() => _RotatingPanelState();
+}
+
+class _RotatingPanelState extends State<_RotatingPanel> {
+  static const _titles = ['LEADERBOARD', 'PAYOUTS', 'UPCOMING'];
+
+  int _panel = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 8), (_) {
+      setState(() => _panel = (_panel + 1) % 3);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D0D0D),
+        border: Border.all(color: const Color(0xFF222222)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _titles[_panel],
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+              color: Color(0xFFFF0015),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              child: switch (_panel) {
+                0 => _LeaderboardPanel(key: const ValueKey(0), game: widget.game),
+                1 => _PayoutsPanel(key: const ValueKey(1), game: widget.game),
+                _ => _UpcomingPanel(key: const ValueKey(2), game: widget.game),
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LeaderboardPanel extends StatelessWidget {
+  const _LeaderboardPanel({super.key, required this.game});
+
+  final LiveGame game;
+
+  @override
+  Widget build(BuildContext context) {
+    final players = [...game.players]..sort((a, b) {
+        final t = a.table.compareTo(b.table);
+        return t != 0 ? t : a.seat.compareTo(b.seat);
+      });
+
+    return ListView(
+      children: [
+        for (final p in players)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    p.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: p.active ? Colors.white : TournamentDisplayBlock.textGrey,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'T${p.table} · S${p.seat}',
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    color: TournamentDisplayBlock.textGrey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _PayoutsPanel extends StatelessWidget {
+  const _PayoutsPanel({super.key, required this.game});
+
+  final LiveGame game;
+
+  static const _ords = ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH'];
+
+  @override
+  Widget build(BuildContext context) {
+    final prizes = game.structure.prizes.take(6).toList();
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < prizes.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                children: [
+                  Text(
+                    _ords[i],
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFFF0015),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    Formatters.chips(prizes[i].amount),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 8),
+          const Divider(height: 1, color: Color(0xFF222222)),
+          const SizedBox(height: 8),
+          Text(
+            'PRIZE POOL: ${Formatters.chips(game.structure.prizePool)}',
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 12,
+              color: TournamentDisplayBlock.textGrey,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UpcomingPanel extends StatelessWidget {
+  const _UpcomingPanel({super.key, required this.game});
+
+  final LiveGame game;
+
+  @override
+  Widget build(BuildContext context) {
+    final upcoming = game.structure.levels
+        .where((l) => l.level > game.currentLevel)
+        .take(4)
+        .toList();
+
+    if (upcoming.isEmpty) {
+      return Center(
+        child: Text(
+          game.status == LiveGameStatus.completed
+              ? 'TOURNAMENT COMPLETE'
+              : 'END',
+          style: const TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 14,
+            color: Color(0xFFFF0015),
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          for (final l in upcoming)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                children: [
+                  Text(
+                    'L${l.level}',
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFFF0015),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'SB ${Formatters.chips(l.sb)} · BB ${Formatters.chips(l.bb)}',
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  if (l.ante != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      'ANTE ${Formatters.chips(l.ante!)}',
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        color: TournamentDisplayBlock.textGrey,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
         ],
       ),
     );

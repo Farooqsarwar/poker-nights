@@ -16,6 +16,7 @@ import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_select.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
@@ -48,11 +49,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   final _date = TextEditingController(text: _todayIso);
   final _time = TextEditingController(text: '20:00');
   final _location = TextEditingController();
-  final _players = TextEditingController();
   final _buyIn = TextEditingController();
   bool _locationPrivate = false;
-  double _duration = 3.5;
+  double _duration = 4.0;
   final Map<String, String> _errors = {};
+
+  // Player count is derived from the group + RSVP signals, never asked as an
+  // input (the guest/going +N counts determine who actually shows up).
+  int _expectedPlayers = 8;
 
   // Step 2
   _ChipMode _chipMode = _ChipMode.preset;
@@ -61,10 +65,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
   // Step 3
   bool _rebuys = true;
+  bool _rebuyUnlimited = true;
   int _rebuysClose = 6;
   final _rebuyCost = TextEditingController();
   bool _reEntry = true;
   bool _addOn = true;
+  int _addOnClose = 6;
   final _addOnCost = TextEditingController();
   bool _koEnabled = false;
   final _koAmount = TextEditingController(text: '5');
@@ -115,9 +121,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           }
         }
       }
-      setState(() {
-        _players.text = expected.toString();
-      });
+
+      _expectedPlayers = expected;
 
       if (widget.presetId != null) {
         final preset = app.presetById(widget.presetId);
@@ -158,6 +163,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     _rebuyCost.text = p.rebuyCost?.toString() ?? '';
     _reEntry = p.reEntry;
     _addOn = p.addOn;
+    _addOnClose = p.addOnCloseLevel;
     _addOnCost.text = p.addOnCost?.toString() ?? '';
     _koEnabled = p.koEnabled;
     _koAmount.text = p.koAmount.toString();
@@ -181,7 +187,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       _date,
       _time,
       _location,
-      _players,
       _buyIn,
       _koAmount,
       _rebuyCost,
@@ -196,8 +201,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     _errors.clear();
     if (_name.text.trim().isEmpty) _errors['name'] = 'Required';
     if (_date.text.trim().isEmpty) _errors['date'] = 'Required';
-    final p = int.tryParse(_players.text) ?? 0;
-    if (p < 2) _errors['players'] = 'Min 2 players';
     final b = num.tryParse(_buyIn.text) ?? 0;
     if (b <= 0) _errors['buyIn'] = 'Must be positive';
     setState(() {});
@@ -210,8 +213,110 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   }
 
   void _generate(AppProvider app) async {
+    if (_chipSet.isEmpty) {
+      await showAppModal(
+        context: context,
+        title: 'Set chip colours first',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Every game needs a chip set. Add chip colours and values before generating.',
+              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(
+              fullWidth: true,
+              onPressed: () {
+                Navigator.of(context).pop();
+                setState(() => _step = 2);
+              },
+              child: const Text('Go to chip set'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Client feedback (07-018): confirm before creating, and persist a custom
+    // chip set as a preset once.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm game details'),
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ConfirmRow(label: 'Name', value: _name.text.trim()),
+              _ConfirmRow(label: 'When', value: '${_date.text} at ${_time.text}'),
+              if (_location.text.trim().isNotEmpty)
+                _ConfirmRow(label: 'Where', value: _location.text.trim()),
+              _ConfirmRow(label: 'Players', value: '$_expectedPlayers'),
+              _ConfirmRow(label: 'Buy-in', value: _buyIn.text.trim()),
+              _ConfirmRow(label: 'Duration', value: '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h'),
+              _ConfirmRow(label: 'Rebuys', value: _rebuys ? (_rebuyUnlimited ? 'Unlimited to L6' : 'Limited to L$_rebuysClose') : 'Off'),
+              _ConfirmRow(label: 'Re-entry', value: _reEntry ? 'Yes' : 'No'),
+              _ConfirmRow(label: 'Add-on', value: _addOn ? 'Yes, to L$_addOnClose' : 'No'),
+              _ConfirmRow(label: 'Bounty', value: _koEnabled ? 'Yes (${_koAmount.text})' : 'No'),
+              _ConfirmRow(label: 'Ante', value: _antePreference == AntePreference.none ? 'No' : 'From L$_anteAfterLevel'),
+              const Divider(height: AppSpacing.xl),
+              Text('Chip set', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: AppSpacing.sm),
+              for (final c in _chipSet)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: c.colorValue,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(child: Text(c.color, style: AppTypography.bodyXs)),
+                      Text('${c.value} × ${c.quantity}', style: AppTypography.monoXs),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Back to edit'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confirm & generate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Persist a custom chip set once so it can be reused next time.
+    if (_chipMode != _ChipMode.preset) {
+      final customName = '${_name.text.trim()} set';
+      app.saveChipSet('cs-${_name.text.trim().replaceAll(' ', '-').toLowerCase()}', customName, _chipSet);
+    }
+
     setState(() => _isGenerating = true);
-    
+
     // Give time for the animation to play
     await Future.delayed(const Duration(milliseconds: 6000));
     if (!mounted) return;
@@ -221,7 +326,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       date: _date.text.trim(),
       time: _time.text.trim(),
       location: _location.text.trim(),
-      players: int.tryParse(_players.text) ?? 8,
+      players: _expectedPlayers,
       durationHours: _duration,
       buyIn: num.tryParse(_buyIn.text)?.toInt() ?? 15,
       koEnabled: _koEnabled,
@@ -231,6 +336,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       rebuyCost: num.tryParse(_rebuyCost.text)?.toInt(),
       reEntry: _reEntry,
       addOn: _addOn,
+      addOnCloseLevel: _addOnClose,
       addOnCost: num.tryParse(_addOnCost.text)?.toInt(),
       anteEnabled: _anteEnabled,
       anteAfterLevel: _anteAfterLevel,
@@ -269,7 +375,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('New Tournament', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+                    Text('New Game', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
                     Text(
                       'Step $_step of ${_steps.length}: ${_steps[_step - 1]}',
                       style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
@@ -386,7 +492,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             const SizedBox(height: AppSpacing.sm),
             _ToggleRow(
               title: 'Keep address private',
-              subtitle: 'Guests see the address only after check-in (11-014/11-015)',
+              subtitle: 'Guests see the address only after check-in',
               value: _locationPrivate,
               onChanged: (v) => setState(() => _locationPrivate = v),
             ),
@@ -395,23 +501,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _NumberField(
-                  controller: _players,
-                  label: 'Expected players',
-                  error: _errors['players'],
-                  onChanged: (_) {
-                    final app = context.read<AppProvider>();
-                    setState(() {
-                      _suggestions = _matchSuggestions(
-                        app,
-                        int.tryParse(_players.text) ?? 0,
-                      );
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -429,17 +518,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          AppSelect(
+          _SegmentedPicker(
             label: 'Target duration',
-            value: _duration.toString(),
-            onChanged: (v) => setState(() => _duration = double.tryParse(v ?? '') ?? 3.5),
-            items: [
-              for (final d in [3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0])
-                DropdownMenuItem(
-                  value: d.toString(),
-                  child: Text('${d == d.roundToDouble() ? d.round() : d}h'),
-                ),
-            ],
+            options: const ['3h', '3.5h', '4h', '4.5h', '5h', '5.5h', '6h'],
+            selected: '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h',
+            onChanged: (v) {
+              final val = v.replaceAll('h', '');
+              setState(() => _duration = double.tryParse(val) ?? 4.0);
+            },
           ),
         ],
       ),
@@ -759,25 +845,55 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ToggleRow(
-            title: 'Rebuys',
-            subtitle: 'Players can re-enter after elimination',
-            value: _rebuys,
-            onChanged: (v) => setState(() => _rebuys = v),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Rebuys', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text('Players can re-enter after elimination', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                const SizedBox(height: AppSpacing.sm),
+                _SegmentedPicker(
+                  options: const ['Off', 'Limited', 'Unlimited'],
+                  selected: _rebuys ? (_rebuyUnlimited ? 'Unlimited' : 'Limited') : 'Off',
+                  onChanged: (v) => setState(() {
+                    if (v == 'Off') {
+                      _rebuys = false;
+                      _rebuyUnlimited = false;
+                    } else if (v == 'Limited') {
+                      _rebuys = true;
+                      _rebuyUnlimited = false;
+                    } else {
+                      // Unlimited rebuys default to closing at the end of L6.
+                      _rebuys = true;
+                      _rebuyUnlimited = true;
+                      _rebuysClose = 6;
+                    }
+                  }),
+                ),
+              ],
+            ),
           ),
           if (_rebuys) ...[
-            Padding(
-              padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
-              child: AppSelect(
-                label: 'Close rebuys',
-                value: '$_rebuysClose',
-                onChanged: (v) => setState(() => _rebuysClose = int.tryParse(v ?? '') ?? 6),
-                items: [
-                  for (var n = 4; n <= 8; n++)
-                    DropdownMenuItem(value: '$n', child: Text('End of Level $n')),
-                ],
+            if (!_rebuyUnlimited)
+              Padding(
+                padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
+                child: _SegmentedPicker(
+                  label: 'Close rebuys',
+                  options: const ['End L4', 'End L5', 'End L6', 'End L7', 'End L8'],
+                  selected: 'End L$_rebuysClose',
+                  onChanged: (v) => setState(() => _rebuysClose = int.tryParse(v.replaceAll('End L', '')) ?? 6),
+                ),
               ),
-            ),
+            if (_rebuyUnlimited)
+              Padding(
+                padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
+                child: Text(
+                  'Unlimited rebuys until the end of Level 6.',
+                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
               child: Column(
@@ -795,7 +911,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    'Unlimited rebuys per player until they close (09-050).',
+                    'Unlimited rebuys per player until they close.',
                     style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                   ),
                 ],
@@ -818,11 +934,27 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               ),
             ),
           const Divider(color: AppColors.border),
-          _ToggleRow(
-            title: 'Add-on',
-            subtitle: 'One per active player at rebuy close',
-            value: _addOn,
-            onChanged: (v) => setState(() => _addOn = v),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Add-on', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 2),
+                      Text('One per active player at rebuy close', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                    ],
+                  ),
+                ),
+                _SegmentedPicker(
+                  options: const ['Yes', 'No'],
+                  selected: _addOn ? 'Yes' : 'No',
+                  onChanged: (v) => setState(() => _addOn = v == 'Yes'),
+                ),
+              ],
+            ),
           ),
           if (_addOn)
             Padding(
@@ -842,18 +974,41 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    'Add-on matches the starting stack (12-060).',
+                    'Add-on matches the starting stack.',
                     style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _SegmentedPicker(
+                    label: 'Add-on available until',
+                    options: const ['End L4', 'End L5', 'End L6', 'End L7', 'End L8'],
+                    selected: 'End L$_addOnClose',
+                    onChanged: (v) => setState(() => _addOnClose = int.tryParse(v.replaceAll('End L', '')) ?? 6),
                   ),
                 ],
               ),
             ),
           const Divider(color: AppColors.border),
-          _ToggleRow(
-            title: 'KO bounty',
-            subtitle: 'Side payment for eliminating a player',
-            value: _koEnabled,
-            onChanged: (v) => setState(() => _koEnabled = v),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('KO bounty', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 2),
+                      Text('Side payment for eliminating a player', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                    ],
+                  ),
+                ),
+                _SegmentedPicker(
+                  options: const ['Yes', 'No'],
+                  selected: _koEnabled ? 'Yes' : 'No',
+                  onChanged: (v) => setState(() => _koEnabled = v == 'Yes'),
+                ),
+              ],
+            ),
           ),
           if (_koEnabled)
             Padding(
@@ -886,7 +1041,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               children: [
                 Text('Ante', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
-                Text('Choose how the ante is posted (09-010)', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                Text('Choose how the ante is posted', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
                 const SizedBox(height: AppSpacing.sm),
                 Column(
                   children: [
@@ -944,14 +1099,11 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
                 if (_antePreference != AntePreference.none) ...[
                   const SizedBox(height: AppSpacing.md),
-                  AppSelect(
+                  _SegmentedPicker(
                     label: 'Activate ante',
-                    value: '$_anteAfterLevel',
-                    onChanged: (v) => setState(() => _anteAfterLevel = int.tryParse(v ?? '') ?? 6),
-                    items: [
-                      for (var n = 4; n <= 8; n++)
-                        DropdownMenuItem(value: '$n', child: Text('After Level $n')),
-                    ],
+                    options: const ['After L4', 'After L5', 'After L6', 'After L7', 'After L8'],
+                    selected: 'After L$_anteAfterLevel',
+                    onChanged: (v) => setState(() => _anteAfterLevel = int.tryParse(v.replaceAll('After L', '')) ?? 6),
                   ),
                 ],
               ],
@@ -961,7 +1113,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Organiser percentage', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+              Text('Organizational costs (%)', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+              const SizedBox(height: 2),
+              Text('Admin only — not visible to players', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
@@ -1051,7 +1205,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 child: _SummaryStatCard(
                   icon: Icons.people_outline,
                   label: 'Players',
-                  value: _players.text,
+                  value: '$_expectedPlayers',
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -1080,7 +1234,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             children: [
               AppBadge(
                 label: _rebuys
-                    ? 'Rebuys to L$_rebuysClose${_rebuyCost.text.trim().isNotEmpty ? ' @ ${_rebuyCost.text}' : ''}'
+                    ? (_rebuyUnlimited
+                        ? 'Unlimited rebuys to L6'
+                        : 'Rebuys to L$_rebuysClose${_rebuyCost.text.trim().isNotEmpty ? ' @ ${_rebuyCost.text}' : ''}')
                     : 'No rebuys',
                 variant: _rebuys ? AppBadgeVariant.gold : AppBadgeVariant.muted,
               ),
@@ -1089,7 +1245,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 variant: _reEntry ? AppBadgeVariant.gold : AppBadgeVariant.muted,
               ),
               AppBadge(
-                label: _addOn ? 'Add-on' : 'No add-on',
+                label: _addOn ? 'Add-on to L$_addOnClose' : 'No add-on',
                 variant: _addOn ? AppBadgeVariant.gold : AppBadgeVariant.muted,
               ),
               AppBadge(
@@ -1128,28 +1284,32 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   }
 }
 
-class _NumberField extends StatelessWidget {
-  const _NumberField({required this.controller, required this.label, this.error, this.onChanged});
 
-  final TextEditingController controller;
+class _ConfirmRow extends StatelessWidget {
+  const _ConfirmRow({required this.label, required this.value});
+
   final String label;
-  final String? error;
-  final ValueChanged<String>? onChanged;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
-        const SizedBox(height: AppSpacing.xs),
-        AppTextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          error: error,
-          onChanged: onChanged,
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+            ),
+          ),
+          Expanded(
+            child: Text(value, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1289,5 +1449,61 @@ class _SummaryStatCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _SegmentedPicker extends StatelessWidget {
+  const _SegmentedPicker({
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+    this.label,
+  });
+
+  final List<String> options;
+  final String selected;
+  final ValueChanged<String> onChanged;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget picker = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < options.length; i++) ...[
+          GestureDetector(
+            onTap: () => onChanged(options[i]),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: options[i] == selected ? AppColors.primary : AppColors.secondary,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Text(
+                options[i],
+                style: AppTypography.bodyXs.copyWith(
+                  color: options[i] == selected ? Colors.white : AppColors.mutedForeground,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          if (i < options.length - 1) const SizedBox(width: AppSpacing.xs),
+        ],
+      ],
+    );
+
+    if (label != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label!, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          const SizedBox(height: AppSpacing.xs),
+          picker,
+        ],
+      );
+    }
+
+    return picker;
   }
 }

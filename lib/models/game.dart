@@ -5,8 +5,7 @@ enum Rsvp {
   cant,
   goingPlus1,
   goingPlus2,
-  goingPlus3,
-  goingPlus4;
+  goingPlus3;
 
   String get label {
     switch (this) {
@@ -22,8 +21,6 @@ enum Rsvp {
         return 'Going +2';
       case Rsvp.goingPlus3:
         return 'Going +3';
-      case Rsvp.goingPlus4:
-        return 'Going +4';
     }
   }
 
@@ -37,8 +34,6 @@ enum Rsvp {
         return 2;
       case Rsvp.goingPlus3:
         return 3;
-      case Rsvp.goingPlus4:
-        return 4;
       default:
         return 0;
     }

@@ -14,6 +14,7 @@ class TournamentPreset {
     required this.rebuysCloseLevel,
     required this.reEntry,
     required this.addOn,
+    this.addOnCloseLevel = 6,
     required this.durationHours,
     required this.anteEnabled,
     required this.anteAfterLevel,
@@ -33,6 +34,10 @@ class TournamentPreset {
   final int rebuysCloseLevel;
   final bool reEntry;
   final bool addOn;
+
+  /// Level after which add-ons close (defaults to end of Level 6).
+  final int addOnCloseLevel;
+
   final double durationHours;
   final bool anteEnabled;
   final int anteAfterLevel;
@@ -57,6 +62,7 @@ class TournamentPreset {
     int? rebuysCloseLevel,
     bool? reEntry,
     bool? addOn,
+    int? addOnCloseLevel,
     double? durationHours,
     bool? anteEnabled,
     int? anteAfterLevel,
@@ -76,6 +82,7 @@ class TournamentPreset {
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
       reEntry: reEntry ?? this.reEntry,
       addOn: addOn ?? this.addOn,
+      addOnCloseLevel: addOnCloseLevel ?? this.addOnCloseLevel,
       durationHours: durationHours ?? this.durationHours,
       anteEnabled: anteEnabled ?? this.anteEnabled,
       anteAfterLevel: anteAfterLevel ?? this.anteAfterLevel,

@@ -8,10 +8,10 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
-import '../../widgets/app_avatar.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 
 /// User profile mirroring the account area of the web app.
@@ -48,7 +48,41 @@ class ProfileScreen extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.xl),
             child: Row(
               children: [
-                AppAvatar(name: user.name, size: AppAvatarSize.lg),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CircleAvatar(
+                      radius: 40,
+                      backgroundColor: AppColors
+                          .avatarPalette[app.avatarColorIndex % AppColors.avatarPalette.length],
+                      child: Text(
+                        user.initials,
+                        style: AppTypography.body(
+                          size: AppFontSizes.xl,
+                          weight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: InkWell(
+                        onTap: () => _chooseAvatarColor(context, app),
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: AppColors.card,
+                            shape: BoxShape.circle,
+                            border: Border.fromBorderSide(BorderSide(color: AppColors.border)),
+                          ),
+                          child: const Icon(Icons.camera_alt_outlined, size: 14, color: AppColors.primary),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(width: AppSpacing.lg),
                 Expanded(
                   child: Column(
@@ -159,6 +193,41 @@ class ProfileScreen extends StatelessWidget {
             onPressed: () => _confirmSignOut(context, app),
             child: const Text('Sign out'),
           ),
+        ],
+      ),
+    );
+  }
+
+  void _chooseAvatarColor(BuildContext context, AppProvider app) {
+    showAppModal(
+      context: context,
+      title: 'Choose avatar colour',
+      child: Wrap(
+        spacing: AppSpacing.md,
+        runSpacing: AppSpacing.md,
+        children: [
+          for (var i = 0; i < AppColors.avatarPalette.length; i++)
+            GestureDetector(
+              onTap: () {
+                app.setAvatarColor(i);
+                Navigator.of(context).pop();
+              },
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.avatarPalette[i],
+                  border: Border.all(
+                    color: i == app.avatarColorIndex ? AppColors.foreground : AppColors.border,
+                    width: i == app.avatarColorIndex ? 3 : 1,
+                  ),
+                ),
+                child: i == app.avatarColorIndex
+                    ? const Icon(Icons.check, color: Colors.white)
+                    : null,
+              ),
+            ),
         ],
       ),
     );

@@ -8,6 +8,7 @@ import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 import '../responsive/responsive.dart';
+import 'app_avatar.dart';
 import 'app_button.dart';
 import 'bottom_nav.dart';
 import 'nav_drawer.dart';
@@ -30,7 +31,7 @@ class ScreenShell extends StatelessWidget {
   final String requiredPath;
 
   /// Routes a guest (no account) may access inside the shell.
-  static const _guestAllowed = {RoutePaths.playerLive};
+  static const _guestAllowed = {RoutePaths.playerLive, RoutePaths.resultPodium};
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +42,15 @@ class ScreenShell extends StatelessWidget {
     // Route guard: block access when the user cannot enter this path.
     if (!signedIn && !guestOk) {
       return _Gate(path: requiredPath);
+    }
+
+    // Guests get a bare scaffold with no navigation chrome — every nav
+    // button in the sidebar / drawer / bottom-nav would be a dead end.
+    if (!signedIn && guestOk) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: child,
+      );
     }
 
     return ResponsiveBuilder(
@@ -149,11 +159,15 @@ class _MobileTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
+    final unread = app.unreadCount;
+    final user = app.user;
+
     return Container(
       padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
       color: AppColors.card,
       child: Container(
-        height: 56,
+        height: 60,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
         decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: AppColors.border)),
@@ -175,6 +189,43 @@ class _MobileTopBar extends StatelessWidget {
               'Poker Night',
               style: AppTypography.crimsonShimmer(size: AppFontSizes.md, weight: FontWeight.w700),
             ),
+            const Spacer(),
+            InkWell(
+              onTap: () => context.go(RoutePaths.notifications),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Stack(
+                  children: [
+                    const Icon(Icons.notifications_none, color: AppColors.mutedForeground, size: 24),
+                    if (unread > 0)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            if (user != null)
+              InkWell(
+                onTap: () => context.go(RoutePaths.profile),
+                borderRadius: BorderRadius.circular(28),
+                child: SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: AppAvatar(name: user.name),
+                ),
+              ),
           ],
         ),
       ),

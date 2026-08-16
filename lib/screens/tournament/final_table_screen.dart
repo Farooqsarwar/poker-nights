@@ -52,6 +52,18 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
     }
   }
 
+  void _swapSeats(String draggedId, String targetId) {
+    if (draggedId == targetId) return;
+    final dragged = _seating.where((s) => s.id == draggedId).firstOrNull;
+    final target = _seating.where((s) => s.id == targetId).firstOrNull;
+    if (dragged == null || target == null) return;
+    setState(() {
+      final draggedSeat = dragged.seat;
+      dragged.seat = target.seat;
+      target.seat = draggedSeat;
+    });
+  }
+
   void _redraw() {
     setState(() {
       final arr = [..._seating]..shuffle(_random);
@@ -79,6 +91,11 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
     final game = app.currentGame;
 
     if (game == null) {
+      // No game in provider — redirect back to dashboard instead of
+      // showing a blank screen dead-end.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go(RoutePaths.adminDashboard);
+      });
       return const SizedBox.shrink();
     }
 
@@ -156,6 +173,12 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                     textAlign: TextAlign.center,
                     style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
                   ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Drag a seat onto another to swap them.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   GridView.builder(
                     shrinkWrap: true,
@@ -169,26 +192,9 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                     itemCount: _seating.length,
                     itemBuilder: (context, i) {
                       final s = _seating[i];
-                      return Container(
-                        padding: const EdgeInsets.all(AppSpacing.sm),
-                        decoration: BoxDecoration(
-                          color: AppColors.muted,
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text('Seat ${s.seat}', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-                            const SizedBox(height: 2),
-                            Text(
-                              s.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
+                      return _DraggableSeatTile(
+                        entry: s,
+                        onSwap: _swapSeats,
                       );
                     },
                   ),
@@ -237,6 +243,92 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
           ],
           const SizedBox(height: AppSpacing.xxl),
         ],
+      ),
+    );
+  }
+}
+
+class _DraggableSeatTile extends StatefulWidget {
+  const _DraggableSeatTile({required this.entry, required this.onSwap});
+
+  final _SeatEntry entry;
+  final void Function(String draggedId, String targetId) onSwap;
+
+  @override
+  State<_DraggableSeatTile> createState() => _DraggableSeatTileState();
+}
+
+class _DraggableSeatTileState extends State<_DraggableSeatTile> {
+  Widget _tile({bool dimmed = false, Color? borderColor, Color? background}) {
+    final s = widget.entry;
+    return Opacity(
+      opacity: dimmed ? 0.35 : 1,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: background ?? AppColors.secondary,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: borderColor ?? AppColors.border),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Seat ${s.seat}', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+            const SizedBox(height: 2),
+            Text(
+              s.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.entry;
+    return Draggable<_SeatEntry>(
+      data: s,
+      feedback: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: AppColors.secondary,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.primary, width: 2),
+            boxShadow: AppShadows.cardGlowActive,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Seat ${s.seat}', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+              const SizedBox(height: 2),
+              Text(
+                s.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ),
+      childWhenDragging: _tile(dimmed: true),
+      child: DragTarget<_SeatEntry>(
+        onWillAcceptWithDetails: (details) => details.data.id != s.id,
+        onAcceptWithDetails: (details) => widget.onSwap(details.data.id, s.id),
+        builder: (context, candidates, rejected) {
+          final hovering = candidates.isNotEmpty;
+          return _tile(
+            borderColor: hovering ? AppColors.primary : AppColors.border,
+            background: hovering ? AppColors.primarySoft : AppColors.secondary,
+          );
+        },
       ),
     );
   }

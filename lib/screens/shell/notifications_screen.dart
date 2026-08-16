@@ -7,6 +7,7 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/app_notification.dart';
+import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_button.dart';
@@ -39,7 +40,27 @@ class NotificationsScreen extends StatelessWidget {
   void _openLink(BuildContext context, String? link) {
     if (link == null) return;
     final target = _routeFor(link);
-    if (target != null) context.go(target);
+    if (target == null) return;
+    // For game-specific screens, ensure the current game is set in the
+    // provider so the destination screen has data to display.
+    const gameScreens = {
+      RoutePaths.adminDashboard,
+      RoutePaths.playerLive,
+      RoutePaths.checkIn,
+      RoutePaths.invitation,
+      RoutePaths.rebuySettlement,
+      RoutePaths.finalTable,
+      RoutePaths.completeTournament,
+      RoutePaths.resultPodium,
+    };
+    if (gameScreens.contains(target)) {
+      final app = context.read<AppProvider>();
+      final activeGame = app.currentGroup.games
+          .where((g) => g.status != LiveGameStatus.cancelled)
+          .firstOrNull;
+      if (activeGame != null) app.setCurrentGame(activeGame);
+    }
+    context.go(target);
   }
 
   String? _routeFor(String link) {

@@ -189,7 +189,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Text(
-                          'Live · ${elapsedH}h ${elapsedM}m · $currency${_num(settings.smallBlind)}/$currency${_num(settings.bigBlind)}',
+                          'Live · ${elapsedH}h ${elapsedM}m · ${_num(settings.smallBlind)}/${_num(settings.bigBlind)}',
                           style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                         ),
                       ],
@@ -332,7 +332,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                                   _CashAction(_CashActionType.buyIn, p.id),
                                   preset: settings.minBuyIn,
                                 ),
-                                child: const Text('+\$'),
+                                child: const Text('+ Buy'),
                               ),
                               AppButton(
                                 size: AppButtonSize.sm,
@@ -379,7 +379,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   const SizedBox(height: AppSpacing.md),
                   AppTextField(
                     controller: _amount,
-                    label: 'Amount ($currency)',
+                    label: 'Amount',
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     textAlign: TextAlign.center,
                     textStyle: AppTypography.monoXl,
@@ -388,8 +388,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     _action!.type == _CashActionType.buyIn
-                        ? 'Min $currency${_num(settings.minBuyIn)} · Max $currency${_num(settings.maxBuyIn)}'
-                        : 'Current stack: $currency${_num(players.where((p) => p.id == _action!.playerId).firstOrNull?.stack ?? 0)}',
+                        ? 'Min ${_num(settings.minBuyIn)} · Max ${_num(settings.maxBuyIn)}'
+                        : 'Current stack: ${_num(players.where((p) => p.id == _action!.playerId).firstOrNull?.stack ?? 0)}',
                     style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -409,7 +409,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                               border: Border.all(color: AppColors.border),
                             ),
                             child: Text(
-                              '$currency${_num(a)}',
+                              _num(a),
                               style: AppTypography.monoSm,
                             ),
                           ),
@@ -460,7 +460,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                         Expanded(
                           child: AppTextField(
                             controller: _editStack,
-                            label: 'Stack in play ($currency)',
+                            label: 'Stack in play',
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           ),
                         ),
@@ -468,7 +468,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                         Expanded(
                           child: AppTextField(
                             controller: _editTotal,
-                            label: 'Total bought ($currency)',
+                            label: 'Total bought',
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           ),
                         ),
@@ -488,7 +488,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                         Expanded(
                           child: AppTextField(
                             controller: _editCashedOut,
-                            label: 'Cashed out ($currency)',
+                            label: 'Cashed out',
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           ),
                         ),

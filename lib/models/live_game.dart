@@ -18,6 +18,7 @@ class GameSettings {
     required this.rebuysCloseLevel,
     this.reEntry = false,
     required this.addOn,
+    this.addOnCloseLevel = 6,
     required this.anteEnabled,
     required this.anteAfterLevel,
     this.anteStyle = AnteStyle.bigBlind,
@@ -48,6 +49,11 @@ class GameSettings {
   /// separately from rebuys (12-046/12-047).
   final bool reEntry;
   final bool addOn;
+
+  /// Level after which add-ons are no longer available. Defaults to end of
+  /// Level 6 (client feedback: "add-on moment, default end L6").
+  final int addOnCloseLevel;
+
   final bool anteEnabled;
   final int anteAfterLevel;
   final AnteStyle anteStyle;
@@ -96,6 +102,7 @@ class GameSettings {
     int? rebuysCloseLevel,
     bool? reEntry,
     bool? addOn,
+    int? addOnCloseLevel,
     bool? anteEnabled,
     int? anteAfterLevel,
     AnteStyle? anteStyle,
@@ -123,6 +130,7 @@ class GameSettings {
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
       reEntry: reEntry ?? this.reEntry,
       addOn: addOn ?? this.addOn,
+      addOnCloseLevel: addOnCloseLevel ?? this.addOnCloseLevel,
       anteEnabled: anteEnabled ?? this.anteEnabled,
       anteAfterLevel: anteAfterLevel ?? this.anteAfterLevel,
       anteStyle: anteStyle ?? this.anteStyle,
@@ -220,9 +228,12 @@ class LiveGame {
     this.speedRecommendation,
     this.settlementConfirmed = false,
     this.seatingConfirmed = false,
+    this.checkInClosed = false,
     this.dealerPlayerId,
     this.guestSlots = const [],
     this.originalLevels,
+    this.rebuyRequests = const [],
+    this.addOnRequests = const [],
   });
 
   final String id;
@@ -253,6 +264,10 @@ class LiveGame {
   /// play starts (checklist 13-013). Seating changes clear it again.
   final bool seatingConfirmed;
 
+  /// True once the admin closes door check-in. Further walk-ins are not added
+  /// and the host is prompted to start the tournament (spec §4.7).
+  final bool checkInClosed;
+
   /// Randomly assigned initial dealer for the current seating (13-012,
   /// 13-026). The system does not track subsequent dealer-button rotation
   /// (13-032).
@@ -262,6 +277,13 @@ class LiveGame {
   /// RSVPs so unclaimed guest slots survive re-entry into the invite flow
   /// (checklist 07-014).
   final List<GuestSlot> guestSlots;
+
+  /// Player ids that have requested a rebuy from the live player view. The
+  /// admin grants them from the dashboard; granting clears the request.
+  final List<String> rebuyRequests;
+
+  /// Player ids that have requested an add-on from the live player view.
+  final List<String> addOnRequests;
 
   List<GuestSlot> get availableGuestSlots =>
       guestSlots.where((s) => s.available).toList();
@@ -331,8 +353,40 @@ class LiveGame {
     return currentLevel > settings.rebuysCloseLevel;
   }
 
+  /// Client feedback (07-018): the AI only finalises stacks/blinds/levels and
+  /// the structure review opens 30 minutes before the scheduled start — or as
+  /// soon as the game moves out of draft/published (check-in is imminent).
+  bool get structureReviewOpen {
+    if (status == LiveGameStatus.checkin ||
+        status.isActiveLive ||
+        status == LiveGameStatus.completed ||
+        status == LiveGameStatus.cancelled) {
+      return true;
+    }
+    final start = settings.scheduledStart;
+    if (start == null) return false;
+    return DateTime.now()
+        .isAfter(start.subtract(const Duration(minutes: 30)));
+  }
+
+  /// Starting stacks are frozen the moment the tournament goes live. Blinds,
+  /// levels and the player count stay editable during play (client feedback).
+  bool get stacksLocked =>
+      status == LiveGameStatus.running ||
+      status == LiveGameStatus.paused ||
+      status == LiveGameStatus.rebuypause ||
+      status == LiveGameStatus.finaltable;
+
+  /// The AI re-estimates the structure with the current expected player count
+  /// inside the 30-minute window before start (07-018).
+  bool get estimateDue =>
+      !stacksLocked &&
+      structureReviewOpen &&
+      settings.scheduledStart != null;
+
   LiveGame copyWith({
     String? id,
+    String? groupId,
     GameSettings? settings,
     LiveGameStatus? status,
     String? publicCode,
@@ -351,13 +405,16 @@ class LiveGame {
     TournamentStructure? structure,
     bool? settlementConfirmed,
     bool? seatingConfirmed,
+    bool? checkInClosed,
     String? dealerPlayerId,
     List<GuestSlot>? guestSlots,
     List<BlindLevel>? originalLevels,
+    List<String>? rebuyRequests,
+    List<String>? addOnRequests,
   }) {
     return LiveGame(
       id: id ?? this.id,
-      groupId: groupId,
+      groupId: groupId ?? this.groupId,
       settings: settings ?? this.settings,
       structure: structure ?? this.structure,
       status: status ?? this.status,
@@ -376,9 +433,12 @@ class LiveGame {
       speedRecommendation: speedRecommendation ?? this.speedRecommendation,
       settlementConfirmed: settlementConfirmed ?? this.settlementConfirmed,
       seatingConfirmed: seatingConfirmed ?? this.seatingConfirmed,
+      checkInClosed: checkInClosed ?? this.checkInClosed,
       dealerPlayerId: dealerPlayerId ?? this.dealerPlayerId,
       guestSlots: guestSlots ?? this.guestSlots,
       originalLevels: originalLevels ?? this.originalLevels,
+      rebuyRequests: rebuyRequests ?? this.rebuyRequests,
+      addOnRequests: addOnRequests ?? this.addOnRequests,
     );
   }
 }

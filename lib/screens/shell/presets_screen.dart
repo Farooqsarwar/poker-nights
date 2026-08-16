@@ -139,7 +139,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'Save your favourite game settings and start a new tournament in one tap.',
+                      'Save your favourite game settings and start a new game in one tap.',
                       style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
                     ),
                   ],
@@ -204,7 +204,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                             _Tag(text: p.addOn ? 'Add-on' : 'No add-on'),
                             _Tag(text: p.koEnabled ? 'KO ${p.koAmount}' : 'No KO'),
                             _Tag(text: p.anteEnabled ? 'Ante L${p.anteAfterLevel}+' : 'No ante'),
-                            _Tag(text: '${p.organizerPct}% org'),
+                            _Tag(text: '${p.organizerPct}% org costs'),
                             _Tag(text: p.chipSetName),
                           ],
                         ),
@@ -537,7 +537,7 @@ class _PresetFormState extends State<_PresetForm> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Organiser percentage', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+            Text('Organizational costs', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
             Row(
               children: [
                 Expanded(

@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../app/colors.dart';
-import '../app/typography.dart';
 import '../utils/formatters.dart';
 
+/// Timer display styled like the TV dashboard: plain mono digits where the
+/// minutes are drawn in the foreground and the seconds in the accent color.
+///
+/// The display scales down with [FittedBox] so it always fits the available
+/// width, on phones, tablets and TV screens alike.
 class AppTimer extends StatelessWidget {
   const AppTimer({
     super.key,
@@ -21,21 +26,27 @@ class AppTimer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = danger
+    final secsColor = danger
         ? AppColors.destructive
         : (warning ? AppColors.warning : AppColors.primary);
 
+    final minsColor = danger
+        ? AppColors.destructive
+        : (warning ? AppColors.warning : AppColors.foreground);
+
     final timeStr = Formatters.time(secondsRemaining);
+    final lastColonIdx = timeStr.lastIndexOf(':');
 
     return Row(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
         for (var i = 0; i < timeStr.length; i++)
           _TimerDigit(
             char: timeStr[i],
             size: size,
-            color: color,
+            color: (lastColonIdx != -1 && i >= lastColonIdx) ? secsColor : minsColor,
             danger: danger,
           ),
       ],
@@ -69,30 +80,13 @@ class _TimerDigit extends StatelessWidget {
   Widget build(BuildContext context) {
     final isColon = char == ':';
     
-    // We want all digits to be roughly the same width for stability,
-    // so we use a fixed width for digits.
-    final digitWidth = size * 0.7;
+    // We want all digits to be roughly the same width for stability
+    final digitWidth = size * 0.6;
 
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: isColon ? 2 : 4),
-      padding: isColon ? null : EdgeInsets.symmetric(vertical: size * 0.1),
+      margin: EdgeInsets.symmetric(horizontal: isColon ? size * 0.05 : 0),
       width: isColon ? null : digitWidth,
       alignment: Alignment.center,
-      decoration: isColon
-          ? null
-          : BoxDecoration(
-              color: AppColors.card.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(size * 0.15),
-              border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: danger ? 0.3 : 0.15),
-                  blurRadius: size * 0.3,
-                  spreadRadius: danger ? 2 : 1,
-                  offset: const Offset(0, 4),
-                )
-              ],
-            ),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
         switchInCurve: Curves.easeOutBack,
@@ -115,12 +109,13 @@ class _TimerDigit extends StatelessWidget {
         child: Text(
           char,
           key: ValueKey<String>(char),
-          style: AppTypography.mono(
-            size: size,
-            weight: FontWeight.w700,
+          style: GoogleFonts.shareTechMono(
+            fontSize: size,
+            fontWeight: FontWeight.w400,
             color: color,
-            height: 1.1,
+            height: 1.0,
           ).copyWith(
+            letterSpacing: size * -0.05,
             shadows: danger
                 ? [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 8)]
                 : null,

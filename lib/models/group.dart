@@ -15,6 +15,8 @@ class Group {
     required this.chat,
     required this.polls,
     required this.notifications,
+    this.icon = '♠️',
+    this.pinned = false,
   });
 
   final String id;
@@ -26,6 +28,12 @@ class Group {
   final List<ChatMessage> chat;
   final List<Poll> polls;
   final List<AppNotification> notifications;
+
+  /// Short emoji used as the group's icon in the sidebar and header.
+  final String icon;
+
+  /// When true the group floats to the top of the sidebar's group list.
+  final bool pinned;
 
   List<LiveGame> get upcomingGames =>
       games.where((g) => g.status.isUpcoming).toList();
@@ -41,6 +49,8 @@ class Group {
     List<ChatMessage>? chat,
     List<Poll>? polls,
     List<AppNotification>? notifications,
+    String? icon,
+    bool? pinned,
   }) {
     return Group(
       id: id,
@@ -52,6 +62,8 @@ class Group {
       chat: chat ?? this.chat,
       polls: polls ?? this.polls,
       notifications: notifications ?? this.notifications,
+      icon: icon ?? this.icon,
+      pinned: pinned ?? this.pinned,
     );
   }
 }

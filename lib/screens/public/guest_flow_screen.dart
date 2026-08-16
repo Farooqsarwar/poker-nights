@@ -187,7 +187,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         // Header
         Column(
           children: [
-            const BrandLockup(suitSize: 24, textSize: AppFontSizes.xl),
+            const PokerNightLogo(size: 40, showWordmark: false),
             const SizedBox(height: AppSpacing.xs),
             Text(game.settings.name, style: AppTypography.display(size: AppFontSizes.xl)),
             Text(
@@ -239,7 +239,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.xl),
-        const BrandLockup(suitSize: 32, textSize: AppFontSizes.xxl),
+        const PokerNightLogo(size: 80, showWordmark: false),
         const SizedBox(height: AppSpacing.lg),
         Text('Join as guest', textAlign: TextAlign.center, style: AppTypography.display(size: AppFontSizes.xxl)),
         const SizedBox(height: AppSpacing.xs),

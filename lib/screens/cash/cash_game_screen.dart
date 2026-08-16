@@ -277,10 +277,10 @@ class _SetupForm extends StatelessWidget {
                   label: 'Currency',
                   value: currency,
                   items: const [
-                    DropdownMenuItem(value: '\$', child: Text('\$ USD')),
-                    DropdownMenuItem(value: '€', child: Text('€ EUR')),
-                    DropdownMenuItem(value: '£', child: Text('£ GBP')),
-                    DropdownMenuItem(value: '¥', child: Text('¥ JPY')),
+                    DropdownMenuItem(value: '\$', child: Text('USD')),
+                    DropdownMenuItem(value: '€', child: Text('EUR')),
+                    DropdownMenuItem(value: '£', child: Text('GBP')),
+                    DropdownMenuItem(value: '¥', child: Text('JPY')),
                   ],
                   onChanged: onCurrencyChanged,
                 ),
@@ -313,7 +313,7 @@ class _SetupForm extends StatelessWidget {
               Expanded(
                 child: AppTextField(
                   controller: minBuyIn,
-                  label: 'Min buy-in ($currency)',
+                  label: 'Min buy-in',
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
               ),
@@ -321,7 +321,7 @@ class _SetupForm extends StatelessWidget {
               Expanded(
                 child: AppTextField(
                   controller: maxBuyIn,
-                  label: 'Max buy-in ($currency)',
+                  label: 'Max buy-in',
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
               ),
@@ -447,9 +447,9 @@ class _PlayersForm extends StatelessWidget {
             ),
             child: Column(
               children: [
-                _SummaryRow(label: 'Blinds', value: '$currency$smallBlind/$currency$bigBlind'),
+                _SummaryRow(label: 'Blinds', value: '$smallBlind/$bigBlind'),
                 const SizedBox(height: 4),
-                _SummaryRow(label: 'Buy-in range', value: '$currency$minBuyIn–$currency$maxBuyIn'),
+                _SummaryRow(label: 'Buy-in range', value: '$minBuyIn–$maxBuyIn'),
                 const SizedBox(height: 4),
                 _SummaryRow(label: 'Starting players', value: '$validCount'),
               ],

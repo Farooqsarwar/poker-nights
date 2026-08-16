@@ -48,13 +48,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openGame(BuildContext context, AppProvider app, LiveGame game) {
+    // Always set the current game first so every destination screen
+    // has the correct game in the provider (fixes navigation dead-ends).
+    app.setCurrentGame(game);
     final isAdmin = app.user?.isAdmin ?? false;
-    if (isAdmin && game.status.isActiveLive) {
+    if (game.status == LiveGameStatus.completed) {
+      context.go(RoutePaths.resultPodium);
+    } else if (isAdmin && game.status.isActiveLive) {
       context.go(RoutePaths.adminDashboard);
     } else if (game.status == LiveGameStatus.checkin && isAdmin) {
       context.go(RoutePaths.checkIn);
+    } else if (isAdmin) {
+      context.go(RoutePaths.invitation);
     } else {
-      context.go(isAdmin ? RoutePaths.adminDashboard : RoutePaths.playerLive);
+      // Members: route to invitation for RSVP/pre-game states,
+      // live screen only once the game is actually running.
+      if (game.status.isActiveLive) {
+        context.go(RoutePaths.playerLive);
+      } else {
+        context.go(RoutePaths.invitation);
+      }
     }
   }
 
@@ -63,7 +76,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final app = context.watch<AppProvider>();
     final user = app.user;
     final group = app.currentGroup;
-    final games = group.games.where((g) => g.status.isUpcoming).toList();
+    final isAdmin = user?.isAdmin ?? false;
+    // Draft games are only visible to admins (spec §3, §25).
+    final games = group.games
+        .where((g) => g.status.isUpcoming && (isAdmin || g.status != LiveGameStatus.draft))
+        .toList();
     final activeGame = games.where((g) => g.status.isActiveLive).firstOrNull;
     final unread = app.unreadCount;
 
@@ -484,7 +501,7 @@ class _UpcomingGames extends StatelessWidget {
               action: isAdmin
                   ? AppButton(
                       onPressed: () => context.go(RoutePaths.createTournament),
-                      child: const Text('Create First Tournament'),
+                      child: const Text('Create First Game'),
                     )
                   : null,
             ),
@@ -690,27 +707,72 @@ class _GroupCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(g.name, style: AppTypography.bodyLg.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: AppSpacing.md),
                 Row(
                   children: [
                     Expanded(
-                      child: Text('Members', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                      child: Text(
+                        g.name,
+                        style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w700),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    Text('${g.members.length}', style: AppTypography.bodySm.copyWith(color: AppColors.foreground, fontWeight: FontWeight.w500)),
+                    const Icon(Icons.chevron_right, color: AppColors.mutedForeground, size: 18),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.md),
+                // Member avatars overlapping row
+                if (g.members.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      SizedBox(
+                        height: 32,
+                        width: (g.members.take(5).length * 22 + 10).toDouble().clamp(32, 130),
+                        child: Stack(
+                          children: [
+                            for (var i = 0; i < g.members.take(5).length; i++)
+                              Positioned(
+                                left: i * 22.0,
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: AppColors.card, width: 2),
+                                    color: AppColors.avatarPalette[g.members[i].name.codeUnitAt(0) % AppColors.avatarPalette.length],
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    g.members[i].name.isNotEmpty ? g.members[i].name[0].toUpperCase() : '?',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        '${g.members.length} member${g.members.length == 1 ? '' : 's'}',
+                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
                 Row(
                   children: [
-                    Expanded(
-                      child: Text('Join Code', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
-                    ),
+                    Text('Join Code', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                    const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
+                        color: AppColors.primary.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(AppRadius.sm),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         g.joinCode,

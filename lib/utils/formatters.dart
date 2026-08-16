@@ -48,15 +48,15 @@ class Formatters {
     return '${h}h';
   }
 
-  /// Format money with the given currency symbol, always 2 decimals.
+  /// Format money without currency symbol, always 2 decimals.
   static String money(String currency, double amount) {
-    return '$currency${amount.toStringAsFixed(2)}';
+    return amount.toStringAsFixed(2);
   }
 
-  /// Signed money, e.g. '+$20.00' / '-$5.00'.
+  /// Signed money without currency symbol, e.g. '+20.00' / '-5.00'.
   static String signedMoney(String currency, double amount) {
     final sign = amount >= 0 ? '+' : '-';
-    return '$sign$currency${amount.abs().toStringAsFixed(2)}';
+    return '$sign${amount.abs().toStringAsFixed(2)}';
   }
 
   /// 'en-GB' style short date+time, e.g. '7 Aug 2026, 20:00'.

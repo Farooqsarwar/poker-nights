@@ -20,10 +20,8 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/app_tabs.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/code_display.dart';
-import '../../widgets/rsvp_badge.dart';
 
 /// Group hub mirroring the web `GroupPage`.
 class GroupScreen extends StatefulWidget {
@@ -91,13 +89,24 @@ class _GroupScreenState extends State<GroupScreen> {
   }
 
   void _openGame(BuildContext context, AppProvider app, LiveGame game) {
+    // Always set the current game first so destination screens
+    // have the correct game in the provider.
+    app.setCurrentGame(game);
     final isAdmin = app.user?.isAdmin ?? false;
-    if (isAdmin && game.status.isActiveLive) {
+    if (game.status == LiveGameStatus.completed) {
+      context.go(RoutePaths.resultPodium);
+    } else if (isAdmin && game.status.isActiveLive) {
       context.go(RoutePaths.adminDashboard);
     } else if (game.status == LiveGameStatus.checkin && isAdmin) {
       context.go(RoutePaths.checkIn);
+    } else if (isAdmin) {
+      context.go(RoutePaths.invitation);
     } else {
-      context.go(isAdmin ? RoutePaths.adminDashboard : RoutePaths.invitation);
+      if (game.status.isActiveLive) {
+        context.go(RoutePaths.playerLive);
+      } else {
+        context.go(RoutePaths.invitation);
+      }
     }
   }
 
@@ -106,61 +115,29 @@ class _GroupScreenState extends State<GroupScreen> {
     final app = context.watch<AppProvider>();
     final group = app.currentGroup;
     final user = app.user;
-
-    final upcomingGames = group.upcomingGames;
-    final pastGames = group.pastGames;
     final isAdmin = user?.isAdmin ?? false;
+    // Draft games are only visible to admins (spec §3, §25).
+    final upcomingGames = group.upcomingGames
+        .where((g) => isAdmin || g.status != LiveGameStatus.draft)
+        .toList();
+    final pastGames = group.pastGames;
 
     return AppPage(
       maxWidth: 960,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      group.name,
-                      style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      '${group.members.length} members',
-                      style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-                    ),
-                  ],
-                ),
-              ),
-              if (isAdmin) ...[
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => context.go(RoutePaths.presets),
-                  child: const Text('Presets'),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                AppButton(
-                  size: AppButtonSize.sm,
-                  onPressed: () => context.go(RoutePaths.createTournament),
-                  child: const Text('+ New game'),
-                ),
-              ],
-            ],
-          ),
+          _GroupHeader(group: group, isAdmin: isAdmin),
           const SizedBox(height: AppSpacing.lg),
           CodeDisplay(code: group.joinCode, label: 'Group code'),
           const SizedBox(height: AppSpacing.lg),
-          AppTabs(
+          _CustomTabBar(
             tabs: [
-              AppTabItem(id: 'games', label: 'Games', count: upcomingGames.length),
-              AppTabItem(id: 'members', label: 'Members', count: group.members.length),
-              AppTabItem(id: 'chat', label: 'Chat', count: group.chat.where((m) => !m.deleted).length),
-              AppTabItem(id: 'polls', label: 'Polls', count: group.polls.length),
-              AppTabItem(id: 'history', label: 'History', count: pastGames.length),
+              _TabItem(id: 'games', label: 'Games', count: upcomingGames.length),
+              _TabItem(id: 'members', label: 'Members', count: group.members.length),
+              _TabItem(id: 'chat', label: 'Chat', count: group.chat.where((m) => !m.deleted).length),
+              _TabItem(id: 'polls', label: 'Polls', count: group.polls.length),
+              _TabItem(id: 'history', label: 'History', count: pastGames.length),
             ],
             active: _tab,
             onChanged: (t) => setState(() => _tab = t),
@@ -250,9 +227,9 @@ class _GroupScreenState extends State<GroupScreen> {
   Widget _buildGames(AppProvider app, Group group, List<LiveGame> games, bool isAdmin, AppUser? user) {
     if (games.isEmpty) {
       return AppEmptyState(
-        icon: Icons.casino_outlined,
+        icon: Icons.sports_esports_outlined, // Wait, fallback
         title: 'No upcoming games',
-        description: 'Create a new tournament to get started.',
+        description: 'No upcoming games — create the first one!',
         action: isAdmin
             ? AppButton(
                 onPressed: () => context.go(RoutePaths.createTournament),
@@ -264,91 +241,11 @@ class _GroupScreenState extends State<GroupScreen> {
     return Column(
       children: [
         for (final game in games)
-          AppCard(
+          _PremiumGameCard(
+            game: game,
+            app: app,
+            user: user,
             onTap: () => _openGame(context, app, game),
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            margin: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(game.settings.name, style: AppTypography.bodyStyle.copyWith(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${game.settings.date} at ${game.settings.time} · '
-                        '${game.settings.locationPrivate ? 'Address shared at check-in' : game.settings.location}',
-                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                      ),
-                      const SizedBox(height: 2),
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text('Buy-in: ${game.settings.buyIn}', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-                          const SizedBox(width: AppSpacing.sm),
-                          Text('${game.goingCount} going', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-                          const SizedBox(width: AppSpacing.sm),
-                          Text('Code: ', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-                          Text(game.publicCode, style: AppTypography.mono(size: AppFontSizes.xs, color: AppColors.primary)),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          RSVPBadge(
-                            rsvp: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp,
-                          ),
-                          if (user != null) ...[
-                              PopupMenuButton<Rsvp>(
-                                initialValue: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp,
-                                onSelected: (val) => app.setRSVP(val, gameId: game.id),
-                                itemBuilder: (context) => [
-                                  for (final opt in [
-                                    Rsvp.going,
-                                    Rsvp.goingPlus1,
-                                    Rsvp.goingPlus2,
-                                    Rsvp.goingPlus3,
-                                    Rsvp.goingPlus4,
-                                  ])
-                                    PopupMenuItem(value: opt, child: Text(opt.label)),
-                                ],
-                                child: _RsvpBtn(
-                                  opt: Rsvp.going,
-                                  current: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp,
-                                  overrideLabel: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp?.isGoing == true
-                                      ? game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp?.label
-                                      : 'Going ▾',
-                                ),
-                              ),
-                              for (final opt in const [Rsvp.maybe, Rsvp.cant])
-                                Padding(
-                                  padding: const EdgeInsets.only(left: AppSpacing.xs),
-                                  child: InkWell(
-                                    onTap: () => app.setRSVP(opt, gameId: game.id),
-                                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                                    child: _RsvpBtn(opt: opt, current: game.players.where((p) => p.id == app.user?.id).firstOrNull?.rsvp),
-                                  ),
-                                ),
-                            ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => _openGame(context, app, game),
-                  child: const Text('Open'),
-                ),
-              ],
-            ),
           ),
       ],
     );
@@ -695,28 +592,40 @@ class _ChatBubble extends StatelessWidget {
             child: Column(
               crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                Text(
-                  message.authorName,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                    fontSize: 10,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      message.authorName,
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.foreground,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      Formatters.relativeTime(message.timestamp),
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                   decoration: BoxDecoration(
-                    color: isMine ? AppColors.primary : AppColors.secondary,
+                    color: AppColors.card,
                     borderRadius: BorderRadius.circular(AppRadius.lg).copyWith(
                       topRight: isMine ? const Radius.circular(2) : null,
                       topLeft: !isMine ? const Radius.circular(2) : null,
                     ),
-                    border: isMine ? null : Border.all(color: AppColors.border),
+                    border: Border.all(color: AppColors.border),
                   ),
                   child: Text(
                     message.body,
                     style: AppTypography.bodySm.copyWith(
-                      color: isMine ? AppColors.primaryForeground : AppColors.foreground,
+                      color: AppColors.foreground,
                     ),
                   ),
                 ),
@@ -845,6 +754,8 @@ class _PollOption extends StatelessWidget {
           children: [
             Row(
               children: [
+                const Icon(Icons.radio_button_unchecked, size: 16, color: AppColors.mutedForeground),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
                     label,
@@ -882,27 +793,291 @@ class _PollOption extends StatelessWidget {
 }
 
 class _RsvpBtn extends StatelessWidget {
-  const _RsvpBtn({required this.opt, this.current, this.overrideLabel});
+  const _RsvpBtn({required this.opt, this.current});
   final Rsvp opt;
   final Rsvp? current;
-  final String? overrideLabel;
   @override
   Widget build(BuildContext context) {
     final active = current != null && (opt == Rsvp.going ? current!.isGoing : current == opt);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
       decoration: BoxDecoration(
-        color: active ? AppColors.primarySoft : AppColors.muted,
+        color: active ? AppColors.primary : AppColors.muted,
         borderRadius: BorderRadius.circular(AppRadius.pill),
         border: Border.all(color: active ? AppColors.primary : AppColors.border),
       ),
       child: Text(
-        overrideLabel ?? opt.label,
+        opt.label,
         style: AppTypography.bodyXs.copyWith(
-          color: active ? AppColors.primary : AppColors.mutedForeground,
+          color: active ? AppColors.primaryForeground : AppColors.mutedForeground,
           fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
 }
+
+class _GroupHeader extends StatelessWidget {
+  final Group group;
+  final bool isAdmin;
+  const _GroupHeader({required this.group, required this.isAdmin});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+          Positioned(
+            right: -20,
+            top: -20,
+            child: Text(
+              group.icon,
+              style: TextStyle(
+                fontSize: 120,
+                color: AppColors.border.withValues(alpha: 0.2),
+              ),
+            ),
+          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    group.name,
+                    style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      Text(
+                        '${group.members.length} members',
+                        style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      SizedBox(
+                        height: 32,
+                        child: Row(
+                          children: [
+                            for (var i = 0; i < group.members.length && i < 5; i++)
+                              Align(
+                                widthFactor: 0.6,
+                                child: AppAvatar(name: group.members[i].name, size: AppAvatarSize.sm),
+                              ),
+                            if (group.members.length > 5)
+                              Align(
+                                widthFactor: 0.6,
+                                child: CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: AppColors.border,
+                                  child: Text('+${group.members.length - 5}', style: AppTypography.monoXs),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (isAdmin) ...[
+              AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => context.go(RoutePaths.presets),
+                child: const Text('Presets'),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => context.read<AppProvider>().togglePinGroup(group),
+                child: Text(group.pinned ? 'Unpin' : 'Pin'),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AppButton(
+                size: AppButtonSize.sm,
+                onPressed: () => context.go(RoutePaths.createTournament),
+                child: const Text('+ New game'),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _TabItem {
+  final String id;
+  final String label;
+  final int count;
+  _TabItem({required this.id, required this.label, required this.count});
+}
+
+class _CustomTabBar extends StatelessWidget {
+  final List<_TabItem> tabs;
+  final String active;
+  final ValueChanged<String> onChanged;
+  
+  const _CustomTabBar({required this.tabs, required this.active, required this.onChanged});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: tabs.map((t) {
+          final isActive = t.id == active;
+          return Expanded(
+            child: InkWell(
+              onTap: () => onChanged(t.id),
+              child: Container(
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isActive ? AppColors.primary : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                child: Text(
+                  '${t.label} ${t.count > 0 ? '(${t.count})' : ''}',
+                  style: AppTypography.bodySm.copyWith(
+                    color: isActive ? Colors.white : AppColors.mutedForeground,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _PremiumGameCard extends StatefulWidget {
+  final LiveGame game;
+  final AppProvider app;
+  final AppUser? user;
+  final VoidCallback onTap;
+  
+  const _PremiumGameCard({required this.game, required this.app, required this.user, required this.onTap});
+
+  @override
+  State<_PremiumGameCard> createState() => _PremiumGameCardState();
+}
+
+class _PremiumGameCardState extends State<_PremiumGameCard> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final game = widget.game;
+    final rsvp = game.players.where((p) => p.id == widget.user?.id).firstOrNull?.rsvp;
+    
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.border),
+            boxShadow: _hovering
+                ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.2), blurRadius: 12, spreadRadius: 2)]
+                : [],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    AppBadge(
+                      label: game.status.name.toUpperCase(),
+                      variant: game.status.isActiveLive ? AppBadgeVariant.accent : AppBadgeVariant.muted,
+                    ),
+                    const Icon(Icons.chevron_right, color: AppColors.mutedForeground),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  game.settings.name,
+                  style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w700),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today, size: 14, color: AppColors.mutedForeground),
+                    const SizedBox(width: 4),
+                    Text(game.settings.date, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.access_time, size: 14, color: AppColors.mutedForeground),
+                    const SizedBox(width: 4),
+                    Text(game.settings.time, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, size: 14, color: AppColors.mutedForeground),
+                    const SizedBox(width: 4),
+                    Text(
+                      game.settings.locationPrivate ? 'Address shared at check-in' : game.settings.location,
+                      style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text('Buy-in: ${game.settings.buyIn}', style: AppTypography.bodySm.copyWith(color: AppColors.foreground, fontWeight: FontWeight.w600)),
+                const SizedBox(height: AppSpacing.md),
+                if (widget.user != null)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final opt in [
+                          Rsvp.going,
+                          Rsvp.goingPlus1,
+                          Rsvp.goingPlus2,
+                          Rsvp.goingPlus3,
+                          Rsvp.maybe,
+                          Rsvp.cant
+                        ])
+                          Padding(
+                            padding: const EdgeInsets.only(right: AppSpacing.xs),
+                            child: InkWell(
+                              onTap: () => widget.app.setRSVP(opt, gameId: game.id),
+                              borderRadius: BorderRadius.circular(AppRadius.pill),
+                              child: _RsvpBtn(opt: opt, current: rsvp),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

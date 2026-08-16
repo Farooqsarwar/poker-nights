@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+
 import 'package:go_router/go_router.dart';
 
 import '../../app/colors.dart';
@@ -21,7 +21,7 @@ class LandingScreen extends StatefulWidget {
 
 class _LandingScreenState extends State<LandingScreen> {
   void _joinAsGuest() {
-    context.go('/join');
+    context.go(RoutePaths.join);
   }
 
   @override
@@ -48,14 +48,18 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final isMobile = AppBreakpoints.deviceOf(context).isMobile;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl, vertical: AppSpacing.lg),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? AppSpacing.lg : AppSpacing.xxl,
+        vertical: AppSpacing.lg,
+      ),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.hairlineWhite)),
       ),
       child: Row(
         children: [
-          const BrandLockup(),
+          const PokerNightLogo(size: 40, showWordmark: false),
           const Spacer(),
           AppButton(
             variant: AppButtonVariant.secondary,
@@ -78,42 +82,6 @@ class _LandingScreenState extends State<LandingScreen> {
     final headingSize = isDesktop ? 48.0 : 32.0;
     return Stack(
       children: [
-        // Decorative suits
-        Positioned.fill(
-          child: IgnorePointer(
-            child: Stack(
-              children: [
-                // Pulsing Background Glow
-                Positioned(
-                  top: -200,
-                  right: -150,
-                  child: Container(
-                    width: 700,
-                    height: 700,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [AppColors.primary.withValues(alpha: 0.15), Colors.transparent],
-                      ),
-                    ),
-                  )
-                      .animate(onPlay: (controller) => controller.repeat(reverse: true))
-                      .scaleXY(begin: 1.0, end: 1.15, duration: 4.seconds, curve: Curves.easeInOut),
-                ),
-                // Spinning Wheel / Rays effect
-                Positioned(
-                  top: -150,
-                  right: -150,
-                  child: _SpinningRays(),
-                ),
-                _AnimatedSuit('♠', const Alignment(0, 0), 0.1, 0),
-                _AnimatedSuit('♥', const Alignment(1, -0.8), 0.25, 200),
-                _AnimatedSuit('♦', const Alignment(-1, 0.2), 0.15, 400),
-                _AnimatedSuit('♣', const Alignment(-0.4, 1.1), 0.2, 600),
-              ],
-            ),
-          ),
-        ),
         Padding(
           padding: EdgeInsets.symmetric(
             horizontal: isDesktop ? AppSpacing.xxxl : AppSpacing.lg,
@@ -152,12 +120,12 @@ class _LandingScreenState extends State<LandingScreen> {
                   weight: FontWeight.w700,
                   height: 1.15,
                 ),
-              ).animate().fadeIn(duration: 800.ms).slideY(begin: -0.2, curve: Curves.easeOutBack),
+              ),
               Text(
                 'poker night',
                 textAlign: TextAlign.center,
                 style: AppTypography.crimsonShimmer(size: headingSize),
-              ).animate().fadeIn(delay: 200.ms, duration: 800.ms).scale(begin: const Offset(0.9, 0.9)),
+              ),
               const SizedBox(height: AppSpacing.lg),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 500),
@@ -181,7 +149,7 @@ class _LandingScreenState extends State<LandingScreen> {
                   'Cash game tracker',
                   'Group chat',
                 ].map((f) => _FeaturePill(label: f)).toList(),
-              ).animate().fadeIn(delay: 200.ms, duration: 800.ms).slideY(begin: 0.2),
+              ),
               const SizedBox(height: AppSpacing.xl),
               // Main CTA
               AppButton(
@@ -191,8 +159,10 @@ class _LandingScreenState extends State<LandingScreen> {
                 child: const Text('Join a game as guest'),
               ),
               const SizedBox(height: AppSpacing.xl),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.md,
                 children: [
                   AppButton(
                     variant: AppButtonVariant.secondary,
@@ -200,7 +170,6 @@ class _LandingScreenState extends State<LandingScreen> {
                     onPressed: () => context.go(RoutePaths.register),
                     child: const Text('Create free account'),
                   ),
-                  const SizedBox(width: AppSpacing.md),
                   AppButton(
                     variant: AppButtonVariant.secondary,
                     size: AppButtonSize.md,
@@ -260,7 +229,7 @@ class _LandingScreenState extends State<LandingScreen> {
                 ),
               ),
             ),
-        ].animate(interval: 100.ms).fadeIn(duration: 600.ms).slideY(begin: 0.1),
+        ],
       ),
     );
   }
@@ -278,8 +247,9 @@ class _LandingScreenState extends State<LandingScreen> {
         children: [
           const Text('© 2026 Poker Night. All rights reserved.',
               style: TextStyle(fontSize: AppFontSizes.xs, color: AppColors.mutedForeground)),
-          Row(
-            mainAxisSize: MainAxisSize.min,
+          Wrap(
+            spacing: AppSpacing.lg,
+            runSpacing: AppSpacing.sm,
             children: [
               for (final l in ['Privacy Policy', 'Terms of Service', 'Support'])
                 Padding(
@@ -312,112 +282,7 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 }
 
-class _AnimatedSuit extends StatefulWidget {
-  const _AnimatedSuit(this.suit, this.alignment, this.opacity, this.delayMs);
 
-  final String suit;
-  final Alignment alignment;
-  final double opacity;
-  final int delayMs;
-
-  @override
-  State<_AnimatedSuit> createState() => _AnimatedSuitState();
-}
-
-class _AnimatedSuitState extends State<_AnimatedSuit> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 12))
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) _controller.repeat();
-      });
-    Future.delayed(Duration(milliseconds: widget.delayMs), () {
-      if (mounted) _controller.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: widget.alignment,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: FadeTransition(
-          opacity: TweenSequence<double>([
-            TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeOut)), weight: 20),
-            TweenSequenceItem(tween: ConstantTween(1.0), weight: 60),
-            TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeIn)), weight: 20),
-          ]).animate(_controller),
-          child: SlideTransition(
-            position: Tween(begin: const Offset(0, 0.4), end: const Offset(0, -0.4)).animate(
-              CurvedAnimation(parent: _controller, curve: Curves.linear),
-            ),
-            child: RotationTransition(
-              turns: Tween(begin: 0.0, end: 0.2).animate(
-                CurvedAnimation(parent: _controller, curve: Curves.linear),
-              ),
-              child: Text(
-                widget.suit,
-                style: AppTypography.display(
-                  size: 120,
-                  weight: FontWeight.w700,
-                  color: AppColors.foreground.withValues(alpha: widget.opacity * 0.4),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SpinningRays extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 700,
-      height: 700,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: List.generate(12, (index) {
-          return Transform.rotate(
-            angle: (index * 3.14159) / 6,
-            child: Container(
-              height: 700,
-              width: 12,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.0),
-                    AppColors.primary.withValues(alpha: 0.06),
-                    AppColors.primary.withValues(alpha: 0.0),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    )
-        .animate(onPlay: (controller) => controller.repeat())
-        .rotate(duration: 40.seconds, curve: Curves.linear);
-  }
-}
 
 class _FeaturePill extends StatefulWidget {
   const _FeaturePill({required this.label});

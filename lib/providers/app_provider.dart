@@ -148,7 +148,7 @@ class AppProvider extends ChangeNotifier {
         final idx = games.indexWhere((g) => g.id == _currentGame!.id);
         if (idx != -1) {
           games[idx] = _currentGame!;
-          _currentGroup = _currentGroup.copyWith(games: games);
+          _setGroup(_currentGroup.copyWith(games: games));
         }
       } else {
         // Revert local down to cloud
@@ -355,21 +355,43 @@ class AppProvider extends ChangeNotifier {
   Group _currentGroup = MockData.demoGroup;
   Group get currentGroup => _currentGroup;
 
-  void setCurrentGroup(Group group) {
+  /// Every group the user belongs to. The current group is always in this
+  /// list; pinned groups float to the top of the sidebar.
+  List<Group> _groups = [MockData.demoGroup, MockData.demoGroup2];
+  List<Group> get groups => List.unmodifiable(_groups);
+
+  /// Groups ordered pinned-first then alphabetically (client feedback: the
+  /// sidebar lists all groups, pinnable, not a single slot).
+  List<Group> get orderedGroups {
+    final sorted = [..._groups]
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+    return sorted;
+  }
+
+  /// Replaces [currentGroup] everywhere it lives so the sidebar list and the
+  /// group hub always reflect the same state.
+  void _setGroup(Group group) {
     _currentGroup = group;
+    final i = _groups.indexWhere((g) => g.id == group.id);
+    _groups = i == -1 ? [..._groups, group] : ([..._groups]..[i] = group);
+  }
+
+  void setCurrentGroup(Group group) {
+    _setGroup(group);
     notifyListeners();
   }
 
   bool joinGroup(String code) {
     if (code.trim().toUpperCase() == MockData.demoGroup.joinCode) {
-      _currentGroup = MockData.demoGroup;
+      _setGroup(MockData.demoGroup);
       notifyListeners();
       return true;
     }
     return false;
   }
 
-  Group createGroup(String name) {
+  Group createGroup(String name, {String icon = '♠️'}) {
     final group = Group(
       id: 'grp-${DateTime.now().millisecondsSinceEpoch}',
       name: name,
@@ -380,10 +402,17 @@ class AppProvider extends ChangeNotifier {
       chat: const [],
       polls: const [],
       notifications: const [],
+      icon: icon,
     );
-    _currentGroup = group;
+    _setGroup(group);
     notifyListeners();
     return group;
+  }
+
+  /// Pins/unpins a group so it floats to the top of the sidebar's group list.
+  void togglePinGroup(Group group) {
+    _setGroup(group.copyWith(pinned: !group.pinned));
+    notifyListeners();
   }
 
   void toggleAdminRole(String userId, bool isAdmin) {
@@ -395,7 +424,7 @@ class AppProvider extends ChangeNotifier {
       }
       return m;
     }).toList();
-    _currentGroup = _currentGroup.copyWith(members: members);
+    _setGroup(_currentGroup.copyWith(members: members));
     notifyListeners();
   }
 
@@ -508,13 +537,16 @@ class AppProvider extends ChangeNotifier {
     if (game == null) return;
     final games = _currentGroup.games;
     final idx = games.indexWhere((g) => g.id == game.id);
-    _currentGroup = _currentGroup.copyWith(
+    _setGroup(_currentGroup.copyWith(
       games: idx == -1 ? [...games, game] : ([...games]..[idx] = game),
-    );
+    ));
   }
 
   void updateGameStatus(LiveGameStatus status) {
     _currentGame = _currentGame!.copyWith(status: status);
+    // Client feedback (07-018): inside the 30-minute window before start the
+    // AI refreshes the stacks/blinds/levels estimate from the expected count.
+    if (status == LiveGameStatus.checkin) refreshEstimate();
     _syncGroupGame();
     notifyListeners();
   }
@@ -589,7 +621,7 @@ class AppProvider extends ChangeNotifier {
       chat: [...game.chat, card],
       originalLevels: List.of(game.structure.levels),
     );
-    _currentGroup = _currentGroup.copyWith(
+    _setGroup(_currentGroup.copyWith(
       chat: [..._currentGroup.chat, card],
       games: _currentGroup.games
           .map((g) => g.id == game.id
@@ -600,7 +632,7 @@ class AppProvider extends ChangeNotifier {
                 )
               : g)
           .toList(),
-    );
+    ));
     _syncGroupGame();
     addAuditRecord(
       'publish',
@@ -644,7 +676,12 @@ class AppProvider extends ChangeNotifier {
         prev.anteAfterLevel != s.anteAfterLevel ||
         prev.anteStyle != s.anteStyle ||
         prev.koEnabled != s.koEnabled ||
-        prev.koAmount != s.koAmount;
+        prev.koAmount != s.koAmount ||
+        prev.rebuys != s.rebuys ||
+        prev.rebuysCloseLevel != s.rebuysCloseLevel ||
+        prev.reEntry != s.reEntry ||
+        prev.addOn != s.addOn ||
+        prev.addOnCloseLevel != s.addOnCloseLevel;
 
     final edits = <String>[];
     if (prev.name != s.name) edits.add('name → ${s.name}');
@@ -852,6 +889,28 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
+  /// Rewinds to the previous level (spec §12 "Previous" control). The clock
+  /// resets to the full previous-level duration and the game resumes running.
+  void previousLevel() {
+    final prev = _currentGame!.currentLevel - 1;
+    if (prev < 1) return;
+    _pushUndo();
+    _levelAnnouncementMarks.clear();
+    final level = _currentGame!.structure.levels[prev - 1];
+    _currentGame = _currentGame!.copyWith(
+      currentLevel: prev,
+      secondsRemaining: _currentGame!.structure.levelDuration * 60,
+      timerRunning: true,
+      status: LiveGameStatus.running,
+      speedRecommendation: null,
+    );
+    addAnnouncement(
+      'Level $prev. Blinds ${level.sb} and ${level.bb}'
+      '${level.ante != null ? ', ante ${level.ante}' : ''}.',
+      true,
+    );
+  }
+
   /// Restarts the clock for the current level (spec §12: requires
   /// confirmation showing its exact effect — the admin UI gates this behind a
   /// confirm dialog). Resets to the full level duration and resumes running.
@@ -964,6 +1023,8 @@ class AppProvider extends ChangeNotifier {
               : p)
           .toList(),
       totalChipsInPlay: _currentGame!.totalChipsInPlay + rebuyStack,
+      rebuyRequests:
+          _currentGame!.rebuyRequests.where((id) => id != playerId).toList(),
     );
     // Recalculate prize pool/prizes after money enters the game.
     // This updates only prizePool, organizerAmount and prizes on the structure,
@@ -971,6 +1032,23 @@ class AppProvider extends ChangeNotifier {
     _updatePrizePool();
   }
 
+  /// Registers a player's request for a rebuy from the live view. The admin
+  /// approves it from the dashboard, which clears the request.
+  void requestRebuy(String playerId) {
+    if (_currentGame!.rebuyRequests.contains(playerId)) return;
+    _currentGame = _currentGame!.copyWith(
+      rebuyRequests: [..._currentGame!.rebuyRequests, playerId],
+    );
+    notifyListeners();
+  }
+
+  void cancelRebuyRequest(String playerId) {
+    _currentGame = _currentGame!.copyWith(
+      rebuyRequests:
+          _currentGame!.rebuyRequests.where((id) => id != playerId).toList(),
+    );
+    notifyListeners();
+  }
   /// Records a re-entry (checklist §12.5): a separate, secondary option that
   /// grants the approved entry stack and is tracked independently of rebuys
   /// (12-046/12-047). Closes with late registration/rebuys (12-049), which is
@@ -1002,9 +1080,29 @@ class AppProvider extends ChangeNotifier {
               p.id == playerId && !p.hasAddOn ? p.copyWith(hasAddOn: true) : p)
           .toList(),
       totalChipsInPlay: _currentGame!.totalChipsInPlay + addOnStack,
+      addOnRequests:
+          _currentGame!.addOnRequests.where((id) => id != playerId).toList(),
     );
     // Recalculate prize pool/prizes after money enters the game.
     _updatePrizePool();
+  }
+
+  /// Registers a player's request for an add-on from the live view. The admin
+  /// approves it during the settlement flow, which clears the request.
+  void requestAddOn(String playerId) {
+    if (_currentGame!.addOnRequests.contains(playerId)) return;
+    _currentGame = _currentGame!.copyWith(
+      addOnRequests: [..._currentGame!.addOnRequests, playerId],
+    );
+    notifyListeners();
+  }
+
+  void cancelAddOnRequest(String playerId) {
+    _currentGame = _currentGame!.copyWith(
+      addOnRequests:
+          _currentGame!.addOnRequests.where((id) => id != playerId).toList(),
+    );
+    notifyListeners();
   }
 
   void undoLast() {
@@ -1049,6 +1147,55 @@ class AppProvider extends ChangeNotifier {
               : p)
           .toList(),
     );
+    notifyListeners();
+  }
+
+  /// Closes door check-in (spec §4.7). Once closed, the host is prompted to
+  /// start the tournament and no further walk-ins are accepted.
+  void closeCheckIn() {
+    _currentGame = _currentGame!.copyWith(checkInClosed: true);
+    _syncGroupGame();
+    addAnnouncement(
+        'Check-in is now closed. No more players may join unless re-opened.', false);
+    notifyListeners();
+  }
+
+  void reopenCheckIn() {
+    _currentGame = _currentGame!.copyWith(checkInClosed: false);
+    _syncGroupGame();
+    addAnnouncement('Check-in re-opened.', false);
+    notifyListeners();
+  }
+
+  /// Registers an un-invited walk-in player at the door (spec §4.7). They are
+  /// checked in immediately and seated by the next seating generation.
+  void addWalkInPlayer(String name) {
+    final game = _currentGame;
+    if (game == null || name.trim().isEmpty) return;
+    _pushUndo();
+    final id = 'p-${DateTime.now().millisecondsSinceEpoch}';
+    final player = Player(
+      id: id,
+      name: name.trim(),
+      isGuest: false,
+      rsvp: null,
+      checkedIn: true,
+      confirmed: true,
+      eliminated: false,
+      rebuys: 0,
+      hasAddOn: false,
+      knockouts: 0,
+      table: 0,
+      seat: 0,
+      active: true,
+    );
+    _currentGame = game.copyWith(
+      players: [...game.players, player],
+      totalChipsInPlay: game.totalChipsInPlay + game.structure.startingStack,
+    );
+    _updatePrizePool();
+    _syncGroupGame();
+    addAnnouncement('${player.name} walked in and is checked in.', true);
     notifyListeners();
   }
 
@@ -1755,6 +1902,7 @@ class AppProvider extends ChangeNotifier {
         rebuysCloseLevel: s.rebuysCloseLevel,
         reEntry: s.reEntry,
         addOn: s.addOn,
+        addOnCloseLevel: s.addOnCloseLevel,
         anteEnabled: s.anteEnabled,
         anteAfterLevel: s.anteAfterLevel,
         anteStyle: s.anteStyle,
@@ -1771,6 +1919,18 @@ class AppProvider extends ChangeNotifier {
       'Structure recalculated for $count confirmed player${count != 1 ? 's' : ''}.',
       true,
     );
+  }
+
+  /// Client feedback (07-018): inside the 30-minute window before start the AI
+  /// refreshes stacks/blinds/levels from the current expected player count.
+  /// No-op once stacks are locked (game running).
+  void refreshEstimate() {
+    final game = _currentGame;
+    if (game == null || !game.estimateDue) return;
+    recalculateStructure();
+    addAuditRecord('structure_estimate',
+        'AI refreshed the structure estimate for ${game.settings.players} expected players.');
+    notifyListeners();
   }
 
   /// Applies admin edits to future levels (the structure editor modal).
@@ -1930,14 +2090,14 @@ class AppProvider extends ChangeNotifier {
     if (gameId != null && gameId == _currentGame!.id) {
       _currentGame = _currentGame!.copyWith(chat: [..._currentGame!.chat, msg]);
     } else {
-      _currentGroup = _currentGroup.copyWith(chat: [..._currentGroup.chat, msg]);
+      _setGroup(_currentGroup.copyWith(chat: [..._currentGroup.chat, msg]));
     }
     notifyListeners();
     return null;
   }
 
   void deleteMessage(String msgId) {
-    _currentGroup = _currentGroup.copyWith(
+    _setGroup(_currentGroup.copyWith(
       chat: _currentGroup.chat
           .map((m) => m.id == msgId ? ChatMessage(
               id: m.id,
@@ -1948,7 +2108,7 @@ class AppProvider extends ChangeNotifier {
               deleted: true,
             ) : m)
           .toList(),
-    );
+    ));
     _currentGame = _currentGame!.copyWith(
       chat: _currentGame!.chat
           .map((m) => m.id == msgId ? ChatMessage(
@@ -1986,7 +2146,7 @@ class AppProvider extends ChangeNotifier {
       closed: false,
       createdAt: DateTime.now(),
     );
-    _currentGroup = _currentGroup.copyWith(polls: [..._currentGroup.polls, poll]);
+    _setGroup(_currentGroup.copyWith(polls: [..._currentGroup.polls, poll]));
     notifyListeners();
     return null;
   }
@@ -1994,7 +2154,7 @@ class AppProvider extends ChangeNotifier {
   void votePoll(String pollId, String option) {
     final userId = _user?.id;
     if (userId == null) return;
-    _currentGroup = _currentGroup.copyWith(
+    _setGroup(_currentGroup.copyWith(
       polls: _currentGroup.polls
           .map((p) => p.id == pollId
               ? Poll(
@@ -2007,13 +2167,13 @@ class AppProvider extends ChangeNotifier {
                 )
               : p)
           .toList(),
-    );
+    ));
     notifyListeners();
   }
 
   /// Admin closes a poll so it no longer accepts votes (checklist 08-022/08-023).
   void closePoll(String pollId) {
-    _currentGroup = _currentGroup.copyWith(
+    _setGroup(_currentGroup.copyWith(
       polls: _currentGroup.polls
           .map((p) => p.id == pollId
               ? Poll(
@@ -2026,7 +2186,7 @@ class AppProvider extends ChangeNotifier {
                 )
               : p)
           .toList(),
-    );
+    ));
     notifyListeners();
   }
 
@@ -2059,7 +2219,7 @@ class AppProvider extends ChangeNotifier {
       }
     }
     // Keep the group's copy of the game in sync so badges update on the hub.
-    _currentGroup = _currentGroup.copyWith(
+    _setGroup(_currentGroup.copyWith(
       games: _currentGroup.games
           .map((g) => (gameId != null ? g.id == gameId : _currentGame != null && g.id == _currentGame!.id)
               ? g.copyWith(
@@ -2069,7 +2229,7 @@ class AppProvider extends ChangeNotifier {
                 )
               : g)
           .toList(),
-    );
+    ));
     notifyListeners();
   }
 
@@ -2358,7 +2518,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── Voice & misc ───────────────────────────────────────────────────────────
-  bool _voiceEnabled = false;
+  bool _voiceEnabled = true;
   bool get voiceEnabled => _voiceEnabled;
 
   void toggleVoice() {
@@ -2439,6 +2599,47 @@ class AppProvider extends ChangeNotifier {
   void setCompactSummary(bool value) {
     if (_compactSummary == value) return;
     _compactSummary = value;
+    notifyListeners();
+  }
+
+  /// SMS/text notifications for RSVPs and game events.
+  bool _smsEnabled = false;
+  bool get smsEnabled => _smsEnabled;
+
+  void setSmsEnabled(bool value) {
+    if (_smsEnabled == value) return;
+    _smsEnabled = value;
+    notifyListeners();
+  }
+
+  /// Theme preference: one of "dark", "light", "system".
+  String _themePreference = 'dark';
+  String get themePreference => _themePreference;
+
+  void setThemePreference(String value) {
+    if (_themePreference == value) return;
+    _themePreference = value;
+    notifyListeners();
+  }
+
+  /// Id of the chip set used as the default for new tournaments; null = the
+  /// standard set.
+  String? _defaultChipSetId;
+  String? get defaultChipSetId => _defaultChipSetId;
+
+  void setDefaultChipSet(String? id) {
+    if (_defaultChipSetId == id) return;
+    _defaultChipSetId = id;
+    notifyListeners();
+  }
+
+  /// Selected avatar colour index (into the app's avatar palette).
+  int _avatarColorIndex = 0;
+  int get avatarColorIndex => _avatarColorIndex;
+
+  void setAvatarColor(int index) {
+    if (_avatarColorIndex == index) return;
+    _avatarColorIndex = index;
     notifyListeners();
   }
 

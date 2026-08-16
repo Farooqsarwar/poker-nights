@@ -20,7 +20,37 @@ import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/chip_token.dart';
 
-enum _SettlementStep { addOns, colorUp, confirm }
+enum _SettlementStep { confirmPlayers, addOns, colorUp, confirm }
+
+/// Client feedback (07-018): the AI suggests an add-on price from the current
+/// player count, blinds and average stack. Stack depth (avg stack / big blind)
+/// drives the value of the add-on stack: the shorter stacks are, the more the
+/// add-on is worth, so the suggested price moves up and vice-versa. The result
+/// is clamped to ±25% of the buy-in and rounded to a clean multiple of 5.
+int aiSuggestedAddOnPrice(LiveGame game) {
+  final settings = game.settings;
+  final structure = game.structure;
+  final buyIn = settings.buyIn;
+  if (buyIn <= 0) return 0;
+
+  final totalRebuys = game.players.fold<int>(
+    0,
+    (s, p) => s + p.rebuys + p.reEntries,
+  );
+  final addOnsGranted = game.players.where((p) => p.hasAddOn).length;
+  final totalChips =
+      settings.players * structure.startingStack +
+      totalRebuys * structure.rebuyStack +
+      addOnsGranted * structure.addOnStack;
+  final activeCount = game.activePlayers.length;
+  final avgStack = activeCount > 0 ? totalChips ~/ activeCount : structure.startingStack;
+  final bb = game.currentLevelData?.bb ?? structure.levels.first.bb;
+
+  final depth = bb > 0 ? avgStack / bb : 20.0;
+  final factor = (1.0 + (20.0 - depth) / 100.0).clamp(0.75, 1.25);
+  final raw = buyIn * factor;
+  return (raw / 5).round() * 5;
+}
 
 /// Rebuy settlement / color-up flow mirroring the web `RebuySettlementPage`.
 class RebuySettlementScreen extends StatefulWidget {
@@ -31,8 +61,12 @@ class RebuySettlementScreen extends StatefulWidget {
 }
 
 class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
-  _SettlementStep _step = _SettlementStep.addOns;
+  _SettlementStep _step = _SettlementStep.confirmPlayers;
   final Set<String> _addOnSelections = {};
+
+  // Step 0 — confirm final eliminations and rebuys
+  int _finalEliminations = 0;
+  int _finalRebuys = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -40,14 +74,17 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
     final game = app.currentGame;
 
     if (game == null) {
-      return Center(
-        child: Text('No active game.', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
-      );
+      // No game in provider — redirect back to a safe screen.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go(RoutePaths.adminDashboard);
+      });
+      return const SizedBox.shrink();
     }
 
     final structure = game.structure;
     final settings = game.settings;
     final activePlayers = game.activePlayers;
+    final suggestedPrice = aiSuggestedAddOnPrice(game);
     final totalAddOns = activePlayers.where((p) => _addOnSelections.contains(p.id)).length;
     final addOnChips = totalAddOns * structure.addOnStack;
     final estPrizePool = structure.prizePool + (settings.addOn ? totalAddOns * settings.buyIn : 0);
@@ -62,15 +99,17 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
             children: [
               AppBackButton(onTap: () => context.go(RoutePaths.adminDashboard)),
               const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Rebuy Settlement', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
-                  Text(
-                    'Level ${settings.rebuysCloseLevel} is complete — confirm before continuing',
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('End of Level 6 — Settlement', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+                    Text(
+                      'Confirm players → add-ons → color-up → continue',
+                      style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -97,6 +136,18 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Step 0: Confirm final eliminations & rebuys
+          if (_step == _SettlementStep.confirmPlayers)
+            _ConfirmPlayersStep(
+              activeCount: activePlayers.length,
+              eliminations: _finalEliminations,
+              rebuys: _finalRebuys,
+              onChanged: (e, r) => setState(() {
+                _finalEliminations = e;
+                _finalRebuys = r;
+              }),
+              onConfirm: () => setState(() => _step = _SettlementStep.addOns),
+            ),
           // Step 1: Add-ons
           if (_step == _SettlementStep.addOns)
             _AddOnsStep(
@@ -110,6 +161,21 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
               totalAddOns: totalAddOns,
               addOnChips: addOnChips,
               estPrizePool: estPrizePool,
+              suggestedPrice: suggestedPrice,
+              currentAddOnCost: settings.effectiveAddOnCost,
+              currentBB: game.currentLevelData?.bb ?? structure.levels.first.bb,
+              playerCount: activePlayers.length,
+              avgStack: activePlayers.isNotEmpty
+                  ? ((settings.players * structure.startingStack +
+                          game.players.fold<int>(0, (s, p) => s + p.rebuys + p.reEntries) *
+                              structure.rebuyStack +
+                          game.players.where((p) => p.hasAddOn).length *
+                              structure.addOnStack) ~/
+                      activePlayers.length)
+                  : structure.startingStack,
+              onApplySuggestion: () {
+                app.updateEventSettings(settings.copyWith(addOnCost: suggestedPrice));
+              },
               onConfirm: () => setState(() => _step = _SettlementStep.colorUp),
             ),
           // Step 2: Color-up
@@ -155,6 +221,12 @@ class _AddOnsStep extends StatelessWidget {
     required this.totalAddOns,
     required this.addOnChips,
     required this.estPrizePool,
+    required this.suggestedPrice,
+    required this.currentAddOnCost,
+    required this.currentBB,
+    required this.playerCount,
+    required this.avgStack,
+    required this.onApplySuggestion,
     required this.onConfirm,
   });
 
@@ -166,10 +238,17 @@ class _AddOnsStep extends StatelessWidget {
   final int totalAddOns;
   final int addOnChips;
   final int estPrizePool;
+  final int suggestedPrice;
+  final int currentAddOnCost;
+  final int currentBB;
+  final int playerCount;
+  final int avgStack;
+  final VoidCallback onApplySuggestion;
   final VoidCallback onConfirm;
 
   @override
   Widget build(BuildContext context) {
+    final isSuggestionNew = suggestedPrice > 0 && suggestedPrice != currentAddOnCost;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
@@ -181,8 +260,54 @@ class _AddOnsStep extends StatelessWidget {
             'Each active player may purchase one add-on worth ${Formatters.chips(addOnStack)} chips.',
             style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
           ),
+          const SizedBox(height: AppSpacing.md),
+          // AI price suggestion (client feedback 07-018).
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.auto_awesome, size: 16, color: AppColors.primary),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text('AI add-on price suggestion', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.primary)),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Based on $playerCount players, blinds ${Formatters.chips(currentBB)} and an average stack of ${Formatters.chips(avgStack)} — suggested price '
+                  '${suggestedPrice > 0 ? Formatters.chips(suggestedPrice) : '—'}.',
+                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Current add-on price: ${Formatters.chips(currentAddOnCost)}',
+                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                      ),
+                    ),
+                    if (isSuggestionNew)
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: onApplySuggestion,
+                        child: Text('Use ${Formatters.chips(suggestedPrice)}'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
           if (addOnChipPlan.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.md),
             Text(
               'Add-on composition',
               style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
@@ -482,6 +607,157 @@ class _ConfirmRow extends StatelessWidget {
         const Spacer(),
         Text(value, style: AppTypography.monoSm),
       ],
+    );
+  }
+}
+
+/// Step 0 — Admin confirms exact player count before add-on selection.
+/// Records any final eliminations and rebuys that happened during the
+/// last hand before the deadline (spec §4.13).
+class _ConfirmPlayersStep extends StatelessWidget {
+  const _ConfirmPlayersStep({
+    required this.activeCount,
+    required this.eliminations,
+    required this.rebuys,
+    required this.onChanged,
+    required this.onConfirm,
+  });
+
+  final int activeCount;
+  final int eliminations;
+  final int rebuys;
+  final void Function(int eliminations, int rebuys) onChanged;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final netActive = activeCount - eliminations + rebuys;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Step 1 — Confirm final player count',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Record any eliminations or rebuys that occurred during the last hand '
+            'before the deadline. This determines the exact number of active players '
+            'and the add-on recommendation.',
+            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          // Eliminations counter
+          _CounterRow(
+            label: 'Final eliminations this level',
+            value: eliminations,
+            onDecrement: eliminations > 0 ? () => onChanged(eliminations - 1, rebuys) : null,
+            onIncrement: () => onChanged(eliminations + 1, rebuys),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Rebuys counter
+          _CounterRow(
+            label: 'Final valid rebuys (hands started before deadline)',
+            value: rebuys,
+            onDecrement: rebuys > 0 ? () => onChanged(eliminations, rebuys - 1) : null,
+            onIncrement: () => onChanged(eliminations, rebuys + 1),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          // Summary
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.people_outline, size: 16, color: AppColors.primary),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  'Active players going to add-on phase: ',
+                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                ),
+                Text(
+                  '$netActive',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppButton(
+            fullWidth: true,
+            onPressed: onConfirm,
+            child: const AppIconLabel(
+              label: 'Confirm player count — go to add-ons',
+              trailing: Icons.arrow_forward,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// +/- counter row used in the confirm-players step.
+class _CounterRow extends StatelessWidget {
+  const _CounterRow({
+    required this.label,
+    required this.value,
+    required this.onIncrement,
+    this.onDecrement,
+  });
+
+  final String label;
+  final int value;
+  final VoidCallback onIncrement;
+  final VoidCallback? onDecrement;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.secondary,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onDecrement,
+            icon: Icon(
+              Icons.remove_circle_outline,
+              size: 20,
+              color: onDecrement != null ? AppColors.destructive : AppColors.border,
+            ),
+          ),
+          SizedBox(
+            width: 28,
+            child: Text(
+              '$value',
+              textAlign: TextAlign.center,
+              style: AppTypography.monoSm.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onIncrement,
+            icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary),
+          ),
+        ],
+      ),
     );
   }
 }

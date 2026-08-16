@@ -55,7 +55,14 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
 
-    if (game == null) return const SizedBox.shrink();
+    if (game == null) {
+      // No game in provider — redirect back to dashboard instead of
+      // showing a blank screen dead-end.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go(RoutePaths.adminDashboard);
+      });
+      return const SizedBox.shrink();
+    }
 
     final activePlayers = game.activePlayers;
     final prizes = game.structure.prizes;
@@ -124,7 +131,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    'Loading results…',
+                    'Loading results\u2026',
                     style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
                   ),
                 ],
@@ -181,8 +188,8 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                       'tap to finish',
                                       style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                                     ),
-                                    SizedBox(width: 4),
-                                    Icon(Icons.arrow_forward, size: 12, color: AppColors.icon),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.arrow_forward, size: 12, color: AppColors.icon),
                                   ],
                                 ),
                               ],
@@ -195,7 +202,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                         padding: const EdgeInsets.only(top: AppSpacing.sm),
                         child: Center(
                           child: Text(
-                            'Last player — tap to set as winner!',
+                            'Last player \u2014 tap to set as winner!',
                             style: AppTypography.bodyXs.copyWith(color: AppColors.success),
                           ),
                         ),

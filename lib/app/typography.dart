@@ -8,16 +8,16 @@ import 'colors.dart';
 /// Centralized typography for the Poker Night app.
 ///
 /// Three families (mirroring the web app):
-///  - Display: Fraunces (serif)  — headings & brand
-///  - Body:    Outfit (sans)     — general UI
-///  - Mono:    JetBrains Mono    — numbers, codes, timers
+///  - Display: Space Grotesk (sans)  — headings & brand
+///  - Body:    Space Grotesk (sans)  — general UI
+///  - Mono:    Space Mono (mono)     — numbers, codes, timers
 class AppTypography {
   AppTypography._();
 
   // ── Font family names ──────────────────────────────────────────────────────
-  static const String displayFamily = 'Nunito';
-  static const String bodyFamily = 'Inter';
-  static const String monoFamily = 'JetBrains Mono';
+  static const String displayFamily = 'Space Grotesk';
+  static const String bodyFamily = 'Space Grotesk';
+  static const String monoFamily = 'Space Mono';
 
   static TextStyle display({
     double size = AppFontSizes.lg,
@@ -26,7 +26,7 @@ class AppTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.nunito(
+    return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color,
@@ -42,7 +42,7 @@ class AppTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.inter(
+    return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color,
@@ -58,7 +58,7 @@ class AppTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.jetBrainsMono(
+    return GoogleFonts.spaceMono(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color,
@@ -88,7 +88,7 @@ class AppTypography {
     double size = AppFontSizes.lg,
     FontWeight weight = FontWeight.w700,
   }) {
-    return GoogleFonts.nunito(
+    return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       foreground: Paint()
@@ -101,7 +101,7 @@ class AppTypography {
   /// Builds the full [TextTheme] wired to Google Fonts.
   static TextTheme textTheme() {
     final base = TextTheme(
-      // Fraunces display styles
+      // Display styles
       displayLarge: display(size: AppFontSizes.displayHero, weight: FontWeight.w700),
       displayMedium: display(size: AppFontSizes.displayLg, weight: FontWeight.w700),
       displaySmall: display(size: AppFontSizes.display, weight: FontWeight.w700),
@@ -121,10 +121,9 @@ class AppTypography {
     return base
         .apply(bodyColor: AppColors.foreground, displayColor: AppColors.foreground)
         .copyWith(
-          // Give every default style the Outfit family fallback via apply.
           bodyLarge: base.bodyLarge!.copyWith(
             fontFamily: bodyFamily,
-            fontFamilyFallback: ['Inter'],
+            fontFamilyFallback: ['Space Grotesk', 'sans-serif'],
           ),
         );
   }

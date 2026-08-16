@@ -27,12 +27,14 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   String _tab = 'games';
+  String _range = 'all';
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final group = app.currentGroup;
-    final pastGames = group.pastGames;
+    final allPast = group.pastGames;
+    final pastGames = _filterByRange(allPast, _range);
     final userId = app.user?.id;
     final isAdmin = app.user?.isAdmin ?? false;
 
@@ -79,7 +81,35 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.sm),
+          GridView.count(
+            crossAxisCount: isMobile ? 3 : 6,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: AppSpacing.sm,
+            crossAxisSpacing: AppSpacing.sm,
+            childAspectRatio: isMobile ? 1.4 : 1.1,
+            children: [
+              _MiniStat(
+                label: 'ITM%',
+                value: myStats.played == 0 ? '—' : '${(myStats.itmCount / myStats.played * 100).round()}%',
+              ),
+              _MiniStat(
+                label: 'ROI%',
+                value: !isAdmin || myStats.grossBuyIns == 0
+                    ? '—'
+                    : _formatRoi(myStats.earnings / myStats.grossBuyIns * 100),
+                color: !isAdmin || myStats.grossBuyIns == 0
+                    ? AppColors.mutedForeground
+                    : (myStats.earnings < 0 ? AppColors.destructive : AppColors.success),
+              ),
+              _MiniStat(label: 'Bubbles', value: '${myStats.bubbles}'),
+              _MiniStat(label: 'Add-ons', value: '${myStats.addOns}'),
+            ],
+          ),
           const SizedBox(height: AppSpacing.xl),
+          _buildRangeFilter(),
+          const SizedBox(height: AppSpacing.md),
           AppTabs(
             tabs: const [
               AppTabItem(id: 'games', label: 'Games'),
@@ -101,17 +131,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  ({int played, int wins, int podium, int rebuys, int knockouts, double earnings}) _computeMyStats(
+  ({int played, int wins, int podium, int rebuys, int knockouts, double earnings,
+    int addOns, int itmCount, int bubbles, int grossBuyIns}) _computeMyStats(
       List<LiveGame> myGames, String? userId) {
     var played = 0, wins = 0, podium = 0, rebuys = 0, knockouts = 0;
+    var addOns = 0, itmCount = 0, bubbles = 0, grossBuyIns = 0;
     var earnings = 0.0;
     for (final g in myGames) {
       played++;
+      grossBuyIns += g.settings.buyIn;
       final pos = g.finishOrder.indexOf(userId ?? '');
       if (pos >= 0) {
         final placement = g.finishOrder.length - pos;
         if (placement == 1) wins++;
         if (placement <= 3) podium++;
+        final paidPlaces = g.structure.prizes.length;
+        if (placement <= paidPlaces) itmCount++;
+        if (placement == paidPlaces + 1) bubbles++;
         // Prize lookup is by placement (result_podium convention), never an
         // index into an arbitrary-length list; missing payouts earn 0.
         final prize = g.structure.prizes.isEmpty
@@ -127,9 +163,81 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (me != null) {
         rebuys += me.rebuys;
         knockouts += me.knockouts;
+        if (me.hasAddOn) addOns++;
       }
     }
-    return (played: played, wins: wins, podium: podium, rebuys: rebuys, knockouts: knockouts, earnings: earnings);
+    return (
+      played: played,
+      wins: wins,
+      podium: podium,
+      rebuys: rebuys,
+      knockouts: knockouts,
+      earnings: earnings,
+      addOns: addOns,
+      itmCount: itmCount,
+      bubbles: bubbles,
+      grossBuyIns: grossBuyIns,
+    );
+  }
+
+  List<LiveGame> _filterByRange(List<LiveGame> all, String range) {
+    final cutoff = _rangeCutoff(range);
+    if (cutoff == null) return all;
+    return all.where((g) {
+      final start = g.settings.scheduledStart ?? DateTime.tryParse(g.settings.date);
+      if (start == null) return true; // lenient: keep when date is unparseable
+      return !start.isBefore(cutoff);
+    }).toList();
+  }
+
+  DateTime? _rangeCutoff(String range) {
+    final now = DateTime.now();
+    switch (range) {
+      case '30d':
+        return now.subtract(const Duration(days: 30));
+      case 'ytd':
+        return DateTime(now.year, 1, 1);
+      default:
+        return null; // 'all' and unknown ranges include everything
+    }
+  }
+
+  String _formatRoi(double roi) {
+    final s = roi.toStringAsFixed(1);
+    return roi >= 0 ? '+$s%' : '$s%';
+  }
+
+  Widget _buildRangeFilter() {
+    const options = <(String, String)>[
+      ('30d', 'Last 30 Days'),
+      ('ytd', 'Year to Date'),
+      ('all', 'All Time'),
+    ];
+    return Wrap(
+      spacing: AppSpacing.sm,
+      children: [
+        for (final (id, label) in options)
+          InkWell(
+            onTap: () => setState(() => _range = id),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(color: _range == id ? AppColors.primary : AppColors.border),
+                color: _range == id ? AppColors.primarySoft : Colors.transparent,
+              ),
+              child: Text(
+                label,
+                style: AppTypography.bodyXs.copyWith(
+                  fontWeight: _range == id ? FontWeight.w600 : FontWeight.w500,
+                  color: _range == id ? AppColors.primary : AppColors.mutedForeground,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _buildGames(List<LiveGame> pastGames, String? userId, bool isAdmin) {
@@ -424,9 +532,24 @@ class _HistoryRow extends StatelessWidget {
     final winner = game.players.where((p) => p.id == winnerId).firstOrNull;
     final playersCount = game.players.where((p) => !p.isGuest).length;
     final totalRebuys = game.players.fold<int>(0, (s, p) => s + p.rebuys);
+    final prizeForPlacement = placement == null
+        ? 0
+        : game.structure.prizes.isEmpty
+            ? 0
+            : game.structure.prizes
+                    .where((pr) => pr.place == placement)
+                    .firstOrNull
+                    ?.amount ??
+                0;
+    final net = placement == null ? null : prizeForPlacement - game.settings.buyIn;
 
     return AppCard(
-      onTap: () => context.go(RoutePaths.resultPodium),
+      onTap: () {
+        // Set the game in provider before navigating so the podium screen
+        // can find it via app.currentGame (fixes "Result unavailable" bug).
+        context.read<AppProvider>().setCurrentGame(game);
+        context.go(RoutePaths.resultPodium);
+      },
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,6 +592,15 @@ class _HistoryRow extends StatelessWidget {
                     Text(
                       placement == 1 ? '1st' : '#$placement',
                       style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  if (net != null && showAmounts)
+                    Text(
+                      net >= 0 ? '+${Formatters.chips(net)}' : Formatters.chips(net),
+                      style: AppTypography.mono(
+                        size: AppFontSizes.xs,
+                        weight: FontWeight.w600,
+                        color: net >= 0 ? AppColors.success : AppColors.destructive,
+                      ),
                     ),
                   if (game.structure.prizePool > 0 && showAmounts)
                     Text(

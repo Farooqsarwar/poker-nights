@@ -19,15 +19,22 @@ class BottomNav extends StatelessWidget {
 
     final items = [
       _BottomItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
-      _BottomItem(RoutePaths.group, app.currentGroup.name, Icons.groups_outlined, null),
+      _BottomItem(RoutePaths.group, 'Group', Icons.groups_outlined, null),
       _BottomItem(RoutePaths.notifications, 'Alerts', Icons.notifications_none, unread),
       _BottomItem(RoutePaths.history, 'History', Icons.history, null),
     ];
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
-        border: Border(top: BorderSide(color: AppColors.border)),
+        border: const Border(top: BorderSide(color: AppColors.border)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
@@ -38,13 +45,25 @@ class BottomNav extends StatelessWidget {
                 child: InkWell(
                   onTap: () => context.go(item.path),
                   child: SizedBox(
-                    height: 56,
+                    height: 64,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
                         Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
+                            if (location == item.path)
+                              Container(
+                                width: 24,
+                                height: 2,
+                                margin: const EdgeInsets.only(bottom: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              )
+                            else
+                              const SizedBox(height: 6),
                             Icon(
                               item.icon,
                               size: 24,

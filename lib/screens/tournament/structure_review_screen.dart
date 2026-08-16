@@ -44,6 +44,21 @@ class StructureReviewScreen extends StatelessWidget {
     final settings = game.settings;
     final totalMins = structure.levels.length * structure.levelDuration;
     final anteStartLevel = structure.levels.indexWhere((l) => l.ante != null) + 1;
+    final expectedRebuys = settings.rebuys ? (settings.players * 0.35).round() : 0;
+    final expectedAddOns = settings.addOn ? (settings.players * 0.65).round() : 0;
+    final totalChips = settings.players * structure.startingStack +
+        expectedRebuys * structure.rebuyStack +
+        expectedAddOns * structure.addOnStack;
+
+    // Client feedback (07-018): inside the 30-minute window before start the
+    // AI refreshes the estimate from the expected player count.
+    if (game.estimateDue) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) context.read<AppProvider>().refreshEstimate();
+      });
+    }
+
+    final reviewOpen = game.structureReviewOpen;
 
     return AppPage(
       maxWidth: 640,
@@ -71,6 +86,13 @@ class StructureReviewScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          if (!reviewOpen) ...[
+            AppAlertBanner(
+              type: AppAlertType.info,
+              message: 'Structure preview — the AI finalizes stacks, blinds and levels 30 minutes before the scheduled start.',
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           for (final w in structure.warnings)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -86,15 +108,16 @@ class StructureReviewScreen extends StatelessWidget {
             ),
           ),
           // Summary cards
-          Row(
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
             children: [
-              Expanded(child: _SummaryCard(label: 'Starting stack', value: Formatters.chips(structure.startingStack))),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(child: _SummaryCard(label: 'Level duration', value: '${structure.levelDuration}m')),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(child: _SummaryCard(label: 'Levels', value: '${structure.levels.length}')),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(child: _SummaryCard(label: 'Est. finish', value: Formatters.duration(totalMins))),
+              SizedBox(width: 150, child: _SummaryCard(label: 'Players', value: '${settings.players}')),
+              SizedBox(width: 150, child: _SummaryCard(label: 'Starting stack', value: Formatters.chips(structure.startingStack))),
+              SizedBox(width: 150, child: _SummaryCard(label: 'Total chips', value: Formatters.chips(totalChips))),
+              SizedBox(width: 150, child: _SummaryCard(label: 'Level duration', value: '${structure.levelDuration}m')),
+              SizedBox(width: 150, child: _SummaryCard(label: 'Levels', value: '${structure.levels.length}')),
+              SizedBox(width: 150, child: _SummaryCard(label: 'Est. finish', value: Formatters.duration(totalMins))),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -375,7 +398,7 @@ class StructureReviewScreen extends StatelessWidget {
                   child: Row(
                     children: [
                       Text(
-                        'Est. organiser amount (${settings.organizerPct}%)',
+                        'Est. organizational costs (%)',
                         style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                       ),
                       const Spacer(),
@@ -440,8 +463,45 @@ class StructureReviewScreen extends StatelessWidget {
                 child: AppButton(
                   variant: AppButtonVariant.secondary,
                   onPressed: () {
-                    // Regenerate with same params
-                    app.setCurrentGame(app.createGame(settings));
+                    showAppModal(
+                      context: context,
+                      title: 'Recalculate structure',
+                      maxWidth: 440,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Recalculating regenerates the starting stack, blinds, levels and '
+                            'prize distribution from scratch using the same settings. Any manual '
+                            'level edits will be lost.',
+                            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                          ),
+                          const SizedBox(height: AppSpacing.xl),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: AppButton(
+                                  variant: AppButtonVariant.secondary,
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: const Text('Keep current'),
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.md),
+                              Expanded(
+                                child: AppButton(
+                                  onPressed: () {
+                                    app.setCurrentGame(app.createGame(settings));
+                                    Navigator.of(context).pop();
+                                  },
+                                  child: const Text('Recalculate'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
                   },
                   child: const FittedBox(
                     fit: BoxFit.scaleDown,
@@ -450,7 +510,7 @@ class StructureReviewScreen extends StatelessWidget {
                       children: [
                         Icon(Icons.refresh, size: 14, color: AppColors.icon),
                         SizedBox(width: 6),
-                        Text('Regenerate'),
+                        Text('Recalculate'),
                       ],
                     ),
                   ),

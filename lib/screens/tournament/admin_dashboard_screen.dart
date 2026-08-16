@@ -20,13 +20,12 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/app_progress_bar.dart';
 import '../../widgets/app_select.dart';
 import '../../widgets/app_tabs.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/code_display.dart';
 import '../../widgets/chat_sheet.dart';
-import '../../widgets/app_timer.dart';
+import '../../widgets/tournament_display_block.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/status_dot.dart';
 
@@ -88,7 +87,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final level = game.currentLevelData;
     final activePlayers = game.activePlayers;
     final eliminatedPlayers = game.eliminatedPlayers;
-    final avgStack = Formatters.averageStack(game.totalChipsInPlay, activePlayers.length);
     final timerDanger = secondsRemaining <= 60;
     final timerWarning = secondsRemaining <= 300;
     final levelDurationSecs = (level?.durationMins ?? 1) * 60;
@@ -271,131 +269,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           if (!device.isMobile) ...[
             // ── DESKTOP BEAUTIFUL LAYOUT ──
             // Row 1: Timer full width, top center
-            AppCard(
-              glow: timerDanger,
-              borderColor: timerDanger
-                  ? AppColors.destructive.withValues(alpha: 0.4)
-                  : timerWarning
-                      ? AppColors.warning.withValues(alpha: 0.4)
-                      : null,
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxxl),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AppTimer(
-                      secondsRemaining: game.secondsRemaining,
-                      size: timerSize * 1.5,
-                      danger: timerDanger,
-                      warning: timerWarning,
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      'Level ${game.currentLevel}',
-                      style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w600),
-                    ),
-                    if (game.nextLevelData != null)
-                      Text(
-                        'Next: ${Formatters.chips(game.nextLevelData!.sb)}/${Formatters.chips(game.nextLevelData!.bb)}',
-                        style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-                      ),
-                  ],
-                ),
-              ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: TournamentDisplayBlock(game: game),
             ),
             const SizedBox(height: AppSpacing.md),
-            
-            // Row 2: Beautiful Cards for Stats
-            Row(
-              children: [
-                Expanded(
-                  child: AppCard(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl, horizontal: AppSpacing.md),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text('BLINDS', style: AppTypography.bodyXs.copyWith(fontWeight: FontWeight.w600, color: AppColors.mutedForeground, letterSpacing: 1.2)),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          game.currentLevelData != null
-                              ? '${Formatters.chips(game.currentLevelData!.sb)} / ${Formatters.chips(game.currentLevelData!.bb)}'
-                              : '-',
-                          style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w700).copyWith(height: 1.1),
-                          textAlign: TextAlign.center,
-                        ),
-                        if (game.currentLevelData?.ante != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              '+ ${Formatters.chips(game.currentLevelData!.ante!)} ante',
-                              style: AppTypography.bodyXs.copyWith(color: AppColors.accent, fontWeight: FontWeight.w500),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: AppCard(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl, horizontal: AppSpacing.md),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text('PLAYERS', style: AppTypography.bodyXs.copyWith(fontWeight: FontWeight.w600, color: AppColors.mutedForeground, letterSpacing: 1.2)),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          '${activePlayers.length}',
-                          style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w700).copyWith(height: 1.1),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: AppCard(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl, horizontal: AppSpacing.md),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text('AVG STACK', style: AppTypography.bodyXs.copyWith(fontWeight: FontWeight.w600, color: AppColors.mutedForeground, letterSpacing: 1.2)),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          Formatters.chips(avgStack),
-                          style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w700).copyWith(height: 1.1),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: AppCard(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl, horizontal: AppSpacing.md),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(game.prizePoolLabel.toUpperCase(), style: AppTypography.bodyXs.copyWith(fontWeight: FontWeight.w600, color: AppColors.mutedForeground, letterSpacing: 1.2)),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          Formatters.chips(game.structure.prizePool),
-                          style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w700).copyWith(height: 1.1, color: AppColors.primary),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
             const SizedBox(height: AppSpacing.lg),
             
             // Row 2: Controls beautifully presented
@@ -416,8 +294,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         else if (status == LiveGameStatus.paused || status == LiveGameStatus.rebuypause)
                           Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.primary, onPressed: app.resumeTimer, child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Resume Timer', icon: Icons.play_arrow)))),
                         
-                        // Next Level
+                        // Next / Previous Level
                         if (status == LiveGameStatus.running || status == LiveGameStatus.paused) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: currentLevel <= 1 ? null : app.previousLevel, child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Previous', icon: Icons.arrow_back)))),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(child: AppButton(size: AppButtonSize.lg, variant: AppButtonVariant.secondary, onPressed: currentLevel >= (structure.levels.length) ? null : app.nextLevel, child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Next level', trailing: Icons.arrow_forward)))),
                           const SizedBox(width: AppSpacing.sm),
@@ -948,14 +828,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       AppButton(
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.secondary,
-                        onPressed: () => app.grantRebuy(p.id),
+                        onPressed: () => _confirmRebuy(context, app, p),
                         child: const Text('Rebuy'),
                       ),
                     if (settings.addOn && game.status == LiveGameStatus.rebuypause && !p.hasAddOn)
                       AppButton(
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.secondary,
-                        onPressed: () => app.grantAddOn(p.id),
+                        onPressed: () => _confirmAddOn(context, app, p),
                         child: const Text('Add-on'),
                       ),
                     AppButton(
@@ -1035,6 +915,86 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               }
             },
             child: const Text('Add Player'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmRebuy(BuildContext context, AppProvider app, Player p) {
+    showAppModal(
+      context: context,
+      title: 'Grant rebuy',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '${p.name} receives a fresh ${Formatters.chips(app.currentGame!.structure.rebuyStack)}-chip '
+            'rebuy stack and rejoins the game. The prize pool is recalculated.',
+            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppButton(
+                  onPressed: () {
+                    app.grantRebuy(p.id);
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Grant rebuy'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmAddOn(BuildContext context, AppProvider app, Player p) {
+    showAppModal(
+      context: context,
+      title: 'Grant add-on',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '${p.name} purchases the add-on stack (${Formatters.chips(app.currentGame!.structure.addOnStack)} chips). '
+            'The prize pool is recalculated.',
+            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppButton(
+                  onPressed: () {
+                    app.grantAddOn(p.id);
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Grant add-on'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1133,143 +1093,9 @@ class _TimerInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final device = AppBreakpoints.deviceOf(context);
-    final isMobile = device.isMobile;
-    
-    final level = game.currentLevelData;
-    final next = game.nextLevelData;
-    final active = game.activePlayers.length;
-    final avgStack = Formatters.averageStack(game.totalChipsInPlay, active);
-
-    return Column(
-      crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: isMobile ? MainAxisAlignment.center : MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            AppTimer(
-              secondsRemaining: game.secondsRemaining,
-              size: timerSize,
-              danger: timerColor == AppColors.destructive,
-              warning: timerColor == AppColors.warning,
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Level ${game.currentLevel}', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
-                if (next != null)
-                  Text(
-                    'Next: ${Formatters.chips(next.sb)}/${Formatters.chips(next.bb)}',
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                  ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        AppProgressBar(
-          value: levelPct,
-          max: 100,
-          color: timerColor == AppColors.primary
-              ? AppProgressColor.primary
-              : timerColor == AppColors.warning
-                  ? AppProgressColor.primary
-                  : AppProgressColor.destructive,
-          height: 6,
-        ),
-        if (level != null) ...[
-          const SizedBox(height: AppSpacing.md),
-          Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _BlindStat(
-                      label: 'Blinds',
-                      value: '${Formatters.chips(level.sb)} / ${Formatters.chips(level.bb)}',
-                      extra: level.ante != null ? '+ ${Formatters.chips(level.ante!)} ante' : null,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: _BlindStat(label: 'Players', value: '$active'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  Expanded(
-                    child: _BlindStat(
-                      label: 'Avg stack',
-                      value: Formatters.chips(avgStack),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: _BlindStat(
-                      label: game.prizePoolLabel,
-                      value: Formatters.chips(game.structure.prizePool),
-                      valueColor: AppColors.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _BlindStat extends StatelessWidget {
-  const _BlindStat({required this.label, required this.value, this.extra, this.valueColor});
-
-  final String label;
-  final String value;
-  final String? extra;
-  final Color? valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.background.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-          const SizedBox(height: 2),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  value,
-                  style: AppTypography.monoLg.copyWith(fontWeight: FontWeight.w700, color: valueColor ?? AppColors.foreground),
-                ),
-                if (extra != null) ...[
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    extra!,
-                    style: AppTypography.bodySm.copyWith(color: AppColors.accent),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: TournamentDisplayBlock(game: game),
     );
   }
 }
@@ -1733,7 +1559,7 @@ class _PrizeTab extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    'Organiser (${settings.organizerPct}%)',
+                    'Organizational costs (%)',
                     style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                   ),
                   const Spacer(),

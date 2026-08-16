@@ -14,8 +14,11 @@ import '../../widgets/app_avatar.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/app_card.dart';        
+import '../../widgets/app_icon_label.dart';  
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_text_field.dart';
 
 enum SeatingMode { random, manual, keepGuests, separateGuests }
 
@@ -47,15 +50,81 @@ class CheckInScreen extends StatefulWidget {
 class _CheckInScreenState extends State<CheckInScreen> {
   SeatingMode _seatingMode = SeatingMode.random;
 
+  void _showWalkInModal(BuildContext context, AppProvider app) {
+    final controller = TextEditingController();
+    showAppModal(
+      context: context,
+      title: 'Walk-in guest',
+      child: StatefulBuilder(
+        builder: (context, setModalState) {
+          final name = controller.text.trim();
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Register someone who showed up without an RSVP. They are checked in immediately and seated with the next seating generation.',
+                style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppTextField(
+                controller: controller,
+                label: 'Name',
+                autofocus: true,
+                onChanged: (_) => setModalState(() {}),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppButton(
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: AppButton(
+                      onPressed: name.isEmpty
+                          ? null
+                          : () {
+                              app.addWalkInPlayer(name);
+                              Navigator.of(context).pop();
+                            },
+                      child: const Text('Check in'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
+    final isAdmin = app.user?.isAdmin ?? false;
+
+    // Seating setup is admin-only. Players see their seat from the invitation
+    // screen, never this setup UI (client feedback 07-018).
+    if (!isAdmin) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go(RoutePaths.invitation);
+      });
+      return const SizedBox.shrink();
+    }
 
     if (game == null) {
-      return Center(
-        child: Text('No game selected.', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
-      );
+      // No game in provider — redirect back to a safe screen.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go(RoutePaths.invitation);
+      });
+      return const SizedBox.shrink();
     }
 
     final players = game.players;
@@ -90,7 +159,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
           Row(
             children: [
               Expanded(
-                child: _SummaryCard(label: 'Checked in', value: '${checkedIn.length}', color: AppColors.success),
+                child: _SummaryCard(label: 'Checked in', value: '${checkedIn.length} / ${players.length}', color: AppColors.success),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -170,8 +239,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
                           AppButton(
                             size: AppButtonSize.sm,
                             variant: AppButtonVariant.secondary,
-                            onPressed: () => app.checkInPlayer(p.id),
-                            child: const Text('Check in'),
+                            onPressed: game.checkInClosed ? null : () => app.checkInPlayer(p.id),
+                            child: Text(game.checkInClosed ? 'Check-in closed' : 'Check in'),
                           ),
                       ],
                     ),
@@ -339,6 +408,48 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 );
               },
             ),
+          const SizedBox(height: AppSpacing.lg),
+          // Check-in controls (admin)
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppButton(
+                        variant: AppButtonVariant.secondary,
+                        onPressed: game.checkInClosed ? app.reopenCheckIn : app.closeCheckIn,
+                        child: Text(game.checkInClosed ? 'Reopen check-in' : 'Close check-in'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: AppButton(
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => _showWalkInModal(context, app),
+                        child: const Text('Walk-in'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                AppButton(
+                  variant: AppButtonVariant.ghost,
+                  onPressed: () => context.go(RoutePaths.tvMode),
+                  child: const AppIconLabel(label: 'Show assignment on TV', icon: Icons.tv_outlined),
+                ),
+                if (game.checkInClosed) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  const AppAlertBanner(
+                    type: AppAlertType.warning,
+                    message: 'Check-in is closed. Reopen to accept more players or start the tournament below.',
+                  ),
+                ],
+              ],
+            ),
+          ),
           const SizedBox(height: AppSpacing.lg),
           // Start game
           if (!seatedYet)

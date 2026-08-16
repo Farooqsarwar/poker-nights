@@ -8,6 +8,7 @@ import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 import 'app_avatar.dart';
+import 'create_group_dialog.dart';
 
 /// Mobile slide-in drawer controlled by [AppProvider.isDrawerOpen].
 class NavDrawer extends StatelessWidget {
@@ -22,12 +23,14 @@ class NavDrawer extends StatelessWidget {
 
     final items = [
       _DrawerItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
-      _DrawerItem(RoutePaths.group, app.currentGroup.name, Icons.groups_outlined, null),
+      _DrawerItem(RoutePaths.group, 'Group', Icons.groups_outlined, null),
       _DrawerItem(RoutePaths.notifications, 'Alerts', Icons.notifications_outlined, unread),
       _DrawerItem(RoutePaths.history, 'History', Icons.bar_chart_outlined, null),
       _DrawerItem(RoutePaths.profile, 'Profile', Icons.person_outline, null),
       _DrawerItem(RoutePaths.settings, 'Settings', Icons.settings_outlined, null),
     ];
+
+    final groups = app.orderedGroups;
 
     final panel = Container(
       width: 280,
@@ -124,6 +127,78 @@ class NavDrawer extends StatelessWidget {
                       ),
                     ),
                   ),
+                if (groups.isNotEmpty) ...[
+                  const Divider(color: AppColors.border, height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                    child: Text(
+                      'MY GROUPS',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ),
+                  for (final group in groups)
+                    InkWell(
+                      onTap: () {
+                        app.setCurrentGroup(group);
+                        app.closeDrawer();
+                        context.go(RoutePaths.group);
+                      },
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: group.id == app.currentGroup.id ? AppColors.primarySoft : Colors.transparent,
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(
+                            color: group.id == app.currentGroup.id ? AppColors.primary : Colors.transparent,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(group.icon, style: const TextStyle(fontSize: 18)),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Text(
+                                group.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.bodySm.copyWith(
+                                  color: group.id == app.currentGroup.id ? AppColors.primary : AppColors.foreground,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            if (group.pinned)
+                              const Icon(Icons.push_pin, size: 14, color: AppColors.primary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  InkWell(
+                    onTap: () {
+                      app.closeDrawer();
+                      openCreateGroupDialog(context);
+                    },
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
+                      child: Row(
+                        children: [
+                          Icon(Icons.group_add_outlined, size: 18, color: AppColors.primary),
+                          const SizedBox(width: AppSpacing.md),
+                          Text(
+                            'New Group',
+                            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500, color: AppColors.primary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

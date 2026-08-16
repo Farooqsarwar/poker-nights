@@ -41,6 +41,33 @@ import 'route_paths.dart';
 /// the persistent app shell (sidebar on desktop, drawer + bottom nav on mobile).
 final GoRouter appRouter = GoRouter(
   initialLocation: RoutePaths.splash,
+  // Catch bad/unknown routes and show a friendly page instead of a red crash.
+  errorBuilder: (context, state) => Scaffold(
+    backgroundColor: const Color(0xFF0D0D0D),
+    body: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline, color: Color(0xFF666666), size: 48),
+          const SizedBox(height: 16),
+          const Text(
+            'Page not found',
+            style: TextStyle(color: Color(0xFFE5E5E5), fontSize: 20, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            state.uri.toString(),
+            style: const TextStyle(color: Color(0xFF666666), fontSize: 12),
+          ),
+          const SizedBox(height: 24),
+          TextButton(
+            onPressed: () => context.go(RoutePaths.home),
+            child: const Text('Go to Home'),
+          ),
+        ],
+      ),
+    ),
+  ),
   routes: [
     GoRoute(
       path: RoutePaths.splash,

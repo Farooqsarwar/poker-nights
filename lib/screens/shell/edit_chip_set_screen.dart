@@ -237,7 +237,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.sm),
               child: Text(
-                'Quantities are estimates — you confirm enough physical chips exist during setup review (10-027).',
+                'Quantities are estimates — you confirm enough physical chips exist during setup review.',
                 style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
               ),
             ),
@@ -274,7 +274,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: Text(
-              'Enter the printed value for each colour. Exact quantities are optional and filled at setup (10-020).',
+              'Enter the printed value for each colour. Exact quantities are optional and filled at setup.',
               style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
             ),
           ),

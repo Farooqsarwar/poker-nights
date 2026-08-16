@@ -159,10 +159,8 @@ class _AuthScreenState extends State<AuthScreen> {
     final device = AppBreakpoints.deviceOf(context);
     final twoColumn = device.isDesktop || device.isLargeDesktop;
 
-    final logo = const BrandLockup(
-      vertical: true,
-      iconCircleSize: 120,
-      textSize: 28,
+    final logo = const PokerNightLogo(
+      size: 160,
     );
 
     final card = _buildCard(context);

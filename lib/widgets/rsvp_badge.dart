@@ -25,7 +25,6 @@ class RSVPBadge extends StatelessWidget {
       case Rsvp.goingPlus1:
       case Rsvp.goingPlus2:
       case Rsvp.goingPlus3:
-      case Rsvp.goingPlus4:
         return AppBadge(label: rsvp!.label, variant: AppBadgeVariant.green);
     }
   }

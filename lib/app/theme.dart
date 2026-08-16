@@ -152,4 +152,101 @@ class AppTheme {
       ),
     );
   }
+
+  /// Light variant for the app-theme setting. Reuses the primary accent and
+  /// swaps the casino backdrop for a paper-toned surface.
+  static ThemeData get light {
+    const paper = Color(0xFFF6F4EF);
+    const paperCard = Colors.white;
+    const ink = Color(0xFF1C1B18);
+    const inkMuted = Color(0xFF6B675F);
+    const line = Color(0xFFE4E1DA);
+
+    final colorScheme = const ColorScheme.light(
+      primary: AppColors.primary,
+      onPrimary: AppColors.primaryForeground,
+      secondary: AppColors.secondary,
+      surface: paperCard,
+      onSurface: ink,
+      error: AppColors.destructive,
+      onError: Colors.white,
+    );
+
+    final base = ThemeData(useMaterial3: false, colorScheme: colorScheme);
+
+    return base.copyWith(
+      scaffoldBackgroundColor: paper,
+      textTheme: AppTypography.textTheme(),
+      canvasColor: paper,
+      dividerColor: line,
+      splashColor: AppColors.primarySoft,
+      highlightColor: AppColors.primarySoft,
+      focusColor: AppColors.primarySoft,
+      hoverColor: AppColors.primarySoft,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        foregroundColor: Colors.black,
+        centerTitle: false,
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: paperCard,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: inkMuted,
+        type: BottomNavigationBarType.fixed,
+        elevation: 0,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: paperCard,
+        hintStyle: AppTypography.body(color: inkMuted),
+        labelStyle: AppTypography.body(color: inkMuted),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderSide: const BorderSide(color: line),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderSide: const BorderSide(color: line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.2),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: paperCard,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          side: const BorderSide(color: line),
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: paperCard,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          side: const BorderSide(color: line),
+        ),
+      ),
+      dividerTheme: const DividerThemeData(
+        color: line,
+        thickness: 1,
+        space: 1,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: ink,
+        contentTextStyle: AppTypography.body(color: Colors.white),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+      ),
+    );
+  }
 }

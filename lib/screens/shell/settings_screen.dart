@@ -12,6 +12,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_select.dart';
 import '../../widgets/app_toggle.dart';
 
 /// Settings mirroring the account area of the web app.
@@ -63,6 +64,16 @@ class SettingsScreen extends StatelessWidget {
                   showDivider: true,
                 ),
                 _SettingRow(
+                  icon: Icons.sms_outlined,
+                  title: 'SMS alerts',
+                  subtitle: 'Text me about RSVPs and game events',
+                  trailing: AppToggle(
+                    value: app.smsEnabled,
+                    onChanged: (v) => app.setSmsEnabled(v),
+                  ),
+                  showDivider: true,
+                ),
+                _SettingRow(
                   icon: Icons.music_note_outlined,
                   title: 'Sound effects',
                   subtitle: 'Chip sounds and level-up chimes',
@@ -100,6 +111,55 @@ class SettingsScreen extends StatelessWidget {
                   trailing: const Icon(Icons.chevron_right, color: AppColors.mutedForeground),
                   showDivider: false,
                   onTap: () => context.push(RoutePaths.chipSets),
+                ),
+                _SettingRow(
+                  icon: Icons.casino_outlined,
+                  title: 'Default chip set',
+                  subtitle: 'Used when you create a new tournament',
+                  trailing: SizedBox(
+                    width: 160,
+                    child: AppSelect<String?>(
+                      value: app.defaultChipSetId,
+                      onChanged: app.setDefaultChipSet,
+                      items: [
+                        const DropdownMenuItem<String?>(value: null, child: Text('Standard set')),
+                        for (final set in app.savedChipSets)
+                          DropdownMenuItem<String?>(
+                            value: set.id,
+                            child: Text(set.name, overflow: TextOverflow.ellipsis),
+                          ),
+                      ],
+                    ),
+                  ),
+                  showDivider: false,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          // Appearance
+          Text('Appearance', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Row(
+              children: [
+                _ThemeChip(
+                  label: 'Dark',
+                  active: app.themePreference == 'dark',
+                  onTap: () => app.setThemePreference('dark'),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                _ThemeChip(
+                  label: 'Light',
+                  active: app.themePreference == 'light',
+                  onTap: () => app.setThemePreference('light'),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                _ThemeChip(
+                  label: 'System',
+                  active: app.themePreference == 'system',
+                  onTap: () => app.setThemePreference('system'),
                 ),
               ],
             ),
@@ -177,6 +237,41 @@ class SettingsScreen extends StatelessWidget {
             child: Text('Sign out', style: AppTypography.bodySm.copyWith(color: AppColors.destructive)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ThemeChip extends StatelessWidget {
+  const _ThemeChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: active ? AppColors.primarySoft : AppColors.card,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: active ? AppColors.primary : AppColors.border),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.bodySm.copyWith(
+            color: active ? AppColors.primary : AppColors.mutedForeground,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }

@@ -1,4 +1,3 @@
-import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 
@@ -18,10 +17,15 @@ class TournamentDisplayBlock extends StatelessWidget {
     super.key,
     required this.game,
     this.showStatusChip = true,
+    this.showPayoutAmounts = true,
   });
 
   final LiveGame game;
   final bool showStatusChip;
+
+  /// Whether individual payout amounts are rendered. The public TV route must
+  /// set this to false: payouts are private to the host (§13.1).
+  final bool showPayoutAmounts;
 
   static const Color _black = AppColors.background;
   static const Color _red = Color(0xFFFF0015);
@@ -43,6 +47,7 @@ class TournamentDisplayBlock extends StatelessWidget {
             // The green status shown above the card belongs to the parent
             // screen and should be removed there (see notes below).
             showStatusChip: true,
+            showPayoutAmounts: showPayoutAmounts,
           );
         }
 
@@ -58,6 +63,7 @@ class TournamentDisplayBlock extends StatelessWidget {
           child: _WideLayout(
             game: game,
             showStatusChip: showStatusChip,
+            showPayoutAmounts: showPayoutAmounts,
           ),
         );
       },
@@ -78,17 +84,12 @@ TextStyle _numberStyle({
   double letterSpacing = 0,
 }) {
   return TextStyle(
-    fontFamily: 'Roboto',
-    fontFamilyFallback: const ['Arial', 'Helvetica', 'sans-serif'],
+    fontFamily: AppTypography.monoFamily,
     fontSize: size,
     fontWeight: weight,
     color: color,
     height: height,
     letterSpacing: letterSpacing,
-    fontFeatures: const [
-      FontFeature.tabularFigures(),
-      FontFeature('zero', 0),
-    ],
   );
 }
 
@@ -138,10 +139,12 @@ class _WideLayout extends StatelessWidget {
   const _WideLayout({
     required this.game,
     required this.showStatusChip,
+    required this.showPayoutAmounts,
   });
 
   final LiveGame game;
   final bool showStatusChip;
+  final bool showPayoutAmounts;
 
   @override
   Widget build(BuildContext context) {
@@ -331,7 +334,11 @@ class _WideLayout extends StatelessWidget {
                 if (game.structure.prizes.isNotEmpty)
                   SizedBox(
                     height: 100 * s,
-                    child: _WidePayouts(game: game, scale: s),
+                    child: _WidePayouts(
+                      game: game,
+                      scale: s,
+                      showPayoutAmounts: showPayoutAmounts,
+                    ),
                   ),
               ],
             ),
@@ -667,10 +674,15 @@ class _MiniValue extends StatelessWidget {
 }
 
 class _WidePayouts extends StatelessWidget {
-  const _WidePayouts({required this.game, required this.scale});
+  const _WidePayouts({
+    required this.game,
+    required this.scale,
+    required this.showPayoutAmounts,
+  });
 
   final LiveGame game;
   final double scale;
+  final bool showPayoutAmounts;
 
   @override
   Widget build(BuildContext context) {
@@ -697,7 +709,9 @@ class _WidePayouts extends StatelessWidget {
           Expanded(
             child: _PayoutValue(
               label: const ['1ST', '2ND', '3RD', '4TH'][i],
-              value: Formatters.chips(game.structure.prizes[i].amount),
+              value: showPayoutAmounts
+                  ? Formatters.chips(game.structure.prizes[i].amount)
+                  : '—',
               scale: scale,
             ),
           ),
@@ -758,10 +772,12 @@ class _CompactLayout extends StatelessWidget {
   const _CompactLayout({
     required this.game,
     required this.showStatusChip,
+    required this.showPayoutAmounts,
   });
 
   final LiveGame game;
   final bool showStatusChip;
+  final bool showPayoutAmounts;
 
   @override
   Widget build(BuildContext context) {
@@ -900,9 +916,11 @@ class _CompactLayout extends StatelessWidget {
                           height: 70,
                           child: _PayoutValue(
                             label: const ['1ST', '2ND', '3RD', '4TH'][i],
-                            value: Formatters.chips(
-                              game.structure.prizes[i].amount,
-                            ),
+                            value: showPayoutAmounts
+                                ? Formatters.chips(
+                                    game.structure.prizes[i].amount,
+                                  )
+                                : '—',
                             scale: .55,
                           ),
                         ),
@@ -1063,55 +1081,13 @@ class _StatusSpade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Image.asset(
+      'assets/logo.png',
       width: width,
       height: height,
-      child: CustomPaint(
-        painter: _BracketPainter(),
-        child: Center(
-          child: Text(
-            '♠',
-            style: TextStyle(
-              color: TournamentDisplayBlock._red,
-              fontSize: height * .72,
-              height: 1,
-            ),
-          ),
-        ),
-      ),
+      fit: BoxFit.contain,
     );
   }
-}
-
-class _BracketPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = TournamentDisplayBlock._red
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.height * .07
-      ..strokeCap = StrokeCap.round;
-    final arm = size.shortestSide * .23;
-
-    final path = Path()
-      ..moveTo(0, arm)
-      ..lineTo(0, 0)
-      ..lineTo(arm, 0)
-      ..moveTo(size.width - arm, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width, arm)
-      ..moveTo(size.width, size.height - arm)
-      ..lineTo(size.width, size.height)
-      ..lineTo(size.width - arm, size.height)
-      ..moveTo(arm, size.height)
-      ..lineTo(0, size.height)
-      ..lineTo(0, size.height - arm);
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _HorizontalLine extends StatelessWidget {

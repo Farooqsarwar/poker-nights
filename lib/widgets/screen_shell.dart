@@ -11,6 +11,7 @@ import '../responsive/responsive.dart';
 import 'app_avatar.dart';
 import 'app_button.dart';
 import 'bottom_nav.dart';
+import 'brand_lockup.dart';
 import 'nav_drawer.dart';
 import 'sidebar.dart';
 
@@ -183,7 +184,7 @@ class _MobileTopBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.md),
-            const Icon(Icons.style, size: AppFontSizes.xxl, color: AppColors.primary),
+            const PokerNightLogo(size: AppFontSizes.xxl),
             const SizedBox(width: AppSpacing.xs),
             Text(
               'Poker Night',

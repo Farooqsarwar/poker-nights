@@ -9,6 +9,7 @@ import '../constants/app_constants.dart';
 import '../models/group.dart';
 import '../providers/app_provider.dart';
 import 'app_avatar.dart';
+import 'brand_lockup.dart';
 import 'create_group_dialog.dart';
 
 /// Desktop left sidebar mirroring the web `Nav` component.
@@ -46,19 +47,7 @@ class Sidebar extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.2),
-                        blurRadius: 12,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.style_outlined, color: AppColors.primary, size: 28),
-                ),
+                const PokerNightLogo(size: 28),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
                   'Poker Night',

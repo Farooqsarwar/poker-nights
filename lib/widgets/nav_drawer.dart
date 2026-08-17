@@ -8,6 +8,7 @@ import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 import 'app_avatar.dart';
+import 'brand_lockup.dart';
 import 'create_group_dialog.dart';
 
 /// Mobile slide-in drawer controlled by [AppProvider.isDrawerOpen].
@@ -46,7 +47,7 @@ class NavDrawer extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.style, size: AppFontSizes.xxxl, color: AppColors.primary),
+                const PokerNightLogo(size: AppFontSizes.xxxl),
                 const SizedBox(width: AppSpacing.sm),
                 Text('Poker Night', style: AppTypography.crimsonShimmer(size: AppFontSizes.lg)),
               ],

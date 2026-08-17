@@ -16,6 +16,7 @@ import '../utils/formatters.dart';
 import '../utils/mock_data.dart';
 import '../utils/tournament_engine.dart';
 import '../utils/voice_service.dart';
+import '../services/projections.dart' as projections;
 import '../services/recovery_service.dart';
 
 /// One future-level edit produced by the admin structure editor.
@@ -1357,6 +1358,28 @@ class AppProvider extends ChangeNotifier {
   /// (used by the router guard to allow guests into player-live without an
   /// account — checklist 15-014).
   bool get hasGuestSession => _guestSession != null;
+
+  /// Role-safe game copies (§2.3). Non-admin views must never read private
+  /// fields; the public surfaces are fed from these projections, never from
+  /// the raw game object.
+  LiveGame? get tvGame => _currentGame == null
+      ? null
+      : projections.tvProjection(_currentGame!);
+
+  /// The game as a registered non-admin member sees it: payout amounts and
+  /// organizer amount removed, chat preserved.
+  LiveGame? get playerProjection => _currentGame == null
+      ? null
+      : projections.playerProjection(_currentGame!);
+
+  /// The game as a guest sees it: payout/organizer amounts and chat removed.
+  LiveGame? get guestProjection => _currentGame == null
+      ? null
+      : projections.guestProjection(_currentGame!);
+
+  /// The projection matching the current viewer (guest vs registered member).
+  LiveGame? get viewerProjection =>
+      hasGuestSession ? guestProjection : playerProjection;
 
   void _saveGuestSession(GuestSession session) {
     _guestSession = session;

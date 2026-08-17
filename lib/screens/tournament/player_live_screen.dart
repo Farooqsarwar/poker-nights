@@ -49,7 +49,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final game = app.currentGame;
+    final isAdmin = app.user?.isAdmin == true;
+    final baseGame = app.currentGame;
+    final game = baseGame == null ? null : (isAdmin ? baseGame : app.viewerProjection);
 
     if (game == null) {
       return AppPage(
@@ -105,7 +107,6 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
         : (((levelDurationSecs - game.secondsRemaining) / levelDurationSecs) * 100).clamp(0, 100).toDouble();
 
     final isFinalTable = game.status == LiveGameStatus.finaltable;
-    final isAdmin = app.user?.isAdmin == true;
 
     final rankIndex = myPlayer == null
         ? -1

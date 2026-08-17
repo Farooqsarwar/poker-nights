@@ -46,12 +46,12 @@ class _TVModeScreenState extends State<TVModeScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final game = app.currentGame;
+    final game = app.tvGame;
 
     if (game == null) return _CodeEntry(controller: _codeController, error: _codeError, onConnect: _connect);
 
     return TVBackground(
-      child: _TVLayout(game: game, app: app),
+      child: _TVLayout(game: game),
     );
   }
 }
@@ -185,10 +185,9 @@ class _CodeEntry extends StatelessWidget {
 }
 
 class _TVLayout extends StatelessWidget {
-  const _TVLayout({required this.game, required this.app});
+  const _TVLayout({required this.game});
 
   final LiveGame game;
-  final AppProvider app;
 
   @override
   Widget build(BuildContext context) {
@@ -214,7 +213,7 @@ class _TVLayout extends StatelessWidget {
                   Expanded(
                     flex: 3,
                     child: SingleChildScrollView(
-                      child: TournamentDisplayBlock(game: game),
+                      child: TournamentDisplayBlock(game: game, showPayoutAmounts: false),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -224,7 +223,7 @@ class _TVLayout extends StatelessWidget {
             );
           }
           return SingleChildScrollView(
-            child: TournamentDisplayBlock(game: game),
+            child: TournamentDisplayBlock(game: game, showPayoutAmounts: false),
           );
         },
       ),
@@ -333,7 +332,7 @@ class _RotatingPanel extends StatefulWidget {
 }
 
 class _RotatingPanelState extends State<_RotatingPanel> {
-  static const _titles = ['LEADERBOARD', 'PAYOUTS', 'UPCOMING'];
+  static const _titles = ['LEADERBOARD', 'PRIZE POOL', 'UPCOMING'];
 
   int _panel = 0;
   Timer? _timer;
@@ -366,7 +365,7 @@ class _RotatingPanelState extends State<_RotatingPanel> {
           Text(
             _titles[_panel],
             style: const TextStyle(
-              fontFamily: 'monospace',
+              fontFamily: 'Space Mono',
               fontSize: 15,
               fontWeight: FontWeight.w700,
               letterSpacing: 2.5,
@@ -415,7 +414,7 @@ class _LeaderboardPanel extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontFamily: 'monospace',
+                      fontFamily: 'Space Mono',
                       fontSize: 12,
                       color: p.active ? Colors.white : AppColors.mutedForeground,
                     ),
@@ -425,7 +424,7 @@ class _LeaderboardPanel extends StatelessWidget {
                 Text(
                   'T${p.table} · S${p.seat}',
                   style: const TextStyle(
-                    fontFamily: 'monospace',
+                    fontFamily: 'Space Mono',
                     fontSize: 11,
                     color: AppColors.mutedForeground,
                   ),
@@ -447,52 +446,78 @@ class _PayoutsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final prizes = game.structure.prizes.take(6).toList();
+    final paidPlaces = game.structure.prizes.take(6).length;
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < prizes.length; i++)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: Row(
-                children: [
-                  Text(
-                    _ords[i],
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFFFF0015),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    Formatters.chips(prizes[i].amount),
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 13,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 8),
-          const Divider(height: 1, color: Color(0xFF222222)),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
-            'PRIZE POOL: ${Formatters.chips(game.structure.prizePool)}',
+            Formatters.chips(game.structure.prizePool),
+            textAlign: TextAlign.center,
             style: const TextStyle(
-              fontFamily: 'monospace',
+              fontFamily: 'Space Mono',
+              fontSize: 42,
+              fontWeight: FontWeight.w300,
+              color: Colors.white,
+            ),
+          ),
+          Text(
+            game.prizePoolLabel.toUpperCase(),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: 'Space Mono',
               fontSize: 12,
+              letterSpacing: 2,
               color: AppColors.mutedForeground,
             ),
           ),
+          if (game.status == LiveGameStatus.completed) ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1, color: Color(0xFF222222)),
+            const SizedBox(height: 8),
+            for (var i = 0; i < paidPlaces; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Text(
+                      _ords[i],
+                      style: const TextStyle(
+                        fontFamily: 'Space Mono',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFFF0015),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      _podiumName(i + 1),
+                      style: const TextStyle(
+                        fontFamily: 'Space Mono',
+                        fontSize: 13,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );
+  }
+
+  /// finishOrder is "first-out first", so place P sits at index len - P.
+  String _podiumName(int place) {
+    final pos = game.finishOrder.length - place;
+    if (pos < 0 || pos >= game.finishOrder.length) return '—';
+    final id = game.finishOrder[pos];
+    for (final p in game.players) {
+      if (p.id == id) return p.name;
+    }
+    return '—';
   }
 }
 
@@ -515,7 +540,7 @@ class _UpcomingPanel extends StatelessWidget {
               ? 'TOURNAMENT COMPLETE'
               : 'END',
           style: const TextStyle(
-            fontFamily: 'monospace',
+            fontFamily: 'Space Mono',
             fontSize: 14,
             color: Color(0xFFFF0015),
           ),
@@ -534,7 +559,7 @@ class _UpcomingPanel extends StatelessWidget {
                   Text(
                     'L${l.level}',
                     style: const TextStyle(
-                      fontFamily: 'monospace',
+                      fontFamily: 'Space Mono',
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFFFF0015),
@@ -546,7 +571,7 @@ class _UpcomingPanel extends StatelessWidget {
                     child: Text(
                       'SB ${Formatters.chips(l.sb)} · BB ${Formatters.chips(l.bb)}',
                       style: const TextStyle(
-                        fontFamily: 'monospace',
+                        fontFamily: 'Space Mono',
                         fontSize: 13,
                         color: Colors.white,
                       ),
@@ -557,7 +582,7 @@ class _UpcomingPanel extends StatelessWidget {
                     Text(
                       'ANTE ${Formatters.chips(l.ante!)}',
                       style: const TextStyle(
-                        fontFamily: 'monospace',
+                        fontFamily: 'Space Mono',
                         fontSize: 11,
                         color: AppColors.mutedForeground,
                       ),

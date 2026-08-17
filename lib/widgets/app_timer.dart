@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../app/colors.dart';
+import '../app/typography.dart';
 import '../utils/formatters.dart';
 
 /// Timer display styled like the TV dashboard: plain mono digits where the
@@ -109,9 +110,9 @@ class _TimerDigit extends StatelessWidget {
         child: Text(
           char,
           key: ValueKey<String>(char),
-          style: GoogleFonts.shareTechMono(
-            fontSize: size,
-            fontWeight: FontWeight.w400,
+          style: AppTypography.mono(
+            size: size,
+            weight: FontWeight.w400,
             color: color,
             height: 1.0,
           ).copyWith(

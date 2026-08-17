@@ -27,7 +27,6 @@ import '../../widgets/code_display.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/tournament_display_block.dart';
 import '../../widgets/medal_icon.dart';
-import '../../widgets/status_dot.dart';
 
 /// Admin live dashboard mirroring the web `AdminDashboardPage`.
 class AdminDashboardScreen extends StatefulWidget {
@@ -97,7 +96,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final device = AppBreakpoints.deviceOf(context);
     final timerSize = device.isMobile ? 54.0 : 64.0;
 
-    final statusSpec = _statusSpec(status);
     final timerColor = timerDanger
         ? AppColors.destructive
         : timerWarning
@@ -1100,36 +1098,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         },
       ),
     );
-  }
-}
-
-// ── Status spec ───────────────────────────────────────────────────────────────
-class _StatusSpec {
-  const _StatusSpec(this.label, this.color);
-  final String label;
-  final Color color;
-}
-
-_StatusSpec _statusSpec(LiveGameStatus status) {
-  switch (status) {
-    case LiveGameStatus.running:
-      return const _StatusSpec('● RUNNING', AppColors.success);
-    case LiveGameStatus.paused:
-      return const _StatusSpec('PAUSED', AppColors.warning);
-    case LiveGameStatus.rebuypause:
-      return const _StatusSpec('BREAK — REBUY CLOSE', AppColors.warning);
-    case LiveGameStatus.finaltable:
-      return const _StatusSpec('FINAL TABLE', AppColors.primary);
-    case LiveGameStatus.checkin:
-      return const _StatusSpec('CHECK-IN', AppColors.mutedForeground);
-    case LiveGameStatus.published:
-      return const _StatusSpec('PUBLISHED', AppColors.mutedForeground);
-    case LiveGameStatus.draft:
-      return const _StatusSpec('DRAFT', AppColors.mutedForeground);
-    case LiveGameStatus.completed:
-      return const _StatusSpec('COMPLETED', AppColors.mutedForeground);
-    case LiveGameStatus.cancelled:
-      return const _StatusSpec('CANCELLED', AppColors.mutedForeground);
   }
 }
 

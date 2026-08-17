@@ -59,7 +59,7 @@ class _LandingScreenState extends State<LandingScreen> {
       ),
       child: Row(
         children: [
-          const PokerNightLogo(size: 40, showWordmark: false),
+          const PokerNightLogo(size: 40),
           const Spacer(),
           AppButton(
             variant: AppButtonVariant.secondary,

@@ -40,7 +40,6 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Center(
         child: const PokerNightLogo(
           size: 160,
-          showWordmark: true,
         )
             .animate()
             .scaleXY(begin: 0.8, end: 1, duration: 500.ms, curve: Curves.easeOutBack)

@@ -15,8 +15,8 @@ class AppTypography {
   AppTypography._();
 
   // ── Font family names ──────────────────────────────────────────────────────
-  static const String displayFamily = 'Space Grotesk';
-  static const String bodyFamily = 'Space Grotesk';
+  static const String displayFamily = 'Space Mono';
+  static const String bodyFamily = 'Space Mono';
   static const String monoFamily = 'Space Mono';
 
   static TextStyle display({
@@ -26,7 +26,7 @@ class AppTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.spaceGrotesk(
+    return GoogleFonts.spaceMono(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color,
@@ -42,7 +42,7 @@ class AppTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.spaceGrotesk(
+    return GoogleFonts.spaceMono(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color,
@@ -88,7 +88,7 @@ class AppTypography {
     double size = AppFontSizes.lg,
     FontWeight weight = FontWeight.w700,
   }) {
-    return GoogleFonts.spaceGrotesk(
+    return GoogleFonts.spaceMono(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       foreground: Paint()
@@ -123,7 +123,7 @@ class AppTypography {
         .copyWith(
           bodyLarge: base.bodyLarge!.copyWith(
             fontFamily: bodyFamily,
-            fontFamilyFallback: ['Space Grotesk', 'sans-serif'],
+            fontFamilyFallback: ['Space Mono', 'monospace'],
           ),
         );
   }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import 'package:go_router/go_router.dart';
 
 import '../../app/colors.dart';
@@ -80,9 +79,11 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Widget _buildHero(BuildContext context, bool isDesktop) {
     final headingSize = isDesktop ? 48.0 : 32.0;
-    return Stack(
-      children: [
-        Padding(
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 800),
+        child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: isDesktop ? AppSpacing.xxxl : AppSpacing.lg,
             vertical: AppSpacing.huge,
@@ -111,6 +112,7 @@ class _LandingScreenState extends State<LandingScreen> {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
+
               // Heading
               Text(
                 'Run your best',
@@ -127,6 +129,7 @@ class _LandingScreenState extends State<LandingScreen> {
                 style: AppTypography.crimsonShimmer(size: headingSize),
               ),
               const SizedBox(height: AppSpacing.lg),
+
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 500),
                 child: Text(
@@ -136,64 +139,50 @@ class _LandingScreenState extends State<LandingScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
+
               // Feature pills
               Wrap(
                 alignment: WrapAlignment.center,
                 spacing: AppSpacing.sm,
                 runSpacing: AppSpacing.sm,
                 children: const [
-                  'Auto blind structure',
-                  'Live timer',
-                  'Seating & redraws',
-                  'TV mode',
-                  'Cash game tracker',
-                  'Group chat',
-                ].map((f) => _FeaturePill(label: f)).toList(),
+                  _FeaturePill(label: 'Auto blind structure'),
+                  _FeaturePill(label: 'Live timer'),
+                  _FeaturePill(label: 'Seating & redraws'),
+                  _FeaturePill(label: 'TV mode'),
+                  _FeaturePill(label: 'Cash game tracker'),
+                  _FeaturePill(label: 'Group chat'),
+                ],
               ),
-              const SizedBox(height: AppSpacing.xl),
-              // Main CTA
+              const SizedBox(height: AppSpacing.xxl),
+
+              // Main CTA (Size decreased to small)
               AppButton(
                 variant: AppButtonVariant.primary,
-                size: AppButtonSize.xl,
+                size: AppButtonSize.sm,
                 onPressed: _joinAsGuest,
-                child: const Text('Join a game as guest'),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: AppSpacing.md,
-                runSpacing: AppSpacing.md,
-                children: [
-                  AppButton(
-                    variant: AppButtonVariant.secondary,
-                    size: AppButtonSize.md,
-                    onPressed: () => context.go(RoutePaths.register),
-                    child: const Text('Create free account'),
-                  ),
-                  AppButton(
-                    variant: AppButtonVariant.secondary,
-                    size: AppButtonSize.md,
-                    onPressed: () => context.go(RoutePaths.login),
-                    child: const Text('Sign in'),
-                  ),
-                ],
+                child: const Text('Join as guest'),
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildFeatures(BuildContext context, bool isDesktop) {
     final features = [
       (Icons.casino_outlined, 'Smart tournament engine',
-          'Enter your chip set and target duration — Poker Night works out stack sizes, blind levels and payouts that actually fit.'),
+      'Enter your chip set and target duration — Poker Night works out stack sizes, blind levels and payouts that actually fit.'),
       (Icons.tv_outlined, 'TV mode & voice',
-          'Open the TV page on any browser. Clean full-screen timer with voice announcements for level changes and eliminations.'),
+      'Open the TV page on any browser. Clean full-screen timer with voice announcements for level changes and eliminations.'),
       (Icons.groups_outlined, 'Group management',
-          'Private group with RSVP, chat, polls and game history. Guests join with a code — no account required.'),
+      'Private group with RSVP, chat, polls and game history. Guests join with a code — no account required.'),
     ];
+
+    // Build standard feature cards
+    final cards = features.map((f) => _FeatureCard(icon: f.$1, title: f.$2, body: f.$3)).toList();
+
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: isDesktop ? AppSpacing.xxxl : AppSpacing.lg,
@@ -202,34 +191,33 @@ class _LandingScreenState extends State<LandingScreen> {
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.hairlineWhite)),
       ),
-      child: Wrap(
-        spacing: AppSpacing.xxl,
-        runSpacing: AppSpacing.xxl,
-        alignment: WrapAlignment.center,
-        children: [
-          for (final (icon, title, body) in features)
-            SizedBox(
-              width: isDesktop ? 360 : double.infinity,
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.xxl),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(icon, size: AppFontSizes.xxxl, color: AppColors.icon),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(title, style: AppTypography.display(size: AppFontSizes.lg)),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(body, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
-                  ],
-                ),
-              ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1100), // Prevent stretching on ultra-wide screens
+          child: isDesktop
+          // Desktop: Row with IntrinsicHeight ensures all cards stretch to match the tallest one
+              ? IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (int i = 0; i < cards.length; i++) ...[
+                  Expanded(child: cards[i]),
+                  if (i != cards.length - 1) const SizedBox(width: AppSpacing.xxl),
+                ]
+              ],
             ),
-        ],
+          )
+          // Mobile: Standard stacked column
+              : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < cards.length; i++) ...[
+                cards[i],
+                if (i != cards.length - 1) const SizedBox(height: AppSpacing.xl),
+              ]
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -282,43 +270,61 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Helper Widgets
+// -----------------------------------------------------------------------------
 
-
-class _FeaturePill extends StatefulWidget {
+class _FeaturePill extends StatelessWidget {
   const _FeaturePill({required this.label});
 
   final String label;
 
   @override
-  State<_FeaturePill> createState() => _FeaturePillState();
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.card.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+      ),
+    );
+  }
 }
 
-class _FeaturePillState extends State<_FeaturePill> {
-  bool _hover = false;
+class _FeatureCard extends StatelessWidget {
+  const _FeatureCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      cursor: SystemMouseCursors.click,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        transform: Matrix4.identity()
-          ..scaleByDouble(_hover ? 1.03 : 1.0, _hover ? 1.03 : 1.0, _hover ? 1.03 : 1.0, 1.0),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
-        decoration: BoxDecoration(
-          color: AppColors.card.withValues(alpha: _hover ? 0.7 : 0.5),
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(color: AppColors.border),
-          boxShadow: _hover
-              ? [BoxShadow(color: AppColors.shadowSoft, blurRadius: 10, offset: Offset(0, 4))]
-              : null,
-        ),
-        child: Text(
-          widget.label,
-          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-        ),
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xxl),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: AppFontSizes.xxxl, color: AppColors.icon),
+          const SizedBox(height: AppSpacing.md),
+          Text(title, style: AppTypography.display(size: AppFontSizes.lg)),
+          const SizedBox(height: AppSpacing.sm),
+          Text(body, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+        ],
       ),
     );
   }

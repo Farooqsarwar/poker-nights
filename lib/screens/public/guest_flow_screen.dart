@@ -289,12 +289,13 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                 Text(_codeError!, style: AppTypography.bodyXs.copyWith(color: AppColors.destructive)),
               ],
               const SizedBox(height: AppSpacing.lg),
-              AppButton(
-                variant: AppButtonVariant.primary,
-                size: AppButtonSize.lg,
-                fullWidth: true,
-                onPressed: _submitCode,
-                child: const Text('Join game'),
+              Center(
+                child: AppButton(
+                  variant: AppButtonVariant.primary,
+                  size: AppButtonSize.md,
+                  onPressed: _submitCode,
+                  child: const Text('Join'),
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               Text.rich(

@@ -246,17 +246,24 @@ class _TablePainter extends CustomPainter {
     if (isMobile) {
       // Center both rows completely, tighter layout, scaled up, no coins
       _paintCardsRow(canvas, center, feltRect, 'POKER', -feltRect.shortestSide * 0.15, 0.05, 0.60);
-      final nightsCenter = center + Offset(0, feltRect.shortestSide * 0.18);
+      final nightsCenter = center + Offset(0, feltRect.shortestSide * 0.26);
       _paintCardsRow(canvas, nightsCenter, feltRect, 'NIGHT', 0, 0.28, 0.75);
     } else {
+      // Shift center to the right only if the window is narrow to avoid overlapping text
+      // Text takes ~440px on the left. The cards row width is ~280px (half is 140px).
+      // We need the center to be at least 440 + 140 + 40 (padding) = 620.
+      final double minCenterX = 640.0; 
+      final double shift = math.max(0.0, minCenterX - center.dx);
+      final contentCenter = center + Offset(shift, 0);
+
       // Position POKER higher up to perfectly align with the "Run your perfect" text baseline
-      _paintCardsRow(canvas, center, feltRect, 'POKER', -feltRect.shortestSide * 0.05, 0.05, 0.60);
+      _paintCardsRow(canvas, contentCenter, feltRect, 'POKER', -feltRect.shortestSide * 0.05, 0.05, 0.60);
       
       // Position NIGHTS below and shifted to the right
-      final nightsCenter = center + Offset(feltRect.shortestSide * 0.20, feltRect.shortestSide * 0.15);
+      final nightsCenter = contentCenter + Offset(feltRect.shortestSide * 0.20, feltRect.shortestSide * 0.18);
       _paintCardsRow(canvas, nightsCenter, feltRect, 'NIGHT', 0, 0.28, 0.75);
       
-      _paintPot(canvas, center, feltRect);
+      _paintPot(canvas, contentCenter, feltRect);
     }
   }
 

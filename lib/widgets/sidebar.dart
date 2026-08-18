@@ -49,9 +49,13 @@ class Sidebar extends StatelessWidget {
               children: [
                 const PokerNightLogo(size: 28),
                 const SizedBox(width: AppSpacing.sm),
-                Text(
-                  'Poker Night',
-                  style: AppTypography.crimsonShimmer(size: AppFontSizes.xl),
+                Expanded(
+                  child: Text(
+                    'Poker Night',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.crimsonShimmer(size: AppFontSizes.xl),
+                  ),
                 ),
               ],
             ),
@@ -298,7 +302,13 @@ class _GroupRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Text(group.icon, style: const TextStyle(fontSize: 16)),
+            Text(
+              group.icon,
+              style: const TextStyle(
+                fontSize: 16,
+                fontFamilyFallback: ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji'],
+              ),
+            ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(

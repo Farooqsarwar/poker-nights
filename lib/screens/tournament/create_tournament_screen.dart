@@ -77,9 +77,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   AntePreference _antePreference = AntePreference.recommend;
   int _anteAfterLevel = 6;
   AnteStyle get _anteStyle => switch (_antePreference) {
-        AntePreference.recommend || AntePreference.bigBlind => AnteStyle.bigBlind,
-        AntePreference.none || AntePreference.individual => AnteStyle.individual,
-      };
+    AntePreference.recommend || AntePreference.bigBlind => AnteStyle.bigBlind,
+    AntePreference.none || AntePreference.individual => AnteStyle.individual,
+  };
   bool get _anteEnabled => _antePreference != AntePreference.none;
   double _orgPct = 10;
 
@@ -112,8 +112,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       int expected = group.members.length;
       for (final poll in group.polls) {
         if (poll.question.toLowerCase().contains('going') || poll.question.toLowerCase().contains('play')) {
-          int yesVotes = poll.votes.values.where((v) => 
-            v.toLowerCase() == 'yes' || v.toLowerCase() == 'going' || v.toLowerCase() == 'in'
+          int yesVotes = poll.votes.values.where((v) =>
+          v.toLowerCase() == 'yes' || v.toLowerCase() == 'going' || v.toLowerCase() == 'in'
           ).length;
           if (yesVotes > 0) {
             expected = yesVotes;
@@ -212,6 +212,64 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     setState(() => _step++);
   }
 
+  String get _durationLabel =>
+      '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h';
+
+  /// Global rect of this screen's content area.
+  ///
+  /// Dialogs live in the root overlay, which spans the whole window — including
+  /// the persistent sidebar. Centring on the window therefore looks shifted to
+  /// the left. Measuring the screen's own box lets the dialog centre over the
+  /// *content* instead, with no hardcoded sidebar width.
+  Rect? get _contentRect {
+    final RenderObject? ro = context.findRenderObject();
+    if (ro is! RenderBox || !ro.hasSize) return null;
+    return ro.localToGlobal(Offset.zero) & ro.size;
+  }
+
+  /// Centered, width-capped review dialog (07-018).
+  Future<bool?> _showConfirmDialog() {
+    final Rect? anchor = _contentRect;
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.72),
+      builder: (context) => _ConfirmDetailsDialog(
+        anchorRect: anchor,
+        gameRows: <_ConfirmItem>[
+          _ConfirmItem('Name', _name.text.trim()),
+          _ConfirmItem('When', '${_date.text} at ${_time.text}'),
+          if (_location.text.trim().isNotEmpty)
+            _ConfirmItem(
+              'Where',
+              _location.text.trim() + (_locationPrivate ? '  (private)' : ''),
+            ),
+          _ConfirmItem('Players', '$_expectedPlayers'),
+          _ConfirmItem('Buy-in', _buyIn.text.trim()),
+          _ConfirmItem('Duration', _durationLabel),
+        ],
+        ruleRows: <_ConfirmItem>[
+          _ConfirmItem(
+            'Rebuys',
+            _rebuys
+                ? (_rebuyUnlimited ? 'Unlimited to L6' : 'Limited to L$_rebuysClose')
+                : 'Off',
+          ),
+          _ConfirmItem('Re-entry', _reEntry ? 'Yes' : 'No'),
+          _ConfirmItem('Add-on', _addOn ? 'Yes, to L$_addOnClose' : 'No'),
+          _ConfirmItem('Bounty', _koEnabled ? 'Yes (${_koAmount.text})' : 'No'),
+          _ConfirmItem(
+            'Ante',
+            _antePreference == AntePreference.none ? 'No' : 'From L$_anteAfterLevel',
+          ),
+          _ConfirmItem('Organizer cut', '${_orgPct.round()}%'),
+        ],
+        chipSet: _chipSet,
+        chipSetName: _chipMode == _ChipMode.preset ? _presetName : 'Custom',
+      ),
+    );
+  }
+
   void _generate(AppProvider app) async {
     if (_chipSet.isEmpty) {
       await showAppModal(
@@ -242,71 +300,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
     // Client feedback (07-018): confirm before creating, and persist a custom
     // chip set as a preset once.
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.7),
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm game details'),
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _ConfirmRow(label: 'Name', value: _name.text.trim()),
-              _ConfirmRow(label: 'When', value: '${_date.text} at ${_time.text}'),
-              if (_location.text.trim().isNotEmpty)
-                _ConfirmRow(label: 'Where', value: _location.text.trim()),
-              _ConfirmRow(label: 'Players', value: '$_expectedPlayers'),
-              _ConfirmRow(label: 'Buy-in', value: _buyIn.text.trim()),
-              _ConfirmRow(label: 'Duration', value: '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h'),
-              _ConfirmRow(label: 'Rebuys', value: _rebuys ? (_rebuyUnlimited ? 'Unlimited to L6' : 'Limited to L$_rebuysClose') : 'Off'),
-              _ConfirmRow(label: 'Re-entry', value: _reEntry ? 'Yes' : 'No'),
-              _ConfirmRow(label: 'Add-on', value: _addOn ? 'Yes, to L$_addOnClose' : 'No'),
-              _ConfirmRow(label: 'Bounty', value: _koEnabled ? 'Yes (${_koAmount.text})' : 'No'),
-              _ConfirmRow(label: 'Ante', value: _antePreference == AntePreference.none ? 'No' : 'From L$_anteAfterLevel'),
-              const Divider(height: AppSpacing.xl),
-              Text('Chip set', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
-              const SizedBox(height: AppSpacing.sm),
-              for (final c in _chipSet)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 14,
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: c.colorValue,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(child: Text(c.color, style: AppTypography.bodyXs)),
-                      Text('${c.value} × ${c.quantity}', style: AppTypography.monoXs),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Back to edit'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Confirm & generate'),
-          ),
-        ],
-      ),
-    );
+    final confirmed = await _showConfirmDialog();
     if (confirmed != true || !mounted) return;
 
     // Persist a custom chip set once so it can be reused next time.
@@ -424,13 +418,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 child: _step == 1
                     ? const Text('Cancel')
                     : const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
-                          SizedBox(width: 6),
-                          Text('Back'),
-                        ],
-                      ),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
+                    SizedBox(width: 6),
+                    Text('Back'),
+                  ],
+                ),
               ),
               if (_step < 4)
                 AppButton(
@@ -521,7 +515,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           _SegmentedPicker(
             label: 'Target duration',
             options: const ['3h', '3.5h', '4h', '4.5h', '5h', '5.5h', '6h'],
-            selected: '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h',
+            selected: _durationLabel,
             onChanged: (v) {
               final val = v.replaceAll('h', '');
               setState(() => _duration = double.tryParse(val) ?? 4.0);
@@ -578,8 +572,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                         const SizedBox(height: 2),
                         Text(
                           'Buy-in ${p.buyIn} · ${p.durationHours}h · '
-                          '${p.rebuys ? 'Rebuys to L${p.rebuysCloseLevel}' : 'No rebuys'} · '
-                          '${p.anteEnabled ? 'Ante L${p.anteAfterLevel}+' : 'No ante'}',
+                              '${p.rebuys ? 'Rebuys to L${p.rebuysCloseLevel}' : 'No rebuys'} · '
+                              '${p.anteEnabled ? 'Ante L${p.anteAfterLevel}+' : 'No ante'}',
                           style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                         ),
                       ],
@@ -687,10 +681,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       onPressed: i == 0
                           ? null
                           : () => setState(() {
-                              final tmp = _chipSet[i - 1];
-                              _chipSet[i - 1] = _chipSet[i];
-                              _chipSet[i] = tmp;
-                            }),
+                        final tmp = _chipSet[i - 1];
+                        _chipSet[i - 1] = _chipSet[i];
+                        _chipSet[i] = tmp;
+                      }),
                       icon: const Icon(Icons.arrow_upward, size: 14, color: AppColors.mutedForeground),
                     ),
                     IconButton(
@@ -698,10 +692,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       onPressed: i == _chipSet.length - 1
                           ? null
                           : () => setState(() {
-                              final tmp = _chipSet[i + 1];
-                              _chipSet[i + 1] = _chipSet[i];
-                              _chipSet[i] = tmp;
-                            }),
+                        final tmp = _chipSet[i + 1];
+                        _chipSet[i + 1] = _chipSet[i];
+                        _chipSet[i] = tmp;
+                      }),
                       icon: const Icon(Icons.arrow_downward, size: 14, color: AppColors.mutedForeground),
                     ),
                   ],
@@ -778,63 +772,134 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Custom Color'),
-        content: SingleChildScrollView(
+      barrierColor: Colors.black.withValues(alpha: 0.72),
+      builder: (context) => Dialog(
+        backgroundColor: AppColors.card,
+        surfaceTintColor: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xl,
+          vertical: AppSpacing.xxl,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 420,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ColorPicker(
-                pickerColor: pickerColor,
-                onColorChanged: (color) {
-                  pickerColor = color;
-                },
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.xl, AppSpacing.lg, AppSpacing.md, AppSpacing.lg),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Add custom colour',
+                        style: AppTypography.display(
+                            size: AppFontSizes.lg, weight: FontWeight.w700),
+                      ),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close,
+                          size: 18, color: AppColors.mutedForeground),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: nameController,
-                label: 'Color Name',
+              const Divider(height: 1, color: AppColors.border),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ColorPicker(
+                        pickerColor: pickerColor,
+                        onColorChanged: (color) {
+                          pickerColor = color;
+                        },
+                        enableAlpha: false,
+                        labelTypes: const [],
+                        portraitOnly: true,
+                        pickerAreaBorderRadius:
+                        BorderRadius.circular(AppRadius.md),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      AppTextField(
+                        controller: nameController,
+                        label: 'Colour name',
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppTextField(
+                              controller: valueController,
+                              label: 'Value',
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: AppTextField(
+                              controller: qtyController,
+                              label: 'Quantity',
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: valueController,
-                label: 'Value',
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: qtyController,
-                label: 'Quantity',
-                keyboardType: TextInputType.number,
+              const Divider(height: 1, color: AppColors.border),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    AppButton(
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    AppButton(
+                      onPressed: () {
+                        final hexName =
+                            '#${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+                        final inputName = nameController.text.trim();
+                        final val = int.tryParse(valueController.text.trim()) ?? 100;
+                        final qty = int.tryParse(qtyController.text.trim()) ?? 50;
+                        setState(() {
+                          _chipSet.add(ChipColor(
+                            color: inputName.isEmpty ? hexName : inputName,
+                            hex: pickerColor.toARGB32(),
+                            value: val,
+                            quantity: qty,
+                          ));
+                          _chipMode = _ChipMode.exact;
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Add colour'),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            child: const Text('Cancel'),
-            onPressed: () => Navigator.pop(context),
-          ),
-          TextButton(
-            child: const Text('Add'),
-            onPressed: () {
-              final hexName = '#${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-              final inputName = nameController.text.trim();
-              final val = int.tryParse(valueController.text.trim()) ?? 100;
-              final qty = int.tryParse(qtyController.text.trim()) ?? 50;
-              setState(() {
-                _chipSet.add(ChipColor(
-                  color: inputName.isEmpty ? hexName : inputName,
-                  hex: pickerColor.toARGB32(),
-                  value: val,
-                  quantity: qty,
-                ));
-                _chipMode = _ChipMode.exact;
-              });
-              Navigator.pop(context);
-            },
-          ),
-        ],
       ),
     );
   }
@@ -1090,7 +1155,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 Text(
                   switch (_antePreference) {
                     AntePreference.recommend =>
-                      'One ante per table equal to the big blind, starting at a fixed level. Recommended.',
+                    'One ante per table equal to the big blind, starting at a fixed level. Recommended.',
                     AntePreference.none => 'No antes during the tournament.',
                     AntePreference.bigBlind => 'One ante per table, equal to the big blind.',
                     AntePreference.individual => 'Every player posts an ante (half the big blind) each hand.',
@@ -1213,7 +1278,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 child: _SummaryStatCard(
                   icon: Icons.timer_outlined,
                   label: 'Duration',
-                  value: '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h',
+                  value: _durationLabel,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -1235,8 +1300,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               AppBadge(
                 label: _rebuys
                     ? (_rebuyUnlimited
-                        ? 'Unlimited rebuys to L6'
-                        : 'Rebuys to L$_rebuysClose${_rebuyCost.text.trim().isNotEmpty ? ' @ ${_rebuyCost.text}' : ''}')
+                    ? 'Unlimited rebuys to L6'
+                    : 'Rebuys to L$_rebuysClose${_rebuyCost.text.trim().isNotEmpty ? ' @ ${_rebuyCost.text}' : ''}')
                     : 'No rebuys',
                 variant: _rebuys ? AppBadgeVariant.gold : AppBadgeVariant.muted,
               ),
@@ -1284,29 +1349,389 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   }
 }
 
+// =============================================================================
+// Review / confirm dialog
+// =============================================================================
 
-class _ConfirmRow extends StatelessWidget {
-  const _ConfirmRow({required this.label, required this.value});
-
+class _ConfirmItem {
+  const _ConfirmItem(this.label, this.value);
   final String label;
   final String value;
+}
+
+/// Centered, width-capped review dialog with a sticky header + footer and a
+/// single scrollable body.
+///
+/// Uses [Dialog] rather than [AlertDialog] so the width is driven purely by our
+/// own constraints — `AlertDialog` + `width: double.maxFinite` was what pushed
+/// the old dialog off-centre on desktop.
+class _ConfirmDetailsDialog extends StatelessWidget {
+  const _ConfirmDetailsDialog({
+    required this.gameRows,
+    required this.ruleRows,
+    required this.chipSet,
+    required this.chipSetName,
+    this.anchorRect,
+  });
+
+  final List<_ConfirmItem> gameRows;
+  final List<_ConfirmItem> ruleRows;
+  final List<ChipColor> chipSet;
+  final String chipSetName;
+
+  /// Global rect of the page content. When supplied the dialog centres over
+  /// this rect rather than the whole window, so a persistent sidebar doesn't
+  /// make it look off-centre.
+  final Rect? anchorRect;
 
   @override
   Widget build(BuildContext context) {
+    final Size screen = MediaQuery.sizeOf(context);
+    final bool isCompact = screen.width < 480;
+
+    final double gap = isCompact ? AppSpacing.lg : AppSpacing.xxl;
+
+    // Asymmetric insets shift the dialog to the centre of the content area.
+    EdgeInsets inset = EdgeInsets.symmetric(
+      horizontal: gap,
+      vertical: AppSpacing.xxl,
+    );
+
+    final Rect? a = anchorRect;
+    if (!isCompact && a != null && a.width > 360) {
+      final double left = a.left + gap;
+      final double right = (screen.width - a.right) + gap;
+      // Only apply if it still leaves a usable width.
+      if (screen.width - left - right >= 360) {
+        inset = EdgeInsets.only(
+          left: left,
+          right: right,
+          top: AppSpacing.xxl,
+          bottom: AppSpacing.xxl,
+        );
+      }
+    }
+
+    return Dialog(
+      backgroundColor: AppColors.card,
+      surfaceTintColor: Colors.transparent,
+      clipBehavior: Clip.antiAlias,
+      elevation: 24,
+      insetPadding: inset,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 520,
+          // Grows with the window instead of a hard 600.
+          maxHeight: screen.height * 0.85,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min, // lets the dialog hug its content
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _header(context),
+            const Divider(height: 1, color: AppColors.border),
+
+            // Scrollable body.
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.lg,
+                  AppSpacing.xl,
+                  AppSpacing.lg,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const _SectionLabel('Game'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _Panel(
+                      children: [
+                        for (int i = 0; i < gameRows.length; i++)
+                          _ConfirmRow(
+                            item: gameRows[i],
+                            last: i == gameRows.length - 1,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    const _SectionLabel('Rules'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _Panel(
+                      children: [
+                        for (int i = 0; i < ruleRows.length; i++)
+                          _ConfirmRow(
+                            item: ruleRows[i],
+                            last: i == ruleRows.length - 1,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    Row(
+                      children: [
+                        const _SectionLabel('Chip set'),
+                        const SizedBox(width: AppSpacing.xs),
+                        Flexible(
+                          child: Text(
+                            '· $chipSetName',
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodyXs
+                                .copyWith(color: AppColors.mutedForeground),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        for (final c in chipSet) _ChipPill(chip: c),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const Divider(height: 1, color: AppColors.border),
+            _footer(context, isCompact),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _header(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 90,
-            child: Text(
-              label,
-              style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: const Icon(
+              Icons.fact_check_outlined,
+              size: 18,
+              color: AppColors.primary,
             ),
           ),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
-            child: Text(value, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Review game details',
+                  style: AppTypography.display(
+                    size: AppFontSizes.lg,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Check everything before the structure is generated.',
+                  style: AppTypography.bodyXs
+                      .copyWith(color: AppColors.mutedForeground),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Close',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => Navigator.of(context).pop(false),
+            icon: const Icon(
+              Icons.close,
+              size: 18,
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _footer(BuildContext context, bool isCompact) {
+    final Widget back = AppButton(
+      variant: AppButtonVariant.secondary,
+      fullWidth: isCompact,
+      onPressed: () => Navigator.of(context).pop(false),
+      child: const Text('Back to edit'),
+    );
+
+    final Widget confirm = AppButton(
+      fullWidth: isCompact,
+      onPressed: () => Navigator.of(context).pop(true),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check, size: 15, color: AppColors.icon),
+          SizedBox(width: 6),
+          Text('Confirm & generate'),
+        ],
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      // Stack on phones so nothing is ever clipped.
+      child: isCompact
+          ? Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          confirm,
+          const SizedBox(height: AppSpacing.sm),
+          back,
+        ],
+      )
+          : Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          back,
+          const SizedBox(width: AppSpacing.sm),
+          confirm,
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: AppTypography.bodyXs.copyWith(
+        color: AppColors.mutedForeground,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.1,
+      ),
+    );
+  }
+}
+
+class _Panel extends StatelessWidget {
+  const _Panel({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: children),
+    );
+  }
+}
+
+/// Label left, value hard-right — reads as a spec sheet instead of two ragged
+/// columns.
+class _ConfirmRow extends StatelessWidget {
+  const _ConfirmRow({required this.item, this.last = false});
+
+  final _ConfirmItem item;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        border: last
+            ? null
+            : const Border(
+          bottom: BorderSide(color: AppColors.border, width: 0.6),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.label,
+            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              item.value.isEmpty ? '—' : item.value,
+              textAlign: TextAlign.right,
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChipPill extends StatelessWidget {
+  const _ChipPill({required this.chip});
+
+  final ChipColor chip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 13,
+            height: 13,
+            decoration: BoxDecoration(
+              color: chip.colorValue,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            '${chip.value}',
+            style: AppTypography.monoXs.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '×${chip.quantity}',
+            style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground),
           ),
         ],
       ),

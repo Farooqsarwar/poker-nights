@@ -32,7 +32,7 @@ class AppTypography {
       color: color,
       height: height,
       letterSpacing: letterSpacing,
-    );
+    ).copyWith(fontFamilyFallback: const ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji']);
   }
 
   static TextStyle body({
@@ -48,7 +48,7 @@ class AppTypography {
       color: color,
       height: height,
       letterSpacing: letterSpacing,
-    );
+    ).copyWith(fontFamilyFallback: const ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji']);
   }
 
   static TextStyle mono({
@@ -64,7 +64,7 @@ class AppTypography {
       color: color,
       height: height,
       letterSpacing: letterSpacing,
-    );
+    ).copyWith(fontFamilyFallback: const ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji']);
   }
 
   // ── Convenience getters ───────────────────────────────────────────────────

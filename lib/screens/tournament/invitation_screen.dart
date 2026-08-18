@@ -1158,7 +1158,7 @@ class _ContextualMainButton extends StatelessWidget {
                 child: Row(
                   children: [
                     for (final opt in const [
-                      Rsvp.going, Rsvp.goingPlus1, Rsvp.goingPlus2, Rsvp.goingPlus3, Rsvp.maybe, Rsvp.cant
+                      Rsvp.going, Rsvp.goingPlus1, Rsvp.goingPlus2, Rsvp.goingPlus3, Rsvp.goingPlus4, Rsvp.maybe, Rsvp.cant
                     ])
                       Padding(
                         padding: const EdgeInsets.only(right: AppSpacing.sm),

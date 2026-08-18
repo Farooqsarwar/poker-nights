@@ -483,6 +483,8 @@ class AppProvider extends ChangeNotifier {
       koEnabled: settings.koEnabled,
       koAmount: settings.koAmount,
       organizerPct: settings.organizerPct,
+      rebuyCost: settings.rebuyCost,
+      addOnCost: settings.addOnCost,
     ));
     // Seed participants from the group roster so the check-in screen lists the
     // real members first; extra seats become placeholder players.
@@ -712,6 +714,8 @@ class AppProvider extends ChangeNotifier {
         koEnabled: s.koEnabled,
         koAmount: s.koAmount,
         organizerPct: s.organizerPct,
+        rebuyCost: s.rebuyCost,
+        addOnCost: s.addOnCost,
       ));
       _currentGame = game.copyWith(
         settings: s,
@@ -878,7 +882,7 @@ class AppProvider extends ChangeNotifier {
     final level = _currentGame!.structure.levels[next - 1];
     _currentGame = _currentGame!.copyWith(
       currentLevel: next,
-      secondsRemaining: _currentGame!.structure.levelDuration * 60,
+      secondsRemaining: level.durationMins * 60,
       timerRunning: true,
       status: LiveGameStatus.running,
       speedRecommendation: null,
@@ -900,7 +904,7 @@ class AppProvider extends ChangeNotifier {
     final level = _currentGame!.structure.levels[prev - 1];
     _currentGame = _currentGame!.copyWith(
       currentLevel: prev,
-      secondsRemaining: _currentGame!.structure.levelDuration * 60,
+      secondsRemaining: level.durationMins * 60,
       timerRunning: true,
       status: LiveGameStatus.running,
       speedRecommendation: null,
@@ -925,8 +929,9 @@ class AppProvider extends ChangeNotifier {
     _pushUndo();
     _levelAnnouncementMarks.clear();
     final level = game.currentLevelData;
+    final durationMins = level?.durationMins ?? game.structure.levelDuration;
     _currentGame = game.copyWith(
-      secondsRemaining: game.structure.levelDuration * 60,
+      secondsRemaining: durationMins * 60,
       timerRunning: true,
       status: LiveGameStatus.running,
       speedRecommendation: null,
@@ -998,7 +1003,7 @@ class AppProvider extends ChangeNotifier {
     // but the spec says "never delete audit history", so we just append.
     final players = _currentGame!.players.map((p) {
       if (p.id == playerId) {
-        return p.copyWith(eliminated: false, eliminationPos: null);
+        return p.copyWith(eliminated: false, eliminationPos: null, active: true);
       }
       return p;
     }).toList();
@@ -1011,10 +1016,16 @@ class AppProvider extends ChangeNotifier {
   }
 
   void grantRebuy(String playerId) {
+    final game = _currentGame;
+    if (game == null) return;
+    if (!game.settings.rebuys || game.rebuysClosed) return;
+    final player = game.players.where((p) => p.id == playerId).firstOrNull;
+    if (player == null || !player.eliminated) return;
+
     _pushUndo();
-    final rebuyStack = _currentGame!.structure.rebuyStack;
-    _currentGame = _currentGame!.copyWith(
-      players: _currentGame!.players
+    final rebuyStack = game.structure.rebuyStack;
+    _currentGame = game.copyWith(
+      players: game.players
           .map((p) => p.id == playerId
               ? p.copyWith(
                   rebuys: p.rebuys + 1,
@@ -1023,9 +1034,9 @@ class AppProvider extends ChangeNotifier {
                 )
               : p)
           .toList(),
-      totalChipsInPlay: _currentGame!.totalChipsInPlay + rebuyStack,
+      totalChipsInPlay: game.totalChipsInPlay + rebuyStack,
       rebuyRequests:
-          _currentGame!.rebuyRequests.where((id) => id != playerId).toList(),
+          game.rebuyRequests.where((id) => id != playerId).toList(),
     );
     // Recalculate prize pool/prizes after money enters the game.
     // This updates only prizePool, organizerAmount and prizes on the structure,
@@ -1055,10 +1066,16 @@ class AppProvider extends ChangeNotifier {
   /// (12-046/12-047). Closes with late registration/rebuys (12-049), which is
   /// enforced by only showing the action while rebuys are still open.
   void grantReEntry(String playerId) {
+    final game = _currentGame;
+    if (game == null) return;
+    if (!game.settings.reEntry || game.rebuysClosed) return;
+    final player = game.players.where((p) => p.id == playerId).firstOrNull;
+    if (player == null || !player.eliminated) return;
+
     _pushUndo();
-    final entryStack = _currentGame!.structure.startingStack;
-    _currentGame = _currentGame!.copyWith(
-      players: _currentGame!.players
+    final entryStack = game.structure.startingStack;
+    _currentGame = game.copyWith(
+      players: game.players
           .map((p) => p.id == playerId
               ? p.copyWith(
                   reEntries: p.reEntries + 1,
@@ -1067,22 +1084,28 @@ class AppProvider extends ChangeNotifier {
                 )
               : p)
           .toList(),
-      totalChipsInPlay: _currentGame!.totalChipsInPlay + entryStack,
+      totalChipsInPlay: game.totalChipsInPlay + entryStack,
     );
     _updatePrizePool();
   }
 
   void grantAddOn(String playerId) {
+    final game = _currentGame;
+    if (game == null) return;
+    if (!game.settings.addOn || game.settlementConfirmed) return;
+    final player = game.players.where((p) => p.id == playerId).firstOrNull;
+    if (player == null || player.eliminated || !player.active || player.hasAddOn) return;
+
     _pushUndo();
-    final addOnStack = _currentGame!.structure.addOnStack;
-    _currentGame = _currentGame!.copyWith(
-      players: _currentGame!.players
+    final addOnStack = game.structure.addOnStack;
+    _currentGame = game.copyWith(
+      players: game.players
           .map((p) =>
-              p.id == playerId && !p.hasAddOn ? p.copyWith(hasAddOn: true) : p)
+              p.id == playerId ? p.copyWith(hasAddOn: true) : p)
           .toList(),
-      totalChipsInPlay: _currentGame!.totalChipsInPlay + addOnStack,
+      totalChipsInPlay: game.totalChipsInPlay + addOnStack,
       addOnRequests:
-          _currentGame!.addOnRequests.where((id) => id != playerId).toList(),
+          game.addOnRequests.where((id) => id != playerId).toList(),
     );
     // Recalculate prize pool/prizes after money enters the game.
     _updatePrizePool();
@@ -1305,8 +1328,21 @@ class AppProvider extends ChangeNotifier {
 
   /// Guest flow: attach a brand-new guest to a game and mark them pending.
   /// The guest's own session is persisted so the same device can recover the
-  /// request after a refresh (checklist 07-030).
-  void requestGuestCheckIn(String name, String inviterId, int slot) {
+  /// request after a refresh (checklist 07-030). Returns an error string if
+  /// the slot is invalid or already taken.
+  String? requestGuestCheckIn(String name, String inviterId, int slot) {
+    final game = _currentGame;
+    if (game == null) return 'No active game found.';
+
+    final existingSlot = game.guestSlots.where((s) => s.inviterId == inviterId && s.slot == slot).firstOrNull;
+    if (existingSlot != null && !existingSlot.available) {
+      return 'That guest slot is already reserved or checked in.';
+    }
+    final alreadyClaimed = game.players.any((p) => p.isGuest && p.inviterId == inviterId && p.guestSlot == slot);
+    if (alreadyClaimed) {
+      return 'That guest slot is already claimed.';
+    }
+
     _pushUndo();
     final id = 'g-${DateTime.now().millisecondsSinceEpoch}';
     final guest = Player(
@@ -1326,11 +1362,11 @@ class AppProvider extends ChangeNotifier {
       seat: 0,
       active: false,
     );
-    _currentGame = _currentGame!.copyWith(
-      players: [..._currentGame!.players, guest],
-      pendingGuests: [..._currentGame!.pendingGuests, guest],
+    _currentGame = game.copyWith(
+      players: [...game.players, guest],
+      pendingGuests: [...game.pendingGuests, guest],
       guestSlots: _markSlotReserved(
-        _currentGame!.guestSlots,
+        game.guestSlots,
         inviterId,
         slot,
         name: name.trim(),
@@ -1338,7 +1374,7 @@ class AppProvider extends ChangeNotifier {
     );
     _saveGuestSession(
       GuestSession(
-        gameId: _currentGame!.id,
+        gameId: game.id,
         name: name.trim(),
         inviterId: inviterId,
         slot: slot,
@@ -1348,6 +1384,7 @@ class AppProvider extends ChangeNotifier {
     // The guest stays pending until the host confirms them at check-in
     // (spec §6 "waiting for admin confirmation", checklist 07-027/07-028).
     notifyListeners();
+    return null;
   }
 
   // ── Guest session (device-local, checklist 07-030) ─────────────────────────
@@ -1370,7 +1407,7 @@ class AppProvider extends ChangeNotifier {
   /// organizer amount removed, chat preserved.
   LiveGame? get playerProjection => _currentGame == null
       ? null
-      : projections.playerProjection(_currentGame!);
+      : projections.playerProjection(_currentGame!, viewerId: _user?.id);
 
   /// The game as a guest sees it: payout/organizer amounts and chat removed.
   LiveGame? get guestProjection => _currentGame == null
@@ -1817,10 +1854,9 @@ class AppProvider extends ChangeNotifier {
         ? structure.levelDuration - 5
         : structure.levelDuration + 5;
     final clamped = newDuration < 10 ? 10 : (newDuration > 20 ? 20 : newDuration);
-    // Apply the new duration to the current and future levels; already-finished
-    // levels keep their original durations (checklist 12-037/12-040).
+    // Apply the new duration to future levels only (spec: active level never changes, starts next level).
     final levels = structure.levels
-        .map((l) => l.level >= game.currentLevel
+        .map((l) => l.level > game.currentLevel
             ? BlindLevel(
                 level: l.level,
                 sb: l.sb,
@@ -1832,24 +1868,10 @@ class AppProvider extends ChangeNotifier {
         .toList();
     _currentGame = game.copyWith(
       speedRecommendation: null,
-      structure: TournamentStructure(
-        startingStack: structure.startingStack,
-        chipPlan: structure.chipPlan,
-        rebuyStack: structure.rebuyStack,
-        rebuyChipPlan: structure.rebuyChipPlan,
-        addOnStack: structure.addOnStack,
-        addOnChipPlan: structure.addOnChipPlan,
+      structure: structure.copyWith(
         levels: levels,
         levelDuration: clamped,
-        expectedFinishMins: structure.expectedFinishMins,
-        prizes: structure.prizes,
-        prizePool: structure.prizePool,
-        organizerAmount: structure.organizerAmount,
-        colorUpInstructions: structure.colorUpInstructions,
-        warnings: structure.warnings,
       ),
-      secondsRemaining:
-          game.secondsRemaining > clamped * 60 ? clamped * 60 : game.secondsRemaining,
     );
     addAnnouncement(
       recommendation == SpeedRecommendation.speedUp
@@ -1892,47 +1914,29 @@ class AppProvider extends ChangeNotifier {
     final confirmed = game.players.where((p) => p.confirmed).length;
     final count = confirmed >= 2 ? confirmed : game.settings.players;
     final s = game.settings;
+    final newSettings = s.copyWith(players: count);
     final structure = TournamentEngine.generate(TournamentParams(
       players: count,
-      durationHours: s.durationHours,
-      buyIn: s.buyIn,
-      chipSet: s.chipSet,
-      rebuys: s.rebuys,
-      rebuysCloseLevel: s.rebuysCloseLevel,
-      reEntry: s.reEntry,
-      addOn: s.addOn,
-      anteEnabled: s.anteEnabled,
-      anteAfterLevel: s.anteAfterLevel,
-      anteStyle: s.anteStyle,
-      koEnabled: s.koEnabled,
-      koAmount: s.koAmount,
-      organizerPct: s.organizerPct,
+      durationHours: newSettings.durationHours,
+      buyIn: newSettings.buyIn,
+      chipSet: newSettings.chipSet,
+      rebuys: newSettings.rebuys,
+      rebuysCloseLevel: newSettings.rebuysCloseLevel,
+      reEntry: newSettings.reEntry,
+      addOn: newSettings.addOn,
+      anteEnabled: newSettings.anteEnabled,
+      anteAfterLevel: newSettings.anteAfterLevel,
+      anteStyle: newSettings.anteStyle,
+      koEnabled: newSettings.koEnabled,
+      koAmount: newSettings.koAmount,
+      organizerPct: newSettings.organizerPct,
+      rebuyCost: newSettings.rebuyCost,
+      addOnCost: newSettings.addOnCost,
     ));
 
     final newLevel = game.currentLevel.clamp(1, structure.levels.length);
     _currentGame = game.copyWith(
-      settings: GameSettings(
-        name: s.name,
-        date: s.date,
-        time: s.time,
-        location: s.location,
-        players: count,
-        durationHours: s.durationHours,
-        buyIn: s.buyIn,
-        koEnabled: s.koEnabled,
-        koAmount: s.koAmount,
-        rebuys: s.rebuys,
-        rebuysCloseLevel: s.rebuysCloseLevel,
-        reEntry: s.reEntry,
-        addOn: s.addOn,
-        addOnCloseLevel: s.addOnCloseLevel,
-        anteEnabled: s.anteEnabled,
-        anteAfterLevel: s.anteAfterLevel,
-        anteStyle: s.anteStyle,
-        organizerPct: s.organizerPct,
-        chipSet: s.chipSet,
-        chipSetName: s.chipSetName,
-      ),
+      settings: newSettings,
       structure: structure,
       currentLevel: newLevel,
       secondsRemaining: structure.levels[newLevel - 1].durationMins * 60,
@@ -2034,13 +2038,15 @@ class AppProvider extends ChangeNotifier {
             return p;
           }).toList();
     final dealer = finalists.isEmpty ? null : finalists[Random().nextInt(finalists.length)];
+    final currentLevelData = _currentGame!.currentLevelData;
+    final durationMins = currentLevelData?.durationMins ?? _currentGame!.structure.levelDuration;
     _currentGame = _currentGame!.copyWith(
       players: players,
       status: LiveGameStatus.running,
       timerRunning: true,
       dealerPlayerId: dealer?.id,
       // The paused level is over — restart the clock for the current level.
-      secondsRemaining: _currentGame!.structure.levelDuration * 60,
+      secondsRemaining: durationMins * 60,
     );
     addAnnouncement('Final table! Please take your new seats.', true);
   }

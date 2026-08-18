@@ -55,58 +55,79 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           const SizedBox(height: AppSpacing.xl),
           // Personal stats
-          GridView.count(
-            crossAxisCount: isMobile ? 3 : 6,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: AppSpacing.sm,
-            crossAxisSpacing: AppSpacing.sm,
-            childAspectRatio: isMobile ? 1.4 : 1.1,
-            children: [
-              _MiniStat(label: 'Played', value: '${myStats.played}'),
-              _MiniStat(label: 'Wins', value: '${myStats.wins}'),
-              _MiniStat(label: 'Podium', value: '${myStats.podium}'),
-              _MiniStat(label: 'Rebuys', value: '${myStats.rebuys}'),
-              _MiniStat(label: 'KOs', value: '${myStats.knockouts}'),
-              // Earnings derive from individual payouts, which are private
-              // (14-042/19-020) — non-admins see no monetary P&L.
-              _MiniStat(
-                label: 'P&L',
-                value: isAdmin
-                    ? '${myStats.earnings >= 0 ? '+' : ''}${Formatters.chips(myStats.earnings)}'
-                    : '—',
-                color: isAdmin
-                    ? (myStats.earnings >= 0 ? AppColors.success : AppColors.destructive)
-                    : AppColors.mutedForeground,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          GridView.count(
-            crossAxisCount: isMobile ? 3 : 6,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: AppSpacing.sm,
-            crossAxisSpacing: AppSpacing.sm,
-            childAspectRatio: isMobile ? 1.4 : 1.1,
-            children: [
-              _MiniStat(
-                label: 'ITM%',
-                value: myStats.played == 0 ? '—' : '${(myStats.itmCount / myStats.played * 100).round()}%',
-              ),
-              _MiniStat(
-                label: 'ROI%',
-                value: !isAdmin || myStats.grossBuyIns == 0
-                    ? '—'
-                    : _formatRoi(myStats.earnings / myStats.grossBuyIns * 100),
-                color: !isAdmin || myStats.grossBuyIns == 0
-                    ? AppColors.mutedForeground
-                    : (myStats.earnings < 0 ? AppColors.destructive : AppColors.success),
-              ),
-              _MiniStat(label: 'Bubbles', value: '${myStats.bubbles}'),
-              _MiniStat(label: 'Add-ons', value: '${myStats.addOns}'),
-            ],
-          ),
+          if (isAdmin) ...[
+            GridView.count(
+              crossAxisCount: isMobile ? 3 : 6,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: AppSpacing.sm,
+              crossAxisSpacing: AppSpacing.sm,
+              childAspectRatio: isMobile ? 1.4 : 1.1,
+              children: [
+                _MiniStat(label: 'Played', value: '${myStats.played}'),
+                _MiniStat(label: 'Wins', value: '${myStats.wins}'),
+                _MiniStat(label: 'Podium', value: '${myStats.podium}'),
+                _MiniStat(
+                  label: 'Avg finish',
+                  value: myStats.played == 0 ? '—' : myStats.avgFinish.toStringAsFixed(1),
+                ),
+                _MiniStat(label: 'KOs', value: '${myStats.knockouts}'),
+                // Earnings derive from individual payouts, which are private
+                // (14-042/19-020) — non-admins see no monetary P&L.
+                _MiniStat(
+                  label: 'P&L',
+                  value: '${myStats.earnings >= 0 ? '+' : ''}${Formatters.chips(myStats.earnings)}',
+                  color: myStats.earnings >= 0 ? AppColors.success : AppColors.destructive,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            GridView.count(
+              crossAxisCount: isMobile ? 3 : 5,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: AppSpacing.sm,
+              crossAxisSpacing: AppSpacing.sm,
+              childAspectRatio: isMobile ? 1.4 : 1.1,
+              children: [
+                _MiniStat(
+                  label: 'ITM%',
+                  value: myStats.played == 0 ? '—' : '${(myStats.itmCount / myStats.played * 100).round()}%',
+                ),
+                _MiniStat(
+                  label: 'ROI%',
+                  value: myStats.grossBuyIns == 0
+                      ? '—'
+                      : _formatRoi(myStats.earnings / myStats.grossBuyIns * 100),
+                  color: myStats.grossBuyIns == 0
+                      ? AppColors.mutedForeground
+                      : (myStats.earnings < 0 ? AppColors.destructive : AppColors.success),
+                ),
+                _MiniStat(label: 'Bubbles', value: '${myStats.bubbles}'),
+                _MiniStat(label: 'Rebuys', value: '${myStats.rebuys}'),
+                _MiniStat(label: 'Add-ons', value: '${myStats.addOns}'),
+              ],
+            ),
+          ] else ...[
+            GridView.count(
+              crossAxisCount: isMobile ? 3 : 5,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: AppSpacing.sm,
+              crossAxisSpacing: AppSpacing.sm,
+              childAspectRatio: isMobile ? 1.4 : 1.1,
+              children: [
+                _MiniStat(label: 'Played', value: '${myStats.played}'),
+                _MiniStat(label: 'Wins', value: '${myStats.wins}'),
+                _MiniStat(label: 'Podium', value: '${myStats.podium}'),
+                _MiniStat(
+                  label: 'Avg finish',
+                  value: myStats.played == 0 ? '—' : myStats.avgFinish.toStringAsFixed(1),
+                ),
+                _MiniStat(label: 'KOs', value: '${myStats.knockouts}'),
+              ],
+            ),
+          ],
           const SizedBox(height: AppSpacing.xl),
           _buildRangeFilter(),
           const SizedBox(height: AppSpacing.md),
@@ -131,11 +152,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  ({int played, int wins, int podium, int rebuys, int knockouts, double earnings,
+  ({int played, int wins, int podium, double avgFinish, int rebuys, int knockouts, double earnings,
     int addOns, int itmCount, int bubbles, int grossBuyIns}) _computeMyStats(
       List<LiveGame> myGames, String? userId) {
     var played = 0, wins = 0, podium = 0, rebuys = 0, knockouts = 0;
     var addOns = 0, itmCount = 0, bubbles = 0, grossBuyIns = 0;
+    var totalPlacements = 0;
+    var placedGames = 0;
     var earnings = 0.0;
     for (final g in myGames) {
       played++;
@@ -143,6 +166,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
       final pos = g.finishOrder.indexOf(userId ?? '');
       if (pos >= 0) {
         final placement = g.finishOrder.length - pos;
+        totalPlacements += placement;
+        placedGames++;
         if (placement == 1) wins++;
         if (placement <= 3) podium++;
         final paidPlaces = g.structure.prizes.length;
@@ -166,10 +191,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
         if (me.hasAddOn) addOns++;
       }
     }
+    final avgFinish = placedGames == 0 ? 0.0 : totalPlacements / placedGames;
     return (
       played: played,
       wins: wins,
       podium: podium,
+      avgFinish: avgFinish,
       rebuys: rebuys,
       knockouts: knockouts,
       earnings: earnings,
@@ -620,7 +647,7 @@ class _HistoryRow extends StatelessWidget {
                 'Winner: ${winner?.name ?? '—'}',
                 style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
               ),
-              if (totalRebuys > 0)
+              if (totalRebuys > 0 && showAmounts)
                 Text(
                   '· $totalRebuys rebuys',
                   style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),

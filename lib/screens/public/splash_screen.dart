@@ -583,22 +583,29 @@ class _BackFace extends StatelessWidget {
       double h,
       double blockW,
       double fontSize,
+
       ) {
     return Positioned(
       left: (w - blockW) / 2,
       top: h * (_rowTop + row * _rowPitch) - fontSize * 0.15,
       width: blockW,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: <Widget>[
           for (final String ch in text.split(''))
-            Text(
-              ch,
-              style: TextStyle(
-                color: color,
-                fontSize: fontSize,
-                height: 1.0,
-                fontWeight: FontWeight.w400,
+            Expanded(
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    ch,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: fontSize,
+                      height: 1.0,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
               ),
             ),
         ],

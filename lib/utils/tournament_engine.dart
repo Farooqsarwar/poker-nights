@@ -306,7 +306,7 @@ class TournamentEngine {
         case 3:
           return [0.57, 0.30, 0.13];
         default:
-          return [0.55, 0.30, 0.11, 0.04];
+          return [0.56, 0.30, 0.10, 0.04];
       }
     }
 
@@ -426,21 +426,12 @@ class TournamentEngine {
 
     final sortedChips = [...params.chipSet]..sort((a, b) => a.value - b.value);
     final minChip = sortedChips.isNotEmpty ? sortedChips.first.value : 1;
-    final openingBB = sortedChips.length >= 2
-        ? sortedChips[1].value * 2
-        : minChip * 10;
+    int startIndex = validBlindLevels.indexWhere((level) => level[0] >= minChip);
+    if (startIndex < 0) startIndex = 0;
+    final openingLevel = validBlindLevels[startIndex];
+    final openingBB = openingLevel[1];
     
-    final startingStack = (targetBBDepth * openingBB / 100).round() * 100;
-
-    int startIndex = 0;
-    for (int i = 0; i < validBlindLevels.length; i++) {
-      final bb = validBlindLevels[i][1];
-      final depth = startingStack / bb;
-      if (depth <= 120) {
-        startIndex = i;
-        break;
-      }
-    }
+    final startingStack = math.max(openingBB, ((targetBBDepth * openingBB) / 100).round() * 100);
 
     // The chip plan must never hand a player an absurd number of chips. If the
     // inventory can't cover the target stack, reduce the stack (rounding to the
@@ -525,9 +516,9 @@ class TournamentEngine {
     final expectedReEntriesTotal = params.reEntry ? (params.players * 0.20).round() : 0;
     final expectedAddOnsTotal = params.addOn ? (params.players * 0.65).round() : 0;
     final grossEligible = params.buyIn * params.players +
-        rebuyStack * expectedRebuysTotal +
-        rebuyStack * expectedReEntriesTotal +
-        addOnStack * expectedAddOnsTotal;
+        params.effectiveRebuyCost * expectedRebuysTotal +
+        params.buyIn * expectedReEntriesTotal +
+        params.effectiveAddOnCost * expectedAddOnsTotal;
     final recalculated = recalculatePrizes(grossEligible, params.players, params.organizerPct);
     final organizerAmount = recalculated.organizerAmount;
     final prizePool = recalculated.prizePool;

@@ -224,15 +224,17 @@ class ResultPodiumScreen extends StatelessWidget {
                             ],
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          [
-                            if (r.player.rebuys > 0) '${r.player.rebuys}R',
-                            if (r.player.hasAddOn) 'AO',
-                            if (r.player.knockouts > 0) '${r.player.knockouts} KO',
-                          ].join(' · '),
-                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                        ),
+                        if (showAmounts) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          Text(
+                            [
+                              if (r.player.rebuys > 0) '${r.player.rebuys}R',
+                              if (r.player.hasAddOn) 'AO',
+                              if (r.player.knockouts > 0) '${r.player.knockouts} KO',
+                            ].join(' · '),
+                            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                          ),
+                        ],
                         const SizedBox(width: AppSpacing.md),
                         Text(
                           showAmounts && r.prize != null
@@ -251,21 +253,42 @@ class ResultPodiumScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           // Stats
-          Row(
-            children: [
-              Expanded(child: _StatCard(label: 'Players', value: '${players.length}')),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: _StatCard(
-                  label: 'Total pot',
-                  value: Formatters.chips(game.structure.prizePool),
-                  valueColor: AppColors.primary,
+          if (showAmounts)
+            Row(
+              children: [
+                Expanded(child: _StatCard(label: 'Players', value: '${players.length}')),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Total pot',
+                    value: Formatters.chips(game.structure.prizePool),
+                    valueColor: AppColors.primary,
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(child: _StatCard(label: 'Rebuys', value: '$totalRebuys')),
-            ],
-          ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(child: _StatCard(label: 'Rebuys', value: '$totalRebuys')),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(child: _StatCard(label: 'Players', value: '${players.length}')),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Duration',
+                    value: '${game.settings.durationHours == game.settings.durationHours.roundToDouble() ? game.settings.durationHours.round() : game.settings.durationHours}h',
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Final level',
+                    value: 'L${game.currentLevel}',
+                  ),
+                ),
+              ],
+            ),
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [

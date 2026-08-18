@@ -34,6 +34,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   final TextEditingController _codeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   String? _codeError;
+  String? _nameError;
   String? _selectedInviter;
   int? _selectedSlot;
 
@@ -116,9 +117,16 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   void _requestCheckIn() {
     final app = context.read<AppProvider>();
     if (_selectedInviter != null && _selectedSlot != null && _nameController.text.trim().isNotEmpty) {
-      app.requestGuestCheckIn(_nameController.text.trim(), _selectedInviter!, _selectedSlot!);
+      final err = app.requestGuestCheckIn(_nameController.text.trim(), _selectedInviter!, _selectedSlot!);
+      if (err != null) {
+        setState(() => _nameError = err);
+        return;
+      }
     }
-    setState(() => _step = _GuestStep.waiting);
+    setState(() {
+      _nameError = null;
+      _step = _GuestStep.waiting;
+    });
   }
 
   void _startOver() {
@@ -129,6 +137,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       _selectedSlot = null;
       _nameController.clear();
       _codeError = null;
+      _nameError = null;
     });
   }
 
@@ -505,7 +514,10 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             controller: _nameController,
             autofocus: true,
             maxLength: 32,
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) {
+              if (_nameError != null) setState(() => _nameError = null);
+              setState(() {});
+            },
             style: AppTypography.body(size: AppFontSizes.lg, weight: FontWeight.w500),
             decoration: InputDecoration(
               counterText: '',
@@ -525,6 +537,10 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               ),
             ),
           ),
+          if (_nameError != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(_nameError!, style: AppTypography.bodyXs.copyWith(color: AppColors.destructive)),
+          ],
           const SizedBox(height: AppSpacing.lg),
           AppButton(
             variant: AppButtonVariant.primary,

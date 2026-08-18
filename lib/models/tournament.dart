@@ -62,6 +62,8 @@ class TournamentParams {
     required this.koEnabled,
     required this.koAmount,
     required this.organizerPct,
+    this.rebuyCost,
+    this.addOnCost,
   });
 
   final int players;
@@ -82,6 +84,12 @@ class TournamentParams {
   final bool koEnabled;
   final int koAmount;
   final int organizerPct;
+
+  final int? rebuyCost;
+  final int? addOnCost;
+
+  int get effectiveRebuyCost => rebuyCost ?? buyIn;
+  int get effectiveAddOnCost => addOnCost ?? buyIn;
 }
 
 /// Prize line.

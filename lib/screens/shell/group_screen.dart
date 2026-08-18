@@ -1058,6 +1058,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                           Rsvp.goingPlus1,
                           Rsvp.goingPlus2,
                           Rsvp.goingPlus3,
+                          Rsvp.goingPlus4,
                           Rsvp.maybe,
                           Rsvp.cant
                         ])

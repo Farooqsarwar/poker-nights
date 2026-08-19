@@ -27,9 +27,33 @@ LiveGame projectionFor(
   final viewerCanSeeChat = role == GameProjectionRole.player;
 
   // 12, 13: Zero organizerPct and clear forcePaidPlaces for non-admin
-  final publicSettings = game.settings.copyWith(
+  final publicSettings = GameSettings(
+    name: game.settings.name,
+    date: game.settings.date,
+    time: game.settings.time,
+    location: game.settings.location,
+    players: game.settings.players,
+    durationHours: game.settings.durationHours,
+    buyIn: game.settings.buyIn,
+    koEnabled: game.settings.koEnabled,
+    koAmount: game.settings.koAmount,
+    rebuys: game.settings.rebuys,
+    rebuysCloseLevel: game.settings.rebuysCloseLevel,
+    reEntry: game.settings.reEntry,
+    addOn: game.settings.addOn,
+    addOnCloseLevel: game.settings.addOnCloseLevel,
+    anteEnabled: game.settings.anteEnabled,
+    anteAfterLevel: game.settings.anteAfterLevel,
+    anteStyle: game.settings.anteStyle,
+    antePreference: game.settings.antePreference,
     organizerPct: 0,
+    chipSet: game.settings.chipSet,
+    chipSetName: game.settings.chipSetName,
+    announceEliminations: game.settings.announceEliminations,
     forcePaidPlaces: null,
+    rebuyCost: game.settings.rebuyCost,
+    addOnCost: game.settings.addOnCost,
+    locationPrivate: game.settings.locationPrivate,
   );
 
   // 16: Zero other players' rebuys / reEntries / hasAddOn / knockouts except viewer's own record (registered member only)

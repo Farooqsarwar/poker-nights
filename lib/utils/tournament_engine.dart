@@ -298,7 +298,7 @@ class TournamentEngine {
 
     // Distribution weights approximating the section-25 reference style.
     // Index 0 is place 1 (largest). Chosen per place count:
-    //   2 places ~ 73/27, 3 places ~ 57/30/13, 4 places ~ 55/30/11/4.
+    //   2 places ~ 73/27, 3 places ~ 57/30/13, 4 places ~ 56/30/10/4.
     List<double> weightsFor(int n) {
       switch (n) {
         case 2:

@@ -1227,17 +1227,13 @@ class AppProvider extends ChangeNotifier {
     _pushUndo();
     final game = _currentGame!;
     
-    // Find a generic placeholder to replace (so we don't exceed expected active players)
-    final placeholderIdx = game.players.indexWhere((p) => !p.checkedIn && !p.isGuest && p.name.startsWith('Player'));
-    
     final updated = game.players
-        .where((p) => placeholderIdx == -1 || p.id != game.players[placeholderIdx].id)
         .map((p) => p.id == guestId
             ? p.copyWith(confirmed: true, checkedIn: true, active: true)
             : p)
         .toList();
         
-    final extraChips = placeholderIdx == -1 ? game.structure.startingStack : 0;
+    final extraChips = game.structure.startingStack;
     final guest = game.players.where((p) => p.id == guestId).firstOrNull;
 
     final inviterId = guest?.inviterId;
@@ -1709,7 +1705,7 @@ class AppProvider extends ChangeNotifier {
       chipsToRemove += p.rebuys * game.structure.startingStack;
     }
     if (p.hasAddOn) {
-      chipsToRemove += game.structure.startingStack;
+      chipsToRemove += game.structure.addOnStack;
     }
 
     final newPlayers = game.players.where((pl) => pl.id != playerId).toList();
@@ -2227,36 +2223,44 @@ class AppProvider extends ChangeNotifier {
   void setRSVP(Rsvp? rsvp, {String? gameId}) {
     final userId = _user?.id;
     if (userId == null) return;
-    final target = _currentGame;
-    // After the cutoff players can no longer alter their RSVP without admin
-    // handling (07-012, UAT-025).
-    if (target != null && target.settings.rsvpCutoffPassed) return;
-    if (gameId == null) {
-      if (_currentGame != null) {
-        _currentGame = _currentGame!.copyWith(
-          players: _currentGame!.players
-              .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
-              .toList(),
-        );
-        // Persist named guest slots for the new count so unclaimed seats are
-        // visible even before a guest claims them (checklist 07-014).
-        _syncGuestSlots(userId, rsvp?.guestCount ?? 0);
-        // Lowering the guest count releases extra unused guest slots safely
-        // and surfaces a conflict when a confirmed guest exceeds the new count
-        // (07-015, 20-030, 20-031).
-        _reconcileExcessGuestSlots(userId, rsvp?.guestCount ?? 0);
-      }
+    
+    final isCurrent = gameId == null || (_currentGame != null && gameId == _currentGame!.id);
+    
+    // Check cutoff
+    if (isCurrent) {
+      if (_currentGame != null && _currentGame!.settings.rsvpCutoffPassed) return;
+    } else {
+      final g = _currentGroup.games.firstWhere((g) => g.id == gameId, orElse: () => _currentGame!);
+      if (g.settings.rsvpCutoffPassed) return;
     }
+
+    if (isCurrent && _currentGame != null) {
+      var updated = _currentGame!.copyWith(
+        players: _currentGame!.players
+            .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
+            .toList(),
+      );
+      updated = _syncGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
+      updated = _reconcileExcessGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
+      _currentGame = updated;
+    }
+
     // Keep the group's copy of the game in sync so badges update on the hub.
     _setGroup(_currentGroup.copyWith(
       games: _currentGroup.games
-          .map((g) => (gameId != null ? g.id == gameId : _currentGame != null && g.id == _currentGame!.id)
-              ? g.copyWith(
-                  players: g.players
-                      .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
-                      .toList(),
-                )
-              : g)
+          .map((g) {
+            if (isCurrent ? (g.id == _currentGame?.id) : (g.id == gameId)) {
+               var updated = g.copyWith(
+                 players: g.players
+                     .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
+                     .toList(),
+               );
+               updated = _syncGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
+               updated = _reconcileExcessGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
+               return updated;
+            }
+            return g;
+          })
           .toList(),
     ));
     notifyListeners();
@@ -2267,9 +2271,7 @@ class AppProvider extends ChangeNotifier {
   /// slots beyond the new count that are still unclaimed are removed. Claimed
   /// slots are never deleted here — excess claims are handled by
   /// [_reconcileExcessGuestSlots].
-  void _syncGuestSlots(String userId, int newCount) {
-    final game = _currentGame;
-    if (game == null) return;
+  LiveGame _syncGuestSlots(LiveGame game, String userId, int newCount) {
     final existing = game.guestSlots
         .where((s) => s.inviterId == userId)
         .toList();
@@ -2301,23 +2303,21 @@ class AppProvider extends ChangeNotifier {
     for (final s in slots) {
       if (seen.add(s.id)) merged.add(s);
     }
-    _currentGame = game.copyWith(guestSlots: merged);
+    return game.copyWith(guestSlots: merged);
   }
 
   /// Checklist 07-015 / 20-030 / 20-031: when a player lowers their guest
   /// count, unused guest slots beyond the new count are released safely.
   /// Unconfirmed requests are removed; guests already confirmed on an excess
   /// slot are kept but surfaced to the administrator as a conflict.
-  void _reconcileExcessGuestSlots(String userId, int newCount) {
-    final game = _currentGame;
-    if (game == null) return;
+  LiveGame _reconcileExcessGuestSlots(LiveGame game, String userId, int newCount) {
     final excess = game.players
         .where((p) => p.isGuest && p.inviterId == userId && (p.guestSlot ?? 0) > newCount)
         .toList();
-    if (excess.isEmpty) return;
+    if (excess.isEmpty) return game;
     final excessIds = excess.map((p) => p.id).toSet();
     final confirmed = excess.where((p) => p.confirmed).toList();
-    _currentGame = _currentGame!.copyWith(
+    final updated = game.copyWith(
       players: game.players.where((p) => !excessIds.contains(p.id)).toList(),
       pendingGuests:
           game.pendingGuests.where((p) => !excessIds.contains(p.id)).toList(),
@@ -2337,6 +2337,7 @@ class AppProvider extends ChangeNotifier {
         ),
       );
     }
+    return updated;
   }
 
   /// Sends an RSVP reminder to every member who has not yet responded

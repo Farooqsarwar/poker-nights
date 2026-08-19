@@ -172,9 +172,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     final inviter = _selectedInviter == null
         ? null
         : registeredPlayers.where((p) => p.id == _selectedInviter).firstOrNull;
-    final availableSlots = inviter != null && inviter.rsvp != null && inviter.rsvp!.label.startsWith('Going +')
-        ? int.parse(inviter.rsvp!.label.split('+')[1].trim())
-        : 0;
+    final availableSlots = inviter?.rsvp?.guestCount ?? 0;
     final level = game.currentLevelData;
 
     // While waiting, react to the admin's decision in real time: the guest is

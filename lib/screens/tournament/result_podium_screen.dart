@@ -99,18 +99,19 @@ class ResultPodiumScreen extends StatelessWidget {
                   style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
-                  decoration: BoxDecoration(
-                    color: AppColors.primarySoft,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                if (showAmounts)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      '${Formatters.chips(game.structure.prizePool)} prize pool',
+                      style: AppTypography.monoSm.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                    ),
                   ),
-                  child: Text(
-                    '${Formatters.chips(game.structure.prizePool)} prize pool',
-                    style: AppTypography.monoSm.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
-                  ),
-                ),
               ],
             ),
           ),

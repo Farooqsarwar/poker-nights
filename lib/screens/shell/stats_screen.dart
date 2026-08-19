@@ -217,6 +217,7 @@ class _RecentResults extends StatelessWidget {
               game: mine[i],
               userId: userId,
               showDivider: i < mine.length - 1,
+              isAdmin: app.user?.isAdmin ?? false,
             ),
         ],
       ),
@@ -229,11 +230,13 @@ class _ResultRow extends StatelessWidget {
     required this.game,
     required this.userId,
     required this.showDivider,
+    required this.isAdmin,
   });
 
   final LiveGame game;
   final String userId;
   final bool showDivider;
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -281,7 +284,7 @@ class _ResultRow extends StatelessWidget {
               ],
             ),
           ),
-          if (net != null)
+          if (isAdmin && net != null)
             Text(
               Formatters.signedMoney('\$', net.toDouble()),
               style: AppTypography.mono(

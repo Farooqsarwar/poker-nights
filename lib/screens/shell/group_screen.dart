@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../app/Icons.dart';
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
@@ -97,7 +98,7 @@ class _GroupScreenState extends State<GroupScreen> {
       context.go(RoutePaths.resultPodium);
     } else if (isAdmin && game.status.isActiveLive) {
       context.go(RoutePaths.adminDashboard);
-    } else if ((game.status == LiveGameStatus.checkin || game.status == LiveGameStatus.ready) && isAdmin) {
+    } else if (game.status == LiveGameStatus.checkin && isAdmin) {
       context.go(RoutePaths.checkIn);
     } else if (isAdmin) {
       context.go(RoutePaths.invitation);
@@ -148,11 +149,11 @@ class _GroupScreenState extends State<GroupScreen> {
           else if (_tab == 'members')
             _buildMembers(group)
           else if (_tab == 'chat')
-            _buildChat(app, group, user?.id)
-          else if (_tab == 'polls')
-            _buildPolls(app, group, user?.id, isAdmin)
-          else
-            _buildHistory(group),
+              _buildChat(app, group, user?.id)
+            else if (_tab == 'polls')
+                _buildPolls(app, group, user?.id, isAdmin)
+              else
+                _buildHistory(group),
           // Poll modal
           AppModal(
             open: _showPollModal,
@@ -227,14 +228,14 @@ class _GroupScreenState extends State<GroupScreen> {
   Widget _buildGames(AppProvider app, Group group, List<LiveGame> games, bool isAdmin, AppUser? user) {
     if (games.isEmpty) {
       return AppEmptyState(
-        icon: Icons.sports_esports_outlined, // Wait, fallback
+        icon: Icons.sports_esports_outlined,
         title: 'No upcoming games',
         description: 'No upcoming games — create the first one!',
         action: isAdmin
             ? AppButton(
-                onPressed: () => context.go(RoutePaths.createTournament),
-                child: const Text('Create tournament'),
-              )
+          onPressed: () => context.go(RoutePaths.createTournament),
+          child: const Text('Create tournament'),
+        )
             : null,
       );
     }
@@ -324,24 +325,24 @@ class _GroupScreenState extends State<GroupScreen> {
               padding: const EdgeInsets.all(AppSpacing.md),
               child: messages.isEmpty
                   ? Padding(
-                      padding: const EdgeInsets.all(AppSpacing.xxl),
-                      child: Text(
-                        'No messages yet. Start the conversation!',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-                      ),
-                    )
+                padding: const EdgeInsets.all(AppSpacing.xxl),
+                child: Text(
+                  'No messages yet. Start the conversation!',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                ),
+              )
                   : Column(
-                      children: [
-                        for (final msg in messages.reversed)
-                          _ChatBubble(
-                            message: msg,
-                            isMine: msg.authorId == userId,
-                            canDelete: (app.user?.isAdmin ?? false) && msg.authorId != userId,
-                            onDelete: () => app.deleteMessage(msg.id),
-                          ),
-                      ],
+                children: [
+                  for (final msg in messages.reversed)
+                    _ChatBubble(
+                      message: msg,
+                      isMine: msg.authorId == userId,
+                      canDelete: (app.user?.isAdmin ?? false) && msg.authorId != userId,
+                      onDelete: () => app.deleteMessage(msg.id),
                     ),
+                ],
+              ),
             ),
           ),
           if (userId != null)
@@ -486,16 +487,15 @@ class _GroupScreenState extends State<GroupScreen> {
                             children: [
                               // finishOrder is "first-out first", so the top 3
                               // are the last elements of the list.
-                              for (var i = 0;
-                                  i < game.finishOrder.length.clamp(0, 3);
-                                  i++)
+                              for (var i = 0; i < game.finishOrder.length.clamp(0, 3); i++)
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     MedalIcon(i + 1, size: AppFontSizes.sm),
                                     const SizedBox(width: AppSpacing.xs),
                                     Text(
-                                      names[game.finishOrder[game.finishOrder.length - 1 - i]] ?? game.finishOrder[game.finishOrder.length - 1 - i],
+                                      names[game.finishOrder[game.finishOrder.length - 1 - i]] ??
+                                          game.finishOrder[game.finishOrder.length - 1 - i],
                                       style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                                     ),
                                   ],
@@ -817,95 +817,172 @@ class _RsvpBtn extends StatelessWidget {
   }
 }
 
+/// Group header. Responsive: stacks the title/members row above the admin
+/// action buttons on narrow (mobile) widths, and lays them out side-by-side
+/// on wider (tablet/laptop) widths. The decorative group icon in the
+/// background is light red and scales down on mobile.
 class _GroupHeader extends StatelessWidget {
   final Group group;
   final bool isAdmin;
   const _GroupHeader({required this.group, required this.isAdmin});
-  
+
+  static const double _mobileBreakpoint = 640;
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-          Positioned(
-            right: -20,
-            top: -20,
-            child: Text(
-              group.icon,
-              style: TextStyle(
-                fontSize: 120,
-                color: AppColors.border.withValues(alpha: 0.2),
-              ),
-            ),
-          ),
-        Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < _mobileBreakpoint;
+        // Mobile: icon bleeds off the top-right corner (unchanged).
+        // Desktop/laptop: icon is centered in the header instead.
+        // minHeight MUST be large enough to contain the icon at its offset
+        // or the Stack's own bounding box will be shorter than the icon and
+        // hard-clip it into a broken rectangle instead of showing the full
+        // glyph.
+        final iconSize = isMobile ? 96.0 : 150.0;
+        final iconOffset = isMobile ? -14.0 : -22.0;
+        final minHeight = isMobile ? 128.0 : 170.0;
+
+        final info = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    group.name,
-                    style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
+            Text(
+              group.name,
+              style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Text(
+                  '${group.members.length} members',
+                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                SizedBox(
+                  height: 32,
+                  child: Row(
                     children: [
-                      Text(
-                        '${group.members.length} members',
-                        style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      SizedBox(
-                        height: 32,
-                        child: Row(
-                          children: [
-                            for (var i = 0; i < group.members.length && i < 5; i++)
-                              Align(
-                                widthFactor: 0.6,
-                                child: AppAvatar(name: group.members[i].name, size: AppAvatarSize.sm),
-                              ),
-                            if (group.members.length > 5)
-                              Align(
-                                widthFactor: 0.6,
-                                child: CircleAvatar(
-                                  radius: 12,
-                                  backgroundColor: AppColors.border,
-                                  child: Text('+${group.members.length - 5}', style: AppTypography.monoXs),
-                                ),
-                              ),
-                          ],
+                      for (var i = 0; i < group.members.length && i < 5; i++)
+                        Align(
+                          widthFactor: 0.6,
+                          child: AppAvatar(name: group.members[i].name, size: AppAvatarSize.sm),
                         ),
-                      ),
+                      if (group.members.length > 5)
+                        Align(
+                          widthFactor: 0.6,
+                          child: CircleAvatar(
+                            radius: 12,
+                            backgroundColor: AppColors.border,
+                            child: Text('+${group.members.length - 5}', style: AppTypography.monoXs),
+                          ),
+                        ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ],
+        );
+
+        final actions = Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            AppButton(
+              size: AppButtonSize.sm,
+              variant: AppButtonVariant.secondary,
+              onPressed: () => context.go(RoutePaths.presets),
+              child: const Text('Presets'),
+            ),
+            AppButton(
+              size: AppButtonSize.sm,
+              variant: AppButtonVariant.secondary,
+              onPressed: () => context.read<AppProvider>().togglePinGroup(group),
+              child: Text(group.pinned ? 'Unpin' : 'Pin'),
+            ),
+            AppButton(
+              size: AppButtonSize.sm,
+              onPressed: () => context.go(RoutePaths.createTournament),
+              child: const Text('+ New game'),
+            ),
+          ],
+        );
+
+        final content = isMobile
+            ? Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            info,
             if (isAdmin) ...[
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => context.go(RoutePaths.presets),
-                child: const Text('Presets'),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => context.read<AppProvider>().togglePinGroup(group),
-                child: Text(group.pinned ? 'Unpin' : 'Pin'),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              AppButton(
-                size: AppButtonSize.sm,
-                onPressed: () => context.go(RoutePaths.createTournament),
-                child: const Text('+ New game'),
-              ),
+              const SizedBox(height: AppSpacing.md),
+              actions,
             ],
           ],
-        ),
-      ],
+        )
+            : Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: info),
+            if (isAdmin) actions,
+          ],
+        );
+
+        return ClipRRect(
+          // Rounded clip so the icon bleeds off the corner cleanly instead
+          // of getting sliced into a hard rectangle.
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: minHeight),
+            child: Stack(
+              fit: StackFit.passthrough,
+              clipBehavior: Clip.hardEdge,
+              children: [
+                // Mobile keeps the corner-bleed look (Positioned must be a
+                // direct Stack child; IgnorePointer wraps the visual content
+                // rather than the other way around). Desktop centers the
+                // icon in the header instead.
+                if (isMobile)
+                  Positioned(
+                    right: iconOffset,
+                    top: iconOffset,
+                    child: _GroupHeaderIcon(icon: groupIconMap[group.icon] ?? Icons.casino, size: iconSize),
+                  )
+                else
+                  Align(
+                    alignment: Alignment.center,
+                    child: _GroupHeaderIcon(icon: groupIconMap[group.icon] ?? Icons.casino, size: iconSize),
+                  ),
+                Align(
+                  alignment: Alignment.topLeft,
+                  child: content,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Decorative background icon for the group header. Uses AppColors.destructive
+/// rather than a hardcoded color, and ignores pointer events so it never
+/// intercepts taps meant for the content above it.
+class _GroupHeaderIcon extends StatelessWidget {
+  const _GroupHeaderIcon({required this.icon, required this.size});
+
+  final IconData icon;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Icon(
+        icon,
+        size: size,
+        color: AppColors.destructive,
+      ),
     );
   }
 }
@@ -921,9 +998,9 @@ class _CustomTabBar extends StatelessWidget {
   final List<_TabItem> tabs;
   final String active;
   final ValueChanged<String> onChanged;
-  
+
   const _CustomTabBar({required this.tabs, required this.active, required this.onChanged});
-  
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -968,7 +1045,7 @@ class _PremiumGameCard extends StatefulWidget {
   final AppProvider app;
   final AppUser? user;
   final VoidCallback onTap;
-  
+
   const _PremiumGameCard({required this.game, required this.app, required this.user, required this.onTap});
 
   @override
@@ -982,7 +1059,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
   Widget build(BuildContext context) {
     final game = widget.game;
     final rsvp = game.players.where((p) => p.id == widget.user?.id).firstOrNull?.rsvp;
-    
+
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
@@ -1081,4 +1158,3 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
     );
   }
 }
-

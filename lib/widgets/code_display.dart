@@ -38,6 +38,7 @@ class _CodeDisplayState extends State<CodeDisplay> {
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (widget.label != null) ...[
             Text(
@@ -46,7 +47,7 @@ class _CodeDisplayState extends State<CodeDisplay> {
             ),
             const SizedBox(width: AppSpacing.md),
           ],
-          Expanded(
+          Flexible(
             child: Text(
               widget.code,
               style: AppTypography.mono(

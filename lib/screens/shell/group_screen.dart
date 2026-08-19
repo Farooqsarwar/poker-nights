@@ -97,7 +97,7 @@ class _GroupScreenState extends State<GroupScreen> {
       context.go(RoutePaths.resultPodium);
     } else if (isAdmin && game.status.isActiveLive) {
       context.go(RoutePaths.adminDashboard);
-    } else if (game.status == LiveGameStatus.checkin && isAdmin) {
+    } else if ((game.status == LiveGameStatus.checkin || game.status == LiveGameStatus.ready) && isAdmin) {
       context.go(RoutePaths.checkIn);
     } else if (isAdmin) {
       context.go(RoutePaths.invitation);

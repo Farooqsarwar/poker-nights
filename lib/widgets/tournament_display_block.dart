@@ -1,3 +1,4 @@
+import 'app_timer.dart';
 
 import 'package:flutter/material.dart';
 
@@ -112,12 +113,12 @@ class _GameValues {
 
     levelSeconds = (level?.durationMins ?? 1) * 60;
     if (level != null) {
-      totalSeconds += levelSeconds - game.secondsRemaining;
+      totalSeconds += levelSeconds - game.currentSecondsRemaining;
     }
 
     progress = level == null
         ? 0
-        : ((levelSeconds - game.secondsRemaining) / levelSeconds)
+        : ((levelSeconds - game.currentSecondsRemaining) / levelSeconds)
         .clamp(0.0, 1.0)
         .toDouble();
   }
@@ -226,10 +227,13 @@ class _WideLayout extends StatelessWidget {
                       Expanded(
                         child: Padding(
                           padding: EdgeInsets.symmetric(horizontal: heroSide),
-                          child: _PlainNumberTimer(
-                            secondsRemaining: game.secondsRemaining,
-                            danger: game.secondsRemaining <= 60,
-                            fontSize: 260 * s,
+                          child: LiveTimerBuilder(
+                            game: game,
+                            builder: (context, remaining) => _PlainNumberTimer(
+                              secondsRemaining: remaining,
+                              danger: remaining <= 60,
+                              fontSize: 260 * s,
+                            ),
                           ),
                         ),
                       ),
@@ -822,10 +826,13 @@ class _CompactLayout extends StatelessWidget {
             const SizedBox(height: 12),
             SizedBox(
               height: 82,
-              child: _PlainNumberTimer(
-                secondsRemaining: game.secondsRemaining,
-                danger: game.secondsRemaining <= 60,
-                fontSize: 104,
+              child: LiveTimerBuilder(
+                game: game,
+                builder: (context, remaining) => _PlainNumberTimer(
+                  secondsRemaining: remaining,
+                  danger: remaining <= 60,
+                  fontSize: 104,
+                ),
               ),
             ),
             const SizedBox(height: 20),

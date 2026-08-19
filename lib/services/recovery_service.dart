@@ -175,6 +175,7 @@ class RecoveryService {
       'dealerPlayerId': game.dealerPlayerId,
       'guestSlots': game.guestSlots.map(_guestSlotToMap).toList(),
       'originalLevels': game.originalLevels?.map(_blindLevelToMap).toList(),
+      'levelEndTime': game.levelEndTime?.toIso8601String(),
     };
   }
 
@@ -209,6 +210,7 @@ class RecoveryService {
       originalLevels: (map['originalLevels'] as List?)
           ?.map((e) => _blindLevelFromMap(e))
           .toList(),
+      levelEndTime: map['levelEndTime'] != null ? DateTime.parse(map['levelEndTime']) : null,
     );
   }
 
@@ -500,6 +502,7 @@ class RecoveryService {
       'settings': _cashSettingsToMap(session.settings),
       'isCompleted': session.isCompleted,
       'startTime': session.startTime.toIso8601String(),
+      'unresolvedNote': session.unresolvedNote,
       'players': session.players.map(_cashPlayerToMap).toList(),
     };
   }
@@ -510,6 +513,7 @@ class RecoveryService {
       settings: _cashSettingsFromMap(map['settings']),
       isCompleted: map['isCompleted'] ?? false,
       startTime: DateTime.parse(map['startTime']),
+      unresolvedNote: map['unresolvedNote'],
       players: (map['players'] as List).map((e) => _cashPlayerFromMap(e)).toList(),
     );
   }

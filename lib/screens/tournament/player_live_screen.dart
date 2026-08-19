@@ -207,11 +207,14 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    AppTimer(
-                      secondsRemaining: game.secondsRemaining,
-                      size: timerSize,
-                      danger: timerDanger,
-                      warning: timerWarning,
+                    LiveTimerBuilder(
+                      game: game,
+                      builder: (context, remaining) => AppTimer(
+                        secondsRemaining: remaining,
+                        size: timerSize,
+                        danger: remaining <= 60,
+                        warning: remaining <= 300,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(

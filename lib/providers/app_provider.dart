@@ -850,6 +850,7 @@ class AppProvider extends ChangeNotifier {
     _currentGame = _currentGame!.copyWith(
       timerRunning: true,
       status: LiveGameStatus.running,
+      levelEndTime: DateTime.now().add(Duration(seconds: _currentGame!.secondsRemaining)),
     );
     addAnnouncement(
       'Tournament starts. Level ${_currentGame!.currentLevel}. '
@@ -862,6 +863,8 @@ class AppProvider extends ChangeNotifier {
     _currentGame = _currentGame!.copyWith(
       timerRunning: false,
       status: LiveGameStatus.paused,
+      secondsRemaining: _currentGame!.currentSecondsRemaining,
+      levelEndTime: null,
     );
     notifyListeners();
   }
@@ -870,6 +873,7 @@ class AppProvider extends ChangeNotifier {
     _currentGame = _currentGame!.copyWith(
       timerRunning: true,
       status: LiveGameStatus.running,
+      levelEndTime: DateTime.now().add(Duration(seconds: _currentGame!.secondsRemaining)),
     );
     notifyListeners();
   }
@@ -886,6 +890,7 @@ class AppProvider extends ChangeNotifier {
       timerRunning: true,
       status: LiveGameStatus.running,
       speedRecommendation: null,
+      levelEndTime: DateTime.now().add(Duration(minutes: level.durationMins)),
     );
     addAnnouncement(
       'Level $next. Blinds ${level.sb} and ${level.bb}'
@@ -908,6 +913,7 @@ class AppProvider extends ChangeNotifier {
       timerRunning: true,
       status: LiveGameStatus.running,
       speedRecommendation: null,
+      levelEndTime: DateTime.now().add(Duration(minutes: level.durationMins)),
     );
     addAnnouncement(
       'Level $prev. Blinds ${level.sb} and ${level.bb}'
@@ -935,6 +941,7 @@ class AppProvider extends ChangeNotifier {
       timerRunning: true,
       status: LiveGameStatus.running,
       speedRecommendation: null,
+      levelEndTime: DateTime.now().add(Duration(minutes: durationMins)),
     );
     _syncGroupGame();
     addAuditRecord(
@@ -1177,7 +1184,7 @@ class AppProvider extends ChangeNotifier {
   /// Closes door check-in (spec §4.7). Once closed, the host is prompted to
   /// start the tournament and no further walk-ins are accepted.
   void closeCheckIn() {
-    _currentGame = _currentGame!.copyWith(checkInClosed: true);
+    _currentGame = _currentGame!.copyWith(checkInClosed: true, status: LiveGameStatus.ready);
     _syncGroupGame();
     addAnnouncement(
         'Check-in is now closed. No more players may join unless re-opened.', false);
@@ -1185,7 +1192,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void reopenCheckIn() {
-    _currentGame = _currentGame!.copyWith(checkInClosed: false);
+    _currentGame = _currentGame!.copyWith(checkInClosed: false, status: LiveGameStatus.checkin);
     _syncGroupGame();
     addAnnouncement('Check-in re-opened.', false);
     notifyListeners();
@@ -2043,6 +2050,7 @@ class AppProvider extends ChangeNotifier {
       dealerPlayerId: dealer?.id,
       // The paused level is over — restart the clock for the current level.
       secondsRemaining: durationMins * 60,
+      levelEndTime: DateTime.now().add(Duration(minutes: durationMins)),
     );
     addAnnouncement('Final table! Please take your new seats.', true);
   }
@@ -2504,10 +2512,10 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void endCashGame() {
+  void endCashGame({String? unresolvedNote}) {
     final session = _cashSession;
     if (session == null) return;
-    _cashSession = session.copyWith(isCompleted: true);
+    _cashSession = session.copyWith(isCompleted: true, unresolvedNote: unresolvedNote);
     _cashHistory = [_cashSession!, ..._cashHistory];
     notifyListeners();
     clearCashSession();

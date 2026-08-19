@@ -686,10 +686,19 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                             final game = context.read<AppProvider>().currentGame;
                             return Column(
                               children: [
-                                AppTimer(
-                                  secondsRemaining: game?.secondsRemaining ?? 0,
-                                  size: AppFontSizes.xxl,
-                                ),
+                                if (game != null)
+                                  LiveTimerBuilder(
+                                    game: game,
+                                    builder: (context, remaining) => AppTimer(
+                                      secondsRemaining: remaining,
+                                      size: AppFontSizes.xxl,
+                                    ),
+                                  )
+                                else
+                                  AppTimer(
+                                    secondsRemaining: 0,
+                                    size: AppFontSizes.xxl,
+                                  ),
                                 Text('Level ${game?.currentLevel ?? 1}', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
                               ],
                             );

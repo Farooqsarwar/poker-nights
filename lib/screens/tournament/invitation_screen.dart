@@ -188,7 +188,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   _ChecklistRow(
                     label: 'Open check-in',
-                    done: game.status == LiveGameStatus.checkin ||
+                    done: (game.status == LiveGameStatus.checkin || game.status == LiveGameStatus.ready) ||
                         game.players.any((p) => p.checkedIn),
                     actionLabel: 'Open',
                     onAction: () => context.go(RoutePaths.checkIn),
@@ -1005,6 +1005,7 @@ class _ContextualMainButton extends StatelessWidget {
             child: const Text('Review RSVPs'),
           );
         case LiveGameStatus.checkin:
+      case LiveGameStatus.ready:
           final checkedInCount = game.players.where((p) => p.checkedIn && p.confirmed).length;
           final seatingConfirmed = game.seatingConfirmed;
           if (checkedInCount >= 2 && seatingConfirmed) {
@@ -1140,7 +1141,7 @@ class _ContextualMainButton extends StatelessWidget {
             onPressed: null,
             child: const Text('Waiting for Confirmation'),
           );
-        } else if (game.status == LiveGameStatus.checkin) {
+        } else if ((game.status == LiveGameStatus.checkin || game.status == LiveGameStatus.ready)) {
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,

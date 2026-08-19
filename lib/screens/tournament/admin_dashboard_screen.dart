@@ -82,7 +82,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final settings = game.settings;
     final status = game.status;
     final currentLevel = game.currentLevel;
-    final secondsRemaining = game.secondsRemaining;
+    final secondsRemaining = game.currentSecondsRemaining;
     final level = game.currentLevelData;
     final activePlayers = game.activePlayers;
     final eliminatedPlayers = game.eliminatedPlayers;
@@ -247,7 +247,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     flex: 3,
                     child: Builder(builder: (_) {
                       if (status == LiveGameStatus.checkin ||
-                          status == LiveGameStatus.published) {
+                          status == LiveGameStatus.published ||
+                          status == LiveGameStatus.ready) {
                         return AppButton(
                           size: AppButtonSize.lg,
                           onPressed: app.startTimer,
@@ -533,7 +534,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
-                if (status == LiveGameStatus.checkin || status == LiveGameStatus.published)
+                if (status == LiveGameStatus.checkin || status == LiveGameStatus.published || status == LiveGameStatus.ready)
                   AppButton(
                     size: AppButtonSize.lg,
                     onPressed: app.startTimer,

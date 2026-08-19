@@ -56,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context.go(RoutePaths.resultPodium);
     } else if (isAdmin && game.status.isActiveLive) {
       context.go(RoutePaths.adminDashboard);
-    } else if (game.status == LiveGameStatus.checkin && isAdmin) {
+    } else if ((game.status == LiveGameStatus.checkin || game.status == LiveGameStatus.ready) && isAdmin) {
       context.go(RoutePaths.checkIn);
     } else if (isAdmin) {
       context.go(RoutePaths.invitation);
@@ -538,6 +538,7 @@ class _GameRow extends StatelessWidget {
       case LiveGameStatus.finaltable:
       case LiveGameStatus.published:
       case LiveGameStatus.checkin:
+      case LiveGameStatus.ready:
         return AppBadgeVariant.accent;
       case LiveGameStatus.draft:
       case LiveGameStatus.completed:

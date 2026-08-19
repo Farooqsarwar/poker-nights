@@ -163,6 +163,7 @@ enum LiveGameStatus {
   draft,
   published,
   checkin,
+  ready,
   running,
   paused,
   rebuypause,
@@ -178,6 +179,8 @@ enum LiveGameStatus {
         return 'Open for RSVP';
       case LiveGameStatus.checkin:
         return 'Check-in open';
+      case LiveGameStatus.ready:
+        return 'Ready to Start';
       case LiveGameStatus.running:
         return 'Live';
       case LiveGameStatus.paused:
@@ -234,6 +237,7 @@ class LiveGame {
     this.originalLevels,
     this.rebuyRequests = const [],
     this.addOnRequests = const [],
+    this.levelEndTime,
   });
 
   final String id;
@@ -284,6 +288,9 @@ class LiveGame {
 
   /// Player ids that have requested an add-on from the live player view.
   final List<String> addOnRequests;
+
+  /// The exact timestamp when the current timer will hit 0. Null if paused or stopped.
+  final DateTime? levelEndTime;
 
   List<GuestSlot> get availableGuestSlots =>
       guestSlots.where((s) => s.available).toList();
@@ -339,6 +346,12 @@ class LiveGame {
   BlindLevel? get currentLevelData {
     if (currentLevel < 1 || currentLevel > structure.levels.length) return null;
     return structure.levels[currentLevel - 1];
+  }
+
+  int get currentSecondsRemaining {
+    if (!timerRunning || levelEndTime == null) return secondsRemaining;
+    final diff = levelEndTime!.difference(DateTime.now()).inSeconds;
+    return diff > 0 ? diff : 0;
   }
 
   BlindLevel? get nextLevelData {
@@ -411,6 +424,7 @@ class LiveGame {
     List<BlindLevel>? originalLevels,
     List<String>? rebuyRequests,
     List<String>? addOnRequests,
+    DateTime? levelEndTime,
   }) {
     return LiveGame(
       id: id ?? this.id,
@@ -439,6 +453,7 @@ class LiveGame {
       originalLevels: originalLevels ?? this.originalLevels,
       rebuyRequests: rebuyRequests ?? this.rebuyRequests,
       addOnRequests: addOnRequests ?? this.addOnRequests,
+      levelEndTime: levelEndTime ?? this.levelEndTime,
     );
   }
 }

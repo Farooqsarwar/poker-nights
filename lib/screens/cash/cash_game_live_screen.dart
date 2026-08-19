@@ -40,6 +40,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   bool _showEndModal = false;
   bool _showReconcile = false;
   bool _forceEnd = false;
+  final TextEditingController _unresolvedNote = TextEditingController();
 
   String? _editPlayerId;
   final _editStack = TextEditingController();
@@ -119,7 +120,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   }
 
   void _endGame(AppProvider app) {
-    app.endCashGame();
+    app.endCashGame(unresolvedNote: _forceEnd ? _unresolvedNote.text.trim() : null);
     setState(() => _showEndModal = false);
     context.go(RoutePaths.history);
   }
@@ -654,6 +655,14 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                               ],
                             ),
                           ),
+                          if (_forceEnd) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            AppTextField(
+                              controller: _unresolvedNote,
+                              placeholder: 'Reason for mismatch (optional)',
+                              autofocus: true,
+                            ),
+                          ],
                         ],
                       ),
                     ),

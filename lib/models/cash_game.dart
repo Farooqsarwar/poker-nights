@@ -69,9 +69,10 @@ class CashSession {
   const CashSession({
     required this.id,
     required this.settings,
-    required this.isCompleted,
+    this.isCompleted = false,
     required this.startTime,
     required this.players,
+    this.unresolvedNote,
   });
 
   final String id;
@@ -79,6 +80,7 @@ class CashSession {
   final bool isCompleted;
   final DateTime startTime;
   final List<CashPlayer> players;
+  final String? unresolvedNote;
 
   double get totalInPlay =>
       players.fold(0, (sum, p) => sum + p.stack);
@@ -99,6 +101,7 @@ class CashSession {
   CashSession copyWith({
     bool? isCompleted,
     List<CashPlayer>? players,
+    String? unresolvedNote,
   }) {
     return CashSession(
       id: id,
@@ -106,6 +109,7 @@ class CashSession {
       isCompleted: isCompleted ?? this.isCompleted,
       startTime: startTime,
       players: players ?? this.players,
+      unresolvedNote: unresolvedNote ?? this.unresolvedNote,
     );
   }
 }

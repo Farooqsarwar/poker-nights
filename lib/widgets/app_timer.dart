@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+
+import '../models/live_game.dart';
 
 import '../app/colors.dart';
 import '../app/typography.dart';
@@ -123,5 +126,58 @@ class _TimerDigit extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class LiveTimerBuilder extends StatefulWidget {
+  const LiveTimerBuilder({
+    super.key,
+    required this.game,
+    required this.builder,
+  });
+
+  final LiveGame game;
+  final Widget Function(BuildContext context, int secondsRemaining) builder;
+
+  @override
+  State<LiveTimerBuilder> createState() => _LiveTimerBuilderState();
+}
+
+class _LiveTimerBuilderState extends State<LiveTimerBuilder> with SingleTickerProviderStateMixin {
+  late Ticker _ticker;
+  int _lastSeconds = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker((_) {
+      if (widget.game.timerRunning) {
+        final current = widget.game.currentSecondsRemaining;
+        if (current != _lastSeconds) {
+          _lastSeconds = current;
+          setState(() {});
+        }
+      }
+    });
+    _ticker.start();
+  }
+
+  @override
+  void didUpdateWidget(LiveTimerBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.game.timerRunning) {
+      _lastSeconds = widget.game.currentSecondsRemaining;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder(context, widget.game.currentSecondsRemaining);
   }
 }

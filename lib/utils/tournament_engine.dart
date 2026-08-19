@@ -526,6 +526,11 @@ class TournamentEngine {
 
     final expectedFinishMins = (numLevels * levelDuration * 1.05).round();
 
+    final values = params.chipSet.map((c) => c.value).toList();
+    if (values.toSet().length != values.length) {
+      warnings.add('Duplicate chip values detected. Two colours should not share the same value.');
+    }
+
     if (params.players < 4) {
       warnings.add('Very small field — consider a shorter structure.');
     }

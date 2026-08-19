@@ -298,6 +298,34 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       return;
     }
 
+    final values = _chipSet.map((c) => c.value).toList();
+    if (values.toSet().length != values.length) {
+      await showAppModal(
+        context: context,
+        title: 'Duplicate chip values',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'No two chip colours can have the same value. Please adjust your chip set.',
+              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(
+              fullWidth: true,
+              onPressed: () {
+                Navigator.of(context).pop();
+                setState(() => _step = 2);
+              },
+              child: const Text('Fix chip set'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     // Client feedback (07-018): confirm before creating, and persist a custom
     // chip set as a preset once.
     final confirmed = await _showConfirmDialog();

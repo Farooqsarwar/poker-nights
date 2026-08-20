@@ -454,6 +454,8 @@ class _GroupScreenState extends State<GroupScreen> {
                             // message — including their own (Tech §14.1).
                             canDelete: (app.user?.isAdmin ?? false),
                             onDelete: () => app.deleteMessage(msg.id),
+                            app: app,
+                            userId: userId,
                           ),
                       ],
                     ),
@@ -467,6 +469,27 @@ class _GroupScreenState extends State<GroupScreen> {
               ),
               child: Column(
                 children: [
+                  // Client rule: hosting a game starts from a button right
+                  // here in the chat, not a guessed player count — the setup
+                  // screen only asks for rules, and RSVPs (posted back into
+                  // this same chat) count the real attendance automatically.
+                  if (app.user?.isAdmin ?? false)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () =>
+                              context.go(RoutePaths.createTournament),
+                          icon: const Icon(Icons.add_circle_outline, size: 18),
+                          label: const Text('Create game'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: BorderSide(color: AppColors.primary),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (_chatError != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -666,22 +689,43 @@ class _ChatBubble extends StatelessWidget {
     required this.isMine,
     required this.canDelete,
     required this.onDelete,
+    required this.app,
+    required this.userId,
   });
 
   final ChatMessage message;
   final bool isMine;
   final bool canDelete;
   final VoidCallback onDelete;
+  final AppProvider app;
+  final String? userId;
 
   @override
   Widget build(BuildContext context) {
     // Pinned system messages (published games / edits) render as an event card
     // rather than a chat bubble (§4.3) and are never deletable by members.
     if (message.pinned) {
+      // The card carries the game id it announces (client rule: RSVPs count
+      // automatically as people answer from the invite in chat), so it opens
+      // and updates the *specific* game rather than whatever happens to be
+      // "current" in the app.
+      final game = message.gameId != null ? app.gameById(message.gameId!) : null;
+      final myRsvp = game?.players
+          .where((p) => p.id == userId)
+          .firstOrNull
+          ?.rsvp;
+      final goingCount = game != null ? app.expectedPlayersFromRsvps(game) : null;
+      final rsvpOpen = game != null &&
+          !game.settings.rsvpCutoffPassed &&
+          game.status == LiveGameStatus.published;
+
       return Padding(
         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
         child: InkWell(
-          onTap: () => context.go(RoutePaths.invitation),
+          onTap: () {
+            if (game != null) app.setCurrentGame(game);
+            context.go(RoutePaths.invitation);
+          },
           borderRadius: BorderRadius.circular(AppRadius.md),
           child: Container(
             width: double.infinity,
@@ -716,6 +760,16 @@ class _ChatBubble extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                    if (goingCount != null) ...[
+                      const Spacer(),
+                      Text(
+                        '$goingCount going',
+                        style: AppTypography.monoXs.copyWith(
+                          color: AppColors.mutedForeground,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -733,6 +787,39 @@ class _ChatBubble extends StatelessWidget {
                     fontSize: 10,
                   ),
                 ),
+                // RSVP directly from the invite card — no need to leave chat;
+                // counts update immediately for everyone (client rule).
+                if (rsvpOpen && userId != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final opt in [
+                          Rsvp.going,
+                          Rsvp.goingPlus1,
+                          Rsvp.goingPlus2,
+                          Rsvp.goingPlus3,
+                          Rsvp.goingPlus4,
+                          Rsvp.maybe,
+                          Rsvp.cant,
+                        ])
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              right: AppSpacing.xs,
+                            ),
+                            child: InkWell(
+                              onTap: () => app.setRSVP(opt, gameId: game.id),
+                              borderRadius: BorderRadius.circular(
+                                AppRadius.pill,
+                              ),
+                              child: _RsvpBtn(opt: opt, current: myRsvp),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

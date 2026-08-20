@@ -677,6 +677,7 @@ class AppProvider extends ChangeNotifier {
       timestamp: DateTime.now(),
       deleted: false,
       pinned: true,
+      gameId: game.id,
     );
     _currentGame = game.copyWith(
       status: LiveGameStatus.published,
@@ -1023,6 +1024,20 @@ class AppProvider extends ChangeNotifier {
   }
 
   void startTimer() {
+    // Client rule: no guessed player count at setup — the AI finalises the
+    // stacks/blinds/levels right now, from the actual final headcount
+    // (checked-in players if any confirmed, otherwise final RSVPs), the
+    // moment the admin presses Start. This supersedes whatever estimate the
+    // 30-minute pre-start window may have already shown.
+    recalculateStructure();
+    _currentGame = _currentGame!.copyWith(structureConfirmed: true);
+    addAuditRecord(
+      'structure_final',
+      'Structure finalised at start for ${_currentGame!.settings.players} '
+          'players: stack ${_currentGame!.structure.startingStack}, '
+          '${_currentGame!.structure.levels.length} levels.',
+    );
+
     _levelAnnouncementMarks.clear();
     final level = _currentGame!.currentLevelData;
     _currentGame = _currentGame!.copyWith(
@@ -2636,35 +2651,13 @@ class AppProvider extends ChangeNotifier {
     _setGroup(
       _currentGroup.copyWith(
         chat: _currentGroup.chat
-            .map(
-              (m) => m.id == msgId
-                  ? ChatMessage(
-                      id: m.id,
-                      authorId: m.authorId,
-                      authorName: m.authorName,
-                      body: m.body,
-                      timestamp: m.timestamp,
-                      deleted: true,
-                    )
-                  : m,
-            )
+            .map((m) => m.id == msgId ? m.copyWith(deleted: true) : m)
             .toList(),
       ),
     );
     _currentGame = _currentGame!.copyWith(
       chat: _currentGame!.chat
-          .map(
-            (m) => m.id == msgId
-                ? ChatMessage(
-                    id: m.id,
-                    authorId: m.authorId,
-                    authorName: m.authorName,
-                    body: m.body,
-                    timestamp: m.timestamp,
-                    deleted: true,
-                  )
-                : m,
-          )
+          .map((m) => m.id == msgId ? m.copyWith(deleted: true) : m)
           .toList(),
     );
     notifyListeners();

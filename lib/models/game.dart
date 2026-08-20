@@ -158,6 +158,7 @@ class ChatMessage {
     required this.timestamp,
     required this.deleted,
     this.pinned = false,
+    this.gameId,
   });
 
   final String id;
@@ -171,6 +172,24 @@ class ChatMessage {
   /// edit notice). Pinned messages render as a card and are not deletable by
   /// members.
   final bool pinned;
+
+  /// Set on pinned event cards so the card can act on the specific game it
+  /// announces (open it, show live RSVP counts, let people RSVP inline)
+  /// instead of assuming whatever game happens to be "current" in the app.
+  final String? gameId;
+
+  ChatMessage copyWith({bool? deleted}) {
+    return ChatMessage(
+      id: id,
+      authorId: authorId,
+      authorName: authorName,
+      body: body,
+      timestamp: timestamp,
+      deleted: deleted ?? this.deleted,
+      pinned: pinned,
+      gameId: gameId,
+    );
+  }
 }
 
 /// Status of a reserved guest slot under an inviter.

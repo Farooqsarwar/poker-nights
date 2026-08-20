@@ -348,8 +348,9 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: _chips.length,
-      onReorderItem: (oldIndex, newIndex) {
+      onReorder: (oldIndex, newIndex) {
         setState(() {
+          if (newIndex > oldIndex) newIndex -= 1;
           final chip = _chips.removeAt(oldIndex);
           _chips.insert(newIndex, chip);
           _reRecommend();

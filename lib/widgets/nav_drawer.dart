@@ -64,9 +64,13 @@ class NavDrawer extends StatelessWidget {
               children: [
                 const PokerNightLogo(size: AppFontSizes.xxxl),
                 const SizedBox(width: AppSpacing.sm),
-                Text(
-                  'Poker Night',
-                  style: AppTypography.crimsonShimmer(size: AppFontSizes.lg),
+                Expanded(
+                  child: Text(
+                    'Poker Night',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.crimsonShimmer(size: AppFontSizes.lg),
+                  ),
                 ),
               ],
             ),
@@ -215,7 +219,7 @@ class NavDrawer extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 group.name,
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTypography.bodySm.copyWith(
                                   color: group.id == app.currentGroup.id

@@ -37,7 +37,7 @@ class Sidebar extends StatelessWidget {
     ];
 
     return Container(
-      width: 224,
+      width: 264,
       decoration: const BoxDecoration(
         color: AppColors.card,
         border: Border(right: BorderSide(color: AppColors.border)),
@@ -48,22 +48,22 @@ class Sidebar extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.xl,
-              vertical: AppSpacing.xl,
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.lg,
             ),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: Row(
               children: [
-                const PokerNightLogo(size: 28),
+                const PokerNightLogo(size: 24),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
                     'Poker Night',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTypography.crimsonShimmer(size: AppFontSizes.xl),
+                    style: AppTypography.crimsonShimmer(size: AppFontSizes.lg),
                   ),
                 ),
               ],
@@ -345,12 +345,14 @@ class _GroupRow extends StatelessWidget {
           ),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Client review: the group SYMBOL is the primary identifier in
             // the multi-group list (the name drops to a smaller label).
             Container(
-              width: 36,
-              height: 36,
+              width: 26,
+              height: 26,
+              margin: const EdgeInsets.only(top: 1),
               decoration: BoxDecoration(
                 color: selected ? AppColors.primarySoft : AppColors.secondary,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -362,7 +364,7 @@ class _GroupRow extends StatelessWidget {
               child: Text(
                 group.icon,
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 14,
                   fontFamilyFallback: [
                     'Noto Color Emoji',
                     'Apple Color Emoji',
@@ -371,7 +373,7 @@ class _GroupRow extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            const SizedBox(width: AppSpacing.xs),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -379,18 +381,20 @@ class _GroupRow extends StatelessWidget {
                 children: [
                   Text(
                     group.name,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.bodyXs.copyWith(
                       color: selected
                           ? AppColors.primary
                           : AppColors.foreground,
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                      height: 1.2,
                     ),
                   ),
                   Text(
                     '${group.members.length} members',
                     maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: AppTypography.bodyXs.copyWith(
                       color: AppColors.mutedForeground,
                       fontSize: 10,
@@ -399,17 +403,20 @@ class _GroupRow extends StatelessWidget {
                 ],
               ),
             ),
-            InkWell(
-              onTap: onPin,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Icon(
-                  group.pinned ? Icons.push_pin : Icons.push_pin_outlined,
-                  size: 14,
-                  color: group.pinned
-                      ? AppColors.primary
-                      : AppColors.mutedForeground,
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: InkWell(
+                onTap: onPin,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Icon(
+                    group.pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    size: 14,
+                    color: group.pinned
+                        ? AppColors.primary
+                        : AppColors.mutedForeground,
+                  ),
                 ),
               ),
             ),

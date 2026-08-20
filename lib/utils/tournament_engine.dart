@@ -52,7 +52,8 @@ class TournamentEngine {
         ordered[i].copyWith(
           value: i < valueLadder.length
               ? valueLadder[i]
-              : valueLadder.last * math.pow(10, i - valueLadder.length + 1).toInt(),
+              : valueLadder.last *
+                    math.pow(10, i - valueLadder.length + 1).toInt(),
         ),
     ];
   }
@@ -63,14 +64,36 @@ class TournamentEngine {
   /// multiples of 50 up to 300 and 100-step jumps after (150/300, 200/400,
   /// 250/500, 300/600, 400/800, …). The big blind is always 2x the small.
   static const List<List<int>> validBlindLevels = [
-    [25, 50], [50, 100], [75, 150], [100, 200],
-    [150, 300], [200, 400], [250, 500], [300, 600],
-    [400, 800], [500, 1000], [600, 1200], [700, 1400],
-    [800, 1600], [900, 1800], [1000, 2000],
-    [1100, 2200], [1200, 2400], [1300, 2600], [1400, 2800],
-    [1500, 3000], [1600, 3200], [1700, 3400], [1800, 3600],
-    [1900, 3800], [2000, 4000], [2200, 4400], [2400, 4800],
-    [2600, 5200], [2800, 5600], [3000, 6000],
+    [25, 50],
+    [50, 100],
+    [75, 150],
+    [100, 200],
+    [150, 300],
+    [200, 400],
+    [250, 500],
+    [300, 600],
+    [400, 800],
+    [500, 1000],
+    [600, 1200],
+    [700, 1400],
+    [800, 1600],
+    [900, 1800],
+    [1000, 2000],
+    [1100, 2200],
+    [1200, 2400],
+    [1300, 2600],
+    [1400, 2800],
+    [1500, 3000],
+    [1600, 3200],
+    [1700, 3400],
+    [1800, 3600],
+    [1900, 3800],
+    [2000, 4000],
+    [2200, 4400],
+    [2400, 4800],
+    [2600, 5200],
+    [2800, 5600],
+    [3000, 6000],
   ];
 
   /// Valid level durations in minutes.
@@ -87,8 +110,6 @@ class TournamentEngine {
     final rounded = (raw / minChip).round() * minChip;
     return math.max(rounded, minChip);
   }
-
-
 
   /// Never hand a player an absurd number of a single colour (e.g. 900 white
   /// chips). When the inventory is too small to cover the target stack the
@@ -107,16 +128,22 @@ class TournamentEngine {
 
     final reversed = sorted.reversed.toList();
     for (final chip in reversed) {
-      final maxPerPlayer = (chip.quantity / (playerCount * reserveMultiplier)).floor();
+      final maxPerPlayer = (chip.quantity / (playerCount * reserveMultiplier))
+          .floor();
       final need = remaining ~/ chip.value;
-      final use = math.min(need, math.min(math.max(1, maxPerPlayer), _maxChipsPerPlayer));
+      final use = math.min(
+        need,
+        math.min(math.max(1, maxPerPlayer), _maxChipsPerPlayer),
+      );
       if (use > 0) {
-        plan.add(ChipPlanEntry(
-          color: chip.color,
-          hex: chip.hex,
-          value: chip.value,
-          count: use,
-        ));
+        plan.add(
+          ChipPlanEntry(
+            color: chip.color,
+            hex: chip.hex,
+            value: chip.value,
+            count: use,
+          ),
+        );
         remaining -= use * chip.value;
       }
     }
@@ -138,12 +165,14 @@ class TournamentEngine {
             count: plan[index].count + extra,
           );
         } else {
-          plan.add(ChipPlanEntry(
-            color: small.color,
-            hex: small.hex,
-            value: small.value,
-            count: extra,
-          ));
+          plan.add(
+            ChipPlanEntry(
+              color: small.color,
+              hex: small.hex,
+              value: small.value,
+              count: extra,
+            ),
+          );
         }
       }
     }
@@ -280,7 +309,11 @@ class TournamentEngine {
     700: [390, 210, 80, 20],
   };
 
-  static List<Prize> _calcPrizes(int prizePool, int players, [int? forcePaidPlaces]) {
+  static List<Prize> _calcPrizes(
+    int prizePool,
+    int players, [
+    int? forcePaidPlaces,
+  ]) {
     if (prizePool <= 0) return const [];
 
     var paidPlaces = forcePaidPlaces ?? _paidPlacesFor(prizePool, players);
@@ -291,7 +324,9 @@ class TournamentEngine {
     // Reference style wins whenever the field size allows the same number of
     // places the schedule intends for this pool (14-028).
     final reference = _referencePayouts[prizePool];
-    if (forcePaidPlaces == null && reference != null && reference.length == paidPlaces) {
+    if (forcePaidPlaces == null &&
+        reference != null &&
+        reference.length == paidPlaces) {
       return [
         for (var i = 0; i < reference.length; i++)
           Prize(place: i + 1, amount: reference[i]),
@@ -382,7 +417,8 @@ class TournamentEngine {
 
   /// Recalculates the organizer amount, final prize pool, and prize distribution.
   /// This is used dynamically when late players join or rebuys/add-ons are taken.
-  static ({int organizerAmount, int prizePool, List<Prize> prizes}) recalculatePrizes(
+  static ({int organizerAmount, int prizePool, List<Prize> prizes})
+  recalculatePrizes(
     int grossEligible,
     int players,
     num organizerPct, {
@@ -391,29 +427,31 @@ class TournamentEngine {
     final targetOrganizer = grossEligible * (organizerPct / 100);
     final mod = grossEligible % 10;
     var organizerAmount = 0;
-    
+
     if (organizerPct > 0) {
       final base = ((targetOrganizer - mod) / 10);
-      final candidates = [
-        base.floor() * 10 + mod,
-        base.ceil() * 10 + mod,
-      ];
+      final candidates = [base.floor() * 10 + mod, base.ceil() * 10 + mod];
       var bestDist = double.infinity;
       for (final c in candidates) {
         if (c < 0 || c > grossEligible) continue;
         final d = (targetOrganizer - c).abs();
-        if (d < bestDist - 1e-9 || (d <= bestDist + 1e-9 && c < organizerAmount)) {
+        if (d < bestDist - 1e-9 ||
+            (d <= bestDist + 1e-9 && c < organizerAmount)) {
           bestDist = d;
           organizerAmount = c;
         }
       }
     }
-    
+
     var prizePool = grossEligible - organizerAmount;
     if (prizePool < 0) prizePool = 0;
 
     final prizes = _calcPrizes(prizePool, players, forcePaidPlaces);
-    return (organizerAmount: organizerAmount, prizePool: prizePool, prizes: prizes);
+    return (
+      organizerAmount: organizerAmount,
+      prizePool: prizePool,
+      prizes: prizes,
+    );
   }
 
   static TournamentStructure generate(TournamentParams params) {
@@ -426,18 +464,25 @@ class TournamentEngine {
       240,
       math.max(
         80,
-        125 + 28 * (params.durationHours - 3.5) - 2.5 * math.max(0, params.players - 8),
+        125 +
+            28 * (params.durationHours - 3.5) -
+            2.5 * math.max(0, params.players - 8),
       ),
     );
 
     final sortedChips = [...params.chipSet]..sort((a, b) => a.value - b.value);
     final minChip = sortedChips.isNotEmpty ? sortedChips.first.value : 1;
-    int startIndex = validBlindLevels.indexWhere((level) => level[0] >= minChip);
+    int startIndex = validBlindLevels.indexWhere(
+      (level) => level[0] >= minChip,
+    );
     if (startIndex < 0) startIndex = 0;
     final openingLevel = validBlindLevels[startIndex];
     final openingBB = openingLevel[1];
-    
-    final startingStack = math.max(openingBB, ((targetBBDepth * openingBB) / 100).round() * 100);
+
+    final startingStack = math.max(
+      openingBB,
+      ((targetBBDepth * openingBB) / 100).round() * 100,
+    );
 
     // The chip plan must never hand a player an absurd number of chips. If the
     // inventory can't cover the target stack, reduce the stack (rounding to the
@@ -447,7 +492,12 @@ class TournamentEngine {
     var stack = startingStack;
     List<ChipPlanEntry> chipPlan;
     while (true) {
-      chipPlan = _buildChipPlan(stack, params.chipSet, params.players, params.rebuys ? 2 : 1.2);
+      chipPlan = _buildChipPlan(
+        stack,
+        params.chipSet,
+        params.players,
+        params.rebuys ? 2 : 1.2,
+      );
       final covered = chipPlan.fold<int>(0, (s, e) => s + e.count * e.value);
       if (covered >= stack || stack <= openingBB) break;
       stack = math.max(openingBB, ((stack - 100) ~/ 100) * 100);
@@ -469,22 +519,35 @@ class TournamentEngine {
       // half the big blind snapped to the smallest chip in play.
       final ante = useAnte
           ? (params.anteStyle == AnteStyle.individual
-              ? math.max(minChip, _snapToPracticalBlind(bb * 0.5, sortedChips))
-              : bb)
+                ? math.max(
+                    minChip,
+                    _snapToPracticalBlind(bb * 0.5, sortedChips),
+                  )
+                : bb)
           : null;
-      levels.add(BlindLevel(
-        level: i + 1,
-        sb: sb,
-        bb: bb,
-        ante: ante,
-        durationMins: levelDuration,
-      ));
+      levels.add(
+        BlindLevel(
+          level: i + 1,
+          sb: sb,
+          bb: bb,
+          ante: ante,
+          durationMins: levelDuration,
+        ),
+      );
     }
 
-    final rebuyChipPlan =
-        _buildChipPlan(rebuyStack, params.chipSet, params.players, 2);
-    final addOnChipPlan =
-        _buildChipPlan(addOnStack, params.chipSet, params.players, 2);
+    final rebuyChipPlan = _buildChipPlan(
+      rebuyStack,
+      params.chipSet,
+      params.players,
+      2,
+    );
+    final addOnChipPlan = _buildChipPlan(
+      addOnStack,
+      params.chipSet,
+      params.players,
+      2,
+    );
 
     // Colour-up schedule (10-044): a concrete exchange for every chip colour
     // that becomes impractical once blinds grow past it, tied to the level
@@ -518,14 +581,25 @@ class TournamentEngine {
       }
     }
 
-    final expectedRebuysTotal = params.rebuys ? (params.players * 0.35).round() : 0;
-    final expectedReEntriesTotal = params.reEntry ? (params.players * 0.20).round() : 0;
-    final expectedAddOnsTotal = params.addOn ? (params.players * 0.65).round() : 0;
-    final grossEligible = params.buyIn * params.players +
+    final expectedRebuysTotal = params.rebuys
+        ? (params.players * 0.35).round()
+        : 0;
+    final expectedReEntriesTotal = params.reEntry
+        ? (params.players * 0.20).round()
+        : 0;
+    final expectedAddOnsTotal = params.addOn
+        ? (params.players * 0.65).round()
+        : 0;
+    final grossEligible =
+        params.buyIn * params.players +
         params.effectiveRebuyCost * expectedRebuysTotal +
         params.buyIn * expectedReEntriesTotal +
         params.effectiveAddOnCost * expectedAddOnsTotal;
-    final recalculated = recalculatePrizes(grossEligible, params.players, params.organizerPct);
+    final recalculated = recalculatePrizes(
+      grossEligible,
+      params.players,
+      params.organizerPct,
+    );
     final organizerAmount = recalculated.organizerAmount;
     final prizePool = recalculated.prizePool;
     final prizes = recalculated.prizes;
@@ -534,14 +608,18 @@ class TournamentEngine {
 
     final values = params.chipSet.map((c) => c.value).toList();
     if (values.toSet().length != values.length) {
-      warnings.add('Duplicate chip values detected. Two colours should not share the same value.');
+      warnings.add(
+        'Duplicate chip values detected. Two colours should not share the same value.',
+      );
     }
 
     if (params.players < 4) {
       warnings.add('Very small field — consider a shorter structure.');
     }
     if (stack < openingBB * 50) {
-      warnings.add('Short starting depth — players will be short-stacked early.');
+      warnings.add(
+        'Short starting depth — players will be short-stacked early.',
+      );
     }
 
     return TournamentStructure(

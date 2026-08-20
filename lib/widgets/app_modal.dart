@@ -47,7 +47,9 @@ class AppModal extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.xl),
                     decoration: const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: AppColors.border)),
+                      border: Border(
+                        bottom: BorderSide(color: AppColors.border),
+                      ),
                     ),
                     child: Row(
                       children: [

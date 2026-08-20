@@ -5,8 +5,11 @@ import '../app/typography.dart';
 import 'chip_token.dart';
 
 class ChipLoadingAnimation extends StatelessWidget {
-  const ChipLoadingAnimation({super.key, this.message = 'Generating structure...'});
-  
+  const ChipLoadingAnimation({
+    super.key,
+    this.message = 'Generating structure...',
+  });
+
   final String message;
 
   @override
@@ -23,29 +26,54 @@ class ChipLoadingAnimation extends StatelessWidget {
               // Left stack moving right
               Positioned(
                 left: 10,
-                child: const ChipToken(colorName: 'Red', hex: Color(0xFFE50914), value: 25)
-                    .animate(onPlay: (controller) => controller.repeat(reverse: true))
-                    .slideX(end: 1.5, duration: 600.ms, curve: Curves.easeInOutSine),
+                child:
+                    const ChipToken(
+                          colorName: 'Red',
+                          hex: Color(0xFFE50914),
+                          value: 25,
+                        )
+                        .animate(
+                          onPlay: (controller) =>
+                              controller.repeat(reverse: true),
+                        )
+                        .slideX(
+                          end: 1.5,
+                          duration: 600.ms,
+                          curve: Curves.easeInOutSine,
+                        ),
               ),
               // Right stack moving left
               Positioned(
                 right: 10,
-                child: const ChipToken(colorName: 'Black', hex: Color(0xFF2C2C2C), value: 100)
-                    .animate(onPlay: (controller) => controller.repeat(reverse: true))
-                    .slideX(end: -1.5, duration: 600.ms, curve: Curves.easeInOutSine),
+                child:
+                    const ChipToken(
+                          colorName: 'Black',
+                          hex: Color(0xFF2C2C2C),
+                          value: 100,
+                        )
+                        .animate(
+                          onPlay: (controller) =>
+                              controller.repeat(reverse: true),
+                        )
+                        .slideX(
+                          end: -1.5,
+                          duration: 600.ms,
+                          curve: Curves.easeInOutSine,
+                        ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 16),
         Text(
-          message,
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.primaryForeground,
-            fontWeight: FontWeight.w600,
-          ),
-        ).animate(onPlay: (controller) => controller.repeat(reverse: true))
-         .fade(begin: 0.5, end: 1.0, duration: 800.ms),
+              message,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.primaryForeground,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+            .animate(onPlay: (controller) => controller.repeat(reverse: true))
+            .fade(begin: 0.5, end: 1.0, duration: 800.ms),
       ],
     );
   }

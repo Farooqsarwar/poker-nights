@@ -48,10 +48,16 @@ class PokerNightApp extends StatelessWidget {
       builder: (context, child) => ResponsiveBreakpoints.builder(
         child: Builder(
           builder: (innerContext) => ResponsiveScaledBox(
-            width: ResponsiveValue<double?>(innerContext, conditionalValues: [
-              const Condition.equals(name: MOBILE, value: 450),
-            ]).value,
-            child: BouncingScrollWrapper.builder(innerContext, child ?? const SizedBox.shrink()),
+            width: ResponsiveValue<double?>(
+              innerContext,
+              conditionalValues: [
+                const Condition.equals(name: MOBILE, value: 450),
+              ],
+            ).value,
+            child: BouncingScrollWrapper.builder(
+              innerContext,
+              child ?? const SizedBox.shrink(),
+            ),
           ),
         ),
         breakpoints: const [

@@ -25,10 +25,25 @@ class NavDrawer extends StatelessWidget {
     final items = [
       _DrawerItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
       _DrawerItem(RoutePaths.group, 'Group', Icons.groups_outlined, null),
-      _DrawerItem(RoutePaths.notifications, 'Alerts', Icons.notifications_outlined, unread),
-      _DrawerItem(RoutePaths.history, 'History', Icons.bar_chart_outlined, null),
+      _DrawerItem(
+        RoutePaths.notifications,
+        'Alerts',
+        Icons.notifications_outlined,
+        unread,
+      ),
+      _DrawerItem(
+        RoutePaths.history,
+        'History',
+        Icons.bar_chart_outlined,
+        null,
+      ),
       _DrawerItem(RoutePaths.profile, 'Profile', Icons.person_outline, null),
-      _DrawerItem(RoutePaths.settings, 'Settings', Icons.settings_outlined, null),
+      _DrawerItem(
+        RoutePaths.settings,
+        'Settings',
+        Icons.settings_outlined,
+        null,
+      ),
     ];
 
     final groups = app.orderedGroups;
@@ -49,7 +64,10 @@ class NavDrawer extends StatelessWidget {
               children: [
                 const PokerNightLogo(size: AppFontSizes.xxxl),
                 const SizedBox(width: AppSpacing.sm),
-                Text('Poker Night', style: AppTypography.crimsonShimmer(size: AppFontSizes.lg)),
+                Text(
+                  'Poker Night',
+                  style: AppTypography.crimsonShimmer(size: AppFontSizes.lg),
+                ),
               ],
             ),
           ),
@@ -70,10 +88,17 @@ class NavDrawer extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(user.name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                          Text(
+                            user.name,
+                            style: AppTypography.bodySm.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                           Text(
                             user.isAdmin ? 'Admin' : 'Player',
-                            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
                         ],
                       ),
@@ -95,9 +120,14 @@ class NavDrawer extends StatelessWidget {
                     },
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 11),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: 11,
+                      ),
                       decoration: BoxDecoration(
-                        color: location == item.path ? AppColors.primarySoft : Colors.transparent,
+                        color: location == item.path
+                            ? AppColors.primarySoft
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                       child: Row(
@@ -109,7 +139,9 @@ class NavDrawer extends StatelessWidget {
                               item.label,
                               style: AppTypography.bodySm.copyWith(
                                 fontWeight: FontWeight.w500,
-                                color: location == item.path ? AppColors.primary : AppColors.mutedForeground,
+                                color: location == item.path
+                                    ? AppColors.primary
+                                    : AppColors.mutedForeground,
                               ),
                             ),
                           ),
@@ -118,10 +150,15 @@ class NavDrawer extends StatelessWidget {
                               width: 20,
                               height: 20,
                               alignment: Alignment.center,
-                              decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                              decoration: const BoxDecoration(
+                                color: AppColors.primary,
+                                shape: BoxShape.circle,
+                              ),
                               child: Text(
                                 item.badge! > 9 ? '9+' : '${item.badge}',
-                                style: AppTypography.monoXs.copyWith(color: AppColors.primaryForeground),
+                                style: AppTypography.monoXs.copyWith(
+                                  color: AppColors.primaryForeground,
+                                ),
                               ),
                             ),
                         ],
@@ -131,7 +168,10 @@ class NavDrawer extends StatelessWidget {
                 if (groups.isNotEmpty) ...[
                   const Divider(color: AppColors.border, height: 24),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
                     child: Text(
                       'MY GROUPS',
                       style: AppTypography.bodyXs.copyWith(
@@ -150,17 +190,27 @@ class NavDrawer extends StatelessWidget {
                       },
                       borderRadius: BorderRadius.circular(AppRadius.md),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
-                          color: group.id == app.currentGroup.id ? AppColors.primarySoft : Colors.transparent,
+                          color: group.id == app.currentGroup.id
+                              ? AppColors.primarySoft
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(AppRadius.md),
                           border: Border.all(
-                            color: group.id == app.currentGroup.id ? AppColors.primary : Colors.transparent,
+                            color: group.id == app.currentGroup.id
+                                ? AppColors.primary
+                                : Colors.transparent,
                           ),
                         ),
                         child: Row(
                           children: [
-                            Text(group.icon, style: const TextStyle(fontSize: 18)),
+                            Text(
+                              group.icon,
+                              style: const TextStyle(fontSize: 18),
+                            ),
                             const SizedBox(width: AppSpacing.md),
                             Expanded(
                               child: Text(
@@ -168,13 +218,19 @@ class NavDrawer extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTypography.bodySm.copyWith(
-                                  color: group.id == app.currentGroup.id ? AppColors.primary : AppColors.foreground,
+                                  color: group.id == app.currentGroup.id
+                                      ? AppColors.primary
+                                      : AppColors.foreground,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
                             if (group.pinned)
-                              const Icon(Icons.push_pin, size: 14, color: AppColors.primary),
+                              const Icon(
+                                Icons.push_pin,
+                                size: 14,
+                                color: AppColors.primary,
+                              ),
                           ],
                         ),
                       ),
@@ -186,14 +242,24 @@ class NavDrawer extends StatelessWidget {
                     },
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: 10,
+                      ),
                       child: Row(
                         children: [
-                          Icon(Icons.group_add_outlined, size: 18, color: AppColors.primary),
+                          Icon(
+                            Icons.group_add_outlined,
+                            size: 18,
+                            color: AppColors.primary,
+                          ),
                           const SizedBox(width: AppSpacing.md),
                           Text(
                             'New Group',
-                            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500, color: AppColors.primary),
+                            style: AppTypography.bodySm.copyWith(
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.primary,
+                            ),
                           ),
                         ],
                       ),
@@ -218,13 +284,19 @@ class NavDrawer extends StatelessWidget {
                   },
                   child: Text(
                     'Sign out',
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ),
                 const Spacer(),
                 IconButton(
                   onPressed: app.closeDrawer,
-                  icon: const Icon(Icons.close, color: AppColors.mutedForeground, size: 20),
+                  icon: const Icon(
+                    Icons.close,
+                    color: AppColors.mutedForeground,
+                    size: 20,
+                  ),
                 ),
               ],
             ),

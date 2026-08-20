@@ -58,21 +58,21 @@ LiveGame projectionFor(
 
   // 16: Zero other players' rebuys / reEntries / hasAddOn / knockouts except viewer's own record (registered member only)
   final publicPlayers = game.players.map((p) {
-    final isViewer = role == GameProjectionRole.player && viewerId != null && p.id == viewerId;
+    final isViewer =
+        role == GameProjectionRole.player &&
+        viewerId != null &&
+        p.id == viewerId;
     if (isViewer) return p;
-    return p.copyWith(
-      rebuys: 0,
-      reEntries: 0,
-      hasAddOn: false,
-      knockouts: 0,
-    );
+    return p.copyWith(rebuys: 0, reEntries: 0, hasAddOn: false, knockouts: 0);
   }).toList();
 
   // 17: Filter rebuyRequests / addOnRequests to viewer's own id for players; empty for guest/TV
-  final publicRebuyRequests = role == GameProjectionRole.player && viewerId != null
+  final publicRebuyRequests =
+      role == GameProjectionRole.player && viewerId != null
       ? game.rebuyRequests.where((id) => id == viewerId).toList()
       : const <String>[];
-  final publicAddOnRequests = role == GameProjectionRole.player && viewerId != null
+  final publicAddOnRequests =
+      role == GameProjectionRole.player && viewerId != null
       ? game.addOnRequests.where((id) => id == viewerId).toList()
       : const <String>[];
 

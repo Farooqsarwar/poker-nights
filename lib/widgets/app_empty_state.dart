@@ -22,16 +22,15 @@ class AppEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl, vertical: AppSpacing.huge),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xxl,
+        vertical: AppSpacing.huge,
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (icon != null)
-            Icon(
-              icon,
-              size: AppFontSizes.display,
-              color: AppColors.icon,
-            ),
+            Icon(icon, size: AppFontSizes.display, color: AppColors.icon),
           const SizedBox(height: AppSpacing.md),
           Text(
             title,
@@ -45,7 +44,9 @@ class AppEmptyState extends StatelessWidget {
               child: Text(
                 description!,
                 textAlign: TextAlign.center,
-                style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
           ],

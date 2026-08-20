@@ -39,7 +39,12 @@ class CreateTournamentScreen extends StatefulWidget {
 }
 
 class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
-  static const _steps = ['Event details', 'Chip set', 'Rules', 'Review & create'];
+  static const _steps = [
+    'Event details',
+    'Chip set',
+    'Rules',
+    'Review & create',
+  ];
 
   int _step = 1;
 
@@ -55,7 +60,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
   // Player count is derived from the group + RSVP signals, never asked as an
   // input (the guest/going +N counts determine who actually shows up).
-  int _expectedPlayers = 8;
 
   // Step 2
   _ChipMode _chipMode = _ChipMode.preset;
@@ -68,6 +72,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   bool _rebuys = true;
   bool _rebuyUnlimited = true;
   int _rebuysClose = 6;
+  final _rebuyLimit = TextEditingController(text: '1');
   final _rebuyCost = TextEditingController();
   bool _reEntry = false;
   bool _addOn = true;
@@ -113,14 +118,17 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
       int expected = group.members.length;
       for (final poll in group.polls) {
-        if (poll.question.toLowerCase().contains('going') || poll.question.toLowerCase().contains('play')) {
+        if (poll.question.toLowerCase().contains('going') ||
+            poll.question.toLowerCase().contains('play')) {
           // votes is userId -> selected option(s) (single or multi choice).
           final yesVotes = poll.votes.values
               .expand((selected) => selected)
-              .where((v) =>
-                  v.toLowerCase() == 'yes' ||
-                  v.toLowerCase() == 'going' ||
-                  v.toLowerCase() == 'in')
+              .where(
+                (v) =>
+                    v.toLowerCase() == 'yes' ||
+                    v.toLowerCase() == 'going' ||
+                    v.toLowerCase() == 'in',
+              )
               .length;
           if (yesVotes > 0) {
             expected = yesVotes;
@@ -128,8 +136,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           }
         }
       }
-
-      _expectedPlayers = expected;
 
       if (widget.presetId != null) {
         final preset = app.presetById(widget.presetId);
@@ -167,6 +173,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     _duration = p.durationHours;
     _rebuys = p.rebuys;
     _rebuysClose = p.rebuysCloseLevel;
+    _rebuyUnlimited = p.rebuyLimit == null;
+    if (p.rebuyLimit != null) _rebuyLimit.text = p.rebuyLimit.toString();
     _rebuyCost.text = p.rebuyCost?.toString() ?? '';
     _reEntry = p.reEntry;
     _addOn = p.addOn;
@@ -174,7 +182,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     _addOnCost.text = p.addOnCost?.toString() ?? '';
     _koEnabled = p.koEnabled;
     _koAmount.text = p.koAmount.toString();
-    _antePreference = p.anteEnabled ? AntePreference.bigBlind : AntePreference.none;
+    _antePreference = p.anteEnabled
+        ? AntePreference.bigBlind
+        : AntePreference.none;
     _anteAfterLevel = p.anteAfterLevel;
     _orgPctController.text = p.organizerPct.toString();
     _chipSet = List.of(p.chipSet);
@@ -196,6 +206,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       _location,
       _buyIn,
       _koAmount,
+      _rebuyLimit,
       _rebuyCost,
       _addOnCost,
       _orgPctController,
@@ -263,8 +274,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             'Rebuys',
             _rebuys
                 ? (_rebuyUnlimited
-                    ? 'Unlimited to L$_rebuysClose'
-                    : 'Limited to L$_rebuysClose')
+                      ? 'Unlimited to L$_rebuysClose'
+                      : 'Limited to L$_rebuysClose')
                 : 'Off',
           ),
           _ConfirmItem('Re-entry', _reEntry ? 'Yes' : 'No'),
@@ -272,7 +283,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           _ConfirmItem('Bounty', _koEnabled ? 'Yes (${_koAmount.text})' : 'No'),
           _ConfirmItem(
             'Ante',
-            _antePreference == AntePreference.none ? 'No' : 'From L$_anteAfterLevel',
+            _antePreference == AntePreference.none
+                ? 'No'
+                : 'From L$_anteAfterLevel',
           ),
           _ConfirmItem('Organizational costs', '${_orgPct}%'),
         ],
@@ -293,7 +306,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           children: [
             Text(
               'Every game needs a chip set. Add chip colours and values before generating.',
-              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
             AppButton(
@@ -321,7 +336,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           children: [
             Text(
               'No two chip colours can have the same value. Please adjust your chip set.',
-              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
             AppButton(
@@ -346,41 +363,50 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     // Persist a custom chip set once so it can be reused next time.
     if (_chipMode != _ChipMode.preset) {
       final customName = '${_name.text.trim()} set';
-      app.saveChipSet('cs-${_name.text.trim().replaceAll(' ', '-').toLowerCase()}', customName, _chipSet);
+      app.saveChipSet(
+        'cs-${_name.text.trim().replaceAll(' ', '-').toLowerCase()}',
+        customName,
+        _chipSet,
+      );
     }
 
     // Client flow: the event is created and published straight away so the
     // group can RSVP. The structure is NOT generated here — the AI estimates
     // stacks/blinds/levels 30 minutes before start from the actual
     // attendance (Going + Going +N answers).
-    final game = app.createGame(GameSettings(
-      name: _name.text.trim(),
-      date: _date.text.trim(),
-      time: _time.text.trim(),
-      location: _location.text.trim(),
-      // Roster size — the real player count comes from RSVPs, never from an
-      // input field (client rule).
-      players: app.currentGroup.members.length,
-      durationHours: _duration,
-      buyIn: num.tryParse(_buyIn.text)?.toInt() ?? 15,
-      koEnabled: _koEnabled,
-      koAmount: num.tryParse(_koAmount.text)?.toInt() ?? 5,
-      rebuys: _rebuys,
-      rebuysCloseLevel: _rebuysClose,
-      rebuyCost: num.tryParse(_rebuyCost.text)?.toInt(),
-      reEntry: _reEntry,
-      addOn: _addOn,
-      addOnCloseLevel: _addOnClose,
-      addOnCost: num.tryParse(_addOnCost.text)?.toInt(),
-      anteEnabled: _anteEnabled,
-      anteAfterLevel: _anteAfterLevel,
-      anteStyle: _anteStyle,
-      antePreference: _antePreference,
-      organizerPct: _orgPct.clamp(0, 100),
-      chipSet: _chipSet,
-      chipSetName: _chipMode == _ChipMode.preset ? _presetName : 'Custom',
-      locationPrivate: _locationPrivate,
-    ));
+    final game = app.createGame(
+      GameSettings(
+        name: _name.text.trim(),
+        date: _date.text.trim(),
+        time: _time.text.trim(),
+        location: _location.text.trim(),
+        // Roster size — the real player count comes from RSVPs, never from an
+        // input field (client rule).
+        players: app.currentGroup.members.length,
+        durationHours: _duration,
+        buyIn: num.tryParse(_buyIn.text)?.toInt() ?? 15,
+        koEnabled: _koEnabled,
+        koAmount: num.tryParse(_koAmount.text)?.toInt() ?? 5,
+        rebuys: _rebuys,
+        rebuysCloseLevel: _rebuysClose,
+        rebuyLimit: _rebuys && !_rebuyUnlimited
+            ? (int.tryParse(_rebuyLimit.text) ?? 1)
+            : null,
+        rebuyCost: num.tryParse(_rebuyCost.text)?.toInt(),
+        reEntry: _reEntry,
+        addOn: _addOn,
+        addOnCloseLevel: _addOnClose,
+        addOnCost: num.tryParse(_addOnCost.text)?.toInt(),
+        anteEnabled: _anteEnabled,
+        anteAfterLevel: _anteAfterLevel,
+        anteStyle: _anteStyle,
+        antePreference: _antePreference,
+        organizerPct: _orgPct.clamp(0, 100),
+        chipSet: _chipSet,
+        chipSetName: _chipMode == _ChipMode.preset ? _presetName : 'Custom',
+        locationPrivate: _locationPrivate,
+      ),
+    );
     app.setCurrentGame(game);
     app.publishGame();
     context.go(RoutePaths.invitation);
@@ -389,6 +415,15 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+    final isAdmin = app.user?.isAdmin ?? false;
+
+    if (!isAdmin) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go(RoutePaths.group);
+      });
+      return const SizedBox.shrink();
+    }
+
     return AppPage(
       maxWidth: 640,
       child: Column(
@@ -398,11 +433,17 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           Row(
             children: [
               InkWell(
-                onTap: () => _step == 1 ? context.go(RoutePaths.group) : setState(() => _step--),
+                onTap: () => _step == 1
+                    ? context.go(RoutePaths.group)
+                    : setState(() => _step--),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: const Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(Icons.arrow_back, size: AppFontSizes.xl, color: AppColors.mutedForeground),
+                  child: Icon(
+                    Icons.arrow_back,
+                    size: AppFontSizes.xl,
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -410,10 +451,18 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('New Game', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+                    Text(
+                      'New Game',
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxxl,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
                     Text(
                       'Step $_step of ${_steps.length}: ${_steps[_step - 1]}',
-                      style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
@@ -438,8 +487,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          if (_step == 1 && _suggestions.isNotEmpty &&
-              !_suggestionsDismissed && _appliedPresetId == null) ...[
+          if (_step == 1 &&
+              _suggestions.isNotEmpty &&
+              !_suggestionsDismissed &&
+              _appliedPresetId == null) ...[
             _buildSuggestionBanner(app),
             const SizedBox(height: AppSpacing.lg),
           ],
@@ -455,17 +506,23 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             children: [
               AppButton(
                 variant: AppButtonVariant.secondary,
-                onPressed: () => _step == 1 ? context.go(RoutePaths.group) : setState(() => _step--),
+                onPressed: () => _step == 1
+                    ? context.go(RoutePaths.group)
+                    : setState(() => _step--),
                 child: _step == 1
                     ? const Text('Cancel')
                     : const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
-                    SizedBox(width: 6),
-                    Text('Back'),
-                  ],
-                ),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.arrow_back,
+                            size: 14,
+                            color: AppColors.icon,
+                          ),
+                          SizedBox(width: 6),
+                          Text('Back'),
+                        ],
+                      ),
               ),
               if (_step < 4)
                 AppButton(
@@ -475,7 +532,11 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     children: [
                       Text('Next'),
                       SizedBox(width: 6),
-                      Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+                      Icon(
+                        Icons.arrow_forward,
+                        size: 14,
+                        color: AppColors.icon,
+                      ),
                     ],
                   ),
                 ),
@@ -510,10 +571,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: AppTextField(
-                  controller: _time,
-                  label: 'Start time',
-                ),
+                child: AppTextField(controller: _time, label: 'Start time'),
               ),
             ],
           ),
@@ -546,7 +604,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       error: _errors['buyIn'],
                       keyboardType: TextInputType.number,
                     ),
-
                   ],
                 ),
               ),
@@ -589,7 +646,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               onTap: () => setState(() => _suggestionsDismissed = true),
               child: Text(
                 'Ignore',
-                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
           ],
@@ -603,7 +662,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               decoration: BoxDecoration(
                 color: AppColors.primarySoft,
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.4),
+                ),
               ),
               child: Row(
                 children: [
@@ -611,13 +672,20 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(p.name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                        Text(
+                          p.name,
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           'Buy-in ${p.buyIn} · ${p.durationHours}h · '
-                              '${p.rebuys ? 'Rebuys to L${p.rebuysCloseLevel}' : 'No rebuys'} · '
-                              '${p.anteEnabled ? 'Ante L${p.anteAfterLevel}+' : 'No ante'}',
-                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                          '${p.rebuys ? 'Rebuys to L${p.rebuysCloseLevel}' : 'No rebuys'} · '
+                          '${p.anteEnabled ? 'Ante L${p.anteAfterLevel}+' : 'No ante'}',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ],
                     ),
@@ -652,17 +720,25 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               decoration: BoxDecoration(
                 color: AppColors.primarySoft,
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.style_outlined, size: 18, color: AppColors.primary),
+                  const Icon(
+                    Icons.style_outlined,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
                       'No saved chip set yet. Use "Quick setup" to pick your colours and '
                       'availability — it will be saved so you can reuse it next game.',
-                      style: AppTypography.bodyXs.copyWith(color: AppColors.foreground),
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.foreground,
+                      ),
                     ),
                   ),
                 ],
@@ -681,10 +757,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       _ChipMode.exact => 'Exact count',
                     },
                     active: _chipMode == _ChipMode.values[i],
-                    onTap: () => setState(() => _chipMode = _ChipMode.values[i]),
+                    onTap: () =>
+                        setState(() => _chipMode = _ChipMode.values[i]),
                   ),
                 ),
-                if (i < _ChipMode.values.length - 1) const SizedBox(width: AppSpacing.sm),
+                if (i < _ChipMode.values.length - 1)
+                  const SizedBox(width: AppSpacing.sm),
               ],
             ],
           ),
@@ -727,12 +805,17 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           ] else if (_chipMode == _ChipMode.quick) ...[
             Text(
               'Select available colours and rank them from most to least available. Poker Night will suggest values.',
-              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
             for (var i = 0; i < _chipSet.length; i++)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.sm,
+                ),
                 margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                 decoration: BoxDecoration(
                   color: AppColors.secondary,
@@ -741,32 +824,49 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
                 child: Row(
                   children: [
-                    ChipToken(colorName: _chipSet[i].color, hex: _chipSet[i].colorValue, value: _chipSet[i].value),
+                    ChipToken(
+                      colorName: _chipSet[i].color,
+                      hex: _chipSet[i].colorValue,
+                      value: _chipSet[i].value,
+                    ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
-                      child: Text('Rank ${i + 1}', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                      child: Text(
+                        'Rank ${i + 1}',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
                     ),
                     IconButton(
                       visualDensity: VisualDensity.compact,
                       onPressed: i == 0
                           ? null
                           : () => setState(() {
-                        final tmp = _chipSet[i - 1];
-                        _chipSet[i - 1] = _chipSet[i];
-                        _chipSet[i] = tmp;
-                      }),
-                      icon: const Icon(Icons.arrow_upward, size: 14, color: AppColors.mutedForeground),
+                              final tmp = _chipSet[i - 1];
+                              _chipSet[i - 1] = _chipSet[i];
+                              _chipSet[i] = tmp;
+                            }),
+                      icon: const Icon(
+                        Icons.arrow_upward,
+                        size: 14,
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                     IconButton(
                       visualDensity: VisualDensity.compact,
                       onPressed: i == _chipSet.length - 1
                           ? null
                           : () => setState(() {
-                        final tmp = _chipSet[i + 1];
-                        _chipSet[i + 1] = _chipSet[i];
-                        _chipSet[i] = tmp;
-                      }),
-                      icon: const Icon(Icons.arrow_downward, size: 14, color: AppColors.mutedForeground),
+                              final tmp = _chipSet[i + 1];
+                              _chipSet[i + 1] = _chipSet[i];
+                              _chipSet[i] = tmp;
+                            }),
+                      icon: const Icon(
+                        Icons.arrow_downward,
+                        size: 14,
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
@@ -774,12 +874,17 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           ] else ...[
             Text(
               'Enter exact chip counts and values.',
-              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
             for (var i = 0; i < _chipSet.length; i++)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.sm,
+                ),
                 margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                 decoration: BoxDecoration(
                   color: AppColors.secondary,
@@ -788,16 +893,25 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
                 child: Row(
                   children: [
-                    ChipToken(colorName: _chipSet[i].color, hex: _chipSet[i].colorValue, value: _chipSet[i].value),
+                    ChipToken(
+                      colorName: _chipSet[i].color,
+                      hex: _chipSet[i].colorValue,
+                      value: _chipSet[i].value,
+                    ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
-                      child: Text(_chipSet[i].color, style: AppTypography.bodyXs),
+                      child: Text(
+                        _chipSet[i].color,
+                        style: AppTypography.bodyXs,
+                      ),
                     ),
                     _ExactInput(
                       label: 'Value',
                       value: '${_chipSet[i].value}',
                       onChanged: (v) => setState(() {
-                        _chipSet[i] = _chipSet[i].copyWith(value: int.tryParse(v) ?? 1);
+                        _chipSet[i] = _chipSet[i].copyWith(
+                          value: int.tryParse(v) ?? 1,
+                        );
                       }),
                     ),
                     const SizedBox(width: AppSpacing.sm),
@@ -805,7 +919,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       label: '×',
                       value: '${_chipSet[i].quantity}',
                       onChanged: (v) => setState(() {
-                        _chipSet[i] = _chipSet[i].copyWith(quantity: int.tryParse(v) ?? 0);
+                        _chipSet[i] = _chipSet[i].copyWith(
+                          quantity: int.tryParse(v) ?? 0,
+                        );
                       }),
                     ),
                   ],
@@ -866,21 +982,30 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xl, AppSpacing.lg, AppSpacing.md, AppSpacing.lg),
+                  AppSpacing.xl,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         'Add custom colour',
                         style: AppTypography.display(
-                            size: AppFontSizes.lg, weight: FontWeight.w700),
+                          size: AppFontSizes.lg,
+                          weight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     IconButton(
                       visualDensity: VisualDensity.compact,
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close,
-                          size: 18, color: AppColors.mutedForeground),
+                      icon: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
@@ -900,8 +1025,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                         enableAlpha: false,
                         labelTypes: const [],
                         portraitOnly: true,
-                        pickerAreaBorderRadius:
-                        BorderRadius.circular(AppRadius.md),
+                        pickerAreaBorderRadius: BorderRadius.circular(
+                          AppRadius.md,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       AppTextField(
@@ -949,15 +1075,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                         final hexName =
                             '#${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
                         final inputName = nameController.text.trim();
-                        final val = int.tryParse(valueController.text.trim()) ?? 100;
-                        final qty = int.tryParse(qtyController.text.trim()) ?? 50;
+                        final val =
+                            int.tryParse(valueController.text.trim()) ?? 100;
+                        final qty =
+                            int.tryParse(qtyController.text.trim()) ?? 50;
                         setState(() {
-                          _chipSet.add(ChipColor(
-                            color: inputName.isEmpty ? hexName : inputName,
-                            hex: pickerColor.toARGB32(),
-                            value: val,
-                            quantity: qty,
-                          ));
+                          _chipSet.add(
+                            ChipColor(
+                              color: inputName.isEmpty ? hexName : inputName,
+                              hex: pickerColor.toARGB32(),
+                              value: val,
+                              quantity: qty,
+                            ),
+                          );
                           _chipMode = _ChipMode.exact;
                         });
                         Navigator.pop(context);
@@ -985,13 +1115,25 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Rebuys', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                Text(
+                  'Rebuys',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text('Players can re-enter after elimination', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                Text(
+                  'Players can re-enter after elimination',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 _SegmentedPicker(
                   options: const ['Off', 'Limited', 'Unlimited'],
-                  selected: _rebuys ? (_rebuyUnlimited ? 'Unlimited' : 'Limited') : 'Off',
+                  selected: _rebuys
+                      ? (_rebuyUnlimited ? 'Unlimited' : 'Limited')
+                      : 'Off',
                   onChanged: (v) => setState(() {
                     if (v == 'Off') {
                       _rebuys = false;
@@ -1014,20 +1156,68 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             // Both limited and unlimited rebuys close at the end of a chosen
             // level (client rule: "if unlimited — until when, end of L6").
             Padding(
-              padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
+              padding: const EdgeInsets.only(
+                left: AppSpacing.lg,
+                top: AppSpacing.md,
+              ),
               child: _SegmentedPicker(
-                label: _rebuyUnlimited ? 'Unlimited rebuys until' : 'Close rebuys',
-                options: const ['End L4', 'End L5', 'End L6', 'End L7', 'End L8'],
+                label: _rebuyUnlimited
+                    ? 'Unlimited rebuys until'
+                    : 'Close rebuys',
+                options: const [
+                  'End L4',
+                  'End L5',
+                  'End L6',
+                  'End L7',
+                  'End L8',
+                ],
                 selected: 'End L$_rebuysClose',
-                onChanged: (v) => setState(() => _rebuysClose = int.tryParse(v.replaceAll('End L', '')) ?? 6),
+                onChanged: (v) => setState(
+                  () => _rebuysClose =
+                      int.tryParse(v.replaceAll('End L', '')) ?? 6,
+                ),
               ),
             ),
+            if (!_rebuyUnlimited)
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: AppSpacing.lg,
+                  top: AppSpacing.md,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Max rebuys per player',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    SizedBox(
+                      width: 130,
+                      child: AppTextField(
+                        controller: _rebuyLimit,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             Padding(
-              padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
+              padding: const EdgeInsets.only(
+                left: AppSpacing.lg,
+                top: AppSpacing.md,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Rebuy price', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                  Text(
+                    'Rebuy price',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   SizedBox(
                     width: 130,
@@ -1040,7 +1230,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     'Unlimited rebuys per player until they close.',
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
@@ -1049,16 +1241,23 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           const Divider(color: AppColors.border),
           _ToggleRow(
             title: 'Re-entry',
-            subtitle: 'Separate option — buy a new entry stack after elimination',
+            subtitle:
+                'Separate option — buy a new entry stack after elimination',
             value: _reEntry,
             onChanged: (v) => setState(() => _reEntry = v),
           ),
           if (_reEntry)
             Padding(
-              padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.sm, bottom: AppSpacing.sm),
+              padding: const EdgeInsets.only(
+                left: AppSpacing.lg,
+                top: AppSpacing.sm,
+                bottom: AppSpacing.sm,
+              ),
               child: Text(
                 'Closes with late registration and rebuys.',
-                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
           const Divider(color: AppColors.border),
@@ -1070,9 +1269,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Add-on', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                      Text(
+                        'Add-on',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                       const SizedBox(height: 2),
-                      Text('One per active player at rebuy close', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                      Text(
+                        'One per active player at rebuy close',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1086,11 +1295,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           ),
           if (_addOn)
             Padding(
-              padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
+              padding: const EdgeInsets.only(
+                left: AppSpacing.lg,
+                top: AppSpacing.md,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Add-on price', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                  Text(
+                    'Add-on price',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   SizedBox(
                     width: 130,
@@ -1103,14 +1320,25 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     'Add-on matches the starting stack.',
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   _SegmentedPicker(
                     label: 'Add-on available until',
-                    options: const ['End L4', 'End L5', 'End L6', 'End L7', 'End L8'],
+                    options: const [
+                      'End L4',
+                      'End L5',
+                      'End L6',
+                      'End L7',
+                      'End L8',
+                    ],
                     selected: 'End L$_addOnClose',
-                    onChanged: (v) => setState(() => _addOnClose = int.tryParse(v.replaceAll('End L', '')) ?? 6),
+                    onChanged: (v) => setState(
+                      () => _addOnClose =
+                          int.tryParse(v.replaceAll('End L', '')) ?? 6,
+                    ),
                   ),
                 ],
               ),
@@ -1124,9 +1352,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('KO bounty', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                      Text(
+                        'KO bounty',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                       const SizedBox(height: 2),
-                      Text('Side payment for eliminating a player', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                      Text(
+                        'Side payment for eliminating a player',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1140,11 +1378,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           ),
           if (_koEnabled)
             Padding(
-              padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.md),
+              padding: const EdgeInsets.only(
+                left: AppSpacing.lg,
+                top: AppSpacing.md,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Bounty amount', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                  Text(
+                    'Bounty amount',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   SizedBox(
                     width: 130,
@@ -1156,7 +1402,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     'Shown as "${_buyIn.text} + ${_koAmount.text}". Bounty does not enter prize pool.',
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
@@ -1167,9 +1415,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Ante', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                Text(
+                  'Ante',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text('Choose how the ante is posted', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                Text(
+                  'Choose how the ante is posted',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 Column(
                   children: [
@@ -1179,7 +1437,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                           child: _ModeButton(
                             label: 'Recommended',
                             active: _antePreference == AntePreference.recommend,
-                            onTap: () => setState(() => _antePreference = AntePreference.recommend),
+                            onTap: () => setState(
+                              () => _antePreference = AntePreference.recommend,
+                            ),
                           ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
@@ -1187,7 +1447,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                           child: _ModeButton(
                             label: 'No ante',
                             active: _antePreference == AntePreference.none,
-                            onTap: () => setState(() => _antePreference = AntePreference.none),
+                            onTap: () => setState(
+                              () => _antePreference = AntePreference.none,
+                            ),
                           ),
                         ),
                       ],
@@ -1199,15 +1461,20 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                           child: _ModeButton(
                             label: 'Big blind',
                             active: _antePreference == AntePreference.bigBlind,
-                            onTap: () => setState(() => _antePreference = AntePreference.bigBlind),
+                            onTap: () => setState(
+                              () => _antePreference = AntePreference.bigBlind,
+                            ),
                           ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: _ModeButton(
                             label: 'Individual',
-                            active: _antePreference == AntePreference.individual,
-                            onTap: () => setState(() => _antePreference = AntePreference.individual),
+                            active:
+                                _antePreference == AntePreference.individual,
+                            onTap: () => setState(
+                              () => _antePreference = AntePreference.individual,
+                            ),
                           ),
                         ),
                       ],
@@ -1218,20 +1485,33 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 Text(
                   switch (_antePreference) {
                     AntePreference.recommend =>
-                    'One ante per table equal to the big blind, starting at a fixed level. Recommended.',
+                      'One ante per table equal to the big blind, starting at a fixed level. Recommended.',
                     AntePreference.none => 'No antes during the tournament.',
-                    AntePreference.bigBlind => 'One ante per table, equal to the big blind.',
-                    AntePreference.individual => 'Every player posts an ante (half the big blind) each hand.',
+                    AntePreference.bigBlind =>
+                      'One ante per table, equal to the big blind.',
+                    AntePreference.individual =>
+                      'Every player posts an ante (half the big blind) each hand.',
                   },
-                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
                 if (_antePreference != AntePreference.none) ...[
                   const SizedBox(height: AppSpacing.md),
                   _SegmentedPicker(
                     label: 'Activate ante',
-                    options: const ['After L4', 'After L5', 'After L6', 'After L7', 'After L8'],
+                    options: const [
+                      'After L4',
+                      'After L5',
+                      'After L6',
+                      'After L7',
+                      'After L8',
+                    ],
                     selected: 'After L$_anteAfterLevel',
-                    onChanged: (v) => setState(() => _anteAfterLevel = int.tryParse(v.replaceAll('After L', '')) ?? 6),
+                    onChanged: (v) => setState(
+                      () => _anteAfterLevel =
+                          int.tryParse(v.replaceAll('After L', '')) ?? 6,
+                    ),
                   ),
                 ],
               ],
@@ -1241,11 +1521,18 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Organizational costs', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+              Text(
+                'Organizational costs',
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               const SizedBox(height: 2),
               Text(
                 'Percentage for equipment, drinks & snacks. Admin only — never shown to players.',
-                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
               SizedBox(
@@ -1259,7 +1546,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'Private — the prize pool keeps the remaining percentage of gross.',
-                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ],
           ),
@@ -1274,12 +1563,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.casino_outlined, size: AppFontSizes.display, color: AppColors.icon),
+          const Icon(
+            Icons.casino_outlined,
+            size: AppFontSizes.display,
+            color: AppColors.icon,
+          ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Ready to create',
             textAlign: TextAlign.center,
-            style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w600),
+            style: AppTypography.display(
+              size: AppFontSizes.xl,
+              weight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
@@ -1326,14 +1622,16 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               AppBadge(
                 label: _rebuys
                     ? (_rebuyUnlimited
-                    ? 'Unlimited rebuys to L6'
-                    : 'Rebuys to L$_rebuysClose${_rebuyCost.text.trim().isNotEmpty ? ' @ ${_rebuyCost.text}' : ''}')
+                          ? 'Unlimited rebuys to L$_rebuysClose'
+                          : '${_rebuyLimit.text.trim().isNotEmpty ? _rebuyLimit.text : '1'} rebuys to L$_rebuysClose${_rebuyCost.text.trim().isNotEmpty ? ' @ ${_rebuyCost.text}' : ''}')
                     : 'No rebuys',
                 variant: _rebuys ? AppBadgeVariant.gold : AppBadgeVariant.muted,
               ),
               AppBadge(
                 label: _reEntry ? 'Re-entry' : 'No re-entry',
-                variant: _reEntry ? AppBadgeVariant.gold : AppBadgeVariant.muted,
+                variant: _reEntry
+                    ? AppBadgeVariant.gold
+                    : AppBadgeVariant.muted,
               ),
               AppBadge(
                 label: _addOn ? 'Add-on to L$_addOnClose' : 'No add-on',
@@ -1343,10 +1641,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 label: _antePreference == AntePreference.none
                     ? 'No ante'
                     : 'Ante L$_anteAfterLevel (${_antePreference == AntePreference.individual ? 'Ind' : 'BB'})',
-                variant: _antePreference != AntePreference.none ? AppBadgeVariant.gold : AppBadgeVariant.muted,
+                variant: _antePreference != AntePreference.none
+                    ? AppBadgeVariant.gold
+                    : AppBadgeVariant.muted,
               ),
               AppBadge(
-                label: 'Chips: ${_chipMode == _ChipMode.preset ? _presetName : 'Custom'}',
+                label:
+                    'Chips: ${_chipMode == _ChipMode.preset ? _presetName : 'Custom'}',
                 variant: AppBadgeVariant.default_,
               ),
               if (_locationPrivate)
@@ -1362,14 +1663,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             'blinds and levels 30 minutes before start, based on who answered Going / Going +N. '
             'You can still change every setting after publishing.',
             textAlign: TextAlign.center,
-            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.xl),
           AppButton(
             size: AppButtonSize.lg,
             fullWidth: true,
             onPressed: () => _generate(app),
-            child: const AppIconLabel(label: 'Create event', trailing: Icons.arrow_forward),
+            child: const AppIconLabel(
+              label: 'Create event',
+              trailing: Icons.arrow_forward,
+            ),
           ),
         ],
       ),
@@ -1510,8 +1816,9 @@ class _ConfirmDetailsDialog extends StatelessWidget {
                           child: Text(
                             '· $chipSetName',
                             overflow: TextOverflow.ellipsis,
-                            style: AppTypography.bodyXs
-                                .copyWith(color: AppColors.mutedForeground),
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
                         ),
                       ],
@@ -1520,9 +1827,7 @@ class _ConfirmDetailsDialog extends StatelessWidget {
                     Wrap(
                       spacing: AppSpacing.sm,
                       runSpacing: AppSpacing.sm,
-                      children: [
-                        for (final c in chipSet) _ChipPill(chip: c),
-                      ],
+                      children: [for (final c in chipSet) _ChipPill(chip: c)],
                     ),
                   ],
                 ),
@@ -1576,8 +1881,9 @@ class _ConfirmDetailsDialog extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   'Check everything before the structure is generated.',
-                  style: AppTypography.bodyXs
-                      .copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ],
             ),
@@ -1623,21 +1929,21 @@ class _ConfirmDetailsDialog extends StatelessWidget {
       // Stack on phones so nothing is ever clipped.
       child: isCompact
           ? Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          confirm,
-          const SizedBox(height: AppSpacing.sm),
-          back,
-        ],
-      )
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                confirm,
+                const SizedBox(height: AppSpacing.sm),
+                back,
+              ],
+            )
           : Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          back,
-          const SizedBox(width: AppSpacing.sm),
-          confirm,
-        ],
-      ),
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                back,
+                const SizedBox(width: AppSpacing.sm),
+                confirm,
+              ],
+            ),
     );
   }
 }
@@ -1698,15 +2004,17 @@ class _ConfirmRow extends StatelessWidget {
         border: last
             ? null
             : const Border(
-          bottom: BorderSide(color: AppColors.border, width: 0.6),
-        ),
+                bottom: BorderSide(color: AppColors.border, width: 0.6),
+              ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             item.label,
-            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -1759,7 +2067,9 @@ class _ChipPill extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             '×${chip.quantity}',
-            style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
         ],
       ),
@@ -1768,7 +2078,11 @@ class _ChipPill extends StatelessWidget {
 }
 
 class _ModeButton extends StatelessWidget {
-  const _ModeButton({required this.label, required this.active, required this.onTap});
+  const _ModeButton({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
 
   final String label;
   final bool active;
@@ -1785,7 +2099,9 @@ class _ModeButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? AppColors.primarySoft : Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: active ? AppColors.primary : AppColors.border),
+          border: Border.all(
+            color: active ? AppColors.primary : AppColors.border,
+          ),
         ),
         child: FittedBox(
           fit: BoxFit.scaleDown,
@@ -1804,7 +2120,12 @@ class _ModeButton extends StatelessWidget {
 }
 
 class _ToggleRow extends StatelessWidget {
-  const _ToggleRow({required this.title, required this.subtitle, required this.value, required this.onChanged});
+  const _ToggleRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
 
   final String title;
   final String subtitle;
@@ -1821,9 +2142,19 @@ class _ToggleRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                Text(
+                  title,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                Text(
+                  subtitle,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1835,7 +2166,11 @@ class _ToggleRow extends StatelessWidget {
 }
 
 class _ExactInput extends StatelessWidget {
-  const _ExactInput({required this.label, required this.value, required this.onChanged});
+  const _ExactInput({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
 
   final String label;
   final String value;
@@ -1846,7 +2181,12 @@ class _ExactInput extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+        Text(
+          label,
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
         const SizedBox(width: AppSpacing.xs),
         SizedBox(
           width: 56,
@@ -1860,7 +2200,10 @@ class _ExactInput extends StatelessWidget {
               isDense: true,
               filled: true,
               fillColor: AppColors.card,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: 8,
+              ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: const BorderSide(color: AppColors.border),
@@ -1878,7 +2221,11 @@ class _ExactInput extends StatelessWidget {
 }
 
 class _SummaryStatCard extends StatelessWidget {
-  const _SummaryStatCard({required this.icon, required this.label, required this.value});
+  const _SummaryStatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
   final IconData icon;
   final String label;
   final String value;
@@ -1886,7 +2233,10 @@ class _SummaryStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.xs),
+      padding: const EdgeInsets.symmetric(
+        vertical: AppSpacing.md,
+        horizontal: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -1896,9 +2246,20 @@ class _SummaryStatCard extends StatelessWidget {
         children: [
           Icon(icon, size: 24, color: AppColors.primary),
           const SizedBox(height: AppSpacing.xs),
-          Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            label,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(value, style: AppTypography.display(size: AppFontSizes.md, weight: FontWeight.w600)),
+          Text(
+            value,
+            style: AppTypography.display(
+              size: AppFontSizes.md,
+              weight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -1927,15 +2288,22 @@ class _SegmentedPicker extends StatelessWidget {
           GestureDetector(
             onTap: () => onChanged(options[i]),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
               decoration: BoxDecoration(
-                color: options[i] == selected ? AppColors.primary : AppColors.secondary,
+                color: options[i] == selected
+                    ? AppColors.primary
+                    : AppColors.secondary,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
               ),
               child: Text(
                 options[i],
                 style: AppTypography.bodyXs.copyWith(
-                  color: options[i] == selected ? Colors.white : AppColors.mutedForeground,
+                  color: options[i] == selected
+                      ? Colors.white
+                      : AppColors.mutedForeground,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1950,7 +2318,12 @@ class _SegmentedPicker extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label!, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            label!,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
           const SizedBox(height: AppSpacing.xs),
           picker,
         ],

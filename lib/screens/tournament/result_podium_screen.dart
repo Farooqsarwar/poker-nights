@@ -19,7 +19,11 @@ import '../../widgets/app_page.dart';
 import '../../widgets/medal_icon.dart';
 
 class _PodiumResult {
-  const _PodiumResult({required this.player, required this.pos, required this.prize});
+  const _PodiumResult({
+    required this.player,
+    required this.pos,
+    required this.prize,
+  });
 
   final Player player;
   final int pos;
@@ -61,11 +65,14 @@ class ResultPodiumScreen extends StatelessWidget {
 
     final ranked = [
       for (var i = 0; i < finishOrder.length; i++)
-        if (players.where((p) => p.id == finishOrder[i]).firstOrNull case final player?)
+        if (players.where((p) => p.id == finishOrder[i]).firstOrNull
+            case final player?)
           _PodiumResult(
             player: player,
             pos: finishOrder.length - i,
-            prize: prizes.where((pr) => pr.place == finishOrder.length - i).firstOrNull,
+            prize: prizes
+                .where((pr) => pr.place == finishOrder.length - i)
+                .firstOrNull,
           ),
     ];
     // finishOrder is "first-out first" so ranked is worst-first. The podium
@@ -85,31 +92,47 @@ class ResultPodiumScreen extends StatelessWidget {
             padding: const EdgeInsets.only(top: AppSpacing.lg),
             child: Column(
               children: [
-                const Icon(Icons.emoji_events, size: AppFontSizes.displayLg, color: AppColors.icon),
+                const Icon(
+                  Icons.emoji_events,
+                  size: AppFontSizes.displayLg,
+                  color: AppColors.icon,
+                ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   game.settings.name,
                   textAlign: TextAlign.center,
-                  style: AppTypography.crimsonShimmer(size: AppFontSizes.display),
+                  style: AppTypography.crimsonShimmer(
+                    size: AppFontSizes.display,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '${game.settings.date} · ${game.settings.location}',
                   textAlign: TextAlign.center,
-                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 if (showAmounts)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.xs,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Text(
                       '${Formatters.chips(game.structure.prizePool)} prize pool',
-                      style: AppTypography.monoSm.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                      style: AppTypography.monoSm.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
               ],
@@ -126,7 +149,13 @@ class ResultPodiumScreen extends StatelessWidget {
                 children: [
                   for (final vi in [1, 0, 2])
                     if (vi < podium.length)
-                      Expanded(child: _PodiumSlot(result: podium[vi], isWinner: vi == 0, showAmounts: showAmounts)),
+                      Expanded(
+                        child: _PodiumSlot(
+                          result: podium[vi],
+                          isWinner: vi == 0,
+                          showAmounts: showAmounts,
+                        ),
+                      ),
                 ],
               ),
             ),
@@ -135,12 +164,19 @@ class ResultPodiumScreen extends StatelessWidget {
           if (myResult != null)
             AppCard(
               glow: myResult.pos <= 3,
-              borderColor: myResult.pos <= 3 ? AppColors.primary.withValues(alpha: 0.4) : null,
+              borderColor: myResult.pos <= 3
+                  ? AppColors.primary.withValues(alpha: 0.4)
+                  : null,
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Your result', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                  Text(
+                    'Your result',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   Row(
                     children: [
@@ -151,12 +187,19 @@ class ResultPodiumScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              myResult.pos == 1 ? 'Winner!' : '${myResult.pos}${_ordinal(myResult.pos)} place',
-                              style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w700),
+                              myResult.pos == 1
+                                  ? 'Winner!'
+                                  : '${myResult.pos}${_ordinal(myResult.pos)} place',
+                              style: AppTypography.display(
+                                size: AppFontSizes.xl,
+                                weight: FontWeight.w700,
+                              ),
                             ),
                             Text(
                               '${players.length} players entered',
-                              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
                             ),
                           ],
                         ),
@@ -164,7 +207,10 @@ class ResultPodiumScreen extends StatelessWidget {
                       if (myResult.prize != null && showAmounts)
                         Text(
                           Formatters.chips(myResult.prize!.amount),
-                          style: AppTypography.monoXl.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
+                          style: AppTypography.monoXl.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                     ],
                   ),
@@ -179,13 +225,26 @@ class ResultPodiumScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-                  child: Text('Full results', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
+                  child: Text(
+                    'Full results',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
                 for (final r in ranked)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-                    color: r.player.id == user?.id ? AppColors.primarySoft : null,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.md,
+                    ),
+                    color: r.player.id == user?.id
+                        ? AppColors.primarySoft
+                        : null,
                     child: Row(
                       children: [
                         SizedBox(
@@ -195,32 +254,55 @@ class ResultPodiumScreen extends StatelessWidget {
                               : Text(
                                   '#${r.pos}',
                                   textAlign: TextAlign.center,
-                                  style: AppTypography.monoSm.copyWith(color: AppColors.mutedForeground),
+                                  style: AppTypography.monoSm.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
                                 ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Container(
                           width: 32,
                           height: 32,
-                          decoration: BoxDecoration(color: AppColors.avatarPalette.first, shape: BoxShape.circle),
+                          decoration: BoxDecoration(
+                            color: AppColors.avatarPalette.first,
+                            shape: BoxShape.circle,
+                          ),
                           alignment: Alignment.center,
                           child: Text(
-                            r.player.name.trim().isEmpty ? '?' : r.player.name.trim()[0].toUpperCase(),
-                            style: AppTypography.bodyXs.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                            r.player.name.trim().isEmpty
+                                ? '?'
+                                : r.player.name.trim()[0].toUpperCase(),
+                            style: AppTypography.bodyXs.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Row(
                             children: [
-                              Flexible(child: Text(r.player.name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500))),
+                              Flexible(
+                                child: Text(
+                                  r.player.name,
+                                  style: AppTypography.bodySm.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
                               if (r.player.id == user?.id) ...[
                                 const SizedBox(width: AppSpacing.xs),
-                                const AppBadge(label: 'You', variant: AppBadgeVariant.green),
+                                const AppBadge(
+                                  label: 'You',
+                                  variant: AppBadgeVariant.green,
+                                ),
                               ],
                               if (r.player.isGuest) ...[
                                 const SizedBox(width: AppSpacing.xs),
-                                const AppBadge(label: 'Guest', variant: AppBadgeVariant.muted),
+                                const AppBadge(
+                                  label: 'Guest',
+                                  variant: AppBadgeVariant.muted,
+                                ),
                               ],
                             ],
                           ),
@@ -231,9 +313,12 @@ class ResultPodiumScreen extends StatelessWidget {
                             [
                               if (r.player.rebuys > 0) '${r.player.rebuys}R',
                               if (r.player.hasAddOn) 'AO',
-                              if (r.player.knockouts > 0) '${r.player.knockouts} KO',
+                              if (r.player.knockouts > 0)
+                                '${r.player.knockouts} KO',
                             ].join(' · '),
-                            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
                         ],
                         const SizedBox(width: AppSpacing.md),
@@ -242,7 +327,9 @@ class ResultPodiumScreen extends StatelessWidget {
                               ? Formatters.chips(r.prize!.amount)
                               : '—',
                           style: AppTypography.monoSm.copyWith(
-                            color: showAmounts && r.prize != null ? AppColors.primary : AppColors.mutedForeground,
+                            color: showAmounts && r.prize != null
+                                ? AppColors.primary
+                                : AppColors.mutedForeground,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -257,7 +344,12 @@ class ResultPodiumScreen extends StatelessWidget {
           if (showAmounts)
             Row(
               children: [
-                Expanded(child: _StatCard(label: 'Players', value: '${players.length}')),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Players',
+                    value: '${players.length}',
+                  ),
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: _StatCard(
@@ -267,18 +359,26 @@ class ResultPodiumScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Expanded(child: _StatCard(label: 'Rebuys', value: '$totalRebuys')),
+                Expanded(
+                  child: _StatCard(label: 'Rebuys', value: '$totalRebuys'),
+                ),
               ],
             )
           else
             Row(
               children: [
-                Expanded(child: _StatCard(label: 'Players', value: '${players.length}')),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Players',
+                    value: '${players.length}',
+                  ),
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: _StatCard(
                     label: 'Duration',
-                    value: '${game.settings.durationHours == game.settings.durationHours.roundToDouble() ? game.settings.durationHours.round() : game.settings.durationHours}h',
+                    value:
+                        '${game.settings.durationHours == game.settings.durationHours.roundToDouble() ? game.settings.durationHours.round() : game.settings.durationHours}h',
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -300,7 +400,11 @@ class ResultPodiumScreen extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
+                      const Icon(
+                        Icons.arrow_back,
+                        size: 14,
+                        color: AppColors.icon,
+                      ),
                       const SizedBox(width: 6),
                       const Text('Group'),
                     ],
@@ -339,7 +443,11 @@ class ResultPodiumScreen extends StatelessWidget {
 }
 
 class _PodiumSlot extends StatelessWidget {
-  const _PodiumSlot({required this.result, required this.isWinner, required this.showAmounts});
+  const _PodiumSlot({
+    required this.result,
+    required this.isWinner,
+    required this.showAmounts,
+  });
 
   final _PodiumResult result;
   final bool isWinner;
@@ -365,8 +473,14 @@ class _PodiumSlot extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: AppColors.card,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-              border: Border.all(color: isFirst ? AppColors.gold.withValues(alpha: 0.5) : AppColors.border),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(AppRadius.lg),
+              ),
+              border: Border.all(
+                color: isFirst
+                    ? AppColors.gold.withValues(alpha: 0.5)
+                    : AppColors.border,
+              ),
             ),
             height: heights[result.pos - 1],
             child: Column(
@@ -376,19 +490,27 @@ class _PodiumSlot extends StatelessWidget {
                   result.player.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTypography.display(size: AppFontSizes.md, weight: FontWeight.w700),
+                  style: AppTypography.display(
+                    size: AppFontSizes.md,
+                    weight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   labels[result.pos - 1],
-                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
                 if (result.prize != null && showAmounts)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       Formatters.chips(result.prize!.amount),
-                      style: AppTypography.monoSm.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                      style: AppTypography.monoSm.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
               ],
@@ -415,10 +537,18 @@ class _StatCard extends StatelessWidget {
         children: [
           Text(
             value,
-            style: AppTypography.monoLg.copyWith(fontWeight: FontWeight.w700, color: valueColor ?? AppColors.foreground),
+            style: AppTypography.monoLg.copyWith(
+              fontWeight: FontWeight.w700,
+              color: valueColor ?? AppColors.foreground,
+            ),
           ),
           const SizedBox(height: 2),
-          Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            label,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
         ],
       ),
     );

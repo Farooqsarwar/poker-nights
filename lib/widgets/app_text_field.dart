@@ -62,7 +62,9 @@ class AppTextField extends StatelessWidget {
         if (label != null) ...[
           Text(
             label!,
-            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.xs),
         ],
@@ -84,18 +86,30 @@ class AppTextField extends StatelessWidget {
           style: textStyle ?? AppTypography.bodyStyle,
           decoration: InputDecoration(
             hintText: placeholder,
-            hintStyle: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceHint),
+            hintStyle: AppTypography.bodySm.copyWith(
+              color: AppColors.onSurfaceHint,
+            ),
             errorText: error,
-            errorStyle: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+            errorStyle: AppTypography.bodyXs.copyWith(
+              color: AppColors.destructive,
+            ),
             prefixIcon: prefixIcon,
             suffixIcon: suffixIcon,
-            prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-            suffixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+            ),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+            ),
             isDense: true,
             filled: true,
             fillColor: AppColors.card,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppRadius.sm),
               borderSide: const BorderSide(color: AppColors.border),
@@ -122,7 +136,9 @@ class AppTextField extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             hint!,
-            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
         ],
       ],

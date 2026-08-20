@@ -20,7 +20,9 @@ class ChipToken extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = value >= 1000 ? '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K' : '$value';
+    final label = value >= 1000
+        ? '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K'
+        : '$value';
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -34,7 +36,10 @@ class ChipToken extends StatelessWidget {
               decoration: BoxDecoration(
                 color: hex,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 2),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  width: 2,
+                ),
                 boxShadow: const [
                   BoxShadow(
                     color: AppColors.shadowDark,
@@ -45,17 +50,28 @@ class ChipToken extends StatelessWidget {
               ),
               child: Text(
                 label,
-                style: AppTypography.mono(
-                  size: 9,
-                  weight: FontWeight.w700,
-                  color: Colors.white,
-                ).copyWith(shadows: const [Shadow(color: AppColors.shadowDeep, blurRadius: 2, offset: Offset(0, 1))]),
+                style:
+                    AppTypography.mono(
+                      size: 9,
+                      weight: FontWeight.w700,
+                      color: Colors.white,
+                    ).copyWith(
+                      shadows: const [
+                        Shadow(
+                          color: AppColors.shadowDeep,
+                          blurRadius: 2,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
               ),
             ),
             const SizedBox(width: 8),
             Text(
               colorName,
-              style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
           ],
         ),

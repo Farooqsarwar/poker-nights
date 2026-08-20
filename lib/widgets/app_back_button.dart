@@ -7,7 +7,11 @@ import '../app/typography.dart';
 /// Standard back arrow with a 44px tap target, tooltip and screen-reader
 /// label. Replaces the duplicated inline back arrows across detail screens.
 class AppBackButton extends StatelessWidget {
-  const AppBackButton({super.key, required this.onTap, this.tooltip = 'Go back'});
+  const AppBackButton({
+    super.key,
+    required this.onTap,
+    this.tooltip = 'Go back',
+  });
 
   final VoidCallback onTap;
   final String tooltip;

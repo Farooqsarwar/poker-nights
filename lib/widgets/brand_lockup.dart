@@ -18,10 +18,6 @@ class PokerNightLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      'assets/logo.png',
-      width: size,
-      fit: BoxFit.contain,
-    );
+    return Image.asset('assets/logo.png', width: size, fit: BoxFit.contain);
   }
 }

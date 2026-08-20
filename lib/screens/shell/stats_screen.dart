@@ -24,7 +24,9 @@ class StatsScreen extends StatelessWidget {
           children: [
             Text(
               'Sign in to see your statistics.',
-              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
           ],
         ),
@@ -36,11 +38,19 @@ class StatsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Statistics', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+          Text(
+            'Statistics',
+            style: AppTypography.display(
+              size: AppFontSizes.xxxl,
+              weight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             '${user.name} · all-time results',
-            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.xl),
           // The FIVE basic player statistics only (Tech §15.2 — "no ROI,
@@ -55,11 +65,27 @@ class StatsScreen extends StatelessWidget {
             crossAxisSpacing: AppSpacing.sm,
             childAspectRatio: 1.1,
             children: [
-              _HeadlineStat(label: 'Games played', value: '${user.stats.played}'),
-              _HeadlineStat(label: 'Wins', value: '${user.stats.wins}', accent: AppColors.gold),
-              _HeadlineStat(label: 'Podium finishes', value: '${user.stats.podium}'),
-              _HeadlineStat(label: 'Avg finish', value: '#${user.stats.avgFinish.toStringAsFixed(1)}'),
-              _HeadlineStat(label: 'Knockouts', value: '${user.stats.knockouts}'),
+              _HeadlineStat(
+                label: 'Games played',
+                value: '${user.stats.played}',
+              ),
+              _HeadlineStat(
+                label: 'Wins',
+                value: '${user.stats.wins}',
+                accent: AppColors.gold,
+              ),
+              _HeadlineStat(
+                label: 'Podium finishes',
+                value: '${user.stats.podium}',
+              ),
+              _HeadlineStat(
+                label: 'Avg finish',
+                value: '#${user.stats.avgFinish.toStringAsFixed(1)}',
+              ),
+              _HeadlineStat(
+                label: 'Knockouts',
+                value: '${user.stats.knockouts}',
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.xxl),
@@ -79,7 +105,10 @@ class _HeadlineStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.sm,
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -95,7 +124,12 @@ class _HeadlineStat extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            label,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
         ],
       ),
     );

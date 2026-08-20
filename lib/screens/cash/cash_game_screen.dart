@@ -70,9 +70,13 @@ class _CashGameScreenState extends State<CashGameScreen> {
     if (validNames.length < 2) return;
     app.startCashGame(
       CashSessionSettings(
-        name: _name.text.trim().isEmpty ? 'Friday Cash Game' : _name.text.trim(),
+        name: _name.text.trim().isEmpty
+            ? 'Friday Cash Game'
+            : _name.text.trim(),
         date: _date.text,
-        location: _location.text.trim().isEmpty ? 'Location' : _location.text.trim(),
+        location: _location.text.trim().isEmpty
+            ? 'Location'
+            : _location.text.trim(),
         smallBlind: num.tryParse(_smallBlind.text)?.toDouble() ?? 1,
         bigBlind: num.tryParse(_bigBlind.text)?.toDouble() ?? 2,
         minBuyIn: num.tryParse(_minBuyIn.text)?.toDouble() ?? 20,
@@ -89,7 +93,9 @@ class _CashGameScreenState extends State<CashGameScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final validCount = _playerControllers.where((c) => c.text.trim().isNotEmpty).length;
+    final validCount = _playerControllers
+        .where((c) => c.text.trim().isNotEmpty)
+        .length;
 
     return AppPage(
       maxWidth: 560,
@@ -103,17 +109,29 @@ class _CashGameScreenState extends State<CashGameScreen> {
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: const Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(Icons.arrow_back, size: AppFontSizes.xl, color: AppColors.mutedForeground),
+                  child: Icon(
+                    Icons.arrow_back,
+                    size: AppFontSizes.xl,
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('New Cash Game', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+                  Text(
+                    'New Cash Game',
+                    style: AppTypography.display(
+                      size: AppFontSizes.xxxl,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
                   Text(
                     'Set up blinds, buy-in limits, and players',
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
@@ -156,7 +174,9 @@ class _CashGameScreenState extends State<CashGameScreen> {
           else
             _PlayersForm(
               controllers: _playerControllers,
-              onAdd: () => setState(() => _playerControllers.add(TextEditingController())),
+              onAdd: () => setState(
+                () => _playerControllers.add(TextEditingController()),
+              ),
               onRemove: (i) => setState(() {
                 _playerControllers.removeAt(i).dispose();
               }),
@@ -175,7 +195,11 @@ class _CashGameScreenState extends State<CashGameScreen> {
 }
 
 class _StepTab extends StatelessWidget {
-  const _StepTab({required this.label, required this.active, required this.onTap});
+  const _StepTab({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
 
   final String label;
   final bool active;
@@ -192,13 +216,17 @@ class _StepTab extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? AppColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: active ? AppColors.primary : AppColors.border),
+          border: Border.all(
+            color: active ? AppColors.primary : AppColors.border,
+          ),
         ),
         child: Text(
           label,
           style: AppTypography.bodySm.copyWith(
             fontWeight: FontWeight.w500,
-            color: active ? AppColors.primaryForeground : AppColors.mutedForeground,
+            color: active
+                ? AppColors.primaryForeground
+                : AppColors.mutedForeground,
           ),
         ),
       ),
@@ -245,16 +273,27 @@ class _SetupForm extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: AppTextField(controller: date, label: 'Date', placeholder: 'YYYY-MM-DD'),
+                child: AppTextField(
+                  controller: date,
+                  label: 'Date',
+                  placeholder: 'YYYY-MM-DD',
+                ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: AppTextField(controller: location, label: 'Location', placeholder: 'Location'),
+                child: AppTextField(
+                  controller: location,
+                  label: 'Location',
+                  placeholder: 'Location',
+                ),
               ),
             ],
           ),
           const Divider(color: AppColors.border, height: AppSpacing.xxl),
-          Text('Blinds', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            'Blinds',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
@@ -264,7 +303,9 @@ class _SetupForm extends StatelessWidget {
                 child: AppTextField(
                   controller: smallBlind,
                   label: 'Small blind',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   placeholder: '1',
                 ),
               ),
@@ -273,14 +314,19 @@ class _SetupForm extends StatelessWidget {
                 child: AppTextField(
                   controller: bigBlind,
                   label: 'Big blind',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   placeholder: '2',
                 ),
               ),
             ],
           ),
           const Divider(color: AppColors.border, height: AppSpacing.xxl),
-          Text('Buy-in limits', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            'Buy-in limits',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
@@ -288,7 +334,9 @@ class _SetupForm extends StatelessWidget {
                 child: AppTextField(
                   controller: minBuyIn,
                   label: 'Min buy-in',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -296,7 +344,9 @@ class _SetupForm extends StatelessWidget {
                 child: AppTextField(
                   controller: maxBuyIn,
                   label: 'Max buy-in',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                 ),
               ),
             ],
@@ -358,11 +408,16 @@ class _PlayersForm extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Starting players', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            'Starting players',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 2),
           Text(
             'Add players now — you can add more once the game starts.',
-            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           for (var i = 0; i < controllers.length; i++)
@@ -409,7 +464,10 @@ class _PlayersForm extends StatelessWidget {
               children: [
                 _SummaryRow(label: 'Blinds', value: '$smallBlind/$bigBlind'),
                 const SizedBox(height: 4),
-                _SummaryRow(label: 'Buy-in range', value: '$minBuyIn–$maxBuyIn'),
+                _SummaryRow(
+                  label: 'Buy-in range',
+                  value: '$minBuyIn–$maxBuyIn',
+                ),
                 const SizedBox(height: 4),
                 _SummaryRow(label: 'Starting players', value: '$validCount'),
               ],
@@ -445,7 +503,12 @@ class _SummaryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(label, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+        Text(
+          label,
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
         const Spacer(),
         Text(value, style: AppTypography.monoSm),
       ],

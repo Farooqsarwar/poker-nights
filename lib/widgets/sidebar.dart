@@ -26,7 +26,13 @@ class Sidebar extends StatelessWidget {
     final navItems = [
       _NavSpec(RoutePaths.home, 'Home', Icons.home_outlined, 0, null),
       _NavSpec(RoutePaths.group, 'Group', Icons.groups_outlined, 0, null),
-      _NavSpec(RoutePaths.notifications, 'Alerts', Icons.notifications_none, 0, unread),
+      _NavSpec(
+        RoutePaths.notifications,
+        'Alerts',
+        Icons.notifications_none,
+        0,
+        unread,
+      ),
       _NavSpec(RoutePaths.history, 'History', Icons.history, 0, null),
     ];
 
@@ -41,7 +47,10 @@ class Sidebar extends StatelessWidget {
           // Logo
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.xl),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.xl,
+            ),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
@@ -65,10 +74,14 @@ class Sidebar extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.sm),
               children: [
-                for (final item in navItems) _NavTile(item: item, location: location),
+                for (final item in navItems)
+                  _NavTile(item: item, location: location),
                 const Divider(color: AppColors.border, height: 24),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  ),
                   child: Text(
                     'MY GROUPS',
                     style: AppTypography.bodyXs.copyWith(
@@ -121,7 +134,10 @@ class Sidebar extends StatelessWidget {
                   onTap: () => context.go(RoutePaths.profile),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.sm,
+                    ),
                     child: Row(
                       children: [
                         if (user != null) AppAvatar(name: user.name),
@@ -134,11 +150,15 @@ class Sidebar extends StatelessWidget {
                                 user?.name ?? '—',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500),
+                                style: AppTypography.bodySm.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                               Text(
                                 user?.isAdmin == true ? 'Admin' : 'Player',
-                                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
                               ),
                             ],
                           ),
@@ -158,10 +178,15 @@ class Sidebar extends StatelessWidget {
                       hoverColor: AppColors.surfaceHover,
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: 4,
+                        ),
                         child: Text(
                           'Settings',
-                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ),
                     ),
@@ -171,10 +196,15 @@ class Sidebar extends StatelessWidget {
                       hoverColor: AppColors.surfaceHover,
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: 4,
+                        ),
                         child: Text(
                           'Sign out',
-                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ),
                     ),
@@ -190,7 +220,13 @@ class Sidebar extends StatelessWidget {
 }
 
 class _NavSpec {
-  const _NavSpec(this.path, this.label, this.icon, this.badgeOffset, this.badge);
+  const _NavSpec(
+    this.path,
+    this.label,
+    this.icon,
+    this.badgeOffset,
+    this.badge,
+  );
 
   final String path;
   final String label;
@@ -219,7 +255,10 @@ class _NavTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md - 3, vertical: 10),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md - 3,
+            vertical: 10,
+          ),
           decoration: BoxDecoration(
             border: Border(
               left: BorderSide(
@@ -243,7 +282,9 @@ class _NavTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w500,
-                    color: active ? AppColors.primary : AppColors.mutedForeground,
+                    color: active
+                        ? AppColors.primary
+                        : AppColors.mutedForeground,
                   ),
                 ),
               ),
@@ -258,7 +299,9 @@ class _NavTile extends StatelessWidget {
                   ),
                   child: Text(
                     item.badge! > 9 ? '9+' : '${item.badge}',
-                    style: AppTypography.monoXs.copyWith(color: AppColors.primaryForeground),
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.primaryForeground,
+                    ),
                   ),
                 ),
             ],
@@ -290,7 +333,10 @@ class _GroupRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
         margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: 8,
+        ),
         decoration: BoxDecoration(
           color: selected ? AppColors.primarySoft : Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadius.md),
@@ -303,8 +349,8 @@ class _GroupRow extends StatelessWidget {
             // Client review: the group SYMBOL is the primary identifier in
             // the multi-group list (the name drops to a smaller label).
             Container(
-              width: 30,
-              height: 30,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: selected ? AppColors.primarySoft : AppColors.secondary,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -316,8 +362,12 @@ class _GroupRow extends StatelessWidget {
               child: Text(
                 group.icon,
                 style: const TextStyle(
-                  fontSize: 15,
-                  fontFamilyFallback: ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji'],
+                  fontSize: 20,
+                  fontFamilyFallback: [
+                    'Noto Color Emoji',
+                    'Apple Color Emoji',
+                    'Segoe UI Emoji',
+                  ],
                 ),
               ),
             ),
@@ -331,8 +381,10 @@ class _GroupRow extends StatelessWidget {
                     group.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodySm.copyWith(
-                      color: selected ? AppColors.primary : AppColors.foreground,
+                    style: AppTypography.bodyXs.copyWith(
+                      color: selected
+                          ? AppColors.primary
+                          : AppColors.foreground,
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                     ),
                   ),
@@ -341,6 +393,7 @@ class _GroupRow extends StatelessWidget {
                     maxLines: 1,
                     style: AppTypography.bodyXs.copyWith(
                       color: AppColors.mutedForeground,
+                      fontSize: 10,
                     ),
                   ),
                 ],
@@ -354,7 +407,9 @@ class _GroupRow extends StatelessWidget {
                 child: Icon(
                   group.pinned ? Icons.push_pin : Icons.push_pin_outlined,
                   size: 14,
-                  color: group.pinned ? AppColors.primary : AppColors.mutedForeground,
+                  color: group.pinned
+                      ? AppColors.primary
+                      : AppColors.mutedForeground,
                 ),
               ),
             ),
@@ -367,7 +422,11 @@ class _GroupRow extends StatelessWidget {
 
 /// Opens the "create group" dialog: name + icon, then switches to it.
 class _QuickAction extends StatelessWidget {
-  const _QuickAction({required this.icon, required this.label, required this.onTap});
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;
@@ -384,7 +443,10 @@ class _QuickAction extends StatelessWidget {
           borderRadius: BorderRadius.circular(50),
           hoverColor: AppColors.surfaceHover,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: 8,
+            ),
             decoration: BoxDecoration(
               border: Border.all(color: AppColors.border),
               borderRadius: BorderRadius.circular(50),
@@ -396,7 +458,9 @@ class _QuickAction extends StatelessWidget {
                 const SizedBox(width: AppSpacing.xs),
                 Text(
                   label,
-                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500),
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),

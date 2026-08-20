@@ -29,13 +29,17 @@ class AppTabs extends StatelessWidget {
               InkWell(
                 onTap: () => onChanged(tab.id),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
                         width: 2,
-                        color: active == tab.id ? AppColors.primary : Colors.transparent,
+                        color: active == tab.id
+                            ? AppColors.primary
+                            : Colors.transparent,
                       ),
                     ),
                   ),
@@ -54,7 +58,10 @@ class AppTabs extends StatelessWidget {
                       if (tab.count != null) ...[
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: active == tab.id
                                 ? AppColors.primarySoft

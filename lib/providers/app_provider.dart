@@ -134,11 +134,13 @@ class AppProvider extends ChangeNotifier {
   /// True if the locally recovered game state differs from the "cloud" state.
   bool get hasOfflineConflict {
     if (_currentGame == null || !_restoredFromRecovery) return false;
-    final cloudGame = _currentGroup.games.where((g) => g.id == _currentGame!.id).firstOrNull;
+    final cloudGame = _currentGroup.games
+        .where((g) => g.id == _currentGame!.id)
+        .firstOrNull;
     if (cloudGame == null) return false;
     // Simple mock comparison: if local has more audit records or different level, it's out of sync
     return _currentGame!.auditHistory.length != cloudGame.auditHistory.length ||
-           _currentGame!.currentLevel != cloudGame.currentLevel;
+        _currentGame!.currentLevel != cloudGame.currentLevel;
   }
 
   void resolveOfflineConflict({required bool keepLocal}) {
@@ -153,7 +155,9 @@ class AppProvider extends ChangeNotifier {
         }
       } else {
         // Revert local down to cloud
-        final cloudGame = _currentGroup.games.where((g) => g.id == _currentGame!.id).firstOrNull;
+        final cloudGame = _currentGroup.games
+            .where((g) => g.id == _currentGame!.id)
+            .firstOrNull;
         if (cloudGame != null) {
           _currentGame = cloudGame;
           RecoveryService.saveGame(cloudGame);
@@ -218,7 +222,13 @@ class AppProvider extends ChangeNotifier {
       name: name.trim(),
       email: email.trim(),
       isAdmin: false,
-      stats: const UserStats(played: 0, wins: 0, podium: 0, avgFinish: 0, knockouts: 0),
+      stats: const UserStats(
+        played: 0,
+        wins: 0,
+        podium: 0,
+        avgFinish: 0,
+        knockouts: 0,
+      ),
     );
     _passwords[key] = password;
     _user = user;
@@ -239,11 +249,17 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── Chip Sets ──────────────────────────────────────────────────────────────
-  final List<({String id, String name, List<ChipColor> chips})> _savedChipSets = [
-    (id: 'cs-default', name: 'Home Set (4 colour)', chips: MockData.defaultChipSet),
-  ];
+  final List<({String id, String name, List<ChipColor> chips})> _savedChipSets =
+      [
+        (
+          id: 'cs-default',
+          name: 'Home Set (4 colour)',
+          chips: MockData.defaultChipSet,
+        ),
+      ];
 
-  List<({String id, String name, List<ChipColor> chips})> get savedChipSets => _savedChipSets;
+  List<({String id, String name, List<ChipColor> chips})> get savedChipSets =>
+      _savedChipSets;
 
   void saveChipSet(String id, String name, List<ChipColor> chips) {
     final idx = _savedChipSets.indexWhere((c) => c.id == id);
@@ -356,11 +372,12 @@ class AppProvider extends ChangeNotifier {
       return score;
     }
 
-    final scored = _presets
-        .map((p) => (preset: p, score: scoreFor(p)))
-        .where((e) => e.score >= 15)
-        .toList()
-      ..sort((a, b) => b.score.compareTo(a.score));
+    final scored =
+        _presets
+            .map((p) => (preset: p, score: scoreFor(p)))
+            .where((e) => e.score >= 15)
+            .toList()
+          ..sort((a, b) => b.score.compareTo(a.score));
 
     return scored.take(2).map((e) => e.preset).toList();
   }
@@ -566,9 +583,11 @@ class AppProvider extends ChangeNotifier {
     if (game == null) return;
     final games = _currentGroup.games;
     final idx = games.indexWhere((g) => g.id == game.id);
-    _setGroup(_currentGroup.copyWith(
-      games: idx == -1 ? [...games, game] : ([...games]..[idx] = game),
-    ));
+    _setGroup(
+      _currentGroup.copyWith(
+        games: idx == -1 ? [...games, game] : ([...games]..[idx] = game),
+      ),
+    );
   }
 
   void updateGameStatus(LiveGameStatus status) {
@@ -578,16 +597,18 @@ class AppProvider extends ChangeNotifier {
     // AI refreshes the stacks/blinds/levels estimate from the expected count.
     if (status == LiveGameStatus.checkin) refreshEstimate();
     if (status == LiveGameStatus.checkin && wasPublished) {
-      pushNotification(AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Check-in opened',
-        body:
-            '${_currentGame!.settings.name} — you can check in now. Seats are assigned after the host confirms.',
-        type: NotificationType.game,
-        link: '/invitation',
-        read: false,
-        timestamp: DateTime.now(),
-      ));
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Check-in opened',
+          body:
+              '${_currentGame!.settings.name} — you can check in now. Seats are assigned after the host confirms.',
+          type: NotificationType.game,
+          link: '/invitation',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
     }
     _syncGroupGame();
     notifyListeners();
@@ -637,21 +658,20 @@ class AppProvider extends ChangeNotifier {
     if (game == null || _user == null) return;
     _pushUndo();
 
-    final anteText = game.settings.anteEnabled 
-        ? 'Ante: L${game.settings.anteAfterLevel}+' 
+    final anteText = game.settings.anteEnabled
+        ? 'Ante: L${game.settings.anteAfterLevel}+'
         : 'No ante';
-    final rebuyText = game.settings.rebuysCloseLevel > 0 
-        ? 'Rebuys: until L${game.settings.rebuysCloseLevel}' 
+    final rebuyText = game.settings.rebuysCloseLevel > 0
+        ? 'Rebuys: until L${game.settings.rebuysCloseLevel}'
         : 'No rebuys';
-    final addonText = game.settings.addOn 
-        ? 'Add-on: Yes' 
-        : 'No add-on';
+    final addonText = game.settings.addOn ? 'Add-on: Yes' : 'No add-on';
 
     final card = ChatMessage(
       id: 'pinned-${DateTime.now().millisecondsSinceEpoch}',
       authorId: _user!.id,
       authorName: _user!.name,
-      body: '${game.settings.name} — ${game.settings.date} at ${game.settings.time}\n'
+      body:
+          '${game.settings.name} — ${game.settings.date} at ${game.settings.time}\n'
           'Buy-in: ${game.settings.buyIn} · Code: ${game.publicCode}\n'
           '$anteText · $rebuyText · $addonText',
       timestamp: DateTime.now(),
@@ -663,29 +683,34 @@ class AppProvider extends ChangeNotifier {
       chat: [...game.chat, card],
       originalLevels: List.of(game.structure.levels),
     );
-    _setGroup(_currentGroup.copyWith(
-      chat: [..._currentGroup.chat, card],
-      games: _currentGroup.games
-          .map((g) => g.id == game.id
-              ? g.copyWith(
-                  status: LiveGameStatus.published,
-                  chat: [...g.chat, card],
-                  originalLevels: List.of(game.structure.levels),
-                )
-              : g)
-          .toList(),
-    ));
+    _setGroup(
+      _currentGroup.copyWith(
+        chat: [..._currentGroup.chat, card],
+        games: _currentGroup.games
+            .map(
+              (g) => g.id == game.id
+                  ? g.copyWith(
+                      status: LiveGameStatus.published,
+                      chat: [...g.chat, card],
+                      originalLevels: List.of(game.structure.levels),
+                    )
+                  : g,
+            )
+            .toList(),
+      ),
+    );
     _syncGroupGame();
     addAuditRecord(
       'publish',
       'Published ${game.settings.name} '
-      '(${game.settings.date} ${game.settings.time}) for RSVP.',
+          '(${game.settings.date} ${game.settings.time}) for RSVP.',
     );
     pushNotification(
       AppNotification(
         id: 'n-${DateTime.now().millisecondsSinceEpoch}',
         title: 'New game published',
-        body: '${game.settings.name} is open for RSVP — '
+        body:
+            '${game.settings.name} is open for RSVP — '
             '${game.settings.date} at ${game.settings.time}.',
         type: NotificationType.game,
         link: '/invitation',
@@ -738,47 +763,63 @@ class AppProvider extends ChangeNotifier {
     }
 
     if (affectsStructure) {
-      var structure = TournamentEngine.generate(TournamentParams(
-        players: s.players,
-        durationHours: s.durationHours,
-        buyIn: s.buyIn,
-        chipSet: s.chipSet,
-        rebuys: s.rebuys,
-        rebuysCloseLevel: s.rebuysCloseLevel,
-        reEntry: s.reEntry,
-        addOn: s.addOn,
-        anteEnabled: s.anteEnabled,
-        anteAfterLevel: s.anteAfterLevel,
-        anteStyle: s.anteStyle,
-        koEnabled: s.koEnabled,
-        koAmount: s.koAmount,
-        organizerPct: s.organizerPct,
-        rebuyCost: s.rebuyCost,
-        addOnCost: s.addOnCost,
-      ));
-      // After play starts the starting stacks are frozen (client rule).
-      if (game.stacksLocked) {
-        structure = structure.copyWith(
-          startingStack: game.structure.startingStack,
-          chipPlan: game.structure.chipPlan,
-          rebuyStack: game.structure.rebuyStack,
-          rebuyChipPlan: game.structure.rebuyChipPlan,
-          addOnStack: game.structure.addOnStack,
-          addOnChipPlan: game.structure.addOnChipPlan,
+      if (game.structure.levels.isEmpty && !game.structureReviewOpen) {
+        _currentGame = game.copyWith(
+          settings: s,
+          players: clearRsvps
+              ? game.players.map((p) => p.copyWithClearRsvp()).toList()
+              : game.players,
         );
+        edits.add('settings saved (structure deferred)');
+      } else {
+        var structure = TournamentEngine.generate(
+          TournamentParams(
+            players: s.players,
+            durationHours: s.durationHours,
+            buyIn: s.buyIn,
+            chipSet: s.chipSet,
+            rebuys: s.rebuys,
+            rebuysCloseLevel: s.rebuysCloseLevel,
+            reEntry: s.reEntry,
+            addOn: s.addOn,
+            anteEnabled: s.anteEnabled,
+            anteAfterLevel: s.anteAfterLevel,
+            anteStyle: s.anteStyle,
+            koEnabled: s.koEnabled,
+            koAmount: s.koAmount,
+            organizerPct: s.organizerPct,
+            rebuyCost: s.rebuyCost,
+            addOnCost: s.addOnCost,
+          ),
+        );
+        // After play starts the starting stacks are frozen (client rule).
+        if (game.stacksLocked) {
+          structure = structure.copyWith(
+            startingStack: game.structure.startingStack,
+            chipPlan: game.structure.chipPlan,
+            rebuyStack: game.structure.rebuyStack,
+            rebuyChipPlan: game.structure.rebuyChipPlan,
+            addOnStack: game.structure.addOnStack,
+            addOnChipPlan: game.structure.addOnChipPlan,
+          );
+        }
+        _currentGame = game.copyWith(
+          settings: s,
+          structure: structure,
+          secondsRemaining: structure.levelDuration * 60,
+          speedRecommendation: null,
+          players: clearRsvps
+              ? game.players.map((p) => p.copyWithClearRsvp()).toList()
+              : game.players,
+        );
+        edits.add('structure regenerated');
       }
-      _currentGame = game.copyWith(
-        settings: s,
-        structure: structure,
-        secondsRemaining: structure.levelDuration * 60,
-        speedRecommendation: null,
-        players: clearRsvps ? game.players.map((p) => p.copyWithClearRsvp()).toList() : game.players,
-      );
-      edits.add('structure regenerated');
     } else {
       _currentGame = game.copyWith(
         settings: s,
-        players: clearRsvps ? game.players.map((p) => p.copyWithClearRsvp()).toList() : game.players,
+        players: clearRsvps
+            ? game.players.map((p) => p.copyWithClearRsvp()).toList()
+            : game.players,
       );
     }
 
@@ -810,20 +851,19 @@ class AppProvider extends ChangeNotifier {
   /// calculated there — exact field size, actual rebuys and the selected
   /// add-ons). [addOnCount] is the number of add-ons taken at settlement.
   ({int organizerAmount, int prizePool, List<Prize> prizes})
-      previewSettlementPrizes(int addOnCount) {
+  previewSettlementPrizes(int addOnCount) {
     final game = _currentGame;
-    if (game == null) return (organizerAmount: 0, prizePool: 0, prizes: const []);
+    if (game == null)
+      return (organizerAmount: 0, prizePool: 0, prizes: const []);
     final s = game.settings;
     final participants = game.players
         .where((p) => p.confirmed || p.checkedIn)
         .length;
-    final rebuys =
-        game.players.fold<int>(0, (sum, p) => sum + p.rebuys);
-    final reEntries =
-        game.players.fold<int>(0, (sum, p) => sum + p.reEntries);
-    final addOns =
-        game.players.where((p) => p.hasAddOn).length + addOnCount;
-    final gross = s.buyIn * participants +
+    final rebuys = game.players.fold<int>(0, (sum, p) => sum + p.rebuys);
+    final reEntries = game.players.fold<int>(0, (sum, p) => sum + p.reEntries);
+    final addOns = game.players.where((p) => p.hasAddOn).length + addOnCount;
+    final gross =
+        s.buyIn * participants +
         s.effectiveRebuyCost * rebuys +
         s.buyIn * reEntries +
         s.effectiveAddOnCost * addOns;
@@ -849,18 +889,23 @@ class AppProvider extends ChangeNotifier {
       ),
     );
     _syncGroupGame();
-    addAuditRecord('settlement',
-        'Rebuy/add-on break settled. Final prize pool: ${finalPrizes.prizePool}.');
+    addAuditRecord(
+      'settlement',
+      'Rebuy/add-on break settled. Final prize pool: ${finalPrizes.prizePool}.',
+    );
     addAnnouncement('Prize pool confirmed: ${finalPrizes.prizePool}.', true);
-    pushNotification(AppNotification(
-      id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-      title: 'Prize Pool confirmed',
-      body: '${game.settings.name} — final prize pool: ${finalPrizes.prizePool}.',
-      type: NotificationType.game,
-      link: '/player-live',
-      read: false,
-      timestamp: DateTime.now(),
-    ));
+    pushNotification(
+      AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Prize Pool confirmed',
+        body:
+            '${game.settings.name} — final prize pool: ${finalPrizes.prizePool}.',
+        type: NotificationType.game,
+        link: '/player-live',
+        read: false,
+        timestamp: DateTime.now(),
+      ),
+    );
     notifyListeners();
   }
 
@@ -876,10 +921,15 @@ class AppProvider extends ChangeNotifier {
     if (game == null || !game.timerRunning) return;
     final level = game.currentLevel;
     final mark = '$level';
-    if (remaining == 300 && !_levelAnnouncementMarks.contains('$mark:300')) {
+    if (remaining <= 300 &&
+        remaining > 60 &&
+        !_levelAnnouncementMarks.contains('$mark:300')) {
       _levelAnnouncementMarks.add('$mark:300');
       addAnnouncement('Five minutes remaining in level $level.', true);
-    } else if (remaining == 60 && !_levelAnnouncementMarks.contains('$mark:60')) {
+    }
+    if (remaining <= 60 &&
+        remaining > 0 &&
+        !_levelAnnouncementMarks.contains('$mark:60')) {
       _levelAnnouncementMarks.add('$mark:60');
       addAnnouncement('One minute remaining in level $level.', true);
     }
@@ -889,29 +939,44 @@ class AppProvider extends ChangeNotifier {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_currentGame == null || !_currentGame!.timerRunning) return;
-      final remaining = _currentGame!.secondsRemaining - 1;
+      int remaining;
+      if (_currentGame!.levelEndTime != null) {
+        remaining = _currentGame!.levelEndTime!
+            .difference(DateTime.now())
+            .inSeconds;
+      } else {
+        remaining = _currentGame!.secondsRemaining - 1;
+      }
       if (remaining <= 0) {
-        final atRebuyClose = _currentGame!.settings.rebuys &&
-            _currentGame!.currentLevel == _currentGame!.settings.rebuysCloseLevel;
+        final atRebuyClose =
+            _currentGame!.settings.rebuys &&
+            _currentGame!.currentLevel ==
+                _currentGame!.settings.rebuysCloseLevel;
         _currentGame = _currentGame!.copyWith(
           secondsRemaining: 0,
           timerRunning: false,
-          status: atRebuyClose ? LiveGameStatus.rebuypause : _currentGame!.status,
+          status: atRebuyClose
+              ? LiveGameStatus.rebuypause
+              : _currentGame!.status,
         );
-        addAnnouncement(atRebuyClose
-            ? 'Rebuys are now closed. Add-ons are available.'
-            : 'Level ${_currentGame!.currentLevel} has ended.');
+        addAnnouncement(
+          atRebuyClose
+              ? 'Rebuys are now closed. Add-ons are available.'
+              : 'Level ${_currentGame!.currentLevel} has ended.',
+        );
         if (atRebuyClose) {
-          pushNotification(AppNotification(
-            id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-            title: 'Rebuys closed',
-            body:
-                '${_currentGame!.settings.name} — rebuy period ended. Settlement required.',
-            type: NotificationType.game,
-            link: '/rebuy-settlement',
-            read: false,
-            timestamp: DateTime.now(),
-          ));
+          pushNotification(
+            AppNotification(
+              id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+              title: 'Rebuys closed',
+              body:
+                  '${_currentGame!.settings.name} — rebuy period ended. Settlement required.',
+              type: NotificationType.game,
+              link: '/rebuy-settlement',
+              read: false,
+              timestamp: DateTime.now(),
+            ),
+          );
         }
         _evaluateSpeedRecommendation();
         return;
@@ -963,22 +1028,26 @@ class AppProvider extends ChangeNotifier {
     _currentGame = _currentGame!.copyWith(
       timerRunning: true,
       status: LiveGameStatus.running,
-      levelEndTime: DateTime.now().add(Duration(seconds: _currentGame!.secondsRemaining)),
+      levelEndTime: DateTime.now().add(
+        Duration(seconds: _currentGame!.secondsRemaining),
+      ),
     );
     addAnnouncement(
       'Tournament starts. Level ${_currentGame!.currentLevel}. '
       'Blinds ${level?.sb ?? 0} and ${level?.bb ?? 0}.',
       true,
     );
-    pushNotification(AppNotification(
-      id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-      title: 'Tournament starting',
-      body: '${_currentGame!.settings.name} is live now.',
-      type: NotificationType.game,
-      link: '/player-live',
-      read: false,
-      timestamp: DateTime.now(),
-    ));
+    pushNotification(
+      AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Tournament starting',
+        body: '${_currentGame!.settings.name} is live now.',
+        type: NotificationType.game,
+        link: '/player-live',
+        read: false,
+        timestamp: DateTime.now(),
+      ),
+    );
   }
 
   void pauseTimer() {
@@ -995,7 +1064,9 @@ class AppProvider extends ChangeNotifier {
     _currentGame = _currentGame!.copyWith(
       timerRunning: true,
       status: LiveGameStatus.running,
-      levelEndTime: DateTime.now().add(Duration(seconds: _currentGame!.secondsRemaining)),
+      levelEndTime: DateTime.now().add(
+        Duration(seconds: _currentGame!.secondsRemaining),
+      ),
     );
     notifyListeners();
   }
@@ -1081,38 +1152,41 @@ class AppProvider extends ChangeNotifier {
         .where((p) => p.active && !p.eliminated)
         .toList();
     final pos = active.length;
-    final bounty = _currentGame!.settings.koEnabled ? _currentGame!.settings.koAmount : 0;
-    final updated = _currentGame!.players
-        .map((p) {
-          if (p.id == playerId) {
-            return p.copyWith(eliminated: true, active: false, eliminationPos: pos);
-          }
-          // Optional single knockout recipient (technical §11.3). The bounty
-          // chips transfer from the eliminated player, so total chips in play
-          // is unchanged — only the recipient's knockout count increases.
-          if (koRecipientId != null && p.id == koRecipientId) {
-            return p.copyWith(knockouts: p.knockouts + 1);
-          }
-          return p;
-        })
-        .toList();
+    final bounty = _currentGame!.settings.koEnabled
+        ? _currentGame!.settings.koAmount
+        : 0;
+    final updated = _currentGame!.players.map((p) {
+      if (p.id == playerId) {
+        return p.copyWith(eliminated: true, active: false, eliminationPos: pos);
+      }
+      // Optional single knockout recipient (technical §11.3). The bounty
+      // chips transfer from the eliminated player, so total chips in play
+      // is unchanged — only the recipient's knockout count increases.
+      if (koRecipientId != null && p.id == koRecipientId) {
+        return p.copyWith(knockouts: p.knockouts + 1);
+      }
+      return p;
+    }).toList();
     final remaining = updated.where((p) => p.active).length;
-    final wasMoreThanNine = _currentGame!.players.where((p) => p.active).length > 9;
+    final wasMoreThanNine =
+        _currentGame!.players.where((p) => p.active).length > 9;
     if (remaining == 9 && wasMoreThanNine) {
       _currentGame = _currentGame!.copyWith(
         players: updated,
         status: LiveGameStatus.finaltable,
         timerRunning: false,
       );
-      pushNotification(AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Final table reached',
-        body: '${_currentGame!.settings.name} — nine players remain.',
-        type: NotificationType.game,
-        link: '/final-table',
-        read: false,
-        timestamp: DateTime.now(),
-      ));
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Final table reached',
+          body: '${_currentGame!.settings.name} — nine players remain.',
+          type: NotificationType.game,
+          link: '/final-table',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
     } else {
       _currentGame = _currentGame!.copyWith(players: updated);
     }
@@ -1121,8 +1195,9 @@ class AppProvider extends ChangeNotifier {
     // (15-053) — spoken only when the admin enabled the setting.
     final speakElimination = _currentGame!.settings.announceEliminations;
     if (koRecipientId != null && bounty > 0) {
-      final koPlayer =
-          _currentGame!.players.where((pl) => pl.id == koRecipientId).firstOrNull;
+      final koPlayer = _currentGame!.players
+          .where((pl) => pl.id == koRecipientId)
+          .firstOrNull;
       addAnnouncement(
         '${p.name} eliminated by ${koPlayer?.name ?? '?'} — $bounty bounty awarded.',
         speakElimination,
@@ -1136,21 +1211,31 @@ class AppProvider extends ChangeNotifier {
   /// if dependent actions occurred). Adds a compensating audit action.
   void correctElimination(String playerId) {
     if (_currentGame == null) return;
-    
-    // We intentionally bypass `_pushUndo()` for audit preservation, 
+
+    // We intentionally bypass `_pushUndo()` for audit preservation,
     // but the spec says "never delete audit history", so we just append.
     final players = _currentGame!.players.map((p) {
       if (p.id == playerId) {
-        return p.copyWith(eliminated: false, eliminationPos: null, active: true);
+        return p.copyWith(
+          eliminated: false,
+          eliminationPos: null,
+          active: true,
+        );
       }
       return p;
     }).toList();
 
     _currentGame = _currentGame!.copyWith(players: players);
     final correctedPlayer = players.firstWhere((p) => p.id == playerId);
-    
-    addAuditRecord('correction', 'Corrected elimination for ${correctedPlayer.name}');
-    addAnnouncement('Correction: ${correctedPlayer.name} has been reinstated to the game.', false);
+
+    addAuditRecord(
+      'correction',
+      'Corrected elimination for ${correctedPlayer.name}',
+    );
+    addAnnouncement(
+      'Correction: ${correctedPlayer.name} has been reinstated to the game.',
+      false,
+    );
   }
 
   void grantRebuy(String playerId) {
@@ -1164,17 +1249,18 @@ class AppProvider extends ChangeNotifier {
     final rebuyStack = game.structure.rebuyStack;
     _currentGame = game.copyWith(
       players: game.players
-          .map((p) => p.id == playerId
-              ? p.copyWith(
-                  rebuys: p.rebuys + 1,
-                  eliminated: false,
-                  active: true,
-                )
-              : p)
+          .map(
+            (p) => p.id == playerId
+                ? p.copyWith(
+                    rebuys: p.rebuys + 1,
+                    eliminated: false,
+                    active: true,
+                  )
+                : p,
+          )
           .toList(),
       totalChipsInPlay: game.totalChipsInPlay + rebuyStack,
-      rebuyRequests:
-          game.rebuyRequests.where((id) => id != playerId).toList(),
+      rebuyRequests: game.rebuyRequests.where((id) => id != playerId).toList(),
     );
     // Recalculate prize pool/prizes after money enters the game.
     // This updates only prizePool, organizerAmount and prizes on the structure,
@@ -1194,11 +1280,13 @@ class AppProvider extends ChangeNotifier {
 
   void cancelRebuyRequest(String playerId) {
     _currentGame = _currentGame!.copyWith(
-      rebuyRequests:
-          _currentGame!.rebuyRequests.where((id) => id != playerId).toList(),
+      rebuyRequests: _currentGame!.rebuyRequests
+          .where((id) => id != playerId)
+          .toList(),
     );
     notifyListeners();
   }
+
   /// Records a re-entry (checklist §12.5): a separate, secondary option that
   /// grants the approved entry stack and is tracked independently of rebuys
   /// (12-046/12-047). Closes with late registration/rebuys (12-049), which is
@@ -1214,13 +1302,15 @@ class AppProvider extends ChangeNotifier {
     final entryStack = game.structure.startingStack;
     _currentGame = game.copyWith(
       players: game.players
-          .map((p) => p.id == playerId
-              ? p.copyWith(
-                  reEntries: p.reEntries + 1,
-                  eliminated: false,
-                  active: true,
-                )
-              : p)
+          .map(
+            (p) => p.id == playerId
+                ? p.copyWith(
+                    reEntries: p.reEntries + 1,
+                    eliminated: false,
+                    active: true,
+                  )
+                : p,
+          )
           .toList(),
       totalChipsInPlay: game.totalChipsInPlay + entryStack,
     );
@@ -1232,18 +1322,20 @@ class AppProvider extends ChangeNotifier {
     if (game == null) return;
     if (!game.settings.addOn || game.settlementConfirmed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
-    if (player == null || player.eliminated || !player.active || player.hasAddOn) return;
+    if (player == null ||
+        player.eliminated ||
+        !player.active ||
+        player.hasAddOn)
+      return;
 
     _pushUndo();
     final addOnStack = game.structure.addOnStack;
     _currentGame = game.copyWith(
       players: game.players
-          .map((p) =>
-              p.id == playerId ? p.copyWith(hasAddOn: true) : p)
+          .map((p) => p.id == playerId ? p.copyWith(hasAddOn: true) : p)
           .toList(),
       totalChipsInPlay: game.totalChipsInPlay + addOnStack,
-      addOnRequests:
-          game.addOnRequests.where((id) => id != playerId).toList(),
+      addOnRequests: game.addOnRequests.where((id) => id != playerId).toList(),
     );
     // Recalculate prize pool/prizes after money enters the game.
     _updatePrizePool();
@@ -1261,8 +1353,9 @@ class AppProvider extends ChangeNotifier {
 
   void cancelAddOnRequest(String playerId) {
     _currentGame = _currentGame!.copyWith(
-      addOnRequests:
-          _currentGame!.addOnRequests.where((id) => id != playerId).toList(),
+      addOnRequests: _currentGame!.addOnRequests
+          .where((id) => id != playerId)
+          .toList(),
     );
     notifyListeners();
   }
@@ -1285,21 +1378,25 @@ class AppProvider extends ChangeNotifier {
         .firstOrNull;
     _currentGame = _currentGame!.copyWith(
       players: _currentGame!.players
-          .map((p) => p.id == playerId
-              ? p.copyWith(checkedIn: true, confirmed: false)
-              : p)
+          .map(
+            (p) => p.id == playerId
+                ? p.copyWith(checkedIn: true, confirmed: false)
+                : p,
+          )
           .toList(),
     );
     if (requester != null && _user?.id != playerId) {
-      pushNotification(AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Check-in request',
-        body: '${requester.name} is waiting to be checked in.',
-        type: NotificationType.game,
-        link: '/check-in',
-        read: false,
-        timestamp: DateTime.now(),
-      ));
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Check-in request',
+          body: '${requester.name} is waiting to be checked in.',
+          type: NotificationType.game,
+          link: '/check-in',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
     }
     notifyListeners();
   }
@@ -1308,9 +1405,11 @@ class AppProvider extends ChangeNotifier {
     _pushUndo();
     _currentGame = _currentGame!.copyWith(
       players: _currentGame!.players
-          .map((p) => p.id == playerId
-              ? p.copyWith(checkedIn: true, confirmed: true)
-              : p)
+          .map(
+            (p) => p.id == playerId
+                ? p.copyWith(checkedIn: true, confirmed: true)
+                : p,
+          )
           .toList(),
     );
   }
@@ -1318,9 +1417,11 @@ class AppProvider extends ChangeNotifier {
   void cancelCheckIn(String playerId) {
     _currentGame = _currentGame!.copyWith(
       players: _currentGame!.players
-          .map((p) => p.id == playerId
-              ? p.copyWith(checkedIn: false, confirmed: false)
-              : p)
+          .map(
+            (p) => p.id == playerId
+                ? p.copyWith(checkedIn: false, confirmed: false)
+                : p,
+          )
           .toList(),
     );
     notifyListeners();
@@ -1329,15 +1430,23 @@ class AppProvider extends ChangeNotifier {
   /// Closes door check-in (spec §4.7). Once closed, the host is prompted to
   /// start the tournament and no further walk-ins are accepted.
   void closeCheckIn() {
-    _currentGame = _currentGame!.copyWith(checkInClosed: true, status: LiveGameStatus.ready);
+    _currentGame = _currentGame!.copyWith(
+      checkInClosed: true,
+      status: LiveGameStatus.ready,
+    );
     _syncGroupGame();
     addAnnouncement(
-        'Check-in is now closed. No more players may join unless re-opened.', false);
+      'Check-in is now closed. No more players may join unless re-opened.',
+      false,
+    );
     notifyListeners();
   }
 
   void reopenCheckIn() {
-    _currentGame = _currentGame!.copyWith(checkInClosed: false, status: LiveGameStatus.checkin);
+    _currentGame = _currentGame!.copyWith(
+      checkInClosed: false,
+      status: LiveGameStatus.checkin,
+    );
     _syncGroupGame();
     addAnnouncement('Check-in re-opened.', false);
     notifyListeners();
@@ -1347,7 +1456,7 @@ class AppProvider extends ChangeNotifier {
   /// checked in immediately and seated by the next seating generation.
   void addWalkInPlayer(String name) {
     final game = _currentGame;
-    if (game == null || name.trim().isEmpty) return;
+    if (game == null || name.trim().isEmpty || game.rebuysClosed) return;
     _pushUndo();
     final id = 'p-${DateTime.now().millisecondsSinceEpoch}';
     final player = Player(
@@ -1370,6 +1479,48 @@ class AppProvider extends ChangeNotifier {
       totalChipsInPlay: game.totalChipsInPlay + game.structure.startingStack,
     );
     _updatePrizePool();
+    recalculateStructure();
+
+    // Suggest a seat if tables are already generated (meaning play has started or seating is done)
+    if (_currentGame!.players.any((p) => p.table > 0)) {
+      final tables = _currentGame!.players
+          .where((p) => p.table > 0)
+          .map((p) => p.table)
+          .toSet();
+      if (tables.isNotEmpty) {
+        // Find table with minimum players
+        int minTable = tables.first;
+        int minCount = 999;
+        for (var t in tables) {
+          int count = _currentGame!.players
+              .where((p) => p.table == t && p.active)
+              .length;
+          if (count < minCount) {
+            minCount = count;
+            minTable = t;
+          }
+        }
+        // Find first empty seat at minTable
+        final taken = _currentGame!.players
+            .where((p) => p.table == minTable)
+            .map((p) => p.seat)
+            .toSet();
+        int freeSeat = 1;
+        while (taken.contains(freeSeat)) {
+          freeSeat++;
+        }
+        _pendingSeatMove = SeatMoveRecommendation(
+          fromPlayerId: player.id,
+          fromPlayerName: player.name,
+          fromTable: 0,
+          fromSeat: 0,
+          toTable: minTable,
+          toSeat: freeSeat,
+          reason: 'Late add requires a seat.',
+        );
+      }
+    }
+
     _syncGroupGame();
     addAnnouncement('${player.name} walked in and is checked in.', true);
     notifyListeners();
@@ -1378,13 +1529,15 @@ class AppProvider extends ChangeNotifier {
   void confirmGuest(String guestId) {
     _pushUndo();
     final game = _currentGame!;
-    
+
     final updated = game.players
-        .map((p) => p.id == guestId
-            ? p.copyWith(confirmed: true, checkedIn: true, active: true)
-            : p)
+        .map(
+          (p) => p.id == guestId
+              ? p.copyWith(confirmed: true, checkedIn: true, active: true)
+              : p,
+        )
         .toList();
-        
+
     final extraChips = game.structure.startingStack;
     final guest = game.players.where((p) => p.id == guestId).firstOrNull;
 
@@ -1408,22 +1561,24 @@ class AppProvider extends ChangeNotifier {
             }).toList()
           : game.guestSlots,
     );
-    
+
     if (extraChips > 0) {
       _updatePrizePool();
     }
 
     addAnnouncement('Guest confirmed and seated.', false);
     if (guest != null) {
-      pushNotification(AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Guest confirmed',
-        body: '${guest.name} is confirmed for ${game.settings.name}.',
-        type: NotificationType.invite,
-        link: '/guest-flow',
-        read: false,
-        timestamp: DateTime.now(),
-      ));
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Guest confirmed',
+          body: '${guest.name} is confirmed for ${game.settings.name}.',
+          type: NotificationType.invite,
+          link: '/guest-flow',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
     }
   }
 
@@ -1432,27 +1587,28 @@ class AppProvider extends ChangeNotifier {
   /// freed so another guest can claim it.
   void rejectGuest(String guestId) {
     _pushUndo();
-    final guest = _currentGame!.players.where((p) => p.id == guestId).firstOrNull;
+    final guest = _currentGame!.players
+        .where((p) => p.id == guestId)
+        .firstOrNull;
     final inviterId = guest?.inviterId;
     final guestSlot = guest?.guestSlot;
     final canFree = guest != null && inviterId != null && guestSlot != null;
     _currentGame = _currentGame!.copyWith(
-      players: _currentGame!.players
-          .where((p) => p.id != guestId)
-          .toList(),
+      players: _currentGame!.players.where((p) => p.id != guestId).toList(),
       pendingGuests: _currentGame!.pendingGuests
           .where((p) => p.id != guestId)
           .toList(),
       guestSlots: canFree
           ? _currentGame!.guestSlots
-              .map((s) =>
-                  s.inviterId == inviterId && s.slot == guestSlot
+                .map(
+                  (s) => s.inviterId == inviterId && s.slot == guestSlot
                       ? s.copyWith(
                           guestName: null,
                           status: GuestSlotStatus.unclaimed,
                         )
-                      : s)
-              .toList()
+                      : s,
+                )
+                .toList()
           : _currentGame!.guestSlots,
     );
     addAnnouncement('Guest request rejected.', false);
@@ -1474,13 +1630,15 @@ class AppProvider extends ChangeNotifier {
     }).toList();
     // Safety net: the inviter somehow has no persisted slot record.
     if (!updated.any((s) => s.inviterId == inviterId && s.slot == slot)) {
-      updated.add(GuestSlot(
-        id: 'slot-${DateTime.now().millisecondsSinceEpoch}-$inviterId-$slot',
-        inviterId: inviterId,
-        slot: slot,
-        guestName: name,
-        status: GuestSlotStatus.reserved,
-      ));
+      updated.add(
+        GuestSlot(
+          id: 'slot-${DateTime.now().millisecondsSinceEpoch}-$inviterId-$slot',
+          inviterId: inviterId,
+          slot: slot,
+          guestName: name,
+          status: GuestSlotStatus.reserved,
+        ),
+      );
     }
     return updated;
   }
@@ -1493,11 +1651,15 @@ class AppProvider extends ChangeNotifier {
     final game = _currentGame;
     if (game == null) return 'No active game found.';
 
-    final existingSlot = game.guestSlots.where((s) => s.inviterId == inviterId && s.slot == slot).firstOrNull;
+    final existingSlot = game.guestSlots
+        .where((s) => s.inviterId == inviterId && s.slot == slot)
+        .firstOrNull;
     if (existingSlot != null && !existingSlot.available) {
       return 'That guest slot is already reserved or checked in.';
     }
-    final alreadyClaimed = game.players.any((p) => p.isGuest && p.inviterId == inviterId && p.guestSlot == slot);
+    final alreadyClaimed = game.players.any(
+      (p) => p.isGuest && p.inviterId == inviterId && p.guestSlot == slot,
+    );
     if (alreadyClaimed) {
       return 'That guest slot is already claimed.';
     }
@@ -1558,9 +1720,8 @@ class AppProvider extends ChangeNotifier {
   /// Role-safe game copies (§2.3). Non-admin views must never read private
   /// fields; the public surfaces are fed from these projections, never from
   /// the raw game object.
-  LiveGame? get tvGame => _currentGame == null
-      ? null
-      : projections.tvProjection(_currentGame!);
+  LiveGame? get tvGame =>
+      _currentGame == null ? null : projections.tvProjection(_currentGame!);
 
   /// The game as a registered non-admin member sees it: payout amounts and
   /// organizer amount removed, chat preserved.
@@ -1569,9 +1730,8 @@ class AppProvider extends ChangeNotifier {
       : projections.playerProjection(_currentGame!, viewerId: _user?.id);
 
   /// The game as a guest sees it: payout/organizer amounts and chat removed.
-  LiveGame? get guestProjection => _currentGame == null
-      ? null
-      : projections.guestProjection(_currentGame!);
+  LiveGame? get guestProjection =>
+      _currentGame == null ? null : projections.guestProjection(_currentGame!);
 
   /// The projection matching the current viewer (guest vs registered member).
   LiveGame? get viewerProjection =>
@@ -1649,7 +1809,9 @@ class AppProvider extends ChangeNotifier {
 
     // Random initial dealer position (13-012/13-026) chosen from the seated
     // players. The system does not track dealer-button rotation (13-032).
-    final dealer = seated.isEmpty ? null : seated[Random().nextInt(seated.length)];
+    final dealer = seated.isEmpty
+        ? null
+        : seated[Random().nextInt(seated.length)];
 
     _currentGame = game.copyWith(
       players: game.players.map((p) {
@@ -1663,10 +1825,7 @@ class AppProvider extends ChangeNotifier {
     // Announce the drawn dealer out loud so the room hears who deals first
     // (checklist 13-026). Falls back quietly if voice is disabled.
     if (dealer != null) {
-      addAnnouncement(
-        'Seating drawn. ${dealer.name} deals first.',
-        true,
-      );
+      addAnnouncement('Seating drawn. ${dealer.name} deals first.', true);
     }
     notifyListeners();
   }
@@ -1680,15 +1839,18 @@ class AppProvider extends ChangeNotifier {
     addAnnouncement('Seating confirmed. Shuffle up and deal!', true);
     // Notify each seated participant of their table and seat (Tech §14.3).
     for (final p in game.players.where((p) => p.confirmed && p.table > 0)) {
-      pushNotification(AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}-${p.id}',
-        title: 'Seat assigned',
-        body: '${game.settings.name} — you are Table ${p.table}, Seat ${p.seat}.',
-        type: NotificationType.game,
-        link: '/invitation',
-        read: false,
-        timestamp: DateTime.now(),
-      ));
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}-${p.id}',
+          title: 'Seat assigned',
+          body:
+              '${game.settings.name} — you are Table ${p.table}, Seat ${p.seat}.',
+          type: NotificationType.game,
+          link: '/invitation',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
     }
   }
 
@@ -1699,14 +1861,20 @@ class AppProvider extends ChangeNotifier {
     final game = _currentGame;
     if (game == null) return null;
     if (table < 1 || seat < 1) return 'Choose a valid table and seat.';
-    final occupied = game.players.any((p) =>
-        p.id != playerId && p.table == table && p.seat == seat && !p.eliminated);
+    final occupied = game.players.any(
+      (p) =>
+          p.id != playerId &&
+          p.table == table &&
+          p.seat == seat &&
+          !p.eliminated,
+    );
     if (occupied) return 'That seat is already taken — choose another.';
     _pushUndo();
     _currentGame = game.copyWith(
       players: game.players
-          .map((p) =>
-              p.id == playerId ? p.copyWith(table: table, seat: seat) : p)
+          .map(
+            (p) => p.id == playerId ? p.copyWith(table: table, seat: seat) : p,
+          )
           .toList(),
       seatingConfirmed: false,
     );
@@ -1727,12 +1895,13 @@ class AppProvider extends ChangeNotifier {
     }
     final tables = counts.keys.toList();
     if (tables.length < 2) return null;
-    
+
     // Sort tables by player count
-    final sortedByCount = tables.toList()..sort((a, b) => counts[a]!.compareTo(counts[b]!));
+    final sortedByCount = tables.toList()
+      ..sort((a, b) => counts[a]!.compareTo(counts[b]!));
     final minTable = sortedByCount.first;
     final maxTable = sortedByCount.last;
-    
+
     final minCount = counts[minTable]!;
     final maxCount = counts[maxTable]!;
     if (maxCount - minCount <= 1) return null;
@@ -1789,11 +1958,13 @@ class AppProvider extends ChangeNotifier {
     if (rec == null) return;
     final game = _currentGame;
     if (game == null) return;
-    final occupied = game.players.any((p) =>
-        p.id != rec.fromPlayerId &&
-        p.table == rec.toTable &&
-        p.seat == rec.toSeat &&
-        !p.eliminated);
+    final occupied = game.players.any(
+      (p) =>
+          p.id != rec.fromPlayerId &&
+          p.table == rec.toTable &&
+          p.seat == rec.toSeat &&
+          !p.eliminated,
+    );
     if (occupied) {
       _pendingSeatMove = null;
       notifyListeners();
@@ -1802,9 +1973,11 @@ class AppProvider extends ChangeNotifier {
     _pushUndo();
     _currentGame = game.copyWith(
       players: game.players
-          .map((p) => p.id == rec.fromPlayerId
-              ? p.copyWith(table: rec.toTable, seat: rec.toSeat)
-              : p)
+          .map(
+            (p) => p.id == rec.fromPlayerId
+                ? p.copyWith(table: rec.toTable, seat: rec.toSeat)
+                : p,
+          )
           .toList(),
       seatingConfirmed: false,
     );
@@ -1823,7 +1996,8 @@ class AppProvider extends ChangeNotifier {
   bool get lateRegistrationOpen {
     final game = _currentGame;
     if (game == null) return false;
-    final live = game.status == LiveGameStatus.running ||
+    final live =
+        game.status == LiveGameStatus.running ||
         game.status == LiveGameStatus.paused;
     return live &&
         !game.settlementConfirmed &&
@@ -1888,7 +2062,10 @@ class AppProvider extends ChangeNotifier {
 
     _currentGame = game.copyWith(
       players: newPlayers,
-      totalChipsInPlay: (game.totalChipsInPlay - chipsToRemove).clamp(0, 99999999),
+      totalChipsInPlay: (game.totalChipsInPlay - chipsToRemove).clamp(
+        0,
+        99999999,
+      ),
     );
 
     _updatePrizePool();
@@ -1949,7 +2126,10 @@ class AppProvider extends ChangeNotifier {
     // price (09-050/12-051, 12-060).
     final confirmedCount = game.players.where((p) => p.confirmed).length;
     final totalRebuys = game.players.fold<int>(0, (sum, p) => sum + p.rebuys);
-    final totalReEntries = game.players.fold<int>(0, (sum, p) => sum + p.reEntries);
+    final totalReEntries = game.players.fold<int>(
+      0,
+      (sum, p) => sum + p.reEntries,
+    );
     final totalAddOns = game.players.where((p) => p.hasAddOn).length;
 
     final grossEligible =
@@ -1986,13 +2166,19 @@ class AppProvider extends ChangeNotifier {
       settings: _currentGame!.settings.copyWith(forcePaidPlaces: count),
     );
     _updatePrizePool();
-    addAuditRecord('structure_edit', 'Paid places overridden to ${count ?? 'auto'}');
+    addAuditRecord(
+      'structure_edit',
+      'Paid places overridden to ${count ?? 'auto'}',
+    );
     notifyListeners();
   }
 
   /// Orders players so guests are placed immediately after (together) or far
   /// from (separate) their inviter, used to steer the round-robin deal.
-  List<Player> _orderKeepingGuests(List<Player> players, {required bool together}) {
+  List<Player> _orderKeepingGuests(
+    List<Player> players, {
+    required bool together,
+  }) {
     final registered = players.where((p) => !p.isGuest).toList();
     final guests = players.where((p) => p.isGuest).toList();
     if (together) {
@@ -2002,12 +2188,16 @@ class AppProvider extends ChangeNotifier {
         result.addAll(guests.where((g) => g.inviterId == r.id));
       }
       // Any guest whose inviter isn't seated still gets placed.
-      result.addAll(guests.where((g) => !registered.any((r) => r.id == g.inviterId)));
+      result.addAll(
+        guests.where((g) => !registered.any((r) => r.id == g.inviterId)),
+      );
       return result;
     }
     // Separate: interleave registered and guests so inviter/guest land apart.
     final result = <Player>[];
-    final maxLen = registered.length > guests.length ? registered.length : guests.length;
+    final maxLen = registered.length > guests.length
+        ? registered.length
+        : guests.length;
     for (var i = 0; i < maxLen; i++) {
       if (i < registered.length) result.add(registered[i]);
       if (i < guests.length) result.add(guests[i]);
@@ -2025,25 +2215,26 @@ class AppProvider extends ChangeNotifier {
     final newDuration = recommendation == SpeedRecommendation.speedUp
         ? structure.levelDuration - 5
         : structure.levelDuration + 5;
-    final clamped = newDuration < 10 ? 10 : (newDuration > 20 ? 20 : newDuration);
+    final clamped = newDuration < 10
+        ? 10
+        : (newDuration > 20 ? 20 : newDuration);
     // Apply the new duration to future levels only (spec: active level never changes, starts next level).
     final levels = structure.levels
-        .map((l) => l.level > game.currentLevel
-            ? BlindLevel(
-                level: l.level,
-                sb: l.sb,
-                bb: l.bb,
-                ante: l.ante,
-                durationMins: clamped,
-              )
-            : l)
+        .map(
+          (l) => l.level > game.currentLevel
+              ? BlindLevel(
+                  level: l.level,
+                  sb: l.sb,
+                  bb: l.bb,
+                  ante: l.ante,
+                  durationMins: clamped,
+                )
+              : l,
+        )
         .toList();
     _currentGame = game.copyWith(
       speedRecommendation: null,
-      structure: structure.copyWith(
-        levels: levels,
-        levelDuration: clamped,
-      ),
+      structure: structure.copyWith(levels: levels, levelDuration: clamped),
     );
     addAnnouncement(
       recommendation == SpeedRecommendation.speedUp
@@ -2096,9 +2287,11 @@ class AppProvider extends ChangeNotifier {
     final game = _currentGame;
     if (game == null) return;
     _currentGame = game.copyWith(structureConfirmed: true);
-    addAuditRecord('structure_confirm',
-        'Structure confirmed: stack ${game.structure.startingStack}, '
-        '${game.structure.levels.length} levels of ${game.structure.levelDuration}m.');
+    addAuditRecord(
+      'structure_confirm',
+      'Structure confirmed: stack ${game.structure.startingStack}, '
+          '${game.structure.levels.length} levels of ${game.structure.levelDuration}m.',
+    );
     _syncGroupGame();
     notifyListeners();
   }
@@ -2110,28 +2303,31 @@ class AppProvider extends ChangeNotifier {
   /// whether to attend).
   void generateStructureFromRsvps({bool force = false}) {
     final game = _currentGame;
-    if (game == null || (!game.structureReviewOpen && !force)) return;
+    if (game == null || (!game.structureReviewOpen && !(kDebugMode && force)))
+      return;
     _pushUndo();
     final count = expectedPlayersFromRsvps(game);
     final s = game.settings.copyWith(players: count);
-    final structure = TournamentEngine.generate(TournamentParams(
-      players: count,
-      durationHours: s.durationHours,
-      buyIn: s.buyIn,
-      chipSet: s.chipSet,
-      rebuys: s.rebuys,
-      rebuysCloseLevel: s.rebuysCloseLevel,
-      reEntry: s.reEntry,
-      addOn: s.addOn,
-      anteEnabled: s.anteEnabled,
-      anteAfterLevel: s.anteAfterLevel,
-      anteStyle: s.anteStyle,
-      koEnabled: s.koEnabled,
-      koAmount: s.koAmount,
-      organizerPct: s.organizerPct,
-      rebuyCost: s.rebuyCost,
-      addOnCost: s.addOnCost,
-    ));
+    final structure = TournamentEngine.generate(
+      TournamentParams(
+        players: count,
+        durationHours: s.durationHours,
+        buyIn: s.buyIn,
+        chipSet: s.chipSet,
+        rebuys: s.rebuys,
+        rebuysCloseLevel: s.rebuysCloseLevel,
+        reEntry: s.reEntry,
+        addOn: s.addOn,
+        anteEnabled: s.anteEnabled,
+        anteAfterLevel: s.anteAfterLevel,
+        anteStyle: s.anteStyle,
+        koEnabled: s.koEnabled,
+        koAmount: s.koAmount,
+        organizerPct: s.organizerPct,
+        rebuyCost: s.rebuyCost,
+        addOnCost: s.addOnCost,
+      ),
+    );
     _currentGame = game.copyWith(
       settings: s,
       structure: structure,
@@ -2141,8 +2337,10 @@ class AppProvider extends ChangeNotifier {
       secondsRemaining: structure.levelDuration * 60,
       structureConfirmed: false,
     );
-    addAuditRecord('structure_estimate',
-        'AI generated the structure estimate for $count expected players.');
+    addAuditRecord(
+      'structure_estimate',
+      'AI generated the structure estimate for $count expected players.',
+    );
     notifyListeners();
   }
 
@@ -2153,26 +2351,40 @@ class AppProvider extends ChangeNotifier {
 
     final confirmed = game.players.where((p) => p.confirmed).length;
     final count = confirmed >= 2 ? confirmed : expectedPlayersFromRsvps(game);
+    _recalculateWithPlayers(count);
+  }
+
+  void updateStructurePlayerCount(int players) {
+    final game = _currentGame;
+    if (game == null) return;
+    _pushUndo();
+    _recalculateWithPlayers(players);
+  }
+
+  void _recalculateWithPlayers(int count) {
+    final game = _currentGame!;
     final s = game.settings;
     final newSettings = s.copyWith(players: count);
-    var structure = TournamentEngine.generate(TournamentParams(
-      players: count,
-      durationHours: newSettings.durationHours,
-      buyIn: newSettings.buyIn,
-      chipSet: newSettings.chipSet,
-      rebuys: newSettings.rebuys,
-      rebuysCloseLevel: newSettings.rebuysCloseLevel,
-      reEntry: newSettings.reEntry,
-      addOn: newSettings.addOn,
-      anteEnabled: newSettings.anteEnabled,
-      anteAfterLevel: newSettings.anteAfterLevel,
-      anteStyle: newSettings.anteStyle,
-      koEnabled: newSettings.koEnabled,
-      koAmount: newSettings.koAmount,
-      organizerPct: newSettings.organizerPct,
-      rebuyCost: newSettings.rebuyCost,
-      addOnCost: newSettings.addOnCost,
-    ));
+    var structure = TournamentEngine.generate(
+      TournamentParams(
+        players: count,
+        durationHours: newSettings.durationHours,
+        buyIn: newSettings.buyIn,
+        chipSet: newSettings.chipSet,
+        rebuys: newSettings.rebuys,
+        rebuysCloseLevel: newSettings.rebuysCloseLevel,
+        reEntry: newSettings.reEntry,
+        addOn: newSettings.addOn,
+        anteEnabled: newSettings.anteEnabled,
+        anteAfterLevel: newSettings.anteAfterLevel,
+        anteStyle: newSettings.anteStyle,
+        koEnabled: newSettings.koEnabled,
+        koAmount: newSettings.koAmount,
+        organizerPct: newSettings.organizerPct,
+        rebuyCost: newSettings.rebuyCost,
+        addOnCost: newSettings.addOnCost,
+      ),
+    );
     // Once play has started the starting stacks are frozen — blinds, levels
     // and the player count may still change (client rule).
     if (game.stacksLocked) {
@@ -2207,8 +2419,10 @@ class AppProvider extends ChangeNotifier {
     final game = _currentGame;
     if (game == null || !game.estimateDue) return;
     recalculateStructure();
-    addAuditRecord('structure_estimate',
-        'AI refreshed the structure estimate for ${game.settings.players} expected players.');
+    addAuditRecord(
+      'structure_estimate',
+      'AI refreshed the structure estimate for ${game.settings.players} expected players.',
+    );
     notifyListeners();
   }
 
@@ -2268,8 +2482,7 @@ class AppProvider extends ChangeNotifier {
     addAuditRecord(
       'structure_edit',
       'Future levels updated: ${renumbered.length} future level'
-      '${renumbered.length == 1 ? '' : 's'} (was ${
-          (game.structure.levels.length - prefix.length).clamp(0, 999)})',
+          '${renumbered.length == 1 ? '' : 's'} (was ${(game.structure.levels.length - prefix.length).clamp(0, 999)})',
     );
     addAnnouncement('Level structure updated by admin.', false);
   }
@@ -2278,7 +2491,9 @@ class AppProvider extends ChangeNotifier {
     List<({String playerId, int seat})>? seating,
     String? dealerId,
   }) {
-    final finalists = _currentGame!.players.where((p) => p.active && !p.eliminated).toList();
+    final finalists = _currentGame!.players
+        .where((p) => p.active && !p.eliminated)
+        .toList();
     // The final table seats at most 9 players (checklist 13-025).
     if (finalists.length > 9) return;
     _pushUndo();
@@ -2295,12 +2510,16 @@ class AppProvider extends ChangeNotifier {
     // Initial dealer for the final table: the admin's choice, or a random
     // finalist (Tech spec §12.3 — the redraw picks the seats AND the
     // initial dealer-button position).
-    final dealer = (dealerId != null
+    final dealer =
+        (dealerId != null
             ? finalists.where((f) => f.id == dealerId).firstOrNull
             : null) ??
-        (finalists.isEmpty ? null : finalists[Random().nextInt(finalists.length)]);
+        (finalists.isEmpty
+            ? null
+            : finalists[Random().nextInt(finalists.length)]);
     final currentLevelData = _currentGame!.currentLevelData;
-    final durationMins = currentLevelData?.durationMins ?? _currentGame!.structure.levelDuration;
+    final durationMins =
+        currentLevelData?.durationMins ?? _currentGame!.structure.levelDuration;
     _currentGame = _currentGame!.copyWith(
       players: players,
       status: LiveGameStatus.running,
@@ -2314,15 +2533,18 @@ class AppProvider extends ChangeNotifier {
     if (dealer != null) {
       addAnnouncement('Dealer on the final table: ${dealer.name}.', true);
     }
-    pushNotification(AppNotification(
-      id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-      title: 'Final table reached',
-      body: '${_currentGame!.settings.name} — 9 players remain, seats redrawn.',
-      type: NotificationType.game,
-      link: '/player-live',
-      read: false,
-      timestamp: DateTime.now(),
-    ));
+    pushNotification(
+      AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Final table reached',
+        body:
+            '${_currentGame!.settings.name} — 9 players remain, seats redrawn.',
+        type: NotificationType.game,
+        link: '/player-live',
+        read: false,
+        timestamp: DateTime.now(),
+      ),
+    );
   }
 
   void recordFinishOrder(List<String> order) {
@@ -2334,15 +2556,17 @@ class AppProvider extends ChangeNotifier {
     );
     _syncGroupGame();
     addAnnouncement('We have a winner!', true);
-    pushNotification(AppNotification(
-      id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-      title: 'Tournament finished',
-      body: '${_currentGame!.settings.name} is over — see the final results.',
-      type: NotificationType.result,
-      link: '/result-podium',
-      read: false,
-      timestamp: DateTime.now(),
-    ));
+    pushNotification(
+      AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Tournament finished',
+        body: '${_currentGame!.settings.name} is over — see the final results.',
+        type: NotificationType.result,
+        link: '/result-podium',
+        read: false,
+        timestamp: DateTime.now(),
+      ),
+    );
   }
 
   void addAnnouncement(String text, [bool speakOutLoud = true]) {
@@ -2409,28 +2633,38 @@ class AppProvider extends ChangeNotifier {
   }
 
   void deleteMessage(String msgId) {
-    _setGroup(_currentGroup.copyWith(
-      chat: _currentGroup.chat
-          .map((m) => m.id == msgId ? ChatMessage(
-              id: m.id,
-              authorId: m.authorId,
-              authorName: m.authorName,
-              body: m.body,
-              timestamp: m.timestamp,
-              deleted: true,
-            ) : m)
-          .toList(),
-    ));
+    _setGroup(
+      _currentGroup.copyWith(
+        chat: _currentGroup.chat
+            .map(
+              (m) => m.id == msgId
+                  ? ChatMessage(
+                      id: m.id,
+                      authorId: m.authorId,
+                      authorName: m.authorName,
+                      body: m.body,
+                      timestamp: m.timestamp,
+                      deleted: true,
+                    )
+                  : m,
+            )
+            .toList(),
+      ),
+    );
     _currentGame = _currentGame!.copyWith(
       chat: _currentGame!.chat
-          .map((m) => m.id == msgId ? ChatMessage(
-              id: m.id,
-              authorId: m.authorId,
-              authorName: m.authorName,
-              body: m.body,
-              timestamp: m.timestamp,
-              deleted: true,
-            ) : m)
+          .map(
+            (m) => m.id == msgId
+                ? ChatMessage(
+                    id: m.id,
+                    authorId: m.authorId,
+                    authorName: m.authorName,
+                    body: m.body,
+                    timestamp: m.timestamp,
+                    deleted: true,
+                  )
+                : m,
+          )
           .toList(),
     );
     notifyListeners();
@@ -2439,9 +2673,16 @@ class AppProvider extends ChangeNotifier {
   /// Creates a poll. Returns a validation message when the question or options
   /// are invalid (empty or duplicate options rejected — checklist 08-015/08-016),
   /// or null on success.
-  String? createPoll(String question, List<String> options, {bool multi = false}) {
+  String? createPoll(
+    String question,
+    List<String> options, {
+    bool multi = false,
+  }) {
     final trimmedQuestion = question.trim();
-    final trimmed = options.map((o) => o.trim()).where((o) => o.isNotEmpty).toList();
+    final trimmed = options
+        .map((o) => o.trim())
+        .where((o) => o.isNotEmpty)
+        .toList();
     if (trimmedQuestion.isEmpty) return 'Poll needs a question.';
     if (trimmed.length < 2) return 'Poll needs at least two options.';
     if (trimmed.length > 10) return 'Polls support at most ten options.';
@@ -2461,15 +2702,17 @@ class AppProvider extends ChangeNotifier {
       multi: multi,
     );
     _setGroup(_currentGroup.copyWith(polls: [..._currentGroup.polls, poll]));
-    pushNotification(AppNotification(
-      id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-      title: 'New poll',
-      body: trimmedQuestion,
-      type: NotificationType.admin,
-      link: '/group',
-      read: false,
-      timestamp: DateTime.now(),
-    ));
+    pushNotification(
+      AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'New poll',
+        body: trimmedQuestion,
+        type: NotificationType.admin,
+        link: '/group',
+        read: false,
+        timestamp: DateTime.now(),
+      ),
+    );
     notifyListeners();
     return null;
   }
@@ -2479,78 +2722,88 @@ class AppProvider extends ChangeNotifier {
   void votePoll(String pollId, List<String> selected) {
     final userId = _user?.id;
     if (userId == null) return;
-    _setGroup(_currentGroup.copyWith(
-      polls: _currentGroup.polls
-          .map((p) {
-              if (p.id != pollId || p.closed) return p;
-              final kept = p.multi
-                  ? selected
-                  : selected.isNotEmpty
-                      ? [selected.first]
-                      : <String>[];
-              return Poll(
-                id: p.id,
-                question: p.question,
-                options: p.options,
-                votes: {...p.votes, userId: kept},
-                closed: p.closed,
-                createdAt: p.createdAt,
-                multi: p.multi,
-              );
-            })
-          .toList(),
-    ));
+    _setGroup(
+      _currentGroup.copyWith(
+        polls: _currentGroup.polls.map((p) {
+          if (p.id != pollId || p.closed) return p;
+          final kept = p.multi
+              ? selected
+              : selected.isNotEmpty
+              ? [selected.first]
+              : <String>[];
+          return Poll(
+            id: p.id,
+            question: p.question,
+            options: p.options,
+            votes: {...p.votes, userId: kept},
+            closed: p.closed,
+            createdAt: p.createdAt,
+            multi: p.multi,
+          );
+        }).toList(),
+      ),
+    );
     notifyListeners();
   }
 
   /// Admin closes a poll so it no longer accepts votes (checklist 08-022/08-023).
   void closePoll(String pollId) {
     var closedPoll;
-    _setGroup(_currentGroup.copyWith(
-      polls: _currentGroup.polls
-          .map((p) => p.id == pollId
-              ? (closedPoll = Poll(
-                  id: p.id,
-                  question: p.question,
-                  options: p.options,
-                  votes: p.votes,
-                  closed: true,
-                  createdAt: p.createdAt,
-                  multi: p.multi,
-                ))
-              : p)
-          .toList(),
-    ));
+    _setGroup(
+      _currentGroup.copyWith(
+        polls: _currentGroup.polls
+            .map(
+              (p) => p.id == pollId
+                  ? (closedPoll = Poll(
+                      id: p.id,
+                      question: p.question,
+                      options: p.options,
+                      votes: p.votes,
+                      closed: true,
+                      createdAt: p.createdAt,
+                      multi: p.multi,
+                    ))
+                  : p,
+            )
+            .toList(),
+      ),
+    );
     if (closedPoll != null) {
-      pushNotification(AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Poll closed',
-        body: closedPoll.question,
-        type: NotificationType.admin,
-        link: '/group',
-        read: false,
-        timestamp: DateTime.now(),
-      ));
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Poll closed',
+          body: closedPoll.question,
+          type: NotificationType.admin,
+          link: '/group',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
     }
     notifyListeners();
   }
 
   /// Whether the RSVP change deadline (1 hour before scheduled start,
   /// 07-011/07-012, UAT-025) has passed for the current game.
-  bool get rsvpCutoffPassed =>
-      _currentGame?.settings.rsvpCutoffPassed ?? false;
+  bool get rsvpCutoffPassed => _currentGame?.settings.rsvpCutoffPassed ?? false;
 
   void setRSVP(Rsvp? rsvp, {String? gameId}) {
     final userId = _user?.id;
     if (userId == null) return;
-    
-    final isCurrent = gameId == null || (_currentGame != null && gameId == _currentGame!.id);
-    
+
+    final isCurrent =
+        gameId == null || (_currentGame != null && gameId == _currentGame!.id);
+
     // Check cutoff
     if (isCurrent) {
-      if (_currentGame != null && _currentGame!.settings.rsvpCutoffPassed) return;
+      if (_currentGame != null && _currentGame!.settings.rsvpCutoffPassed)
+        return;
     } else {
-      final g = _currentGroup.games.firstWhere((g) => g.id == gameId, orElse: () => _currentGame!);
+      final g = _currentGroup.games.firstWhere(
+        (g) => g.id == gameId,
+        orElse: () => _currentGame!,
+      );
       if (g.settings.rsvpCutoffPassed) return;
     }
 
@@ -2561,28 +2814,36 @@ class AppProvider extends ChangeNotifier {
             .toList(),
       );
       updated = _syncGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
-      updated = _reconcileExcessGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
+      updated = _reconcileExcessGuestSlots(
+        updated,
+        userId,
+        rsvp?.guestCount ?? 0,
+      );
       _currentGame = updated;
     }
 
     // Keep the group's copy of the game in sync so badges update on the hub.
-    _setGroup(_currentGroup.copyWith(
-      games: _currentGroup.games
-          .map((g) {
-            if (isCurrent ? (g.id == _currentGame?.id) : (g.id == gameId)) {
-               var updated = g.copyWith(
-                 players: g.players
-                     .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
-                     .toList(),
-               );
-               updated = _syncGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
-               updated = _reconcileExcessGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
-               return updated;
-            }
-            return g;
-          })
-          .toList(),
-    ));
+    _setGroup(
+      _currentGroup.copyWith(
+        games: _currentGroup.games.map((g) {
+          if (isCurrent ? (g.id == _currentGame?.id) : (g.id == gameId)) {
+            var updated = g.copyWith(
+              players: g.players
+                  .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
+                  .toList(),
+            );
+            updated = _syncGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
+            updated = _reconcileExcessGuestSlots(
+              updated,
+              userId,
+              rsvp?.guestCount ?? 0,
+            );
+            return updated;
+          }
+          return g;
+        }).toList(),
+      ),
+    );
     notifyListeners();
   }
 
@@ -2602,21 +2863,29 @@ class AppProvider extends ChangeNotifier {
       if (existingForSlot != null) {
         keep.add(existingForSlot);
       } else {
-        keep.add(GuestSlot(
-          id: 'slot-${DateTime.now().millisecondsSinceEpoch}-$userId-$slot',
-          inviterId: userId,
-          slot: slot,
-          status: GuestSlotStatus.unclaimed,
-        ));
+        keep.add(
+          GuestSlot(
+            id: 'slot-${DateTime.now().millisecondsSinceEpoch}-$userId-$slot',
+            inviterId: userId,
+            slot: slot,
+            status: GuestSlotStatus.unclaimed,
+          ),
+        );
       }
     }
     // Unclaimed slots beyond the new count are dropped; claimed ones remain.
     final rest = game.guestSlots
-        .where((s) =>
-            s.inviterId != userId ||
-            (s.inviterId == userId && s.slot > newCount && !s.available))
+        .where(
+          (s) =>
+              s.inviterId != userId ||
+              (s.inviterId == userId && s.slot > newCount && !s.available),
+        )
         .toList();
-    final slots = [...rest, ...keep, ...claimed.where((s) => s.slot <= newCount)];
+    final slots = [
+      ...rest,
+      ...keep,
+      ...claimed.where((s) => s.slot <= newCount),
+    ];
     // Deduplicate (id-based) to be safe.
     final seen = <String>{};
     final merged = <GuestSlot>[];
@@ -2630,24 +2899,35 @@ class AppProvider extends ChangeNotifier {
   /// count, unused guest slots beyond the new count are released safely.
   /// Unconfirmed requests are removed; guests already confirmed on an excess
   /// slot are kept but surfaced to the administrator as a conflict.
-  LiveGame _reconcileExcessGuestSlots(LiveGame game, String userId, int newCount) {
+  LiveGame _reconcileExcessGuestSlots(
+    LiveGame game,
+    String userId,
+    int newCount,
+  ) {
     final excess = game.players
-        .where((p) => p.isGuest && p.inviterId == userId && (p.guestSlot ?? 0) > newCount)
+        .where(
+          (p) =>
+              p.isGuest &&
+              p.inviterId == userId &&
+              (p.guestSlot ?? 0) > newCount,
+        )
         .toList();
     if (excess.isEmpty) return game;
     final excessIds = excess.map((p) => p.id).toSet();
     final confirmed = excess.where((p) => p.confirmed).toList();
     final updated = game.copyWith(
       players: game.players.where((p) => !excessIds.contains(p.id)).toList(),
-      pendingGuests:
-          game.pendingGuests.where((p) => !excessIds.contains(p.id)).toList(),
+      pendingGuests: game.pendingGuests
+          .where((p) => !excessIds.contains(p.id))
+          .toList(),
     );
     if (confirmed.isNotEmpty) {
       pushNotification(
         AppNotification(
           id: 'n-${DateTime.now().millisecondsSinceEpoch}',
           title: 'RSVP reduced after guest check-in',
-          body: '${confirmed.map((p) => p.name).join(', ')} '
+          body:
+              '${confirmed.map((p) => p.name).join(', ')} '
               '${confirmed.length == 1 ? 'is' : 'are'} confirmed on a guest slot '
               'the inviter just removed. Review before seating.',
           type: NotificationType.admin,
@@ -2677,7 +2957,8 @@ class AppProvider extends ChangeNotifier {
         AppNotification(
           id: 'n-${DateTime.now().millisecondsSinceEpoch}',
           title: 'RSVP reminder',
-          body: 'You haven\'t responded to ${target.settings.name} '
+          body:
+              'You haven\'t responded to ${target.settings.name} '
               '(${target.settings.date} at ${target.settings.time}). '
               'Let the host know if you\'re in.',
           type: NotificationType.rsvp,
@@ -2690,7 +2971,7 @@ class AppProvider extends ChangeNotifier {
     addAuditRecord(
       'rsvp_reminder',
       'Reminder sent to ${pending.length} member'
-      '${pending.length == 1 ? '' : 's'} who have not responded.',
+          '${pending.length == 1 ? '' : 's'} who have not responded.',
     );
     addAnnouncement(
       'Reminder sent to ${pending.length} player'
@@ -2706,7 +2987,9 @@ class AppProvider extends ChangeNotifier {
     if (c == MockData.demoGame.publicCode || c == MockData.demoGame.tvCode) {
       _currentGame = MockData.demoGame;
       notifyListeners();
-      return c == MockData.demoGame.tvCode ? CodeLookupResult.tv : CodeLookupResult.game;
+      return c == MockData.demoGame.tvCode
+          ? CodeLookupResult.tv
+          : CodeLookupResult.game;
     }
     return CodeLookupResult.notFound;
   }
@@ -2721,9 +3004,30 @@ class AppProvider extends ChangeNotifier {
     MockData.demoCashSession.copyWith(
       isCompleted: true,
       players: const [
-        CashPlayer(id: 'cp-0', name: 'Daniel', stack: 0, totalBuyIns: 60, buyInCount: 2, cashedOut: 82),
-        CashPlayer(id: 'cp-1', name: 'Marcus', stack: 0, totalBuyIns: 20, buyInCount: 1, cashedOut: 14),
-        CashPlayer(id: 'cp-2', name: 'Sophia', stack: 0, totalBuyIns: 40, buyInCount: 2, cashedOut: 38),
+        CashPlayer(
+          id: 'cp-0',
+          name: 'Daniel',
+          stack: 0,
+          totalBuyIns: 60,
+          buyInCount: 2,
+          cashedOut: 82,
+        ),
+        CashPlayer(
+          id: 'cp-1',
+          name: 'Marcus',
+          stack: 0,
+          totalBuyIns: 20,
+          buyInCount: 1,
+          cashedOut: 14,
+        ),
+        CashPlayer(
+          id: 'cp-2',
+          name: 'Sophia',
+          stack: 0,
+          totalBuyIns: 40,
+          buyInCount: 2,
+          cashedOut: 38,
+        ),
       ],
     ),
   ];
@@ -2735,14 +3039,17 @@ class AppProvider extends ChangeNotifier {
       settings: settings,
       isCompleted: false,
       startTime: DateTime.now(),
-      players: List.generate(playerNames.length, (i) => CashPlayer(
-            id: 'cp-${DateTime.now().millisecondsSinceEpoch}-$i',
-            name: playerNames[i],
-            stack: settings.minBuyIn,
-            totalBuyIns: settings.minBuyIn,
-            buyInCount: 1,
-            cashedOut: 0,
-          )),
+      players: List.generate(
+        playerNames.length,
+        (i) => CashPlayer(
+          id: 'cp-${DateTime.now().millisecondsSinceEpoch}-$i',
+          name: playerNames[i],
+          stack: settings.minBuyIn,
+          totalBuyIns: settings.minBuyIn,
+          buyInCount: 1,
+          cashedOut: 0,
+        ),
+      ),
     );
     notifyListeners();
   }
@@ -2751,7 +3058,11 @@ class AppProvider extends ChangeNotifier {
   /// Returns a validation message when the amount falls outside the session's
   /// [CashSessionSettings.minBuyIn]..[CashSessionSettings.maxBuyIn] bounds, or
   /// null on success.
-  String? cashBuyIn(String playerIdOrName, double amount, {bool isNew = false}) {
+  String? cashBuyIn(
+    String playerIdOrName,
+    double amount, {
+    bool isNew = false,
+  }) {
     final session = _cashSession;
     if (session == null) return 'No active cash session.';
     if (amount <= 0) return 'Amount must be positive.';
@@ -2761,27 +3072,33 @@ class AppProvider extends ChangeNotifier {
     if (amount < min) return 'Minimum buy-in is $min.';
     if (amount > max) return 'Maximum buy-in is $max.';
     if (isNew) {
-      _cashSession = session.copyWith(players: [
-        ...session.players,
-        CashPlayer(
-          id: 'cp-${DateTime.now().millisecondsSinceEpoch}',
-          name: playerIdOrName,
-          stack: amount,
-          totalBuyIns: amount,
-          buyInCount: 1,
-          cashedOut: 0,
-        ),
-      ]);
+      _cashSession = session.copyWith(
+        players: [
+          ...session.players,
+          CashPlayer(
+            id: 'cp-${DateTime.now().millisecondsSinceEpoch}',
+            name: playerIdOrName,
+            stack: amount,
+            totalBuyIns: amount,
+            buyInCount: 1,
+            cashedOut: 0,
+          ),
+        ],
+      );
     } else {
-      _cashSession = session.copyWith(players: session.players
-          .map((p) => p.id == playerIdOrName
-              ? p.copyWith(
-                  stack: p.stack + amount,
-                  totalBuyIns: p.totalBuyIns + amount,
-                  buyInCount: p.buyInCount + 1,
-                )
-              : p)
-          .toList());
+      _cashSession = session.copyWith(
+        players: session.players
+            .map(
+              (p) => p.id == playerIdOrName
+                  ? p.copyWith(
+                      stack: p.stack + amount,
+                      totalBuyIns: p.totalBuyIns + amount,
+                      buyInCount: p.buyInCount + 1,
+                    )
+                  : p,
+            )
+            .toList(),
+      );
     }
     notifyListeners();
     return null;
@@ -2790,11 +3107,14 @@ class AppProvider extends ChangeNotifier {
   void cashCashOut(String playerId, double amount) {
     final session = _cashSession;
     if (session == null) return;
-    _cashSession = session.copyWith(players: session.players
-        .map((p) => p.id == playerId
-            ? p.copyWith(cashedOut: amount, stack: 0)
-            : p)
-        .toList());
+    _cashSession = session.copyWith(
+      players: session.players
+          .map(
+            (p) =>
+                p.id == playerId ? p.copyWith(cashedOut: amount, stack: 0) : p,
+          )
+          .toList(),
+    );
     notifyListeners();
   }
 
@@ -2810,25 +3130,32 @@ class AppProvider extends ChangeNotifier {
   }) {
     final session = _cashSession;
     if (session == null) return;
-    _cashSession = session.copyWith(players: session.players
-        .map((p) => p.id == playerId
-            ? CashPlayer(
-                id: p.id,
-                name: p.name,
-                stack: stack ?? p.stack,
-                totalBuyIns: totalBuyIns ?? p.totalBuyIns,
-                buyInCount: buyInCount ?? p.buyInCount,
-                cashedOut: cashedOut ?? p.cashedOut,
-              )
-            : p)
-        .toList());
+    _cashSession = session.copyWith(
+      players: session.players
+          .map(
+            (p) => p.id == playerId
+                ? CashPlayer(
+                    id: p.id,
+                    name: p.name,
+                    stack: stack ?? p.stack,
+                    totalBuyIns: totalBuyIns ?? p.totalBuyIns,
+                    buyInCount: buyInCount ?? p.buyInCount,
+                    cashedOut: cashedOut ?? p.cashedOut,
+                  )
+                : p,
+          )
+          .toList(),
+    );
     notifyListeners();
   }
 
   void endCashGame({String? unresolvedNote}) {
     final session = _cashSession;
     if (session == null) return;
-    _cashSession = session.copyWith(isCompleted: true, unresolvedNote: unresolvedNote);
+    _cashSession = session.copyWith(
+      isCompleted: true,
+      unresolvedNote: unresolvedNote,
+    );
     _cashHistory = [_cashSession!, ..._cashHistory];
     notifyListeners();
     clearCashSession();
@@ -2845,13 +3172,10 @@ class AppProvider extends ChangeNotifier {
   List<AppNotification> _notifications = List.of(MockData.demoNotifications);
   List<AppNotification> get notifications => _notifications;
 
-  int get unreadCount =>
-      _notifications.where((n) => !n.read).length;
+  int get unreadCount => _notifications.where((n) => !n.read).length;
 
   void markAllRead() {
-    _notifications = _notifications
-        .map((n) => n.copyWith(read: true))
-        .toList();
+    _notifications = _notifications.map((n) => n.copyWith(read: true)).toList();
     notifyListeners();
   }
 
@@ -2895,7 +3219,8 @@ class AppProvider extends ChangeNotifier {
 
   /// Stable per-session id for the current browser/device.
   String? _thisDeviceId;
-  String get thisDeviceId => _thisDeviceId ??= 'dev-${DateTime.now().millisecondsSinceEpoch}';
+  String get thisDeviceId =>
+      _thisDeviceId ??= 'dev-${DateTime.now().millisecondsSinceEpoch}';
 
   String? get audioMasterDeviceId => _audioMasterDeviceId;
 

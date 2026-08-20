@@ -71,7 +71,8 @@ class _PokerNightHeroState extends State<PokerNightHero>
                         _HeroCopy(isMobile: isMobile),
                         SizedBox(
                           height: 320, // Taller canvas for mobile
-                          width: double.infinity, // Must expand horizontally so CustomPaint has a size
+                          width: double
+                              .infinity, // Must expand horizontally so CustomPaint has a size
                           child: RepaintBoundary(
                             child: AnimatedBuilder(
                               animation: _controller,
@@ -143,10 +144,7 @@ class _HeroCopy extends StatelessWidget {
       child: Padding(
         padding: isMobile
             ? const EdgeInsets.all(AppSpacing.xl)
-            : const EdgeInsets.only(
-                left: AppSpacing.xxl,
-                right: AppSpacing.lg,
-              ),
+            : const EdgeInsets.only(left: AppSpacing.xxl, right: AppSpacing.lg),
         child: Align(
           alignment: Alignment.centerLeft,
           child: ConstrainedBox(
@@ -158,16 +156,15 @@ class _HeroCopy extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 RichText(
                   text: TextSpan(
-                    style: AppTypography.display(
-                      size: AppFontSizes.display,
-                      weight: FontWeight.w700,
-                    ).copyWith(
-                      color: AppColors.foreground,
-                      shadows: [textShadow],
-                    ),
-                    children: const [
-                      TextSpan(text: 'Run your perfect'),
-                    ],
+                    style:
+                        AppTypography.display(
+                          size: AppFontSizes.display,
+                          weight: FontWeight.w700,
+                        ).copyWith(
+                          color: AppColors.foreground,
+                          shadows: [textShadow],
+                        ),
+                    children: const [TextSpan(text: 'Run your perfect')],
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
@@ -240,29 +237,47 @@ class _TablePainter extends CustomPainter {
     _paintShadow(canvas, railRRect);
     _paintRail(canvas, railRRect);
     _paintFelt(canvas, feltRRect);
-    
+
     // Draw elements in proper Z-order (back to front)
-    
+
     if (isMobile) {
       // Center both rows completely, tighter layout, scaled up, no coins
-      _paintCardsRow(canvas, center, feltRect, 'POKER', -feltRect.shortestSide * 0.15, 0.05, 0.60);
+      _paintCardsRow(
+        canvas,
+        center,
+        feltRect,
+        'POKER',
+        -feltRect.shortestSide * 0.15,
+        0.05,
+        0.60,
+      );
       final nightsCenter = center + Offset(0, feltRect.shortestSide * 0.26);
       _paintCardsRow(canvas, nightsCenter, feltRect, 'NIGHT', 0, 0.28, 0.75);
     } else {
       // Shift center to the right only if the window is narrow to avoid overlapping text
       // Text takes ~440px on the left. The cards row width is ~280px (half is 140px).
       // We need the center to be at least 440 + 140 + 40 (padding) = 620.
-      final double minCenterX = 640.0; 
+      final double minCenterX = 640.0;
       final double shift = math.max(0.0, minCenterX - center.dx);
       final contentCenter = center + Offset(shift, 0);
 
       // Position POKER higher up to perfectly align with the "Run your perfect" text baseline
-      _paintCardsRow(canvas, contentCenter, feltRect, 'POKER', -feltRect.shortestSide * 0.05, 0.05, 0.60);
-      
+      _paintCardsRow(
+        canvas,
+        contentCenter,
+        feltRect,
+        'POKER',
+        -feltRect.shortestSide * 0.05,
+        0.05,
+        0.60,
+      );
+
       // Position NIGHTS below and shifted to the right
-      final nightsCenter = contentCenter + Offset(feltRect.shortestSide * 0.20, feltRect.shortestSide * 0.18);
+      final nightsCenter =
+          contentCenter +
+          Offset(feltRect.shortestSide * 0.20, feltRect.shortestSide * 0.18);
       _paintCardsRow(canvas, nightsCenter, feltRect, 'NIGHT', 0, 0.28, 0.75);
-      
+
       _paintPot(canvas, contentCenter, feltRect);
     }
   }
@@ -330,7 +345,7 @@ class _TablePainter extends CustomPainter {
     final cardHeight = feltRect.shortestSide * 0.17 * mobileScale;
     final cardWidth = cardHeight * 0.68;
     final spacing = cardWidth * 1.12;
-    
+
     final totalWidth = spacing * (count - 1);
     final startX = center.dx - totalWidth / 2;
     final cardsCenterY = center.dy + offsetY;
@@ -342,13 +357,16 @@ class _TablePainter extends CustomPainter {
       final faceUp = flip > 0.5;
 
       final lift = 1.0 - scaleX;
-      final shadowOffset = Offset(0, cardHeight * 0.04 + lift * cardHeight * 0.12);
+      final shadowOffset = Offset(
+        0,
+        cardHeight * 0.04 + lift * cardHeight * 0.12,
+      );
       final shadowSigma = 2.0 + lift * 6.0;
       final shadowOpacity = 0.45 - lift * 0.25;
 
       canvas.save();
       canvas.translate(cardCenter.dx, cardCenter.dy);
-      
+
       // Draw dynamic floating drop shadow
       final rect = Rect.fromCenter(
         center: Offset.zero,
@@ -356,7 +374,7 @@ class _TablePainter extends CustomPainter {
         height: cardHeight,
       );
       final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(4));
-      
+
       canvas.drawRRect(
         rrect.shift(shadowOffset),
         Paint()
@@ -370,8 +388,11 @@ class _TablePainter extends CustomPainter {
         canvas.drawRRect(rrect, Paint()..color = _HeroPalette.cardFace);
       } else {
         canvas.drawRRect(rrect, Paint()..color = _HeroPalette.cardBack);
-        
-        final innerRRect = RRect.fromRectAndRadius(rect.deflate(cardWidth * 0.08), const Radius.circular(2));
+
+        final innerRRect = RRect.fromRectAndRadius(
+          rect.deflate(cardWidth * 0.08),
+          const Radius.circular(2),
+        );
         canvas.drawRRect(
           innerRRect,
           Paint()
@@ -379,7 +400,7 @@ class _TablePainter extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1,
         );
-        
+
         final backPainter = TextPainter(
           text: TextSpan(
             text: letters[i],
@@ -405,7 +426,7 @@ class _TablePainter extends CustomPainter {
           textAlign: TextAlign.center,
           textDirection: TextDirection.ltr,
         )..layout();
-        
+
         backPainter.paint(
           canvas,
           Offset(-backPainter.width / 2, -backPainter.height / 2),
@@ -464,16 +485,19 @@ class _TablePainter extends CustomPainter {
 
   void _paintPot(Canvas canvas, Offset center, Rect feltRect) {
     // Pushed much further out to the right side so it feels separated from the cards
-    final potCenter = center + Offset(feltRect.shortestSide * 0.85, feltRect.shortestSide * 0.15);
+    final potCenter =
+        center +
+        Offset(feltRect.shortestSide * 0.85, feltRect.shortestSide * 0.15);
     const colors = [
       _HeroPalette.chipRed,
       _HeroPalette.chipWhite,
       _HeroPalette.chipBlue,
     ];
-    
+
     // Smooth, elegant floating effect instead of a fast jittery bounce
     for (var i = 0; i < colors.length; i++) {
-      final floatAnim = math.sin(t * math.pi * 4 + i * 1.5) * feltRect.shortestSide * 0.015;
+      final floatAnim =
+          math.sin(t * math.pi * 4 + i * 1.5) * feltRect.shortestSide * 0.015;
       _drawChipStack(
         canvas,
         potCenter + Offset((i - 1) * feltRect.shortestSide * 0.07, floatAnim),
@@ -493,7 +517,9 @@ class _TablePainter extends CustomPainter {
   ) {
     // Calculate a darker shade for the rim to give real 3D depth
     final hsl = HSLColor.fromColor(color);
-    final darkColor = hsl.withLightness((hsl.lightness - 0.2).clamp(0.0, 1.0)).toColor();
+    final darkColor = hsl
+        .withLightness((hsl.lightness - 0.2).clamp(0.0, 1.0))
+        .toColor();
 
     final rimPaint = Paint()..color = darkColor;
     final facePaint = Paint()..color = color;
@@ -503,7 +529,7 @@ class _TablePainter extends CustomPainter {
 
     for (var i = 0; i < count; i++) {
       final chipCenter = base - Offset(0, radius * 0.75 * i);
-      
+
       // Deep 3D Shadow
       canvas.drawOval(
         Rect.fromCenter(
@@ -513,7 +539,7 @@ class _TablePainter extends CustomPainter {
         ),
         shadowPaint,
       );
-      
+
       // Extruded Rim
       canvas.drawOval(
         Rect.fromCenter(
@@ -523,7 +549,7 @@ class _TablePainter extends CustomPainter {
         ),
         rimPaint,
       );
-      
+
       // Top Face
       canvas.drawOval(
         Rect.fromCenter(
@@ -533,7 +559,7 @@ class _TablePainter extends CustomPainter {
         ),
         facePaint,
       );
-      
+
       // Inner clay ring detail
       canvas.drawOval(
         Rect.fromCenter(
@@ -552,7 +578,7 @@ class _TablePainter extends CustomPainter {
         radius * 0.8 * math.cos(t * math.pi * 4 + i * 0.5),
         radius * 0.4 * math.sin(t * math.pi * 4 + i * 0.5),
       );
-      
+
       canvas.drawOval(
         Rect.fromCenter(
           center: chipCenter + shimmerOffset,

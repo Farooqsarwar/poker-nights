@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -29,6 +30,14 @@ class StructureReviewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
+    final isAdmin = app.user?.isAdmin ?? false;
+
+    if (!isAdmin) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) context.go(RoutePaths.invitation);
+      });
+      return const SizedBox.shrink();
+    }
 
     if (game == null) {
       return AppEmptyState(
@@ -43,11 +52,20 @@ class StructureReviewScreen extends StatelessWidget {
 
     final structure = game.structure;
     final settings = game.settings;
-    final totalMins = structure.levels.fold<int>(0, (s, l) => s + l.durationMins);
-    final anteStartLevel = structure.levels.indexWhere((l) => l.ante != null) + 1;
-    final expectedRebuys = settings.rebuys ? (settings.players * 0.35).round() : 0;
-    final expectedAddOns = settings.addOn ? (settings.players * 0.65).round() : 0;
-    final totalChips = settings.players * structure.startingStack +
+    final totalMins = structure.levels.fold<int>(
+      0,
+      (s, l) => s + l.durationMins,
+    );
+    final anteStartLevel =
+        structure.levels.indexWhere((l) => l.ante != null) + 1;
+    final expectedRebuys = settings.rebuys
+        ? (settings.players * 0.35).round()
+        : 0;
+    final expectedAddOns = settings.addOn
+        ? (settings.players * 0.65).round()
+        : 0;
+    final totalChips =
+        settings.players * structure.startingStack +
         expectedRebuys * structure.rebuyStack +
         expectedAddOns * structure.addOnStack;
     final hasStructure = structure.levels.isNotEmpty;
@@ -73,15 +91,30 @@ class StructureReviewScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                   child: const Padding(
                     padding: EdgeInsets.all(AppSpacing.xs),
-                    child: Icon(Icons.arrow_back, size: AppFontSizes.xl, color: AppColors.mutedForeground),
+                    child: Icon(
+                      Icons.arrow_back,
+                      size: AppFontSizes.xl,
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Structure Review', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
-                    Text(settings.name, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                    Text(
+                      'Structure Review',
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxxl,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      settings.name,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -92,41 +125,56 @@ class StructureReviewScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.timer_outlined, size: 32, color: AppColors.primary),
+                  const Icon(
+                    Icons.timer_outlined,
+                    size: 32,
+                    color: AppColors.primary,
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     reviewOpen
                         ? 'Ready to generate the estimate'
                         : 'Structure unlocks 30 minutes before start',
-                    style: AppTypography.bodyLg.copyWith(fontWeight: FontWeight.w600),
+                    style: AppTypography.bodyLg.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     reviewOpen
                         ? 'The AI can now calculate stacks, blinds and levels from the total '
-                            'attendance (everyone who answered Going or Going +N) and the inputs '
-                            'you provided.'
+                              'attendance (everyone who answered Going or Going +N) and the inputs '
+                              'you provided.'
                         : 'While the group is still deciding whether to attend, there is nothing '
-                            'to calculate yet. Once the window opens, the AI estimates stacks, '
-                            'blinds and levels from the total number of players. '
-                            '${unlockAt != null ? 'Unlocks at ${hhmm(unlockAt)}.' : ''}',
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                              'to calculate yet. Once the window opens, the AI estimates stacks, '
+                              'blinds and levels from the total number of players. '
+                              '${unlockAt != null ? 'Unlocks at ${hhmm(unlockAt)}.' : ''}',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                   if (reviewOpen) ...[
                     const SizedBox(height: AppSpacing.xl),
                     AppButton(
                       fullWidth: true,
                       size: AppButtonSize.lg,
-                      onPressed: () => context.read<AppProvider>().generateStructureFromRsvps(),
-                      child: const AppIconLabel(label: 'Generate structure estimate', trailing: Icons.auto_awesome),
+                      onPressed: () => context
+                          .read<AppProvider>()
+                          .generateStructureFromRsvps(),
+                      child: const AppIconLabel(
+                        label: 'Generate structure estimate',
+                        trailing: Icons.auto_awesome,
+                      ),
                     ),
-                  ] else ...[
+                  ] else if (kDebugMode) ...[
                     const SizedBox(height: AppSpacing.xl),
                     AppButton(
                       fullWidth: true,
                       size: AppButtonSize.md,
                       variant: AppButtonVariant.ghost,
-                      onPressed: () => context.read<AppProvider>().generateStructureFromRsvps(force: true),
+                      onPressed: () => context
+                          .read<AppProvider>()
+                          .generateStructureFromRsvps(force: true),
                       child: const Text('Bypass wait (testing)'),
                     ),
                   ],
@@ -145,7 +193,7 @@ class StructureReviewScreen extends StatelessWidget {
     final finishWindow = start == null
         ? null
         : '${hhmm(start.add(Duration(minutes: totalMins - 10)))}–'
-            '${hhmm(start.add(Duration(minutes: totalMins + 15)))}';
+              '${hhmm(start.add(Duration(minutes: totalMins + 15)))}';
 
     return AppPage(
       maxWidth: 640,
@@ -159,15 +207,30 @@ class StructureReviewScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: const Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(Icons.arrow_back, size: AppFontSizes.xl, color: AppColors.mutedForeground),
+                  child: Icon(
+                    Icons.arrow_back,
+                    size: AppFontSizes.xl,
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Structure Review', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
-                  Text(settings.name, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                  Text(
+                    'Structure Review',
+                    style: AppTypography.display(
+                      size: AppFontSizes.xxxl,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    settings.name,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -199,12 +262,49 @@ class StructureReviewScreen extends StatelessWidget {
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
             children: [
-              SizedBox(width: 150, child: _SummaryCard(label: 'Players', value: '${settings.players}')),
-              SizedBox(width: 150, child: _SummaryCard(label: 'Starting stack', value: Formatters.chips(structure.startingStack))),
-              SizedBox(width: 150, child: _SummaryCard(label: 'Total chips', value: Formatters.chips(totalChips))),
-              SizedBox(width: 150, child: _SummaryCard(label: 'Level duration', value: '${structure.levelDuration}m')),
-              SizedBox(width: 150, child: _SummaryCard(label: 'Levels', value: '${structure.levels.length}')),
-              SizedBox(width: 150, child: _SummaryCard(label: 'Est. finish', value: finishWindow ?? Formatters.duration(totalMins))),
+              SizedBox(
+                width: 150,
+                child: _PlayerCountCard(
+                  players: settings.players,
+                  isAdmin: isAdmin,
+                  onChanged: (v) => app.updateStructurePlayerCount(v),
+                ),
+              ),
+              SizedBox(
+                width: 150,
+                child: _SummaryCard(
+                  label: 'Starting stack',
+                  value: Formatters.chips(structure.startingStack),
+                ),
+              ),
+              SizedBox(
+                width: 150,
+                child: _SummaryCard(
+                  label: 'Total chips',
+                  value: Formatters.chips(totalChips),
+                ),
+              ),
+              SizedBox(
+                width: 150,
+                child: _SummaryCard(
+                  label: 'Level duration',
+                  value: '${structure.levelDuration}m',
+                ),
+              ),
+              SizedBox(
+                width: 150,
+                child: _SummaryCard(
+                  label: 'Levels',
+                  value: '${structure.levels.length}',
+                ),
+              ),
+              SizedBox(
+                width: 150,
+                child: _SummaryCard(
+                  label: 'Est. finish',
+                  value: finishWindow ?? Formatters.duration(totalMins),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -216,7 +316,9 @@ class StructureReviewScreen extends StatelessWidget {
               children: [
                 Text(
                   'Starting stack — ${Formatters.chips(structure.startingStack)}',
-                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 for (final c in structure.chipPlan)
@@ -226,15 +328,24 @@ class StructureReviewScreen extends StatelessWidget {
                       children: [
                         _ChipDot(hex: c.hex, value: c.value),
                         const SizedBox(width: AppSpacing.md),
-                        Expanded(child: Text(c.color, style: AppTypography.bodySm)),
-                        Text('×${c.count}', style: AppTypography.monoSm.copyWith(color: AppColors.mutedForeground)),
+                        Expanded(
+                          child: Text(c.color, style: AppTypography.bodySm),
+                        ),
+                        Text(
+                          '×${c.count}',
+                          style: AppTypography.monoSm.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
                         const SizedBox(width: AppSpacing.lg),
                         SizedBox(
                           width: 72,
                           child: Text(
                             Formatters.chips(c.total),
                             textAlign: TextAlign.right,
-                            style: AppTypography.monoSm.copyWith(color: AppColors.primary),
+                            style: AppTypography.monoSm.copyWith(
+                              color: AppColors.primary,
+                            ),
                           ),
                         ),
                       ],
@@ -243,13 +354,17 @@ class StructureReviewScreen extends StatelessWidget {
                 if (settings.rebuys) ...[
                   Container(
                     padding: const EdgeInsets.only(top: AppSpacing.md),
-                    decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+                    decoration: const BoxDecoration(
+                      border: Border(top: BorderSide(color: AppColors.border)),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Rebuy stack — ${Formatters.chips(structure.rebuyStack)}',
-                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         for (final c in structure.rebuyChipPlan)
@@ -259,8 +374,16 @@ class StructureReviewScreen extends StatelessWidget {
                               children: [
                                 _ChipDot(hex: c.hex, value: c.value),
                                 const SizedBox(width: AppSpacing.md),
-                                Expanded(child: Text(c.color, style: AppTypography.bodyXs)),
-                                Text('×${c.count}', style: AppTypography.monoXs),
+                                Expanded(
+                                  child: Text(
+                                    c.color,
+                                    style: AppTypography.bodyXs,
+                                  ),
+                                ),
+                                Text(
+                                  '×${c.count}',
+                                  style: AppTypography.monoXs,
+                                ),
                               ],
                             ),
                           ),
@@ -273,7 +396,9 @@ class StructureReviewScreen extends StatelessWidget {
                     padding: const EdgeInsets.only(top: AppSpacing.sm),
                     child: Text(
                       'Add-on stack: ${Formatters.chips(structure.addOnStack)} — same as starting stack',
-                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ),
               ],
@@ -291,7 +416,9 @@ class StructureReviewScreen extends StatelessWidget {
                   children: [
                     Text(
                       'Blind schedule — ${structure.levelDuration}-minute levels',
-                      style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     AppButton(
                       size: AppButtonSize.sm,
@@ -306,15 +433,20 @@ class StructureReviewScreen extends StatelessWidget {
                             currentLevel: 0,
                             anteStyle: settings.anteStyle,
                             onSpeedUp: () {
-                              app.acceptSpeedRecommendation(rec: SpeedRecommendation.speedUp);
+                              app.acceptSpeedRecommendation(
+                                rec: SpeedRecommendation.speedUp,
+                              );
                               Navigator.of(context).pop();
                             },
                             onSlowDown: () {
-                              app.acceptSpeedRecommendation(rec: SpeedRecommendation.slowDown);
+                              app.acceptSpeedRecommendation(
+                                rec: SpeedRecommendation.slowDown,
+                              );
                               Navigator.of(context).pop();
                             },
                             onApply: (levels) {
-                              if (levels.isNotEmpty) app.applyFutureLevels(levels);
+                              if (levels.isNotEmpty)
+                                app.applyFutureLevels(levels);
                               Navigator.of(context).pop();
                             },
                           ),
@@ -330,72 +462,130 @@ class StructureReviewScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                   child: Row(
                     children: const [
-                      Expanded(child: _LevelCell(label: 'Level', align: TextAlign.left)),
-                      Expanded(child: _LevelCell(label: 'Small', align: TextAlign.right)),
-                      Expanded(child: _LevelCell(label: 'Big', align: TextAlign.right)),
-                      Expanded(child: _LevelCell(label: 'Ante', align: TextAlign.right)),
-                      Expanded(child: _LevelCell(label: 'BB Depth', align: TextAlign.right)),
+                      Expanded(
+                        child: _LevelCell(
+                          label: 'Level',
+                          align: TextAlign.left,
+                        ),
+                      ),
+                      Expanded(
+                        child: _LevelCell(
+                          label: 'Small',
+                          align: TextAlign.right,
+                        ),
+                      ),
+                      Expanded(
+                        child: _LevelCell(label: 'Big', align: TextAlign.right),
+                      ),
+                      Expanded(
+                        child: _LevelCell(
+                          label: 'Ante',
+                          align: TextAlign.right,
+                        ),
+                      ),
+                      Expanded(
+                        child: _LevelCell(
+                          label: 'BB Depth',
+                          align: TextAlign.right,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 const Divider(color: AppColors.border, height: 1),
                 for (var i = 0; i < structure.levels.length; i++)
-                  Builder(builder: (context) {
-                    final l = structure.levels[i];
-                    final isRebuyClose = settings.rebuys && l.level == settings.rebuysCloseLevel;
-                    final isAnteStart = l.ante != null && (i == 0 || structure.levels[i - 1].ante == null);
-                    final bbDepth = (structure.startingStack / l.bb).round();
-                    return Container(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isAnteStart ? AppColors.primarySoft.withValues(alpha: 0.15) : null,
-                        border: isRebuyClose
-                            ? const Border(bottom: BorderSide(color: AppColors.primary, width: 2))
-                            : const Border(bottom: BorderSide(color: AppColors.hairlineBorder)),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${l.level}',
-                              style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground),
-                            ),
-                          ),
-                          Expanded(child: Text(Formatters.chips(l.sb), textAlign: TextAlign.right, style: AppTypography.monoXs)),
-                          Expanded(
-                            child: Text(
-                              Formatters.chips(l.bb),
-                              textAlign: TextAlign.right,
-                              style: AppTypography.monoXs.copyWith(color: AppColors.foreground, fontWeight: FontWeight.w500),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              l.ante != null ? Formatters.chips(l.ante!) : '—',
-                              textAlign: TextAlign.right,
-                              style: AppTypography.monoXs.copyWith(
-                                color: l.ante != null ? AppColors.accent : AppColors.mutedForeground,
+                  Builder(
+                    builder: (context) {
+                      final l = structure.levels[i];
+                      final isRebuyClose =
+                          settings.rebuys &&
+                          l.level == settings.rebuysCloseLevel;
+                      final isAnteStart =
+                          l.ante != null &&
+                          (i == 0 || structure.levels[i - 1].ante == null);
+                      final bbDepth = (structure.startingStack / l.bb).round();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isAnteStart
+                              ? AppColors.primarySoft.withValues(alpha: 0.15)
+                              : null,
+                          border: isRebuyClose
+                              ? const Border(
+                                  bottom: BorderSide(
+                                    color: AppColors.primary,
+                                    width: 2,
+                                  ),
+                                )
+                              : const Border(
+                                  bottom: BorderSide(
+                                    color: AppColors.hairlineBorder,
+                                  ),
+                                ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${l.level}',
+                                style: AppTypography.monoXs.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
                               ),
                             ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              '$bbDepth',
-                              textAlign: TextAlign.right,
-                              style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground),
+                            Expanded(
+                              child: Text(
+                                Formatters.chips(l.sb),
+                                textAlign: TextAlign.right,
+                                style: AppTypography.monoXs,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
+                            Expanded(
+                              child: Text(
+                                Formatters.chips(l.bb),
+                                textAlign: TextAlign.right,
+                                style: AppTypography.monoXs.copyWith(
+                                  color: AppColors.foreground,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                l.ante != null
+                                    ? Formatters.chips(l.ante!)
+                                    : '—',
+                                textAlign: TextAlign.right,
+                                style: AppTypography.monoXs.copyWith(
+                                  color: l.ante != null
+                                      ? AppColors.accent
+                                      : AppColors.mutedForeground,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                '$bbDepth',
+                                textAlign: TextAlign.right,
+                                style: AppTypography.monoXs.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 if (settings.rebuys)
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.sm),
                     child: Text(
                       'Rebuys close after Level ${settings.rebuysCloseLevel}.'
                       '${settings.anteEnabled && anteStartLevel > 0 ? ' Ante starts Level $anteStartLevel.' : ''}',
-                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ),
               ],
@@ -411,16 +601,29 @@ class StructureReviewScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(child: Text('Prize distribution (admin only)', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600))),
+                    Expanded(
+                      child: Text(
+                        'Prize distribution (admin only)',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                     SizedBox(
                       width: 140,
                       child: AppSelect<int?>(
                         value: settings.forcePaidPlaces,
                         hint: 'Auto-calculate',
                         items: [
-                          const DropdownMenuItem<int?>(value: null, child: Text('Auto')),
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('Auto'),
+                          ),
                           for (var i = 1; i <= 10; i++)
-                            DropdownMenuItem<int?>(value: i, child: Text('$i paid places')),
+                            DropdownMenuItem<int?>(
+                              value: i,
+                              child: Text('$i paid places'),
+                            ),
                         ],
                         onChanged: (v) => app.overridePaidPlaces(v),
                       ),
@@ -428,54 +631,98 @@ class StructureReviewScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Based on ${settings.players} players + estimated rebuys${settings.addOn ? ' + add-ons' : ''}. Players will see prize pool total only.',
-                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                for (final p in structure.prizes)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        p.place <= 3
-                            ? SizedBox(
-                                width: 24,
-                                child: Center(child: MedalIcon(p.place, size: AppFontSizes.md)),
-                              )
-                            : SizedBox(
-                                width: 24,
-                                child: Center(
-                                  child: Text(
-                                    _placeLabel(p.place),
-                                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                                  ),
-                                ),
-                              ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Text(
-                            _placeName(p.place),
-                            style: AppTypography.bodySm,
-                          ),
-                        ),
-                        Text(
-                          '${p.amount}',
-                          style: AppTypography.monoSm.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
-                        ),
-                      ],
+                if (!game.settlementConfirmed) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  const Icon(
+                    Icons.lock_outline,
+                    size: 28,
+                    color: AppColors.mutedForeground,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Distribution calculated at rebuy close',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                const Divider(color: AppColors.border),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Prices are calculated at the end of Level ${settings.rebuysCloseLevel}, '
+                    'when the exact number of players, actual rebuys and selected add-ons are known.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const Divider(height: AppSpacing.lg),
+                ] else ...[
+                  Text(
+                    'Based on ${settings.players} players + estimated rebuys${settings.addOn ? ' + add-ons' : ''}. Players will see prize pool total only.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  for (final p in structure.prizes)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          p.place <= 3
+                              ? SizedBox(
+                                  width: 24,
+                                  child: Center(
+                                    child: MedalIcon(
+                                      p.place,
+                                      size: AppFontSizes.md,
+                                    ),
+                                  ),
+                                )
+                              : SizedBox(
+                                  width: 24,
+                                  child: Center(
+                                    child: Text(
+                                      _placeLabel(p.place),
+                                      style: AppTypography.bodyXs.copyWith(
+                                        color: AppColors.mutedForeground,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              _placeName(p.place),
+                              style: AppTypography.bodySm,
+                            ),
+                          ),
+                          Text(
+                            '${p.amount}',
+                            style: AppTypography.monoSm.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const Divider(color: AppColors.border),
+                ],
                 Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.sm),
                   child: Row(
                     children: [
-                      Text('Est. prize pool', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                      Text(
+                        'Est. prize pool',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
                       const Spacer(),
                       Text(
                         '${structure.prizePool}',
-                        style: AppTypography.monoXs.copyWith(color: AppColors.foreground),
+                        style: AppTypography.monoXs.copyWith(
+                          color: AppColors.foreground,
+                        ),
                       ),
                     ],
                   ),
@@ -489,12 +736,16 @@ class StructureReviewScreen extends StatelessWidget {
                       // under a "(%)" label).
                       Text(
                         'Organizational costs · ${settings.organizerPct}%',
-                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
                       ),
                       const Spacer(),
                       Text(
                         '${structure.organizerAmount}',
-                        style: AppTypography.monoXs.copyWith(color: AppColors.foreground),
+                        style: AppTypography.monoXs.copyWith(
+                          color: AppColors.foreground,
+                        ),
                       ),
                     ],
                   ),
@@ -510,7 +761,12 @@ class StructureReviewScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Color-up at rebuy close', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                  Text(
+                    'Color-up at rebuy close',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.sm),
                   for (final ins in structure.colorUpInstructions)
                     Padding(
@@ -518,10 +774,19 @@ class StructureReviewScreen extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.arrow_forward, size: 14, color: AppColors.primary),
+                          Icon(
+                            Icons.arrow_forward,
+                            size: 14,
+                            color: AppColors.primary,
+                          ),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
-                            child: Text(ins, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                            child: Text(
+                              ins,
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -568,7 +833,9 @@ class StructureReviewScreen extends StatelessWidget {
                             'Recalculating regenerates the blinds, levels and prize distribution '
                             'from the current settings and attendance. Manual level edits will be '
                             'lost. Starting stacks stay frozen once the tournament has started.',
-                            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
                           const SizedBox(height: AppSpacing.xl),
                           Row(
@@ -623,7 +890,11 @@ class StructureReviewScreen extends StatelessWidget {
                       children: [
                         Text('Confirm structure'),
                         SizedBox(width: 6),
-                        Icon(Icons.check_circle, size: 14, color: AppColors.icon),
+                        Icon(
+                          Icons.check_circle,
+                          size: 14,
+                          color: AppColors.icon,
+                        ),
                       ],
                     ),
                   ),
@@ -650,11 +921,89 @@ class _SummaryCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         children: [
-          Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            label,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: AppTypography.mono(size: AppFontSizes.md, weight: FontWeight.w700, color: AppColors.primary),
+            style: AppTypography.mono(
+              size: AppFontSizes.md,
+              weight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlayerCountCard extends StatelessWidget {
+  const _PlayerCountCard({
+    required this.players,
+    required this.onChanged,
+    required this.isAdmin,
+  });
+
+  final int players;
+  final ValueChanged<int> onChanged;
+  final bool isAdmin;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isAdmin) {
+      return _SummaryCard(label: 'Players', value: '$players');
+    }
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.sm,
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Players',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              InkWell(
+                onTap: players > 2 ? () => onChanged(players - 1) : null,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: Icon(
+                    Icons.remove,
+                    size: 20,
+                    color: players > 2 ? AppColors.primary : AppColors.muted,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                '$players',
+                style: AppTypography.mono(
+                  size: AppFontSizes.md,
+                  weight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              InkWell(
+                onTap: () => onChanged(players + 1),
+                child: const Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: Icon(Icons.add, size: 20, color: AppColors.primary),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -663,16 +1012,19 @@ class _SummaryCard extends StatelessWidget {
 }
 
 String _placeLabel(int place) => switch (place) {
-      1 => '1st',
-      2 => '2nd',
-      3 => '3rd',
-      _ => '${place}th',
-    };
+  1 => '1st',
+  2 => '2nd',
+  3 => '3rd',
+  _ => '${place}th',
+};
 
 /// Computes the total chips required for the plan (starting stacks for every
 /// expected player + expected rebuys + expected add-ons) and flags any
 /// denomination where the host owns fewer chips than required (§4.5, 12-059).
-List<String> _chipShortages(TournamentStructure structure, GameSettings settings) {
+List<String> _chipShortages(
+  TournamentStructure structure,
+  GameSettings settings,
+) {
   final players = settings.players;
   final expectedRebuys = settings.rebuys ? (players * 0.35).round() : 0;
   final expectedAddOns = settings.addOn ? (players * 0.65).round() : 0;
@@ -703,11 +1055,11 @@ List<String> _chipShortages(TournamentStructure structure, GameSettings settings
 }
 
 String _placeName(int place) => switch (place) {
-      1 => '1st Place',
-      2 => '2nd Place',
-      3 => '3rd Place',
-      _ => '${place}th Place',
-    };
+  1 => '1st Place',
+  2 => '2nd Place',
+  3 => '3rd Place',
+  _ => '${place}th Place',
+};
 
 class _LevelCell extends StatelessWidget {
   const _LevelCell({required this.label, required this.align});
@@ -720,7 +1072,10 @@ class _LevelCell extends StatelessWidget {
     return Text(
       label,
       textAlign: align,
-      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, fontWeight: FontWeight.w500),
+      style: AppTypography.bodyXs.copyWith(
+        color: AppColors.mutedForeground,
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 }
@@ -733,7 +1088,9 @@ class _ChipDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = value >= 1000 ? '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K' : '$value';
+    final label = value >= 1000
+        ? '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K'
+        : '$value';
     return Container(
       width: 28,
       height: 28,
@@ -741,15 +1098,23 @@ class _ChipDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: Color(hex),
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
       ),
       child: Text(
         label,
-        style: AppTypography.mono(
-          size: 8,
-          weight: FontWeight.w700,
-          color: Colors.white,
-        ).copyWith(shadows: const [Shadow(color: AppColors.shadowDeep, blurRadius: 2)]),
+        style:
+            AppTypography.mono(
+              size: 8,
+              weight: FontWeight.w700,
+              color: Colors.white,
+            ).copyWith(
+              shadows: const [
+                Shadow(color: AppColors.shadowDeep, blurRadius: 2),
+              ],
+            ),
       ),
     );
   }

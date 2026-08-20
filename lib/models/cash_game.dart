@@ -86,21 +86,17 @@ class CashSession {
   final List<CashPlayer> players;
   final String? unresolvedNote;
 
-  double get totalInPlay =>
-      players.fold(0, (sum, p) => sum + p.stack);
+  double get totalInPlay => players.fold(0, (sum, p) => sum + p.stack);
 
-  double get totalBuyIns =>
-      players.fold(0, (sum, p) => sum + p.totalBuyIns);
+  double get totalBuyIns => players.fold(0, (sum, p) => sum + p.totalBuyIns);
 
-  double get totalCashedOut =>
-      players.fold(0, (sum, p) => sum + p.cashedOut);
+  double get totalCashedOut => players.fold(0, (sum, p) => sum + p.cashedOut);
 
   double get expectedInPlay => totalBuyIns - totalCashedOut;
 
   double get difference => (totalBuyIns - totalCashedOut) - totalInPlay;
 
-  Duration get elapsed =>
-      DateTime.now().difference(startTime);
+  Duration get elapsed => DateTime.now().difference(startTime);
 
   CashSession copyWith({
     bool? isCompleted,
@@ -117,4 +113,3 @@ class CashSession {
     );
   }
 }
-

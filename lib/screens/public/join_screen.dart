@@ -36,7 +36,9 @@ class _JoinScreenState extends State<JoinScreen> {
     }
     final result = context.read<AppProvider>().enterGameCode(code);
     if (result == CodeLookupResult.notFound) {
-      setState(() => _codeError = 'Game not found. Check the code and try again.');
+      setState(
+        () => _codeError = 'Game not found. Check the code and try again.',
+      );
       return;
     }
     if (result == CodeLookupResult.tv) {
@@ -96,7 +98,9 @@ class _JoinScreenState extends State<JoinScreen> {
                     Text(
                       'Enter code or scan QR to join.',
                       textAlign: TextAlign.center,
-                      style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xl),
                     TextField(
@@ -106,7 +110,8 @@ class _JoinScreenState extends State<JoinScreen> {
                       textAlign: TextAlign.center,
                       style: AppTypography.monoLg.copyWith(letterSpacing: 3),
                       onChanged: (_) {
-                        if (_codeError != null) setState(() => _codeError = null);
+                        if (_codeError != null)
+                          setState(() => _codeError = null);
                       },
                       decoration: InputDecoration(
                         counterText: '',
@@ -118,7 +123,10 @@ class _JoinScreenState extends State<JoinScreen> {
                         isDense: true,
                         filled: true,
                         fillColor: AppColors.background,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
                           borderSide: const BorderSide(color: AppColors.border),
@@ -134,7 +142,9 @@ class _JoinScreenState extends State<JoinScreen> {
                         padding: const EdgeInsets.only(top: AppSpacing.sm),
                         child: Text(
                           _codeError!,
-                          style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.destructive,
+                          ),
                         ),
                       ),
                     const SizedBox(height: AppSpacing.xl),
@@ -156,8 +166,15 @@ class _JoinScreenState extends State<JoinScreen> {
                       children: [
                         Expanded(child: Divider(color: AppColors.border)),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                          child: Text('OR', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                          ),
+                          child: Text(
+                            'OR',
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
                         ),
                         Expanded(child: Divider(color: AppColors.border)),
                       ],
@@ -213,7 +230,7 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
           if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
             _hasScanned = true;
             final code = barcodes.first.rawValue!;
-            
+
             // Extract code if it's a URL
             String extracted = code;
             if (code.contains('code=')) {
@@ -221,7 +238,7 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
             } else if (code.contains('/game/')) {
               extracted = code.split('/game/').last;
             }
-            
+
             Navigator.pop(context, extracted);
           }
         },

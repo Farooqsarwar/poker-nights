@@ -22,11 +22,11 @@ class GuestSession {
   final int slot;
 
   Map<String, dynamic> toMap() => {
-        'gameId': gameId,
-        'name': name,
-        'inviterId': inviterId,
-        'slot': slot,
-      };
+    'gameId': gameId,
+    'name': name,
+    'inviterId': inviterId,
+    'slot': slot,
+  };
 
   static GuestSession? fromMap(Map<String, dynamic> map) {
     final gameId = map['gameId'] as String?;
@@ -36,7 +36,12 @@ class GuestSession {
     if (gameId == null || name == null || inviterId == null || slot == null) {
       return null;
     }
-    return GuestSession(gameId: gameId, name: name, inviterId: inviterId, slot: slot);
+    return GuestSession(
+      gameId: gameId,
+      name: name,
+      inviterId: inviterId,
+      slot: slot,
+    );
   }
 }
 
@@ -199,24 +204,33 @@ class RecoveryService {
       secondsRemaining: map['secondsRemaining'],
       players: (map['players'] as List).map((e) => _playerFromMap(e)).toList(),
       chat: (map['chat'] as List).map((e) => _chatMessageFromMap(e)).toList(),
-      announcements: (map['announcements'] as List).map((e) => _announcementFromMap(e)).toList(),
+      announcements: (map['announcements'] as List)
+          .map((e) => _announcementFromMap(e))
+          .toList(),
       totalChipsInPlay: map['totalChipsInPlay'],
-      pendingGuests: (map['pendingGuests'] as List).map((e) => _playerFromMap(e)).toList(),
+      pendingGuests: (map['pendingGuests'] as List)
+          .map((e) => _playerFromMap(e))
+          .toList(),
       finishOrder: List<String>.from(map['finishOrder'] ?? []),
       speedRecommendation: map['speedRecommendation'] != null
-          ? SpeedRecommendation.values.firstWhere((e) => e.name == map['speedRecommendation'])
+          ? SpeedRecommendation.values.firstWhere(
+              (e) => e.name == map['speedRecommendation'],
+            )
           : null,
       settlementConfirmed: map['settlementConfirmed'] ?? false,
       seatingConfirmed: map['seatingConfirmed'] ?? false,
       dealerPlayerId: map['dealerPlayerId'],
-      guestSlots: (map['guestSlots'] as List?)
+      guestSlots:
+          (map['guestSlots'] as List?)
               ?.map((e) => _guestSlotFromMap(e))
               .toList() ??
           const [],
       originalLevels: (map['originalLevels'] as List?)
           ?.map((e) => _blindLevelFromMap(e))
           .toList(),
-      levelEndTime: map['levelEndTime'] != null ? DateTime.parse(map['levelEndTime']) : null,
+      levelEndTime: map['levelEndTime'] != null
+          ? DateTime.parse(map['levelEndTime'])
+          : null,
     );
   }
 
@@ -269,11 +283,15 @@ class RecoveryService {
       addOnCloseLevel: map['addOnCloseLevel'] ?? 6,
       anteEnabled: map['anteEnabled'] ?? false,
       anteAfterLevel: map['anteAfterLevel'] ?? 0,
-      anteStyle: AnteStyle.values.asNameMap()[map['anteStyle']] ?? AnteStyle.bigBlind,
-      antePreference: AntePreference.values.asNameMap()[map['antePreference']] ??
+      anteStyle:
+          AnteStyle.values.asNameMap()[map['anteStyle']] ?? AnteStyle.bigBlind,
+      antePreference:
+          AntePreference.values.asNameMap()[map['antePreference']] ??
           AntePreference.recommend,
       organizerPct: map['organizerPct'] ?? 0,
-      chipSet: (map['chipSet'] as List).map((e) => _chipColorFromMap(e)).toList(),
+      chipSet: (map['chipSet'] as List)
+          .map((e) => _chipColorFromMap(e))
+          .toList(),
       chipSetName: map['chipSetName'] ?? '',
       announceEliminations: map['announceEliminations'] ?? false,
       forcePaidPlaces: map['forcePaidPlaces'],
@@ -283,7 +301,9 @@ class RecoveryService {
     );
   }
 
-  static Map<String, dynamic> _tournamentStructureToMap(TournamentStructure struct) {
+  static Map<String, dynamic> _tournamentStructureToMap(
+    TournamentStructure struct,
+  ) {
     return {
       'startingStack': struct.startingStack,
       'chipPlan': struct.chipPlan.map(_chipPlanEntryToMap).toList(),
@@ -302,15 +322,27 @@ class RecoveryService {
     };
   }
 
-  static TournamentStructure _tournamentStructureFromMap(Map<String, dynamic> map) {
+  static TournamentStructure _tournamentStructureFromMap(
+    Map<String, dynamic> map,
+  ) {
     return TournamentStructure(
       startingStack: map['startingStack'],
-      chipPlan: (map['chipPlan'] as List).map((e) => _chipPlanEntryFromMap(e)).toList(),
+      chipPlan: (map['chipPlan'] as List)
+          .map((e) => _chipPlanEntryFromMap(e))
+          .toList(),
       rebuyStack: map['rebuyStack'],
-      rebuyChipPlan: (map['rebuyChipPlan'] as List).map((e) => _chipPlanEntryFromMap(e)).toList(),
+      rebuyChipPlan: (map['rebuyChipPlan'] as List)
+          .map((e) => _chipPlanEntryFromMap(e))
+          .toList(),
       addOnStack: map['addOnStack'],
-      addOnChipPlan: (map['addOnChipPlan'] as List?)?.map((e) => _chipPlanEntryFromMap(e)).toList() ?? const [],
-      levels: (map['levels'] as List).map((e) => _blindLevelFromMap(e)).toList(),
+      addOnChipPlan:
+          (map['addOnChipPlan'] as List?)
+              ?.map((e) => _chipPlanEntryFromMap(e))
+              .toList() ??
+          const [],
+      levels: (map['levels'] as List)
+          .map((e) => _blindLevelFromMap(e))
+          .toList(),
       levelDuration: map['levelDuration'],
       expectedFinishMins: map['expectedFinishMins'],
       prizes: (map['prizes'] as List).map((e) => _prizeFromMap(e)).toList(),
@@ -351,7 +383,10 @@ class RecoveryService {
       inviterId: map['inviterId'],
       guestSlot: map['guestSlot'],
       rsvp: map['rsvp'] != null
-          ? Rsvp.values.firstWhere((e) => e.name == map['rsvp'], orElse: () => Rsvp.maybe)
+          ? Rsvp.values.firstWhere(
+              (e) => e.name == map['rsvp'],
+              orElse: () => Rsvp.maybe,
+            )
           : null,
       checkedIn: map['checkedIn'] ?? false,
       confirmed: map['confirmed'] ?? false,
@@ -451,12 +486,7 @@ class RecoveryService {
   }
 
   static Map<String, dynamic> _chipPlanEntryToMap(ChipPlanEntry c) {
-    return {
-      'color': c.color,
-      'hex': c.hex,
-      'value': c.value,
-      'count': c.count,
-    };
+    return {'color': c.color, 'hex': c.hex, 'value': c.value, 'count': c.count};
   }
 
   static ChipPlanEntry _chipPlanEntryFromMap(Map<String, dynamic> map) {
@@ -469,17 +499,11 @@ class RecoveryService {
   }
 
   static Map<String, dynamic> _prizeToMap(Prize p) {
-    return {
-      'place': p.place,
-      'amount': p.amount,
-    };
+    return {'place': p.place, 'amount': p.amount};
   }
 
   static Prize _prizeFromMap(Map<String, dynamic> map) {
-    return Prize(
-      place: map['place'],
-      amount: map['amount'],
-    );
+    return Prize(place: map['place'], amount: map['amount']);
   }
 
   static Map<String, dynamic> _chipColorToMap(ChipColor c) {
@@ -520,7 +544,9 @@ class RecoveryService {
       isCompleted: map['isCompleted'] ?? false,
       startTime: DateTime.parse(map['startTime']),
       unresolvedNote: map['unresolvedNote'],
-      players: (map['players'] as List).map((e) => _cashPlayerFromMap(e)).toList(),
+      players: (map['players'] as List)
+          .map((e) => _cashPlayerFromMap(e))
+          .toList(),
     );
   }
 

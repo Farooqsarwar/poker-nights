@@ -28,7 +28,9 @@ class AppDivider extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             child: Text(
               label!,
-              style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
           ),
           const Expanded(child: Divider(color: AppColors.border, height: 1)),

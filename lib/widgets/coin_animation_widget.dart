@@ -39,17 +39,24 @@ class _CoinAnimationWidgetState extends State<CoinAnimationWidget>
       duration: const Duration(milliseconds: 450),
     );
 
-    _translateY = Tween<double>(begin: 0.0, end: -100.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInCubic),
-    );
+    _translateY = Tween<double>(
+      begin: 0.0,
+      end: -100.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInCubic));
 
     _blurY = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: 18.0).chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween(
+          begin: 0.0,
+          end: 18.0,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 40,
       ),
       TweenSequenceItem(
-        tween: Tween(begin: 18.0, end: 0.0).chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween(
+          begin: 18.0,
+          end: 0.0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 60,
       ),
     ]).animate(_controller);
@@ -104,10 +111,7 @@ class _CoinAnimationWidgetState extends State<CoinAnimationWidget>
             child: Opacity(
               opacity: _opacity.value,
               child: ImageFiltered(
-                imageFilter: ImageFilter.blur(
-                  sigmaX: 0,
-                  sigmaY: _blurY.value,
-                ),
+                imageFilter: ImageFilter.blur(sigmaX: 0, sigmaY: _blurY.value),
                 child: child,
               ),
             ),

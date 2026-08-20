@@ -94,10 +94,15 @@ class _LandingScreenState extends State<LandingScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Container(height: 1, color: AppColors.primary.withValues(alpha: 0.3)),
+                    child: Container(
+                      height: 1,
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                    ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                    ),
                     child: Text(
                       'PRIVATE HOME POKER',
                       style: AppTypography.bodyXs.copyWith(
@@ -107,7 +112,10 @@ class _LandingScreenState extends State<LandingScreen> {
                     ),
                   ),
                   Expanded(
-                    child: Container(height: 1, color: AppColors.primary.withValues(alpha: 0.3)),
+                    child: Container(
+                      height: 1,
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                    ),
                   ),
                 ],
               ),
@@ -135,7 +143,9 @@ class _LandingScreenState extends State<LandingScreen> {
                 child: Text(
                   'One host, one app. Tournament structure generated from your real chips. Timer, blinds, seating and prizes — handled.',
                   textAlign: TextAlign.center,
-                  style: AppTypography.bodyStyle.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodyStyle.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
@@ -172,16 +182,27 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Widget _buildFeatures(BuildContext context, bool isDesktop) {
     final features = [
-      (Icons.casino_outlined, 'Smart tournament engine',
-      'Enter your chip set and target duration — Poker Night works out stack sizes, blind levels and payouts that actually fit.'),
-      (Icons.tv_outlined, 'TV mode & voice',
-      'Open the TV page on any browser. Clean full-screen timer with voice announcements for level changes and eliminations.'),
-      (Icons.groups_outlined, 'Group management',
-      'Private group with RSVP, chat, polls and game history. Guests join with a code — no account required.'),
+      (
+        Icons.casino_outlined,
+        'Smart tournament engine',
+        'Enter your chip set and target duration — Poker Night works out stack sizes, blind levels and payouts that actually fit.',
+      ),
+      (
+        Icons.tv_outlined,
+        'TV mode & voice',
+        'Open the TV page on any browser. Clean full-screen timer with voice announcements for level changes and eliminations.',
+      ),
+      (
+        Icons.groups_outlined,
+        'Group management',
+        'Private group with RSVP, chat, polls and game history. Guests join with a code — no account required.',
+      ),
     ];
 
     // Build standard feature cards
-    final cards = features.map((f) => _FeatureCard(icon: f.$1, title: f.$2, body: f.$3)).toList();
+    final cards = features
+        .map((f) => _FeatureCard(icon: f.$1, title: f.$2, body: f.$3))
+        .toList();
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -193,30 +214,34 @@ class _LandingScreenState extends State<LandingScreen> {
       ),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100), // Prevent stretching on ultra-wide screens
+          constraints: const BoxConstraints(
+            maxWidth: 1100,
+          ), // Prevent stretching on ultra-wide screens
           child: isDesktop
-          // Desktop: Row with IntrinsicHeight ensures all cards stretch to match the tallest one
+              // Desktop: Row with IntrinsicHeight ensures all cards stretch to match the tallest one
               ? IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (int i = 0; i < cards.length; i++) ...[
-                  Expanded(child: cards[i]),
-                  if (i != cards.length - 1) const SizedBox(width: AppSpacing.xxl),
-                ]
-              ],
-            ),
-          )
-          // Mobile: Standard stacked column
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (int i = 0; i < cards.length; i++) ...[
+                        Expanded(child: cards[i]),
+                        if (i != cards.length - 1)
+                          const SizedBox(width: AppSpacing.xxl),
+                      ],
+                    ],
+                  ),
+                )
+              // Mobile: Standard stacked column
               : Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (int i = 0; i < cards.length; i++) ...[
-                cards[i],
-                if (i != cards.length - 1) const SizedBox(height: AppSpacing.xl),
-              ]
-            ],
-          ),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (int i = 0; i < cards.length; i++) ...[
+                      cards[i],
+                      if (i != cards.length - 1)
+                        const SizedBox(height: AppSpacing.xl),
+                    ],
+                  ],
+                ),
         ),
       ),
     );
@@ -224,7 +249,10 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Widget _buildFooter(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl, vertical: AppSpacing.lg),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xxl,
+        vertical: AppSpacing.lg,
+      ),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.hairlineWhite)),
       ),
@@ -233,8 +261,13 @@ class _LandingScreenState extends State<LandingScreen> {
         spacing: AppSpacing.lg,
         runSpacing: AppSpacing.sm,
         children: [
-          const Text('© 2026 Poker Night. All rights reserved.',
-              style: TextStyle(fontSize: AppFontSizes.xs, color: AppColors.mutedForeground)),
+          const Text(
+            '© 2026 Poker Night. All rights reserved.',
+            style: TextStyle(
+              fontSize: AppFontSizes.xs,
+              color: AppColors.mutedForeground,
+            ),
+          ),
           Wrap(
             spacing: AppSpacing.lg,
             runSpacing: AppSpacing.sm,
@@ -254,10 +287,15 @@ class _LandingScreenState extends State<LandingScreen> {
                     },
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 6.0,
+                        horizontal: 8.0,
+                      ),
                       child: Text(
                         l,
-                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
                       ),
                     ),
                   ),
@@ -282,7 +320,10 @@ class _FeaturePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 6,
+      ),
       decoration: BoxDecoration(
         color: AppColors.card.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -323,7 +364,12 @@ class _FeatureCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Text(title, style: AppTypography.display(size: AppFontSizes.lg)),
           const SizedBox(height: AppSpacing.sm),
-          Text(body, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            body,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
         ],
       ),
     );

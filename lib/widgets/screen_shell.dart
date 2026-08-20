@@ -24,7 +24,11 @@ import 'sidebar.dart';
 /// are redirected to sign-in, and a guest session is only allowed through to
 /// the live-game view (checklist §6.4/§15.14).
 class ScreenShell extends StatelessWidget {
-  const ScreenShell({super.key, required this.child, required this.requiredPath});
+  const ScreenShell({
+    super.key,
+    required this.child,
+    required this.requiredPath,
+  });
 
   final Widget child;
 
@@ -48,10 +52,7 @@ class ScreenShell extends StatelessWidget {
     // Guests get a bare scaffold with no navigation chrome — every nav
     // button in the sidebar / drawer / bottom-nav would be a dead end.
     if (!signedIn && guestOk) {
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        body: child,
-      );
+      return Scaffold(backgroundColor: AppColors.background, body: child);
     }
 
     return ResponsiveBuilder(
@@ -93,7 +94,11 @@ class _Gate extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.lock_outline, size: 40, color: AppColors.mutedForeground),
+                const Icon(
+                  Icons.lock_outline,
+                  size: 40,
+                  color: AppColors.mutedForeground,
+                ),
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   'Signed out',
@@ -104,7 +109,9 @@ class _Gate extends StatelessWidget {
                 Text(
                   'This page needs a signed-in account. Guests can only watch the live game.',
                   textAlign: TextAlign.center,
-                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 AppButton(
@@ -179,7 +186,10 @@ class _MobileTopBar extends StatelessWidget {
               onTap: onMenu,
               borderRadius: BorderRadius.circular(AppRadius.sm),
               child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.xs),
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: AppSpacing.xs,
+                ),
                 child: Icon(Icons.menu, color: AppColors.foreground, size: 22),
               ),
             ),
@@ -188,7 +198,10 @@ class _MobileTopBar extends StatelessWidget {
             const SizedBox(width: AppSpacing.xs),
             Text(
               'Poker Night',
-              style: AppTypography.crimsonShimmer(size: AppFontSizes.md, weight: FontWeight.w700),
+              style: AppTypography.crimsonShimmer(
+                size: AppFontSizes.md,
+                weight: FontWeight.w700,
+              ),
             ),
             const Spacer(),
             InkWell(
@@ -198,7 +211,11 @@ class _MobileTopBar extends StatelessWidget {
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 child: Stack(
                   children: [
-                    const Icon(Icons.notifications_none, color: AppColors.mutedForeground, size: 24),
+                    const Icon(
+                      Icons.notifications_none,
+                      color: AppColors.mutedForeground,
+                      size: 24,
+                    ),
                     if (unread > 0)
                       Positioned(
                         top: 0,

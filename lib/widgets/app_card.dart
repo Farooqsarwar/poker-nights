@@ -38,7 +38,9 @@ class AppCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(radius),
-          highlightColor: onTap != null ? AppColors.surfaceHover : Colors.transparent,
+          highlightColor: onTap != null
+              ? AppColors.surfaceHover
+              : Colors.transparent,
           splashColor: Colors.transparent,
           child: Ink(
             decoration: BoxDecoration(
@@ -48,10 +50,15 @@ class AppCard extends StatelessWidget {
               boxShadow: glow ? AppShadows.cardGlowActive : AppShadows.cardGlow,
             ),
             child: margin != null
-                ? Padding(padding: margin!, child: padding != null ? Padding(padding: padding!, child: child) : child)
+                ? Padding(
+                    padding: margin!,
+                    child: padding != null
+                        ? Padding(padding: padding!, child: child)
+                        : child,
+                  )
                 : padding != null
-                    ? Padding(padding: padding!, child: child)
-                    : child,
+                ? Padding(padding: padding!, child: child)
+                : child,
           ),
         ),
       ),

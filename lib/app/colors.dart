@@ -89,18 +89,12 @@ class AppColors {
   static const RadialGradient luxuryGradient = RadialGradient(
     center: Alignment.topRight,
     radius: 1.6,
-    colors: [
-      Color(0x33B71C1C),
-      Color(0x00000000),
-    ],
+    colors: [Color(0x33B71C1C), Color(0x00000000)],
   );
 
   static const RadialGradient feltBackground = RadialGradient(
     center: Alignment(0, 0.7),
     radius: 1.4,
-    colors: [
-      Color(0x4D4A0B0B),
-      Color(0xFF000000),
-    ],
+    colors: [Color(0x4D4A0B0B), Color(0xFF000000)],
   );
 }

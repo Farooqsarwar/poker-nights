@@ -36,4 +36,3 @@ class ChipColor {
   @override
   int get hashCode => Object.hash(color, hex, value, quantity);
 }
-

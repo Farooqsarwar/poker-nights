@@ -29,7 +29,9 @@ class AppSelect<T> extends StatelessWidget {
         if (label != null) ...[
           Text(
             label!,
-            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.xs),
         ],
@@ -48,17 +50,23 @@ class AppSelect<T> extends StatelessWidget {
           hint: hint != null
               ? Text(
                   hint!,
-                  style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceHint),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.onSurfaceHint,
+                  ),
                 )
               : null,
           style: AppTypography.bodyStyle,
           decoration: InputDecoration(
-            hintStyle: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceHint),
+            hintStyle: AppTypography.bodySm.copyWith(
+              color: AppColors.onSurfaceHint,
+            ),
             isDense: true,
             filled: true,
             fillColor: AppColors.card,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 11,
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppRadius.sm),
               borderSide: const BorderSide(color: AppColors.border),

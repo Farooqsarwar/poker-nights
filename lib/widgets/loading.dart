@@ -46,7 +46,12 @@ class LoadingScreen extends StatelessWidget {
           const LoadingSpinner(size: AppLoaderSize.lg),
           if (message != null) ...[
             const SizedBox(height: AppSpacing.lg),
-            Text(message!, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+            Text(
+              message!,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
           ],
         ],
       ),

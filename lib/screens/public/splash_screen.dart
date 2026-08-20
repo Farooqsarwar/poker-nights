@@ -31,11 +31,11 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _controller;
 
   late final Animation<double> _opacityAnimation; // fade in
-  late final Animation<double> _scaleAnimation;   // pop in
-  late final Animation<double> _liftAnimation;    // vertical settle
-  late final Animation<double> _spinAnimation;    // Y rotation, in TURNS
-  late final Animation<double> _glowAnimation;    // red bloom behind card
-  late final Animation<double> _exitAnimation;    // fade out before routing
+  late final Animation<double> _scaleAnimation; // pop in
+  late final Animation<double> _liftAnimation; // vertical settle
+  late final Animation<double> _spinAnimation; // Y rotation, in TURNS
+  late final Animation<double> _glowAnimation; // red bloom behind card
+  late final Animation<double> _exitAnimation; // fade out before routing
 
   Timer? _timer;
   bool _navigated = false;
@@ -45,16 +45,10 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
 
     // Controls the complete splash animation.
-    _controller = AnimationController(
-      vsync: this,
-      duration: _totalDuration,
-    );
+    _controller = AnimationController(vsync: this, duration: _totalDuration);
 
     // 0% - 14% : smooth fade-in.
-    _opacityAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.0, 0.14, curve: Curves.easeOut),
@@ -62,10 +56,7 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     // 0% - 22% : grows the card from small to full size with a slight overshoot.
-    _scaleAnimation = Tween<double>(
-      begin: 0.62,
-      end: 1.0,
-    ).animate(
+    _scaleAnimation = Tween<double>(begin: 0.62, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.0, 0.22, curve: Curves.easeOutBack),
@@ -73,10 +64,7 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     // 0% - 26% : the card drops into place.
-    _liftAnimation = Tween<double>(
-      begin: 26.0,
-      end: 0.0,
-    ).animate(
+    _liftAnimation = Tween<double>(begin: 26.0, end: 0.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.0, 0.26, curve: Curves.easeOutCubic),
@@ -86,10 +74,7 @@ class _SplashScreenState extends State<SplashScreen>
     // 20% - 72% : the flip. 1.5 turns == 540 degrees, so it passes edge-on
     // twice and SETTLES ON THE BACK (wordmark) face.
     // Use 1.0 or 2.0 instead if you want it to land back on the spade face.
-    _spinAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.5,
-    ).animate(
+    _spinAnimation = Tween<double>(begin: 0.0, end: 1.5).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.20, 0.72, curve: Curves.easeInOutCubic),
@@ -104,10 +89,7 @@ class _SplashScreenState extends State<SplashScreen>
     ]).animate(_controller);
 
     // 88% - 100% : fade out just before we route away.
-    _exitAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(
+    _exitAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.88, 1.0, curve: Curves.easeIn),
@@ -158,8 +140,10 @@ class _SplashScreenState extends State<SplashScreen>
               animation: _controller,
               builder: (BuildContext context, Widget? child) {
                 final double fade =
-                (_opacityAnimation.value * _exitAnimation.value)
-                    .clamp(0.0, 1.0);
+                    (_opacityAnimation.value * _exitAnimation.value).clamp(
+                      0.0,
+                      1.0,
+                    );
 
                 return Stack(
                   alignment: Alignment.center,
@@ -167,8 +151,8 @@ class _SplashScreenState extends State<SplashScreen>
                     // Soft red bloom behind the card.
                     Opacity(
                       opacity:
-                      (0.6 * _glowAnimation.value * _exitAnimation.value)
-                          .clamp(0.0, 1.0),
+                          (0.6 * _glowAnimation.value * _exitAnimation.value)
+                              .clamp(0.0, 1.0),
                       child: Container(
                         width: cardSize * 2.2,
                         height: cardSize * 2.2,
@@ -247,17 +231,19 @@ class _FlipCard extends StatelessWidget {
     final Widget faceContent = showFront
         ? _FrontFace(width: size, height: height)
         : Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()..rotateY(math.pi), // un-mirror
-      child: _BackFace(width: size, height: height),
-    );
+            alignment: Alignment.center,
+            transform: Matrix4.identity()..rotateY(math.pi), // un-mirror
+            child: _BackFace(width: size, height: height),
+          );
 
     return Transform(
       alignment: Alignment.center,
       transform: Matrix4.identity()
         ..setEntry(3, 2, 0.0011) // perspective
         ..rotateY(angle)
-        ..rotateX(0.06 * math.sin(angle)), // subtle tilt, reads as a real object
+        ..rotateX(
+          0.06 * math.sin(angle),
+        ), // subtle tilt, reads as a real object
       child: _CardShell(
         width: size,
         height: height,
@@ -388,20 +374,17 @@ class _FrontFace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _FrontFacePainter(),
-      size: Size(width, height),
-    );
+    return CustomPaint(painter: _FrontFacePainter(), size: Size(width, height));
   }
 }
 
 class _FrontFacePainter extends CustomPainter {
   // All values are fractions of the plate, measured from the reference.
-  static const double _pad = 0.058;       // bracket outer offset
-  static const double _armLen = 0.185;    // arm length
-  static const double _thick = 0.042;     // stroke thickness
-  static const double _spadeW = 0.393;    // spade width  (of plate width)
-  static const double _spadeH = 0.570;    // spade height (of plate height)
+  static const double _pad = 0.058; // bracket outer offset
+  static const double _armLen = 0.185; // arm length
+  static const double _thick = 0.042; // stroke thickness
+  static const double _spadeW = 0.393; // spade width  (of plate width)
+  static const double _spadeH = 0.570; // spade height (of plate height)
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -428,14 +411,14 @@ class _FrontFacePainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    final double lx = w * _pad + t / 2;        // left stroke centre
-    final double rx = w * (1 - _pad) - t / 2;  // right stroke centre
-    final double ty = h * _pad + t / 2;        // top stroke centre
-    final double by = h * (1 - _pad) - t / 2;  // bottom stroke centre
+    final double lx = w * _pad + t / 2; // left stroke centre
+    final double rx = w * (1 - _pad) - t / 2; // right stroke centre
+    final double ty = h * _pad + t / 2; // top stroke centre
+    final double by = h * (1 - _pad) - t / 2; // bottom stroke centre
 
     final double ax = w * _armLen; // horizontal reach
     final double ay = h * _armLen; // vertical reach
-    final double r = t * 0.9;      // inner corner radius
+    final double r = t * 0.9; // inner corner radius
 
     void bracket(double cx, double cy, double sx, double sy) {
       final Path path = Path()
@@ -446,9 +429,9 @@ class _FrontFacePainter extends CustomPainter {
       canvas.drawPath(path, p);
     }
 
-    bracket(lx, ty, 1, 1);   // top-left
-    bracket(rx, ty, -1, 1);  // top-right
-    bracket(lx, by, 1, -1);  // bottom-left
+    bracket(lx, ty, 1, 1); // top-left
+    bracket(rx, ty, -1, 1); // top-right
+    bracket(lx, by, 1, -1); // bottom-left
     bracket(rx, by, -1, -1); // bottom-right
   }
 
@@ -460,20 +443,20 @@ class _FrontFacePainter extends CustomPainter {
 
     return Path()
       ..moveTo(x(0.500), y(0.000))
-    // left shoulder sweeping down to the widest point
+      // left shoulder sweeping down to the widest point
       ..cubicTo(x(0.360), y(0.260), x(0.000), y(0.340), x(0.000), y(0.600))
-    // left lobe
+      // left lobe
       ..cubicTo(x(0.040), y(0.770), x(0.200), y(0.800), x(0.245), y(0.815))
       ..cubicTo(x(0.330), y(0.800), x(0.390), y(0.800), x(0.472), y(0.715))
-    // stem, left side
+      // stem, left side
       ..cubicTo(x(0.465), y(0.860), x(0.400), y(0.960), x(0.303), y(1.000))
       ..lineTo(x(0.697), y(1.000))
-    // stem, right side (mirror)
+      // stem, right side (mirror)
       ..cubicTo(x(0.600), y(0.960), x(0.535), y(0.860), x(0.528), y(0.715))
-    // right lobe (mirror)
+      // right lobe (mirror)
       ..cubicTo(x(0.610), y(0.800), x(0.670), y(0.800), x(0.755), y(0.815))
       ..cubicTo(x(0.800), y(0.800), x(0.960), y(0.770), x(1.000), y(0.600))
-    // right shoulder back to the tip (mirror)
+      // right shoulder back to the tip (mirror)
       ..cubicTo(x(1.000), y(0.340), x(0.640), y(0.260), x(0.500), y(0.000))
       ..close();
   }
@@ -493,10 +476,10 @@ class _BackFace extends StatelessWidget {
   final double height;
 
   // Measured from the reference render, as fractions of the plate.
-  static const double _blockW = 0.748;  // width of the justified word rows
-  static const double _rowTop = 0.188;  // top of the first row
+  static const double _blockW = 0.748; // width of the justified word rows
+  static const double _rowTop = 0.188; // top of the first row
   static const double _rowPitch = 0.187;
-  static const double _capH = 0.120;    // cap height of a word row
+  static const double _capH = 0.120; // cap height of a word row
   static const double _ruleY = 0.753;
   static const double _ruleW = 0.736;
   static const double _tagY = 0.825;
@@ -576,15 +559,14 @@ class _BackFace extends StatelessWidget {
   /// exactly how the reference is set: POKER / NIGHT / TOOLS all span the same
   /// measure regardless of their differing letter widths.
   Widget _word(
-      String text,
-      Color color,
-      int row,
-      double w,
-      double h,
-      double blockW,
-      double fontSize,
-
-      ) {
+    String text,
+    Color color,
+    int row,
+    double w,
+    double h,
+    double blockW,
+    double fontSize,
+  ) {
     return Positioned(
       left: (w - blockW) / 2,
       top: h * (_rowTop + row * _rowPitch) - fontSize * 0.15,

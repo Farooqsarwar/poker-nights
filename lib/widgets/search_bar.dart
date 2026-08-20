@@ -27,12 +27,22 @@ class SearchBar extends StatelessWidget {
       style: AppTypography.bodyStyle,
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceHint),
-        prefixIcon: const Icon(Icons.search, color: AppColors.mutedForeground, size: 20),
+        hintStyle: AppTypography.bodySm.copyWith(
+          color: AppColors.onSurfaceHint,
+        ),
+        prefixIcon: const Icon(
+          Icons.search,
+          color: AppColors.mutedForeground,
+          size: 20,
+        ),
         suffixIcon: controller.text.isEmpty
             ? null
             : IconButton(
-                icon: const Icon(Icons.close, color: AppColors.mutedForeground, size: 18),
+                icon: const Icon(
+                  Icons.close,
+                  color: AppColors.mutedForeground,
+                  size: 18,
+                ),
                 onPressed: () {
                   controller.clear();
                   onChanged('');
@@ -42,7 +52,10 @@ class SearchBar extends StatelessWidget {
         isDense: true,
         filled: true,
         fillColor: AppColors.card,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
           borderSide: const BorderSide(color: AppColors.border),

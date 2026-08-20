@@ -33,13 +33,20 @@ class ChipSetsScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text('Cancel', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(
               'Delete',
-              style: AppTypography.bodySm.copyWith(color: AppColors.destructive),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.destructive,
+              ),
             ),
           ),
         ],
@@ -65,7 +72,13 @@ class ChipSetsScreen extends StatelessWidget {
                 onPressed: () => context.go(RoutePaths.settings),
               ),
               Expanded(
-                child: Text('Chip Sets', style: AppTypography.display(size: AppFontSizes.xxl, weight: FontWeight.w700)),
+                child: Text(
+                  'Chip Sets',
+                  style: AppTypography.display(
+                    size: AppFontSizes.xxl,
+                    weight: FontWeight.w700,
+                  ),
+                ),
               ),
               AppButton(
                 onPressed: () => context.push(RoutePaths.editChipSet),
@@ -78,7 +91,12 @@ class ChipSetsScreen extends StatelessWidget {
             Center(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.xl),
-                child: Text('No saved chip sets.', style: AppTypography.bodyLg.copyWith(color: AppColors.mutedForeground)),
+                child: Text(
+                  'No saved chip sets.',
+                  style: AppTypography.bodyLg.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
               ),
             )
           else
@@ -97,28 +115,44 @@ class ChipSetsScreen extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(cs.name, style: AppTypography.bodyLg.copyWith(fontWeight: FontWeight.w600)),
+                            Text(
+                              cs.name,
+                              style: AppTypography.bodyLg.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                             const SizedBox(height: AppSpacing.xs),
                             Wrap(
                               spacing: AppSpacing.sm,
                               runSpacing: AppSpacing.sm,
-                              children: cs.chips.map((c) => ChipToken(
-                                colorName: c.color,
-                                hex: c.colorValue,
-                                value: c.value,
-                                count: c.quantity,
-                              )).toList(),
+                              children: cs.chips
+                                  .map(
+                                    (c) => ChipToken(
+                                      colorName: c.color,
+                                      hex: c.colorValue,
+                                      value: c.value,
+                                      count: c.quantity,
+                                    ),
+                                  )
+                                  .toList(),
                             ),
                           ],
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.edit, color: AppColors.mutedForeground),
-                        onPressed: () => context.push(RoutePaths.editChipSet, extra: cs.id),
+                        icon: const Icon(
+                          Icons.edit,
+                          color: AppColors.mutedForeground,
+                        ),
+                        onPressed: () =>
+                            context.push(RoutePaths.editChipSet, extra: cs.id),
                       ),
                       if (cs.id != 'cs-default')
                         IconButton(
-                          icon: const Icon(Icons.delete, color: AppColors.destructive),
+                          icon: const Icon(
+                            Icons.delete,
+                            color: AppColors.destructive,
+                          ),
                           onPressed: () => _confirmDelete(context, app, cs),
                         ),
                     ],

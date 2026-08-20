@@ -26,29 +26,32 @@ class AppAlertBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final (background, border, foreground) = switch (type) {
       AppAlertType.info => (
-          const Color(0x4D262626),
-          const Color(0x4D525252),
-          const Color(0xFFE4E4E7),
-        ),
+        const Color(0x4D262626),
+        const Color(0x4D525252),
+        const Color(0xFFE4E4E7),
+      ),
       AppAlertType.warning => (
-          const Color(0x4D7F1D1D),
-          const Color(0x4D7F1D1D),
-          const Color(0xFFFECACA),
-        ),
+        const Color(0x4D7F1D1D),
+        const Color(0x4D7F1D1D),
+        const Color(0xFFFECACA),
+      ),
       AppAlertType.success => (
-          const Color(0x4D262626),
-          const Color(0x4D525252),
-          const Color(0xFFE4E4E7),
-        ),
+        const Color(0x4D262626),
+        const Color(0x4D525252),
+        const Color(0xFFE4E4E7),
+      ),
       AppAlertType.error => (
-          const Color(0x4D450A0A),
-          const Color(0x4D991B1B),
-          const Color(0xFFFECACA),
-        ),
+        const Color(0x4D450A0A),
+        const Color(0x4D991B1B),
+        const Color(0xFFFECACA),
+      ),
     };
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 10),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: 10,
+      ),
       decoration: BoxDecoration(
         color: background,
         border: Border.all(color: border),

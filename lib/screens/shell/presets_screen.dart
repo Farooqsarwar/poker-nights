@@ -50,9 +50,9 @@ class _PresetsScreenState extends State<PresetsScreen> {
   }
 
   List<String> _chipSetNames(AppProvider app) => [
-        ...TournamentEngine.presetNames,
-        for (final cs in app.savedChipSets) cs.name,
-      ];
+    ...TournamentEngine.presetNames,
+    for (final cs in app.savedChipSets) cs.name,
+  ];
 
   TournamentPreset _buildPreset(
     AppProvider app,
@@ -101,13 +101,20 @@ class _PresetsScreenState extends State<PresetsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text('Cancel', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(
               'Delete',
-              style: AppTypography.bodySm.copyWith(color: AppColors.destructive),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.destructive,
+              ),
             ),
           ),
         ],
@@ -135,12 +142,17 @@ class _PresetsScreenState extends State<PresetsScreen> {
                   children: [
                     Text(
                       'Tournament Presets',
-                      style: AppTypography.display(size: AppFontSizes.xxl, weight: FontWeight.w700),
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxl,
+                        weight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
                       'Save your favourite game settings and start a new game in one tap.',
-                      style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
@@ -176,20 +188,30 @@ class _PresetsScreenState extends State<PresetsScreen> {
                             Expanded(
                               child: Text(
                                 p.name,
-                                style: AppTypography.bodyLg.copyWith(fontWeight: FontWeight.w600),
+                                style: AppTypography.bodyLg.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                             IconButton(
                               visualDensity: VisualDensity.compact,
                               tooltip: 'Edit',
                               onPressed: () => _editPreset(app, p),
-                              icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.mutedForeground),
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                size: 18,
+                                color: AppColors.mutedForeground,
+                              ),
                             ),
                             IconButton(
                               visualDensity: VisualDensity.compact,
                               tooltip: 'Delete',
                               onPressed: () => _confirmDelete(p, app),
-                              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.mutedForeground),
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: AppColors.mutedForeground,
+                              ),
                             ),
                           ],
                         ),
@@ -200,10 +222,20 @@ class _PresetsScreenState extends State<PresetsScreen> {
                           children: [
                             _Tag(text: 'Buy-in ${p.buyIn}'),
                             _Tag(text: '${_hours(p.durationHours)}h'),
-                            _Tag(text: p.rebuys ? 'Rebuys to L${p.rebuysCloseLevel}' : 'No rebuys'),
+                            _Tag(
+                              text: p.rebuys
+                                  ? 'Rebuys to L${p.rebuysCloseLevel}'
+                                  : 'No rebuys',
+                            ),
                             _Tag(text: p.addOn ? 'Add-on' : 'No add-on'),
-                            _Tag(text: p.koEnabled ? 'KO ${p.koAmount}' : 'No KO'),
-                            _Tag(text: p.anteEnabled ? 'Ante L${p.anteAfterLevel}+' : 'No ante'),
+                            _Tag(
+                              text: p.koEnabled ? 'KO ${p.koAmount}' : 'No KO',
+                            ),
+                            _Tag(
+                              text: p.anteEnabled
+                                  ? 'Ante L${p.anteAfterLevel}+'
+                                  : 'No ante',
+                            ),
                             _Tag(text: '${p.organizerPct}% org costs'),
                             _Tag(text: p.chipSetName),
                           ],
@@ -255,13 +287,19 @@ class _Tag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 3,
+      ),
       decoration: BoxDecoration(
         color: AppColors.secondary,
         borderRadius: BorderRadius.circular(AppRadius.pill),
         border: Border.all(color: AppColors.border),
       ),
-      child: Text(text, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+      child: Text(
+        text,
+        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+      ),
     );
   }
 }
@@ -345,8 +383,11 @@ class _PresetFormState extends State<_PresetForm> {
     _anteEnabled = p?.anteEnabled ?? true;
     _anteAfterLevel = p?.anteAfterLevel ?? 6;
     _orgPct = (p?.organizerPct ?? 10).toDouble();
-    _chipSetName = p?.chipSetName ??
-        (widget.chipSetNames.isNotEmpty ? widget.chipSetNames.first : 'Standard 300');
+    _chipSetName =
+        p?.chipSetName ??
+        (widget.chipSetNames.isNotEmpty
+            ? widget.chipSetNames.first
+            : 'Standard 300');
   }
 
   @override
@@ -373,21 +414,23 @@ class _PresetFormState extends State<_PresetForm> {
       setState(() => _error = 'KO bounty must be a positive number.');
       return;
     }
-    widget.onSave(_PresetDraft(
-      name: name,
-      buyIn: buyIn.toInt(),
-      koEnabled: _koEnabled,
-      koAmount: ko.toInt(),
-      rebuys: _rebuys,
-      rebuysCloseLevel: _rebuysCloseLevel,
-      reEntry: _reEntry,
-      addOn: _addOn,
-      durationHours: _duration,
-      anteEnabled: _anteEnabled,
-      anteAfterLevel: _anteAfterLevel,
-      organizerPct: _orgPct.round(),
-      chipSetName: _chipSetName,
-    ));
+    widget.onSave(
+      _PresetDraft(
+        name: name,
+        buyIn: buyIn.toInt(),
+        koEnabled: _koEnabled,
+        koAmount: ko.toInt(),
+        rebuys: _rebuys,
+        rebuysCloseLevel: _rebuysCloseLevel,
+        reEntry: _reEntry,
+        addOn: _addOn,
+        durationHours: _duration,
+        anteEnabled: _anteEnabled,
+        anteAfterLevel: _anteAfterLevel,
+        organizerPct: _orgPct.round(),
+        chipSetName: _chipSetName,
+      ),
+    );
   }
 
   @override
@@ -416,7 +459,12 @@ class _PresetFormState extends State<_PresetForm> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Target duration', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                  Text(
+                    'Target duration',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   DropdownButtonFormField<String>(
                     initialValue: _duration.toString(),
@@ -427,7 +475,10 @@ class _PresetFormState extends State<_PresetForm> {
                       isDense: true,
                       filled: true,
                       fillColor: AppColors.card,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 11,
+                      ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(AppRadius.sm),
                         borderSide: const BorderSide(color: AppColors.border),
@@ -441,10 +492,14 @@ class _PresetFormState extends State<_PresetForm> {
                       for (final d in [3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0])
                         DropdownMenuItem(
                           value: d.toString(),
-                          child: Text('${d == d.roundToDouble() ? d.round() : d}h'),
+                          child: Text(
+                            '${d == d.roundToDouble() ? d.round() : d}h',
+                          ),
                         ),
                     ],
-                    onChanged: (v) => setState(() => _duration = double.tryParse(v ?? '') ?? 3.5),
+                    onChanged: (v) => setState(
+                      () => _duration = double.tryParse(v ?? '') ?? 3.5,
+                    ),
                   ),
                 ],
               ),
@@ -481,7 +536,8 @@ class _PresetFormState extends State<_PresetForm> {
           AppSelect(
             label: 'Close rebuys',
             value: '$_rebuysCloseLevel',
-            onChanged: (v) => setState(() => _rebuysCloseLevel = int.tryParse(v ?? '') ?? 6),
+            onChanged: (v) =>
+                setState(() => _rebuysCloseLevel = int.tryParse(v ?? '') ?? 6),
             items: [
               for (var n = 4; n <= 8; n++)
                 DropdownMenuItem(value: '$n', child: Text('End of Level $n')),
@@ -514,7 +570,8 @@ class _PresetFormState extends State<_PresetForm> {
           AppSelect(
             label: 'Activate ante',
             value: '$_anteAfterLevel',
-            onChanged: (v) => setState(() => _anteAfterLevel = int.tryParse(v ?? '') ?? 6),
+            onChanged: (v) =>
+                setState(() => _anteAfterLevel = int.tryParse(v ?? '') ?? 6),
             items: [
               for (var n = 4; n <= 8; n++)
                 DropdownMenuItem(value: '$n', child: Text('After Level $n')),
@@ -537,7 +594,10 @@ class _PresetFormState extends State<_PresetForm> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Organizational costs', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+            Text(
+              'Organizational costs',
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500),
+            ),
             Row(
               children: [
                 Expanded(
@@ -557,7 +617,10 @@ class _PresetFormState extends State<_PresetForm> {
                   child: Text(
                     '${_orgPct.round()}%',
                     textAlign: TextAlign.right,
-                    style: AppTypography.mono(size: AppFontSizes.sm, color: AppColors.primary),
+                    style: AppTypography.mono(
+                      size: AppFontSizes.sm,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
               ],
@@ -566,7 +629,10 @@ class _PresetFormState extends State<_PresetForm> {
         ),
         if (_error != null) ...[
           const SizedBox(height: AppSpacing.sm),
-          Text(_error!, style: AppTypography.bodyXs.copyWith(color: AppColors.destructive)),
+          Text(
+            _error!,
+            style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+          ),
         ],
         const SizedBox(height: AppSpacing.lg),
         AppButton(
@@ -602,9 +668,19 @@ class _FieldToggle extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                Text(
+                  title,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                Text(
+                  subtitle,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
               ],
             ),
           ),

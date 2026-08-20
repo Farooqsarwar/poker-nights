@@ -15,8 +15,8 @@ class AppTypography {
   AppTypography._();
 
   // ── Font family names ──────────────────────────────────────────────────────
-  static const String displayFamily = 'Space Mono';
-  static const String bodyFamily = 'Space Mono';
+  static const String displayFamily = 'Space Grotesk';
+  static const String bodyFamily = 'Space Grotesk';
   static const String monoFamily = 'Space Mono';
 
   static TextStyle display({
@@ -26,13 +26,19 @@ class AppTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.spaceMono(
+    return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color,
       height: height,
       letterSpacing: letterSpacing,
-    ).copyWith(fontFamilyFallback: const ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji']);
+    ).copyWith(
+      fontFamilyFallback: const [
+        'Noto Color Emoji',
+        'Apple Color Emoji',
+        'Segoe UI Emoji',
+      ],
+    );
   }
 
   static TextStyle body({
@@ -42,13 +48,19 @@ class AppTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.spaceMono(
+    return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color,
       height: height,
       letterSpacing: letterSpacing,
-    ).copyWith(fontFamilyFallback: const ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji']);
+    ).copyWith(
+      fontFamilyFallback: const [
+        'Noto Color Emoji',
+        'Apple Color Emoji',
+        'Segoe UI Emoji',
+      ],
+    );
   }
 
   static TextStyle mono({
@@ -64,7 +76,13 @@ class AppTypography {
       color: color,
       height: height,
       letterSpacing: letterSpacing,
-    ).copyWith(fontFamilyFallback: const ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji']);
+    ).copyWith(
+      fontFamilyFallback: const [
+        'Noto Color Emoji',
+        'Apple Color Emoji',
+        'Segoe UI Emoji',
+      ],
+    );
   }
 
   // ── Convenience getters ───────────────────────────────────────────────────
@@ -72,13 +90,16 @@ class AppTypography {
   static TextStyle get bodySm => body(size: AppFontSizes.sm);
   static TextStyle get bodyXs => body(size: AppFontSizes.xs);
   static TextStyle get bodyLg => body(size: AppFontSizes.lg);
-  static TextStyle get bodyBold => body(size: AppFontSizes.md, weight: FontWeight.w600);
-  static TextStyle get buttonStyle => body(size: AppFontSizes.sm, weight: FontWeight.w500);
+  static TextStyle get bodyBold =>
+      body(size: AppFontSizes.md, weight: FontWeight.w600);
+  static TextStyle get buttonStyle =>
+      body(size: AppFontSizes.sm, weight: FontWeight.w500);
   static TextStyle get monoStyle => mono();
   static TextStyle get monoXs => mono(size: AppFontSizes.xs);
   static TextStyle get monoSm => mono(size: AppFontSizes.sm);
   static TextStyle get monoLg => mono(size: AppFontSizes.lg);
-  static TextStyle get monoXl => mono(size: AppFontSizes.xl, weight: FontWeight.w700);
+  static TextStyle get monoXl =>
+      mono(size: AppFontSizes.xl, weight: FontWeight.w700);
   static TextStyle get displayStyle => display();
   static TextStyle get displaySm => display(size: AppFontSizes.lg);
   static TextStyle get displayMd => display(size: AppFontSizes.xl);
@@ -102,9 +123,18 @@ class AppTypography {
   static TextTheme textTheme() {
     final base = TextTheme(
       // Display styles
-      displayLarge: display(size: AppFontSizes.displayHero, weight: FontWeight.w700),
-      displayMedium: display(size: AppFontSizes.displayLg, weight: FontWeight.w700),
-      displaySmall: display(size: AppFontSizes.display, weight: FontWeight.w700),
+      displayLarge: display(
+        size: AppFontSizes.displayHero,
+        weight: FontWeight.w700,
+      ),
+      displayMedium: display(
+        size: AppFontSizes.displayLg,
+        weight: FontWeight.w700,
+      ),
+      displaySmall: display(
+        size: AppFontSizes.display,
+        weight: FontWeight.w700,
+      ),
       headlineMedium: display(size: AppFontSizes.xxl, weight: FontWeight.w700),
       headlineSmall: display(size: AppFontSizes.xl, weight: FontWeight.w600),
       titleLarge: display(size: AppFontSizes.lg, weight: FontWeight.w600),
@@ -119,7 +149,10 @@ class AppTypography {
     );
 
     return base
-        .apply(bodyColor: AppColors.foreground, displayColor: AppColors.foreground)
+        .apply(
+          bodyColor: AppColors.foreground,
+          displayColor: AppColors.foreground,
+        )
         .copyWith(
           bodyLarge: base.bodyLarge!.copyWith(
             fontFamily: bodyFamily,

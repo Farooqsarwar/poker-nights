@@ -52,7 +52,11 @@ final GoRouter appRouter = GoRouter(
           const SizedBox(height: 16),
           const Text(
             'Page not found',
-            style: TextStyle(color: Color(0xFFE5E5E5), fontSize: 20, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: Color(0xFFE5E5E5),
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -120,11 +124,13 @@ final GoRouter appRouter = GoRouter(
     // ── App shell ────────────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.home,
-      builder: (context, state) => shell(const HomeScreen(), path: RoutePaths.home),
+      builder: (context, state) =>
+          shell(const HomeScreen(), path: RoutePaths.home),
     ),
     GoRoute(
       path: RoutePaths.group,
-      builder: (context, state) => shell(const GroupScreen(), path: RoutePaths.group),
+      builder: (context, state) =>
+          shell(const GroupScreen(), path: RoutePaths.group),
     ),
     GoRoute(
       path: RoutePaths.notifications,
@@ -133,33 +139,42 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: RoutePaths.history,
-      builder: (context, state) => shell(const HistoryScreen(), path: RoutePaths.history),
+      builder: (context, state) =>
+          shell(const HistoryScreen(), path: RoutePaths.history),
     ),
     GoRoute(
       path: RoutePaths.profile,
-      builder: (context, state) => shell(const ProfileScreen(), path: RoutePaths.profile),
+      builder: (context, state) =>
+          shell(const ProfileScreen(), path: RoutePaths.profile),
     ),
     GoRoute(
       path: RoutePaths.settings,
-      builder: (context, state) => shell(const SettingsScreen(), path: RoutePaths.settings),
+      builder: (context, state) =>
+          shell(const SettingsScreen(), path: RoutePaths.settings),
     ),
     GoRoute(
       path: RoutePaths.stats,
-      builder: (context, state) => shell(const StatsScreen(), path: RoutePaths.stats),
+      builder: (context, state) =>
+          shell(const StatsScreen(), path: RoutePaths.stats),
     ),
     GoRoute(
       path: RoutePaths.chipSets,
-      builder: (context, state) => shell(const ChipSetsScreen(), path: RoutePaths.chipSets),
+      builder: (context, state) =>
+          shell(const ChipSetsScreen(), path: RoutePaths.chipSets),
     ),
     GoRoute(
       path: RoutePaths.presets,
-      builder: (context, state) => shell(const PresetsScreen(), path: RoutePaths.presets),
+      builder: (context, state) =>
+          shell(const PresetsScreen(), path: RoutePaths.presets),
     ),
     GoRoute(
       path: RoutePaths.editChipSet,
       builder: (context, state) {
         final id = state.extra as String?;
-        return shell(EditChipSetScreen(chipSetId: id), path: RoutePaths.editChipSet);
+        return shell(
+          EditChipSetScreen(chipSetId: id),
+          path: RoutePaths.editChipSet,
+        );
       },
     ),
 
@@ -167,16 +182,16 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: RoutePaths.createTournament,
       builder: (context, state) => shell(
-        CreateTournamentScreen(
-          presetId: state.uri.queryParameters['preset'],
-        ),
+        CreateTournamentScreen(presetId: state.uri.queryParameters['preset']),
         path: RoutePaths.createTournament,
       ),
     ),
     GoRoute(
       path: RoutePaths.structureReview,
-      builder: (context, state) =>
-          shell(const StructureReviewScreen(), path: RoutePaths.structureReview),
+      builder: (context, state) => shell(
+        const StructureReviewScreen(),
+        path: RoutePaths.structureReview,
+      ),
     ),
     GoRoute(
       path: RoutePaths.invitation,
@@ -185,7 +200,8 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: RoutePaths.checkIn,
-      builder: (context, state) => shell(const CheckInScreen(), path: RoutePaths.checkIn),
+      builder: (context, state) =>
+          shell(const CheckInScreen(), path: RoutePaths.checkIn),
     ),
     GoRoute(
       path: RoutePaths.adminDashboard,
@@ -199,17 +215,22 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: RoutePaths.rebuySettlement,
-      builder: (context, state) =>
-          shell(const RebuySettlementScreen(), path: RoutePaths.rebuySettlement),
+      builder: (context, state) => shell(
+        const RebuySettlementScreen(),
+        path: RoutePaths.rebuySettlement,
+      ),
     ),
     GoRoute(
       path: RoutePaths.finalTable,
-      builder: (context, state) => shell(const FinalTableScreen(), path: RoutePaths.finalTable),
+      builder: (context, state) =>
+          shell(const FinalTableScreen(), path: RoutePaths.finalTable),
     ),
     GoRoute(
       path: RoutePaths.completeTournament,
-      builder: (context, state) =>
-          shell(const CompleteTournamentScreen(), path: RoutePaths.completeTournament),
+      builder: (context, state) => shell(
+        const CompleteTournamentScreen(),
+        path: RoutePaths.completeTournament,
+      ),
     ),
     GoRoute(
       path: RoutePaths.resultPodium,
@@ -220,7 +241,8 @@ final GoRouter appRouter = GoRouter(
     // ── Cash game ────────────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.cashGame,
-      builder: (context, state) => shell(const CashGameScreen(), path: RoutePaths.cashGame),
+      builder: (context, state) =>
+          shell(const CashGameScreen(), path: RoutePaths.cashGame),
     ),
     GoRoute(
       path: RoutePaths.cashGameLive,
@@ -233,12 +255,12 @@ final GoRouter appRouter = GoRouter(
 /// Wraps a content page in the persistent app shell with a smooth entrance
 /// animation and records the route path for the shell's access guard.
 Widget shell(Widget child, {required String path}) => ScreenShell(
-      requiredPath: path,
-      child: child
-          .animate(key: ValueKey(child.runtimeType))
-          .fadeIn(duration: 300.ms, curve: Curves.easeOut)
-          .slideY(begin: 0.05),
-    );
+  requiredPath: path,
+  child: child
+      .animate(key: ValueKey(child.runtimeType))
+      .fadeIn(duration: 300.ms, curve: Curves.easeOut)
+      .slideY(begin: 0.05),
+);
 
 /// Reads the `?next=` query param so auth can redirect back to the page the
 /// user originally tried to reach.

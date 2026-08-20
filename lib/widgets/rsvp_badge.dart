@@ -11,9 +11,16 @@ class RSVPBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (rsvp == null) return const AppBadge(label: 'No response', variant: AppBadgeVariant.muted);
+    if (rsvp == null)
+      return const AppBadge(
+        label: 'No response',
+        variant: AppBadgeVariant.muted,
+      );
     if (rsvp!.guestCount > 0) {
-      return AppBadge(label: 'Going +${rsvp!.guestCount}', variant: AppBadgeVariant.green);
+      return AppBadge(
+        label: 'Going +${rsvp!.guestCount}',
+        variant: AppBadgeVariant.green,
+      );
     }
     switch (rsvp!) {
       case Rsvp.going:
@@ -21,7 +28,10 @@ class RSVPBadge extends StatelessWidget {
       case Rsvp.maybe:
         return const AppBadge(label: 'Maybe', variant: AppBadgeVariant.accent);
       case Rsvp.cant:
-        return const AppBadge(label: "Can't Come", variant: AppBadgeVariant.red);
+        return const AppBadge(
+          label: "Can't Come",
+          variant: AppBadgeVariant.red,
+        );
       case Rsvp.goingPlus1:
       case Rsvp.goingPlus2:
       case Rsvp.goingPlus3:

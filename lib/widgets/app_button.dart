@@ -6,7 +6,15 @@ import '../app/typography.dart';
 import 'interactive_scale.dart';
 
 /// Button mirroring the web `Btn` component.
-enum AppButtonVariant { primary, secondary, danger, ghost, gold, light, destructive }
+enum AppButtonVariant {
+  primary,
+  secondary,
+  danger,
+  ghost,
+  gold,
+  light,
+  destructive,
+}
 
 enum AppButtonSize { sm, md, lg, xl }
 
@@ -66,7 +74,9 @@ class AppButton extends StatelessWidget {
                       color: colors.background,
                       border: colors.border,
                       borderRadius: BorderRadius.circular(AppRadius.sm),
-                      boxShadow: variant == AppButtonVariant.primary && size == AppButtonSize.xl
+                      boxShadow:
+                          variant == AppButtonVariant.primary &&
+                              size == AppButtonSize.xl
                           ? AppShadows.primaryGlow
                           : null,
                     ),
@@ -79,7 +89,9 @@ class AppButton extends StatelessWidget {
                               style: AppTypography.buttonStyle.copyWith(
                                 fontSize: sizes.fontSize,
                                 color: colors.foreground,
-                                fontWeight: variant == AppButtonVariant.gold ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: variant == AppButtonVariant.gold
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                               ),
                               textAlign: TextAlign.center,
                               child: child,
@@ -124,7 +136,9 @@ class AppButton extends StatelessWidget {
         return _BtnColors(
           background: Colors.transparent,
           foreground: AppColors.destructive,
-          border: Border.all(color: AppColors.destructive.withValues(alpha: 0.3)),
+          border: Border.all(
+            color: AppColors.destructive.withValues(alpha: 0.3),
+          ),
         );
       case AppButtonVariant.destructive:
         return const _BtnColors(

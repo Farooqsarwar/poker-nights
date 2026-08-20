@@ -29,7 +29,9 @@ class ProfileScreen extends StatelessWidget {
           children: [
             Text(
               'Not signed in.',
-              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
           ],
         ),
@@ -41,7 +43,13 @@ class ProfileScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Profile', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+          Text(
+            'Profile',
+            style: AppTypography.display(
+              size: AppFontSizes.xxxl,
+              weight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: AppSpacing.xl),
           // Identity card
           AppCard(
@@ -53,8 +61,9 @@ class ProfileScreen extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 40,
-                      backgroundColor: AppColors
-                          .avatarPalette[app.avatarColorIndex % AppColors.avatarPalette.length],
+                      backgroundColor:
+                          AppColors.avatarPalette[app.avatarColorIndex %
+                              AppColors.avatarPalette.length],
                       child: Text(
                         user.initials,
                         style: AppTypography.body(
@@ -75,9 +84,15 @@ class ProfileScreen extends StatelessWidget {
                           decoration: const BoxDecoration(
                             color: AppColors.card,
                             shape: BoxShape.circle,
-                            border: Border.fromBorderSide(BorderSide(color: AppColors.border)),
+                            border: Border.fromBorderSide(
+                              BorderSide(color: AppColors.border),
+                            ),
                           ),
-                          child: const Icon(Icons.camera_alt_outlined, size: 14, color: AppColors.primary),
+                          child: const Icon(
+                            Icons.camera_alt_outlined,
+                            size: 14,
+                            color: AppColors.primary,
+                          ),
                         ),
                       ),
                     ),
@@ -93,22 +108,35 @@ class ProfileScreen extends StatelessWidget {
                           Flexible(
                             child: Text(
                               user.name,
-                              style: AppTypography.body(size: AppFontSizes.xl, weight: FontWeight.w700),
+                              style: AppTypography.body(
+                                size: AppFontSizes.xl,
+                                weight: FontWeight.w700,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           if (user.isAdmin) ...[
                             const SizedBox(width: AppSpacing.sm),
-                            const AppBadge(label: 'Admin', variant: AppBadgeVariant.gold),
+                            const AppBadge(
+                              label: 'Admin',
+                              variant: AppBadgeVariant.gold,
+                            ),
                           ],
                         ],
                       ),
                       const SizedBox(height: 2),
-                      Text(user.email, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                      Text(
+                        user.email,
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
                         'Member of ${app.currentGroup.name}',
-                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
                       ),
                     ],
                   ),
@@ -121,11 +149,18 @@ class ProfileScreen extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                        const Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'Edit',
-                          style: AppTypography.bodySm.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                          style: AppTypography.bodySm.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -138,7 +173,12 @@ class ProfileScreen extends StatelessWidget {
           // Stats overview
           Row(
             children: [
-              Text('Your stats', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+              Text(
+                'Your stats',
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const Spacer(),
               AppButton(
                 size: AppButtonSize.sm,
@@ -219,7 +259,9 @@ class ProfileScreen extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: AppColors.avatarPalette[i],
                   border: Border.all(
-                    color: i == app.avatarColorIndex ? AppColors.foreground : AppColors.border,
+                    color: i == app.avatarColorIndex
+                        ? AppColors.foreground
+                        : AppColors.border,
                     width: i == app.avatarColorIndex ? 3 : 1,
                   ),
                 ),
@@ -260,14 +302,25 @@ class ProfileScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text('Cancel', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () {
-              app.updateProfile(name: nameController.text, email: emailController.text);
+              app.updateProfile(
+                name: nameController.text,
+                email: emailController.text,
+              );
               Navigator.of(dialogContext).pop();
             },
-            child: Text('Save', style: AppTypography.bodySm.copyWith(color: AppColors.primary)),
+            child: Text(
+              'Save',
+              style: AppTypography.bodySm.copyWith(color: AppColors.primary),
+            ),
           ),
         ],
       ),
@@ -282,12 +335,19 @@ class ProfileScreen extends StatelessWidget {
         title: const Text('Delete account?'),
         content: Text(
           'This permanently removes your account and invalidates any live session. This cannot be undone.',
-          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text('Cancel', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () {
@@ -295,7 +355,12 @@ class ProfileScreen extends StatelessWidget {
               app.deleteAccount();
               context.go(RoutePaths.landing);
             },
-            child: Text('Delete', style: AppTypography.bodySm.copyWith(color: AppColors.destructive)),
+            child: Text(
+              'Delete',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.destructive,
+              ),
+            ),
           ),
         ],
       ),
@@ -310,12 +375,19 @@ class ProfileScreen extends StatelessWidget {
         title: const Text('Sign out?'),
         content: Text(
           'You will need to log in again to see your games.',
-          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text('Cancel', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () {
@@ -323,7 +395,12 @@ class ProfileScreen extends StatelessWidget {
               app.logout();
               context.go(RoutePaths.landing);
             },
-            child: Text('Sign out', style: AppTypography.bodySm.copyWith(color: AppColors.destructive)),
+            child: Text(
+              'Sign out',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.destructive,
+              ),
+            ),
           ),
         ],
       ),
@@ -353,7 +430,9 @@ class _ProfileRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          border: showDivider ? const Border(bottom: BorderSide(color: AppColors.border)) : null,
+          border: showDivider
+              ? const Border(bottom: BorderSide(color: AppColors.border))
+              : null,
         ),
         child: Row(
           children: [
@@ -363,13 +442,27 @@ class _ProfileRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                  Text(
+                    title,
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                  Text(
+                    subtitle,
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.mutedForeground, size: 18),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.mutedForeground,
+              size: 18,
+            ),
           ],
         ),
       ),
@@ -395,11 +488,15 @@ class _StatsGrid extends StatelessWidget {
         _ProfileStat(label: 'Played', value: '${stats.played}'),
         _ProfileStat(label: 'Wins', value: '${stats.wins}'),
         _ProfileStat(label: 'Podium', value: '${stats.podium}'),
-        _ProfileStat(label: 'Avg finish', value: '#${stats.avgFinish.toStringAsFixed(1)}'),
+        _ProfileStat(
+          label: 'Avg finish',
+          value: '#${stats.avgFinish.toStringAsFixed(1)}',
+        ),
         _ProfileStat(label: 'Knockouts', value: '${stats.knockouts}'),
         _ProfileStat(
           label: 'Win rate',
-          value: '${stats.played == 0 ? 0 : ((stats.wins / stats.played) * 100).round()}%',
+          value:
+              '${stats.played == 0 ? 0 : ((stats.wins / stats.played) * 100).round()}%',
         ),
       ],
     );
@@ -415,7 +512,10 @@ class _ProfileStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.sm,
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -423,11 +523,20 @@ class _ProfileStat extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              style: AppTypography.mono(size: AppFontSizes.lg, weight: FontWeight.w700, color: AppColors.foreground),
+              style: AppTypography.mono(
+                size: AppFontSizes.lg,
+                weight: FontWeight.w700,
+                color: AppColors.foreground,
+              ),
             ),
           ),
           const SizedBox(height: 2),
-          Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            label,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
         ],
       ),
     );

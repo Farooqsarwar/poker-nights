@@ -4,6 +4,8 @@ import '../models/tournament.dart';
 import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
+import '../utils/formatters.dart';
+import '../utils/tournament_engine.dart';
 import 'app_button.dart';
 import 'app_select.dart';
 
@@ -64,27 +66,23 @@ class _StructureEditorState extends State<StructureEditor> {
     });
   }
 
-  void _removeAt(int index) {
-    if (_levels.length <= 1) return;
-    setState(() {
-      final removed = _levels.removeAt(index);
-      removed.dispose();
-    });
-  }
-
   List<BlindLevel> _build() {
     final result = <BlindLevel>[];
     for (final l in _levels) {
       final bb = l.bbValue;
-      result.add(BlindLevel(
-        level: 0, // renumbered by the provider
-        sb: l.sbValue,
-        bb: bb,
-        ante: l.anteOn
-            ? (widget.anteStyle == AnteStyle.individual ? (bb * 0.5).round() : bb)
-            : null,
-        durationMins: l.durationMins,
-      ));
+      result.add(
+        BlindLevel(
+          level: 0, // renumbered by the provider
+          sb: l.sbValue,
+          bb: bb,
+          ante: l.anteOn
+              ? (widget.anteStyle == AnteStyle.individual
+                    ? (bb * 0.5).round()
+                    : bb)
+              : null,
+          durationMins: l.durationMins,
+        ),
+      );
     }
     return result;
   }
@@ -95,22 +93,24 @@ class _StructureEditorState extends State<StructureEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final anyInvalid = _levels.any(
-      (l) => l.sbValue <= 0 || l.bbValue <= 0,
-    );
+    final anyInvalid = _levels.any((l) => l.sbValue <= 0 || l.bbValue <= 0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           'Adjust future levels. Active and completed levels are locked.',
-          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
           'Durations are limited to ${kAllowedLevelDurations.join(' / ')} minutes '
           'and new levels can be inserted at any point.',
-          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         for (var i = 0; i < _levels.length; i++) _buildRow(i),
@@ -168,11 +168,36 @@ class _StructureEditorState extends State<StructureEditor> {
             children: [
               SizedBox(
                 width: 48,
-                child: Text('Lv ${l.level.level}', style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground)),
+                child: Text(
+                  'Lv ${l.level.level}',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
               ),
-              Expanded(child: _MiniField(label: 'SB', controller: l.sb)),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(child: _MiniField(label: 'BB', controller: l.bb)),
+              Expanded(
+                flex: 2,
+                child: AppSelect<String>(
+                  value: '${l.sbValue}-${l.bbValue}',
+                  onChanged: (v) {
+                    if (v == null) return;
+                    final parts = v.split('-');
+                    setState(() {
+                      l.sbValue = int.parse(parts[0]);
+                      l.bbValue = int.parse(parts[1]);
+                    });
+                  },
+                  items: [
+                    for (final blind in TournamentEngine.validBlindLevels)
+                      DropdownMenuItem(
+                        value: '${blind[0]}-${blind[1]}',
+                        child: Text(
+                          '${Formatters.chips(blind[0])}/${Formatters.chips(blind[1])}',
+                        ),
+                      ),
+                  ],
+                ),
+              ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: AppSelect<String>(
@@ -188,17 +213,12 @@ class _StructureEditorState extends State<StructureEditor> {
               ),
               IconButton(
                 tooltip: 'Insert level',
-                icon: const Icon(Icons.add_circle_outline, size: 18, color: AppColors.primary),
-                onPressed: () => _insertAfter(index),
-              ),
-              IconButton(
-                tooltip: 'Remove level',
-                icon: Icon(
-                  Icons.remove_circle_outline,
+                icon: const Icon(
+                  Icons.add_circle_outline,
                   size: 18,
-                  color: _levels.length <= 1 ? AppColors.muted : AppColors.destructive,
+                  color: AppColors.primary,
                 ),
-                onPressed: _levels.length <= 1 ? null : () => _removeAt(index),
+                onPressed: () => _insertAfter(index),
               ),
             ],
           ),
@@ -212,16 +232,22 @@ class _StructureEditorState extends State<StructureEditor> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      l.anteOn ? Icons.check_box : Icons.check_box_outline_blank,
+                      l.anteOn
+                          ? Icons.check_box
+                          : Icons.check_box_outline_blank,
                       size: 18,
-                      color: l.anteOn ? AppColors.primary : AppColors.mutedForeground,
+                      color: l.anteOn
+                          ? AppColors.primary
+                          : AppColors.mutedForeground,
                     ),
                     const SizedBox(width: AppSpacing.xs),
                     Text(
                       widget.anteStyle == AnteStyle.individual
                           ? 'Ante (individual, half BB)'
                           : 'Ante (big blind ante)',
-                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
@@ -238,33 +264,24 @@ class _StructureEditorState extends State<StructureEditor> {
 /// edits survive rebuilds.
 class _EditableLevel {
   _EditableLevel({required BlindLevel level})
-      : level = level,
-        durationMins = _snapDuration(level.durationMins) {
-    sb = TextEditingController(text: '${level.sb}');
-    bb = TextEditingController(text: '${level.bb}');
-  }
+    : level = level,
+      sbValue = level.sb,
+      bbValue = level.bb,
+      durationMins = _snapDuration(level.durationMins);
 
   _EditableLevel.copyOf(_EditableLevel other)
-      : level = other.level,
-        durationMins = other.durationMins {
-    sb = TextEditingController(text: other.sb.text);
-    bb = TextEditingController(text: other.bb.text);
-  }
+    : level = other.level,
+      sbValue = other.sbValue,
+      bbValue = other.bbValue,
+      durationMins = other.durationMins;
 
   final BlindLevel level;
-  late final TextEditingController sb;
-  late final TextEditingController bb;
+  int sbValue;
+  int bbValue;
   int durationMins;
   late bool anteOn = level.ante != null;
 
-  int get sbValue => int.tryParse(sb.text.trim()) ?? 0;
-  int get bbValue => int.tryParse(bb.text.trim()) ?? 0;
-
-  void dispose() {
-    sb.dispose();
-    bb.dispose();
-  }
-
+  void dispose() {}
   static int _snapDuration(int d) {
     if (kAllowedLevelDurations.contains(d)) return d;
     int best = 15;
@@ -277,35 +294,5 @@ class _EditableLevel {
       }
     }
     return best;
-  }
-}
-
-class _MiniField extends StatelessWidget {
-  const _MiniField({required this.label, required this.controller});
-
-  final String label;
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      keyboardType: TextInputType.number,
-      textAlign: TextAlign.center,
-      style: AppTypography.monoXs,
-      decoration: InputDecoration(
-        labelText: label,
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.ring),
-        ),
-      ),
-    );
   }
 }

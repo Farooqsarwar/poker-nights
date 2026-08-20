@@ -43,7 +43,9 @@ class AppToggle extends StatelessWidget {
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: AppColors.shadowSoft, blurRadius: 2)],
+                  boxShadow: [
+                    BoxShadow(color: AppColors.shadowSoft, blurRadius: 2),
+                  ],
                 ),
               ),
             ),

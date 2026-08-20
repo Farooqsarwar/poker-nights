@@ -50,7 +50,9 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
     if (!_initialized) {
       if (widget.chipSetId != null) {
         final app = context.read<AppProvider>();
-        final cs = app.savedChipSets.firstWhere((c) => c.id == widget.chipSetId);
+        final cs = app.savedChipSets.firstWhere(
+          (c) => c.id == widget.chipSetId,
+        );
         _nameController.text = cs.name;
         _chips.addAll(cs.chips);
       } else {
@@ -78,10 +80,24 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
   void _addChip() {
     setState(() {
       if (_mode == _EditorMode.quick && _quickKind == _QuickKind.unnumbered) {
-        _chips.add(const ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 0, quantity: 200));
+        _chips.add(
+          const ChipColor(
+            color: 'White',
+            hex: 0xFFE8E4D9,
+            value: 0,
+            quantity: 200,
+          ),
+        );
         _reRecommend();
       } else {
-        _chips.add(const ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 1, quantity: 100));
+        _chips.add(
+          const ChipColor(
+            color: 'White',
+            hex: 0xFFE8E4D9,
+            value: 1,
+            quantity: 100,
+          ),
+        );
       }
     });
   }
@@ -120,14 +136,17 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
 
     // Unique name within saved sets (10-002).
     final duplicateName = app.savedChipSets.any(
-      (c) => c.id != widget.chipSetId && c.name.toLowerCase() == name.toLowerCase(),
+      (c) =>
+          c.id != widget.chipSetId &&
+          c.name.toLowerCase() == name.toLowerCase(),
     );
     if (duplicateName) {
       setState(() => _nameError = 'A chip set with this name already exists.');
       return;
     }
 
-    final id = widget.chipSetId ?? 'cs-${DateTime.now().millisecondsSinceEpoch}';
+    final id =
+        widget.chipSetId ?? 'cs-${DateTime.now().millisecondsSinceEpoch}';
     app.saveChipSet(id, name, _chips);
     context.pop();
   }
@@ -148,13 +167,13 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
               Expanded(
                 child: Text(
                   widget.chipSetId == null ? 'New Chip Set' : 'Edit Chip Set',
-                  style: AppTypography.display(size: AppFontSizes.xxl, weight: FontWeight.w700),
+                  style: AppTypography.display(
+                    size: AppFontSizes.xxl,
+                    weight: FontWeight.w700,
+                  ),
                 ),
               ),
-              AppButton(
-                onPressed: _save,
-                child: const Text('Save'),
-              ),
+              AppButton(onPressed: _save, child: const Text('Save')),
             ],
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -190,7 +209,9 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
             _mode == _EditorMode.exact
                 ? 'Enter the exact quantity and printed value for each colour (10.2).'
                 : 'Quick setup: pick colours and rank them — Poker Night suggests values (10.3).',
-            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
 
@@ -203,11 +224,15 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
               decoration: BoxDecoration(
                 color: AppColors.destructive.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.destructive.withValues(alpha: 0.5)),
+                border: Border.all(
+                  color: AppColors.destructive.withValues(alpha: 0.5),
+                ),
               ),
               child: Text(
                 _dupError!,
-                style: AppTypography.bodySm.copyWith(color: AppColors.destructive),
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.destructive,
+                ),
               ),
             ),
           ],
@@ -225,7 +250,9 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
                 onPressed: _addChip,
                 child: const Text('+ Add colour'),
               ),
-              if (_mode == _EditorMode.quick && _quickKind == _QuickKind.unnumbered && _chips.isNotEmpty)
+              if (_mode == _EditorMode.quick &&
+                  _quickKind == _QuickKind.unnumbered &&
+                  _chips.isNotEmpty)
                 AppButton(
                   variant: AppButtonVariant.ghost,
                   onPressed: () => setState(_reRecommend),
@@ -238,7 +265,9 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
               padding: const EdgeInsets.only(top: AppSpacing.sm),
               child: Text(
                 'Quantities are estimates — you confirm enough physical chips exist during setup review.',
-                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
         ],
@@ -275,7 +304,9 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: Text(
               'Enter the printed value for each colour. Exact quantities are optional and filled at setup.',
-              style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
           ),
       ],
@@ -295,7 +326,9 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
               key: ValueKey('row-${_chips[i].color}-$i'),
               chip: _chips[i],
               index: i,
-              showQuantity: !(_mode == _EditorMode.quick && _quickKind == _QuickKind.numbered),
+              showQuantity:
+                  !(_mode == _EditorMode.quick &&
+                      _quickKind == _QuickKind.numbered),
               showDragHandle: false,
               duplicateValue: _duplicateValues.contains(_chips[i].value),
               onChanged: (c) => _onChipChanged(i, c),
@@ -354,9 +387,19 @@ class _EmptyChips extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text('Add at least one colour.', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            'Add at least one colour.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
           const SizedBox(height: AppSpacing.xs),
-          Text('Most available → least available.', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            'Most available → least available.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
         ],
       ),
     );
@@ -364,7 +407,11 @@ class _EmptyChips extends StatelessWidget {
 }
 
 class _ModeButton extends StatelessWidget {
-  const _ModeButton({required this.label, required this.active, required this.onTap});
+  const _ModeButton({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
 
   final String label;
   final bool active;
@@ -381,7 +428,9 @@ class _ModeButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? AppColors.primarySoft : Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: active ? AppColors.primary : AppColors.border),
+          border: Border.all(
+            color: active ? AppColors.primary : AppColors.border,
+          ),
         ),
         child: Text(
           label,
@@ -429,8 +478,12 @@ class _ChipRowState extends State<_ChipRow> {
   @override
   void initState() {
     super.initState();
-    _valueController = TextEditingController(text: widget.chip.value.toString());
-    _quantityController = TextEditingController(text: widget.chip.quantity.toString());
+    _valueController = TextEditingController(
+      text: widget.chip.value.toString(),
+    );
+    _quantityController = TextEditingController(
+      text: widget.chip.quantity.toString(),
+    );
   }
 
   @override
@@ -490,10 +543,7 @@ class _ChipRowState extends State<_ChipRow> {
                 },
               ),
               const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: nameController,
-                label: 'Color Name',
-              ),
+              AppTextField(controller: nameController, label: 'Color Name'),
             ],
           ),
         ),
@@ -505,12 +555,15 @@ class _ChipRowState extends State<_ChipRow> {
           TextButton(
             child: const Text('Got it'),
             onPressed: () {
-              final hexName = '#${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+              final hexName =
+                  '#${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
               final inputName = nameController.text.trim();
-              widget.onChanged(widget.chip.copyWith(
-                color: inputName.isEmpty ? hexName : inputName,
-                hex: pickerColor.toARGB32(),
-              ));
+              widget.onChanged(
+                widget.chip.copyWith(
+                  color: inputName.isEmpty ? hexName : inputName,
+                  hex: pickerColor.toARGB32(),
+                ),
+              );
               Navigator.of(context).pop();
             },
           ),
@@ -536,7 +589,11 @@ class _ChipRowState extends State<_ChipRow> {
               index: widget.index,
               child: const Padding(
                 padding: EdgeInsets.only(right: AppSpacing.xs),
-                child: Icon(Icons.drag_handle, size: 18, color: AppColors.mutedForeground),
+                child: Icon(
+                  Icons.drag_handle,
+                  size: 18,
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
           ChipToken(
@@ -550,7 +607,10 @@ class _ChipRowState extends State<_ChipRow> {
             child: GestureDetector(
               onTap: _pickColor,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
+                ),
                 decoration: BoxDecoration(
                   border: Border.all(color: AppColors.border),
                   borderRadius: BorderRadius.circular(AppRadius.md),
@@ -589,10 +649,19 @@ class _ChipRowState extends State<_ChipRow> {
               decoration: InputDecoration(
                 labelText: 'Value',
                 isDense: true,
-                errorText: widget.duplicateValue ? 'dup' : (_valueError ? 'inv' : null),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: borderColor)),
-                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.ring)),
+                errorText: widget.duplicateValue
+                    ? 'dup'
+                    : (_valueError ? 'inv' : null),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 8,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: AppColors.ring),
+                ),
               ),
               onChanged: _onValue,
             ),
@@ -610,9 +679,16 @@ class _ChipRowState extends State<_ChipRow> {
                   labelText: 'Qty',
                   isDense: true,
                   errorText: _quantityError ? 'inv' : null,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: borderColor)),
-                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.ring)),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: AppColors.ring),
+                  ),
                 ),
                 onChanged: _onQuantity,
               ),

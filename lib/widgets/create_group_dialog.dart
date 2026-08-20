@@ -33,7 +33,10 @@ Future<void> openCreateGroupDialog(BuildContext context) {
           ),
           const SizedBox(height: AppSpacing.md),
           Container(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.sm),
+            padding: const EdgeInsets.symmetric(
+              vertical: AppSpacing.md,
+              horizontal: AppSpacing.sm,
+            ),
             decoration: BoxDecoration(
               color: AppColors.surfaceHover.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -76,21 +79,25 @@ Future<void> openCreateGroupDialog(BuildContext context) {
                             ),
                             boxShadow: name == selectedIconName
                                 ? [
-                              BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.35),
-                                blurRadius: 8,
-                                spreadRadius: 0,
-                                offset: const Offset(0, 2),
-                              ),
-                            ]
+                                    BoxShadow(
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                      blurRadius: 8,
+                                      spreadRadius: 0,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
                                 : [
-                              BoxShadow(
-                                color: AppColors.shadowDeep.withValues(alpha: 0.15),
-                                blurRadius: 2,
-                                spreadRadius: 0,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
+                                    BoxShadow(
+                                      color: AppColors.shadowDeep.withValues(
+                                        alpha: 0.15,
+                                      ),
+                                      blurRadius: 2,
+                                      spreadRadius: 0,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
                           ),
                           child: Icon(
                             groupIconMap[name],
@@ -118,7 +125,11 @@ Future<void> openCreateGroupDialog(BuildContext context) {
   );
 }
 
-void _create(BuildContext context, TextEditingController controller, String iconName) {
+void _create(
+  BuildContext context,
+  TextEditingController controller,
+  String iconName,
+) {
   final name = controller.text.trim();
   if (name.isEmpty) return;
   final app = context.read<AppProvider>();

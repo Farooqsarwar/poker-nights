@@ -35,7 +35,9 @@ class PageHeader extends StatelessWidget {
               padding: const EdgeInsets.only(right: AppSpacing.md, top: 4),
               child: Text(
                 '←',
-                style: AppTypography.bodyLg.copyWith(color: AppColors.mutedForeground),
+                style: AppTypography.bodyLg.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
           ),
@@ -60,17 +62,16 @@ class PageHeader extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   subtitle!,
-                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ],
             ],
           ),
         ),
         if (actions != null && actions!.isNotEmpty)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: actions!,
-          ),
+          Row(mainAxisSize: MainAxisSize.min, children: actions!),
       ],
     );
   }

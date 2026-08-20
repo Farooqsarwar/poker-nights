@@ -61,8 +61,7 @@ class TermsScreen extends StatelessWidget {
     ),
     (
       title: '8. Contact',
-      body:
-          'Questions about these Terms? Email support@pokernight.app.',
+      body: 'Questions about these Terms? Email support@pokernight.app.',
     ),
   ];
 
@@ -85,7 +84,9 @@ class TermsScreen extends StatelessWidget {
               children: [
                 Text(
                   'Effective date: August 1, 2026',
-                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 Text(

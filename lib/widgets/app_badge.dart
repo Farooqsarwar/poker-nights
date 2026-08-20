@@ -23,35 +23,35 @@ class AppBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (background, foreground, edge) = switch (variant) {
       AppBadgeVariant.default_ => (
-          AppColors.secondary,
-          AppColors.secondaryForeground,
-          _borderFor(AppColors.primarySoftBorder, border),
-        ),
+        AppColors.secondary,
+        AppColors.secondaryForeground,
+        _borderFor(AppColors.primarySoftBorder, border),
+      ),
       AppBadgeVariant.gold => (
-          AppColors.primarySoft,
-          AppColors.primary,
-          _borderFor(AppColors.primarySoftBorder, border),
-        ),
+        AppColors.primarySoft,
+        AppColors.primary,
+        _borderFor(AppColors.primarySoftBorder, border),
+      ),
       AppBadgeVariant.green => (
-          AppColors.successSoft,
-          AppColors.success,
-          _borderFor(AppColors.successSoftBorder, border),
-        ),
+        AppColors.successSoft,
+        AppColors.success,
+        _borderFor(AppColors.successSoftBorder, border),
+      ),
       AppBadgeVariant.red => (
-          AppColors.destructiveSoft,
-          AppColors.destructive,
-          _borderFor(AppColors.destructive.withValues(alpha: 0.3), border),
-        ),
+        AppColors.destructiveSoft,
+        AppColors.destructive,
+        _borderFor(AppColors.destructive.withValues(alpha: 0.3), border),
+      ),
       AppBadgeVariant.muted => (
-          AppColors.muted,
-          AppColors.mutedForeground,
-          _borderFor(AppColors.border, border),
-        ),
+        AppColors.muted,
+        AppColors.mutedForeground,
+        _borderFor(AppColors.border, border),
+      ),
       AppBadgeVariant.accent => (
-          AppColors.primarySoft,
-          AppColors.primary,
-          _borderFor(AppColors.primarySoftBorder, border),
-        ),
+        AppColors.primarySoft,
+        AppColors.primary,
+        _borderFor(AppColors.primarySoftBorder, border),
+      ),
     };
 
     return Container(

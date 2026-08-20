@@ -29,15 +29,26 @@ class SettingsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Settings', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+          Text(
+            'Settings',
+            style: AppTypography.display(
+              size: AppFontSizes.xxxl,
+              weight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Preferences for your account',
-            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.xl),
           // Notifications
-          Text('Gameplay', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            'Gameplay',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: AppSpacing.sm),
           AppCard(
             padding: EdgeInsets.zero,
@@ -81,7 +92,10 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
           // Game Assets
-          Text('Game Assets', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            'Game Assets',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: AppSpacing.sm),
           AppCard(
             padding: EdgeInsets.zero,
@@ -91,7 +105,10 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.casino_outlined,
                   title: 'Chip sets',
                   subtitle: 'Manage saved chip denominations and colours',
-                  trailing: const Icon(Icons.chevron_right, color: AppColors.mutedForeground),
+                  trailing: const Icon(
+                    Icons.chevron_right,
+                    color: AppColors.mutedForeground,
+                  ),
                   showDivider: false,
                   onTap: () => context.push(RoutePaths.chipSets),
                 ),
@@ -105,11 +122,17 @@ class SettingsScreen extends StatelessWidget {
                       value: app.defaultChipSetId,
                       onChanged: app.setDefaultChipSet,
                       items: [
-                        const DropdownMenuItem<String?>(value: null, child: Text('Standard set')),
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Standard set'),
+                        ),
                         for (final set in app.savedChipSets)
                           DropdownMenuItem<String?>(
                             value: set.id,
-                            child: Text(set.name, overflow: TextOverflow.ellipsis),
+                            child: Text(
+                              set.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                       ],
                     ),
@@ -121,7 +144,10 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
           // Appearance
-          Text('Appearance', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            'Appearance',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: AppSpacing.sm),
           AppCard(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -149,13 +175,20 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
           // Account
-          Text('Account', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            'Account',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: AppSpacing.sm),
           AppCard(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Row(
               children: [
-                const Icon(Icons.person_outline, size: 22, color: AppColors.icon),
+                const Icon(
+                  Icons.person_outline,
+                  size: 22,
+                  color: AppColors.icon,
+                ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
@@ -163,17 +196,22 @@ class SettingsScreen extends StatelessWidget {
                     children: [
                       Text(
                         user?.name ?? 'Guest',
-                        style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         user?.email ?? 'Not signed in',
-                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                if (user?.isAdmin == true) const AppBadge(label: 'Admin', variant: AppBadgeVariant.gold),
+                if (user?.isAdmin == true)
+                  const AppBadge(label: 'Admin', variant: AppBadgeVariant.gold),
               ],
             ),
           ),
@@ -189,7 +227,9 @@ class SettingsScreen extends StatelessWidget {
           Text(
             'Poker Night v1.0.0',
             textAlign: TextAlign.center,
-            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
         ],
       ),
@@ -204,12 +244,19 @@ class SettingsScreen extends StatelessWidget {
         title: const Text('Sign out?'),
         content: Text(
           'You will need to log in again to see your games.',
-          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text('Cancel', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () {
@@ -217,7 +264,12 @@ class SettingsScreen extends StatelessWidget {
               app.logout();
               context.go(RoutePaths.landing);
             },
-            child: Text('Sign out', style: AppTypography.bodySm.copyWith(color: AppColors.destructive)),
+            child: Text(
+              'Sign out',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.destructive,
+              ),
+            ),
           ),
         ],
       ),
@@ -242,11 +294,16 @@ class _ThemeChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.sm),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
         decoration: BoxDecoration(
           color: active ? AppColors.primarySoft : AppColors.card,
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          border: Border.all(color: active ? AppColors.primary : AppColors.border),
+          border: Border.all(
+            color: active ? AppColors.primary : AppColors.border,
+          ),
         ),
         child: Text(
           label,
@@ -284,26 +341,38 @@ class _SettingRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          border: showDivider ? const Border(bottom: BorderSide(color: AppColors.border)) : null,
+          border: showDivider
+              ? const Border(bottom: BorderSide(color: AppColors.border))
+              : null,
         ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: AppColors.icon),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(subtitle, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-              ],
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: AppColors.icon),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          trailing,
-        ],
-      ),
+            const SizedBox(width: AppSpacing.md),
+            trailing,
+          ],
+        ),
       ),
     );
   }

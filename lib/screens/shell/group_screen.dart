@@ -40,7 +40,10 @@ class _GroupScreenState extends State<GroupScreen> {
   bool _showPollModal = false;
   String? _pollError;
   final _pollQuestion = TextEditingController();
-  final List<TextEditingController> _pollOptions = [TextEditingController(), TextEditingController()];
+  final List<TextEditingController> _pollOptions = [
+    TextEditingController(),
+    TextEditingController(),
+  ];
   bool _pollMulti = false;
 
   @override
@@ -71,12 +74,19 @@ class _GroupScreenState extends State<GroupScreen> {
   }
 
   void _createPoll(AppProvider app) {
-    final opts = _pollOptions.map((c) => c.text.trim()).where((o) => o.isNotEmpty).toList();
+    final opts = _pollOptions
+        .map((c) => c.text.trim())
+        .where((o) => o.isNotEmpty)
+        .toList();
     if (_pollQuestion.text.trim().isEmpty || opts.length < 2) {
       setState(() => _pollError = 'Enter a question and at least two options.');
       return;
     }
-    final error = app.createPoll(_pollQuestion.text.trim(), opts, multi: _pollMulti);
+    final error = app.createPoll(
+      _pollQuestion.text.trim(),
+      opts,
+      multi: _pollMulti,
+    );
     if (error != null) {
       setState(() => _pollError = error);
       return;
@@ -137,11 +147,27 @@ class _GroupScreenState extends State<GroupScreen> {
           const SizedBox(height: AppSpacing.lg),
           _CustomTabBar(
             tabs: [
-              _TabItem(id: 'games', label: 'Games', count: upcomingGames.length),
-              _TabItem(id: 'members', label: 'Members', count: group.members.length),
-              _TabItem(id: 'chat', label: 'Chat', count: group.chat.where((m) => !m.deleted).length),
+              _TabItem(
+                id: 'games',
+                label: 'Games',
+                count: upcomingGames.length,
+              ),
+              _TabItem(
+                id: 'members',
+                label: 'Members',
+                count: group.members.length,
+              ),
+              _TabItem(
+                id: 'chat',
+                label: 'Chat',
+                count: group.chat.where((m) => !m.deleted).length,
+              ),
               _TabItem(id: 'polls', label: 'Polls', count: group.polls.length),
-              _TabItem(id: 'history', label: 'History', count: pastGames.length),
+              _TabItem(
+                id: 'history',
+                label: 'History',
+                count: pastGames.length,
+              ),
             ],
             active: _tab,
             onChanged: (t) => setState(() => _tab = t),
@@ -152,11 +178,11 @@ class _GroupScreenState extends State<GroupScreen> {
           else if (_tab == 'members')
             _buildMembers(group)
           else if (_tab == 'chat')
-              _buildChat(app, group, user?.id)
-            else if (_tab == 'polls')
-                _buildPolls(app, group, user?.id, isAdmin)
-              else
-                _buildHistory(group),
+            _buildChat(app, group, user?.id)
+          else if (_tab == 'polls')
+            _buildPolls(app, group, user?.id, isAdmin)
+          else
+            _buildHistory(group),
           // Poll modal
           AppModal(
             open: _showPollModal,
@@ -174,13 +200,17 @@ class _GroupScreenState extends State<GroupScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     _pollError!,
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.destructive,
+                    ),
                   ),
                 ],
                 const SizedBox(height: AppSpacing.lg),
                 Text(
                   'Options (min. 2)',
-                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 for (var i = 0; i < _pollOptions.length; i++) ...[
@@ -198,7 +228,13 @@ class _GroupScreenState extends State<GroupScreen> {
                           onPressed: () => setState(() {
                             _pollOptions.removeAt(i).dispose();
                           }),
-                          icon: const Text('×', style: TextStyle(color: AppColors.mutedForeground, fontSize: AppFontSizes.lg)),
+                          icon: const Text(
+                            '×',
+                            style: TextStyle(
+                              color: AppColors.mutedForeground,
+                              fontSize: AppFontSizes.lg,
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -206,10 +242,19 @@ class _GroupScreenState extends State<GroupScreen> {
                 ],
                 if (_pollOptions.length < 10)
                   InkWell(
-                    onTap: () => setState(() => _pollOptions.add(TextEditingController())),
+                    onTap: () => setState(
+                      () => _pollOptions.add(TextEditingController()),
+                    ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                      child: Text('+ Add option', style: AppTypography.bodyXs.copyWith(color: AppColors.primary)),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.xs,
+                      ),
+                      child: Text(
+                        '+ Add option',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.primary,
+                        ),
+                      ),
                     ),
                   ),
                 const SizedBox(height: AppSpacing.md),
@@ -222,19 +267,28 @@ class _GroupScreenState extends State<GroupScreen> {
                           Text('Multi-choice', style: AppTypography.bodySm),
                           Text(
                             'Members may pick more than one option',
-                            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    AppToggle(value: _pollMulti, onChanged: (v) => setState(() => _pollMulti = v)),
+                    AppToggle(
+                      value: _pollMulti,
+                      onChanged: (v) => setState(() => _pollMulti = v),
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 AppButton(
                   fullWidth: true,
-                  disabled: _pollQuestion.text.trim().isEmpty ||
-                      _pollOptions.where((c) => c.text.trim().isNotEmpty).length < 2,
+                  disabled:
+                      _pollQuestion.text.trim().isEmpty ||
+                      _pollOptions
+                              .where((c) => c.text.trim().isNotEmpty)
+                              .length <
+                          2,
                   onPressed: () => _createPoll(app),
                   child: const Text('Create poll'),
                 ),
@@ -246,7 +300,13 @@ class _GroupScreenState extends State<GroupScreen> {
     );
   }
 
-  Widget _buildGames(AppProvider app, Group group, List<LiveGame> games, bool isAdmin, AppUser? user) {
+  Widget _buildGames(
+    AppProvider app,
+    Group group,
+    List<LiveGame> games,
+    bool isAdmin,
+    AppUser? user,
+  ) {
     if (games.isEmpty) {
       return AppEmptyState(
         icon: Icons.sports_esports_outlined,
@@ -254,9 +314,9 @@ class _GroupScreenState extends State<GroupScreen> {
         description: 'No upcoming games — create the first one!',
         action: isAdmin
             ? AppButton(
-          onPressed: () => context.go(RoutePaths.createTournament),
-          child: const Text('Create tournament'),
-        )
+                onPressed: () => context.go(RoutePaths.createTournament),
+                child: const Text('Create tournament'),
+              )
             : null,
       );
     }
@@ -277,7 +337,9 @@ class _GroupScreenState extends State<GroupScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoCol = constraints.maxWidth >= 640;
-        final width = twoCol ? (constraints.maxWidth - AppSpacing.sm) / 2 : constraints.maxWidth;
+        final width = twoCol
+            ? (constraints.maxWidth - AppSpacing.sm) / 2
+            : constraints.maxWidth;
         return Wrap(
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
@@ -295,31 +357,58 @@ class _GroupScreenState extends State<GroupScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(m.name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
-                            Text(m.email, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                            Text(
+                              m.name,
+                              style: AppTypography.bodySm.copyWith(
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              m.email,
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
                           ],
                         ),
                       ),
                       if (m.isAdmin) ...[
-                        const AppBadge(label: 'Admin', variant: AppBadgeVariant.accent),
+                        const AppBadge(
+                          label: 'Admin',
+                          variant: AppBadgeVariant.accent,
+                        ),
                         const SizedBox(width: AppSpacing.sm),
                       ],
                       Text(
                         '${m.stats.played}G · ${m.stats.wins}W',
-                        style: AppTypography.mono(size: AppFontSizes.xs, color: AppColors.mutedForeground),
+                        style: AppTypography.mono(
+                          size: AppFontSizes.xs,
+                          color: AppColors.mutedForeground,
+                        ),
                       ),
-                      if (context.read<AppProvider>().user?.id == group.ownerId && m.id != group.ownerId)
+                      if (context.read<AppProvider>().user?.id ==
+                              group.ownerId &&
+                          m.id != group.ownerId)
                         PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert, size: 18, color: AppColors.mutedForeground),
+                          icon: const Icon(
+                            Icons.more_vert,
+                            size: 18,
+                            color: AppColors.mutedForeground,
+                          ),
                           onSelected: (val) {
                             if (val == 'toggle_admin') {
-                              context.read<AppProvider>().toggleAdminRole(m.id, !m.isAdmin);
+                              context.read<AppProvider>().toggleAdminRole(
+                                m.id,
+                                !m.isAdmin,
+                              );
                             }
                           },
                           itemBuilder: (context) => [
                             PopupMenuItem(
                               value: 'toggle_admin',
-                              child: Text(m.isAdmin ? 'Revoke Admin' : 'Make Admin'),
+                              child: Text(
+                                m.isAdmin ? 'Revoke Admin' : 'Make Admin',
+                              ),
                             ),
                           ],
                         ),
@@ -346,26 +435,28 @@ class _GroupScreenState extends State<GroupScreen> {
               padding: const EdgeInsets.all(AppSpacing.md),
               child: messages.isEmpty
                   ? Padding(
-                padding: const EdgeInsets.all(AppSpacing.xxl),
-                child: Text(
-                  'No messages yet. Start the conversation!',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-                ),
-              )
+                      padding: const EdgeInsets.all(AppSpacing.xxl),
+                      child: Text(
+                        'No messages yet. Start the conversation!',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    )
                   : Column(
-                children: [
-                  for (final msg in messages.reversed)
-                    _ChatBubble(
-                      message: msg,
-                      isMine: msg.authorId == userId,
-                      // Audit fix E12: the admin can delete any inappropriate
-                      // message — including their own (Tech §14.1).
-                      canDelete: (app.user?.isAdmin ?? false),
-                      onDelete: () => app.deleteMessage(msg.id),
+                      children: [
+                        for (final msg in messages.reversed)
+                          _ChatBubble(
+                            message: msg,
+                            isMine: msg.authorId == userId,
+                            // Audit fix E12: the admin can delete any inappropriate
+                            // message — including their own (Tech §14.1).
+                            canDelete: (app.user?.isAdmin ?? false),
+                            onDelete: () => app.deleteMessage(msg.id),
+                          ),
+                      ],
                     ),
-                ],
-              ),
             ),
           ),
           if (userId != null)
@@ -381,7 +472,9 @@ class _GroupScreenState extends State<GroupScreen> {
                       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                       child: Text(
                         _chatError!,
-                        style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.destructive,
+                        ),
                       ),
                     ),
                   Row(
@@ -418,7 +511,9 @@ class _GroupScreenState extends State<GroupScreen> {
               child: Text(
                 'Sign in to chat',
                 textAlign: TextAlign.center,
-                style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
         ],
@@ -426,7 +521,12 @@ class _GroupScreenState extends State<GroupScreen> {
     );
   }
 
-  Widget _buildPolls(AppProvider app, Group group, String? userId, bool isAdmin) {
+  Widget _buildPolls(
+    AppProvider app,
+    Group group,
+    String? userId,
+    bool isAdmin,
+  ) {
     if (group.polls.isEmpty) {
       return Column(
         children: [
@@ -480,9 +580,7 @@ class _GroupScreenState extends State<GroupScreen> {
         description: 'Completed games will appear here.',
       );
     }
-    final names = <String, String>{
-      for (final m in group.members) m.id: m.name,
-    };
+    final names = <String, String>{for (final m in group.members) m.id: m.name};
     return Column(
       children: [
         for (final game in group.pastGames)
@@ -496,11 +594,18 @@ class _GroupScreenState extends State<GroupScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(game.settings.name, style: AppTypography.bodyStyle.copyWith(fontWeight: FontWeight.w600)),
+                      Text(
+                        game.settings.name,
+                        style: AppTypography.bodyStyle.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         '${game.settings.date} · ${game.players.where((p) => p.confirmed).length} players',
-                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
                       ),
                       if (game.finishOrder.isNotEmpty)
                         Padding(
@@ -510,16 +615,30 @@ class _GroupScreenState extends State<GroupScreen> {
                             children: [
                               // finishOrder is "first-out first", so the top 3
                               // are the last elements of the list.
-                              for (var i = 0; i < game.finishOrder.length.clamp(0, 3); i++)
+                              for (
+                                var i = 0;
+                                i < game.finishOrder.length.clamp(0, 3);
+                                i++
+                              )
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     MedalIcon(i + 1, size: AppFontSizes.sm),
                                     const SizedBox(width: AppSpacing.xs),
                                     Text(
-                                      names[game.finishOrder[game.finishOrder.length - 1 - i]] ??
-                                          game.finishOrder[game.finishOrder.length - 1 - i],
-                                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                                      names[game.finishOrder[game
+                                                  .finishOrder
+                                                  .length -
+                                              1 -
+                                              i]] ??
+                                          game.finishOrder[game
+                                                  .finishOrder
+                                                  .length -
+                                              1 -
+                                              i],
+                                      style: AppTypography.bodyXs.copyWith(
+                                        color: AppColors.mutedForeground,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -529,7 +648,10 @@ class _GroupScreenState extends State<GroupScreen> {
                     ],
                   ),
                 ),
-                const AppBadge(label: 'Completed', variant: AppBadgeVariant.muted),
+                const AppBadge(
+                  label: 'Completed',
+                  variant: AppBadgeVariant.muted,
+                ),
               ],
             ),
           ),
@@ -539,7 +661,12 @@ class _GroupScreenState extends State<GroupScreen> {
 }
 
 class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({required this.message, required this.isMine, required this.canDelete, required this.onDelete});
+  const _ChatBubble({
+    required this.message,
+    required this.isMine,
+    required this.canDelete,
+    required this.onDelete,
+  });
 
   final ChatMessage message;
   final bool isMine;
@@ -567,14 +694,20 @@ class _ChatBubble extends StatelessWidget {
                 ],
               ),
               borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.3),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.push_pin, size: 14, color: AppColors.primary),
+                    const Icon(
+                      Icons.push_pin,
+                      size: 14,
+                      color: AppColors.primary,
+                    ),
                     const SizedBox(width: AppSpacing.xs),
                     Text(
                       'Pinned event',
@@ -588,12 +721,17 @@ class _ChatBubble extends StatelessWidget {
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   message.body,
-                  style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.foreground,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   'Posted by ${message.authorName} · ${Formatters.relativeTime(message.timestamp)}',
-                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, fontSize: 10),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                    fontSize: 10,
+                  ),
                 ),
               ],
             ),
@@ -604,7 +742,9 @@ class _ChatBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
-        mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isMine) ...[
@@ -613,7 +753,9 @@ class _ChatBubble extends StatelessWidget {
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMine
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
@@ -636,7 +778,10 @@ class _ChatBubble extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.card,
                     borderRadius: BorderRadius.circular(AppRadius.lg).copyWith(
@@ -659,7 +804,10 @@ class _ChatBubble extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
                         'delete',
-                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, fontSize: 10),
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                          fontSize: 10,
+                        ),
                       ),
                     ),
                   ),
@@ -684,6 +832,7 @@ class _PollCard extends StatefulWidget {
   final Poll poll;
   final String? userId;
   final bool isAdmin;
+
   /// Commits the member's selection. For single-choice polls this is a one-
   /// element list; for multi-choice polls it carries every ticked option
   /// (Tech §14.2, audit fix B11).
@@ -701,7 +850,9 @@ class _PollCardState extends State<_PollCard> {
   @override
   void initState() {
     super.initState();
-    final mine = widget.userId != null ? widget.poll.votes[widget.userId!] : null;
+    final mine = widget.userId != null
+        ? widget.poll.votes[widget.userId!]
+        : null;
     if (widget.poll.multi && mine != null) {
       _multiSelection.addAll(mine);
     }
@@ -713,8 +864,9 @@ class _PollCardState extends State<_PollCard> {
     final isMulti = poll.multi;
     final totalVotes = poll.totalVotes;
     final counts = poll.optionCounts();
-    final mySingle =
-        !isMulti && widget.userId != null ? poll.votes[widget.userId!] : null;
+    final mySingle = !isMulti && widget.userId != null
+        ? poll.votes[widget.userId!]
+        : null;
 
     void toggleMulti(String opt) {
       setState(() {
@@ -731,11 +883,22 @@ class _PollCardState extends State<_PollCard> {
           Row(
             children: [
               Expanded(
-                child: Text(poll.question, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                child: Text(
+                  poll.question,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
-              if (isMulti) const AppBadge(label: 'Multi-choice', variant: AppBadgeVariant.accent, border: true),
+              if (isMulti)
+                const AppBadge(
+                  label: 'Multi-choice',
+                  variant: AppBadgeVariant.accent,
+                  border: true,
+                ),
               const SizedBox(width: AppSpacing.sm),
-              if (poll.closed) const AppBadge(label: 'Closed', variant: AppBadgeVariant.muted),
+              if (poll.closed)
+                const AppBadge(label: 'Closed', variant: AppBadgeVariant.muted),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -771,7 +934,9 @@ class _PollCardState extends State<_PollCard> {
             children: [
               Text(
                 '$totalVotes vote${totalVotes != 1 ? 's' : ''}',
-                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
               const Spacer(),
               if (widget.isAdmin && !poll.closed)
@@ -815,7 +980,10 @@ class _PollOption extends StatelessWidget {
       onTap: closed ? null : onTap,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
         decoration: BoxDecoration(
           color: isMyVote ? AppColors.primarySoft : AppColors.secondary,
           borderRadius: BorderRadius.circular(AppRadius.md),
@@ -831,26 +999,33 @@ class _PollOption extends StatelessWidget {
                 Icon(
                   checkbox
                       ? (isMyVote
-                          ? Icons.check_box
-                          : Icons.check_box_outline_blank)
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank)
                       : (isMyVote
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_unchecked),
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked),
                   size: 16,
-                  color: isMyVote ? AppColors.primary : AppColors.mutedForeground,
+                  color: isMyVote
+                      ? AppColors.primary
+                      : AppColors.mutedForeground,
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
                     label,
                     style: AppTypography.bodySm.copyWith(
-                      color: isMyVote ? AppColors.primary : AppColors.foreground,
+                      color: isMyVote
+                          ? AppColors.primary
+                          : AppColors.foreground,
                     ),
                   ),
                 ),
                 Text(
                   '$count vote${count != 1 ? 's' : ''}',
-                  style: AppTypography.mono(size: AppFontSizes.xs, color: AppColors.mutedForeground),
+                  style: AppTypography.mono(
+                    size: AppFontSizes.xs,
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ],
             ),
@@ -864,7 +1039,9 @@ class _PollOption extends StatelessWidget {
                     minHeight: 4,
                     backgroundColor: AppColors.muted,
                     valueColor: AlwaysStoppedAnimation(
-                      isMyVote ? AppColors.primary : AppColors.mutedForeground.withValues(alpha: 0.4),
+                      isMyVote
+                          ? AppColors.primary
+                          : AppColors.mutedForeground.withValues(alpha: 0.4),
                     ),
                   ),
                 ),
@@ -882,18 +1059,27 @@ class _RsvpBtn extends StatelessWidget {
   final Rsvp? current;
   @override
   Widget build(BuildContext context) {
-    final active = current != null && (opt == Rsvp.going ? current!.isGoing : current == opt);
+    final active =
+        current != null &&
+        (opt == Rsvp.going ? current!.isGoing : current == opt);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 4,
+      ),
       decoration: BoxDecoration(
         color: active ? AppColors.primary : AppColors.muted,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: active ? AppColors.primary : AppColors.border),
+        border: Border.all(
+          color: active ? AppColors.primary : AppColors.border,
+        ),
       ),
       child: Text(
         opt.label,
         style: AppTypography.bodyXs.copyWith(
-          color: active ? AppColors.primaryForeground : AppColors.mutedForeground,
+          color: active
+              ? AppColors.primaryForeground
+              : AppColors.mutedForeground,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -932,14 +1118,19 @@ class _GroupHeader extends StatelessWidget {
           children: [
             Text(
               group.name,
-              style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700),
+              style: AppTypography.display(
+                size: AppFontSizes.xxxl,
+                weight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Row(
               children: [
                 Text(
                   '${group.members.length} members',
-                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 SizedBox(
@@ -949,7 +1140,10 @@ class _GroupHeader extends StatelessWidget {
                       for (var i = 0; i < group.members.length && i < 5; i++)
                         Align(
                           widthFactor: 0.6,
-                          child: AppAvatar(name: group.members[i].name, size: AppAvatarSize.sm),
+                          child: AppAvatar(
+                            name: group.members[i].name,
+                            size: AppAvatarSize.sm,
+                          ),
                         ),
                       if (group.members.length > 5)
                         Align(
@@ -957,7 +1151,10 @@ class _GroupHeader extends StatelessWidget {
                           child: CircleAvatar(
                             radius: 12,
                             backgroundColor: AppColors.border,
-                            child: Text('+${group.members.length - 5}', style: AppTypography.monoXs),
+                            child: Text(
+                              '+${group.members.length - 5}',
+                              style: AppTypography.monoXs,
+                            ),
                           ),
                         ),
                     ],
@@ -981,7 +1178,8 @@ class _GroupHeader extends StatelessWidget {
             AppButton(
               size: AppButtonSize.sm,
               variant: AppButtonVariant.secondary,
-              onPressed: () => context.read<AppProvider>().togglePinGroup(group),
+              onPressed: () =>
+                  context.read<AppProvider>().togglePinGroup(group),
               child: Text(group.pinned ? 'Unpin' : 'Pin'),
             ),
             AppButton(
@@ -994,23 +1192,23 @@ class _GroupHeader extends StatelessWidget {
 
         final content = isMobile
             ? Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            info,
-            if (isAdmin) ...[
-              const SizedBox(height: AppSpacing.md),
-              actions,
-            ],
-          ],
-        )
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  info,
+                  if (isAdmin) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    actions,
+                  ],
+                ],
+              )
             : Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: info),
-            if (isAdmin) actions,
-          ],
-        );
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: info),
+                  if (isAdmin) actions,
+                ],
+              );
 
         return ClipRRect(
           // Rounded clip so the icon bleeds off the corner cleanly instead
@@ -1030,17 +1228,20 @@ class _GroupHeader extends StatelessWidget {
                   Positioned(
                     right: iconOffset,
                     top: iconOffset,
-                    child: _GroupHeaderIcon(icon: groupIconMap[group.icon] ?? Icons.casino, size: iconSize),
+                    child: _GroupHeaderIcon(
+                      icon: groupIconMap[group.icon] ?? Icons.casino,
+                      size: iconSize,
+                    ),
                   )
                 else
                   Align(
                     alignment: Alignment.center,
-                    child: _GroupHeaderIcon(icon: groupIconMap[group.icon] ?? Icons.casino, size: iconSize),
+                    child: _GroupHeaderIcon(
+                      icon: groupIconMap[group.icon] ?? Icons.casino,
+                      size: iconSize,
+                    ),
                   ),
-                Align(
-                  alignment: Alignment.topLeft,
-                  child: content,
-                ),
+                Align(alignment: Alignment.topLeft, child: content),
               ],
             ),
           ),
@@ -1062,11 +1263,7 @@ class _GroupHeaderIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: Icon(
-        icon,
-        size: size,
-        color: AppColors.destructive,
-      ),
+      child: Icon(icon, size: size, color: AppColors.destructive),
     );
   }
 }
@@ -1083,7 +1280,11 @@ class _CustomTabBar extends StatelessWidget {
   final String active;
   final ValueChanged<String> onChanged;
 
-  const _CustomTabBar({required this.tabs, required this.active, required this.onChanged});
+  const _CustomTabBar({
+    required this.tabs,
+    required this.active,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1130,7 +1331,12 @@ class _PremiumGameCard extends StatefulWidget {
   final AppUser? user;
   final VoidCallback onTap;
 
-  const _PremiumGameCard({required this.game, required this.app, required this.user, required this.onTap});
+  const _PremiumGameCard({
+    required this.game,
+    required this.app,
+    required this.user,
+    required this.onTap,
+  });
 
   @override
   State<_PremiumGameCard> createState() => _PremiumGameCardState();
@@ -1142,7 +1348,10 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
   @override
   Widget build(BuildContext context) {
     final game = widget.game;
-    final rsvp = game.players.where((p) => p.id == widget.user?.id).firstOrNull?.rsvp;
+    final rsvp = game.players
+        .where((p) => p.id == widget.user?.id)
+        .firstOrNull
+        ?.rsvp;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
@@ -1156,7 +1365,13 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
             borderRadius: BorderRadius.circular(AppRadius.lg),
             border: Border.all(color: AppColors.border),
             boxShadow: _hovering
-                ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.2), blurRadius: 12, spreadRadius: 2)]
+                ? [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.2),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ]
                 : [],
           ),
           child: Padding(
@@ -1169,45 +1384,85 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                   children: [
                     AppBadge(
                       label: game.status.name.toUpperCase(),
-                      variant: game.status.isActiveLive ? AppBadgeVariant.accent : AppBadgeVariant.muted,
+                      variant: game.status.isActiveLive
+                          ? AppBadgeVariant.accent
+                          : AppBadgeVariant.muted,
                     ),
-                    const Icon(Icons.chevron_right, color: AppColors.mutedForeground),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.mutedForeground,
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   game.settings.name,
-                  style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w700),
+                  style: AppTypography.display(
+                    size: AppFontSizes.xl,
+                    weight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today, size: 14, color: AppColors.mutedForeground),
-                    const SizedBox(width: 4),
-                    Text(game.settings.date, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.access_time, size: 14, color: AppColors.mutedForeground),
-                    const SizedBox(width: 4),
-                    Text(game.settings.time, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.location_on, size: 14, color: AppColors.mutedForeground),
+                    const Icon(
+                      Icons.calendar_today,
+                      size: 14,
+                      color: AppColors.mutedForeground,
+                    ),
                     const SizedBox(width: 4),
                     Text(
-                      game.settings.locationPrivate ? 'Address shared at check-in' : game.settings.location,
-                      style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                      game.settings.date,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.access_time,
+                      size: 14,
+                      color: AppColors.mutedForeground,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      game.settings.time,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on,
+                      size: 14,
+                      color: AppColors.mutedForeground,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      game.settings.locationPrivate
+                          ? 'Address shared at check-in'
+                          : game.settings.location,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Text('Buy-in: ${game.settings.buyIn}', style: AppTypography.bodySm.copyWith(color: AppColors.foreground, fontWeight: FontWeight.w600)),
+                Text(
+                  'Buy-in: ${game.settings.buyIn}',
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.foreground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.md),
                 if (widget.user != null)
                   SingleChildScrollView(
@@ -1221,13 +1476,18 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                           Rsvp.goingPlus3,
                           Rsvp.goingPlus4,
                           Rsvp.maybe,
-                          Rsvp.cant
+                          Rsvp.cant,
                         ])
                           Padding(
-                            padding: const EdgeInsets.only(right: AppSpacing.xs),
+                            padding: const EdgeInsets.only(
+                              right: AppSpacing.xs,
+                            ),
                             child: InkWell(
-                              onTap: () => widget.app.setRSVP(opt, gameId: game.id),
-                              borderRadius: BorderRadius.circular(AppRadius.pill),
+                              onTap: () =>
+                                  widget.app.setRSVP(opt, gameId: game.id),
+                              borderRadius: BorderRadius.circular(
+                                AppRadius.pill,
+                              ),
                               child: _RsvpBtn(opt: opt, current: rsvp),
                             ),
                           ),

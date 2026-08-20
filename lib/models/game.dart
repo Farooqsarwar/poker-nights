@@ -224,6 +224,7 @@ class Poll {
   final String id;
   final String question;
   final List<String> options;
+
   /// userId -> selected option(s). A single-choice poll stores one option per
   /// user; a multi-choice poll may store several (Tech spec §14.2).
   final Map<String, List<String>> votes;

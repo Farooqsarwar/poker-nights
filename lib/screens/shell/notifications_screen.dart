@@ -128,12 +128,17 @@ class NotificationsScreen extends StatelessWidget {
                   children: [
                     Text(
                       'Notifications',
-                      style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700),
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxxl,
+                        weight: FontWeight.w700,
+                      ),
                     ),
                     if (unreadCount > 0)
                       Text(
                         '$unreadCount unread',
-                        style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
                       ),
                   ],
                 ),
@@ -153,15 +158,25 @@ class NotificationsScreen extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.xxl),
               child: Column(
                 children: [
-                  const Icon(Icons.notifications_outlined,
-                      size: AppFontSizes.display, color: AppColors.icon),
+                  const Icon(
+                    Icons.notifications_outlined,
+                    size: AppFontSizes.display,
+                    color: AppColors.icon,
+                  ),
                   const SizedBox(height: AppSpacing.md),
-                  Text('No notifications yet.', style: AppTypography.bodyStyle.copyWith(color: AppColors.mutedForeground)),
+                  Text(
+                    'No notifications yet.',
+                    style: AppTypography.bodyStyle.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     "You'll see game invites, RSVP updates, and announcements here.",
                     textAlign: TextAlign.center,
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
@@ -190,7 +205,9 @@ class NotificationsScreen extends StatelessWidget {
               child: Text(
                 "You're all caught up.",
                 textAlign: TextAlign.center,
-                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
         ],
@@ -220,8 +237,12 @@ class _NotificationRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: unread ? AppColors.primary.withValues(alpha: 0.04) : Colors.transparent,
-          border: showDivider ? const Border(bottom: BorderSide(color: AppColors.border)) : null,
+          color: unread
+              ? AppColors.primary.withValues(alpha: 0.04)
+              : Colors.transparent,
+          border: showDivider
+              ? const Border(bottom: BorderSide(color: AppColors.border))
+              : null,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -232,7 +253,11 @@ class _NotificationRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: unread ? AppColors.primarySoft : AppColors.muted,
                 shape: BoxShape.circle,
-                border: Border.all(color: unread ? AppColors.primary.withValues(alpha: 0.3) : AppColors.border),
+                border: Border.all(
+                  color: unread
+                      ? AppColors.primary.withValues(alpha: 0.3)
+                      : AppColors.border,
+                ),
               ),
               alignment: Alignment.center,
               child: Icon(icon, size: 20, color: AppColors.icon),
@@ -249,7 +274,9 @@ class _NotificationRow extends StatelessWidget {
                           notification.title,
                           style: AppTypography.bodySm.copyWith(
                             fontWeight: FontWeight.w500,
-                            color: unread ? AppColors.foreground : AppColors.mutedForeground,
+                            color: unread
+                                ? AppColors.foreground
+                                : AppColors.mutedForeground,
                           ),
                         ),
                       ),
@@ -258,7 +285,10 @@ class _NotificationRow extends StatelessWidget {
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                          decoration: const BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ],
                     ],
@@ -268,12 +298,16 @@ class _NotificationRow extends StatelessWidget {
                     notification.body,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     Formatters.relativeTime(notification.timestamp),
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground.withValues(alpha: 0.6)),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground.withValues(alpha: 0.6),
+                    ),
                   ),
                 ],
               ),

@@ -11,7 +11,8 @@ class _CoinShuffleAnimationWeb extends StatefulWidget {
   const _CoinShuffleAnimationWeb();
 
   @override
-  State<_CoinShuffleAnimationWeb> createState() => _CoinShuffleAnimationWebState();
+  State<_CoinShuffleAnimationWeb> createState() =>
+      _CoinShuffleAnimationWebState();
 }
 
 class _CoinShuffleAnimationWebState extends State<_CoinShuffleAnimationWeb> {
@@ -21,7 +22,7 @@ class _CoinShuffleAnimationWebState extends State<_CoinShuffleAnimationWeb> {
   void initState() {
     super.initState();
     _viewId = 'coin-3d-iframe-${DateTime.now().millisecondsSinceEpoch}';
-    
+
     ui_web.platformViewRegistry.registerViewFactory(
       _viewId,
       (int viewId) => html.IFrameElement()
@@ -35,8 +36,6 @@ class _CoinShuffleAnimationWebState extends State<_CoinShuffleAnimationWeb> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox.expand(
-      child: HtmlElementView(viewType: _viewId),
-    );
+    return SizedBox.expand(child: HtmlElementView(viewType: _viewId));
   }
 }

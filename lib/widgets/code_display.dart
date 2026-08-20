@@ -31,7 +31,10 @@ class _CodeDisplayState extends State<CodeDisplay> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
       decoration: BoxDecoration(
         color: AppColors.muted,
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -43,7 +46,9 @@ class _CodeDisplayState extends State<CodeDisplay> {
           if (widget.label != null) ...[
             Text(
               widget.label!,
-              style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
             const SizedBox(width: AppSpacing.md),
           ],
@@ -62,18 +67,27 @@ class _CodeDisplayState extends State<CodeDisplay> {
             onTap: _copy,
             borderRadius: BorderRadius.circular(AppRadius.sm),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (_copied) ...[
-                    const Icon(Icons.check_circle, size: AppFontSizes.sm, color: AppColors.success),
+                    const Icon(
+                      Icons.check_circle,
+                      size: AppFontSizes.sm,
+                      color: AppColors.success,
+                    ),
                     const SizedBox(width: AppSpacing.xs),
                   ],
                   Text(
                     _copied ? 'Copied' : 'Copy',
                     style: AppTypography.bodyXs.copyWith(
-                      color: _copied ? AppColors.success : AppColors.mutedForeground,
+                      color: _copied
+                          ? AppColors.success
+                          : AppColors.mutedForeground,
                     ),
                   ),
                 ],

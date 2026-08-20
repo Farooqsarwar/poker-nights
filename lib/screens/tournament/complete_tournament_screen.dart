@@ -20,7 +20,8 @@ class CompleteTournamentScreen extends StatefulWidget {
   const CompleteTournamentScreen({super.key});
 
   @override
-  State<CompleteTournamentScreen> createState() => _CompleteTournamentScreenState();
+  State<CompleteTournamentScreen> createState() =>
+      _CompleteTournamentScreenState();
 }
 
 class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
@@ -42,7 +43,9 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
     // (tracked by eliminationPos) come first, then the tapped survivors.
     final game = app.currentGame;
     final eliminated = game!.players.where((p) => p.eliminated).toList()
-      ..sort((a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0));
+      ..sort(
+        (a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0),
+      );
     app.recordFinishOrder([...eliminated.map((p) => p.id), ..._order]);
     setState(() => _confirmed = true);
     Future.delayed(const Duration(milliseconds: 1500), () {
@@ -70,9 +73,13 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
     // Players eliminated during play, in first-out order (their elimination
     // position is the count of active players remaining at the time).
     final eliminated = game.players.where((p) => p.eliminated).toList()
-      ..sort((a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0));
+      ..sort(
+        (a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0),
+      );
 
-    final unranked = activePlayers.where((p) => !_order.contains(p.id)).toList();
+    final unranked = activePlayers
+        .where((p) => !_order.contains(p.id))
+        .toList();
     final ranked = <_RankedPlayer>[
       for (final p in eliminated)
         _RankedPlayer(
@@ -100,17 +107,29 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: const Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(Icons.arrow_back, size: AppFontSizes.xl, color: AppColors.mutedForeground),
+                  child: Icon(
+                    Icons.arrow_back,
+                    size: AppFontSizes.xl,
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Record Finish Order', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+                  Text(
+                    'Record Finish Order',
+                    style: AppTypography.display(
+                      size: AppFontSizes.xxxl,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
                   Text(
                     'Tap players in order of elimination (first-out first)',
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
@@ -123,7 +142,11 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
               padding: const EdgeInsets.all(AppSpacing.xxxl),
               child: Column(
                 children: [
-                  const Icon(Icons.emoji_events, size: AppFontSizes.displayLg, color: AppColors.icon),
+                  const Icon(
+                    Icons.emoji_events,
+                    size: AppFontSizes.displayLg,
+                    color: AppColors.icon,
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     'Tournament Complete!',
@@ -132,7 +155,9 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     'Loading results\u2026',
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
@@ -161,7 +186,10 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                           onTap: () => _finishPlayer(p.id),
                           borderRadius: BorderRadius.circular(AppRadius.md),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.card,
                               borderRadius: BorderRadius.circular(AppRadius.md),
@@ -172,24 +200,45 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                 Container(
                                   width: 28,
                                   height: 28,
-                                  decoration: BoxDecoration(color: AppColors.avatarPalette.first, shape: BoxShape.circle),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.avatarPalette.first,
+                                    shape: BoxShape.circle,
+                                  ),
                                   alignment: Alignment.center,
                                   child: Text(
-                                    p.name.trim().isEmpty ? '?' : p.name.trim()[0].toUpperCase(),
-                                    style: AppTypography.bodyXs.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                                    p.name.trim().isEmpty
+                                        ? '?'
+                                        : p.name.trim()[0].toUpperCase(),
+                                    style: AppTypography.bodyXs.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.md),
-                                Expanded(child: Text(p.name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500))),
+                                Expanded(
+                                  child: Text(
+                                    p.name,
+                                    style: AppTypography.bodySm.copyWith(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
                                       'tap to finish',
-                                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                                      style: AppTypography.bodyXs.copyWith(
+                                        color: AppColors.mutedForeground,
+                                      ),
                                     ),
                                     const SizedBox(width: 4),
-                                    const Icon(Icons.arrow_forward, size: 12, color: AppColors.icon),
+                                    const Icon(
+                                      Icons.arrow_forward,
+                                      size: 12,
+                                      color: AppColors.icon,
+                                    ),
                                   ],
                                 ),
                               ],
@@ -203,7 +252,9 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                         child: Center(
                           child: Text(
                             'Last player \u2014 tap to set as winner!',
-                            style: AppTypography.bodyXs.copyWith(color: AppColors.success),
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.success,
+                            ),
                           ),
                         ),
                       ),
@@ -234,7 +285,11 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.undo, size: 14, color: AppColors.destructive),
+                              const Icon(
+                                Icons.undo,
+                                size: 14,
+                                color: AppColors.destructive,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 'Undo last',
@@ -254,7 +309,10 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                         Padding(
                           padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.muted.withValues(alpha: 0.3),
                               borderRadius: BorderRadius.circular(AppRadius.md),
@@ -265,19 +323,35 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                 SizedBox(
                                   width: 28,
                                   child: r.pos <= 3
-                                      ? Center(child: MedalIcon(r.pos, size: AppFontSizes.xl))
+                                      ? Center(
+                                          child: MedalIcon(
+                                            r.pos,
+                                            size: AppFontSizes.xl,
+                                          ),
+                                        )
                                       : Text(
                                           '#${r.pos}',
                                           textAlign: TextAlign.center,
-                                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                                          style: AppTypography.bodyXs.copyWith(
+                                            color: AppColors.mutedForeground,
+                                          ),
                                         ),
                                 ),
                                 const SizedBox(width: AppSpacing.sm),
-                                Expanded(child: Text(r.player!.name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500))),
+                                Expanded(
+                                  child: Text(
+                                    r.player!.name,
+                                    style: AppTypography.bodySm.copyWith(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
                                 if (r.prize != null)
                                   Text(
                                     Formatters.chips(r.prize!.amount),
-                                    style: AppTypography.monoSm.copyWith(color: AppColors.primary),
+                                    style: AppTypography.monoSm.copyWith(
+                                      color: AppColors.primary,
+                                    ),
                                   ),
                               ],
                             ),
@@ -294,7 +368,12 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Prize distribution (admin only)', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                    Text(
+                      'Prize distribution (admin only)',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.sm),
                     for (var i = 0; i < prizes.length; i++)
                       Padding(
@@ -304,12 +383,16 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                             Expanded(
                               child: Text(
                                 _placeName(prizes[i].place),
-                                style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
                               ),
                             ),
                             Text(
                               Formatters.chips(prizes[i].amount),
-                              style: AppTypography.monoSm.copyWith(color: AppColors.primary),
+                              style: AppTypography.monoSm.copyWith(
+                                color: AppColors.primary,
+                              ),
                             ),
                           ],
                         ),
@@ -325,7 +408,11 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.emoji_events, size: 16, color: AppColors.icon),
+                  const Icon(
+                    Icons.emoji_events,
+                    size: 16,
+                    color: AppColors.icon,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     unranked.isEmpty
@@ -343,11 +430,11 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
   }
 
   String _placeName(int place) => switch (place) {
-        1 => '1st place',
-        2 => '2nd place',
-        3 => '3rd place',
-        _ => '${place}th place',
-      };
+    1 => '1st place',
+    2 => '2nd place',
+    3 => '3rd place',
+    _ => '${place}th place',
+  };
 
   Prize? _prizeFor(List<Prize> prizes, int pos) {
     if (pos <= 0) return null;
@@ -356,7 +443,11 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
 }
 
 class _RankedPlayer {
-  const _RankedPlayer({required this.player, required this.pos, required this.prize});
+  const _RankedPlayer({
+    required this.player,
+    required this.pos,
+    required this.prize,
+  });
 
   final Player? player;
   final int pos;

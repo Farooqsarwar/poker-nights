@@ -6,6 +6,7 @@ import '../app/colors.dart';
 import '../app/typography.dart';
 import '../models/live_game.dart';
 import '../models/tournament.dart';
+import '../responsive/responsive.dart';
 import '../utils/formatters.dart';
 
 /// Responsive tournament display.
@@ -86,7 +87,7 @@ TextStyle _numberStyle({
 }) {
   return TextStyle(
     fontFamily: AppTypography.monoFamily,
-    fontSize: size,
+    fontSize: AppScale.sp(size),
     fontWeight: weight,
     color: color,
     height: height,
@@ -167,12 +168,7 @@ class _WideLayout extends StatelessWidget {
         return ColoredBox(
           color: TournamentDisplayBlock._black,
           child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              side,
-              42 * s,
-              side,
-              30 * s,
-            ),
+            padding: EdgeInsets.fromLTRB(side, 42 * s, side, 30 * s),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -208,12 +204,12 @@ class _WideLayout extends StatelessWidget {
                 // 16:9, 16:10 and 3:2 displays without a fixed canvas.
                 Expanded(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SizedBox(height: (showStatusChip ? 49 : 18) * s),
+                      // Drastically reduced vertical spacing to maximize timer space
+                      SizedBox(height: (showStatusChip ? 12 : 4) * s),
                       Text(
-                        data.isBreak
-                            ? 'BREAK'
-                            : 'LEVEL ${game.currentLevel}',
+                        data.isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
                         textAlign: TextAlign.center,
                         style: AppTypography.mono(
                           size: 40 * s,
@@ -223,7 +219,7 @@ class _WideLayout extends StatelessWidget {
                           height: 1,
                         ),
                       ),
-                      SizedBox(height: 28 * s),
+                      SizedBox(height: 8 * s), // Reduced from 16
                       Expanded(
                         child: Padding(
                           padding: EdgeInsets.symmetric(horizontal: heroSide),
@@ -237,7 +233,7 @@ class _WideLayout extends StatelessWidget {
                           ),
                         ),
                       ),
-                      SizedBox(height: 24 * s),
+                      SizedBox(height: 8 * s), // Reduced from 16
                       Row(
                         children: [
                           Expanded(
@@ -273,17 +269,14 @@ class _WideLayout extends StatelessWidget {
                           ),
                         ],
                       ),
-                      SizedBox(height: 57 * s),
+                      SizedBox(height: 16 * s), // Reduced from 24
                     ],
                   ),
                 ),
 
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: heroSide - side),
-                  child: _ProgressBar(
-                    value: data.progress,
-                    height: 14 * s,
-                  ),
+                  child: _ProgressBar(value: data.progress, height: 14 * s),
                 ),
                 SizedBox(height: 40 * s),
                 const _HorizontalLine(),
@@ -379,28 +372,34 @@ class _PlainNumberTimer extends StatelessWidget {
       weight: FontWeight.w400,
       color: danger ? TournamentDisplayBlock._red : Colors.white,
       letterSpacing: -fontSize * .035,
-      height: .9,
+      height: 1.1, // <-- FIX: Increased slightly so native bounding box is generous
     );
 
     return Center(
       child: FittedBox(
         fit: BoxFit.scaleDown,
         alignment: Alignment.center,
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 160),
-          child: RichText(
-            key: ValueKey(value),
-            maxLines: 1,
-            softWrap: false,
-            text: TextSpan(
-              style: style,
-              children: [
-                TextSpan(text: left),
-                TextSpan(
-                  text: right,
-                  style: style.copyWith(color: TournamentDisplayBlock._red),
-                ),
-              ],
+        // <-- FIX: Added padding *inside* the FittedBox. This ensures the text
+        // bounding box used for scaling includes extra safe space at the top/bottom
+        // so ascenders are never chopped off by the FittedBox constraints.
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20.0),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 160),
+            child: RichText(
+              key: ValueKey(value),
+              maxLines: 1,
+              softWrap: false,
+              text: TextSpan(
+                style: style,
+                children: [
+                  TextSpan(text: left),
+                  TextSpan(
+                    text: right,
+                    style: style.copyWith(color: TournamentDisplayBlock._red),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -426,9 +425,7 @@ class _BlindValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = highlighted
-        ? TournamentDisplayBlock._red
-        : Colors.white;
+    final color = highlighted ? TournamentDisplayBlock._red : Colors.white;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -602,10 +599,7 @@ class _NextLevelValue extends StatelessWidget {
         if (next == null)
           Text(
             'END',
-            style: AppTypography.mono(
-              size: 28 * scale,
-              color: Colors.white,
-            ),
+            style: AppTypography.mono(size: 28 * scale, color: Colors.white),
           )
         else
           FittedBox(
@@ -825,7 +819,7 @@ class _CompactLayout extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             SizedBox(
-              height: 82,
+              height: 92, // <-- FIX: Increased from 82 to give safety room
               child: LiveTimerBuilder(
                 game: game,
                 builder: (context, remaining) => _PlainNumberTimer(
@@ -887,10 +881,7 @@ class _CompactLayout extends StatelessWidget {
             ),
             const _HorizontalLine(),
             _CompactPair(
-              left: _CompactNext(
-                next: data.next,
-                level: game.currentLevel + 1,
-              ),
+              left: _CompactNext(next: data.next, level: game.currentLevel + 1),
               right: _CompactStat(
                 label: 'PLAYERS',
                 value: '${data.active} / ${data.total}',
@@ -915,9 +906,11 @@ class _CompactLayout extends StatelessWidget {
                 builder: (context, constraints) {
                   return Wrap(
                     children: [
-                      for (int i = 0;
+                      for (
+                      int i = 0;
                       i < game.structure.prizes.length && i < 4;
-                      i++)
+                      i++
+                      )
                         SizedBox(
                           width: constraints.maxWidth / 2,
                           height: 70,
@@ -925,8 +918,8 @@ class _CompactLayout extends StatelessWidget {
                             label: const ['1ST', '2ND', '3RD', '4TH'][i],
                             value: showPayoutAmounts
                                 ? Formatters.chips(
-                                    game.structure.prizes[i].amount,
-                                  )
+                              game.structure.prizes[i].amount,
+                            )
                                 : '—',
                             scale: .55,
                           ),

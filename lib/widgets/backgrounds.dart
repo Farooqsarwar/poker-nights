@@ -15,10 +15,7 @@ class FeltBackground extends StatelessWidget {
         color: AppColors.background,
         gradient: RadialGradient(
           radius: 1.2,
-          colors: [
-            AppColors.blackGlow,
-            AppColors.background,
-          ],
+          colors: [AppColors.blackGlow, AppColors.background],
         ),
       ),
       child: DecoratedBox(
@@ -26,10 +23,7 @@ class FeltBackground extends StatelessWidget {
           gradient: RadialGradient(
             center: Alignment(0, 0),
             radius: 1.6,
-            colors: [
-              AppColors.feltGlow,
-              Colors.transparent,
-            ],
+            colors: [AppColors.feltGlow, Colors.transparent],
           ),
         ),
         child: child,
@@ -52,10 +46,7 @@ class TVBackground extends StatelessWidget {
         gradient: RadialGradient(
           center: Alignment(0, -0.9),
           radius: 1.4,
-          colors: [
-            AppColors.feltGlowStrong,
-            Colors.transparent,
-          ],
+          colors: [AppColors.feltGlowStrong, Colors.transparent],
         ),
       ),
       child: child,

@@ -53,59 +53,29 @@ class AppShadows {
   AppShadows._();
 
   static const List<BoxShadow> cardGlow = [
-    BoxShadow(
-      color: Color(0x1A7F1D1D),
-      blurRadius: 1,
-      spreadRadius: 0,
-    ),
-    BoxShadow(
-      color: Color(0x66000000),
-      blurRadius: 24,
-      offset: Offset(0, 4),
-    ),
+    BoxShadow(color: Color(0x1A7F1D1D), blurRadius: 1, spreadRadius: 0),
+    BoxShadow(color: Color(0x66000000), blurRadius: 24, offset: Offset(0, 4)),
   ];
 
   static const List<BoxShadow> cardGlowActive = [
-    BoxShadow(
-      color: Color(0x667F1D1D),
-      blurRadius: 1,
-      spreadRadius: 0,
-    ),
-    BoxShadow(
-      color: Color(0x1F7F1D1D),
-      blurRadius: 32,
-      offset: Offset(0, 4),
-    ),
+    BoxShadow(color: Color(0x667F1D1D), blurRadius: 1, spreadRadius: 0),
+    BoxShadow(color: Color(0x1F7F1D1D), blurRadius: 32, offset: Offset(0, 4)),
   ];
 
   static const List<BoxShadow> glassPanel = [
-    BoxShadow(
-      color: Color(0x80000000),
-      blurRadius: 32,
-      offset: Offset(0, 8),
-    ),
+    BoxShadow(color: Color(0x80000000), blurRadius: 32, offset: Offset(0, 8)),
   ];
 
   static const List<BoxShadow> primaryGlow = [
-    BoxShadow(
-      color: Color(0x337F1D1D),
-      blurRadius: 15,
-    ),
+    BoxShadow(color: Color(0x337F1D1D), blurRadius: 15),
   ];
 
   static const List<BoxShadow> successGlow = [
-    BoxShadow(
-      color: Color(0x26166534),
-      blurRadius: 20,
-    ),
+    BoxShadow(color: Color(0x26166534), blurRadius: 20),
   ];
 
   static const List<BoxShadow> softCard = [
-    BoxShadow(
-      color: Color(0x0D000000),
-      blurRadius: 6,
-      offset: Offset(0, 2),
-    ),
+    BoxShadow(color: Color(0x0D000000), blurRadius: 6, offset: Offset(0, 2)),
   ];
 }
 

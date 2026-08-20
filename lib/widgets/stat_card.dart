@@ -6,7 +6,12 @@ import '../app/typography.dart';
 
 /// Stat card mirroring the web `StatCard` component.
 class StatCard extends StatelessWidget {
-  const StatCard({super.key, required this.label, required this.value, this.sub});
+  const StatCard({
+    super.key,
+    required this.label,
+    required this.value,
+    this.sub,
+  });
 
   final String label;
   final String value;
@@ -44,7 +49,9 @@ class StatCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               sub!,
-              style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
           ],
         ],

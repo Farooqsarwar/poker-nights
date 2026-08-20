@@ -35,7 +35,9 @@ class _TVModeScreenState extends State<TVModeScreen> {
   }
 
   void _connect() {
-    final result = context.read<AppProvider>().enterGameCode(_codeController.text.trim());
+    final result = context.read<AppProvider>().enterGameCode(
+      _codeController.text.trim(),
+    );
     if (result == CodeLookupResult.notFound) {
       setState(() => _codeError = 'Code not found — try again');
     } else {
@@ -48,16 +50,23 @@ class _TVModeScreenState extends State<TVModeScreen> {
     final app = context.watch<AppProvider>();
     final game = app.tvGame;
 
-    if (game == null) return _CodeEntry(controller: _codeController, error: _codeError, onConnect: _connect);
+    if (game == null)
+      return _CodeEntry(
+        controller: _codeController,
+        error: _codeError,
+        onConnect: _connect,
+      );
 
-    return TVBackground(
-      child: _TVLayout(game: game),
-    );
+    return TVBackground(child: _TVLayout(game: game));
   }
 }
 
 class _CodeEntry extends StatelessWidget {
-  const _CodeEntry({required this.controller, required this.error, required this.onConnect});
+  const _CodeEntry({
+    required this.controller,
+    required this.error,
+    required this.onConnect,
+  });
 
   final TextEditingController controller;
   final String? error;
@@ -79,11 +88,18 @@ class _CodeEntry extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.style, size: 60, color: AppColors.primary),
+                      const Icon(
+                        Icons.style,
+                        size: 60,
+                        color: AppColors.primary,
+                      ),
                       const SizedBox(width: AppSpacing.md),
                       Text(
                         'POKER NIGHT',
-                        style: AppTypography.crimsonShimmer(size: 36, weight: FontWeight.w700),
+                        style: AppTypography.crimsonShimmer(
+                          size: 36,
+                          weight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
@@ -98,11 +114,16 @@ class _CodeEntry extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
-                        Text('TV Display', style: AppTypography.display(size: AppFontSizes.xxl)),
+                        Text(
+                          'TV Display',
+                          style: AppTypography.display(size: AppFontSizes.xxl),
+                        ),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
                           'Enter the TV code shown by the host',
-                          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                          style: AppTypography.bodySm.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                         const SizedBox(height: AppSpacing.lg),
                         TextField(
@@ -110,29 +131,46 @@ class _CodeEntry extends StatelessWidget {
                           maxLength: 8,
                           textCapitalization: TextCapitalization.characters,
                           textAlign: TextAlign.center,
-                          style: AppTypography.monoXl.copyWith(letterSpacing: 3),
+                          style: AppTypography.monoXl.copyWith(
+                            letterSpacing: 3,
+                          ),
                           onChanged: (_) {},
                           decoration: InputDecoration(
                             counterText: '',
                             hintText: 'TV CODE',
-                            hintStyle: AppTypography.monoXl.copyWith(color: AppColors.onSurfaceHint, letterSpacing: 3),
+                            hintStyle: AppTypography.monoXl.copyWith(
+                              color: AppColors.onSurfaceHint,
+                              letterSpacing: 3,
+                            ),
                             isDense: true,
                             filled: true,
                             fillColor: AppColors.card,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 13,
+                            ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(AppRadius.sm),
-                              borderSide: const BorderSide(color: AppColors.border),
+                              borderSide: const BorderSide(
+                                color: AppColors.border,
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(AppRadius.sm),
-                              borderSide: const BorderSide(color: AppColors.ring),
+                              borderSide: const BorderSide(
+                                color: AppColors.ring,
+                              ),
                             ),
                           ),
                         ),
                         if (error != null) ...[
                           const SizedBox(height: AppSpacing.sm),
-                          Text(error!, style: AppTypography.bodySm.copyWith(color: AppColors.destructive)),
+                          Text(
+                            error!,
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.destructive,
+                            ),
+                          ),
                         ],
                         const SizedBox(height: AppSpacing.lg),
                         AppButton(
@@ -148,7 +186,9 @@ class _CodeEntry extends StatelessWidget {
                             children: [
                               TextSpan(
                                 text: 'Demo TV code: ',
-                                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
                               ),
                               WidgetSpan(
                                 alignment: PlaceholderAlignment.baseline,
@@ -157,7 +197,9 @@ class _CodeEntry extends StatelessWidget {
                                   onTap: () => controller.text = 'TV-FP',
                                   child: Text(
                                     'TV-FP',
-                                    style: AppTypography.monoSm.copyWith(color: AppColors.primary),
+                                    style: AppTypography.monoSm.copyWith(
+                                      color: AppColors.primary,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -213,7 +255,10 @@ class _TVLayout extends StatelessWidget {
                   Expanded(
                     flex: 3,
                     child: SingleChildScrollView(
-                      child: TournamentDisplayBlock(game: game, showPayoutAmounts: false),
+                      child: TournamentDisplayBlock(
+                        game: game,
+                        showPayoutAmounts: false,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -249,7 +294,11 @@ class _Podium extends StatelessWidget {
         children: [
           Text(
             'Tournament Complete!',
-            style: AppTypography.display(size: 36, weight: FontWeight.w700, color: AppColors.primary),
+            style: AppTypography.display(
+              size: 36,
+              weight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
           ),
           const SizedBox(height: AppSpacing.xxl),
           Row(
@@ -258,7 +307,9 @@ class _Podium extends StatelessWidget {
             children: [
               for (var i = 0; i < 3; i++)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
                   child: _PodiumStep(
                     place: places[i],
                     label: labels[i],
@@ -286,7 +337,12 @@ class _Podium extends StatelessWidget {
 }
 
 class _PodiumStep extends StatelessWidget {
-  const _PodiumStep({required this.place, required this.label, required this.name, required this.height});
+  const _PodiumStep({
+    required this.place,
+    required this.label,
+    required this.name,
+    required this.height,
+  });
 
   final int place;
   final String label;
@@ -301,7 +357,9 @@ class _PodiumStep extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppRadius.lg),
+        ),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
@@ -312,10 +370,18 @@ class _PodiumStep extends StatelessWidget {
           Text(
             name ?? '—',
             textAlign: TextAlign.center,
-            style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w700),
+            style: AppTypography.display(
+              size: AppFontSizes.xl,
+              weight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text(label, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            label,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
         ],
       ),
     );
@@ -364,10 +430,9 @@ class _RotatingPanelState extends State<_RotatingPanel> {
         children: [
           Text(
             _titles[_panel],
-            style: const TextStyle(
-              fontFamily: 'Space Mono',
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+            style: AppTypography.mono(
+              size: 15,
+              weight: FontWeight.w700,
               letterSpacing: 2.5,
               color: Color(0xFFFF0015),
             ),
@@ -377,7 +442,10 @@ class _RotatingPanelState extends State<_RotatingPanel> {
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
               child: switch (_panel) {
-                0 => _LeaderboardPanel(key: const ValueKey(0), game: widget.game),
+                0 => _LeaderboardPanel(
+                  key: const ValueKey(0),
+                  game: widget.game,
+                ),
                 1 => _PayoutsPanel(key: const ValueKey(1), game: widget.game),
                 _ => _UpcomingPanel(key: const ValueKey(2), game: widget.game),
               },
@@ -396,7 +464,8 @@ class _LeaderboardPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final players = [...game.players]..sort((a, b) {
+    final players = [...game.players]
+      ..sort((a, b) {
         final t = a.table.compareTo(b.table);
         return t != 0 ? t : a.seat.compareTo(b.seat);
       });
@@ -413,19 +482,19 @@ class _LeaderboardPanel extends StatelessWidget {
                     p.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Space Mono',
-                      fontSize: 12,
-                      color: p.active ? Colors.white : AppColors.mutedForeground,
+                    style: AppTypography.mono(
+                      size: 12,
+                      color: p.active
+                          ? Colors.white
+                          : AppColors.mutedForeground,
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   'T${p.table} · S${p.seat}',
-                  style: const TextStyle(
-                    fontFamily: 'Space Mono',
-                    fontSize: 11,
+                  style: AppTypography.mono(
+                    size: 11,
                     color: AppColors.mutedForeground,
                   ),
                 ),
@@ -456,19 +525,17 @@ class _PayoutsPanel extends StatelessWidget {
           Text(
             Formatters.chips(game.structure.prizePool),
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontFamily: 'Space Mono',
-              fontSize: 42,
-              fontWeight: FontWeight.w300,
+            style: AppTypography.mono(
+              size: 42,
+              weight: FontWeight.w300,
               color: Colors.white,
             ),
           ),
           Text(
             game.prizePoolLabel.toUpperCase(),
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontFamily: 'Space Mono',
-              fontSize: 12,
+            style: AppTypography.mono(
+              size: 12,
               letterSpacing: 2,
               color: AppColors.mutedForeground,
             ),
@@ -484,21 +551,16 @@ class _PayoutsPanel extends StatelessWidget {
                   children: [
                     Text(
                       _ords[i],
-                      style: const TextStyle(
-                        fontFamily: 'Space Mono',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                      style: AppTypography.mono(
+                        size: 12,
+                        weight: FontWeight.w700,
                         color: Color(0xFFFF0015),
                       ),
                     ),
                     const Spacer(),
                     Text(
                       _podiumName(i + 1),
-                      style: const TextStyle(
-                        fontFamily: 'Space Mono',
-                        fontSize: 13,
-                        color: Colors.white,
-                      ),
+                      style: AppTypography.mono(size: 13, color: Colors.white),
                     ),
                   ],
                 ),
@@ -539,11 +601,7 @@ class _UpcomingPanel extends StatelessWidget {
           game.status == LiveGameStatus.completed
               ? 'TOURNAMENT COMPLETE'
               : 'END',
-          style: const TextStyle(
-            fontFamily: 'Space Mono',
-            fontSize: 14,
-            color: Color(0xFFFF0015),
-          ),
+          style: AppTypography.mono(size: 14, color: Color(0xFFFF0015)),
         ),
       );
     }
@@ -558,10 +616,9 @@ class _UpcomingPanel extends StatelessWidget {
                 children: [
                   Text(
                     'L${l.level}',
-                    style: const TextStyle(
-                      fontFamily: 'Space Mono',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                    style: AppTypography.mono(
+                      size: 13,
+                      weight: FontWeight.w700,
                       color: Color(0xFFFF0015),
                     ),
                   ),
@@ -570,20 +627,15 @@ class _UpcomingPanel extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     child: Text(
                       'SB ${Formatters.chips(l.sb)} · BB ${Formatters.chips(l.bb)}',
-                      style: const TextStyle(
-                        fontFamily: 'Space Mono',
-                        fontSize: 13,
-                        color: Colors.white,
-                      ),
+                      style: AppTypography.mono(size: 13, color: Colors.white),
                     ),
                   ),
                   if (l.ante != null) ...[
                     const SizedBox(height: 3),
                     Text(
                       'ANTE ${Formatters.chips(l.ante!)}',
-                      style: const TextStyle(
-                        fontFamily: 'Space Mono',
-                        fontSize: 11,
+                      style: AppTypography.mono(
+                        size: 11,
                         color: AppColors.mutedForeground,
                       ),
                     ),

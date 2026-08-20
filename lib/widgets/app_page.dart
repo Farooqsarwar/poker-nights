@@ -27,7 +27,8 @@ class AppPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final device = AppBreakpoints.deviceOf(context);
-    final effectivePadding = padding ??
+    final effectivePadding =
+        padding ??
         (device.isMobile
             ? AppSpacing.mobileContentPadding
             : AppSpacing.desktopContentPadding);
@@ -40,15 +41,15 @@ class AppPage extends StatelessWidget {
     );
 
     if (!scrollable) {
-      return ColoredBox(color: color, child: Padding(padding: effectivePadding, child: content));
+      return ColoredBox(
+        color: color,
+        child: Padding(padding: effectivePadding, child: content),
+      );
     }
 
     return ColoredBox(
       color: color,
-      child: SingleChildScrollView(
-        padding: effectivePadding,
-        child: content,
-      ),
+      child: SingleChildScrollView(padding: effectivePadding, child: content),
     );
   }
 }

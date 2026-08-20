@@ -77,7 +77,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
     final total = num.tryParse(_editTotal.text.trim())?.toDouble();
     final count = num.tryParse(_editBuyInCount.text.trim())?.toInt();
     final cashedOut = num.tryParse(_editCashedOut.text.trim())?.toDouble();
-    if (stack == null || total == null || count == null || cashedOut == null) return;
+    if (stack == null || total == null || count == null || cashedOut == null)
+      return;
     app.cashEditPlayer(
       id,
       stack: stack,
@@ -109,7 +110,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
         app.cashBuyIn(_newPlayerName.text.trim(), amt, isNew: true);
         _newPlayerName.clear();
       }
-    } else if (action.type == _CashActionType.cashOut && action.playerId != null) {
+    } else if (action.type == _CashActionType.cashOut &&
+        action.playerId != null) {
       app.cashCashOut(action.playerId!, amt);
     }
 
@@ -120,7 +122,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   }
 
   void _endGame(AppProvider app) {
-    app.endCashGame(unresolvedNote: _forceEnd ? _unresolvedNote.text.trim() : null);
+    app.endCashGame(
+      unresolvedNote: _forceEnd ? _unresolvedNote.text.trim() : null,
+    );
     setState(() => _showEndModal = false);
     context.go(RoutePaths.history);
   }
@@ -136,7 +140,12 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
         child: Column(
           children: [
             const SizedBox(height: AppSpacing.xxxl),
-            Text('No active cash game.', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+            Text(
+              'No active cash game.',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
             const SizedBox(height: AppSpacing.lg),
             AppButton(
               onPressed: () => context.go(RoutePaths.cashGame),
@@ -158,14 +167,15 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
     final elapsedM = elapsed.inMinutes % 60;
     final currency = settings.currency;
 
-    final isNewPlayer = _action?.type == _CashActionType.buyIn && _action?.playerId == null;
+    final isNewPlayer =
+        _action?.type == _CashActionType.buyIn && _action?.playerId == null;
     final actionTitle = isNewPlayer
         ? 'Add new player'
         : _action?.type == _CashActionType.buyIn
-            ? 'Buy in / rebuy'
-            : _action?.type == _CashActionType.cashOut
-                ? 'Cash out'
-                : '';
+        ? 'Buy in / rebuy'
+        : _action?.type == _CashActionType.cashOut
+        ? 'Cash out'
+        : '';
 
     return AppPage(
       maxWidth: 720,
@@ -179,19 +189,30 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(settings.name, style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+                    Text(
+                      settings.name,
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxxl,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(height: 2),
                     Row(
                       children: [
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
+                          decoration: const BoxDecoration(
+                            color: AppColors.success,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Text(
                           'Live · ${elapsedH}h ${elapsedM}m · ${_num(settings.smallBlind)}/${_num(settings.bigBlind)}',
-                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ],
                     ),
@@ -208,7 +229,11 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.scale_outlined, size: 14, color: AppColors.icon),
+                        Icon(
+                          Icons.scale_outlined,
+                          size: 14,
+                          color: AppColors.icon,
+                        ),
                         SizedBox(width: 6),
                         Text('Reconcile'),
                       ],
@@ -237,7 +262,10 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: _CashStatCard(label: 'In play', value: Formatters.money(currency, totalInPlay)),
+                child: _CashStatCard(
+                  label: 'In play',
+                  value: Formatters.money(currency, totalInPlay),
+                ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -257,15 +285,25 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
                   child: Row(
                     children: [
-                      Text('${players.length} Players', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                      Text(
+                        '${players.length} Players',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const Spacer(),
                       AppButton(
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.secondary,
-                        onPressed: () => _openAction(const _CashAction(_CashActionType.buyIn, null)),
+                        onPressed: () => _openAction(
+                          const _CashAction(_CashActionType.buyIn, null),
+                        ),
                         child: const Text('+ Add player'),
                       ),
                     ],
@@ -275,99 +313,130 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   Opacity(
                     opacity: players[pi].isCashedOut ? 0.5 : 1,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.md,
+                      ),
                       child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(color: AppColors.avatarPalette.first, shape: BoxShape.circle),
-                          alignment: Alignment.center,
-                          child: Text(
-                            players[pi].name.trim().isEmpty ? '?' : players[pi].name.trim()[0].toUpperCase(),
-                            style: AppTypography.bodyXs.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: AppColors.avatarPalette.first,
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              players[pi].name.trim().isEmpty
+                                  ? '?'
+                                  : players[pi].name.trim()[0].toUpperCase(),
+                              style: AppTypography.bodyXs.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'Seat ${pi + 1} · ${players[pi].name}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Seat ${pi + 1} · ${players[pi].name}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTypography.bodySm.copyWith(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  'In: ${Formatters.money(currency, players[pi].totalBuyIns)}${players[pi].buyInCount > 1 ? ' (${players[pi].buyInCount}×)' : ''}',
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: AppColors.mutedForeground,
                                   ),
-                                ],
-                              ),
-                              Text(
-                                'In: ${Formatters.money(currency, players[pi].totalBuyIns)}${players[pi].buyInCount > 1 ? ' (${players[pi].buyInCount}×)' : ''}',
-                                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        if (players[pi].isCashedOut)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              const AppBadge(label: 'Cashed out', variant: AppBadgeVariant.muted),
-                              const SizedBox(height: 2),
-                              Text(
-                                Formatters.signedMoney(currency, players[pi].net),
-                                style: AppTypography.monoXs.copyWith(
-                                  color: players[pi].net >= 0 ? AppColors.success : AppColors.destructive,
                                 ),
-                              ),
-                            ],
-                          )
-                        else
-                          Text(
-                            Formatters.money(currency, players[pi].stack),
-                            style: AppTypography.monoSm.copyWith(fontWeight: FontWeight.w600),
+                              ],
+                            ),
                           ),
-                        if (!players[pi].isCashedOut) ...[
                           const SizedBox(width: AppSpacing.sm),
-                          Wrap(
-                            spacing: AppSpacing.xs,
-                            children: [
-                              AppButton(
-                                size: AppButtonSize.sm,
-                                variant: AppButtonVariant.secondary,
-                                onPressed: () => _openAction(
-                                  _CashAction(_CashActionType.buyIn, players[pi].id),
-                                  preset: settings.minBuyIn,
+                          if (players[pi].isCashedOut)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                const AppBadge(
+                                  label: 'Cashed out',
+                                  variant: AppBadgeVariant.muted,
                                 ),
-                                child: const Text('+ Buy'),
-                              ),
-                              AppButton(
-                                size: AppButtonSize.sm,
-                                variant: AppButtonVariant.ghost,
-                                onPressed: () => _openAction(
-                                  _CashAction(_CashActionType.cashOut, players[pi].id),
-                                  preset: players[pi].stack,
+                                const SizedBox(height: 2),
+                                Text(
+                                  Formatters.signedMoney(
+                                    currency,
+                                    players[pi].net,
+                                  ),
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: players[pi].net >= 0
+                                        ? AppColors.success
+                                        : AppColors.destructive,
+                                  ),
                                 ),
-                                child: const Text('Out'),
+                              ],
+                            )
+                          else
+                            Text(
+                              Formatters.money(currency, players[pi].stack),
+                              style: AppTypography.monoSm.copyWith(
+                                fontWeight: FontWeight.w600,
                               ),
-                            ],
+                            ),
+                          if (!players[pi].isCashedOut) ...[
+                            const SizedBox(width: AppSpacing.sm),
+                            Wrap(
+                              spacing: AppSpacing.xs,
+                              children: [
+                                AppButton(
+                                  size: AppButtonSize.sm,
+                                  variant: AppButtonVariant.secondary,
+                                  onPressed: () => _openAction(
+                                    _CashAction(
+                                      _CashActionType.buyIn,
+                                      players[pi].id,
+                                    ),
+                                    preset: settings.minBuyIn,
+                                  ),
+                                  child: const Text('+ Buy'),
+                                ),
+                                AppButton(
+                                  size: AppButtonSize.sm,
+                                  variant: AppButtonVariant.ghost,
+                                  onPressed: () => _openAction(
+                                    _CashAction(
+                                      _CashActionType.cashOut,
+                                      players[pi].id,
+                                    ),
+                                    preset: players[pi].stack,
+                                  ),
+                                  child: const Text('Out'),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(width: AppSpacing.xs),
+                          AppButton(
+                            size: AppButtonSize.sm,
+                            variant: AppButtonVariant.ghost,
+                            onPressed: () => _openEdit(players[pi]),
+                            child: const Text('Edit'),
                           ),
                         ],
-                        const SizedBox(width: AppSpacing.xs),
-                        AppButton(
-                          size: AppButtonSize.sm,
-                          variant: AppButtonVariant.ghost,
-                          onPressed: () => _openEdit(players[pi]),
-                          child: const Text('Edit'),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -391,7 +460,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   AppTextField(
                     controller: _amount,
                     label: 'Amount',
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     textAlign: TextAlign.center,
                     textStyle: AppTypography.monoXl,
                     autofocus: !isNewPlayer,
@@ -401,28 +472,35 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                     _action!.type == _CashActionType.buyIn
                         ? 'Min ${_num(settings.minBuyIn)} · Max ${_num(settings.maxBuyIn)}'
                         : 'Current stack: ${_num(players.where((p) => p.id == _action!.playerId).firstOrNull?.stack ?? 0)}',
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Wrap(
                     spacing: AppSpacing.sm,
                     runSpacing: AppSpacing.sm,
                     children: [
-                      for (final a in [settings.minBuyIn, settings.minBuyIn * 2, settings.maxBuyIn])
+                      for (final a in [
+                        settings.minBuyIn,
+                        settings.minBuyIn * 2,
+                        settings.maxBuyIn,
+                      ])
                         InkWell(
-                          onTap: () => setState(() => _amount.text = a.toString()),
+                          onTap: () =>
+                              setState(() => _amount.text = a.toString()),
                           borderRadius: BorderRadius.circular(AppRadius.md),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.card,
                               borderRadius: BorderRadius.circular(AppRadius.md),
                               border: Border.all(color: AppColors.border),
                             ),
-                            child: Text(
-                              _num(a),
-                              style: AppTypography.monoSm,
-                            ),
+                            child: Text(_num(a), style: AppTypography.monoSm),
                           ),
                         ),
                     ],
@@ -451,83 +529,99 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
             ),
           // Edit player modal
           if (_editPlayerId != null)
-            Builder(builder: (context) {
-              final p = players.where((x) => x.id == _editPlayerId).firstOrNull;
-              if (p == null) return const SizedBox.shrink();
-              return AppModal(
-                open: true,
-                onClose: () => setState(() => _editPlayerId = null),
-                title: 'Edit ${p.name}',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Correct an incorrectly entered buy-in, top-up or cash-out. Totals are recalculated from these fields.',
-                      style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: AppTextField(
-                            controller: _editStack,
-                            label: 'Stack in play',
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          ),
+            Builder(
+              builder: (context) {
+                final p = players
+                    .where((x) => x.id == _editPlayerId)
+                    .firstOrNull;
+                if (p == null) return const SizedBox.shrink();
+                return AppModal(
+                  open: true,
+                  onClose: () => setState(() => _editPlayerId = null),
+                  title: 'Edit ${p.name}',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Correct an incorrectly entered buy-in, top-up or cash-out. Totals are recalculated from these fields.',
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.mutedForeground,
                         ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: AppTextField(
-                            controller: _editTotal,
-                            label: 'Total bought',
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppTextField(
+                              controller: _editStack,
+                              label: 'Stack in play',
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: AppTextField(
-                            controller: _editBuyInCount,
-                            label: 'Buy-in count',
-                            keyboardType: TextInputType.number,
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: AppTextField(
+                              controller: _editTotal,
+                              label: 'Total bought',
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: AppTextField(
-                            controller: _editCashedOut,
-                            label: 'Cashed out',
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppTextField(
+                              controller: _editBuyInCount,
+                              label: 'Buy-in count',
+                              keyboardType: TextInputType.number,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: AppButton(
-                            variant: AppButtonVariant.secondary,
-                            onPressed: () => setState(() => _editPlayerId = null),
-                            child: const Text('Cancel'),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: AppTextField(
+                              controller: _editCashedOut,
+                              label: 'Cashed out',
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: AppButton(
-                            onPressed: () => _saveEdit(app),
-                            child: const Text('Save corrections'),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppButton(
+                              variant: AppButtonVariant.secondary,
+                              onPressed: () =>
+                                  setState(() => _editPlayerId = null),
+                              child: const Text('Cancel'),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            }),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: AppButton(
+                              onPressed: () => _saveEdit(app),
+                              child: const Text('Save corrections'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           // Reconcile modal
           if (_showReconcile)
             AppModal(
@@ -539,7 +633,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 children: [
                   Text(
                     'Chips in play must equal total buy-ins minus cashed out. Any discrepancy needs to be resolved before ending the game.',
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Container(
@@ -551,22 +647,46 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                     ),
                     child: Column(
                       children: [
-                        _ReconcileRow(label: 'Total buy-ins', value: Formatters.money(currency, totalBuyIns)),
+                        _ReconcileRow(
+                          label: 'Total buy-ins',
+                          value: Formatters.money(currency, totalBuyIns),
+                        ),
                         const SizedBox(height: AppSpacing.xs),
                         _ReconcileRow(
                           label: 'Cashed out',
-                          value: '- ${Formatters.money(currency, totalCashedOut)}',
+                          value:
+                              '- ${Formatters.money(currency, totalCashedOut)}',
                           valueColor: AppColors.success,
                         ),
-                        const Divider(color: AppColors.border, height: AppSpacing.lg),
-                        _ReconcileRow(label: 'Expected in play', value: Formatters.money(currency, session.expectedInPlay)),
+                        const Divider(
+                          color: AppColors.border,
+                          height: AppSpacing.lg,
+                        ),
+                        _ReconcileRow(
+                          label: 'Expected in play',
+                          value: Formatters.money(
+                            currency,
+                            session.expectedInPlay,
+                          ),
+                        ),
                         const SizedBox(height: AppSpacing.xs),
-                        _ReconcileRow(label: 'Actual in play', value: Formatters.money(currency, totalInPlay)),
-                        const Divider(color: AppColors.border, height: AppSpacing.lg),
+                        _ReconcileRow(
+                          label: 'Actual in play',
+                          value: Formatters.money(currency, totalInPlay),
+                        ),
+                        const Divider(
+                          color: AppColors.border,
+                          height: AppSpacing.lg,
+                        ),
                         _ReconcileRow(
                           label: 'Difference',
-                          value: Formatters.money(currency, session.difference.abs()),
-                          valueColor: session.difference.abs() < 0.01 ? AppColors.success : AppColors.destructive,
+                          value: Formatters.money(
+                            currency,
+                            session.difference.abs(),
+                          ),
+                          valueColor: session.difference.abs() < 0.01
+                              ? AppColors.success
+                              : AppColors.destructive,
                           bold: true,
                         ),
                       ],
@@ -596,43 +716,62 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 children: [
                   Text(
                     'Make sure all players have cashed out before ending. The results will be saved to history.',
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                   if (activePlayers.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.md),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.warningSoft,
                         borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: AppColors.warning.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Text(
                         '${activePlayers.length} player${activePlayers.length > 1 ? 's' : ''} still active — they should cash out first.',
-                        style: AppTypography.bodySm.copyWith(color: AppColors.warning),
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.warning,
+                        ),
                       ),
                     ),
                   ],
                   if (session.difference.abs() > 0.01) ...[
                     const SizedBox(height: AppSpacing.md),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.destructive.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(color: AppColors.destructive.withValues(alpha: 0.4)),
+                        border: Border.all(
+                          color: AppColors.destructive.withValues(alpha: 0.4),
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'Reconciliation mismatch of ${Formatters.money(currency, session.difference.abs())}',
-                            style: AppTypography.bodySm.copyWith(color: AppColors.destructive, fontWeight: FontWeight.w600),
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.destructive,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             'Chips in play do not equal buy-ins minus cash-outs. Resolve it in the reconciliation screen, or explicitly confirm ending with the mismatch.',
-                            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
                           const SizedBox(height: AppSpacing.sm),
                           InkWell(
@@ -641,15 +780,21 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  _forceEnd ? Icons.check_box : Icons.check_box_outline_blank,
+                                  _forceEnd
+                                      ? Icons.check_box
+                                      : Icons.check_box_outline_blank,
                                   size: 18,
-                                  color: _forceEnd ? AppColors.destructive : AppColors.mutedForeground,
+                                  color: _forceEnd
+                                      ? AppColors.destructive
+                                      : AppColors.mutedForeground,
                                 ),
                                 const SizedBox(width: AppSpacing.xs),
                                 Flexible(
                                   child: Text(
                                     'I understand — end with the mismatch recorded',
-                                    style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+                                    style: AppTypography.bodyXs.copyWith(
+                                      color: AppColors.destructive,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -684,7 +829,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                       Expanded(
                         child: AppButton(
                           variant: AppButtonVariant.danger,
-                          disabled: session.difference.abs() > 0.01 && !_forceEnd,
+                          disabled:
+                              session.difference.abs() > 0.01 && !_forceEnd,
                           onPressed: () => _endGame(app),
                           child: const Text('End game'),
                         ),
@@ -699,11 +845,17 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
     );
   }
 
-  String _num(double value) => value == value.roundToDouble() ? value.round().toString() : value.toString();
+  String _num(double value) => value == value.roundToDouble()
+      ? value.round().toString()
+      : value.toString();
 }
 
 class _CashStatCard extends StatelessWidget {
-  const _CashStatCard({required this.label, required this.value, this.valueColor});
+  const _CashStatCard({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
 
   final String label;
   final String value;
@@ -717,10 +869,18 @@ class _CashStatCard extends StatelessWidget {
         children: [
           Text(
             value,
-            style: AppTypography.monoLg.copyWith(fontWeight: FontWeight.w700, color: valueColor ?? AppColors.foreground),
+            style: AppTypography.monoLg.copyWith(
+              fontWeight: FontWeight.w700,
+              color: valueColor ?? AppColors.foreground,
+            ),
           ),
           const SizedBox(height: 2),
-          Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            label,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
         ],
       ),
     );
@@ -744,7 +904,12 @@ class _ReconcileRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(label, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+        Text(
+          label,
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
         const Spacer(),
         Text(
           value,

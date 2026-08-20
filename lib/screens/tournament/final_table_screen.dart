@@ -80,16 +80,12 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
       }
       _seating = arr;
       // A fresh redraw picks a fresh random dealer position.
-      _dealerId = arr.isEmpty
-          ? null
-          : arr[_random.nextInt(arr.length)].id;
+      _dealerId = arr.isEmpty ? null : arr[_random.nextInt(arr.length)].id;
     });
   }
 
   void _confirm(AppProvider app) {
-    final seating = [
-      for (final s in _seating) (playerId: s.id, seat: s.seat),
-    ];
+    final seating = [for (final s in _seating) (playerId: s.id, seat: s.seat)];
     app.confirmFinalTable(seating: seating, dealerId: _dealerId);
     setState(() => _confirmed = true);
     Future.delayed(const Duration(milliseconds: 1500), () {
@@ -125,17 +121,29 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: const Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(Icons.arrow_back, color: AppColors.mutedForeground, size: AppFontSizes.xl),
+                  child: Icon(
+                    Icons.arrow_back,
+                    color: AppColors.mutedForeground,
+                    size: AppFontSizes.xl,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Final Table Redraw', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+                  Text(
+                    'Final Table Redraw',
+                    style: AppTypography.display(
+                      size: AppFontSizes.xxxl,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
                   Text(
                     '${_seating.length} players · random seating',
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
@@ -144,13 +152,15 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
           const SizedBox(height: AppSpacing.lg),
           const AppAlertBanner(
             type: AppAlertType.info,
-            message: 'All remaining players draw new seats at the final table. This cannot be undone.',
+            message:
+                'All remaining players draw new seats at the final table. This cannot be undone.',
           ),
           if (tooMany) ...[
             const SizedBox(height: AppSpacing.md),
             const AppAlertBanner(
               type: AppAlertType.warning,
-              message: 'More than 9 players are still in. The final table holds a maximum of 9 seats.',
+              message:
+                  'More than 9 players are still in. The final table holds a maximum of 9 seats.',
             ),
           ],
           const SizedBox(height: AppSpacing.lg),
@@ -160,7 +170,11 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
               padding: const EdgeInsets.all(AppSpacing.xxxl),
               child: Column(
                 children: [
-                  const Icon(Icons.casino, color: AppColors.primary, size: AppFontSizes.displayLg),
+                  const Icon(
+                    Icons.casino,
+                    color: AppColors.primary,
+                    size: AppFontSizes.displayLg,
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     'Final Table Set!',
@@ -169,7 +183,9 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     'Returning to dashboard…',
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
@@ -183,31 +199,33 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                   Text(
                     'Final Table Seating',
                     textAlign: TextAlign.center,
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     'Drag a seat onto another to swap them.',
                     textAlign: TextAlign.center,
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      mainAxisSpacing: AppSpacing.sm,
-                      crossAxisSpacing: AppSpacing.sm,
-                      childAspectRatio: 1.6,
-                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          mainAxisSpacing: AppSpacing.sm,
+                          crossAxisSpacing: AppSpacing.sm,
+                          childAspectRatio: 1.6,
+                        ),
                     itemCount: _seating.length,
                     itemBuilder: (context, i) {
                       final s = _seating[i];
-                      return _DraggableSeatTile(
-                        entry: s,
-                        onSwap: _swapSeats,
-                      );
+                      return _DraggableSeatTile(entry: s, onSwap: _swapSeats);
                     },
                   ),
                 ],
@@ -225,13 +243,17 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                   Text(
                     'Initial dealer position',
                     textAlign: TextAlign.center,
-                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     'Picked randomly with the redraw — tap to change.',
                     textAlign: TextAlign.center,
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Wrap(
@@ -239,32 +261,50 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                     runSpacing: AppSpacing.sm,
                     alignment: WrapAlignment.center,
                     children: [
-                      for (final s in [..._seating]..sort((a, b) => a.seat.compareTo(b.seat)))
+                      for (final s in [
+                        ..._seating,
+                      ]..sort((a, b) => a.seat.compareTo(b.seat)))
                         InkWell(
                           onTap: () => setState(() => _dealerId = s.id),
                           borderRadius: BorderRadius.circular(AppRadius.md),
                           child: Container(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
                             decoration: BoxDecoration(
-                              color: _dealerId == s.id ? AppColors.primarySoft : AppColors.secondary,
+                              color: _dealerId == s.id
+                                  ? AppColors.primarySoft
+                                  : AppColors.secondary,
                               borderRadius: BorderRadius.circular(AppRadius.md),
                               border: Border.all(
-                                  color: _dealerId == s.id ? AppColors.primary : AppColors.border,
-                                  width: _dealerId == s.id ? 1.5 : 1),
+                                color: _dealerId == s.id
+                                    ? AppColors.primary
+                                    : AppColors.border,
+                                width: _dealerId == s.id ? 1.5 : 1,
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 if (_dealerId == s.id) ...[
-                                  const Icon(Icons.style, size: 14, color: AppColors.primary),
+                                  const Icon(
+                                    Icons.style,
+                                    size: 14,
+                                    color: AppColors.primary,
+                                  ),
                                   const SizedBox(width: 4),
                                 ],
                                 Text(
                                   'Seat ${s.seat} · ${s.name}',
                                   style: AppTypography.bodyXs.copyWith(
-                                      color: _dealerId == s.id ? AppColors.primary : AppColors.mutedForeground,
-                                      fontWeight: _dealerId == s.id ? FontWeight.w700 : null),
+                                    color: _dealerId == s.id
+                                        ? AppColors.primary
+                                        : AppColors.mutedForeground,
+                                    fontWeight: _dealerId == s.id
+                                        ? FontWeight.w700
+                                        : null,
+                                  ),
                                 ),
                               ],
                             ),
@@ -282,7 +322,10 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                   child: AppButton(
                     variant: AppButtonVariant.secondary,
                     onPressed: _redraw,
-                    child: const AppIconLabel(label: 'Redraw', icon: Icons.refresh),
+                    child: const AppIconLabel(
+                      label: 'Redraw',
+                      icon: Icons.refresh,
+                    ),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -291,7 +334,9 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                     disabled: tooMany,
                     onPressed: () => _confirm(app),
                     child: AppIconLabel(
-                      label: tooMany ? 'Eliminate to 9 first' : 'Confirm seating',
+                      label: tooMany
+                          ? 'Eliminate to 9 first'
+                          : 'Confirm seating',
                       icon: tooMany ? null : Icons.event_seat,
                     ),
                   ),
@@ -331,7 +376,12 @@ class _DraggableSeatTileState extends State<_DraggableSeatTile> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Seat ${s.seat}', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+            Text(
+              'Seat ${s.seat}',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
             const SizedBox(height: 2),
             Text(
               s.name,
@@ -364,13 +414,20 @@ class _DraggableSeatTileState extends State<_DraggableSeatTile> {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('Seat ${s.seat}', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+              Text(
+                'Seat ${s.seat}',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
               const SizedBox(height: 2),
               Text(
                 s.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -391,4 +448,3 @@ class _DraggableSeatTileState extends State<_DraggableSeatTile> {
     );
   }
 }
-

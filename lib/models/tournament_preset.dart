@@ -12,6 +12,7 @@ class TournamentPreset {
     required this.koAmount,
     required this.rebuys,
     required this.rebuysCloseLevel,
+    this.rebuyLimit,
     required this.reEntry,
     required this.addOn,
     this.addOnCloseLevel = 6,
@@ -32,6 +33,7 @@ class TournamentPreset {
   final int koAmount;
   final bool rebuys;
   final int rebuysCloseLevel;
+  final int? rebuyLimit;
   final bool reEntry;
   final bool addOn;
 

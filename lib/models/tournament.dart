@@ -54,6 +54,7 @@ class TournamentParams {
     required this.chipSet,
     required this.rebuys,
     required this.rebuysCloseLevel,
+    this.rebuyLimit,
     this.reEntry = false,
     required this.addOn,
     required this.anteEnabled,
@@ -72,6 +73,7 @@ class TournamentParams {
   final List<ChipColor> chipSet;
   final bool rebuys;
   final int rebuysCloseLevel;
+  final int? rebuyLimit;
 
   /// Re-entry enabled as a separate, secondary option (checklist 09-030,
   /// 14-003/14-012). Re-entries are expected at a lower rate than rebuys.
@@ -176,4 +178,3 @@ class TournamentStructure {
     );
   }
 }
-

@@ -65,7 +65,10 @@ class SupportScreen extends StatelessWidget {
                   style: AppTypography.body(),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
-                Text('Frequently asked questions', style: AppTypography.displaySm),
+                Text(
+                  'Frequently asked questions',
+                  style: AppTypography.displaySm,
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 for (final faq in _faqs) ...[
                   Container(

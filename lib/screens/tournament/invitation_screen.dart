@@ -39,7 +39,9 @@ class _InvitationScreenState extends State<InvitationScreen> {
   bool _copied = false;
 
   Future<void> _copyLink(LiveGame game) async {
-    await Clipboard.setData(ClipboardData(text: 'https://pokernight.app/game/${game.publicCode}'));
+    await Clipboard.setData(
+      ClipboardData(text: 'https://pokernight.app/game/${game.publicCode}'),
+    );
     if (!mounted) return;
     setState(() => _copied = true);
     Future.delayed(const Duration(seconds: 2), () {
@@ -47,7 +49,11 @@ class _InvitationScreenState extends State<InvitationScreen> {
     });
   }
 
-  void _confirmCancelGame(BuildContext context, AppProvider app, LiveGame game) {
+  void _confirmCancelGame(
+    BuildContext context,
+    AppProvider app,
+    LiveGame game,
+  ) {
     showAppModal(
       context: context,
       title: 'Cancel game',
@@ -69,30 +75,41 @@ class _InvitationScreenState extends State<InvitationScreen> {
 
     if (game == null) {
       return Center(
-        child: Text('No game selected.', style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+        child: Text(
+          'No game selected.',
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
       );
     }
 
     final settings = game.settings;
     final myPlayer = game.players.where((p) => p.id == user?.id).firstOrNull;
-    final going = game.players.where((p) => p.rsvp != null && p.rsvp!.isGoing).toList();
+    final going = game.players
+        .where((p) => p.rsvp != null && p.rsvp!.isGoing)
+        .toList();
     final total = game.players
         .where((p) => p.rsvp != null && p.rsvp!.isGoing)
         .fold<int>(0, (s, p) => s + 1 + p.rsvp!.guestCount);
     // Categorized attendance (spec §4.4) — people and seats are both shown.
     final members = game.players.where((p) => !p.isGuest).toList();
-    final confirmedMembers =
-        members.where((p) => p.rsvp != null && p.rsvp!.isGoing).toList();
+    final confirmedMembers = members
+        .where((p) => p.rsvp != null && p.rsvp!.isGoing)
+        .toList();
     final confirmedMemberCount = confirmedMembers.length;
-    final memberSeats =
-        confirmedMembers.fold<int>(0, (s, p) => s + 1 + p.rsvp!.guestCount);
+    final memberSeats = confirmedMembers.fold<int>(
+      0,
+      (s, p) => s + 1 + p.rsvp!.guestCount,
+    );
     final claimedGuestSlots = game.guestSlots.where((s) => !s.available).length;
     final guestSlotsTotal = game.guestSlots.length;
     final maybeCount = members.where((p) => p.rsvp == Rsvp.maybe).length;
     final cantCount = members.where((p) => p.rsvp == Rsvp.cant).length;
     final noResponseCount = members.where((p) => p.rsvp == null).length;
     // Private addresses are hidden until the viewer is confirmed (11-015).
-    final showAddress = !settings.locationPrivate ||
+    final showAddress =
+        !settings.locationPrivate ||
         (user?.isAdmin ?? false) ||
         (myPlayer?.confirmed ?? false);
 
@@ -105,7 +122,9 @@ class _InvitationScreenState extends State<InvitationScreen> {
             game: game,
             showAddress: showAddress,
             hostName: _hostName(app.currentGroup),
-            onEdit: user?.isAdmin == true ? () => _openEditModal(context, app, game) : null,
+            onEdit: user?.isAdmin == true
+                ? () => _openEditModal(context, app, game)
+                : null,
           ),
           _ContextualMainButton(game: game, user: user, myPlayer: myPlayer),
           // Admin-only: where the structure stands. The AI estimate unlocks
@@ -139,16 +158,29 @@ class _InvitationScreenState extends State<InvitationScreen> {
               children: [
                 Row(
                   children: [
-                    Text('Expected: $memberSeats players', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.success)),
+                    Text(
+                      'Expected: $memberSeats players',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.success,
+                      ),
+                    ),
                     const SizedBox(width: AppSpacing.md),
                     SizedBox(
                       height: 24,
                       child: Row(
                         children: [
-                          for (var i = 0; i < confirmedMembers.length && i < 5; i++)
+                          for (
+                            var i = 0;
+                            i < confirmedMembers.length && i < 5;
+                            i++
+                          )
                             Align(
                               widthFactor: 0.7,
-                              child: AppAvatar(name: confirmedMembers[i].name, size: AppAvatarSize.sm),
+                              child: AppAvatar(
+                                name: confirmedMembers[i].name,
+                                size: AppAvatarSize.sm,
+                              ),
                             ),
                           if (confirmedMembers.length > 5)
                             Align(
@@ -156,7 +188,10 @@ class _InvitationScreenState extends State<InvitationScreen> {
                               child: CircleAvatar(
                                 radius: 12,
                                 backgroundColor: AppColors.border,
-                                child: Text('+${confirmedMembers.length - 5}', style: AppTypography.monoXs),
+                                child: Text(
+                                  '+${confirmedMembers.length - 5}',
+                                  style: AppTypography.monoXs,
+                                ),
                               ),
                             ),
                         ],
@@ -165,10 +200,16 @@ class _InvitationScreenState extends State<InvitationScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
-                _AttendanceRow(label: 'Confirmed members', value: '$confirmedMemberCount people', highlight: true),
+                _AttendanceRow(
+                  label: 'Confirmed members',
+                  value: '$confirmedMemberCount people',
+                  highlight: true,
+                ),
                 _AttendanceRow(
                   label: 'Confirmed guest slots',
-                  value: guestSlotsTotal > 0 ? '$claimedGuestSlots of $guestSlotsTotal claimed' : '0',
+                  value: guestSlotsTotal > 0
+                      ? '$claimedGuestSlots of $guestSlotsTotal claimed'
+                      : '0',
                   highlight: true,
                 ),
                 _AttendanceRow(label: 'Maybe', value: '$maybeCount'),
@@ -191,24 +232,38 @@ class _InvitationScreenState extends State<InvitationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Event-day checklist', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.primary)),
+                  Text(
+                    'Event-day checklist',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     'Walk through preparation in order — no need to remember the sequence.',
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   _ChecklistRow(
                     label: 'Open check-in',
-                    done: (game.status == LiveGameStatus.checkin || game.status == LiveGameStatus.ready) ||
+                    done:
+                        (game.status == LiveGameStatus.checkin ||
+                            game.status == LiveGameStatus.ready) ||
                         game.players.any((p) => p.checkedIn),
                     actionLabel: 'Open',
                     onAction: () => context.go(RoutePaths.checkIn),
                   ),
                   _ChecklistRow(
                     label: 'Generate structure estimate',
-                    done: game.structure.levels.isNotEmpty && game.structureConfirmed,
-                    actionLabel: game.structure.levels.isNotEmpty ? 'Review' : 'Generate',
+                    done:
+                        game.structure.levels.isNotEmpty &&
+                        game.structureConfirmed,
+                    actionLabel: game.structure.levels.isNotEmpty
+                        ? 'Review'
+                        : 'Generate',
                     onAction: () => context.go(RoutePaths.structureReview),
                   ),
                   _ChecklistRow(
@@ -219,7 +274,8 @@ class _InvitationScreenState extends State<InvitationScreen> {
                   ),
                   _ChecklistRow(
                     label: 'Start the tournament',
-                    done: game.status == LiveGameStatus.running ||
+                    done:
+                        game.status == LiveGameStatus.running ||
                         game.status == LiveGameStatus.paused,
                     actionLabel: 'Dashboard',
                     onAction: () => context.go(RoutePaths.adminDashboard),
@@ -237,7 +293,12 @@ class _InvitationScreenState extends State<InvitationScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Share with guests', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  'Share with guests',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.md),
                 CodeDisplay(code: game.publicCode, label: 'Game code'),
                 const SizedBox(height: AppSpacing.sm),
@@ -249,7 +310,11 @@ class _InvitationScreenState extends State<InvitationScreen> {
                       variant: AppButtonVariant.secondary,
                       onPressed: () => _copyLink(game),
                       child: _copied
-                          ? const AppIconLabel(label: 'Link copied', icon: Icons.check_circle, color: AppColors.success)
+                          ? const AppIconLabel(
+                              label: 'Link copied',
+                              icon: Icons.check_circle,
+                              color: AppColors.success,
+                            )
                           : const Text('Copy link'),
                     ),
                     AppButton(
@@ -263,7 +328,9 @@ class _InvitationScreenState extends State<InvitationScreen> {
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   'Guests open the link, choose who invited them, select their guest slot and request check-in. No account needed.',
-                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ],
             ),
@@ -275,16 +342,25 @@ class _InvitationScreenState extends State<InvitationScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Responses', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  'Responses',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 for (final p in game.players.where((p) => !p.isGuest))
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.xs,
+                    ),
                     child: Row(
                       children: [
                         AppAvatar(name: p.name, size: AppAvatarSize.sm),
                         const SizedBox(width: AppSpacing.md),
-                        Expanded(child: Text(p.name, style: AppTypography.bodySm)),
+                        Expanded(
+                          child: Text(p.name, style: AppTypography.bodySm),
+                        ),
                         RSVPBadge(rsvp: p.rsvp),
                       ],
                     ),
@@ -294,11 +370,19 @@ class _InvitationScreenState extends State<InvitationScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [
-                      Text('Total confirmed (incl. guests)', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                      Text(
+                        'Total confirmed (incl. guests)',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
                       const Spacer(),
                       Text(
                         '$total',
-                        style: AppTypography.monoXs.copyWith(color: AppColors.success, fontWeight: FontWeight.w600),
+                        style: AppTypography.monoXs.copyWith(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
@@ -316,7 +400,12 @@ class _InvitationScreenState extends State<InvitationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Guest seats', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                  Text(
+                    'Guest seats',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.sm),
                   for (final slot in game.guestSlots)
                     Container(
@@ -329,7 +418,11 @@ class _InvitationScreenState extends State<InvitationScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.event_seat_outlined, size: 16, color: AppColors.icon),
+                          const Icon(
+                            Icons.event_seat_outlined,
+                            size: 16,
+                            color: AppColors.icon,
+                          ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
                             child: Text(
@@ -348,8 +441,8 @@ class _InvitationScreenState extends State<InvitationScreen> {
             ),
             const SizedBox(height: AppSpacing.lg),
           ],
-          // Admin actions
 
+          // Admin actions
         ],
       ),
     );
@@ -357,7 +450,12 @@ class _InvitationScreenState extends State<InvitationScreen> {
 }
 
 class _Detail extends StatelessWidget {
-  const _Detail({required this.label, required this.value, this.valueColor, this.mono = false});
+  const _Detail({
+    required this.label,
+    required this.value,
+    this.valueColor,
+    this.mono = false,
+  });
 
   final String label;
   final String value;
@@ -371,12 +469,20 @@ class _Detail extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            label,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
           const SizedBox(height: 2),
           Text(
             value,
             style: mono
-                ? AppTypography.monoSm.copyWith(fontWeight: FontWeight.w600, color: valueColor ?? AppColors.foreground)
+                ? AppTypography.monoSm.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: valueColor ?? AppColors.foreground,
+                  )
                 : AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500),
           ),
         ],
@@ -438,22 +544,26 @@ class _StructureStatusCard extends StatelessWidget {
                 Text(
                   hasStructure
                       ? 'Structure generated for ${game.settings.players} players'
-                          '${game.structureConfirmed ? ' — confirmed' : ''}'
+                            '${game.structureConfirmed ? ' — confirmed' : ''}'
                       : (reviewOpen
-                          ? 'Structure ready to generate'
-                          : 'Structure unlocks 30 min before start'),
-                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                            ? 'Structure ready to generate'
+                            : 'Structure unlocks 30 min before start'),
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   hasStructure
                       ? 'Stacks, blinds, levels and chips are set. Review or edit any time before the game; stacks freeze when play starts.'
                       : (reviewOpen
-                          ? 'Attendance is final enough — let the AI calculate stacks, blinds and levels from the Going / Going +N answers.'
-                          : (unlockAt != null
-                              ? 'The AI will estimate the structure at ${hhmm(unlockAt)}, based on who answers the invitation.'
-                              : 'The AI will estimate the structure 30 minutes before start, based on attendance.')),
-                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                            ? 'Attendance is final enough — let the AI calculate stacks, blinds and levels from the Going / Going +N answers.'
+                            : (unlockAt != null
+                                  ? 'The AI will estimate the structure at ${hhmm(unlockAt)}, based on who answers the invitation.'
+                                  : 'The AI will estimate the structure 30 minutes before start, based on attendance.')),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ],
             ),
@@ -461,7 +571,9 @@ class _StructureStatusCard extends StatelessWidget {
           const SizedBox(width: AppSpacing.md),
           AppButton(
             size: AppButtonSize.sm,
-            variant: hasStructure ? AppButtonVariant.secondary : AppButtonVariant.primary,
+            variant: hasStructure
+                ? AppButtonVariant.secondary
+                : AppButtonVariant.primary,
             onPressed: () => context.go(RoutePaths.structureReview),
             child: Text(hasStructure ? 'Review' : 'Generate'),
           ),
@@ -492,7 +604,9 @@ class _GuestSlotBadge extends StatelessWidget {
 /// Check-in). Shows the live attendance breakdown plus every member's answer.
 void _showRsvpListModal(BuildContext context, LiveGame game) {
   final members = game.players.where((p) => !p.isGuest).toList();
-  final going = members.where((p) => p.rsvp != null && p.rsvp!.isGoing).toList();
+  final going = members
+      .where((p) => p.rsvp != null && p.rsvp!.isGoing)
+      .toList();
   final seats = going.fold<int>(0, (s, p) => s + 1 + p.rsvp!.guestCount);
   final maybe = members.where((p) => p.rsvp == Rsvp.maybe).length;
   final cant = members.where((p) => p.rsvp == Rsvp.cant).length;
@@ -508,11 +622,34 @@ void _showRsvpListModal(BuildContext context, LiveGame game) {
         Wrap(
           spacing: AppSpacing.md,
           children: [
-            AppBadge(label: '$seats expected', variant: AppBadgeVariant.green, border: true),
-            AppBadge(label: '${going.length} going', variant: AppBadgeVariant.accent, border: true),
-            if (maybe > 0) AppBadge(label: '$maybe maybe', variant: AppBadgeVariant.gold, border: true),
-            if (cant > 0) AppBadge(label: '$cant can’t come', variant: AppBadgeVariant.muted, border: true),
-            if (none > 0) AppBadge(label: '$none no response', variant: AppBadgeVariant.red, border: true),
+            AppBadge(
+              label: '$seats expected',
+              variant: AppBadgeVariant.green,
+              border: true,
+            ),
+            AppBadge(
+              label: '${going.length} going',
+              variant: AppBadgeVariant.accent,
+              border: true,
+            ),
+            if (maybe > 0)
+              AppBadge(
+                label: '$maybe maybe',
+                variant: AppBadgeVariant.gold,
+                border: true,
+              ),
+            if (cant > 0)
+              AppBadge(
+                label: '$cant can’t come',
+                variant: AppBadgeVariant.muted,
+                border: true,
+              ),
+            if (none > 0)
+              AppBadge(
+                label: '$none no response',
+                variant: AppBadgeVariant.red,
+                border: true,
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -612,7 +749,17 @@ class _EditEventFormState extends State<_EditEventForm> {
 
   @override
   void dispose() {
-    for (final c in [_name, _date, _time, _location, _buyIn, _rebuyCost, _addOnCost, _koAmount, _orgPct]) {
+    for (final c in [
+      _name,
+      _date,
+      _time,
+      _location,
+      _buyIn,
+      _rebuyCost,
+      _addOnCost,
+      _koAmount,
+      _orgPct,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -644,8 +791,13 @@ class _EditEventFormState extends State<_EditEventForm> {
       antePreference: _antePreference,
       anteAfterLevel: _anteAfterLevel,
       anteEnabled: _antePreference != AntePreference.none,
-      anteStyle: _antePreference == AntePreference.individual ? AnteStyle.individual : AnteStyle.bigBlind,
-      organizerPct: (int.tryParse(_orgPct.text.trim()) ?? s.organizerPct).clamp(0, 100),
+      anteStyle: _antePreference == AntePreference.individual
+          ? AnteStyle.individual
+          : AnteStyle.bigBlind,
+      organizerPct: (int.tryParse(_orgPct.text.trim()) ?? s.organizerPct).clamp(
+        0,
+        100,
+      ),
     );
 
     if (s.date != newDate || s.time != newTime) {
@@ -655,7 +807,9 @@ class _EditEventFormState extends State<_EditEventForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('You have changed the scheduled date or time. Would you like to clear existing RSVPs so players must confirm they can still make it?'),
+            const Text(
+              'You have changed the scheduled date or time. Would you like to clear existing RSVPs so players must confirm they can still make it?',
+            ),
             const SizedBox(height: AppSpacing.lg),
             AppButton(
               variant: AppButtonVariant.destructive,
@@ -721,7 +875,8 @@ class _EditEventFormState extends State<_EditEventForm> {
         _SegmentedPicker(
           label: 'Duration',
           options: const ['4h', '3h', '3.5h', '4.5h', '5h', '5.5h', '6h'],
-          selected: '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h',
+          selected:
+              '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h',
           onChanged: (v) {
             final val = v.replaceAll('h', '');
             setState(() => _duration = double.tryParse(val) ?? 4.0);
@@ -733,7 +888,9 @@ class _EditEventFormState extends State<_EditEventForm> {
           subtitle: 'Players can re-enter after elimination',
           trailing: _SegmentedPicker(
             options: const ['Off', 'Limited', 'Unlimited'],
-            selected: _rebuys ? (_rebuyUnlimited ? 'Unlimited' : 'Limited') : 'Off',
+            selected: _rebuys
+                ? (_rebuyUnlimited ? 'Unlimited' : 'Limited')
+                : 'Off',
             onChanged: (v) => setState(() {
               if (v == 'Off') {
                 _rebuys = false;
@@ -751,25 +908,39 @@ class _EditEventFormState extends State<_EditEventForm> {
         ),
         if (_rebuys && !_rebuyUnlimited)
           Padding(
-            padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.sm),
+            padding: const EdgeInsets.only(
+              left: AppSpacing.lg,
+              top: AppSpacing.sm,
+            ),
             child: _SegmentedPicker(
               label: 'Close rebuys',
               options: const ['End L4', 'End L5', 'End L6', 'End L7', 'End L8'],
               selected: 'End L$_rebuysClose',
-              onChanged: (v) => setState(() => _rebuysClose = int.tryParse(v.replaceAll('End L', '')) ?? 6),
+              onChanged: (v) => setState(
+                () =>
+                    _rebuysClose = int.tryParse(v.replaceAll('End L', '')) ?? 6,
+              ),
             ),
           ),
         if (_rebuys && _rebuyUnlimited)
           Padding(
-            padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.sm),
+            padding: const EdgeInsets.only(
+              left: AppSpacing.lg,
+              top: AppSpacing.sm,
+            ),
             child: Text(
               'Unlimited rebuys until the end of Level 6.',
-              style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
           ),
         if (_rebuys)
           Padding(
-            padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.sm),
+            padding: const EdgeInsets.only(
+              left: AppSpacing.lg,
+              top: AppSpacing.sm,
+            ),
             child: AppTextField(
               controller: _rebuyCost,
               label: 'Rebuy price (optional)',
@@ -796,7 +967,10 @@ class _EditEventFormState extends State<_EditEventForm> {
         ),
         if (_addOn) ...[
           Padding(
-            padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.sm),
+            padding: const EdgeInsets.only(
+              left: AppSpacing.lg,
+              top: AppSpacing.sm,
+            ),
             child: AppTextField(
               controller: _addOnCost,
               label: 'Add-on price (optional)',
@@ -805,12 +979,18 @@ class _EditEventFormState extends State<_EditEventForm> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.sm),
+            padding: const EdgeInsets.only(
+              left: AppSpacing.lg,
+              top: AppSpacing.sm,
+            ),
             child: _SegmentedPicker(
               label: 'Add-on available until',
               options: const ['End L4', 'End L5', 'End L6', 'End L7', 'End L8'],
               selected: 'End L$_addOnClose',
-              onChanged: (v) => setState(() => _addOnClose = int.tryParse(v.replaceAll('End L', '')) ?? 6),
+              onChanged: (v) => setState(
+                () =>
+                    _addOnClose = int.tryParse(v.replaceAll('End L', '')) ?? 6,
+              ),
             ),
           ),
         ],
@@ -826,7 +1006,10 @@ class _EditEventFormState extends State<_EditEventForm> {
         ),
         if (_koEnabled)
           Padding(
-            padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.sm),
+            padding: const EdgeInsets.only(
+              left: AppSpacing.lg,
+              top: AppSpacing.sm,
+            ),
             child: AppTextField(
               controller: _koAmount,
               label: 'Bounty amount',
@@ -838,29 +1021,48 @@ class _EditEventFormState extends State<_EditEventForm> {
           title: 'Ante',
           subtitle: 'How the ante is posted',
           trailing: _SegmentedPicker(
-            options: const ['Recommended', 'No ante', 'Big blind', 'Individual'],
+            options: const [
+              'Recommended',
+              'No ante',
+              'Big blind',
+              'Individual',
+            ],
             selected: switch (_antePreference) {
               AntePreference.recommend => 'Recommended',
               AntePreference.none => 'No ante',
               AntePreference.bigBlind => 'Big blind',
               AntePreference.individual => 'Individual',
             },
-            onChanged: (v) => setState(() => _antePreference = switch (v) {
-              'No ante' => AntePreference.none,
-              'Big blind' => AntePreference.bigBlind,
-              'Individual' => AntePreference.individual,
-              _ => AntePreference.recommend,
-            }),
+            onChanged: (v) => setState(
+              () => _antePreference = switch (v) {
+                'No ante' => AntePreference.none,
+                'Big blind' => AntePreference.bigBlind,
+                'Individual' => AntePreference.individual,
+                _ => AntePreference.recommend,
+              },
+            ),
           ),
         ),
         if (_antePreference != AntePreference.none)
           Padding(
-            padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.sm),
+            padding: const EdgeInsets.only(
+              left: AppSpacing.lg,
+              top: AppSpacing.sm,
+            ),
             child: _SegmentedPicker(
               label: 'Activate ante',
-              options: const ['After L4', 'After L5', 'After L6', 'After L7', 'After L8'],
+              options: const [
+                'After L4',
+                'After L5',
+                'After L6',
+                'After L7',
+                'After L8',
+              ],
               selected: 'After L$_anteAfterLevel',
-              onChanged: (v) => setState(() => _anteAfterLevel = int.tryParse(v.replaceAll('After L', '')) ?? 6),
+              onChanged: (v) => setState(
+                () => _anteAfterLevel =
+                    int.tryParse(v.replaceAll('After L', '')) ?? 6,
+              ),
             ),
           ),
         const SizedBox(height: AppSpacing.sm),
@@ -880,7 +1082,9 @@ class _EditEventFormState extends State<_EditEventForm> {
         Text(
           'Changing game details regenerates the structure estimate. '
           'All edits are recorded in the audit log and shared with members.',
-          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
         ),
         const SizedBox(height: AppSpacing.xl),
         AppButton(
@@ -914,9 +1118,19 @@ class _EditRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                Text(
+                  title,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                Text(
+                  subtitle,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
               ],
             ),
           ),
@@ -951,7 +1165,10 @@ class _SegmentedPicker extends StatelessWidget {
           GestureDetector(
             onTap: () => onChanged(o),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.sm,
+              ),
               decoration: BoxDecoration(
                 color: o == selected ? AppColors.primary : AppColors.secondary,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -959,7 +1176,9 @@ class _SegmentedPicker extends StatelessWidget {
               child: Text(
                 o,
                 style: AppTypography.bodyXs.copyWith(
-                  color: o == selected ? Colors.white : AppColors.mutedForeground,
+                  color: o == selected
+                      ? Colors.white
+                      : AppColors.mutedForeground,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -972,7 +1191,12 @@ class _SegmentedPicker extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label!, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+          Text(
+            label!,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
           const SizedBox(height: AppSpacing.xs),
           picker,
         ],
@@ -1005,9 +1229,19 @@ class _ToggleRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                Text(
+                  title,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle, style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                Text(
+                  subtitle,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1065,7 +1299,9 @@ void showAppLinkModal(BuildContext context, LiveGame game) {
             Text(
               'Guests scan this to open the join page — no account needed.',
               textAlign: TextAlign.center,
-              style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
             AppButton(
@@ -1101,7 +1337,9 @@ class _AttendanceRow extends StatelessWidget {
             child: Text(
               label,
               style: AppTypography.bodySm.copyWith(
-                color: highlight ? AppColors.foreground : AppColors.mutedForeground,
+                color: highlight
+                    ? AppColors.foreground
+                    : AppColors.mutedForeground,
                 fontWeight: highlight ? FontWeight.w500 : null,
               ),
             ),
@@ -1109,7 +1347,9 @@ class _AttendanceRow extends StatelessWidget {
           Text(
             value,
             style: AppTypography.monoXs.copyWith(
-              color: highlight ? AppColors.foreground : AppColors.mutedForeground,
+              color: highlight
+                  ? AppColors.foreground
+                  : AppColors.mutedForeground,
               fontWeight: highlight ? FontWeight.w700 : FontWeight.w600,
             ),
           ),
@@ -1168,7 +1408,11 @@ class _ChecklistRow extends StatelessWidget {
 }
 
 class _ContextualMainButton extends StatelessWidget {
-  const _ContextualMainButton({required this.game, required this.user, required this.myPlayer});
+  const _ContextualMainButton({
+    required this.game,
+    required this.user,
+    required this.myPlayer,
+  });
 
   final LiveGame game;
   final AppUser? user;
@@ -1199,15 +1443,19 @@ class _ContextualMainButton extends StatelessWidget {
             child: const Text('Review RSVPs'),
           );
         case LiveGameStatus.checkin:
-      case LiveGameStatus.ready:
-          final checkedInCount = game.players.where((p) => p.checkedIn && p.confirmed).length;
+        case LiveGameStatus.ready:
+          final checkedInCount = game.players
+              .where((p) => p.checkedIn && p.confirmed)
+              .length;
           final seatingConfirmed = game.seatingConfirmed;
           if (checkedInCount >= 2 && seatingConfirmed) {
             return AppButton(
               fullWidth: true,
               size: AppButtonSize.xl,
               onPressed: () {
-                app.updateEventSettings(game.settings.copyWith(players: checkedInCount));
+                app.updateEventSettings(
+                  game.settings.copyWith(players: checkedInCount),
+                );
                 app.updateGameStatus(LiveGameStatus.running);
                 context.go(RoutePaths.adminDashboard);
               },
@@ -1262,8 +1510,12 @@ class _ContextualMainButton extends StatelessWidget {
           child: const Text('View Results'),
         );
       }
-      
-      final isRunning = game.status == LiveGameStatus.running || game.status == LiveGameStatus.paused || game.status == LiveGameStatus.finaltable || game.status == LiveGameStatus.rebuypause;
+
+      final isRunning =
+          game.status == LiveGameStatus.running ||
+          game.status == LiveGameStatus.paused ||
+          game.status == LiveGameStatus.finaltable ||
+          game.status == LiveGameStatus.rebuypause;
       if (isRunning) {
         return AppButton(
           fullWidth: true,
@@ -1276,8 +1528,11 @@ class _ContextualMainButton extends StatelessWidget {
       final p = myPlayer;
       if (p != null) {
         if (p.checkedIn && p.confirmed) {
-          final seated = game.players.where((q) => q.table == p.table && q.seat > 0).toList()
-            ..sort((a, b) => a.seat.compareTo(b.seat));
+          final seated =
+              game.players
+                  .where((q) => q.table == p.table && q.seat > 0)
+                  .toList()
+                ..sort((a, b) => a.seat.compareTo(b.seat));
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
@@ -1292,13 +1547,21 @@ class _ContextualMainButton extends StatelessWidget {
                   Center(
                     child: Text(
                       'Table ${p.table} · Seat ${p.seat}',
-                      style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.bold),
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxxl,
+                        weight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   const Divider(color: AppColors.border),
                   const SizedBox(height: AppSpacing.md),
-                  Text('At your table', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                  Text(
+                    'At your table',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.sm),
                   for (final q in seated)
                     Padding(
@@ -1311,13 +1574,17 @@ class _ContextualMainButton extends StatelessWidget {
                             child: Text(
                               q.name,
                               style: AppTypography.bodySm.copyWith(
-                                fontWeight: q.id == p.id ? FontWeight.w700 : FontWeight.w400,
+                                fontWeight: q.id == p.id
+                                    ? FontWeight.w700
+                                    : FontWeight.w400,
                               ),
                             ),
                           ),
                           Text(
                             'Seat ${q.seat}',
-                            style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground),
+                            style: AppTypography.monoXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
                         ],
                       ),
@@ -1335,7 +1602,8 @@ class _ContextualMainButton extends StatelessWidget {
             onPressed: null,
             child: const Text('Waiting for Confirmation'),
           );
-        } else if ((game.status == LiveGameStatus.checkin || game.status == LiveGameStatus.ready)) {
+        } else if ((game.status == LiveGameStatus.checkin ||
+            game.status == LiveGameStatus.ready)) {
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
@@ -1346,14 +1614,25 @@ class _ContextualMainButton extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Your RSVP', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+              Text(
+                'Your RSVP',
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: AppSpacing.md),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
                     for (final opt in const [
-                      Rsvp.going, Rsvp.goingPlus1, Rsvp.goingPlus2, Rsvp.goingPlus3, Rsvp.goingPlus4, Rsvp.maybe, Rsvp.cant
+                      Rsvp.going,
+                      Rsvp.goingPlus1,
+                      Rsvp.goingPlus2,
+                      Rsvp.goingPlus3,
+                      Rsvp.goingPlus4,
+                      Rsvp.maybe,
+                      Rsvp.cant,
                     ])
                       Padding(
                         padding: const EdgeInsets.only(right: AppSpacing.sm),
@@ -1406,7 +1685,9 @@ class _CancelGameFormState extends State<_CancelGameForm> {
         Text(
           'Cancelling ${widget.gameName} stops the timer and removes it from live view. '
           'Members are notified and a reason is recorded in the audit log.',
-          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         AppTextField(
@@ -1430,7 +1711,9 @@ class _CancelGameFormState extends State<_CancelGameForm> {
             Expanded(
               child: AppButton(
                 variant: AppButtonVariant.danger,
-                onPressed: reason.isEmpty ? null : () => widget.onCancel(reason),
+                onPressed: reason.isEmpty
+                    ? null
+                    : () => widget.onCancel(reason),
                 child: const Text('Cancel tournament'),
               ),
             ),
@@ -1453,7 +1736,7 @@ class _PremiumEventHeader extends StatelessWidget {
     required this.hostName,
     this.onEdit,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     final settings = game.settings;
@@ -1475,32 +1758,61 @@ class _PremiumEventHeader extends StatelessWidget {
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       settings.name,
-                      style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700),
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxxl,
+                        weight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Row(
                       children: [
-                        const Icon(Icons.calendar_today, size: 16, color: AppColors.mutedForeground),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(settings.date, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        const Icon(Icons.access_time, size: 16, color: AppColors.mutedForeground),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(settings.time, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on, size: 16, color: AppColors.mutedForeground),
+                        const Icon(
+                          Icons.calendar_today,
+                          size: 16,
+                          color: AppColors.mutedForeground,
+                        ),
                         const SizedBox(width: AppSpacing.sm),
                         Text(
-                          showAddress ? settings.location : 'Address shared at check-in',
-                          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                          settings.date,
+                          style: AppTypography.bodySm.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.access_time,
+                          size: 16,
+                          color: AppColors.mutedForeground,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text(
+                          settings.time,
+                          style: AppTypography.bodySm.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on,
+                          size: 16,
+                          color: AppColors.mutedForeground,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text(
+                          showAddress
+                              ? settings.location
+                              : 'Address shared at check-in',
+                          style: AppTypography.bodySm.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ],
                     ),
@@ -1512,13 +1824,18 @@ class _PremiumEventHeader extends StatelessWidget {
                 children: [
                   AppBadge(
                     label: game.status.name.toUpperCase(),
-                    variant: game.status.isActiveLive ? AppBadgeVariant.accent : AppBadgeVariant.muted,
+                    variant: game.status.isActiveLive
+                        ? AppBadgeVariant.accent
+                        : AppBadgeVariant.muted,
                   ),
                   if (onEdit != null) ...[
                     const SizedBox(height: AppSpacing.md),
                     IconButton(
                       onPressed: onEdit,
-                      icon: const Icon(Icons.edit_outlined, color: AppColors.mutedForeground),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        color: AppColors.mutedForeground,
+                      ),
                       tooltip: 'Edit details',
                     ),
                   ],
@@ -1533,10 +1850,25 @@ class _PremiumEventHeader extends StatelessWidget {
             runSpacing: AppSpacing.md,
             spacing: AppSpacing.lg,
             children: [
-              _Detail(label: 'Buy-in', value: '${settings.buyIn}', valueColor: AppColors.primary, mono: true),
+              _Detail(
+                label: 'Buy-in',
+                value: '${settings.buyIn}',
+                valueColor: AppColors.primary,
+                mono: true,
+              ),
               if (settings.koEnabled)
-                _Detail(label: 'KO bounty', value: '${settings.buyIn} + ${settings.koAmount}', valueColor: AppColors.primary, mono: true),
-              _Detail(label: 'Duration', value: '${settings.durationHours == settings.durationHours.roundToDouble() ? settings.durationHours.round() : settings.durationHours}h', mono: true),
+                _Detail(
+                  label: 'KO bounty',
+                  value: '${settings.buyIn} + ${settings.koAmount}',
+                  valueColor: AppColors.primary,
+                  mono: true,
+                ),
+              _Detail(
+                label: 'Duration',
+                value:
+                    '${settings.durationHours == settings.durationHours.roundToDouble() ? settings.durationHours.round() : settings.durationHours}h',
+                mono: true,
+              ),
               _Detail(
                 label: 'Rebuys',
                 value: settings.rebuys
@@ -1565,23 +1897,35 @@ class _PremiumEventHeader extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.person_outline, size: 14, color: AppColors.mutedForeground),
+                  const Icon(
+                    Icons.person_outline,
+                    size: 14,
+                    color: AppColors.mutedForeground,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Hosted by $hostName',
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
               Row(
                 children: [
-                  const Icon(Icons.schedule_outlined, size: 14, color: AppColors.mutedForeground),
+                  const Icon(
+                    Icons.schedule_outlined,
+                    size: 14,
+                    color: AppColors.mutedForeground,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     settings.rsvpDeadline == null
                         ? 'RSVPs close 1 hour before start'
                         : 'RSVPs close at ${settings.rsvpDeadline!.hour.toString().padLeft(2, '0')}:${settings.rsvpDeadline!.minute.toString().padLeft(2, '0')}',
-                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ],
               ),
@@ -1597,13 +1941,18 @@ class _RsvpChip extends StatefulWidget {
   final String label;
   final bool active;
   final VoidCallback onTap;
-  const _RsvpChip({required this.label, required this.active, required this.onTap});
+  const _RsvpChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   State<_RsvpChip> createState() => _RsvpChipState();
 }
 
-class _RsvpChipState extends State<_RsvpChip> with SingleTickerProviderStateMixin {
+class _RsvpChipState extends State<_RsvpChip>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -1635,16 +1984,23 @@ class _RsvpChipState extends State<_RsvpChip> with SingleTickerProviderStateMixi
       child: ScaleTransition(
         scale: _scaleAnimation,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
           decoration: BoxDecoration(
             color: widget.active ? AppColors.primary : AppColors.card,
             borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(color: widget.active ? AppColors.primary : AppColors.border),
+            border: Border.all(
+              color: widget.active ? AppColors.primary : AppColors.border,
+            ),
           ),
           child: Text(
             widget.label,
             style: AppTypography.bodySm.copyWith(
-              color: widget.active ? AppColors.primaryForeground : AppColors.mutedForeground,
+              color: widget.active
+                  ? AppColors.primaryForeground
+                  : AppColors.mutedForeground,
               fontWeight: FontWeight.w600,
             ),
           ),

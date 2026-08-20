@@ -58,7 +58,11 @@ class _PokerTableHeroState extends State<PokerTableHero>
             stops: [0.0, 0.6, 1.0],
           ),
           boxShadow: [
-            BoxShadow(color: AppColors.primary.withValues(alpha: 0.12), blurRadius: 40, spreadRadius: -8),
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              blurRadius: 40,
+              spreadRadius: -8,
+            ),
           ],
         ),
         child: AnimatedBuilder(
@@ -71,34 +75,64 @@ class _PokerTableHeroState extends State<PokerTableHero>
                 Center(
                   child: Text(
                     'POKER NIGHT',
-                    style: AppTypography.display(size: 44, weight: FontWeight.w800).copyWith(
-                      color: Colors.white.withValues(alpha: 0.03),
-                      letterSpacing: 8,
-                    ),
+                    style:
+                        AppTypography.display(
+                          size: 44,
+                          weight: FontWeight.w800,
+                        ).copyWith(
+                          color: Colors.white.withValues(alpha: 0.03),
+                          letterSpacing: 8,
+                        ),
                   ),
                 ),
                 // Dealer button (top center).
                 Align(
                   alignment: const Alignment(0, -0.85),
-                  child: _ChipStack(count: 2, color: const Color(0xFFEDEDED), phase: t, seed: 0.0),
+                  child: _ChipStack(
+                    count: 2,
+                    color: const Color(0xFFEDEDED),
+                    phase: t,
+                    seed: 0.0,
+                  ),
                 ),
                 // Corner chip stacks.
                 Align(
                   alignment: const Alignment(-0.86, -0.35),
-                  child: _ChipStack(count: 4, color: const Color(0xFFC0392B), phase: t, seed: 0.2),
+                  child: _ChipStack(
+                    count: 4,
+                    color: const Color(0xFFC0392B),
+                    phase: t,
+                    seed: 0.2,
+                  ),
                 ),
                 Align(
                   alignment: const Alignment(0.86, -0.35),
-                  child: _ChipStack(count: 4, color: const Color(0xFFC0392B), phase: t, seed: 0.6),
+                  child: _ChipStack(
+                    count: 4,
+                    color: const Color(0xFFC0392B),
+                    phase: t,
+                    seed: 0.6,
+                  ),
                 ),
                 Align(
                   alignment: const Alignment(0.86, 0.55),
-                  child: _ChipStack(count: 5, color: const Color(0xFF2980B9), phase: t, seed: 0.85),
+                  child: _ChipStack(
+                    count: 5,
+                    color: const Color(0xFF2980B9),
+                    phase: t,
+                    seed: 0.85,
+                  ),
                 ),
                 // Pot in the middle, tucked under the cards.
                 Align(
                   alignment: const Alignment(0, 0.42),
-                  child: _ChipStack(count: 6, color: const Color(0xFF2C2C2C), phase: t, seed: 0.5, mixed: true),
+                  child: _ChipStack(
+                    count: 6,
+                    color: const Color(0xFF2C2C2C),
+                    phase: t,
+                    seed: 0.5,
+                    mixed: true,
+                  ),
                 ),
                 // Community card row (the hero element).
                 Center(
@@ -128,18 +162,24 @@ class _PokerTableHeroState extends State<PokerTableHero>
                     children: [
                       Text(
                         'Run your perfect',
-                        style: AppTypography.display(size: AppFontSizes.xxl, weight: FontWeight.w800)
-                            .copyWith(color: Colors.white, height: 1.05),
+                        style: AppTypography.display(
+                          size: AppFontSizes.xxl,
+                          weight: FontWeight.w800,
+                        ).copyWith(color: Colors.white, height: 1.05),
                       ),
                       Text(
                         'poker night',
-                        style: AppTypography.display(size: AppFontSizes.xxl, weight: FontWeight.w800)
-                            .copyWith(color: AppColors.destructive, height: 1.05),
+                        style: AppTypography.display(
+                          size: AppFontSizes.xxl,
+                          weight: FontWeight.w800,
+                        ).copyWith(color: AppColors.destructive, height: 1.05),
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
                         'Blinds, buy-ins, seating and settlement \n one app for the whole table.',
-                        style: AppTypography.bodyXs.copyWith(color: Colors.white.withValues(alpha: 0.75)),
+                        style: AppTypography.bodyXs.copyWith(
+                          color: Colors.white.withValues(alpha: 0.75),
+                        ),
                       ),
                     ],
                   ),
@@ -187,7 +227,11 @@ class _FloatingCard extends StatelessWidget {
             color: const Color(0xFFEDEAE0),
             borderRadius: BorderRadius.circular(6),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 10, offset: const Offset(0, 4)),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
             ],
           ),
           alignment: Alignment.center,
@@ -243,9 +287,16 @@ class _ChipStack extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: mixed && i.isOdd ? const Color(0xFFC0392B) : color,
                     borderRadius: BorderRadius.circular(3),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 0.5),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      width: 0.5,
+                    ),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 3, offset: const Offset(0, 1)),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        blurRadius: 3,
+                        offset: const Offset(0, 1),
+                      ),
                     ],
                   ),
                 ),

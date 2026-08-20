@@ -20,7 +20,12 @@ class BottomNav extends StatelessWidget {
     final items = [
       _BottomItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
       _BottomItem(RoutePaths.group, 'Group', Icons.groups_outlined, null),
-      _BottomItem(RoutePaths.notifications, 'Alerts', Icons.notifications_none, unread),
+      _BottomItem(
+        RoutePaths.notifications,
+        'Alerts',
+        Icons.notifications_none,
+        unread,
+      ),
       _BottomItem(RoutePaths.history, 'History', Icons.history, null),
     ];
 

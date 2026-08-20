@@ -16,6 +16,7 @@ class GameSettings {
     required this.koAmount,
     required this.rebuys,
     required this.rebuysCloseLevel,
+    this.rebuyLimit,
     this.reEntry = false,
     required this.addOn,
     this.addOnCloseLevel = 6,
@@ -44,6 +45,10 @@ class GameSettings {
   final int koAmount;
   final bool rebuys;
   final int rebuysCloseLevel;
+
+  /// Number of rebuys allowed per player when rebuys are limited.
+  final int? rebuyLimit;
+
   /// Re-entry is a separate, secondary option (checklist 09-030, §12.5).
   /// A re-entering player receives the approved entry stack and is recorded
   /// separately from rebuys (12-046/12-047).
@@ -100,6 +105,7 @@ class GameSettings {
     int? koAmount,
     bool? rebuys,
     int? rebuysCloseLevel,
+    int? rebuyLimit,
     bool? reEntry,
     bool? addOn,
     int? addOnCloseLevel,
@@ -128,6 +134,7 @@ class GameSettings {
       koAmount: koAmount ?? this.koAmount,
       rebuys: rebuys ?? this.rebuys,
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
+      rebuyLimit: rebuyLimit ?? this.rebuyLimit,
       reEntry: reEntry ?? this.reEntry,
       addOn: addOn ?? this.addOn,
       addOnCloseLevel: addOnCloseLevel ?? this.addOnCloseLevel,
@@ -345,8 +352,7 @@ class LiveGame {
   int get goingCount =>
       players.where((p) => p.rsvp != null && p.rsvp!.isGoing).length;
 
-  int get confirmedCount =>
-      players.where((p) => p.confirmed).length;
+  int get confirmedCount => players.where((p) => p.confirmed).length;
 
   BlindLevel? get currentLevelData {
     if (currentLevel < 1 || currentLevel > structure.levels.length) return null;
@@ -383,8 +389,7 @@ class LiveGame {
     }
     final start = settings.scheduledStart;
     if (start == null) return false;
-    return DateTime.now()
-        .isAfter(start.subtract(const Duration(minutes: 30)));
+    return DateTime.now().isAfter(start.subtract(const Duration(minutes: 30)));
   }
 
   /// Starting stacks are frozen the moment the tournament goes live. Blinds,
@@ -398,9 +403,7 @@ class LiveGame {
   /// The AI re-estimates the structure with the current expected player count
   /// inside the 30-minute window before start (07-018).
   bool get estimateDue =>
-      !stacksLocked &&
-      structureReviewOpen &&
-      settings.scheduledStart != null;
+      !stacksLocked && structureReviewOpen && settings.scheduledStart != null;
 
   LiveGame copyWith({
     String? id,

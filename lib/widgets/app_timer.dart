@@ -41,22 +41,25 @@ class AppTimer extends StatelessWidget {
     final lastColonIdx = timeStr.lastIndexOf(':');
 
     return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        for (var i = 0; i < timeStr.length; i++)
-          _TimerDigit(
-            char: timeStr[i],
-            size: size,
-            color: (lastColonIdx != -1 && i >= lastColonIdx) ? secsColor : minsColor,
-            danger: danger,
-          ),
-      ],
-    )
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            for (var i = 0; i < timeStr.length; i++)
+              _TimerDigit(
+                char: timeStr[i],
+                size: size,
+                color: (lastColonIdx != -1 && i >= lastColonIdx)
+                    ? secsColor
+                    : minsColor,
+                danger: danger,
+              ),
+          ],
+        )
         .animate(
           key: ValueKey(danger ? 'danger' : 'normal'),
-          onPlay: (controller) => danger ? controller.repeat(reverse: true) : null,
+          onPlay: (controller) =>
+              danger ? controller.repeat(reverse: true) : null,
         )
         .scaleXY(
           end: danger ? 1.05 : 1.0,
@@ -82,7 +85,7 @@ class _TimerDigit extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isColon = char == ':';
-    
+
     // We want all digits to be roughly the same width for stability
     final digitWidth = size * 0.6;
 
@@ -102,27 +105,30 @@ class _TimerDigit extends StatelessWidget {
                 begin: isNew ? const Offset(0.0, -1.0) : const Offset(0.0, 1.0),
                 end: Offset.zero,
               ).animate(animation),
-              child: FadeTransition(
-                opacity: animation,
-                child: child,
-              ),
+              child: FadeTransition(opacity: animation, child: child),
             ),
           );
         },
         child: Text(
           char,
           key: ValueKey<String>(char),
-          style: AppTypography.mono(
-            size: size,
-            weight: FontWeight.w400,
-            color: color,
-            height: 1.0,
-          ).copyWith(
-            letterSpacing: size * -0.05,
-            shadows: danger
-                ? [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 8)]
-                : null,
-          ),
+          style:
+              AppTypography.mono(
+                size: size,
+                weight: FontWeight.w400,
+                color: color,
+                height: 1.0,
+              ).copyWith(
+                letterSpacing: size * -0.05,
+                shadows: danger
+                    ? [
+                        Shadow(
+                          color: color.withValues(alpha: 0.5),
+                          blurRadius: 8,
+                        ),
+                      ]
+                    : null,
+              ),
         ),
       ),
     );
@@ -143,7 +149,8 @@ class LiveTimerBuilder extends StatefulWidget {
   State<LiveTimerBuilder> createState() => _LiveTimerBuilderState();
 }
 
-class _LiveTimerBuilderState extends State<LiveTimerBuilder> with SingleTickerProviderStateMixin {
+class _LiveTimerBuilderState extends State<LiveTimerBuilder>
+    with SingleTickerProviderStateMixin {
   late Ticker _ticker;
   int _lastSeconds = -1;
 

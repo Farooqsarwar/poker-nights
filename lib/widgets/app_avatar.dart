@@ -8,7 +8,11 @@ enum AppAvatarSize { sm, md, lg }
 
 /// Avatar mirroring the web `Avatar` component.
 class AppAvatar extends StatelessWidget {
-  const AppAvatar({super.key, required this.name, this.size = AppAvatarSize.md});
+  const AppAvatar({
+    super.key,
+    required this.name,
+    this.size = AppAvatarSize.md,
+  });
 
   final String name;
   final AppAvatarSize size;

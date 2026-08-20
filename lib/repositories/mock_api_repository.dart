@@ -21,7 +21,7 @@ class MockApiRepository implements DataRepository {
   Future<Group> fetchGroup(String id) async {
     // Simulate network delay
     await Future.delayed(const Duration(milliseconds: 500));
-    
+
     // Structure the dummy data EXACTLY as a real backend response would be:
     // JSON -> Map<String, dynamic> -> Group
     // For now, we return the MockData model directly since we are mocking the deserialization layer.

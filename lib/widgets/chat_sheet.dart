@@ -22,7 +22,9 @@ class ChatSheet extends StatefulWidget {
         height: MediaQuery.of(context).size.height * 0.75,
         decoration: const BoxDecoration(
           color: AppColors.background,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.lg),
+          ),
         ),
         child: ChatSheet(gameId: gameId),
       ),
@@ -66,7 +68,7 @@ class _ChatSheetState extends State<ChatSheet> {
     final game = app.gameById(widget.gameId);
     final userId = app.user?.id;
     if (game == null) return const SizedBox();
-    
+
     final messages = game.chat.where((m) => !m.deleted).toList();
 
     return Column(
@@ -76,7 +78,10 @@ class _ChatSheetState extends State<ChatSheet> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Tournament Chat', style: AppTypography.display(size: AppFontSizes.lg)),
+              Text(
+                'Tournament Chat',
+                style: AppTypography.display(size: AppFontSizes.lg),
+              ),
               IconButton(
                 icon: const Icon(Icons.close, color: AppColors.foreground),
                 onPressed: () => Navigator.pop(context),
@@ -95,7 +100,9 @@ class _ChatSheetState extends State<ChatSheet> {
                     child: Text(
                       'No messages yet. Start the conversation!',
                       textAlign: TextAlign.center,
-                      style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   )
                 : Column(
@@ -104,7 +111,9 @@ class _ChatSheetState extends State<ChatSheet> {
                         _ChatBubble(
                           message: msg,
                           isMine: msg.authorId == userId,
-                          canDelete: (app.user?.isAdmin ?? false) && msg.authorId != userId,
+                          canDelete:
+                              (app.user?.isAdmin ?? false) &&
+                              msg.authorId != userId,
                           onDelete: () => app.deleteMessage(msg.id),
                         ),
                     ],
@@ -129,7 +138,9 @@ class _ChatSheetState extends State<ChatSheet> {
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                     child: Text(
                       _chatError!,
-                      style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.destructive,
+                      ),
                     ),
                   ),
                 Row(
@@ -166,7 +177,9 @@ class _ChatSheetState extends State<ChatSheet> {
             child: Text(
               'Sign in to chat',
               textAlign: TextAlign.center,
-              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
           ),
       ],
@@ -175,7 +188,12 @@ class _ChatSheetState extends State<ChatSheet> {
 }
 
 class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({required this.message, required this.isMine, required this.canDelete, required this.onDelete});
+  const _ChatBubble({
+    required this.message,
+    required this.isMine,
+    required this.canDelete,
+    required this.onDelete,
+  });
 
   final ChatMessage message;
   final bool isMine;
@@ -187,7 +205,9 @@ class _ChatBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
-        mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isMine) ...[
@@ -196,7 +216,9 @@ class _ChatBubble extends StatelessWidget {
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMine
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 Text(
                   message.authorName,
@@ -207,7 +229,10 @@ class _ChatBubble extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
                   decoration: BoxDecoration(
                     color: isMine ? AppColors.primary : AppColors.secondary,
                     borderRadius: BorderRadius.circular(AppRadius.lg).copyWith(
@@ -219,7 +244,9 @@ class _ChatBubble extends StatelessWidget {
                   child: Text(
                     message.body,
                     style: AppTypography.bodySm.copyWith(
-                      color: isMine ? AppColors.primaryForeground : AppColors.foreground,
+                      color: isMine
+                          ? AppColors.primaryForeground
+                          : AppColors.foreground,
                     ),
                   ),
                 ),
@@ -230,7 +257,10 @@ class _ChatBubble extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
                         'delete',
-                        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, fontSize: 10),
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                          fontSize: 10,
+                        ),
                       ),
                     ),
                   ),

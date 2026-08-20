@@ -64,8 +64,13 @@ class AppTheme {
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.primaryForeground,
           disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
-          disabledForegroundColor: AppColors.primaryForeground.withValues(alpha: 0.6),
-          textStyle: AppTypography.body(size: AppFontSizes.sm, weight: FontWeight.w600),
+          disabledForegroundColor: AppColors.primaryForeground.withValues(
+            alpha: 0.6,
+          ),
+          textStyle: AppTypography.body(
+            size: AppFontSizes.sm,
+            weight: FontWeight.w600,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
@@ -77,8 +82,14 @@ class AppTheme {
         fillColor: AppColors.card,
         hintStyle: AppTypography.body(color: AppColors.onSurfaceHint),
         labelStyle: AppTypography.body(color: AppColors.mutedForeground),
-        errorStyle: AppTypography.body(color: AppColors.destructive, size: AppFontSizes.xs),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        errorStyle: AppTypography.body(
+          color: AppColors.destructive,
+          size: AppFontSizes.xs,
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
           borderSide: const BorderSide(color: AppColors.border),
@@ -97,7 +108,10 @@ class AppTheme {
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.destructive, width: 1.2),
+          borderSide: const BorderSide(
+            color: AppColors.destructive,
+            width: 1.2,
+          ),
         ),
       ),
       // ── Dialogs / modals ───────────────────────────────────────────────────
@@ -143,10 +157,15 @@ class AppTheme {
           color: AppColors.secondary,
           borderRadius: BorderRadius.all(Radius.circular(AppRadius.sm)),
         ),
-        textStyle: TextStyle(color: AppColors.foreground, fontSize: AppFontSizes.xs),
+        textStyle: TextStyle(
+          color: AppColors.foreground,
+          fontSize: AppFontSizes.xs,
+        ),
       ),
       scrollbarTheme: ScrollbarThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((states) => AppColors.border),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => AppColors.border,
+        ),
         radius: const Radius.circular(2),
         thickness: WidgetStateProperty.all(4),
       ),
@@ -202,7 +221,10 @@ class AppTheme {
         fillColor: paperCard,
         hintStyle: AppTypography.body(color: inkMuted),
         labelStyle: AppTypography.body(color: inkMuted),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
           borderSide: const BorderSide(color: line),
@@ -234,11 +256,7 @@ class AppTheme {
           side: const BorderSide(color: line),
         ),
       ),
-      dividerTheme: const DividerThemeData(
-        color: line,
-        thickness: 1,
-        space: 1,
-      ),
+      dividerTheme: const DividerThemeData(color: line, thickness: 1, space: 1),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: ink,
         contentTextStyle: AppTypography.body(color: Colors.white),

@@ -218,16 +218,33 @@ class Poll {
     required this.votes,
     required this.closed,
     required this.createdAt,
+    this.multi = false,
   });
 
   final String id;
   final String question;
   final List<String> options;
-  final Map<String, String> votes; // userId -> option
+  /// userId -> selected option(s). A single-choice poll stores one option per
+  /// user; a multi-choice poll may store several (Tech spec §14.2).
+  final Map<String, List<String>> votes;
   final bool closed;
   final DateTime createdAt;
 
+  /// Whether members may select more than one option.
+  final bool multi;
+
   int get totalVotes => votes.length;
+
+  /// Vote count per option (works for single and multi choice polls).
+  Map<String, int> optionCounts() {
+    final counts = <String, int>{for (final o in options) o: 0};
+    for (final chosen in votes.values) {
+      for (final c in chosen) {
+        counts[c] = (counts[c] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
 }
 
 /// An announcement broadcast during a live game.

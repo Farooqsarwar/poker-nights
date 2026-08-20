@@ -38,6 +38,10 @@ class CashPlayer {
 }
 
 /// Settings for a cash game session.
+///
+/// `currency` and `rakePct` are kept for serialization compatibility but are
+/// no longer surfaced in the UI: the primary interface hides currency symbols
+/// (User Flow spec §3.4) and the minimal cash module has no rake (Tech §16.1).
 class CashSessionSettings {
   const CashSessionSettings({
     required this.name,
@@ -47,9 +51,9 @@ class CashSessionSettings {
     required this.bigBlind,
     required this.minBuyIn,
     required this.maxBuyIn,
-    required this.currency,
+    this.currency = '',
     required this.maxPlayers,
-    required this.rakePct,
+    this.rakePct = 0,
   });
 
   final String name;

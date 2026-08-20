@@ -36,6 +36,11 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
   List<_SeatEntry> _seating = [];
   bool _confirmed = false;
 
+  /// Initial dealer-button position for the final table — picked randomly
+  /// with the redraw and adjustable by the admin before confirming
+  /// (Tech spec §12.3: the redraw creates the seats AND the dealer position).
+  String? _dealerId;
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +54,9 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
         for (var i = 0; i < finalists.length; i++)
           _SeatEntry(id: finalists[i].id, name: finalists[i].name, seat: i + 1),
       ];
+      _dealerId = finalists.isEmpty
+          ? null
+          : finalists[_random.nextInt(finalists.length)].id;
     }
   }
 
@@ -71,6 +79,10 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
         arr[i].seat = i + 1;
       }
       _seating = arr;
+      // A fresh redraw picks a fresh random dealer position.
+      _dealerId = arr.isEmpty
+          ? null
+          : arr[_random.nextInt(arr.length)].id;
     });
   }
 
@@ -78,7 +90,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
     final seating = [
       for (final s in _seating) (playerId: s.id, seat: s.seat),
     ];
-    app.confirmFinalTable(seating: seating);
+    app.confirmFinalTable(seating: seating, dealerId: _dealerId);
     setState(() => _confirmed = true);
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) context.go(RoutePaths.adminDashboard);
@@ -202,18 +214,64 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-            // Table diagram
+            // Initial dealer position (Tech spec §12.3: the redraw also picks
+            // the dealer-button position; the admin can adjust it).
+            // Shown as a list — no graphical poker table (User Flow §4.15).
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.xl),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Table layout',
+                    'Initial dealer position',
                     textAlign: TextAlign.center,
                     style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
                   ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Picked randomly with the redraw — tap to change.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  ),
                   const SizedBox(height: AppSpacing.md),
-                  _TableDiagram(seating: _seating),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      for (final s in [..._seating]..sort((a, b) => a.seat.compareTo(b.seat)))
+                        InkWell(
+                          onTap: () => setState(() => _dealerId = s.id),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          child: Container(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                            decoration: BoxDecoration(
+                              color: _dealerId == s.id ? AppColors.primarySoft : AppColors.secondary,
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                              border: Border.all(
+                                  color: _dealerId == s.id ? AppColors.primary : AppColors.border,
+                                  width: _dealerId == s.id ? 1.5 : 1),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_dealerId == s.id) ...[
+                                  const Icon(Icons.style, size: 14, color: AppColors.primary),
+                                  const SizedBox(width: 4),
+                                ],
+                                Text(
+                                  'Seat ${s.seat} · ${s.name}',
+                                  style: AppTypography.bodyXs.copyWith(
+                                      color: _dealerId == s.id ? AppColors.primary : AppColors.mutedForeground,
+                                      fontWeight: _dealerId == s.id ? FontWeight.w700 : null),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -334,86 +392,3 @@ class _DraggableSeatTileState extends State<_DraggableSeatTile> {
   }
 }
 
-class _TableDiagram extends StatelessWidget {
-  const _TableDiagram({required this.seating});
-
-  final List<_SeatEntry> seating;
-
-  @override
-  Widget build(BuildContext context) {
-    const width = 280.0;
-    const height = 180.0;
-    const cx = 140.0;
-    const cy = 90.0;
-    const rx = 115.0;
-    const ry = 70.0;
-
-    final sorted = [...seating]..sort((a, b) => a.seat.compareTo(b.seat));
-
-    return SizedBox(
-      width: width,
-      height: height,
-      child: Stack(
-        children: [
-          // Felt table oval
-          Positioned.fill(
-            child: Center(
-              child: Container(
-                width: width - 32,
-                height: height - 32,
-                decoration: BoxDecoration(
-                  color: AppColors.blackGlow,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 2),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'FINAL TABLE',
-                  style: AppTypography.monoXs.copyWith(color: AppColors.primary.withValues(alpha: 0.5)),
-                ),
-              ),
-            ),
-          ),
-          // Seats around the oval
-          for (var i = 0; i < sorted.length; i++)
-            Builder(builder: (context) {
-              final angle = (i / sorted.length) * 2 * pi - pi / 2;
-              final x = cx + rx * cos(angle) - 24;
-              final y = cy + ry * sin(angle) - 16;
-              final s = sorted[i];
-              return Positioned(
-                left: x,
-                top: y,
-                width: 48,
-                child: Column(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: AppColors.card,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 2),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '${s.seat}',
-                        style: AppTypography.bodyXs.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      s.name.split(' ').first,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-}

@@ -27,6 +27,7 @@ import '../../widgets/code_display.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/tournament_display_block.dart';
 import '../../widgets/medal_icon.dart';
+import '../../widgets/structure_editor.dart';
 
 /// Admin live dashboard mirroring the web `AdminDashboardPage`.
 class AdminDashboardScreen extends StatefulWidget {
@@ -42,6 +43,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _showStructureModal = false;
   bool _showRestartModal = false;
   bool _showCancelModal = false;
+  bool _showUndoModal = false;
+  // Pending speed change shown in the preview modal (audit fix B4: the admin
+  // must see old vs. proposed structure + both finish estimates BEFORE
+  // anything is applied).
+  SpeedRecommendation? _pendingSpeed;
+
+  /// Estimated finish time: remaining clock + the durations of the levels
+  /// still to play (+5% buffer). [futureDurationOverride] previews a
+  /// speed-up/slow-down of all future levels.
+  String? _estimateFinish(LiveGame game, {int? futureDurationOverride}) {
+    final levels = game.structure.levels;
+    if (levels.isEmpty) return null;
+    var mins = game.currentSecondsRemaining ~/ 60;
+    for (final l in levels) {
+      if (l.level >= game.currentLevel) {
+        mins += l.level > game.currentLevel && futureDurationOverride != null
+            ? futureDurationOverride
+            : l.durationMins;
+      }
+    }
+    final finish =
+        DateTime.now().add(Duration(minutes: (mins * 1.05).round()));
+    return '${finish.hour.toString().padLeft(2, '0')}:${finish.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// What a speed up/slow down would do to the level duration (the provider
+  /// clamps the result to the allowed 10/15/20 set).
+  int _previewedDuration(LiveGame game, SpeedRecommendation rec) {
+    final raw = rec == SpeedRecommendation.speedUp
+        ? game.structure.levelDuration - 5
+        : game.structure.levelDuration + 5;
+    return raw < 10 ? 10 : (raw > 20 ? 20 : raw);
+  }
 
   @override
   void dispose() {
@@ -155,7 +189,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     child: AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
-                      onPressed: app.canUndo ? app.undoLast : null,
+                      onPressed: app.canUndo ? () => setState(() => _showUndoModal = true) : null,
                       child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Undo', icon: Icons.undo)),
                     ),
                   ),
@@ -195,7 +229,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.secondary,
-                      onPressed: app.canUndo ? app.undoLast : null,
+                      onPressed: app.canUndo ? () => setState(() => _showUndoModal = true) : null,
                       child: const AppIconLabel(label: 'Undo', icon: Icons.undo),
                     ),
                   ],
@@ -213,19 +247,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 message: 'This tournament has been cancelled. Live controls are disabled.',
               ),
             ),
-          // Speed recommendation
+          // Speed recommendation — always previewed before applying
+          // (audit fix B4: old vs. proposed structure + finish estimates).
           if (game.speedRecommendation != null)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: AppAlertBanner(
                 type: AppAlertType.warning,
                 message: game.speedRecommendation == SpeedRecommendation.speedUp
-                    ? 'Tournament is running late — suggest shorter future levels'
-                    : 'Tournament finishing early — suggest longer future levels',
-                actionLabel: 'Accept change',
-                onAction: app.acceptSpeedRecommendation,
+                    ? 'Tournament is running late — shorter future levels suggested'
+                    : 'Tournament finishing early — longer future levels suggested',
+                actionLabel: 'Preview change',
+                onAction: () => setState(
+                    () => _pendingSpeed = game.speedRecommendation),
               ),
             ),
+          // Estimated finish — required on the admin control screen
+          // (Tech spec §11.1, audit fix B3).
+          if (status.isActiveLive || status == LiveGameStatus.rebuypause) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: Row(
+                children: [
+                  const Icon(Icons.schedule_outlined, size: 16, color: AppColors.primary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    'Estimated finish ≈ ${_estimateFinish(game) ?? '—'}',
+                    style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (!device.isMobile) ...[
             // ── DESKTOP BEAUTIFUL LAYOUT ──
             // Row 1: Timer full width, top center
@@ -278,19 +331,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   if (status == LiveGameStatus.running ||
                       status == LiveGameStatus.paused) ...[
                     const SizedBox(width: AppSpacing.sm),
-                    // Previous
-                    Expanded(
-                      flex: 2,
-                      child: AppButton(
-                        size: AppButtonSize.lg,
-                        variant: AppButtonVariant.secondary,
-                        onPressed:
-                            currentLevel <= 1 ? null : app.previousLevel,
-                        child: const AppIconLabel(
-                            label: 'Previous', icon: Icons.skip_previous),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
                     // Next Level
                     Expanded(
                       flex: 2,
@@ -304,19 +344,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: const AppIconLabel(
                             label: 'Next Level',
                             trailing: Icons.skip_next),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    // Restart
-                    Expanded(
-                      flex: 2,
-                      child: AppButton(
-                        size: AppButtonSize.lg,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () =>
-                            setState(() => _showRestartModal = true),
-                        child: const AppIconLabel(
-                            label: 'Restart Level', icon: Icons.replay),
                       ),
                     ),
                   ],
@@ -355,7 +382,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
 
-            // ── CONTROLS — Row 2: Structure / Nav ───────────────────────
+            // ── CONTROLS — Row 2: Structure / Nav (secondary actions) ───
+            // Restart Level lives here (secondary + confirmation), not next
+            // to Pause/Next Level (audit fixes E6/E1).
             AppCard(
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.md, vertical: AppSpacing.md),
@@ -366,9 +395,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       size: AppButtonSize.lg,
                       variant: AppButtonVariant.secondary,
                       onPressed: () =>
-                          setState(() => _showStructureModal = true),
+                          setState(() => _pendingSpeed = SpeedRecommendation.speedUp),
                       child: const AppIconLabel(
-                          label: '+ Speed Up', icon: Icons.bolt),
+                          label: 'Speed Up', icon: Icons.bolt),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -377,7 +406,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       size: AppButtonSize.lg,
                       variant: AppButtonVariant.secondary,
                       onPressed: () =>
-                          setState(() => _showStructureModal = true),
+                          setState(() => _pendingSpeed = SpeedRecommendation.slowDown),
                       child: const AppIconLabel(
                           label: 'Slow Down', icon: Icons.trending_down),
                     ),
@@ -401,7 +430,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       onPressed: () =>
                           setState(() => _showStructureModal = true),
                       child: const AppIconLabel(
-                          label: 'Levels', icon: Icons.edit_outlined),
+                          label: 'Edit Levels', icon: Icons.edit_outlined),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: AppButton(
+                      size: AppButtonSize.lg,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: status == LiveGameStatus.running || status == LiveGameStatus.paused
+                          ? () => setState(() => _showRestartModal = true)
+                          : null,
+                      child: const AppIconLabel(
+                          label: 'Restart', icon: Icons.replay),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -469,6 +510,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   structure: structure,
                                   settings: settings,
                                   remainingPlayers: activePlayers.length,
+                                  settled: game.settlementConfirmed,
                                 ),
                               if (_tab == 'audit') _AuditTab(auditHistory: game.auditHistory),
                             ],
@@ -560,13 +602,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     onPressed: currentLevel >= (structure.levels.length) ? null : app.nextLevel,
                     child: const AppIconLabel(label: 'Next level', trailing: Icons.arrow_forward),
                   ),
-                if (status == LiveGameStatus.running || status == LiveGameStatus.paused)
-                  AppButton(
-                    size: AppButtonSize.md,
-                    variant: AppButtonVariant.secondary,
-                    onPressed: () => setState(() => _showRestartModal = true),
-                    child: const AppIconLabel(label: 'Restart level', icon: Icons.replay),
-                  ),
                 if (status == LiveGameStatus.rebuypause)
                   AppButton(
                     size: AppButtonSize.md,
@@ -594,7 +629,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.md,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => setState(() => _showStructureModal = true),
+                          onPressed: () => setState(() => _pendingSpeed = SpeedRecommendation.speedUp),
                           child: const AppIconLabel(label: 'Speed Up', icon: Icons.bolt),
                         ),
                       ),
@@ -603,8 +638,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.md,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => setState(() => _showStructureModal = true),
+                          onPressed: () => setState(() => _pendingSpeed = SpeedRecommendation.slowDown),
                           child: const AppIconLabel(label: 'Slow Down', icon: Icons.trending_down),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.md,
+                          variant: AppButtonVariant.secondary,
+                          onPressed: status == LiveGameStatus.running || status == LiveGameStatus.paused
+                              ? () => setState(() => _showRestartModal = true)
+                              : null,
+                          child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Restart', icon: Icons.replay)),
                         ),
                       ),
                     ],
@@ -626,7 +672,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           size: AppButtonSize.md,
                           variant: AppButtonVariant.secondary,
                           onPressed: () => setState(() => _showStructureModal = true),
-                          child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Levels', icon: Icons.edit_outlined)),
+                          child: const FittedBox(fit: BoxFit.scaleDown, child: AppIconLabel(label: 'Edit Levels', icon: Icons.edit_outlined)),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.sm),
@@ -704,6 +750,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 structure: structure,
                 settings: settings,
                 remainingPlayers: activePlayers.length,
+                settled: game.settlementConfirmed,
               ),
             if (_tab == 'audit') _AuditTab(auditHistory: game.auditHistory),
           ],
@@ -741,23 +788,141 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
           ],
-          // Structure edit modal
+          // Structure edit modal — the full editor (edit any future blind /
+          // duration, insert or remove levels; active level locked).
+          // Audit fix B5: manual "Edit Future Levels" is available live.
           AppModal(
             open: _showStructureModal,
             onClose: () => setState(() => _showStructureModal = false),
             title: 'Edit future structure',
-            child: _StructureEditor(
+            child: StructureEditor(
               structure: structure,
               currentLevel: currentLevel,
-              onSpeedUp: () {
-                app.acceptSpeedRecommendation(rec: SpeedRecommendation.speedUp);
+              anteStyle: settings.anteStyle,
+              onSpeedUp: () => setState(() {
+                _showStructureModal = false;
+                _pendingSpeed = SpeedRecommendation.speedUp;
+              }),
+              onSlowDown: () => setState(() {
+                _showStructureModal = false;
+                _pendingSpeed = SpeedRecommendation.slowDown;
+              }),
+              onApply: (levels) {
+                app.applyFutureLevels(levels);
                 setState(() => _showStructureModal = false);
               },
-              onSlowDown: () {
-                app.acceptSpeedRecommendation(rec: SpeedRecommendation.slowDown);
-                setState(() => _showStructureModal = false);
-              },
-              onApply: () => setState(() => _showStructureModal = false),
+            ),
+          ),
+          // Speed change PREVIEW — old vs. proposed structure and both
+          // estimated finish times, applied only on explicit confirm
+          // (audit fix B4).
+          if (_pendingSpeed != null) ...[
+            Builder(builder: (context) {
+              final game2 = app.currentGame;
+              if (game2 == null) return const SizedBox.shrink();
+              final oldDur = game2.structure.levelDuration;
+              final newDur = _previewedDuration(game2, _pendingSpeed!);
+              final isUp = _pendingSpeed == SpeedRecommendation.speedUp;
+              return AppModal(
+                open: true,
+                onClose: () => setState(() => _pendingSpeed = null),
+                title: isUp ? 'Preview: speed up' : 'Preview: slow down',
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AppAlertBanner(
+                      type: AppAlertType.info,
+                      message: 'Future levels change only — the active level and all '
+                          'completed levels stay exactly as they are.',
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _PreviewCol(
+                            label: 'Current',
+                            duration: '$oldDur min levels',
+                            finish: _estimateFinish(game2) ?? '—',
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.lg),
+                        Expanded(
+                          child: _PreviewCol(
+                            label: 'Proposed',
+                            duration: '$newDur min levels (future)',
+                            finish:
+                                _estimateFinish(game2, futureDurationOverride: newDur) ?? '—',
+                            highlighted: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppButton(
+                            variant: AppButtonVariant.secondary,
+                            onPressed: () => setState(() => _pendingSpeed = null),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: AppButton(
+                            onPressed: () {
+                              app.acceptSpeedRecommendation(rec: _pendingSpeed);
+                              setState(() => _pendingSpeed = null);
+                            },
+                            child: const Text('Apply change'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+          // Undo PREVIEW — "Undo shows the action that will be reversed"
+          // (User Flow spec §12.6, audit fix E5).
+          AppModal(
+            open: _showUndoModal,
+            onClose: () => setState(() => _showUndoModal = false),
+            title: 'Undo last action?',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  app.lastActionSummary ?? 'The most recent action will be reversed.',
+                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppButton(
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => setState(() => _showUndoModal = false),
+                        child: const Text('Keep'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: AppButton(
+                        variant: AppButtonVariant.danger,
+                        onPressed: () {
+                          app.undoLast();
+                          setState(() => _showUndoModal = false);
+                        },
+                        child: const Text('Undo action'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           // Restart level confirmation (spec §12: shows exact effect)
@@ -1527,15 +1692,70 @@ class _PrizeTab extends StatelessWidget {
     required this.structure,
     required this.settings,
     required this.remainingPlayers,
+    required this.settled,
   });
 
   final TournamentStructure structure;
   final GameSettings settings;
   final int remainingPlayers;
+  final bool settled;
 
   @override
   Widget build(BuildContext context) {
     const placeLabel = ['1st', '2nd', '3rd', '4th'];
+
+    // Client rule: the price distribution is only calculated at the end of
+    // the rebuy level, when the exact field and add-ons are known. Until the
+    // settlement is confirmed the admin sees the estimate only.
+    if (!settled) {
+      return Column(
+        children: [
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const AppAlertBanner(
+                  type: AppAlertType.info,
+                  message: 'Prize amounts are private — only visible to you as admin.',
+                ),
+                const SizedBox(height: AppSpacing.md),
+                const Icon(Icons.lock_outline, size: 28, color: AppColors.mutedForeground),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Distribution calculated at rebuy close',
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Prices are calculated at the end of Level ${settings.rebuysCloseLevel}, '
+                  'when the exact number of players, actual rebuys and selected add-ons are known.',
+                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                ),
+                const Divider(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Text('Est. prize pool', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                    const Spacer(),
+                    Text('${structure.prizePool}', style: AppTypography.monoXs.copyWith(color: AppColors.foreground)),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Text(
+                      'Organizational costs · ${settings.organizerPct}%',
+                      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                    ),
+                    const Spacer(),
+                    Text('${structure.organizerAmount}', style: AppTypography.monoXs.copyWith(color: AppColors.foreground)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
 
     return Column(
       children: [
@@ -1607,8 +1827,9 @@ class _PrizeTab extends StatelessWidget {
               ),
               Row(
                 children: [
+                  // Audit fix E2: label is the percentage; value is the amount.
                   Text(
-                    'Organizational costs (%)',
+                    'Organizational costs · ${settings.organizerPct}%',
                     style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                   ),
                   const Spacer(),
@@ -1798,120 +2019,45 @@ class _EliminateContentState extends State<_EliminateContent> {
   }
 }
 
-// ── Structure editor modal ────────────────────────────────────────────────────
-class _StructureEditor extends StatelessWidget {
-  const _StructureEditor({
-    required this.structure,
-    required this.currentLevel,
-    required this.onSpeedUp,
-    required this.onSlowDown,
-    required this.onApply,
+
+/// One column of the speed-change preview (current vs. proposed).
+class _PreviewCol extends StatelessWidget {
+  const _PreviewCol({
+    required this.label,
+    required this.duration,
+    required this.finish,
+    this.highlighted = false,
   });
 
-  final TournamentStructure structure;
-  final int currentLevel;
-  final VoidCallback onSpeedUp;
-  final VoidCallback onSlowDown;
-  final VoidCallback onApply;
+  final String label;
+  final String duration;
+  final String finish;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
-    final futureLevels = structure.levels.length > currentLevel
-        ? structure.levels.sublist(currentLevel)
-        : <BlindLevel>[];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Adjust future levels. Active level is locked.',
-          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        for (final l in futureLevels)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: AppCard(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('LV', style: AppTypography.bodyXs.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700, height: 1.0, fontSize: 10)),
-                          Text('${l.level}', style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700).copyWith(color: AppColors.primary, height: 1.1)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${Formatters.chips(l.sb)} / ${Formatters.chips(l.bb)}', style: AppTypography.monoLg.copyWith(fontWeight: FontWeight.w700)),
-                        if (l.ante != null)
-                          Text('Ante ${Formatters.chips(l.ante!)}', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceHover,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.timer_outlined, size: 14, color: AppColors.mutedForeground),
-                        const SizedBox(width: 4),
-                        Text('${l.durationMins}m', style: AppTypography.monoSm.copyWith(fontWeight: FontWeight.w600, color: AppColors.mutedForeground)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            Expanded(
-              child: AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.danger,
-                onPressed: onSpeedUp,
-                child: const Text('Speed up (-5m)'),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: onSlowDown,
-                child: const Text('Slow down (+5m)'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        AppButton(
-          fullWidth: true,
-          onPressed: onApply,
-          child: const Text('Apply & close'),
-        ),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: highlighted ? AppColors.primarySoft : AppColors.secondary,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+            color: highlighted ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label.toUpperCase(),
+              style: AppTypography.bodyXs.copyWith(
+                  color: highlighted ? AppColors.primary : AppColors.mutedForeground,
+                  letterSpacing: 1, fontWeight: FontWeight.w700)),
+          const SizedBox(height: AppSpacing.xs),
+          Text(duration, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text('Est. finish ≈ $finish',
+              style: AppTypography.monoSm.copyWith(color: AppColors.foreground)),
+        ],
+      ),
     );
   }
 }

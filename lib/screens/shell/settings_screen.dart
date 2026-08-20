@@ -53,6 +53,9 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   showDivider: true,
                 ),
+                // Audit fix C6: SMS alerts ("Email and SMS are not required",
+                // Tech §14.3) and chip-sound effects (not in the voice spec,
+                // §13.2) were out of MVP scope and were removed.
                 _SettingRow(
                   icon: Icons.notifications_outlined,
                   title: 'Push notifications',
@@ -61,27 +64,7 @@ class SettingsScreen extends StatelessWidget {
                     value: app.notificationsEnabled,
                     onChanged: (v) => app.setNotificationsEnabled(v),
                   ),
-                  showDivider: true,
-                ),
-                _SettingRow(
-                  icon: Icons.sms_outlined,
-                  title: 'SMS alerts',
-                  subtitle: 'Text me about RSVPs and game events',
-                  trailing: AppToggle(
-                    value: app.smsEnabled,
-                    onChanged: (v) => app.setSmsEnabled(v),
-                  ),
-                  showDivider: true,
-                ),
-                _SettingRow(
-                  icon: Icons.music_note_outlined,
-                  title: 'Sound effects',
-                  subtitle: 'Chip sounds and level-up chimes',
-                  trailing: AppToggle(
-                    value: app.soundsEnabled,
-                    onChanged: (v) => app.setSoundsEnabled(v),
-                  ),
-                  showDivider: true,
+                  showDivider: false,
                 ),
                 _SettingRow(
                   icon: Icons.description_outlined,

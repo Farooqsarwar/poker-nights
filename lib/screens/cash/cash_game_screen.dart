@@ -11,7 +11,6 @@ import '../../providers/app_provider.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/app_select.dart';
 import '../../widgets/app_text_field.dart';
 
 enum _CashStep { setup, players }
@@ -35,8 +34,6 @@ class _CashGameScreenState extends State<CashGameScreen> {
   final _minBuyIn = TextEditingController(text: '20');
   final _maxBuyIn = TextEditingController(text: '200');
   final _maxPlayers = TextEditingController(text: '10');
-  final _rakePct = TextEditingController(text: '0');
-  String _currency = '\$';
   final List<TextEditingController> _playerControllers = [
     TextEditingController(),
     TextEditingController(),
@@ -59,7 +56,6 @@ class _CashGameScreenState extends State<CashGameScreen> {
     _minBuyIn.dispose();
     _maxBuyIn.dispose();
     _maxPlayers.dispose();
-    _rakePct.dispose();
     for (final c in _playerControllers) {
       c.dispose();
     }
@@ -81,9 +77,9 @@ class _CashGameScreenState extends State<CashGameScreen> {
         bigBlind: num.tryParse(_bigBlind.text)?.toDouble() ?? 2,
         minBuyIn: num.tryParse(_minBuyIn.text)?.toDouble() ?? 20,
         maxBuyIn: num.tryParse(_maxBuyIn.text)?.toDouble() ?? 200,
-        currency: _currency,
+        // No currency selector (no symbols in the primary interface,
+        // User Flow §3.4) and no rake (not in the minimal cash spec, §16.1).
         maxPlayers: num.tryParse(_maxPlayers.text)?.toInt() ?? 10,
-        rakePct: num.tryParse(_rakePct.text)?.toDouble() ?? 0,
       ),
       validNames,
     );
@@ -155,9 +151,6 @@ class _CashGameScreenState extends State<CashGameScreen> {
               minBuyIn: _minBuyIn,
               maxBuyIn: _maxBuyIn,
               maxPlayers: _maxPlayers,
-              rakePct: _rakePct,
-              currency: _currency,
-              onCurrencyChanged: (v) => setState(() => _currency = v ?? '\$'),
               onContinue: () => setState(() => _step = _CashStep.players),
             )
           else
@@ -168,7 +161,6 @@ class _CashGameScreenState extends State<CashGameScreen> {
                 _playerControllers.removeAt(i).dispose();
               }),
               validCount: validCount,
-              currency: _currency,
               smallBlind: _smallBlind.text,
               bigBlind: _bigBlind.text,
               minBuyIn: _minBuyIn.text,
@@ -224,9 +216,6 @@ class _SetupForm extends StatelessWidget {
     required this.minBuyIn,
     required this.maxBuyIn,
     required this.maxPlayers,
-    required this.rakePct,
-    required this.currency,
-    required this.onCurrencyChanged,
     required this.onContinue,
   });
 
@@ -238,9 +227,6 @@ class _SetupForm extends StatelessWidget {
   final TextEditingController minBuyIn;
   final TextEditingController maxBuyIn;
   final TextEditingController maxPlayers;
-  final TextEditingController rakePct;
-  final String currency;
-  final ValueChanged<String?> onCurrencyChanged;
   final VoidCallback onContinue;
 
   @override
@@ -272,20 +258,8 @@ class _SetupForm extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
-              Expanded(
-                child: AppSelect(
-                  label: 'Currency',
-                  value: currency,
-                  items: const [
-                    DropdownMenuItem(value: '\$', child: Text('USD')),
-                    DropdownMenuItem(value: '€', child: Text('EUR')),
-                    DropdownMenuItem(value: '£', child: Text('GBP')),
-                    DropdownMenuItem(value: '¥', child: Text('JPY')),
-                  ],
-                  onChanged: onCurrencyChanged,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
+              // Audit fix E15: no currency selector — currency symbols are
+              // hidden in the primary interface (User Flow §3.4).
               Expanded(
                 child: AppTextField(
                   controller: smallBlind,
@@ -328,24 +302,12 @@ class _SetupForm extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: AppTextField(
-                  controller: maxPlayers,
-                  label: 'Max players',
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: AppTextField(
-                  controller: rakePct,
-                  label: 'Rake %',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                ),
-              ),
-            ],
+          // Audit fix C5: no rake field — the minimal cash module (§16.1) has
+          // no rake, and the organizer cut must never be called "rake".
+          AppTextField(
+            controller: maxPlayers,
+            label: 'Max players',
+            keyboardType: TextInputType.number,
           ),
           const SizedBox(height: AppSpacing.lg),
           AppButton(
@@ -372,7 +334,6 @@ class _PlayersForm extends StatelessWidget {
     required this.onAdd,
     required this.onRemove,
     required this.validCount,
-    required this.currency,
     required this.smallBlind,
     required this.bigBlind,
     required this.minBuyIn,
@@ -384,7 +345,6 @@ class _PlayersForm extends StatelessWidget {
   final VoidCallback onAdd;
   final void Function(int) onRemove;
   final int validCount;
-  final String currency;
   final String smallBlind;
   final String bigBlind;
   final String minBuyIn;

@@ -9,7 +9,9 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/game.dart';
+import '../../models/group.dart';
 import '../../models/live_game.dart';
+import '../../models/tournament.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_avatar.dart';
@@ -102,9 +104,19 @@ class _InvitationScreenState extends State<InvitationScreen> {
           _PremiumEventHeader(
             game: game,
             showAddress: showAddress,
+            hostName: _hostName(app.currentGroup),
             onEdit: user?.isAdmin == true ? () => _openEditModal(context, app, game) : null,
           ),
           _ContextualMainButton(game: game, user: user, myPlayer: myPlayer),
+          // Admin-only: where the structure stands. The AI estimate unlocks
+          // 30 minutes before start (client rule) — before that the group is
+          // still deciding who is coming.
+          if (user?.isAdmin == true &&
+              game.status != LiveGameStatus.completed &&
+              game.status != LiveGameStatus.cancelled) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _StructureStatusCard(game: game),
+          ],
           if (user?.isAdmin == true &&
               game.status != LiveGameStatus.completed &&
               game.status != LiveGameStatus.cancelled) ...[
@@ -194,13 +206,13 @@ class _InvitationScreenState extends State<InvitationScreen> {
                     onAction: () => context.go(RoutePaths.checkIn),
                   ),
                   _ChecklistRow(
-                    label: 'Configure chip set',
-                    done: app.savedChipSets.isNotEmpty,
-                    actionLabel: 'Configure',
-                    onAction: () => context.go(RoutePaths.chipSets),
+                    label: 'Generate structure estimate',
+                    done: game.structure.levels.isNotEmpty && game.structureConfirmed,
+                    actionLabel: game.structure.levels.isNotEmpty ? 'Review' : 'Generate',
+                    onAction: () => context.go(RoutePaths.structureReview),
                   ),
                   _ChecklistRow(
-                    label: 'Generate seating plan',
+                    label: 'Confirm seating (at check-in)',
                     done: game.seatingConfirmed,
                     actionLabel: 'Seating',
                     onAction: () => context.go(RoutePaths.checkIn),
@@ -380,6 +392,85 @@ String _memberName(LiveGame game, String id) {
   return 'Member';
 }
 
+/// The group owner's display name — the host of every event in the group.
+String _hostName(Group? group) {
+  if (group == null) return 'the host';
+  for (final m in group.members) {
+    if (m.id == group.ownerId) return m.name;
+  }
+  return group.members.isNotEmpty ? group.members.first.name : 'the host';
+}
+
+/// Admin-only card describing the state of the AI structure estimate and
+/// offering the single relevant action (client rule: the estimate is
+/// generated ~30 minutes before start, from the RSVP attendance).
+class _StructureStatusCard extends StatelessWidget {
+  const _StructureStatusCard({required this.game});
+
+  final LiveGame game;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.read<AppProvider>();
+    final start = game.settings.scheduledStart;
+    final unlockAt = start?.subtract(const Duration(minutes: 30));
+    final hhmm = (DateTime dt) =>
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+    final hasStructure = game.structure.levels.isNotEmpty;
+    final reviewOpen = game.structureReviewOpen;
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      borderColor: AppColors.primary.withValues(alpha: 0.25),
+      child: Row(
+        children: [
+          Icon(
+            hasStructure ? Icons.check_circle_outline : Icons.auto_awesome,
+            size: 22,
+            color: hasStructure ? AppColors.success : AppColors.primary,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hasStructure
+                      ? 'Structure generated for ${game.settings.players} players'
+                          '${game.structureConfirmed ? ' — confirmed' : ''}'
+                      : (reviewOpen
+                          ? 'Structure ready to generate'
+                          : 'Structure unlocks 30 min before start'),
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  hasStructure
+                      ? 'Stacks, blinds, levels and chips are set. Review or edit any time before the game; stacks freeze when play starts.'
+                      : (reviewOpen
+                          ? 'Attendance is final enough — let the AI calculate stacks, blinds and levels from the Going / Going +N answers.'
+                          : (unlockAt != null
+                              ? 'The AI will estimate the structure at ${hhmm(unlockAt)}, based on who answers the invitation.'
+                              : 'The AI will estimate the structure 30 minutes before start, based on attendance.')),
+                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          AppButton(
+            size: AppButtonSize.sm,
+            variant: hasStructure ? AppButtonVariant.secondary : AppButtonVariant.primary,
+            onPressed: () => context.go(RoutePaths.structureReview),
+            child: Text(hasStructure ? 'Review' : 'Generate'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _GuestSlotBadge extends StatelessWidget {
   const _GuestSlotBadge({required this.status});
 
@@ -395,6 +486,53 @@ class _GuestSlotBadge extends StatelessWidget {
     };
     return AppBadge(label: label, variant: variant, border: true);
   }
+}
+
+/// Admin "Review RSVPs" modal (audit fix E4 — the button used to navigate to
+/// Check-in). Shows the live attendance breakdown plus every member's answer.
+void _showRsvpListModal(BuildContext context, LiveGame game) {
+  final members = game.players.where((p) => !p.isGuest).toList();
+  final going = members.where((p) => p.rsvp != null && p.rsvp!.isGoing).toList();
+  final seats = going.fold<int>(0, (s, p) => s + 1 + p.rsvp!.guestCount);
+  final maybe = members.where((p) => p.rsvp == Rsvp.maybe).length;
+  final cant = members.where((p) => p.rsvp == Rsvp.cant).length;
+  final none = members.where((p) => p.rsvp == null).length;
+
+  showAppModal(
+    context: context,
+    title: 'RSVPs — ${game.settings.name}',
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: AppSpacing.md,
+          children: [
+            AppBadge(label: '$seats expected', variant: AppBadgeVariant.green, border: true),
+            AppBadge(label: '${going.length} going', variant: AppBadgeVariant.accent, border: true),
+            if (maybe > 0) AppBadge(label: '$maybe maybe', variant: AppBadgeVariant.gold, border: true),
+            if (cant > 0) AppBadge(label: '$cant can’t come', variant: AppBadgeVariant.muted, border: true),
+            if (none > 0) AppBadge(label: '$none no response', variant: AppBadgeVariant.red, border: true),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        const Divider(color: AppColors.border),
+        const SizedBox(height: AppSpacing.sm),
+        for (final p in members)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            child: Row(
+              children: [
+                AppAvatar(name: p.name, size: AppAvatarSize.sm),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(child: Text(p.name, style: AppTypography.bodySm)),
+                RSVPBadge(rsvp: p.rsvp),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 void _openEditModal(BuildContext context, AppProvider app, LiveGame game) {
@@ -442,6 +580,9 @@ class _EditEventFormState extends State<_EditEventForm> {
   late bool _addOn;
   late int _addOnClose;
   late bool _koEnabled;
+  late AntePreference _antePreference;
+  late int _anteAfterLevel;
+  late final TextEditingController _orgPct;
 
   @override
   void initState() {
@@ -464,11 +605,14 @@ class _EditEventFormState extends State<_EditEventForm> {
     _addOn = s.addOn;
     _addOnClose = s.addOnCloseLevel;
     _koEnabled = s.koEnabled;
+    _antePreference = s.antePreference;
+    _anteAfterLevel = s.anteAfterLevel;
+    _orgPct = TextEditingController(text: '${s.organizerPct}');
   }
 
   @override
   void dispose() {
-    for (final c in [_name, _date, _time, _location, _buyIn, _rebuyCost, _addOnCost, _koAmount]) {
+    for (final c in [_name, _date, _time, _location, _buyIn, _rebuyCost, _addOnCost, _koAmount, _orgPct]) {
       c.dispose();
     }
     super.dispose();
@@ -497,6 +641,11 @@ class _EditEventFormState extends State<_EditEventForm> {
       koAmount: num.tryParse(_koAmount.text)?.toInt() ?? s.koAmount,
       rebuyCost: _rebuys ? (num.tryParse(_rebuyCost.text)?.toInt()) : null,
       addOnCost: _addOn ? (num.tryParse(_addOnCost.text)?.toInt()) : null,
+      antePreference: _antePreference,
+      anteAfterLevel: _anteAfterLevel,
+      anteEnabled: _antePreference != AntePreference.none,
+      anteStyle: _antePreference == AntePreference.individual ? AnteStyle.individual : AnteStyle.bigBlind,
+      organizerPct: (int.tryParse(_orgPct.text.trim()) ?? s.organizerPct).clamp(0, 100),
     );
 
     if (s.date != newDate || s.time != newTime) {
@@ -571,7 +720,7 @@ class _EditEventFormState extends State<_EditEventForm> {
         const SizedBox(height: AppSpacing.sm),
         _SegmentedPicker(
           label: 'Duration',
-          options: const ['3h', '3.5h', '4h', '4.5h', '5h', '5.5h', '6h'],
+          options: const ['4h', '3h', '3.5h', '4.5h', '5h', '5.5h', '6h'],
           selected: '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h',
           onChanged: (v) {
             final val = v.replaceAll('h', '');
@@ -684,6 +833,49 @@ class _EditEventFormState extends State<_EditEventForm> {
               keyboardType: TextInputType.number,
             ),
           ),
+        const SizedBox(height: AppSpacing.sm),
+        _EditRow(
+          title: 'Ante',
+          subtitle: 'How the ante is posted',
+          trailing: _SegmentedPicker(
+            options: const ['Recommended', 'No ante', 'Big blind', 'Individual'],
+            selected: switch (_antePreference) {
+              AntePreference.recommend => 'Recommended',
+              AntePreference.none => 'No ante',
+              AntePreference.bigBlind => 'Big blind',
+              AntePreference.individual => 'Individual',
+            },
+            onChanged: (v) => setState(() => _antePreference = switch (v) {
+              'No ante' => AntePreference.none,
+              'Big blind' => AntePreference.bigBlind,
+              'Individual' => AntePreference.individual,
+              _ => AntePreference.recommend,
+            }),
+          ),
+        ),
+        if (_antePreference != AntePreference.none)
+          Padding(
+            padding: const EdgeInsets.only(left: AppSpacing.lg, top: AppSpacing.sm),
+            child: _SegmentedPicker(
+              label: 'Activate ante',
+              options: const ['After L4', 'After L5', 'After L6', 'After L7', 'After L8'],
+              selected: 'After L$_anteAfterLevel',
+              onChanged: (v) => setState(() => _anteAfterLevel = int.tryParse(v.replaceAll('After L', '')) ?? 6),
+            ),
+          ),
+        const SizedBox(height: AppSpacing.sm),
+        _EditRow(
+          title: 'Organizational costs',
+          subtitle: 'Percentage (%) — admin only, never shown to players',
+          trailing: SizedBox(
+            width: 90,
+            child: AppTextField(
+              controller: _orgPct,
+              label: '%',
+              keyboardType: TextInputType.number,
+            ),
+          ),
+        ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           'Changing game details regenerates the structure estimate. '
@@ -998,10 +1190,12 @@ class _ContextualMainButton extends StatelessWidget {
             child: const Text('Edit Event'),
           );
         case LiveGameStatus.published:
+          // Audit fix (E4): the button used to jump to Check-in. It now
+          // actually shows the RSVP list (spec §4.4 "Review RSVPs").
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
-            onPressed: () => context.go(RoutePaths.checkIn),
+            onPressed: () => _showRsvpListModal(context, game),
             child: const Text('Review RSVPs'),
           );
         case LiveGameStatus.checkin:
@@ -1250,9 +1444,15 @@ class _CancelGameFormState extends State<_CancelGameForm> {
 class _PremiumEventHeader extends StatelessWidget {
   final LiveGame game;
   final bool showAddress;
+  final String hostName;
   final VoidCallback? onEdit;
-  
-  const _PremiumEventHeader({required this.game, required this.showAddress, this.onEdit});
+
+  const _PremiumEventHeader({
+    required this.game,
+    required this.showAddress,
+    required this.hostName,
+    this.onEdit,
+  });
   
   @override
   Widget build(BuildContext context) {
@@ -1327,6 +1527,8 @@ class _PremiumEventHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.xl),
+          // The inputs the admin provided when creating the game — everyone
+          // in the group sees these (organizational costs stay admin-only).
           Wrap(
             runSpacing: AppSpacing.md,
             spacing: AppSpacing.lg,
@@ -1338,12 +1540,50 @@ class _PremiumEventHeader extends StatelessWidget {
               _Detail(
                 label: 'Rebuys',
                 value: settings.rebuys
-                    ? 'Until L${settings.rebuysCloseLevel} @ ${settings.effectiveRebuyCost}'
+                    ? 'Unlimited, until L${settings.rebuysCloseLevel} @ ${settings.effectiveRebuyCost}'
                     : 'None',
               ),
               _Detail(
                 label: 'Add-on',
-                value: settings.addOn ? 'Enabled @ ${settings.effectiveAddOnCost}' : 'None',
+                value: settings.addOn
+                    ? '@ ${settings.effectiveAddOnCost}, end of L${settings.addOnCloseLevel}'
+                    : 'None',
+              ),
+              if (settings.anteEnabled)
+                _Detail(
+                  label: 'Ante',
+                  value: settings.anteStyle.name == 'individual'
+                      ? 'Individual, from L${settings.anteAfterLevel + 1}'
+                      : 'Big blind, from L${settings.anteAfterLevel + 1}',
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            runSpacing: AppSpacing.sm,
+            spacing: AppSpacing.lg,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.person_outline, size: 14, color: AppColors.mutedForeground),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Hosted by $hostName',
+                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  const Icon(Icons.schedule_outlined, size: 14, color: AppColors.mutedForeground),
+                  const SizedBox(width: 6),
+                  Text(
+                    settings.rsvpDeadline == null
+                        ? 'RSVPs close 1 hour before start'
+                        : 'RSVPs close at ${settings.rsvpDeadline!.hour.toString().padLeft(2, '0')}:${settings.rsvpDeadline!.minute.toString().padLeft(2, '0')}',
+                    style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                  ),
+                ],
               ),
             ],
           ),

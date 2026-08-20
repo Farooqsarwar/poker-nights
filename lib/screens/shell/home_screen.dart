@@ -18,6 +18,7 @@ import '../../utils/formatters.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
@@ -39,6 +40,10 @@ class _HomeScreenState extends State<HomeScreen> {
   String _joinError = '';
   bool _showJoin = false;
   bool _showCreate = false;
+  bool _showRestoreModal = false;
+
+  static String _hhmm(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
   @override
   void dispose() {
@@ -122,8 +127,11 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             const SizedBox(width: AppSpacing.sm),
+                            // Audit fix E11: no more "Welcome back, Guest".
                             Text(
-                              'Welcome back, ${user?.name ?? 'Guest'}',
+                              user?.name != null && user!.name.isNotEmpty
+                                  ? 'Welcome back, ${user!.name}'
+                                  : 'Welcome back',
                               style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
                             ),
                           ],
@@ -187,25 +195,50 @@ class _HomeScreenState extends State<HomeScreen> {
                 ).animate().fadeIn(duration: 400.ms),
                 const SizedBox(height: AppSpacing.xl),
               ] else if (app.restoredFromRecovery && activeGame != null) ...[
+                // Audit fix B8: the restore is surfaced with the last-saved
+                // time and an explicit review (Tech §20.1).
                 AppAlertBanner(
                   type: AppAlertType.info,
-                  message: 'Active tournament was successfully recovered from local storage.',
-                  actionLabel: 'Dismiss',
-                  onAction: () => app.resolveOfflineConflict(keepLocal: true), // dismisses by clearing flag
+                  message: 'An active tournament was found on this device'
+                      '${app.restoredAt != null ? ' — last saved ${_hhmm(app.restoredAt!)}' : ''}.',
+                  actionLabel: 'Review',
+                  onAction: () => setState(() => _showRestoreModal = true),
                 ).animate().fadeIn(duration: 400.ms),
                 const SizedBox(height: AppSpacing.xl),
               ],
-              // Active game banner
-              if (activeGame != null) ...[
-                AppAlertBanner(
-                  type: AppAlertType.success,
-                  message: '${activeGame.settings.name} is '
-                      '${activeGame.status == LiveGameStatus.running ? 'live now' : 'in progress'}'
-                      ' — Level ${activeGame.currentLevel}',
-                  actionLabel: user?.isAdmin == true ? 'Open Dashboard' : 'View Game',
-                  onAction: () => _openGame(context, app, activeGame),
-                ).animate().fadeIn(delay: 120.ms, duration: 400.ms).scaleXY(begin: 0.97, end: 1, delay: 120.ms, curve: Curves.easeOut),
-                const SizedBox(height: AppSpacing.xl),
+              // ── Next required action (User Flow §4.1: Home "should identify
+              // the next required action", not just list data). ─────────────
+              if (group != null) ...[
+                _NextActionCard(
+                  app: app,
+                  group: group,
+                  isAdmin: isAdmin,
+                  onOpen: (g) => _openGame(context, app, g),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+              // Primary actions: Create Event + Start Cash Game (§4.1).
+              // Audit fix B2 — "Start Cash Game" was missing from Home.
+              if (isAdmin) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppButton(
+                        onPressed: () => context.go(RoutePaths.createTournament),
+                        child: const AppIconLabel(label: 'Create Event', icon: Icons.add),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: AppButton(
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => context.go(RoutePaths.cashGame),
+                        child: const AppIconLabel(label: 'Start Cash Game', icon: Icons.sports_esports),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
               ],
               // Stats row
               if (user?.stats != null) ...[
@@ -371,6 +404,46 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
+        // Restore-active-tournament prompt (Tech §20.1, audit fix B8):
+        // shows the last-saved local time and offers Restore or Discard.
+        AppModal(
+          open: _showRestoreModal && app.restoredFromRecovery,
+          onClose: () => setState(() => _showRestoreModal = false),
+          title: 'Restore active tournament?',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppAlertBanner(
+                type: AppAlertType.info,
+                message: app.restoredAt != null
+                    ? 'A saved game was found — last saved locally at ${_hhmm(app.restoredAt!)}.'
+                    : 'A saved game was found on this device.',
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppButton(
+                variant: AppButtonVariant.primary,
+                fullWidth: true,
+                onPressed: () {
+                  // Keep the restored state.
+                  app.resolveOfflineConflict(keepLocal: true);
+                  setState(() => _showRestoreModal = false);
+                },
+                child: const Text('Restore and continue'),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              AppButton(
+                variant: AppButtonVariant.ghost,
+                fullWidth: true,
+                onPressed: () {
+                  app.discardRestoredGame();
+                  setState(() => _showRestoreModal = false);
+                },
+                child: const Text('Discard saved game'),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -451,6 +524,125 @@ class _StatsRow extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// One card that answers "what should I do next?" for the current user
+/// (User Flow §4.1 — Home identifies the next required action, and shows
+/// pending check-ins / confirmed attendance for the admin).
+class _NextActionCard extends StatelessWidget {
+  const _NextActionCard({
+    required this.app,
+    required this.group,
+    required this.isAdmin,
+    required this.onOpen,
+  });
+
+  final AppProvider app;
+  final Group group;
+  final bool isAdmin;
+  final ValueChanged<LiveGame> onOpen;
+
+  LiveGame? _target() {
+    final games = group.games.where((g) => g.status.isUpcoming).toList();
+    if (games.isEmpty) return null;
+    // Prefer a live game, then check-in/ready, then published.
+    for (final s in [
+      LiveGameStatus.running,
+      LiveGameStatus.paused,
+      LiveGameStatus.rebuypause,
+      LiveGameStatus.finaltable,
+      LiveGameStatus.checkin,
+      LiveGameStatus.ready,
+      LiveGameStatus.published,
+      LiveGameStatus.draft,
+    ]) {
+      final g = games.where((g) => g.status == s).firstOrNull;
+      if (g != null) return g;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final game = _target();
+    if (game == null) return const SizedBox.shrink();
+
+    final pending =
+        game.players.where((p) => p.checkedIn && !p.confirmed).length;
+    final confirmed =
+        game.players.where((p) => p.confirmed).length;
+    final going = game.goingCount;
+
+    final (title, subtitle, actionLabel, path) = switch (game.status) {
+      LiveGameStatus.running || LiveGameStatus.paused => (
+          '${game.settings.name} is live',
+          'Level ${game.currentLevel} · ${game.activePlayers.length} players remaining',
+          isAdmin ? 'Open Dashboard' : 'View Game',
+          RoutePaths.adminDashboard,
+        ),
+      LiveGameStatus.rebuypause => (
+          'Settlement required',
+          'Rebuys closed — record add-ons and confirm the prize pool',
+          'Complete Break',
+          RoutePaths.rebuySettlement,
+        ),
+      LiveGameStatus.finaltable => (
+          'Final table',
+          'Nine players remain — redraw the seats',
+          'Redraw Table',
+          RoutePaths.finalTable,
+        ),
+      LiveGameStatus.checkin || LiveGameStatus.ready => (
+          pending > 0
+              ? '$pending check-in${pending == 1 ? '' : 's'} waiting'
+              : 'Check-in is open',
+          '$confirmed confirmed · $going going so far',
+          'Open Check-in',
+          RoutePaths.checkIn,
+        ),
+      _ => (
+          'RSVPs are open',
+          '$going going · structure unlocks 30 min before start',
+          'Review Event',
+          RoutePaths.invitation,
+        ),
+    };
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      glow: game.status.isActiveLive,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Next up',
+                    style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground, letterSpacing: 1)),
+                const SizedBox(height: 2),
+                Text(title,
+                    style: AppTypography.bodyLg.copyWith(fontWeight: FontWeight.w600)),
+                if (subtitle != null && subtitle.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(subtitle,
+                        style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground)),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          AppButton(
+            size: AppButtonSize.sm,
+            onPressed: () => onOpen(game),
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
     );
   }
 }

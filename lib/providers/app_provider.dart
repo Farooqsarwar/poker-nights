@@ -164,6 +164,19 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Exposes the snapshot timestamp so the restore prompt can show
+  /// "last saved HH:MM" (Tech spec §20.1).
+  DateTime? get restoredAt => RecoveryService.lastSavedAt;
+
+  /// Admin declined the restored snapshot — drop the local active game.
+  void discardRestoredGame() {
+    _currentGame = null;
+    _restoredFromRecovery = false;
+    RecoveryService.clearGame();
+    _syncGroupGame();
+    notifyListeners();
+  }
+
   // ── Auth ───────────────────────────────────────────────────────────────────
   AppUser? _user;
   AppUser? get user => _user;
@@ -440,6 +453,15 @@ class AppProvider extends ChangeNotifier {
 
   bool get canUndo => _undoStack.isNotEmpty;
 
+  /// Human-readable description of the most recent reversible action, used
+  /// by the Undo confirmation ("Undo shows the action that will be reversed"
+  /// — User Flow spec §12.6).
+  String? get lastActionSummary {
+    final history = _currentGame?.auditHistory;
+    if (history == null || history.isEmpty) return null;
+    return history.last.details;
+  }
+
   /// Pending seat-balance recommendation (checklist §13.2), if any.
   SeatMoveRecommendation? _pendingSeatMove;
 
@@ -469,43 +491,47 @@ class AppProvider extends ChangeNotifier {
   }
 
   LiveGame createGame(GameSettings settings) {
-    final structure = TournamentEngine.generate(TournamentParams(
-      players: settings.players,
-      durationHours: settings.durationHours,
-      buyIn: settings.buyIn,
-      chipSet: settings.chipSet,
-      rebuys: settings.rebuys,
-      rebuysCloseLevel: settings.rebuysCloseLevel,
-      reEntry: settings.reEntry,
-      addOn: settings.addOn,
-      anteEnabled: settings.anteEnabled,
-      anteAfterLevel: settings.anteAfterLevel,
-      koEnabled: settings.koEnabled,
-      koAmount: settings.koAmount,
-      organizerPct: settings.organizerPct,
-      rebuyCost: settings.rebuyCost,
-      addOnCost: settings.addOnCost,
-    ));
-    // Seed participants from the group roster so the check-in screen lists the
-    // real members first; extra seats become placeholder players.
-    final seeded = List<Player>.generate(settings.players, (i) {
-      final member = i < _currentGroup.members.length ? _currentGroup.members[i] : null;
-      return Player(
-        id: member?.id ?? 'p-${i + 1}-${DateTime.now().millisecondsSinceEpoch}',
-        name: member?.name ?? 'Player ${i + 1}',
-        isGuest: false,
-        rsvp: null,
-        checkedIn: false,
-        confirmed: false,
-        eliminated: false,
-        rebuys: 0,
-        hasAddOn: false,
-        knockouts: 0,
-        table: 0,
-        seat: 0,
-        active: true,
-      );
-    });
+    // Client flow: creating an event does NOT generate the structure. The AI
+    // estimates stacks/blinds/levels 30 minutes before start, using the
+    // attendance taken from RSVPs (Going + Going +N) — see
+    // [generateStructureFromRsvps]. Until then the structure stays empty.
+    final structure = const TournamentStructure(
+      startingStack: 0,
+      chipPlan: const [],
+      rebuyStack: 0,
+      rebuyChipPlan: const [],
+      addOnStack: 0,
+      addOnChipPlan: const [],
+      levels: const [],
+      levelDuration: 15,
+      expectedFinishMins: 0,
+      prizes: const [],
+      prizePool: 0,
+      organizerAmount: 0,
+      colorUpInstructions: const [],
+      warnings: const [],
+    );
+    // Seed participants from the group roster so the RSVP and check-in
+    // screens list the real members. Guest seats appear as guest slots when
+    // members answer Going +N — no placeholder players are invented.
+    final seeded = [
+      for (final member in _currentGroup.members)
+        Player(
+          id: member.id,
+          name: member.name,
+          isGuest: false,
+          rsvp: null,
+          checkedIn: false,
+          confirmed: false,
+          eliminated: false,
+          rebuys: 0,
+          hasAddOn: false,
+          knockouts: 0,
+          table: 0,
+          seat: 0,
+          active: true,
+        ),
+    ];
     final game = LiveGame(
       id: 'game-${DateTime.now().millisecondsSinceEpoch}',
       groupId: _currentGroup.id,
@@ -546,10 +572,23 @@ class AppProvider extends ChangeNotifier {
   }
 
   void updateGameStatus(LiveGameStatus status) {
+    final wasPublished = _currentGame?.status == LiveGameStatus.published;
     _currentGame = _currentGame!.copyWith(status: status);
     // Client feedback (07-018): inside the 30-minute window before start the
     // AI refreshes the stacks/blinds/levels estimate from the expected count.
     if (status == LiveGameStatus.checkin) refreshEstimate();
+    if (status == LiveGameStatus.checkin && wasPublished) {
+      pushNotification(AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Check-in opened',
+        body:
+            '${_currentGame!.settings.name} — you can check in now. Seats are assigned after the host confirms.',
+        type: NotificationType.game,
+        link: '/invitation',
+        read: false,
+        timestamp: DateTime.now(),
+      ));
+    }
     _syncGroupGame();
     notifyListeners();
   }
@@ -699,7 +738,7 @@ class AppProvider extends ChangeNotifier {
     }
 
     if (affectsStructure) {
-      final structure = TournamentEngine.generate(TournamentParams(
+      var structure = TournamentEngine.generate(TournamentParams(
         players: s.players,
         durationHours: s.durationHours,
         buyIn: s.buyIn,
@@ -717,6 +756,17 @@ class AppProvider extends ChangeNotifier {
         rebuyCost: s.rebuyCost,
         addOnCost: s.addOnCost,
       ));
+      // After play starts the starting stacks are frozen (client rule).
+      if (game.stacksLocked) {
+        structure = structure.copyWith(
+          startingStack: game.structure.startingStack,
+          chipPlan: game.structure.chipPlan,
+          rebuyStack: game.structure.rebuyStack,
+          rebuyChipPlan: game.structure.rebuyChipPlan,
+          addOnStack: game.structure.addOnStack,
+          addOnChipPlan: game.structure.addOnChipPlan,
+        );
+      }
       _currentGame = game.copyWith(
         settings: s,
         structure: structure,
@@ -755,11 +805,62 @@ class AppProvider extends ChangeNotifier {
   /// point the public label reads "Prize Pool" instead of "Estimated Prize
   /// Pool" (12-068, 14-038/14-039, 15-009, 15-030), and no more rebuys,
   /// re-entries or add-ons are possible (12-065).
+  /// Computes the *final* prize distribution from the actual contributions
+  /// recorded at the end of the rebuy level (client rule: prices are only
+  /// calculated there — exact field size, actual rebuys and the selected
+  /// add-ons). [addOnCount] is the number of add-ons taken at settlement.
+  ({int organizerAmount, int prizePool, List<Prize> prizes})
+      previewSettlementPrizes(int addOnCount) {
+    final game = _currentGame;
+    if (game == null) return (organizerAmount: 0, prizePool: 0, prizes: const []);
+    final s = game.settings;
+    final participants = game.players
+        .where((p) => p.confirmed || p.checkedIn)
+        .length;
+    final rebuys =
+        game.players.fold<int>(0, (sum, p) => sum + p.rebuys);
+    final reEntries =
+        game.players.fold<int>(0, (sum, p) => sum + p.reEntries);
+    final addOns =
+        game.players.where((p) => p.hasAddOn).length + addOnCount;
+    final gross = s.buyIn * participants +
+        s.effectiveRebuyCost * rebuys +
+        s.buyIn * reEntries +
+        s.effectiveAddOnCost * addOns;
+    return TournamentEngine.recalculatePrizes(
+      gross,
+      participants,
+      s.organizerPct.toDouble(),
+      forcePaidPlaces: s.forcePaidPlaces,
+    );
+  }
+
   void confirmSettlement() {
-    _currentGame = _currentGame!.copyWith(
+    final game = _currentGame;
+    if (game == null) return;
+    final finalPrizes = previewSettlementPrizes(0);
+    _currentGame = game.copyWith(
       settlementConfirmed: true,
       pendingGuests: const [],
+      structure: game.structure.copyWith(
+        organizerAmount: finalPrizes.organizerAmount,
+        prizePool: finalPrizes.prizePool,
+        prizes: finalPrizes.prizes,
+      ),
     );
+    _syncGroupGame();
+    addAuditRecord('settlement',
+        'Rebuy/add-on break settled. Final prize pool: ${finalPrizes.prizePool}.');
+    addAnnouncement('Prize pool confirmed: ${finalPrizes.prizePool}.', true);
+    pushNotification(AppNotification(
+      id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+      title: 'Prize Pool confirmed',
+      body: '${game.settings.name} — final prize pool: ${finalPrizes.prizePool}.',
+      type: NotificationType.game,
+      link: '/player-live',
+      read: false,
+      timestamp: DateTime.now(),
+    ));
     notifyListeners();
   }
 
@@ -800,6 +901,18 @@ class AppProvider extends ChangeNotifier {
         addAnnouncement(atRebuyClose
             ? 'Rebuys are now closed. Add-ons are available.'
             : 'Level ${_currentGame!.currentLevel} has ended.');
+        if (atRebuyClose) {
+          pushNotification(AppNotification(
+            id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+            title: 'Rebuys closed',
+            body:
+                '${_currentGame!.settings.name} — rebuy period ended. Settlement required.',
+            type: NotificationType.game,
+            link: '/rebuy-settlement',
+            read: false,
+            timestamp: DateTime.now(),
+          ));
+        }
         _evaluateSpeedRecommendation();
         return;
       }
@@ -857,6 +970,15 @@ class AppProvider extends ChangeNotifier {
       'Blinds ${level?.sb ?? 0} and ${level?.bb ?? 0}.',
       true,
     );
+    pushNotification(AppNotification(
+      id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+      title: 'Tournament starting',
+      body: '${_currentGame!.settings.name} is live now.',
+      type: NotificationType.game,
+      link: '/player-live',
+      read: false,
+      timestamp: DateTime.now(),
+    ));
   }
 
   void pauseTimer() {
@@ -982,6 +1104,15 @@ class AppProvider extends ChangeNotifier {
         status: LiveGameStatus.finaltable,
         timerRunning: false,
       );
+      pushNotification(AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Final table reached',
+        body: '${_currentGame!.settings.name} — nine players remain.',
+        type: NotificationType.game,
+        link: '/final-table',
+        read: false,
+        timestamp: DateTime.now(),
+      ));
     } else {
       _currentGame = _currentGame!.copyWith(players: updated);
     }
@@ -1149,6 +1280,9 @@ class AppProvider extends ChangeNotifier {
   }
 
   void requestCheckIn(String playerId) {
+    final requester = _currentGame!.players
+        .where((p) => p.id == playerId)
+        .firstOrNull;
     _currentGame = _currentGame!.copyWith(
       players: _currentGame!.players
           .map((p) => p.id == playerId
@@ -1156,6 +1290,17 @@ class AppProvider extends ChangeNotifier {
               : p)
           .toList(),
     );
+    if (requester != null && _user?.id != playerId) {
+      pushNotification(AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Check-in request',
+        body: '${requester.name} is waiting to be checked in.',
+        type: NotificationType.game,
+        link: '/check-in',
+        read: false,
+        timestamp: DateTime.now(),
+      ));
+    }
     notifyListeners();
   }
 
@@ -1267,8 +1412,19 @@ class AppProvider extends ChangeNotifier {
     if (extraChips > 0) {
       _updatePrizePool();
     }
-    
+
     addAnnouncement('Guest confirmed and seated.', false);
+    if (guest != null) {
+      pushNotification(AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Guest confirmed',
+        body: '${guest.name} is confirmed for ${game.settings.name}.',
+        type: NotificationType.invite,
+        link: '/guest-flow',
+        read: false,
+        timestamp: DateTime.now(),
+      ));
+    }
   }
 
   /// Admin rejects a pending guest request — the guest is removed from the
@@ -1518,9 +1674,22 @@ class AppProvider extends ChangeNotifier {
   /// Marks the generated physical seating as confirmed before play starts
   /// (checklist 13-013). Seats remain editable afterwards via the move flow.
   void confirmSeating() {
-    if (_currentGame == null) return;
-    _currentGame = _currentGame!.copyWith(seatingConfirmed: true);
+    final game = _currentGame;
+    if (game == null) return;
+    _currentGame = game.copyWith(seatingConfirmed: true);
     addAnnouncement('Seating confirmed. Shuffle up and deal!', true);
+    // Notify each seated participant of their table and seat (Tech §14.3).
+    for (final p in game.players.where((p) => p.confirmed && p.table > 0)) {
+      pushNotification(AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}-${p.id}',
+        title: 'Seat assigned',
+        body: '${game.settings.name} — you are Table ${p.table}, Seat ${p.seat}.',
+        type: NotificationType.game,
+        link: '/invitation',
+        read: false,
+        timestamp: DateTime.now(),
+      ));
+    }
   }
 
   /// Assigns one player to an explicit (table, seat) — used by Manual seating
@@ -1909,16 +2078,84 @@ class AppProvider extends ChangeNotifier {
   /// Regenerates the whole structure for the actual confirmed attendance
   /// (checklist 09-003 / 22-006: the engine always regenerates rather than
   /// reusing a fixed template). Keeps the current level and resets its clock.
+  /// Total expected attendance taken from RSVPs: every "Going" answer counts
+  /// the member plus their guest slots (Going +2 = 3 people). Falls back to
+  /// the group roster when nobody has answered yet.
+  int expectedPlayersFromRsvps(LiveGame game) {
+    var total = 0;
+    for (final p in game.players) {
+      if (!p.isGuest && p.rsvp != null && p.rsvp!.isGoing) {
+        total += 1 + p.rsvp!.guestCount;
+      }
+    }
+    return total >= 2 ? total : game.players.where((p) => !p.isGuest).length;
+  }
+
+  /// Admin has reviewed the generated structure (30-minute estimate).
+  void confirmStructure() {
+    final game = _currentGame;
+    if (game == null) return;
+    _currentGame = game.copyWith(structureConfirmed: true);
+    addAuditRecord('structure_confirm',
+        'Structure confirmed: stack ${game.structure.startingStack}, '
+        '${game.structure.levels.length} levels of ${game.structure.levelDuration}m.');
+    _syncGroupGame();
+    notifyListeners();
+  }
+
+  /// Generates (or regenerates) the structure estimate from the inputs the
+  /// admin provided plus the current expected attendance. Only allowed once
+  /// the 30-minute pre-start window is open (client rule: the structure is
+  /// reviewed ~30 minutes before the game, while people are still deciding
+  /// whether to attend).
+  void generateStructureFromRsvps({bool force = false}) {
+    final game = _currentGame;
+    if (game == null || (!game.structureReviewOpen && !force)) return;
+    _pushUndo();
+    final count = expectedPlayersFromRsvps(game);
+    final s = game.settings.copyWith(players: count);
+    final structure = TournamentEngine.generate(TournamentParams(
+      players: count,
+      durationHours: s.durationHours,
+      buyIn: s.buyIn,
+      chipSet: s.chipSet,
+      rebuys: s.rebuys,
+      rebuysCloseLevel: s.rebuysCloseLevel,
+      reEntry: s.reEntry,
+      addOn: s.addOn,
+      anteEnabled: s.anteEnabled,
+      anteAfterLevel: s.anteAfterLevel,
+      anteStyle: s.anteStyle,
+      koEnabled: s.koEnabled,
+      koAmount: s.koAmount,
+      organizerPct: s.organizerPct,
+      rebuyCost: s.rebuyCost,
+      addOnCost: s.addOnCost,
+    ));
+    _currentGame = game.copyWith(
+      settings: s,
+      structure: structure,
+      originalLevels: List.of(structure.levels),
+      totalChipsInPlay: structure.startingStack * count,
+      currentLevel: 1,
+      secondsRemaining: structure.levelDuration * 60,
+      structureConfirmed: false,
+    );
+    addAuditRecord('structure_estimate',
+        'AI generated the structure estimate for $count expected players.');
+    notifyListeners();
+  }
+
   void recalculateStructure() {
     final game = _currentGame;
     if (game == null) return;
     _pushUndo();
 
     final confirmed = game.players.where((p) => p.confirmed).length;
-    final count = confirmed >= 2 ? confirmed : game.settings.players;
+    final count = confirmed >= 2 ? confirmed : expectedPlayersFromRsvps(game);
     final s = game.settings;
     final newSettings = s.copyWith(players: count);
-    final structure = TournamentEngine.generate(TournamentParams(
+    var structure = TournamentEngine.generate(TournamentParams(
       players: count,
       durationHours: newSettings.durationHours,
       buyIn: newSettings.buyIn,
@@ -1936,6 +2173,18 @@ class AppProvider extends ChangeNotifier {
       rebuyCost: newSettings.rebuyCost,
       addOnCost: newSettings.addOnCost,
     ));
+    // Once play has started the starting stacks are frozen — blinds, levels
+    // and the player count may still change (client rule).
+    if (game.stacksLocked) {
+      structure = structure.copyWith(
+        startingStack: game.structure.startingStack,
+        chipPlan: game.structure.chipPlan,
+        rebuyStack: game.structure.rebuyStack,
+        rebuyChipPlan: game.structure.rebuyChipPlan,
+        addOnStack: game.structure.addOnStack,
+        addOnChipPlan: game.structure.addOnChipPlan,
+      );
+    }
 
     final newLevel = game.currentLevel.clamp(1, structure.levels.length);
     _currentGame = game.copyWith(
@@ -2025,7 +2274,10 @@ class AppProvider extends ChangeNotifier {
     addAnnouncement('Level structure updated by admin.', false);
   }
 
-  void confirmFinalTable({List<({String playerId, int seat})>? seating}) {
+  void confirmFinalTable({
+    List<({String playerId, int seat})>? seating,
+    String? dealerId,
+  }) {
     final finalists = _currentGame!.players.where((p) => p.active && !p.eliminated).toList();
     // The final table seats at most 9 players (checklist 13-025).
     if (finalists.length > 9) return;
@@ -2040,7 +2292,13 @@ class AppProvider extends ChangeNotifier {
             }
             return p;
           }).toList();
-    final dealer = finalists.isEmpty ? null : finalists[Random().nextInt(finalists.length)];
+    // Initial dealer for the final table: the admin's choice, or a random
+    // finalist (Tech spec §12.3 — the redraw picks the seats AND the
+    // initial dealer-button position).
+    final dealer = (dealerId != null
+            ? finalists.where((f) => f.id == dealerId).firstOrNull
+            : null) ??
+        (finalists.isEmpty ? null : finalists[Random().nextInt(finalists.length)]);
     final currentLevelData = _currentGame!.currentLevelData;
     final durationMins = currentLevelData?.durationMins ?? _currentGame!.structure.levelDuration;
     _currentGame = _currentGame!.copyWith(
@@ -2053,6 +2311,18 @@ class AppProvider extends ChangeNotifier {
       levelEndTime: DateTime.now().add(Duration(minutes: durationMins)),
     );
     addAnnouncement('Final table! Please take your new seats.', true);
+    if (dealer != null) {
+      addAnnouncement('Dealer on the final table: ${dealer.name}.', true);
+    }
+    pushNotification(AppNotification(
+      id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+      title: 'Final table reached',
+      body: '${_currentGame!.settings.name} — 9 players remain, seats redrawn.',
+      type: NotificationType.game,
+      link: '/player-live',
+      read: false,
+      timestamp: DateTime.now(),
+    ));
   }
 
   void recordFinishOrder(List<String> order) {
@@ -2064,6 +2334,15 @@ class AppProvider extends ChangeNotifier {
     );
     _syncGroupGame();
     addAnnouncement('We have a winner!', true);
+    pushNotification(AppNotification(
+      id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+      title: 'Tournament finished',
+      body: '${_currentGame!.settings.name} is over — see the final results.',
+      type: NotificationType.result,
+      link: '/result-podium',
+      read: false,
+      timestamp: DateTime.now(),
+    ));
   }
 
   void addAnnouncement(String text, [bool speakOutLoud = true]) {
@@ -2160,11 +2439,12 @@ class AppProvider extends ChangeNotifier {
   /// Creates a poll. Returns a validation message when the question or options
   /// are invalid (empty or duplicate options rejected — checklist 08-015/08-016),
   /// or null on success.
-  String? createPoll(String question, List<String> options) {
+  String? createPoll(String question, List<String> options, {bool multi = false}) {
     final trimmedQuestion = question.trim();
     final trimmed = options.map((o) => o.trim()).where((o) => o.isNotEmpty).toList();
     if (trimmedQuestion.isEmpty) return 'Poll needs a question.';
     if (trimmed.length < 2) return 'Poll needs at least two options.';
+    if (trimmed.length > 10) return 'Polls support at most ten options.';
     final unique = <String>{};
     for (final o in trimmed) {
       if (!unique.add(o.toLowerCase())) {
@@ -2178,27 +2458,46 @@ class AppProvider extends ChangeNotifier {
       votes: const {},
       closed: false,
       createdAt: DateTime.now(),
+      multi: multi,
     );
     _setGroup(_currentGroup.copyWith(polls: [..._currentGroup.polls, poll]));
+    pushNotification(AppNotification(
+      id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+      title: 'New poll',
+      body: trimmedQuestion,
+      type: NotificationType.admin,
+      link: '/group',
+      read: false,
+      timestamp: DateTime.now(),
+    ));
     notifyListeners();
     return null;
   }
 
-  void votePoll(String pollId, String option) {
+  /// Records a vote. For single-choice polls [selected] holds one option;
+  /// for multi-choice polls it holds every option the member ticked.
+  void votePoll(String pollId, List<String> selected) {
     final userId = _user?.id;
     if (userId == null) return;
     _setGroup(_currentGroup.copyWith(
       polls: _currentGroup.polls
-          .map((p) => p.id == pollId
-              ? Poll(
-                  id: p.id,
-                  question: p.question,
-                  options: p.options,
-                  votes: {...p.votes, userId: option},
-                  closed: p.closed,
-                  createdAt: p.createdAt,
-                )
-              : p)
+          .map((p) {
+              if (p.id != pollId || p.closed) return p;
+              final kept = p.multi
+                  ? selected
+                  : selected.isNotEmpty
+                      ? [selected.first]
+                      : <String>[];
+              return Poll(
+                id: p.id,
+                question: p.question,
+                options: p.options,
+                votes: {...p.votes, userId: kept},
+                closed: p.closed,
+                createdAt: p.createdAt,
+                multi: p.multi,
+              );
+            })
           .toList(),
     ));
     notifyListeners();
@@ -2206,20 +2505,33 @@ class AppProvider extends ChangeNotifier {
 
   /// Admin closes a poll so it no longer accepts votes (checklist 08-022/08-023).
   void closePoll(String pollId) {
+    var closedPoll;
     _setGroup(_currentGroup.copyWith(
       polls: _currentGroup.polls
           .map((p) => p.id == pollId
-              ? Poll(
+              ? (closedPoll = Poll(
                   id: p.id,
                   question: p.question,
                   options: p.options,
                   votes: p.votes,
                   closed: true,
                   createdAt: p.createdAt,
-                )
+                  multi: p.multi,
+                ))
               : p)
           .toList(),
     ));
+    if (closedPoll != null) {
+      pushNotification(AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Poll closed',
+        body: closedPoll.question,
+        type: NotificationType.admin,
+        link: '/group',
+        read: false,
+        timestamp: DateTime.now(),
+      ));
+    }
     notifyListeners();
   }
 
@@ -2445,8 +2757,9 @@ class AppProvider extends ChangeNotifier {
     if (amount <= 0) return 'Amount must be positive.';
     final min = session.settings.minBuyIn;
     final max = session.settings.maxBuyIn;
-    if (amount < min) return 'Minimum buy-in is ${session.settings.currency}$min.';
-    if (amount > max) return 'Maximum buy-in is ${session.settings.currency}$max.';
+    // No currency symbols in the primary interface (User Flow spec §3.4).
+    if (amount < min) return 'Minimum buy-in is $min.';
+    if (amount > max) return 'Maximum buy-in is $max.';
     if (isNew) {
       _cashSession = session.copyWith(players: [
         ...session.players,

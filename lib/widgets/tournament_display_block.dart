@@ -374,9 +374,9 @@ class _PlainNumberTimer extends StatelessWidget {
     final left = colon < 0 ? value : value.substring(0, colon + 1);
     final right = colon < 0 ? '' : value.substring(colon + 1);
 
-    final style = _numberStyle(
+    final style = AppTypography.mono(
       size: fontSize,
-      weight: FontWeight.w300,
+      weight: FontWeight.w400,
       color: danger ? TournamentDisplayBlock._red : Colors.white,
       letterSpacing: -fontSize * .035,
       height: .9,

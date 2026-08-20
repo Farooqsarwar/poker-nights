@@ -271,9 +271,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                     ],
                   ),
                 ),
-                for (final p in players)
+                for (var pi = 0; pi < players.length; pi++)
                   Opacity(
-                    opacity: p.isCashedOut ? 0.5 : 1,
+                    opacity: players[pi].isCashedOut ? 0.5 : 1,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
                       child: Row(
@@ -284,7 +284,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                           decoration: BoxDecoration(color: AppColors.avatarPalette.first, shape: BoxShape.circle),
                           alignment: Alignment.center,
                           child: Text(
-                            p.name.trim().isEmpty ? '?' : p.name.trim()[0].toUpperCase(),
+                            players[pi].name.trim().isEmpty ? '?' : players[pi].name.trim()[0].toUpperCase(),
                             style: AppTypography.bodyXs.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
                           ),
                         ),
@@ -293,35 +293,45 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Seat ${pi + 1} · ${players[pi].name}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500),
+                                  ),
+                                ],
+                              ),
                               Text(
-                                'In: ${Formatters.money(currency, p.totalBuyIns)}${p.buyInCount > 1 ? ' (${p.buyInCount}×)' : ''}',
+                                'In: ${Formatters.money(currency, players[pi].totalBuyIns)}${players[pi].buyInCount > 1 ? ' (${players[pi].buyInCount}×)' : ''}',
                                 style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
-                        if (p.isCashedOut)
+                        if (players[pi].isCashedOut)
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               const AppBadge(label: 'Cashed out', variant: AppBadgeVariant.muted),
                               const SizedBox(height: 2),
                               Text(
-                                Formatters.signedMoney(currency, p.net),
+                                Formatters.signedMoney(currency, players[pi].net),
                                 style: AppTypography.monoXs.copyWith(
-                                  color: p.net >= 0 ? AppColors.success : AppColors.destructive,
+                                  color: players[pi].net >= 0 ? AppColors.success : AppColors.destructive,
                                 ),
                               ),
                             ],
                           )
                         else
                           Text(
-                            Formatters.money(currency, p.stack),
+                            Formatters.money(currency, players[pi].stack),
                             style: AppTypography.monoSm.copyWith(fontWeight: FontWeight.w600),
                           ),
-                        if (!p.isCashedOut) ...[
+                        if (!players[pi].isCashedOut) ...[
                           const SizedBox(width: AppSpacing.sm),
                           Wrap(
                             spacing: AppSpacing.xs,
@@ -330,7 +340,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                                 size: AppButtonSize.sm,
                                 variant: AppButtonVariant.secondary,
                                 onPressed: () => _openAction(
-                                  _CashAction(_CashActionType.buyIn, p.id),
+                                  _CashAction(_CashActionType.buyIn, players[pi].id),
                                   preset: settings.minBuyIn,
                                 ),
                                 child: const Text('+ Buy'),
@@ -339,8 +349,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                                 size: AppButtonSize.sm,
                                 variant: AppButtonVariant.ghost,
                                 onPressed: () => _openAction(
-                                  _CashAction(_CashActionType.cashOut, p.id),
-                                  preset: p.stack,
+                                  _CashAction(_CashActionType.cashOut, players[pi].id),
+                                  preset: players[pi].stack,
                                 ),
                                 child: const Text('Out'),
                               ),
@@ -351,7 +361,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                         AppButton(
                           size: AppButtonSize.sm,
                           variant: AppButtonVariant.ghost,
-                          onPressed: () => _openEdit(p),
+                          onPressed: () => _openEdit(players[pi]),
                           child: const Text('Edit'),
                         ),
                       ],
@@ -562,16 +572,6 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                       ],
                     ),
                   ),
-                  if (settings.rakePct > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.sm),
-                      child: Center(
-                        child: Text(
-                          'Rake (${settings.rakePct}%): ${Formatters.money(currency, totalBuyIns * settings.rakePct / 100)}',
-                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
-                        ),
-                      ),
-                    ),
                   const SizedBox(height: AppSpacing.md),
                   AppButton(
                     variant: AppButtonVariant.secondary,

@@ -15,11 +15,12 @@ import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_timer.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/brand_lockup.dart';
 
-enum _GuestStep { enterCode, chooseInviter, chooseSlot, enterName, waiting, confirmed, rejected }
+enum _GuestStep { enterCode, eventIntro, chooseInviter, chooseSlot, enterName, waiting, confirmed, rejected }
 
 /// Guest join flow mirroring the web `GuestFlowPage`.
 class GuestFlowScreen extends StatefulWidget {
@@ -52,7 +53,8 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       final guest = _matchGuest(game, session);
       _step = guest != null && guest.confirmed ? _GuestStep.confirmed : _GuestStep.waiting;
     } else {
-      _step = game == null ? _GuestStep.enterCode : _GuestStep.chooseInviter;
+      // No saved session: show the event details first, then claim.
+      _step = game == null ? _GuestStep.enterCode : _GuestStep.eventIntro;
     }
   }
 
@@ -106,7 +108,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       } else {
         setState(() {
           _codeError = null;
-          _step = _GuestStep.chooseInviter;
+          _step = _GuestStep.eventIntro;
         });
       }
     } else {
@@ -229,6 +231,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         const SizedBox(height: AppSpacing.xl),
 
         switch (view) {
+          _GuestStep.eventIntro => _buildEventIntro(game),
           _GuestStep.chooseInviter => _buildChooseInviter(game, registeredPlayers),
           _GuestStep.chooseSlot => _buildChooseSlot(inviter, availableSlots, game.players),
           _GuestStep.enterName => _buildEnterName(inviter),
@@ -352,6 +355,51 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         .where((p) => p.isGuest && p.inviterId == inviter.id)
         .length;
     return (inviter.rsvp?.guestCount ?? 0) - taken;
+  }
+
+  /// Friendly event-specific landing card shown right after the guest
+  /// resolves the code (audit fix B12 — the spec sample shows date/time,
+  /// location, buy-in, rebuys and KO before "Claim My Guest Place").
+  Widget _buildEventIntro(LiveGame game) {
+    final s = game.settings;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('You’re invited to', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            s.name,
+            textAlign: TextAlign.center,
+            style: AppTypography.display(size: AppFontSizes.xl, weight: FontWeight.w700),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _IntroLine(icon: Icons.calendar_today_outlined, text: '${s.date} · ${s.time}'),
+              if (s.location.isNotEmpty)
+                _IntroLine(icon: Icons.location_on_outlined, text: s.location),
+              _IntroLine(icon: Icons.attach_money_outlined, text: 'Buy-in ${s.buyIn}${s.koEnabled ? ' + ${s.koAmount} KO' : ''}'),
+              if (s.rebuys)
+                _IntroLine(icon: Icons.replay_outlined, text: 'Rebuys until L${s.rebuysCloseLevel}'),
+              if (s.addOn)
+                _IntroLine(icon: Icons.add_circle_outline, text: 'Add-on available'),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(
+            fullWidth: true,
+            size: AppButtonSize.lg,
+            onPressed: () => setState(() => _step = _GuestStep.chooseInviter),
+            child: const AppIconLabel(label: 'Claim My Guest Place', trailing: Icons.arrow_forward),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildChooseInviter(LiveGame game, List<Player> registeredPlayers) {
@@ -755,6 +803,26 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           ),
           textAlign: TextAlign.center,
         ),
+      ],
+    );
+  }
+}
+
+/// One icon + text line on the guest event-intro card.
+class _IntroLine extends StatelessWidget {
+  const _IntroLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: AppColors.mutedForeground),
+        const SizedBox(width: 6),
+        Text(text, style: AppTypography.bodySm.copyWith(color: AppColors.foreground)),
       ],
     );
   }

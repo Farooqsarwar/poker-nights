@@ -12,6 +12,7 @@ import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_alert_banner.dart';
+import '../../widgets/app_avatar.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
@@ -64,10 +65,6 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
   _SettlementStep _step = _SettlementStep.confirmPlayers;
   final Set<String> _addOnSelections = {};
 
-  // Step 0 — confirm final eliminations and rebuys
-  int _finalEliminations = 0;
-  int _finalRebuys = 0;
-
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
@@ -103,7 +100,12 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('End of Level 6 — Settlement', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+                    // Audit fix E3: the closing level is configurable (L4–L8),
+                    // so the title follows it instead of hard-coding Level 6.
+                    Text(
+                      'End of Level ${settings.rebuysCloseLevel} — Settlement',
+                      style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700),
+                    ),
                     Text(
                       'Confirm players → add-ons → color-up → continue',
                       style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
@@ -139,13 +141,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
           // Step 0: Confirm final eliminations & rebuys
           if (_step == _SettlementStep.confirmPlayers)
             _ConfirmPlayersStep(
-              activeCount: activePlayers.length,
-              eliminations: _finalEliminations,
-              rebuys: _finalRebuys,
-              onChanged: (e, r) => setState(() {
-                _finalEliminations = e;
-                _finalRebuys = r;
-              }),
+              game: game,
               onConfirm: () => setState(() => _step = _SettlementStep.addOns),
             ),
           // Step 1: Add-ons
@@ -188,22 +184,30 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
             ),
           // Step 3: Confirm
           if (_step == _SettlementStep.confirm)
-            _ConfirmStep(
-              activeCount: activePlayers.length,
-              // Already-granted add-ons plus the ones selected in this step.
-              addOnsTaken: activePlayers.where((p) => p.hasAddOn).length + _addOnSelections.length,
-              anteEnabled: settings.anteEnabled,
-              prizePool: structure.prizePool,
-              onStart: () {
-                for (final id in _addOnSelections) {
-                  app.grantAddOn(id);
-                }
-                app.confirmSettlement();
-                app.updateGameStatus(LiveGameStatus.running);
-                app.resumeTimer();
-                context.go(RoutePaths.adminDashboard);
-              },
-            ),
+            Builder(builder: (context) {
+              // Prices are calculated HERE — from the exact field, the actual
+              // rebuys already recorded, and the add-ons just selected.
+              final finalPrizes = app.previewSettlementPrizes(_addOnSelections.length);
+              return _ConfirmStep(
+                activeCount: activePlayers.length,
+                // Already-granted add-ons plus the ones selected in this step.
+                addOnsTaken: activePlayers.where((p) => p.hasAddOn).length + _addOnSelections.length,
+                anteEnabled: settings.anteEnabled,
+                prizePool: finalPrizes.prizePool,
+                prizes: finalPrizes.prizes,
+                organizerPct: settings.organizerPct,
+                organizerAmount: finalPrizes.organizerAmount,
+                onStart: () {
+                  for (final id in _addOnSelections) {
+                    app.grantAddOn(id);
+                  }
+                  app.confirmSettlement();
+                  app.updateGameStatus(LiveGameStatus.running);
+                  app.resumeTimer();
+                  context.go(RoutePaths.adminDashboard);
+                },
+              );
+            }),
           const SizedBox(height: AppSpacing.xxl),
         ],
       ),
@@ -531,6 +535,9 @@ class _ConfirmStep extends StatelessWidget {
     required this.addOnsTaken,
     required this.anteEnabled,
     required this.prizePool,
+    required this.prizes,
+    required this.organizerPct,
+    required this.organizerAmount,
     required this.onStart,
   });
 
@@ -538,6 +545,12 @@ class _ConfirmStep extends StatelessWidget {
   final int addOnsTaken;
   final bool anteEnabled;
   final int prizePool;
+  /// The distribution calculated at this moment from the exact field,
+  /// actual rebuys and the selected add-ons (client rule: prices are only
+  /// calculated here, at the end of the rebuy level).
+  final List<Prize> prizes;
+  final int organizerPct;
+  final int organizerAmount;
   final VoidCallback onStart;
 
   @override
@@ -571,6 +584,38 @@ class _ConfirmStep extends StatelessWidget {
                     Text(Formatters.chips(prizePool), style: AppTypography.monoSm.copyWith(color: AppColors.primary)),
                   ],
                 ),
+                const SizedBox(height: 4),
+                _ConfirmRow(
+                  label: 'Organizational costs · $organizerPct%',
+                  value: Formatters.chips(organizerAmount),
+                ),
+                if (prizes.isNotEmpty) ...[
+                  const Divider(color: AppColors.border, height: AppSpacing.lg),
+                  Text(
+                    'Final distribution (calculated now)',
+                    style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground, letterSpacing: 1),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (final p in prizes)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${p.place == 1 ? '1st' : p.place == 2 ? '2nd' : p.place == 3 ? '3rd' : '${p.place}th'} place',
+                              style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                            ),
+                          ),
+                          Text(
+                            Formatters.chips(p.amount),
+                            style: AppTypography.monoXs.copyWith(color: AppColors.foreground),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ],
             ),
           ),
@@ -616,55 +661,75 @@ class _ConfirmRow extends StatelessWidget {
 /// last hand before the deadline (spec §4.13).
 class _ConfirmPlayersStep extends StatelessWidget {
   const _ConfirmPlayersStep({
-    required this.activeCount,
-    required this.eliminations,
-    required this.rebuys,
-    required this.onChanged,
+    required this.game,
     required this.onConfirm,
   });
 
-  final int activeCount;
-  final int eliminations;
-  final int rebuys;
-  final void Function(int eliminations, int rebuys) onChanged;
+  final LiveGame game;
   final VoidCallback onConfirm;
 
   @override
   Widget build(BuildContext context) {
-    final netActive = activeCount - eliminations + rebuys;
+    final active = game.activePlayers;
+    final eliminated = [...game.eliminatedPlayers]
+      ..sort((a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0));
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Step 1 — Confirm final player count',
+            'Step 1 — Confirm who is in',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Record any eliminations or rebuys that occurred during the last hand '
-            'before the deadline. This determines the exact number of active players '
-            'and the add-on recommendation.',
+            'Check the eliminations and rebuys from the last hand before the '
+            'deadline. The app already tracks each one — this confirms the exact '
+            'field before the add-on price is calculated.',
             style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
           ),
           const SizedBox(height: AppSpacing.lg),
-          // Eliminations counter
-          _CounterRow(
-            label: 'Final eliminations this level',
-            value: eliminations,
-            onDecrement: eliminations > 0 ? () => onChanged(eliminations - 1, rebuys) : null,
-            onIncrement: () => onChanged(eliminations + 1, rebuys),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          // Rebuys counter
-          _CounterRow(
-            label: 'Final valid rebuys (hands started before deadline)',
-            value: rebuys,
-            onDecrement: rebuys > 0 ? () => onChanged(eliminations, rebuys - 1) : null,
-            onIncrement: () => onChanged(eliminations, rebuys + 1),
-          ),
-          const SizedBox(height: AppSpacing.lg),
+          // Recent eliminations with their rebuy state
+          if (eliminated.isNotEmpty) ...[
+            Text('Eliminations so far',
+                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground, letterSpacing: 1)),
+            const SizedBox(height: AppSpacing.sm),
+            for (final p in eliminated)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                child: Row(
+                  children: [
+                    AppAvatar(name: p.name, size: AppAvatarSize.sm),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Text(
+                        p.name,
+                        style: AppTypography.bodySm.copyWith(
+                            color: p.rebuys > 0 ? AppColors.mutedForeground : AppColors.foreground,
+                            decoration: TextDecoration.lineThrough),
+                      ),
+                    ),
+                    Text(
+                      'Pos ${p.eliminationPos ?? '—'}',
+                      style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    p.rebuys > 0
+                        ? const AppBadge(label: 'Rebought', variant: AppBadgeVariant.green)
+                        : const AppBadge(label: 'Out', variant: AppBadgeVariant.red),
+                  ],
+                ),
+              ),
+            const SizedBox(height: AppSpacing.sm),
+          ] else
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Text(
+                'No eliminations recorded yet.',
+                style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+              ),
+            ),
           // Summary
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -682,7 +747,7 @@ class _ConfirmPlayersStep extends StatelessWidget {
                   style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
                 ),
                 Text(
-                  '$netActive',
+                  '${active.length}',
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w700,
                     color: AppColors.primary,
@@ -706,58 +771,3 @@ class _ConfirmPlayersStep extends StatelessWidget {
   }
 }
 
-/// +/- counter row used in the confirm-players step.
-class _CounterRow extends StatelessWidget {
-  const _CounterRow({
-    required this.label,
-    required this.value,
-    required this.onIncrement,
-    this.onDecrement,
-  });
-
-  final String label;
-  final int value;
-  final VoidCallback onIncrement;
-  final VoidCallback? onDecrement;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.secondary,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(label, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
-          ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            onPressed: onDecrement,
-            icon: Icon(
-              Icons.remove_circle_outline,
-              size: 20,
-              color: onDecrement != null ? AppColors.destructive : AppColors.border,
-            ),
-          ),
-          SizedBox(
-            width: 28,
-            child: Text(
-              '$value',
-              textAlign: TextAlign.center,
-              style: AppTypography.monoSm.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            onPressed: onIncrement,
-            icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary),
-          ),
-        ],
-      ),
-    );
-  }
-}

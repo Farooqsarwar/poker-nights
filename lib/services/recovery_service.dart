@@ -45,6 +45,11 @@ class RecoveryService {
   static const _collection = 'recovery';
   static const _docId = 'active_game';
 
+  /// Timestamp of the most recently loaded snapshot, so the UI can offer
+  /// "Restore active tournament — last saved 21:43" (Tech spec §20.1).
+  static DateTime? _lastSavedAt;
+  static DateTime? get lastSavedAt => _lastSavedAt;
+
   static Future<void> saveGame(LiveGame game) async {
     try {
       final data = _liveGameToMap(game);
@@ -133,6 +138,7 @@ class RecoveryService {
       final game = _liveGameFromMap(data);
       final lastSavedString = data['lastSavedAt'] as String?;
       if (lastSavedString != null) {
+        _lastSavedAt = DateTime.parse(lastSavedString);
         final lastSavedAt = DateTime.parse(lastSavedString);
         if (game.timerRunning) {
           final elapsed = DateTime.now().difference(lastSavedAt).inSeconds;

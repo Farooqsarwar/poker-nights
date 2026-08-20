@@ -232,6 +232,7 @@ class LiveGame {
     this.settlementConfirmed = false,
     this.seatingConfirmed = false,
     this.checkInClosed = false,
+    this.structureConfirmed = false,
     this.dealerPlayerId,
     this.guestSlots = const [],
     this.originalLevels,
@@ -271,6 +272,10 @@ class LiveGame {
   /// True once the admin closes door check-in. Further walk-ins are not added
   /// and the host is prompted to start the tournament (spec §4.7).
   final bool checkInClosed;
+
+  /// True once the admin has reviewed and confirmed the AI-generated
+  /// structure (30-minute pre-start estimate).
+  final bool structureConfirmed;
 
   /// Randomly assigned initial dealer for the current seating (13-012,
   /// 13-026). The system does not track subsequent dealer-button rotation
@@ -419,6 +424,7 @@ class LiveGame {
     bool? settlementConfirmed,
     bool? seatingConfirmed,
     bool? checkInClosed,
+    bool? structureConfirmed,
     String? dealerPlayerId,
     List<GuestSlot>? guestSlots,
     List<BlindLevel>? originalLevels,
@@ -448,6 +454,7 @@ class LiveGame {
       settlementConfirmed: settlementConfirmed ?? this.settlementConfirmed,
       seatingConfirmed: seatingConfirmed ?? this.seatingConfirmed,
       checkInClosed: checkInClosed ?? this.checkInClosed,
+      structureConfirmed: structureConfirmed ?? this.structureConfirmed,
       dealerPlayerId: dealerPlayerId ?? this.dealerPlayerId,
       guestSlots: guestSlots ?? this.guestSlots,
       originalLevels: originalLevels ?? this.originalLevels,

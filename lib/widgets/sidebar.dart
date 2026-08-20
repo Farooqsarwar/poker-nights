@@ -90,17 +90,15 @@ class Sidebar extends StatelessWidget {
                     },
                     onPin: () => app.togglePinGroup(group),
                   ),
+                // Client review: the funnel is group-first. Events ("New
+                // Game") are created INSIDE a group (admin only) — the
+                // global quick action for games was removed; "+ New Group"
+                // is the top-level action.
                 _QuickAction(
                   icon: Icons.group_add_outlined,
                   label: 'New Group',
                   onTap: () => openCreateGroupDialog(context),
                 ),
-                if (user?.isAdmin == true && app.currentGroup.id.isNotEmpty)
-                  _QuickAction(
-                    icon: Icons.add,
-                    label: 'New Game',
-                    onTap: () => context.go(RoutePaths.createTournament),
-                  ),
                 _QuickAction(
                   icon: Icons.add,
                   label: 'Cash Game',
@@ -302,23 +300,50 @@ class _GroupRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Text(
-              group.icon,
-              style: const TextStyle(
-                fontSize: 16,
-                fontFamilyFallback: ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji'],
+            // Client review: the group SYMBOL is the primary identifier in
+            // the multi-group list (the name drops to a smaller label).
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: selected ? AppColors.primarySoft : AppColors.secondary,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(
+                  color: selected ? AppColors.primary : AppColors.border,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                group.icon,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontFamilyFallback: ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji'],
+                ),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
-              child: Text(
-                group.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodySm.copyWith(
-                  color: selected ? AppColors.primary : AppColors.foreground,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    group.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySm.copyWith(
+                      color: selected ? AppColors.primary : AppColors.foreground,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                  Text(
+                    '${group.members.length} members',
+                    maxLines: 1,
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
               ),
             ),
             InkWell(

@@ -50,6 +50,10 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final isAdmin = app.user?.isAdmin == true;
+    // Guests get the LIMITED live view: timer, blinds, next level, players
+    // remaining, average stack, their seat and announcements — no chat,
+    // polls, payouts or full structure (Tech §6.6/§17, audit fix C1).
+    final isGuest = app.hasGuestSession;
     final baseGame = app.currentGame;
     final game = baseGame == null ? null : (isAdmin ? baseGame : app.viewerProjection);
 
@@ -108,11 +112,6 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
 
     final isFinalTable = game.status == LiveGameStatus.finaltable;
 
-    final rankIndex = myPlayer == null
-        ? -1
-        : activePlayers.indexWhere((p) => p.id == myPlayer!.id);
-    final rankValue = rankIndex < 0 ? '—' : '${rankIndex + 1}/${activePlayers.length}';
-
     return AppPage(
       maxWidth: 560,
       child: Container(
@@ -157,11 +156,13 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: () => ChatSheet.show(context, game.id),
-                  icon: const Icon(Icons.chat_bubble_outline, color: AppColors.mutedForeground),
-                  tooltip: 'Chat',
-                ),
+                // Guests have no chat (Tech §3.3/§6.6 — audit fix C1).
+                if (!isGuest)
+                  IconButton(
+                    onPressed: () => ChatSheet.show(context, game.id),
+                    icon: const Icon(Icons.chat_bubble_outline, color: AppColors.mutedForeground),
+                    tooltip: 'Chat',
+                  ),
                 Wrap(
                   spacing: AppSpacing.sm,
                   children: [
@@ -177,11 +178,11 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
             ),
             const SizedBox(height: AppSpacing.lg),
             AppTabs(
-              tabs: const [
-                AppTabItem(id: 'dashboard', label: 'Dashboard'),
-                AppTabItem(id: 'structure', label: 'Structure'),
-                AppTabItem(id: 'payouts', label: 'Payouts'),
-                AppTabItem(id: 'chat', label: 'Chat'),
+              tabs: [
+                const AppTabItem(id: 'dashboard', label: 'Dashboard'),
+                if (!isGuest) const AppTabItem(id: 'structure', label: 'Structure'),
+                if (isAdmin) const AppTabItem(id: 'payouts', label: 'Payouts'),
+                if (!isGuest) const AppTabItem(id: 'chat', label: 'Chat'),
               ],
               active: _tab,
               onChanged: (t) => setState(() => _tab = t),
@@ -276,14 +277,13 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                   ),
                 ),
               const SizedBox(height: AppSpacing.md),
-              // Stats row
+              // Stats row — the limited live view for players/guests.
+              // (Audit fix C2: removed the un-specced "Rank" card.)
               Row(
                 children: [
                   Expanded(child: _StatCard(label: 'Players left', value: '${activePlayers.length}')),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(child: _StatCard(label: 'Avg stack', value: Formatters.chips(avgStack))),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: _StatCard(label: 'Rank', value: rankValue)),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: _StatCard(
@@ -336,68 +336,10 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                           style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                         ),
                       ],
-                      if (game.settings.rebuys &&
-                          game.currentLevel <= game.settings.rebuysCloseLevel &&
-                          (game.status == LiveGameStatus.running ||
-                              game.status == LiveGameStatus.paused ||
-                              game.status == LiveGameStatus.finaltable)) ...[
-                        const SizedBox(height: AppSpacing.md),
-                        if (game.rebuyRequests.contains(myPlayer.id))
-                          Row(
-                            children: [
-                              const AppBadge(label: 'Rebuy requested', variant: AppBadgeVariant.accent),
-                              const SizedBox(width: AppSpacing.xs),
-                              TextButton(
-                                onPressed: () => app.cancelRebuyRequest(myPlayer!.id),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.mutedForeground,
-                                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                                  minimumSize: const Size(0, 28),
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  textStyle: AppTypography.bodySm,
-                                ),
-                                child: const Text('Cancel'),
-                              ),
-                            ],
-                          )
-                        else
-                          AppButton(
-                            size: AppButtonSize.sm,
-                            variant: AppButtonVariant.secondary,
-                            onPressed: () => app.requestRebuy(myPlayer!.id),
-                            child: const Text('Request Rebuy'),
-                          ),
-                      ],
-                      if (game.settings.addOn &&
-                          game.status == LiveGameStatus.rebuypause &&
-                          !myPlayer.hasAddOn) ...[
-                        const SizedBox(height: AppSpacing.md),
-                        if (game.addOnRequests.contains(myPlayer.id))
-                          Row(
-                            children: [
-                              const AppBadge(label: 'Add-on requested', variant: AppBadgeVariant.accent),
-                              const SizedBox(width: AppSpacing.xs),
-                              TextButton(
-                                onPressed: () => app.cancelAddOnRequest(myPlayer!.id),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.mutedForeground,
-                                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                                  minimumSize: const Size(0, 28),
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  textStyle: AppTypography.bodySm,
-                                ),
-                                child: const Text('Cancel'),
-                              ),
-                            ],
-                          )
-                        else
-                          AppButton(
-                            size: AppButtonSize.sm,
-                            variant: AppButtonVariant.secondary,
-                            onPressed: () => app.requestAddOn(myPlayer!.id),
-                            child: const Text('Request Add-on'),
-                          ),
-                      ],
+                      // Rebuys and add-ons are recorded by the host, never
+                      // self-served (Tech §3 permission matrix, UAT: "a member
+                      // attempts to self-record a rebuy; the backend denies
+                      // the action") — so no request buttons here.
                     ],
                   ),
                 ),

@@ -14,6 +14,7 @@ import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
@@ -42,23 +43,109 @@ class StructureReviewScreen extends StatelessWidget {
 
     final structure = game.structure;
     final settings = game.settings;
-    final totalMins = structure.levels.length * structure.levelDuration;
+    final totalMins = structure.levels.fold<int>(0, (s, l) => s + l.durationMins);
     final anteStartLevel = structure.levels.indexWhere((l) => l.ante != null) + 1;
     final expectedRebuys = settings.rebuys ? (settings.players * 0.35).round() : 0;
     final expectedAddOns = settings.addOn ? (settings.players * 0.65).round() : 0;
     final totalChips = settings.players * structure.startingStack +
         expectedRebuys * structure.rebuyStack +
         expectedAddOns * structure.addOnStack;
+    final hasStructure = structure.levels.isNotEmpty;
 
-    // Client feedback (07-018): inside the 30-minute window before start the
-    // AI refreshes the estimate from the expected player count.
-    if (game.estimateDue) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) context.read<AppProvider>().refreshEstimate();
-      });
+    String hhmm(DateTime dt) =>
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+    // ── Client rule: the structure is only generated/seen 30 minutes before
+    // start, when the AI can use the total attendance from RSVPs. ──────────
+    if (!hasStructure) {
+      final start = settings.scheduledStart;
+      final unlockAt = start?.subtract(const Duration(minutes: 30));
+      final reviewOpen = game.structureReviewOpen;
+      return AppPage(
+        maxWidth: 640,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                InkWell(
+                  onTap: () => context.go(RoutePaths.invitation),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  child: const Padding(
+                    padding: EdgeInsets.all(AppSpacing.xs),
+                    child: Icon(Icons.arrow_back, size: AppFontSizes.xl, color: AppColors.mutedForeground),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Structure Review', style: AppTypography.display(size: AppFontSizes.xxxl, weight: FontWeight.w700)),
+                    Text(settings.name, style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground)),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.timer_outlined, size: 32, color: AppColors.primary),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    reviewOpen
+                        ? 'Ready to generate the estimate'
+                        : 'Structure unlocks 30 minutes before start',
+                    style: AppTypography.bodyLg.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    reviewOpen
+                        ? 'The AI can now calculate stacks, blinds and levels from the total '
+                            'attendance (everyone who answered Going or Going +N) and the inputs '
+                            'you provided.'
+                        : 'While the group is still deciding whether to attend, there is nothing '
+                            'to calculate yet. Once the window opens, the AI estimates stacks, '
+                            'blinds and levels from the total number of players. '
+                            '${unlockAt != null ? 'Unlocks at ${hhmm(unlockAt)}.' : ''}',
+                    style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                  ),
+                  if (reviewOpen) ...[
+                    const SizedBox(height: AppSpacing.xl),
+                    AppButton(
+                      fullWidth: true,
+                      size: AppButtonSize.lg,
+                      onPressed: () => context.read<AppProvider>().generateStructureFromRsvps(),
+                      child: const AppIconLabel(label: 'Generate structure estimate', trailing: Icons.auto_awesome),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: AppSpacing.xl),
+                    AppButton(
+                      fullWidth: true,
+                      size: AppButtonSize.md,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: () => context.read<AppProvider>().generateStructureFromRsvps(force: true),
+                      child: const Text('Bypass wait (testing)'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+          ],
+        ),
+      );
     }
 
-    final reviewOpen = game.structureReviewOpen;
+    // Predicted finish as a clock-time window around the estimated end
+    // (spec example: "Expected finish: 23:25–23:50").
+    final start = settings.scheduledStart;
+    final finishWindow = start == null
+        ? null
+        : '${hhmm(start.add(Duration(minutes: totalMins - 10)))}–'
+            '${hhmm(start.add(Duration(minutes: totalMins + 15)))}';
 
     return AppPage(
       maxWidth: 640,
@@ -68,7 +155,7 @@ class StructureReviewScreen extends StatelessWidget {
           Row(
             children: [
               InkWell(
-                onTap: () => context.go(RoutePaths.createTournament),
+                onTap: () => context.go(RoutePaths.invitation),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: const Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
@@ -86,13 +173,13 @@ class StructureReviewScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          if (!reviewOpen) ...[
-            AppAlertBanner(
-              type: AppAlertType.info,
-              message: 'Structure preview — the AI finalizes stacks, blinds and levels 30 minutes before the scheduled start.',
-            ),
-            const SizedBox(height: AppSpacing.lg),
-          ],
+          AppAlertBanner(
+            type: AppAlertType.info,
+            message: game.structureConfirmed
+                ? 'Structure confirmed. Starting stacks freeze when the tournament starts; blinds, level durations and the player count stay editable.'
+                : 'AI estimate based on ${settings.players} expected players (from RSVPs) — review, edit or regenerate before the game.',
+          ),
+          const SizedBox(height: AppSpacing.lg),
           for (final w in structure.warnings)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -117,7 +204,7 @@ class StructureReviewScreen extends StatelessWidget {
               SizedBox(width: 150, child: _SummaryCard(label: 'Total chips', value: Formatters.chips(totalChips))),
               SizedBox(width: 150, child: _SummaryCard(label: 'Level duration', value: '${structure.levelDuration}m')),
               SizedBox(width: 150, child: _SummaryCard(label: 'Levels', value: '${structure.levels.length}')),
-              SizedBox(width: 150, child: _SummaryCard(label: 'Est. finish', value: Formatters.duration(totalMins))),
+              SizedBox(width: 150, child: _SummaryCard(label: 'Est. finish', value: finishWindow ?? Formatters.duration(totalMins))),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -397,12 +484,18 @@ class StructureReviewScreen extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 2),
                   child: Row(
                     children: [
+                      // Label is the percentage; the value shows the resulting
+                      // amount (audit fix: the row used to print the amount
+                      // under a "(%)" label).
                       Text(
-                        'Est. organizational costs (%)',
+                        'Organizational costs · ${settings.organizerPct}%',
                         style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
                       ),
                       const Spacer(),
-                      Text('${structure.organizerAmount}', style: AppTypography.monoXs.copyWith(color: AppColors.foreground)),
+                      Text(
+                        '${structure.organizerAmount}',
+                        style: AppTypography.monoXs.copyWith(color: AppColors.foreground),
+                      ),
                     ],
                   ),
                 ),
@@ -444,7 +537,7 @@ class StructureReviewScreen extends StatelessWidget {
               Expanded(
                 child: AppButton(
                   variant: AppButtonVariant.secondary,
-                  onPressed: () => context.go(RoutePaths.createTournament),
+                  onPressed: () => context.go(RoutePaths.invitation),
                   child: const FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Row(
@@ -452,7 +545,7 @@ class StructureReviewScreen extends StatelessWidget {
                       children: [
                         Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
                         SizedBox(width: 6),
-                        Text('Edit settings'),
+                        Text('Event details'),
                       ],
                     ),
                   ),
@@ -472,9 +565,9 @@ class StructureReviewScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            'Recalculating regenerates the starting stack, blinds, levels and '
-                            'prize distribution from scratch using the same settings. Any manual '
-                            'level edits will be lost.',
+                            'Recalculating regenerates the blinds, levels and prize distribution '
+                            'from the current settings and attendance. Manual level edits will be '
+                            'lost. Starting stacks stay frozen once the tournament has started.',
                             style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
                           ),
                           const SizedBox(height: AppSpacing.xl),
@@ -491,7 +584,7 @@ class StructureReviewScreen extends StatelessWidget {
                               Expanded(
                                 child: AppButton(
                                   onPressed: () {
-                                    app.setCurrentGame(app.createGame(settings));
+                                    app.recalculateStructure();
                                     Navigator.of(context).pop();
                                   },
                                   child: const Text('Recalculate'),
@@ -520,7 +613,7 @@ class StructureReviewScreen extends StatelessWidget {
               Expanded(
                 child: AppButton(
                   onPressed: () {
-                    app.publishGame();
+                    app.confirmStructure();
                     context.go(RoutePaths.invitation);
                   },
                   child: const FittedBox(
@@ -528,9 +621,9 @@ class StructureReviewScreen extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Confirm & Publish'),
+                        Text('Confirm structure'),
                         SizedBox(width: 6),
-                        Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
+                        Icon(Icons.check_circle, size: 14, color: AppColors.icon),
                       ],
                     ),
                   ),

@@ -22,6 +22,7 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/app_toggle.dart';
 import '../../widgets/code_display.dart';
 
 /// Group hub mirroring the web `GroupPage`.
@@ -40,6 +41,7 @@ class _GroupScreenState extends State<GroupScreen> {
   String? _pollError;
   final _pollQuestion = TextEditingController();
   final List<TextEditingController> _pollOptions = [TextEditingController(), TextEditingController()];
+  bool _pollMulti = false;
 
   @override
   void dispose() {
@@ -74,7 +76,7 @@ class _GroupScreenState extends State<GroupScreen> {
       setState(() => _pollError = 'Enter a question and at least two options.');
       return;
     }
-    final error = app.createPoll(_pollQuestion.text.trim(), opts);
+    final error = app.createPoll(_pollQuestion.text.trim(), opts, multi: _pollMulti);
     if (error != null) {
       setState(() => _pollError = error);
       return;
@@ -85,6 +87,7 @@ class _GroupScreenState extends State<GroupScreen> {
       for (final c in _pollOptions) {
         c.clear();
       }
+      _pollMulti = false;
       _showPollModal = false;
     });
   }
@@ -209,6 +212,24 @@ class _GroupScreenState extends State<GroupScreen> {
                       child: Text('+ Add option', style: AppTypography.bodyXs.copyWith(color: AppColors.primary)),
                     ),
                   ),
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Multi-choice', style: AppTypography.bodySm),
+                          Text(
+                            'Members may pick more than one option',
+                            style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                          ),
+                        ],
+                      ),
+                    ),
+                    AppToggle(value: _pollMulti, onChanged: (v) => setState(() => _pollMulti = v)),
+                  ],
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 AppButton(
                   fullWidth: true,
@@ -338,7 +359,9 @@ class _GroupScreenState extends State<GroupScreen> {
                     _ChatBubble(
                       message: msg,
                       isMine: msg.authorId == userId,
-                      canDelete: (app.user?.isAdmin ?? false) && msg.authorId != userId,
+                      // Audit fix E12: the admin can delete any inappropriate
+                      // message — including their own (Tech §14.1).
+                      canDelete: (app.user?.isAdmin ?? false),
                       onDelete: () => app.deleteMessage(msg.id),
                     ),
                 ],
@@ -442,7 +465,7 @@ class _GroupScreenState extends State<GroupScreen> {
             poll: poll,
             userId: userId,
             isAdmin: isAdmin,
-            onVote: (opt) => app.votePoll(poll.id, opt),
+            onVote: (opts) => app.votePoll(poll.id, opts),
             onClose: () => app.closePoll(poll.id),
           ),
       ],
@@ -649,7 +672,7 @@ class _ChatBubble extends StatelessWidget {
   }
 }
 
-class _PollCard extends StatelessWidget {
+class _PollCard extends StatefulWidget {
   const _PollCard({
     required this.poll,
     required this.userId,
@@ -661,13 +684,44 @@ class _PollCard extends StatelessWidget {
   final Poll poll;
   final String? userId;
   final bool isAdmin;
-  final ValueChanged<String> onVote;
+  /// Commits the member's selection. For single-choice polls this is a one-
+  /// element list; for multi-choice polls it carries every ticked option
+  /// (Tech §14.2, audit fix B11).
+  final ValueChanged<List<String>> onVote;
   final VoidCallback onClose;
 
   @override
+  State<_PollCard> createState() => _PollCardState();
+}
+
+class _PollCardState extends State<_PollCard> {
+  // Local multi-choice selection (committed via the "Vote" button).
+  final Set<String> _multiSelection = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final mine = widget.userId != null ? widget.poll.votes[widget.userId!] : null;
+    if (widget.poll.multi && mine != null) {
+      _multiSelection.addAll(mine);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final poll = widget.poll;
+    final isMulti = poll.multi;
     final totalVotes = poll.totalVotes;
-    final myVote = userId != null ? poll.votes[userId] : null;
+    final counts = poll.optionCounts();
+    final mySingle =
+        !isMulti && widget.userId != null ? poll.votes[widget.userId!] : null;
+
+    void toggleMulti(String opt) {
+      setState(() {
+        if (!_multiSelection.remove(opt)) _multiSelection.add(opt);
+      });
+    }
+
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -679,6 +733,8 @@ class _PollCard extends StatelessWidget {
               Expanded(
                 child: Text(poll.question, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500)),
               ),
+              if (isMulti) const AppBadge(label: 'Multi-choice', variant: AppBadgeVariant.accent, border: true),
+              const SizedBox(width: AppSpacing.sm),
               if (poll.closed) const AppBadge(label: 'Closed', variant: AppBadgeVariant.muted),
             ],
           ),
@@ -688,13 +744,29 @@ class _PollCard extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: _PollOption(
                 label: opt,
-                count: poll.votes.values.where((v) => v == opt).length,
+                count: counts[opt] ?? 0,
                 total: totalVotes,
-                isMyVote: myVote == opt,
+                isMyVote: isMulti
+                    ? _multiSelection.contains(opt)
+                    : mySingle != null && mySingle.contains(opt),
                 closed: poll.closed,
-                onTap: () => onVote(opt),
+                checkbox: isMulti,
+                onTap: isMulti
+                    ? () => toggleMulti(opt)
+                    : () => widget.onVote([opt]),
               ),
             ),
+          if (isMulti && !poll.closed && _multiSelection.isNotEmpty) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppButton(
+                size: AppButtonSize.sm,
+                onPressed: () => widget.onVote(_multiSelection.toList()),
+                child: const Text('Submit vote'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
           Row(
             children: [
               Text(
@@ -702,11 +774,11 @@ class _PollCard extends StatelessWidget {
                 style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
               ),
               const Spacer(),
-              if (isAdmin && !poll.closed)
+              if (widget.isAdmin && !poll.closed)
                 AppButton(
                   size: AppButtonSize.sm,
                   variant: AppButtonVariant.ghost,
-                  onPressed: onClose,
+                  onPressed: widget.onClose,
                   child: const Text('Close poll'),
                 ),
             ],
@@ -725,6 +797,7 @@ class _PollOption extends StatelessWidget {
     required this.isMyVote,
     required this.closed,
     required this.onTap,
+    this.checkbox = false,
   });
 
   final String label;
@@ -732,6 +805,7 @@ class _PollOption extends StatelessWidget {
   final int total;
   final bool isMyVote;
   final bool closed;
+  final bool checkbox;
   final VoidCallback onTap;
 
   @override
@@ -754,7 +828,17 @@ class _PollOption extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.radio_button_unchecked, size: 16, color: AppColors.mutedForeground),
+                Icon(
+                  checkbox
+                      ? (isMyVote
+                          ? Icons.check_box
+                          : Icons.check_box_outline_blank)
+                      : (isMyVote
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked),
+                  size: 16,
+                  color: isMyVote ? AppColors.primary : AppColors.mutedForeground,
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(

@@ -779,6 +779,41 @@ class _ChatBubble extends StatelessWidget {
                     color: AppColors.foreground,
                   ),
                 ),
+                if (game != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      AppBadge(
+                        label: game.settings.rebuys
+                            ? (game.settings.rebuyLimit == null
+                                ? 'Unlimited rebuys to L${game.settings.rebuysCloseLevel}'
+                                : '${game.settings.rebuyLimit} rebuys to L${game.settings.rebuysCloseLevel}${game.settings.rebuyCost != null ? ' @ \\${game.settings.rebuyCost}' : ''}')
+                            : 'No rebuys',
+                        variant: game.settings.rebuys
+                            ? AppBadgeVariant.gold
+                            : AppBadgeVariant.muted,
+                      ),
+                      AppBadge(
+                        label: game.settings.addOn
+                            ? 'Add-on to L${game.settings.addOnCloseLevel}'
+                            : 'No add-on',
+                        variant: game.settings.addOn
+                            ? AppBadgeVariant.gold
+                            : AppBadgeVariant.muted,
+                      ),
+                      AppBadge(
+                        label: game.settings.anteEnabled
+                            ? 'Ante L${game.settings.anteAfterLevel}'
+                            : 'No ante',
+                        variant: game.settings.anteEnabled
+                            ? AppBadgeVariant.gold
+                            : AppBadgeVariant.muted,
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   'Posted by ${message.authorName} · ${Formatters.relativeTime(message.timestamp)}',

@@ -8,7 +8,7 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
-import '../../responsive/responsive.dart';
+
 import '../../utils/formatters.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_avatar.dart';
@@ -17,12 +17,11 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_tabs.dart';
-import '../../widgets/app_timer.dart';
-import '../../widgets/blinds_trio.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/app_progress_bar.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/medal_icon.dart';
+import '../../widgets/tournament_display_block.dart';
+import '../../responsive/responsive.dart';
 import '../../models/game.dart';
 
 /// Player live view mirroring the web `PlayerLivePage`.
@@ -81,7 +80,6 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
       );
     }
 
-    final level = game.currentLevelData;
     final next = game.nextLevelData;
     final activePlayers = game.activePlayers;
     Player? myPlayer = game.players
@@ -113,34 +111,16 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
       game.totalChipsInPlay,
       activePlayers.length,
     );
-    final timerDanger = game.secondsRemaining <= 60;
-    final timerWarning = game.secondsRemaining <= 300;
     final latestAnn = game.announcements.isEmpty
         ? null
         : game.announcements.last;
-    final statusText = switch (game.status) {
-      LiveGameStatus.running => '● RUNNING',
-      LiveGameStatus.paused => 'PAUSED',
-      LiveGameStatus.rebuypause => 'REBUY CLOSE — BREAK',
-      LiveGameStatus.finaltable => 'FINAL TABLE',
-      _ => '',
-    };
-
-    final device = AppBreakpoints.deviceOf(context);
-    final timerSize = device.isMobile ? 64.0 : 72.0;
-
-    final levelDurationSecs = (level?.durationMins ?? 1) * 60;
-    final levelPct = level == null
-        ? 0.0
-        : (((levelDurationSecs - game.secondsRemaining) / levelDurationSecs) *
-                  100)
-              .clamp(0, 100)
-              .toDouble();
 
     final isFinalTable = game.status == LiveGameStatus.finaltable;
 
+    final device = AppBreakpoints.deviceOf(context);
+
     return AppPage(
-      maxWidth: 560,
+      maxWidth: 1200,
       child: Container(
         decoration: isFinalTable
             ? const BoxDecoration(
@@ -194,16 +174,6 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                     ],
                   ),
                 ),
-                // Guests have no chat (Tech §3.3/§6.6 — audit fix C1).
-                if (!isGuest)
-                  IconButton(
-                    onPressed: () => ChatSheet.show(context, game.id),
-                    icon: const Icon(
-                      Icons.chat_bubble_outline,
-                      color: AppColors.mutedForeground,
-                    ),
-                    tooltip: 'Chat',
-                  ),
                 Wrap(
                   spacing: AppSpacing.sm,
                   children: [
@@ -216,6 +186,17 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         icon: Icons.tv_outlined,
                       ),
                     ),
+                    // Guests have no chat (Tech §3.3/§6.6 — audit fix C1).
+                    if (!isGuest)
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.ghost,
+                        onPressed: () => ChatSheet.show(context, game.id),
+                        child: const AppIconLabel(
+                          label: 'Chat',
+                          icon: Icons.chat_bubble_outline,
+                        ),
+                      ),
                   ],
                 ),
               ],
@@ -227,7 +208,6 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 if (!isGuest)
                   const AppTabItem(id: 'structure', label: 'Structure'),
                 if (isAdmin) const AppTabItem(id: 'payouts', label: 'Payouts'),
-                if (!isGuest) const AppTabItem(id: 'chat', label: 'Chat'),
               ],
               active: _tab,
               onChanged: (t) => setState(() => _tab = t),
@@ -235,62 +215,11 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
             const SizedBox(height: AppSpacing.lg),
             if (_tab == 'dashboard') ...[
               // Main timer card
-              AppCard(
-                glow: timerDanger,
-                borderColor: timerDanger
-                    ? AppColors.destructive.withValues(alpha: 0.4)
-                    : timerWarning
-                    ? AppColors.warning.withValues(alpha: 0.3)
-                    : null,
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: Column(
-                  children: [
-                    Text(
-                      'Level ${game.currentLevel}',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                        letterSpacing: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    LiveTimerBuilder(
-                      game: game,
-                      builder: (context, remaining) => AppTimer(
-                        secondsRemaining: remaining,
-                        size: timerSize,
-                        danger: remaining <= 60,
-                        warning: remaining <= 300,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      statusText,
-                      style: AppTypography.bodyXs.copyWith(
-                        color: game.status == LiveGameStatus.running
-                            ? AppColors.success
-                            : AppColors.warning,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    if (level != null) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      AppProgressBar(
-                        value: levelPct,
-                        max: 100,
-                        color: timerDanger
-                            ? AppProgressColor.destructive
-                            : AppProgressColor.primary,
-                        height: 6,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      BlindsTrio(
-                        sb: level.sb,
-                        bb: level.bb,
-                        ante: level.ante,
-                        valueSize: AppFontSizes.displayLg,
-                      ),
-                    ],
-                  ],
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                child: TournamentDisplayBlock(
+                  game: game,
+                  showPayoutAmounts: false,
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -527,8 +456,8 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
+                          SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: device.isMobile ? 2 : 4,
                             mainAxisSpacing: AppSpacing.xs,
                             crossAxisSpacing: AppSpacing.xs,
                             childAspectRatio: 3,
@@ -895,81 +824,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 ),
               ),
             ],
-            if (_tab == 'chat') ...[
-              if (game.chat.isEmpty)
-                AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.xxxl),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.forum_outlined,
-                        color: AppColors.mutedForeground,
-                        size: AppFontSizes.xxl,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        'No messages yet.',
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final m in game.chat)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppSpacing.sm,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  AppAvatar(
-                                    name: m.authorName,
-                                    size: AppAvatarSize.sm,
-                                  ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Expanded(
-                                    child: Text(
-                                      m.authorName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTypography.bodySm.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    Formatters.relativeTime(m.timestamp),
-                                    style: AppTypography.bodyXs.copyWith(
-                                      color: AppColors.mutedForeground,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: AppSpacing.xs),
-                              Text(
-                                m.body,
-                                style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-            ],
+
             const SizedBox(height: AppSpacing.xxl),
           ],
         ),

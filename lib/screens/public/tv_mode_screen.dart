@@ -34,10 +34,11 @@ class _TVModeScreenState extends State<TVModeScreen> {
     super.dispose();
   }
 
-  void _connect() {
-    final result = context.read<AppProvider>().enterGameCode(
+  Future<void> _connect() async {
+    final result = await context.read<AppProvider>().enterGameCode(
       _codeController.text.trim(),
     );
+    if (!mounted) return;
     if (result == CodeLookupResult.notFound) {
       setState(() => _codeError = 'Code not found — try again');
     } else {

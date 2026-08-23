@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart'
+    show DocumentSnapshot, FieldValue;
+import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:flutter/foundation.dart';
 
 import '../models/app_notification.dart';
@@ -12,8 +15,10 @@ import '../models/tournament.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
 import '../models/chip_color.dart';
+import '../repositories/firebase_repository.dart';
 import '../utils/formatters.dart';
 import '../utils/mock_data.dart';
+import '../utils/model_codec.dart';
 import '../utils/tournament_engine.dart';
 import '../utils/voice_service.dart';
 import '../services/projections.dart' as projections;
@@ -58,7 +63,71 @@ class AppProvider extends ChangeNotifier {
     _currentGame = null;
     _startTick();
     _loadRecovery();
+    // Firebase may be unavailable (widget tests run before initializeApp);
+    // degrade gracefully by marking auth resolved so route guards open up.
+    try {
+      _authSub = _repo.authStateChanges().listen(_onAuthStateChanged);
+    } catch (_) {
+      _backendUp = false;
+      _authReady = true;
+    }
   }
+
+  final FirebaseRepository _repo = FirebaseRepository.instance;
+
+  /// False when Firebase never came up (widget tests) — every cloud sync
+  /// entry point checks this before touching the repository.
+  bool _backendUp = true;
+
+  /// Firebase auth session subscription — cancelled on dispose.
+  StreamSubscription<fa.User?>? _authSub;
+
+  /// Live data subscriptions, all keyed to the signed-in user / selected
+  /// group and cancelled on sign-out or dispose.
+  StreamSubscription<List<GroupMembership>>? _groupsSub;
+  StreamSubscription<Group>? _bundleSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _gameDocSub;
+  StreamSubscription<dynamic>? _lookupSub;
+  StreamSubscription<List<TournamentPreset>>? _presetsSub;
+  StreamSubscription<
+          List<({String id, String name, List<ChipColor> chips})>>?
+      _chipSetsSub;
+  StreamSubscription<List<AppNotification>>? _notificationsSub;
+  StreamSubscription<List<GameRequest>>? _requestsSub;
+  StreamSubscription<List<CashSession>>? _cashSub;
+  StreamSubscription<List<GameResultRow>>? _resultsSub;
+
+  /// Game ids whose own-result has already been written this session
+  /// (doc id = gameId makes the write idempotent anyway).
+  final Set<String> _resultsRecorded = <String>{};
+
+  /// This player's lifetime results — aggregated into [_user.stats].
+  List<GameResultRow> _myResults = const [];
+
+  /// Signature of the last stats summary pushed to roster rows (dedupe).
+  String? _lastPushedStatsKey;
+
+  /// Debounces whole-document game saves so rapid admin edits coalesce.
+  Timer? _gameSaveDebounce;
+
+  /// The game doc currently mirrored via [_gameDocSub] — used to skip
+  /// adopting our own server acks (echo prevention).
+  String? _syncedGameKey;
+
+  /// True once a remote emission for [_syncedGameKey] was adopted; afterwards
+  /// snapshots written by this device are ignored so debounced local edits are
+  /// never reverted by their own ack.
+  bool _gameSyncPrimed = false;
+
+  /// True while a debounced save is pending — remote adoptions wait until it
+  /// flushes so newer local state is not overwritten by an older snapshot.
+  bool _pendingGameSave = false;
+
+  /// True once the first Firebase auth snapshot has been resolved. The router
+  /// holds navigation at splash until this flips so the persisted session is
+  /// restored before any guard runs.
+  bool _authReady = false;
+  bool get authReady => _authReady;
 
   bool _isTickUpdate = false;
 
@@ -91,6 +160,8 @@ class AppProvider extends ChangeNotifier {
     super.notifyListeners();
     if (_isTickUpdate) return;
     _lastSync = DateTime.now();
+    _syncGameToCloud();
+    _ensureRequestsSubscription();
     if (_currentGame != null) {
       RecoveryService.saveGame(_currentGame!);
     } else {
@@ -112,6 +183,490 @@ class AppProvider extends ChangeNotifier {
     _notificationsEnabled = value;
     notifyListeners();
   }
+
+  // ── Cloud sync plumbing ────────────────────────────────────────────────────
+  /// Tracks which active-game document this device mirrors. When the key
+  /// changes the old doc subscription is replaced and a fresh baseline is
+  /// awaited before further remote adoptions.
+  void _syncGameToCloud() {
+    if (!_backendUp) return;
+    final game = _currentGame;
+    final gid = game != null && game.groupId.isNotEmpty
+        ? game.groupId
+        : _currentGroupId;
+    final key =
+        (game == null || gid == null || _user == null) ? null : '$gid|${game.id}';
+
+    if (key != _syncedGameKey) {
+      _syncedGameKey = key;
+      _gameSyncPrimed = false;
+      _gameDocSub?.cancel();
+      _gameDocSub = null;
+      _gameSaveDebounce?.cancel();
+      _pendingGameSave = false;
+      if (key != null && game != null && gid != null) {
+        _gameDocSub = _repo.gameDocSnapshots(gid, game.id).listen(
+          _adoptRemoteGame,
+          onError: (Object e) => debugPrint('gameDoc stream error: $e'),
+        );
+      }
+    }
+
+    if (game == null || gid == null || _user == null) return;
+    // Whole-document writes are reserved for the admin/authority device
+    // (locked architecture §writes). Members patch their own fields and
+    // guests use the request queue instead.
+    if (!_isGameAuthority) return;
+    // Identity check skips re-saving freshly adopted remote state (prevents
+    // A↔B write loops).
+    if (identical(_lastSavedGame, game)) return;
+    _gameSaveDebounce?.cancel();
+    final effectiveGid = game.groupId.isNotEmpty ? game.groupId : gid;
+    _gameSaveDebounce = Timer(const Duration(milliseconds: 400), () async {
+      final g = _currentGame;
+      if (g == null || _user == null) return;
+      try {
+        // Stamp the owning group so recovered/draft games land in the right
+        // collection even when the model was built before selection.
+        final toSave =
+            g.groupId.isNotEmpty ? g : g.copyWith(groupId: effectiveGid);
+        await _repo.saveGame(toSave);
+        await _publishProjections(toSave);
+        _lastSavedGame = g;
+      } catch (e) {
+        debugPrint('saveGame failed: $e');
+      }
+      _pendingGameSave = false;
+    });
+    _pendingGameSave = true;
+  }
+
+  LiveGame? _lastSavedGame;
+
+  /// True when the signed-in user may write the whole game document (group
+  /// owner or admin member). Guests and plain members never qualify.
+  bool get _isGameAuthority {
+    final user = _user;
+    if (user == null) return false;
+    if (_currentGroup.ownerId == user.id) return true;
+    return _currentGroup.members
+        .any((m) => m.id == user.id && m.isAdmin);
+  }
+
+  /// Resolves `(gid, gameId)` for cloud operations on the active game, or
+  /// null when there is nothing to target yet.
+  (String, String)? get _cloudGameContext {
+    final game = _currentGame;
+    if (game == null || _user == null || !_backendUp) return null;
+    final gid = game.groupId.isNotEmpty ? game.groupId : _currentGroupId;
+    if (gid == null) return null;
+    return (gid, game.id);
+  }
+
+  /// Member/guest-safe field patch: writes dot-paths without touching the
+  /// rest of the document (locked architecture §writes).
+  void _patchActiveGame(Map<String, dynamic> dotPaths) {
+    final ctx = _cloudGameContext;
+    if (ctx == null || dotPaths.isEmpty) return;
+    unawaited(_repo
+        .patchGame(ctx.$1, ctx.$2, dotPaths)
+        .catchError((Object e) => debugPrint('patchGame failed: $e')));
+  }
+
+  /// Publishes sanitized public/TV/player/guest projections after a
+  /// successful whole-doc save so TVs and guest devices can follow along.
+  Future<void> _publishProjections(LiveGame game) async {
+    if (!_backendUp) return;
+    try {
+      await _repo.publishPublicProjections(
+        game: game,
+        tv: liveGameToMap(projections.tvProjection(game)),
+        player:
+            liveGameToMap(projections.playerProjection(game, viewerId: '')),
+        guest: liveGameToMap(projections.guestProjection(game)),
+      );
+      await _repo.upsertGameCodes(game);
+    } catch (e) {
+      debugPrint('publishProjections failed: $e');
+    }
+  }
+
+  /// Opens the request-queue subscription once this device qualifies as
+  /// authority for the active game. Re-evaluated on every provider change so
+  /// late-loading membership flips it on at the right moment.
+  void _ensureRequestsSubscription() {
+    if (!_backendUp || _currentGame == null || !_isGameAuthority) return;
+    if (_requestsSub != null) return;
+    final gameId = _currentGame!.id;
+    _requestsSub = _repo.requestsStream(gameId).listen(
+      _consumeRequests,
+      onError: (Object e) => debugPrint('requests stream error: $e'),
+    );
+  }
+
+  /// Applies queued member/guest requests to the authoritative local game,
+  /// then marks each one consumed so other devices ignore it.
+  Future<void> _consumeRequests(List<GameRequest> requests) async {
+    final game = _currentGame;
+    if (requests.isEmpty || game == null) return;
+    final gameId = game.id;
+    var changed = false;
+    var hadError = false;
+    for (final req in requests) {
+      String? error;
+      switch (req.kind) {
+        case 'guestCheckIn':
+          error = _applyQueuedGuestCheckIn(req.payload);
+          break;
+        case 'rebuyReq':
+          requestRebuy((req.payload['playerId'] as String?) ?? '');
+          break;
+        case 'addOnReq':
+          requestAddOn((req.payload['playerId'] as String?) ?? '');
+          break;
+        default:
+          error = 'unknown kind';
+      }
+      if (error != null) hadError = true;
+      try {
+        await _repo.consumeRequest(gameId, req.id);
+      } catch (e) {
+        debugPrint('consumeRequest failed: $e');
+      }
+      changed = true;
+    }
+    if (changed && !hadError) notifyListeners();
+  }
+
+  /// Attaches a queued guest check-in to the authoritative game. Returns an
+  /// error string when the slot is invalid — the request is consumed either
+  /// way so it never re-processes.
+  String? _applyQueuedGuestCheckIn(Map<String, dynamic> payload) {
+    final game = _currentGame;
+    if (game == null) return 'no active game';
+    final name = (payload['name'] as String?) ?? 'Guest';
+    final inviterId = (payload['inviterId'] as String?) ?? '';
+    final slotNo = (payload['slot'] as num?)?.toInt() ?? 0;
+    final guestId =
+        (payload['guestId'] as String?) ?? 'g-${DateTime.now().millisecondsSinceEpoch}';
+
+    final existingSlot = game.guestSlots
+        .where((s) => s.inviterId == inviterId && s.slot == slotNo)
+        .firstOrNull;
+    if (existingSlot != null && !existingSlot.available) {
+      return 'slot taken';
+    }
+    if (game.players.any(
+      (p) => p.isGuest && p.inviterId == inviterId && p.guestSlot == slotNo,
+    )) {
+      return 'slot claimed';
+    }
+
+    final guest = Player(
+      id: guestId,
+      name: name,
+      isGuest: true,
+      inviterId: inviterId,
+      guestSlot: slotNo,
+      rsvp: Rsvp.going,
+      checkedIn: false,
+      confirmed: false,
+      eliminated: false,
+      rebuys: 0,
+      hasAddOn: false,
+      knockouts: 0,
+      table: 0,
+      seat: 0,
+      active: false,
+    );
+    _pushUndo();
+    _currentGame = game.copyWith(
+      players: [...game.players, guest],
+      pendingGuests: [...game.pendingGuests, guest],
+      guestSlots: _markSlotReserved(
+        game.guestSlots,
+        inviterId,
+        slotNo,
+        name: name.trim(),
+      ),
+    );
+    return null;
+  }
+
+  /// Adopts a remote game document unless it is our own latency-compensated
+  /// write or the ack of a write we just made (echo prevention, locked
+  /// architecture §reads).
+  void _adoptRemoteGame(DocumentSnapshot<Map<String, dynamic>> snap) {
+    final data = snap.data();
+    if (!snap.exists || data == null) return;
+    if (snap.metadata.hasPendingWrites) return;
+    if (!_gameSyncPrimed) {
+      _gameSyncPrimed = true;
+    } else if (data['writerId'] == _repo.deviceId) {
+      return;
+    }
+    if (_pendingGameSave) return;
+    try {
+      final remote =
+          liveGameFromFirestoreDoc(Map<String, dynamic>.from(data));
+      if (_currentGame?.id != remote.id) return;
+      _currentGame = remote;
+      _lastSavedGame = remote;
+      RecoveryService.saveGame(remote);
+      // Another device may have settled the tournament — record my result.
+      _maybeRecordOwnResult(remote);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('remote game decode failed: $e');
+    }
+  }
+
+  /// Subscribes every user-scoped collection after sign-in / hydration.
+  void _subscribeUserData() {
+    final uid = _repo.currentUid;
+    if (!_backendUp || uid == null) return;
+
+    _groupsSub?.cancel();
+    _groupsSub = _repo.groupsIndexStream(uid).listen((rows) {
+      _groups = [for (final r in rows) _groupFromMembership(r)];
+      // First group after sign-in is auto-selected (pinned first, then
+      // alphabetical — same ordering the sidebar uses).
+      if (_currentGroupId == null && rows.isNotEmpty) {
+        final sorted = [...rows]
+          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+        _selectGroup(sorted.first.groupId);
+      }
+      notifyListeners();
+    },
+        onError: (Object e) => debugPrint('groupsIndex stream error: $e'));
+
+    _presetsSub?.cancel();
+    _presetsSub = _repo.presetsStream(uid).listen((list) {
+      _presets
+        ..clear()
+        ..addAll(list);
+      notifyListeners();
+    },
+        onError: (Object e) => debugPrint('presets stream error: $e'));
+
+    _chipSetsSub?.cancel();
+    _chipSetsSub = _repo.chipSetsStream(uid).listen((list) {
+      _savedChipSets
+        ..clear()
+        ..addAll(list);
+      notifyListeners();
+    },
+        onError: (Object e) => debugPrint('chipSets stream error: $e'));
+
+    _notificationsSub?.cancel();
+    _notificationsSub = _repo.notificationsStream(uid).listen((list) {
+      _notifications = list;
+      notifyListeners();
+    },
+        onError: (Object e) => debugPrint('notifications stream error: $e'));
+
+    // Lifetime stats: recompute whenever a result lands (this device wrote it
+    // or another device did — same source of truth either way).
+    _resultsSub?.cancel();
+    _resultsSub = _repo.resultsStream(uid).listen((rows) {
+      _myResults = rows;
+      final user = _user;
+      if (user != null) {
+        _user = user.copyWith(stats: _statsFromResults(rows));
+        _pushStatsSummaries();
+      }
+      notifyListeners();
+    },
+        onError: (Object e) => debugPrint('results stream error: $e'));
+  }
+
+  /// Mirrors the lifetime stats summary onto this user's roster row in every
+  /// group they belong to, so other members see real numbers. Skipped when
+  /// the summary is unchanged since the last push.
+  void _pushStatsSummaries() {
+    if (!_backendUp) return;
+    final stats = _user?.stats;
+    final uid = _repo.currentUid;
+    if (stats == null || uid == null) return;
+    final key =
+        '${stats.played}/${stats.wins}/${stats.podium}/${stats.avgFinish}/${stats.knockouts}';
+    if (key == _lastPushedStatsKey) return;
+    _lastPushedStatsKey = key;
+    for (final g in _groups) {
+      unawaited(_repo.saveMemberStats(g.id, uid, stats)
+          .catchError((Object e) => debugPrint('saveMemberStats failed: $e')));
+    }
+  }
+
+  /// Aggregates raw result rows into the lifetime [UserStats].
+  UserStats _statsFromResults(List<GameResultRow> rows) {
+    var wins = 0, podium = 0, knockouts = 0, finishSum = 0;
+    for (final r in rows) {
+      if (r.position <= 0) continue; // malformed / partial row
+      if (r.position == 1) wins++;
+      if (r.position <= 3) podium++;
+      knockouts += r.knockouts;
+      finishSum += r.position;
+    }
+    final played = rows.where((r) => r.position > 0).length;
+    return UserStats(
+      played: played,
+      wins: wins,
+      podium: podium,
+      avgFinish: played == 0 ? 0 : finishSum / played,
+      knockouts: knockouts,
+    );
+  }
+
+  /// Offline/demo fallback for [_maybeRecordOwnResult]: keeps the in-memory
+  /// result list and stats moving with no backend round-trip.
+  void _recordOwnResultOffline(LiveGame game) {
+    final uid = _user?.id;
+    if (uid == null || game.finishOrder.isEmpty) return;
+    if (_resultsRecorded.contains(game.id)) return;
+    final me =
+        game.players.where((p) => p.id == uid && !p.isGuest).firstOrNull;
+    if (me == null) return;
+    final index = game.finishOrder.indexOf(uid);
+    if (index == -1) return;
+    _resultsRecorded.add(game.id);
+    _myResults = [
+      ..._myResults.where((r) => r.gameId != game.id),
+      GameResultRow(
+        gameId: game.id,
+        groupId: game.groupId,
+        position: index + 1,
+        playerCount: game.finishOrder.length,
+        knockouts: me.knockouts,
+        finishedAt: DateTime.now(),
+      ),
+    ];
+    _user = _user?.copyWith(stats: _statsFromResults(_myResults));
+    notifyListeners();
+  }
+
+  /// When [game] has settled, records this signed-in player's own result
+  /// (`users/{uid}/results/{gameId}`) so every device aggregates identical
+  /// lifetime stats. Guests are skipped.
+  void _maybeRecordOwnResult(LiveGame game) {
+    final uid = _repo.currentUid;
+    if (!_backendUp || uid == null || _user == null) return;
+    if (game.status != LiveGameStatus.completed || game.finishOrder.isEmpty) {
+      return;
+    }
+    if (_resultsRecorded.contains(game.id)) return;
+    final me =
+        game.players.where((p) => p.id == uid && !p.isGuest).firstOrNull;
+    if (me == null) return;
+    final index = game.finishOrder.indexOf(uid);
+    if (index == -1) return;
+    _resultsRecorded.add(game.id);
+    unawaited(_repo
+        .saveGameResult(
+          uid,
+          game.id,
+          GameResultRow(
+            gameId: game.id,
+            groupId: game.groupId,
+            position: index + 1,
+            playerCount: game.finishOrder.length,
+            knockouts: me.knockouts,
+            finishedAt: DateTime.now(),
+          ),
+        )
+        .catchError(
+            (Object e) => debugPrint('saveGameResult failed: $e')));
+  }
+
+  /// Cancels all user/group-scoped subscriptions and clears derived state.
+  void _teardownUserData() {
+    for (final s in [
+      _groupsSub,
+      _bundleSub,
+      _gameDocSub,
+      _lookupSub,
+      _presetsSub,
+      _chipSetsSub,
+      _notificationsSub,
+      _requestsSub,
+      _cashSub,
+      _resultsSub,
+    ]) {
+      s?.cancel();
+    }
+    _groupsSub = null;
+    _bundleSub = null;
+    _gameDocSub = null;
+    _lookupSub = null;
+    _presetsSub = null;
+    _chipSetsSub = null;
+    _notificationsSub = null;
+    _requestsSub = null;
+    _cashSub = null;
+    _resultsSub = null;
+    _gameSaveDebounce?.cancel();
+    _pendingGameSave = false;
+    _syncedGameKey = null;
+    _gameSyncPrimed = false;
+    _currentGroupId = null;
+    // Drop any group-scoped state from the previous session so a different
+    // account signing in on this device never sees it.
+    _currentGroup = const Group(
+      id: '',
+      name: '',
+      joinCode: '',
+      ownerId: '',
+      members: [],
+      games: [],
+      chat: [],
+      polls: [],
+      notifications: [],
+    );
+    _notifications = const [];
+    _cashHistory = const [];
+    _myResults = const [];
+    _resultsRecorded.clear();
+    _lastPushedStatsKey = null;
+  }
+
+  /// Selects a group by id and (re)subscribes its live bundle.
+  void _selectGroup(String gid) {
+    if (_currentGroupId == gid && _bundleSub != null) return;
+    _currentGroupId = gid;
+    _bundleSub?.cancel();
+    _cashSub?.cancel();
+    _cashSub = null;
+    _bundleSub = null;
+    if (!_backendUp) return;
+    _bundleSub = _repo.groupBundleStream(gid).listen((g) {
+      _currentGroup = g;
+      // Catch results of games this device never followed live (e.g. the
+      // player sat out or never opened the game screen).
+      for (final finished in g.pastGames) {
+        _maybeRecordOwnResult(finished);
+      }
+      notifyListeners();
+    }, onError: (Object e) => debugPrint('groupBundle stream error: $e'));
+    _cashSub = _repo.completedCashSessionsStream(gid).listen((list) {
+      _cashHistory = list;
+      notifyListeners();
+    }, onError: (Object e) => debugPrint('cashSessions stream error: $e'));
+  }
+
+  Group _groupFromMembership(GroupMembership r) => Group(
+        id: r.groupId,
+        name: r.name,
+        joinCode: '',
+        ownerId: '',
+        members: const [],
+        games: const [],
+        chat: const [],
+        polls: const [],
+        notifications: const [],
+        icon: r.icon,
+        pinned: r.pinned,
+      );
 
   Future<void> _loadRecovery() async {
     final recovered = await RecoveryService.loadGame();
@@ -187,76 +742,160 @@ class AppProvider extends ChangeNotifier {
 
   bool get isAuthenticated => _user != null;
 
-  /// Shared demo password for every seeded mock account.
-  static const seedPassword = 'password123';
+  /// True while the signed-in account is an anonymous (guest) session.
+  bool get isGuest => _repo.isSignedInAsGuest;
 
-  /// Emails → passwords for every account that can sign in (seeded members
-  /// plus anything created via `register`). Acts as the dummy auth store.
-  final Map<String, String> _passwords = {
-    for (final m in MockData.members) m.email.toLowerCase(): seedPassword,
-  };
+  Future<void> _onAuthStateChanged(fa.User? fbUser) async {
+    _authReady = true;
+    if (fbUser == null) {
+      _teardownUserData();
+      if (_user != null) {
+        _user = null;
+        notifyListeners();
+      }
+      return;
+    }
+    await _hydrateUser(fbUser);
+  }
 
-  int _userIdSeq = 100;
-
-  bool login(String email, String password) {
-    final key = email.trim().toLowerCase();
-    final found = MockData.members.where((m) => m.email.toLowerCase() == key);
-    if (found.isNotEmpty && _passwords[key] == password) {
-      _user = found.first;
+  /// Loads (creating on first sign-in) the Firestore profile for [fbUser] and
+  /// mirrors it into [_user]. Called from both the auth stream and directly
+  /// after login/register so navigation is never gated on stream latency.
+  Future<void> _hydrateUser(fa.User fbUser) async {
+    try {
+      await _repo.ensureUserDoc(
+        uid: fbUser.uid,
+        name: fbUser.displayName ?? 'Player',
+        email: fbUser.email ?? '',
+        starterPresets: seedPresets,
+        starterChipSet: seedChipSet,
+      );
+      final loaded = await _repo.loadUser(fbUser.uid);
+      _user = loaded ??
+          AppUser(
+            id: fbUser.uid,
+            name: fbUser.displayName ?? 'Player',
+            email: fbUser.email ?? '',
+            isAdmin: false,
+            stats: const UserStats(
+              played: 0,
+              wins: 0,
+              podium: 0,
+              avgFinish: 0,
+              knockouts: 0,
+            ),
+          );
       notifyListeners();
-      return true;
+      await _loadUserPrefs(fbUser.uid);
+      _subscribeUserData();
+    } on fa.FirebaseAuthException catch (e) {
+      debugPrint('AppProvider: profile hydration failed (${e.code})');
     }
-    return false;
   }
 
-  /// Returns `true` when a new account was created, `false` when the email
-  /// is already registered (duplicate).
-  bool register(String name, String email, String password) {
-    final key = email.trim().toLowerCase();
-    if (MockData.members.any((m) => m.email.toLowerCase() == key) ||
-        _passwords.containsKey(key)) {
-      return false;
+  /// Restores per-user preferences (`users/{uid}.prefs`) onto local state.
+  Future<void> _loadUserPrefs(String uid) async {
+    if (!_backendUp) return;
+    try {
+      final prefs = await _repo.loadUserPrefs(uid);
+      final voice = prefs['voiceEnabled'];
+      if (voice is bool) _voiceEnabled = voice;
+    } catch (e) {
+      debugPrint('loadUserPrefs failed: $e');
     }
-    final user = AppUser(
-      id: 'u-${_userIdSeq++}',
-      name: name.trim(),
-      email: email.trim(),
-      isAdmin: false,
-      stats: const UserStats(
-        played: 0,
-        wins: 0,
-        podium: 0,
-        avgFinish: 0,
-        knockouts: 0,
-      ),
-    );
-    _passwords[key] = password;
-    _user = user;
-    notifyListeners();
-    return true;
   }
 
-  /// True when an account exists for [email], so a reset "link" can be sent.
-  bool requestPasswordReset(String email) {
-    final key = email.trim().toLowerCase();
-    return MockData.members.any((m) => m.email.toLowerCase() == key) ||
-        _passwords.containsKey(key);
+  /// Fire-and-forget write of a single preference key.
+  void _persistPref(String key, Object? value) {
+    final uid = _repo.currentUid;
+    if (!_backendUp || uid == null) return;
+    unawaited(_repo
+        .saveUserPref(uid, key, value)
+        .catchError((Object e) => debugPrint('saveUserPref($key) failed: $e')));
   }
 
-  void logout() {
-    _user = null;
-    notifyListeners();
+  /// Returns `null` on success or a friendly error message for the UI.
+  Future<String?> login(String email, String password) async {
+    try {
+      final cred = await _repo.signIn(email, password);
+      if (cred.user != null) await _hydrateUser(cred.user!);
+      return null;
+    } on fa.FirebaseAuthException catch (e) {
+      return switch (e.code) {
+        'invalid-credential' ||
+        'wrong-password' ||
+        'user-not-found' =>
+          'Incorrect email or password.',
+        'invalid-email' => 'Enter a valid email address.',
+        'user-disabled' => 'This account has been disabled.',
+        'too-many-requests' => 'Too many attempts. Please try again later.',
+        'network-request-failed' => 'Network error. Check your connection.',
+        _ => e.message ?? 'Sign-in failed. Please try again.',
+      };
+    }
   }
+
+  /// Returns `null` on success or a friendly error message for the UI.
+  Future<String?> register(String name, String email, String password) async {
+    try {
+      final cred = await _repo.signUp(
+        name: name,
+        email: email,
+        password: password,
+      );
+      if (cred.user != null) await _hydrateUser(cred.user!);
+      return null;
+    } on fa.FirebaseAuthException catch (e) {
+      return switch (e.code) {
+        'email-already-in-use' => 'An account already exists for that email.',
+        'weak-password' => 'That password is too weak — use at least 8 characters.',
+        'invalid-email' => 'Enter a valid email address.',
+        'network-request-failed' => 'Network error. Check your connection.',
+        _ => e.message ?? 'Registration failed. Please try again.',
+      };
+    }
+  }
+
+  /// Sends the reset email; returns `null` on success or a friendly error.
+  Future<String?> requestPasswordReset(String email) async {
+    try {
+      await _repo.sendPasswordReset(email);
+      return null;
+    } on fa.FirebaseAuthException catch (e) {
+      return switch (e.code) {
+        'user-not-found' || 'invalid-credential' =>
+          'No account found for that email.',
+        'invalid-email' => 'Enter a valid email address.',
+        'network-request-failed' => 'Network error. Check your connection.',
+        _ => e.message ?? 'Could not send the reset email. Please try again.',
+      };
+    }
+  }
+
+  /// Signs in anonymously — the entry point of the guest flow.
+  Future<String?> signInAsGuest() async {
+    try {
+      final cred = await _repo.signInAsGuest();
+      if (cred.user != null) await _hydrateUser(cred.user!);
+      return null;
+    } on fa.FirebaseAuthException catch (e) {
+      return e.message ?? 'Guest sign-in failed. Please try again.';
+    }
+  }
+
+  Future<void> logout() => _repo.signOut();
 
   // ── Chip Sets ──────────────────────────────────────────────────────────────
+  /// Starter chip set seeded into new Firestore accounts (doc id `cs-default`
+  /// keeps the "protected default" semantics of deleteChipSet).
+  static const seedChipSet = (
+    id: 'cs-default',
+    name: 'Home Set (4 colour)',
+    chips: MockData.defaultChipSet,
+  );
+
   final List<({String id, String name, List<ChipColor> chips})> _savedChipSets =
-      [
-        (
-          id: 'cs-default',
-          name: 'Home Set (4 colour)',
-          chips: MockData.defaultChipSet,
-        ),
-      ];
+      [seedChipSet];
 
   List<({String id, String name, List<ChipColor> chips})> get savedChipSets =>
       _savedChipSets;
@@ -269,27 +908,46 @@ class AppProvider extends ChangeNotifier {
       _savedChipSets.add((id: id, name: name, chips: chips));
     }
     notifyListeners();
+    final uid = _repo.currentUid;
+    if (_backendUp && uid != null && id != seedChipSet.id) {
+      unawaited(_repo.saveChipSet(uid, id, name, chips)
+          .catchError((Object e) => debugPrint('saveChipSet failed: $e')));
+    }
   }
 
   void deleteChipSet(String id) {
     if (id == 'cs-default') return; // protect default
     _savedChipSets.removeWhere((c) => c.id == id);
     notifyListeners();
+    final uid = _repo.currentUid;
+    if (_backendUp && uid != null) {
+      unawaited(_repo.deleteChipSet(uid, id)
+          .catchError((Object e) => debugPrint('deleteChipSet failed: $e')));
+    }
   }
 
-  /// Updates the signed-in member's display details (profile screen).
+  /// Updates the signed-in member's display details (profile screen) and
+  /// persists them to the Firestore profile.
   void updateProfile({String? name, String? email}) {
     final current = _user;
     if (current == null) return;
-    _user = current.copyWith(
-      name: name?.trim().isNotEmpty == true ? name!.trim() : current.name,
-      email: email?.trim().isNotEmpty == true ? email!.trim() : current.email,
-    );
+    final nextName =
+        name?.trim().isNotEmpty == true ? name!.trim() : current.name;
+    final nextEmail =
+        email?.trim().isNotEmpty == true ? email!.trim() : current.email;
+    _user = current.copyWith(name: nextName, email: nextEmail);
     notifyListeners();
+    final uid = _repo.currentUid;
+    if (_backendUp && uid != null) {
+      unawaited(_repo.updateUserProfile(uid, name: nextName, email: nextEmail)
+          .catchError((Object e) => debugPrint('updateUserProfile failed: $e')));
+    }
   }
 
   // ── Tournament Presets (checklist §9.1) ──────────────────────────────────
-  final List<TournamentPreset> _presets = [
+  /// Starter presets seeded into new Firestore accounts so the create-
+  /// tournament wizard works out of the box.
+  static final List<TournamentPreset> seedPresets = [
     TournamentPreset(
       id: 'pr-friday',
       name: 'Friday Night Regular',
@@ -326,6 +984,8 @@ class AppProvider extends ChangeNotifier {
     ),
   ];
 
+  final List<TournamentPreset> _presets = List.of(seedPresets);
+
   List<TournamentPreset> get presets => List.unmodifiable(_presets);
 
   TournamentPreset? presetById(String? id) {
@@ -344,11 +1004,21 @@ class AppProvider extends ChangeNotifier {
       _presets.add(preset);
     }
     notifyListeners();
+    final uid = _repo.currentUid;
+    if (_backendUp && uid != null) {
+      unawaited(_repo.savePreset(uid, preset)
+          .catchError((Object e) => debugPrint('savePreset failed: $e')));
+    }
   }
 
   void deletePreset(String id) {
     _presets.removeWhere((p) => p.id == id);
     notifyListeners();
+    final uid = _repo.currentUid;
+    if (_backendUp && uid != null) {
+      unawaited(_repo.deletePreset(uid, id)
+          .catchError((Object e) => debugPrint('deletePreset failed: $e')));
+    }
   }
 
   /// Suggests up to two presets that match the signals parsed from closed
@@ -383,12 +1053,31 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── Group ──────────────────────────────────────────────────────────────────
-  Group _currentGroup = MockData.demoGroup;
+  /// Neutral placeholder until the first group of the signed-in user is
+  /// auto-selected (or the user creates/joins one).
+  Group _currentGroup = const Group(
+    id: '',
+    name: '',
+    joinCode: '',
+    ownerId: '',
+    members: [],
+    games: [],
+    chat: [],
+    polls: [],
+    notifications: [],
+  );
   Group get currentGroup => _currentGroup;
 
-  /// Every group the user belongs to. The current group is always in this
-  /// list; pinned groups float to the top of the sidebar.
-  List<Group> _groups = [MockData.demoGroup, MockData.demoGroup2];
+  /// True once a real group bundle is subscribed (id is non-empty).
+  bool get hasCurrentGroup => _currentGroupId != null;
+
+  /// The group whose live bundle is currently subscribed.
+  String? _currentGroupId;
+
+  /// Every group the user belongs to, rebuilt from the live index stream.
+  /// Rows are lightweight (no members/chat/games) — the rich state lives in
+  /// [currentGroup] via the bundle subscription.
+  List<Group> _groups = const [];
   List<Group> get groups => List.unmodifiable(_groups);
 
   /// Groups ordered pinned-first then alphabetically (client feedback: the
@@ -408,34 +1097,52 @@ class AppProvider extends ChangeNotifier {
     _groups = i == -1 ? [..._groups, group] : ([..._groups]..[i] = group);
   }
 
-  void setCurrentGroup(Group group) {
-    _setGroup(group);
-    notifyListeners();
-  }
+  /// Selects the group hub target and subscribes its live Firestore bundle.
+  void setCurrentGroup(Group group) => _selectGroup(group.id);
 
-  bool joinGroup(String code) {
-    if (code.trim().toUpperCase() == MockData.demoGroup.joinCode) {
-      _setGroup(MockData.demoGroup);
+  /// Joins a group by its invite code. Returns false when the code is
+  /// unknown or the request failed.
+  Future<bool> joinGroup(String code) async {
+    final user = _user;
+    if (!_backendUp || user == null) return false;
+    try {
+      final gid = await _repo.joinByCode(code, user);
+      if (gid == null) return false;
+      _subscribeUserData(); // refresh the index with the new row promptly
+      _selectGroup(gid);
       notifyListeners();
       return true;
+    } catch (e) {
+      debugPrint('joinGroup failed: $e');
+      return false;
     }
-    return false;
   }
 
-  Group createGroup(String name, {String icon = '♠️'}) {
+  /// Creates a new group with this account as owner. Returns null when the
+  /// caller is unauthenticated or the write failed.
+  Future<Group?> createGroup(String name, {String icon = '♠️'}) async {
+    final user = _user;
+    if (!_backendUp || user == null) return null;
     final group = Group(
       id: 'grp-${DateTime.now().millisecondsSinceEpoch}',
       name: name,
       joinCode: Formatters.generateCode(),
-      ownerId: _user?.id ?? 'u1',
-      members: _user != null ? [_user!] : const [],
+      ownerId: user.id,
+      members: [user],
       games: const [],
       chat: const [],
       polls: const [],
       notifications: const [],
       icon: icon,
     );
-    _setGroup(group);
+    try {
+      await _repo.createGroup(group, user);
+    } catch (e) {
+      debugPrint('createGroup failed: $e');
+      return null;
+    }
+    _subscribeUserData();
+    _selectGroup(group.id);
     notifyListeners();
     return group;
   }
@@ -444,6 +1151,13 @@ class AppProvider extends ChangeNotifier {
   void togglePinGroup(Group group) {
     _setGroup(group.copyWith(pinned: !group.pinned));
     notifyListeners();
+    final uid = _repo.currentUid;
+    if (_backendUp && uid != null) {
+      unawaited(_repo
+          .updateGroupIndex(uid, group.id, pinned: !group.pinned)
+          .catchError((Object e) =>
+              debugPrint('updateGroupIndex(pinned) failed: $e')));
+    }
   }
 
   void toggleAdminRole(String userId, bool isAdmin) {
@@ -457,6 +1171,12 @@ class AppProvider extends ChangeNotifier {
     }).toList();
     _setGroup(_currentGroup.copyWith(members: members));
     notifyListeners();
+    if (_backendUp) {
+      unawaited(_repo
+          .setMemberRole(_currentGroup.id, userId, isAdmin ? 'admin' : 'member')
+          .catchError(
+              (Object e) => debugPrint('setMemberRole failed: $e')));
+    }
   }
 
   // ── Game ───────────────────────────────────────────────────────────────────
@@ -700,6 +1420,7 @@ class AppProvider extends ChangeNotifier {
             .toList(),
       ),
     );
+    _postGroupChat(card);
     _syncGroupGame();
     addAuditRecord(
       'publish',
@@ -1284,13 +2005,20 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// Registers a player's request for a rebuy from the live view. The admin
-  /// approves it from the dashboard, which clears the request.
+  /// approves it from the dashboard, which clears the request. Non-authority
+  /// devices also push the change as an array-union patch so the admin's
+  /// dashboard picks it up live.
   void requestRebuy(String playerId) {
     if (_currentGame!.rebuyRequests.contains(playerId)) return;
     _currentGame = _currentGame!.copyWith(
       rebuyRequests: [..._currentGame!.rebuyRequests, playerId],
     );
     notifyListeners();
+    if (!_isGameAuthority) {
+      _patchActiveGame({
+        'rebuyRequests': FieldValue.arrayUnion([playerId]),
+      });
+    }
   }
 
   void cancelRebuyRequest(String playerId) {
@@ -1300,6 +2028,11 @@ class AppProvider extends ChangeNotifier {
           .toList(),
     );
     notifyListeners();
+    if (!_isGameAuthority) {
+      _patchActiveGame({
+        'rebuyRequests': FieldValue.arrayRemove([playerId]),
+      });
+    }
   }
 
   /// Records a re-entry (checklist §12.5): a separate, secondary option that
@@ -1364,6 +2097,11 @@ class AppProvider extends ChangeNotifier {
       addOnRequests: [..._currentGame!.addOnRequests, playerId],
     );
     notifyListeners();
+    if (!_isGameAuthority) {
+      _patchActiveGame({
+        'addOnRequests': FieldValue.arrayUnion([playerId]),
+      });
+    }
   }
 
   void cancelAddOnRequest(String playerId) {
@@ -1373,6 +2111,11 @@ class AppProvider extends ChangeNotifier {
           .toList(),
     );
     notifyListeners();
+    if (!_isGameAuthority) {
+      _patchActiveGame({
+        'addOnRequests': FieldValue.arrayRemove([playerId]),
+      });
+    }
   }
 
   void undoLast() {
@@ -1659,10 +2402,14 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// Guest flow: attach a brand-new guest to a game and mark them pending.
-  /// The guest's own session is persisted so the same device can recover the
-  /// request after a refresh (checklist 07-030). Returns an error string if
-  /// the slot is invalid or already taken.
-  String? requestGuestCheckIn(String name, String inviterId, int slot) {
+  /// With a backend this posts a request to the game's queue for the admin
+  /// device to consume — the guest's own view stays read-only. Offline (no
+  /// backend) the same mutation is applied locally so the demo flow keeps
+  /// working. The guest's session is persisted either way so the device can
+  /// recover the request after a refresh (checklist 07-030). Returns an error
+  /// string if the slot is invalid or already taken.
+  Future<String?> requestGuestCheckIn(
+      String name, String inviterId, int slot) async {
     final game = _currentGame;
     if (game == null) return 'No active game found.';
 
@@ -1679,10 +2426,43 @@ class AppProvider extends ChangeNotifier {
       return 'That guest slot is already claimed.';
     }
 
+    final guestId = 'g-${DateTime.now().millisecondsSinceEpoch}';
+    _saveGuestSession(
+      GuestSession(
+        gameId: game.id,
+        name: name.trim(),
+        inviterId: inviterId,
+        slot: slot,
+      ),
+    );
+
+    if (_backendUp) {
+      try {
+        await _repo.pushRequest(
+          gameId: game.id,
+          kind: 'guestCheckIn',
+          payload: {
+            'guestId': guestId,
+            'name': name.trim(),
+            'inviterId': inviterId,
+            'slot': slot,
+            // Lets security rules verify only group admins consume requests.
+            'gid': game.groupId,
+          },
+        );
+      } catch (e) {
+        debugPrint('pushRequest(guestCheckIn) failed: $e');
+        return 'Could not reach the host. Check your connection.';
+      }
+      // The guest stays pending until the host confirms them at check-in
+      // (spec §6 "waiting for admin confirmation", checklist 07-027/07-028).
+      return null;
+    }
+
+    // Offline / mock mode: apply locally (same rules the admin would apply).
     _pushUndo();
-    final id = 'g-${DateTime.now().millisecondsSinceEpoch}';
     final guest = Player(
-      id: id,
+      id: guestId,
       name: name,
       isGuest: true,
       inviterId: inviterId,
@@ -1708,19 +2488,17 @@ class AppProvider extends ChangeNotifier {
         name: name.trim(),
       ),
     );
-    _saveGuestSession(
-      GuestSession(
-        gameId: game.id,
-        name: name.trim(),
-        inviterId: inviterId,
-        slot: slot,
-      ),
-    );
-
-    // The guest stays pending until the host confirms them at check-in
-    // (spec §6 "waiting for admin confirmation", checklist 07-027/07-028).
     notifyListeners();
     return null;
+  }
+
+  /// Signs this device in anonymously so guests can read public projections
+  /// and write to the request queue without an account. A no-op when a real
+  /// account is already signed in — never replaces an authenticated session.
+  Future<void> ensureGuestAuth() async {
+    if (!_backendUp) return;
+    if (_repo.currentUser != null) return;
+    await signInAsGuest();
   }
 
   // ── Guest session (device-local, checklist 07-030) ─────────────────────────
@@ -2570,6 +3348,14 @@ class AppProvider extends ChangeNotifier {
       timerRunning: false,
     );
     _syncGroupGame();
+    // This device settled the game — write my own result now (other members'
+    // devices record theirs when the completed doc reaches them).
+    if (_backendUp) {
+      _maybeRecordOwnResult(_currentGame!);
+    } else {
+      // Offline fallback: aggregate locally so stats still move in demo mode.
+      _recordOwnResultOffline(_currentGame!);
+    }
     addAnnouncement('We have a winner!', true);
     pushNotification(
       AppNotification(
@@ -2640,11 +3426,35 @@ class AppProvider extends ChangeNotifier {
     );
     if (gameId != null && gameId == _currentGame!.id) {
       _currentGame = _currentGame!.copyWith(chat: [..._currentGame!.chat, msg]);
+      if (!_isGameAuthority) {
+        // Game chat is a plain list in the doc — append via array union so
+        // member devices never rewrite the whole document.
+        _patchActiveGame({
+          'chat': FieldValue.arrayUnion([chatMessageToMap(msg)]),
+        });
+      }
     } else {
       _setGroup(_currentGroup.copyWith(chat: [..._currentGroup.chat, msg]));
+      _postGroupChat(msg);
     }
     notifyListeners();
     return null;
+  }
+
+  /// Persists a group-chat message to `groups/{gid}/chat` (fire-and-forget).
+  void _postGroupChat(ChatMessage msg) {
+    if (!_backendUp || _currentGroupId == null) return;
+    unawaited(_repo
+        .sendGroupChatMessage(_currentGroupId!, msg)
+        .catchError((Object e) => debugPrint('sendGroupChat failed: $e')));
+  }
+
+  /// Persists a poll create/update to `groups/{gid}/polls` (fire-and-forget).
+  void _persistPoll(Poll poll) {
+    if (!_backendUp || _currentGroupId == null) return;
+    unawaited(_repo
+        .savePoll(_currentGroupId!, poll)
+        .catchError((Object e) => debugPrint('savePoll failed: $e')));
   }
 
   void deleteMessage(String msgId) {
@@ -2661,6 +3471,11 @@ class AppProvider extends ChangeNotifier {
           .toList(),
     );
     notifyListeners();
+    if (_backendUp && _currentGroupId != null) {
+      unawaited(_repo
+          .markChatMessageDeleted(_currentGroupId!, msgId)
+          .catchError((Object e) => debugPrint('deleteMessage failed: $e')));
+    }
   }
 
   /// Creates a poll. Returns a validation message when the question or options
@@ -2695,6 +3510,7 @@ class AppProvider extends ChangeNotifier {
       multi: multi,
     );
     _setGroup(_currentGroup.copyWith(polls: [..._currentGroup.polls, poll]));
+    _persistPoll(poll);
     pushNotification(
       AppNotification(
         id: 'n-${DateTime.now().millisecondsSinceEpoch}',
@@ -2715,6 +3531,7 @@ class AppProvider extends ChangeNotifier {
   void votePoll(String pollId, List<String> selected) {
     final userId = _user?.id;
     if (userId == null) return;
+    Poll? updated;
     _setGroup(
       _currentGroup.copyWith(
         polls: _currentGroup.polls.map((p) {
@@ -2724,7 +3541,7 @@ class AppProvider extends ChangeNotifier {
               : selected.isNotEmpty
               ? [selected.first]
               : <String>[];
-          return Poll(
+          updated = Poll(
             id: p.id,
             question: p.question,
             options: p.options,
@@ -2733,9 +3550,11 @@ class AppProvider extends ChangeNotifier {
             createdAt: p.createdAt,
             multi: p.multi,
           );
+          return updated!;
         }).toList(),
       ),
     );
+    if (updated != null) _persistPoll(updated!);
     notifyListeners();
   }
 
@@ -2762,6 +3581,7 @@ class AppProvider extends ChangeNotifier {
       ),
     );
     if (closedPoll != null) {
+      _persistPoll(closedPoll);
       pushNotification(
         AppNotification(
           id: 'n-${DateTime.now().millisecondsSinceEpoch}',
@@ -2801,8 +3621,9 @@ class AppProvider extends ChangeNotifier {
     }
 
     if (isCurrent && _currentGame != null) {
-      var updated = _currentGame!.copyWith(
-        players: _currentGame!.players
+      final before = _currentGame!;
+      var updated = before.copyWith(
+        players: before.players
             .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
             .toList(),
       );
@@ -2813,6 +3634,11 @@ class AppProvider extends ChangeNotifier {
         rsvp?.guestCount ?? 0,
       );
       _currentGame = updated;
+      // Members write only their own fields via dot-path so concurrent admin
+      // edits are never clobbered (locked architecture §writes).
+      if (!_isGameAuthority) {
+        _patchActiveGame(_rsvpDotPatch(before, updated));
+      }
     }
 
     // Keep the group's copy of the game in sync so badges update on the hub.
@@ -2838,6 +3664,53 @@ class AppProvider extends ChangeNotifier {
       ),
     );
     notifyListeners();
+  }
+
+  /// Builds the dot-path patch describing an RSVP change: the member's own
+  /// `players.{id}.rsvp` plus the guest-slot rows their +N count creates,
+  /// updates or removes. Slot docs are written whole (they belong to this
+  /// inviter), player entries field-by-field.
+  Map<String, dynamic> _rsvpDotPatch(LiveGame before, LiveGame after) {
+    final patch = <String, dynamic>{};
+
+    String? oldRsvp;
+    for (final p in before.players) {
+      if (p.id == _user?.id) {
+        oldRsvp = p.rsvp?.name;
+        break;
+      }
+    }
+    for (final p in after.players) {
+      if (p.id == _user?.id && p.rsvp?.name != oldRsvp) {
+        patch['players.${p.id}.rsvp'] = p.rsvp?.name;
+        break;
+      }
+    }
+
+    final beforeSlots = {for (final s in before.guestSlots) s.id: s};
+    for (var i = 0; i < after.guestSlots.length; i++) {
+      final s = after.guestSlots[i];
+      final old = beforeSlots[s.id];
+      if (old == null) {
+        patch['guestSlots.${s.id}'] = {
+          ...guestSlotToMap(s),
+          'orderIndex': i,
+        };
+      } else if (old.guestName != s.guestName ||
+          old.status != s.status ||
+          old.slot != s.slot) {
+        patch['guestSlots.${s.id}'] = {
+          ...guestSlotToMap(s),
+          'orderIndex': i,
+        };
+      }
+    }
+    for (final s in before.guestSlots) {
+      if (!after.guestSlots.any((n) => n.id == s.id)) {
+        patch['guestSlots.${s.id}'] = FieldValue.delete();
+      }
+    }
+    return patch;
   }
 
   /// Keeps the persisted [GuestSlot] records aligned with a member's "Going +N"
@@ -2975,55 +3848,70 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── Code lookup ────────────────────────────────────────────────────────────
-  CodeLookupResult enterGameCode(String code) {
-    final c = code.trim().toUpperCase();
-    if (c == MockData.demoGame.publicCode || c == MockData.demoGame.tvCode) {
-      _currentGame = MockData.demoGame;
-      notifyListeners();
-      return c == MockData.demoGame.tvCode
+  /// Resolves a public/TV join code through Firestore and subscribes the
+  /// matching feed. TVs and guests read the sanitized `publicGames/{id}`
+  /// projections (never the raw game doc); the returned result tells the
+  /// caller which screen to open. Returns [CodeLookupResult.notFound] for
+  /// unknown codes or when no backend is available.
+  Future<CodeLookupResult> enterGameCode(String code) async {
+    if (!_backendUp) return CodeLookupResult.notFound;
+    try {
+      final hit = await _repo.findGameByCode(code);
+      if (hit == null) return CodeLookupResult.notFound;
+
+      _lookupSub?.cancel();
+      if (hit.kind == 'game' &&
+          (_isGameAuthority || _currentGroup.id == hit.gid)) {
+        // Group members with dashboard access can follow the raw document.
+        _lookupSub =
+            _repo.gameDocSnapshots(hit.gid, hit.gameId).listen((snap) {
+          final data = snap.data();
+          if (!snap.exists || data == null) return;
+          try {
+            _clearUndoStack();
+            final remote =
+                liveGameFromFirestoreDoc(Map<String, dynamic>.from(data));
+            _currentGame = remote;
+            _lastSavedGame = remote;
+            notifyListeners();
+          } catch (e) {
+            debugPrint('code-lookup game decode failed: $e');
+          }
+        }, onError: (Object e) => debugPrint('lookup stream error: $e'));
+      } else {
+        // Guests / TVs: sanitized projection feed.
+        final projectionKey = hit.kind == 'tv' ? 'tv' : 'guest';
+        _lookupSub = _repo.publicGameStream(hit.gameId).listen((doc) {
+          final payload = doc[projectionKey];
+          if (payload == null) return;
+          try {
+            _clearUndoStack();
+            _currentGame = liveGameFromMap(
+              Map<String, dynamic>.from(payload as Map),
+            );
+            notifyListeners();
+          } catch (e) {
+            debugPrint('projection decode failed: $e');
+          }
+        }, onError: (Object e) => debugPrint('public stream error: $e'));
+      }
+      return hit.kind == 'tv'
           ? CodeLookupResult.tv
           : CodeLookupResult.game;
+    } catch (e) {
+      debugPrint('enterGameCode failed: $e');
+      return CodeLookupResult.notFound;
     }
-    return CodeLookupResult.notFound;
   }
 
   // ── Cash game ──────────────────────────────────────────────────────────────
   CashSession? _cashSession;
   CashSession? get cashSession => _cashSession;
 
-  /// Completed cash sessions shown in history (checklist 16-002). Seeded with
-  /// a demo record so the section is populated out of the box.
-  List<CashSession> _cashHistory = [
-    MockData.demoCashSession.copyWith(
-      isCompleted: true,
-      players: const [
-        CashPlayer(
-          id: 'cp-0',
-          name: 'Daniel',
-          stack: 0,
-          totalBuyIns: 60,
-          buyInCount: 2,
-          cashedOut: 82,
-        ),
-        CashPlayer(
-          id: 'cp-1',
-          name: 'Marcus',
-          stack: 0,
-          totalBuyIns: 20,
-          buyInCount: 1,
-          cashedOut: 14,
-        ),
-        CashPlayer(
-          id: 'cp-2',
-          name: 'Sophia',
-          stack: 0,
-          totalBuyIns: 40,
-          buyInCount: 2,
-          cashedOut: 38,
-        ),
-      ],
-    ),
-  ];
+  /// Completed cash sessions shown in history (checklist 16-002). Cloud-backed
+  /// per group via [completedCashSessionsStream]; locally appended when the
+  /// backend is unavailable.
+  List<CashSession> _cashHistory = const [];
   List<CashSession> get cashHistory => List.unmodifiable(_cashHistory);
 
   void startCashGame(CashSessionSettings settings, List<String> playerNames) {
@@ -3151,6 +4039,14 @@ class AppProvider extends ChangeNotifier {
     );
     _cashHistory = [_cashSession!, ..._cashHistory];
     notifyListeners();
+    final gid = _currentGroupId ?? _currentGame?.groupId;
+    final uid = _repo.currentUid;
+    if (_backendUp && gid != null && uid != null) {
+      unawaited(_repo
+          .saveCashSession(gid, _cashSession!)
+          .catchError(
+              (Object e) => debugPrint('saveCashSession failed: $e')));
+    }
     clearCashSession();
   }
 
@@ -3162,7 +4058,9 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── Notifications ──────────────────────────────────────────────────────────
-  List<AppNotification> _notifications = List.of(MockData.demoNotifications);
+  /// Replaced by the live inbox stream once user data is subscribed; empty
+  /// until then (no demo seed — a fresh account starts clean).
+  List<AppNotification> _notifications = const [];
   List<AppNotification> get notifications => _notifications;
 
   int get unreadCount => _notifications.where((n) => !n.read).length;
@@ -3170,6 +4068,11 @@ class AppProvider extends ChangeNotifier {
   void markAllRead() {
     _notifications = _notifications.map((n) => n.copyWith(read: true)).toList();
     notifyListeners();
+    final uid = _repo.currentUid;
+    if (_backendUp && uid != null) {
+      unawaited(_repo.markAllNotificationsRead(uid)
+          .catchError((Object e) => debugPrint('markAllRead failed: $e')));
+    }
   }
 
   void markNotificationRead(String id) {
@@ -3177,12 +4080,29 @@ class AppProvider extends ChangeNotifier {
         .map((n) => n.id == id ? n.copyWith(read: true) : n)
         .toList();
     notifyListeners();
+    final uid = _repo.currentUid;
+    if (_backendUp && uid != null) {
+      unawaited(_repo.markNotificationRead(uid, id)
+          .catchError((Object e) => debugPrint('markRead failed: $e')));
+    }
   }
 
-  /// Appends a notification to the top of the inbox (checklist §08).
+  /// Prepends a notification locally and fans it out to every other member of
+  /// the current group's inbox (`users/{uid}/notifications`).
   void pushNotification(AppNotification notification) {
     _notifications = [notification, ..._notifications];
     notifyListeners();
+    final uid = _repo.currentUid;
+    if (_backendUp && uid != null) {
+      final targets = _currentGroup.members
+          .map((m) => m.id)
+          .where((id) => id != uid)
+          .toList();
+      if (targets.isNotEmpty) {
+        unawaited(_repo.fanOutNotifications(targets, notification)
+            .catchError((Object e) => debugPrint('fanOut failed: $e')));
+      }
+    }
   }
 
   // ── Voice & misc ───────────────────────────────────────────────────────────
@@ -3191,12 +4111,14 @@ class AppProvider extends ChangeNotifier {
 
   void toggleVoice() {
     _voiceEnabled = !_voiceEnabled;
+    _persistPref('voiceEnabled', _voiceEnabled);
     notifyListeners();
   }
 
   void setVoiceEnabled(bool value) {
     if (_voiceEnabled == value) return;
     _voiceEnabled = value;
+    _persistPref('voiceEnabled', _voiceEnabled);
     notifyListeners();
   }
 
@@ -3312,9 +4234,20 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Deletes the signed-in account and invalidates every session so a deleted
-  /// account cannot keep using a stale live game (checklist 05-014).
-  void deleteAccount() {
+  /// Deletes the signed-in account (profile doc, membership mirrors, auth
+  /// user) and invalidates every session so a deleted account cannot keep
+  /// using a stale live game (checklist 05-014). Returns a friendly error
+  /// message on failure — notably `requires-recent-login`, where the caller
+  /// must re-authenticate first.
+  Future<String?> deleteAccount() async {
+    try {
+      await _repo.deleteAccount();
+    } on fa.FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        return 'For security please sign in again before deleting your account.';
+      }
+      return e.message ?? 'Could not delete the account. Please try again.';
+    }
     _user = null;
     _currentGame = null;
     _cashSession = null;
@@ -3325,6 +4258,7 @@ class AppProvider extends ChangeNotifier {
     RecoveryService.clearCashSession();
     RecoveryService.clearGuestSession();
     notifyListeners();
+    return null;
   }
 
   String _guestCode = '';
@@ -3359,6 +4293,8 @@ class AppProvider extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+    _authSub?.cancel();
+    _teardownUserData();
     super.dispose();
   }
 }

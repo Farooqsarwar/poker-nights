@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
+import '../providers/app_provider.dart';
+
 import '../screens/cash/cash_game_live_screen.dart';
 import '../screens/cash/cash_game_screen.dart';
 import '../screens/public/auth_screen.dart';
@@ -36,11 +38,55 @@ import '../screens/tournament/structure_review_screen.dart';
 import '../widgets/screen_shell.dart';
 import 'route_paths.dart';
 
-/// App-wide route table. Screens mirror the web `AppContext` screen ids:
-/// public and TV/guest screens are full-screen; everything else sits inside
-/// the persistent app shell (sidebar on desktop, drawer + bottom nav on mobile).
-final GoRouter appRouter = GoRouter(
+/// Routes reachable without a signed-in account.
+const _publicPaths = {
+  RoutePaths.splash,
+  RoutePaths.landing,
+  RoutePaths.login,
+  RoutePaths.register,
+  RoutePaths.forgotPassword,
+  RoutePaths.tvMode,
+  RoutePaths.guestFlow,
+  RoutePaths.privacy,
+  RoutePaths.terms,
+  RoutePaths.support,
+  RoutePaths.join,
+};
+
+/// Shell routes a guest session (no account) may enter — mirrors
+/// `ScreenShell._guestAllowed`.
+const _guestAllowed = {RoutePaths.playerLive, RoutePaths.resultPodium};
+
+/// Builds the app router wired to [app] so the auth guard re-evaluates on
+/// every provider change (sign-in/out and the initial `authReady` flip).
+GoRouter buildAppRouter(AppProvider app) => GoRouter(
   initialLocation: RoutePaths.splash,
+  refreshListenable: app,
+  redirect: (context, state) {
+    final path = state.uri.path;
+    final ready = app.authReady;
+    final authed = app.isAuthenticated;
+
+    // Hold every navigation at splash until Firebase resolves the persisted
+    // session, so guards never run against a half-initialised auth state.
+    if (!ready) {
+      return path == RoutePaths.splash ? null : RoutePaths.splash;
+    }
+
+    final guestOk = app.hasGuestSession && _guestAllowed.contains(path);
+    if (!authed && !guestOk && !_publicPaths.contains(path)) {
+      final query = state.uri.query.isEmpty ? '' : '?${state.uri.query}';
+      return '${RoutePaths.login}?next=${Uri.encodeComponent('$path$query')}';
+    }
+    if (authed &&
+        (path == RoutePaths.splash ||
+            path == RoutePaths.login ||
+            path == RoutePaths.register ||
+            path == RoutePaths.forgotPassword)) {
+      return RoutePaths.home;
+    }
+    return null;
+  },
   // Catch bad/unknown routes and show a friendly page instead of a red crash.
   errorBuilder: (context, state) => Scaffold(
     backgroundColor: const Color(0xFF0D0D0D),

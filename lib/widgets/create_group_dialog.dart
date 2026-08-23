@@ -125,16 +125,25 @@ Future<void> openCreateGroupDialog(BuildContext context) {
   );
 }
 
-void _create(
+Future<void> _create(
   BuildContext context,
   TextEditingController controller,
   String iconName,
-) {
+) async {
   final name = controller.text.trim();
   if (name.isEmpty) return;
   final app = context.read<AppProvider>();
-  app.createGroup(name, icon: iconName);
+  final messenger = ScaffoldMessenger.of(context);
+  final navigator = Navigator.of(context);
+  final created = await app.createGroup(name, icon: iconName);
+  if (created == null) {
+    messenger.showSnackBar(const SnackBar(
+      content: Text('Could not create the group. Please try again.'),
+    ));
+    return;
+  }
   controller.dispose();
-  Navigator.of(context).pop();
+  navigator.pop();
+  if (!context.mounted) return;
   context.go(RoutePaths.group);
 }

@@ -387,44 +387,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 onChanged: (_) => setState(() => _joinError = ''),
               ),
-              const SizedBox(height: AppSpacing.md),
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.secondary.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Demo code: ',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    InkWell(
-                      onTap: () =>
-                          _joinController.text = AppAssets.demoGroupCode,
-                      child: Text(
-                        AppAssets.demoGroupCode,
-                        style: AppTypography.mono(
-                          size: AppFontSizes.xs,
-                          weight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: AppSpacing.xl),
               AppButton(
                 fullWidth: true,
                 size: AppButtonSize.lg,
-                onPressed: () {
-                  final ok = app.joinGroup(_joinController.text);
+                onPressed: () async {
+                  final ok = await app.joinGroup(_joinController.text);
+                  if (!mounted) return;
                   if (!ok) {
                     setState(
                       () => _joinError =
@@ -462,9 +431,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 fullWidth: true,
                 size: AppButtonSize.lg,
                 disabled: _groupNameController.text.trim().length < 2,
-                onPressed: () {
+                onPressed: () async {
                   if (_groupNameController.text.trim().length < 2) return;
-                  app.createGroup(_groupNameController.text.trim());
+                  final created =
+                      await app.createGroup(_groupNameController.text.trim());
+                  if (!context.mounted) return;
+                  if (created == null) {
+                    setState(() => _joinError =
+                        'Could not create the group. Please try again.');
+                    return;
+                  }
                   setState(() => _showCreate = false);
                   context.go(RoutePaths.group);
                 },

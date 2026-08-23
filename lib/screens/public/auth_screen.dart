@@ -64,7 +64,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  void _handleSubmit() async {
+  Future<void> _handleSubmit() async {
     setState(() {
       _error = null;
       _success = null;
@@ -78,20 +78,7 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
-    if (_isForgot) {
-      final app = context.read<AppProvider>();
-      final exists = app.requestPasswordReset(email);
-      if (!exists) {
-        setState(() => _error = 'No account found for that email.');
-        return;
-      }
-      setState(
-        () => _success = 'A password reset link has been sent to $email.',
-      );
-      return;
-    }
-
-    if (_passwordController.text.length < 8) {
+    if (!_isForgot && _passwordController.text.length < 8) {
       setState(() => _error = 'Password must be at least 8 characters.');
       return;
     }
@@ -107,35 +94,39 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 600));
+    final app = context.read<AppProvider>();
+
+    final String? error;
+    switch (widget.mode) {
+      case AuthMode.login:
+        error = await app.login(email, _passwordController.text);
+      case AuthMode.register:
+        error = await app.register(
+          _nameController.text.trim(),
+          email,
+          _passwordController.text,
+        );
+      case AuthMode.forgotPassword:
+        error = await app.requestPasswordReset(email);
+    }
     if (!mounted) return;
 
-    final app = context.read<AppProvider>();
-    final dest = widget.next ?? RoutePaths.home;
-    if (widget.mode == AuthMode.login) {
-      final ok = app.login(email, _passwordController.text);
-      if (!ok) {
-        setState(() {
-          _loading = false;
-          _error = 'Incorrect email or password.';
-        });
-        return;
-      }
-    } else {
-      final ok = app.register(
-        _nameController.text.trim(),
-        email,
-        _passwordController.text,
-      );
-      if (!ok) {
-        setState(() {
-          _loading = false;
-          _error = 'An account already exists for that email.';
-        });
-        return;
-      }
+    if (error != null) {
+      setState(() {
+        _loading = false;
+        _error = error;
+      });
+      return;
     }
-    context.go(dest);
+
+    if (_isForgot) {
+      setState(() {
+        _loading = false;
+        _success = 'A password reset link has been sent to $email.';
+      });
+      return;
+    }
+    context.go(widget.next ?? RoutePaths.home);
   }
 
   /// A leading field icon padded to sit inside the input pill.
@@ -363,34 +354,6 @@ class _AuthScreenState extends State<AuthScreen> {
                         prompt: "Don't have an account? ",
                         action: 'Create Account',
                         onTap: () => context.go(RoutePaths.register),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Center(
-                        child: SelectableText.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: 'Demo: ',
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                              TextSpan(
-                                text: 'daniel@example.com',
-                                style: AppTypography.monoXs.copyWith(
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              TextSpan(
-                                text: ' / ${AppProvider.seedPassword}',
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                            ],
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
                       ),
                     ] else if (_isRegister) ...[
                       _switchLine(

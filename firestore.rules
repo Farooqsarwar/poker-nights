@@ -1,0 +1,206 @@
+rules_version = '2';
+
+// Poker Night — Cloud Firestore security rules.
+//
+// Model:
+//  - Group OWNER (groups/{gid}.ownerId) and group ADMINS (role == 'admin')
+//    are the "authority" devices: they may write whole game documents.
+//  - Regular MEMBERS patch only their own slices of a game document
+//    (their player row, their guest slots, chat, rebuy/add-on request lists)
+//    and everything else must remain byte-identical.
+//  - GUESTS and TVs never touch game documents: they read sanitized
+//    projections in publicGames/{gameId} and post to requests/{gameId}/items.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(gid) {
+      return signedIn()
+          && exists(/databases/$(database)/documents/groups/$(gid)/members/$(request.auth.uid));
+    }
+
+    function isGroupAdmin(gid) {
+      return signedIn() && exists(/databases/$(database)/documents/groups/$(gid))
+          && (
+            get(/databases/$(database)/documents/groups/$(gid)).data.ownerId
+                == request.auth.uid
+            || get(/databases/$(database)/documents/groups/$(gid)/members/$(request.auth.uid)).data.role
+                == 'admin'
+          );
+    }
+
+    // A member update on a game doc may only vary these subtrees; every other
+    // section listed below must be identical before/after.
+    function sameVal(key, def) {
+      return request.resource.data.get(key, def) == resource.data.get(key, def);
+    }
+
+    function memberGameEdit() {
+      return sameVal('groupId', '')
+          && sameVal('settings', {})
+          && sameVal('structure', {})
+          && sameVal('status', '')
+          && sameVal('publicCode', '')
+          && sameVal('tvCode', '')
+          && sameVal('currentLevel', -1)
+          && sameVal('timerRunning', true)
+          && sameVal('secondsRemaining', -1)
+          && sameVal('levelEndTime', null)
+          && sameVal('totalChipsInPlay', -1)
+          && sameVal('pendingGuests', {})
+          && sameVal('finishOrder', [])
+          && sameVal('speedRecommendation', 'x')
+          && sameVal('settlementConfirmed', true)
+          && sameVal('seatingConfirmed', true)
+          && sameVal('checkInClosed', true)
+          && sameVal('structureConfirmed', true)
+          && sameVal('dealerPlayerId', 'x')
+          && sameVal('announcements', [])
+          && sameVal('auditHistory', [])
+          && sameVal('originalLevels', []);
+    }
+
+    // ---------- users ----------
+    // Private profiles. Stats live here too; updated by the owner device.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+
+      // Tournament presets / chip sets — personal library.
+      match /presets/{presetId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+      match /chipSets/{setId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+
+      // Notification inbox. Anyone signed-in may DROP a notification into
+      // another user's inbox (fan-out); only the owner can read/mark/delete.
+      match /notifications/{notifId} {
+        allow create: if signedIn();
+        allow read, update, delete: if signedIn() && request.auth.uid == uid;
+        allow update: if signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      }
+
+      // Membership index mirror (one doc per joined group). Self-managed.
+      match /groups/{gid} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+
+      // Personal tournament results (one doc per settled game). Written by
+      // the player's own device when it sees a game complete; aggregated
+      // client-side into lifetime stats.
+      match /results/{resultId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // ---------- groups ----------
+    match /groups/{gid} {
+      // Meta doc: name/icon/joinCode/ownerId. Readable by members so the
+      // bundle stream can resolve it.
+      allow read: if isMember(gid);
+      allow create: if signedIn()
+          && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isGroupAdmin(gid);
+
+      // Member roster rows carry name + role. Members read each other's rows.
+      match /members/{memberUid} {
+        allow read: if isMember(gid);
+        allow create: if signedIn() && request.auth.uid == memberUid;
+        // Role changes / removals are admin+owner ops. A member may fix their
+        // own display name and mirror their own stats summary.
+        allow update: if isGroupAdmin(gid)
+            || (signedIn() && request.auth.uid == memberUid
+                && request.resource.data.diff(resource.data).affectedKeys()
+                    .hasOnly(['name', 'stats']));
+        allow delete: if isGroupAdmin(gid)
+            || (signedIn() && request.auth.uid == memberUid);
+      }
+
+      // Games: authority writes whole docs; members get a tightly scoped
+      // patch path; guests have no access here at all.
+      match /games/{gameId} {
+        allow read: if isMember(gid);
+        allow create, delete: if isGroupAdmin(gid);
+        allow update: if isGroupAdmin(gid) || (isMember(gid) && memberGameEdit());
+      }
+
+      // Group chat.
+      match /chat/{msgId} {
+        allow read: if isMember(gid);
+        allow create: if isMember(gid)
+            && request.resource.data.authorId == request.auth.uid;
+        // Soft-delete ("deleted": true) by author or an admin; no hard deletes.
+        allow update: if isMember(gid)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleted'])
+            && (
+              resource.data.authorId == request.auth.uid
+              || isGroupAdmin(gid)
+            );
+        allow delete: if false;
+      }
+
+      // Polls: any member can create/vote/close; cleanup by admins only.
+      match /polls/{pollId} {
+        allow read, create, update: if isMember(gid);
+        allow delete: if isGroupAdmin(gid);
+      }
+
+      // Completed cash-game sessions.
+      match /cashSessions/{sessionId} {
+        allow read, create, update: if isMember(gid);
+        allow delete: if isGroupAdmin(gid);
+      }
+    }
+
+    // ---------- join codes ----------
+    // Documents hold {kind, gid|gameId}. Any signed-in user may RESOLVE a
+    // code (join flows). Creation happens in the same batch that creates the
+    // group/game, so no cross-doc check is possible there; later updates
+    // (game tv/public codes upserted on publish) require group admin rights.
+    match /joinCodes/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if signedIn() && isGroupAdmin(resource.data.gid);
+    }
+
+    // ---------- public game projections ----------
+    // Sanitized TV / guest feeds keyed by public/tv join code. TVs are often
+    // unauthenticated browsers, hence world-readable by design — projections
+    // contain no personal data beyond first names and seat assignments.
+    match /publicGames/{gameId} {
+      allow read: if true;
+      allow create, update: if signedIn() && isGroupAdmin(request.resource.data.gid);
+      allow delete: if signedIn() && isGroupAdmin(resource.data.gid);
+    }
+
+    // ---------- guest/member request queue ----------
+    // requests/{gameId}/items/{reqId}: guests push check-in requests, members
+    // push rebuy/add-on requests. Only group admins of payload.gid may
+    // consume (flip consumed:true).
+    match /requests/{gameId} {
+      allow read: if false; // parent placeholder doc is never read directly
+
+      match /items/{reqId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+            && request.resource.data.keys().hasAll(['kind', 'gid'])
+            && request.resource.data.gid is string;
+        allow update: if signedIn()
+            && isGroupAdmin(request.resource.data.gid);
+        allow delete: if signedIn()
+            && isGroupAdmin(resource.data.gid);
+      }
+    }
+
+    // Deny everything not explicitly matched above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -100,16 +100,21 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     super.dispose();
   }
 
-  void _submitCode() {
-    final result = context.read<AppProvider>().enterGameCode(
+  Future<void> _submitCode() async {
+    final result = await context.read<AppProvider>().enterGameCode(
       _codeController.text.trim(),
     );
+    if (!mounted) return;
     if (result == CodeLookupResult.notFound) {
       setState(
         () => _codeError = 'Game not found — check the code and try again.',
       );
     } else if (result == CodeLookupResult.game) {
       final app = context.read<AppProvider>();
+      // Guests authenticate anonymously so the request queue accepts their
+      // writes and the router guard lets them into the live view.
+      await app.ensureGuestAuth();
+      if (!mounted) return;
       final session = app.guestSession;
       final game = app.currentGame;
       if (session != null && game != null && session.gameId == game.id) {
@@ -137,16 +142,17 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     }
   }
 
-  void _requestCheckIn() {
+  Future<void> _requestCheckIn() async {
     final app = context.read<AppProvider>();
     if (_selectedInviter != null &&
         _selectedSlot != null &&
         _nameController.text.trim().isNotEmpty) {
-      final err = app.requestGuestCheckIn(
+      final err = await app.requestGuestCheckIn(
         _nameController.text.trim(),
         _selectedInviter!,
         _selectedSlot!,
       );
+      if (!mounted) return;
       if (err != null) {
         setState(() => _nameError = err);
         return;

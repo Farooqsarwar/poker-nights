@@ -1,0 +1,712 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fa;
+import 'package:flutter/foundation.dart';
+
+import '../models/app_notification.dart';
+import '../models/cash_game.dart';
+import '../models/chip_color.dart';
+import '../models/game.dart';
+import '../models/group.dart';
+import '../models/live_game.dart';
+import '../models/tournament_preset.dart';
+import '../models/user.dart';
+import '../utils/model_codec.dart';
+
+/// A membership row mirrored under [users/{uid}/groups/{groupId}] so the
+/// sidebar can render every group without reading protected group documents.
+class GroupMembership {
+  const GroupMembership({
+    required this.groupId,
+    required this.name,
+    required this.icon,
+    required this.pinned,
+    required this.role,
+  });
+
+  final String groupId;
+  final String name;
+  final String icon;
+  final bool pinned;
+
+  /// 'admin' | 'member'
+  final String role;
+
+  Map<String, dynamic> toMap() => {
+        'groupId': groupId,
+        'name': name,
+        'icon': icon,
+        'pinned': pinned,
+        'role': role,
+      };
+
+  static GroupMembership fromMap(String gid, Map<String, dynamic> m) =>
+      GroupMembership(
+        groupId: m['groupId'] as String? ?? gid,
+        name: (m['name'] as String?) ?? '',
+        icon: (m['icon'] as String?) ?? '♠️',
+        pinned: (m['pinned'] as bool?) ?? false,
+        role: (m['role'] as String?) ?? 'member',
+      );
+}
+
+/// A queued request posted by a member/guest device for the admin device to
+/// consume (guest check-in, rebuy/add-on/check-in requests).
+class GameRequest {
+  const GameRequest({
+    required this.id,
+    required this.kind,
+    required this.payload,
+    required this.createdAt,
+  });
+
+  final String id;
+
+  /// 'guestCheckIn' | 'rebuyReq' | 'addOnReq' | 'checkInReq'
+  final String kind;
+  final Map<String, dynamic> payload;
+  final DateTime createdAt;
+}
+
+/// One settled tournament from the signed-in player's point of view, mirrored
+/// under `users/{uid}/results/{gameId}` so every device can aggregate the same
+/// lifetime stats (played / wins / podium / avgFinish / knockouts).
+class GameResultRow {
+  const GameResultRow({
+    required this.gameId,
+    required this.groupId,
+    required this.position,
+    required this.playerCount,
+    required this.knockouts,
+    required this.finishedAt,
+  });
+
+  final String gameId;
+  final String groupId;
+
+  /// 1-based finishing position.
+  final int position;
+  final int playerCount;
+  final int knockouts;
+  final DateTime? finishedAt;
+
+  Map<String, dynamic> toMap() => {
+        'gameId': gameId,
+        'groupId': groupId,
+        'position': position,
+        'playerCount': playerCount,
+        'knockouts': knockouts,
+      };
+
+  static GameResultRow fromMap(String id, Map<String, dynamic> m) =>
+      GameResultRow(
+        gameId: m['gameId'] as String? ?? id,
+        groupId: (m['groupId'] as String?) ?? '',
+        position: (m['position'] as num?)?.toInt() ?? 0,
+        playerCount: (m['playerCount'] as num?)?.toInt() ?? 0,
+        knockouts: (m['knockouts'] as num?)?.toInt() ?? 0,
+        finishedAt: switch (m['finishedAt']) {
+          final DateTime dt => dt,
+          _ => null,
+        },
+      );
+}
+
+/// Single Firestore access point for the whole app. Screens never touch
+/// Firestore directly; [AppProvider] calls these methods optimistically after
+/// mutating local state.
+///
+/// Echo-loop prevention: callers only apply emissions whose snapshot has
+/// `metadata.hasPendingWrites == false`, so locally-sourced writes never bounce
+/// back while genuine remote writes propagate normally.
+class FirebaseRepository {
+  FirebaseRepository._();
+  static final FirebaseRepository instance = FirebaseRepository._();
+
+  FirebaseFirestore get _db => FirebaseFirestore.instance;
+  fa.FirebaseAuth get _auth => fa.FirebaseAuth.instance;
+
+  /// Stable per-install id stamped onto every write as `writerId`.
+  String? _deviceId;
+  String get deviceId =>
+      _deviceId ??= 'dev-${DateTime.now().millisecondsSinceEpoch}';
+
+  Map<String, dynamic> _stamp(Map<String, dynamic>? data) => {
+        ...?data,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'writerId': deviceId,
+      };
+
+  // ── Auth ───────────────────────────────────────────────────────────────────
+  Stream<fa.User?> authStateChanges() => _auth.authStateChanges();
+  fa.User? get currentUser => _auth.currentUser;
+  String? get currentUid => _auth.currentUser?.uid;
+  bool get isSignedInAsGuest => _auth.currentUser?.isAnonymous ?? false;
+
+  Future<fa.UserCredential> signUp({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final cred = await _auth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+    await cred.user?.updateDisplayName(name.trim());
+    return cred;
+  }
+
+  Future<fa.UserCredential> signIn(String email, String password) =>
+      _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
+
+  Future<fa.UserCredential> signInAsGuest() => _auth.signInAnonymously();
+
+  Future<void> sendPasswordReset(String email) =>
+      _auth.sendPasswordResetEmail(email: email.trim());
+
+  Future<void> signOut() => _auth.signOut();
+
+  /// Deletes the profile doc, membership mirrors and rows, then the auth user.
+  /// Throws [fa.FirebaseException] code `requires-recent-login` when the
+  /// caller must re-authenticate first.
+  Future<void> deleteAccount() async {
+    final uid = currentUid;
+    if (uid == null) return;
+    final userDoc = _db.collection('users').doc(uid);
+
+    final memberships = await userDoc.collection('groups').get();
+    final batch = _db.batch();
+    for (final m in memberships.docs) {
+      batch.delete(m.reference);
+      batch.delete(
+          _db.collection('groups').doc(m.id).collection('members').doc(uid));
+    }
+    for (final sub in const ['presets', 'chipSets', 'notifications']) {
+      final docs = await userDoc.collection(sub).get();
+      for (final d in docs.docs) {
+        batch.delete(d.reference);
+      }
+    }
+    batch.delete(userDoc);
+    await batch.commit();
+    await _auth.currentUser?.delete();
+  }
+
+  // ── Users ──────────────────────────────────────────────────────────────────
+  /// Creates the profile doc on first sign-in, optionally seeding starter
+  /// presets / chip set so a fresh account is immediately usable. Existing
+  /// profiles only get their name/email refreshed.
+  Future<void> ensureUserDoc({
+    required String uid,
+    required String name,
+    required String email,
+    List<TournamentPreset> starterPresets = const [],
+    ({String id, String name, List<ChipColor> chips})? starterChipSet,
+  }) async {
+    final ref = _db.collection('users').doc(uid);
+    final snap = await ref.get();
+    if (!snap.exists) {
+      final batch = _db.batch();
+      batch.set(ref, _stamp({
+        'name': name,
+        'email': email,
+        'stats': userStatsToMap(const UserStats(
+            played: 0, wins: 0, podium: 0, avgFinish: 0, knockouts: 0)),
+        'prefs': <String, dynamic>{},
+        'createdAt': FieldValue.serverTimestamp(),
+      }));
+      for (final p in starterPresets) {
+        batch.set(
+            ref.collection('presets').doc(p.id), tournamentPresetToMap(p));
+      }
+      if (starterChipSet != null) {
+        batch.set(ref.collection('chipSets').doc(starterChipSet.id), {
+          'name': starterChipSet.name,
+          'chips': [
+            for (final c in starterChipSet.chips) chipColorToMap(c),
+          ],
+        });
+      }
+      await batch.commit();
+    } else {
+      await ref.set(_stamp({'name': name, 'email': email}),
+          SetOptions(merge: true));
+    }
+  }
+
+  Future<AppUser?> loadUser(String uid) async {
+    final snap = await _db.collection('users').doc(uid).get();
+    if (!snap.exists) return null;
+    final data = Map<String, dynamic>.from(snap.data()!);
+    return AppUser(
+      id: uid,
+      name: (data['name'] as String?) ?? '',
+      email: (data['email'] as String?) ?? '',
+      isAdmin: false,
+      stats: data['stats'] == null
+          ? const UserStats(
+              played: 0, wins: 0, podium: 0, avgFinish: 0, knockouts: 0)
+          : userStatsFromMap(Map<String, dynamic>.from(data['stats'] as Map)),
+    );
+  }
+
+  Future<void> updateUserProfile(String uid, {String? name, String? email}) =>
+      _db.collection('users').doc(uid).set(
+            _stamp({
+              'name': ?name,
+              'email': ?email,
+            }),
+            SetOptions(merge: true),
+          );
+
+  Future<void> saveUserPref(String uid, String key, Object? value) => _db
+      .collection('users').doc(uid)
+      .set(_stamp({'prefs.$key': value}), SetOptions(merge: true));
+
+  /// Reads the stored per-user preferences map (`users/{uid}.prefs`).
+  Future<Map<String, dynamic>> loadUserPrefs(String uid) async {
+    final snap = await _db.collection('users').doc(uid).get();
+    if (!snap.exists) return const {};
+    final prefs = snap.data()!['prefs'];
+    return prefs is Map ? Map<String, dynamic>.from(prefs) : const {};
+  }
+
+  /// Persists the signed-in player's own result for a settled tournament.
+  /// Doc id is the gameId so re-writes are idempotent.
+  Future<void> saveGameResult(
+    String uid,
+    String gameId,
+    GameResultRow row,
+  ) =>
+      _db.collection('users').doc(uid).collection('results').doc(gameId).set(
+            _stamp({...row.toMap(), 'finishedAt': FieldValue.serverTimestamp()}),
+          );
+
+  /// Live stream of every result this player has recorded — the source of
+  /// truth for lifetime stats.
+  Stream<List<GameResultRow>> resultsStream(String uid) => _db
+      .collection('users').doc(uid).collection('results')
+      .snapshots()
+      .map((s) => [
+            for (final d in s.docs)
+              GameResultRow.fromMap(d.id, Map<String, dynamic>.from(d.data())),
+          ]);
+
+  /// Mirrors a compact stats summary onto the caller's own roster row
+  /// (`groups/{gid}/members/{uid}`) so other members' devices can display it
+  /// without reading private profile data.
+  Future<void> saveMemberStats(String gid, String uid, UserStats stats) =>
+      _db.collection('groups').doc(gid).collection('members').doc(uid).set(
+            {'stats': userStatsToMap(stats)},
+            SetOptions(merge: true),
+          );
+
+  // ── Groups ─────────────────────────────────────────────────────────────────
+  DocumentReference userGroupIndexRef(String uid, String gid) =>
+      _db.collection('users').doc(uid).collection('groups').doc(gid);
+
+  /// Creates the group doc, owner membership row, the owner's mirror index
+  /// entry and the join-code lookup entry in one atomic batch.
+  Future<void> createGroup(Group group, AppUser owner) async {
+    final gid = group.id;
+    final batch = _db.batch();
+
+    final groupRef = _db.collection('groups').doc(gid);
+    batch.set(groupRef, _stamp({
+      'name': group.name,
+      'joinCode': group.joinCode,
+      'ownerId': group.ownerId,
+      'icon': group.icon,
+      'createdAt': FieldValue.serverTimestamp(),
+    }));
+
+    batch.set(groupRef.collection('members').doc(owner.id), {
+      'name': owner.name,
+      'role': 'admin',
+      'joinedAt': FieldValue.serverTimestamp(),
+    });
+
+    batch.set(
+        userGroupIndexRef(owner.id, gid),
+        GroupMembership(
+                groupId: gid,
+                name: group.name,
+                icon: group.icon,
+                pinned: false,
+                role: 'admin')
+            .toMap());
+
+    batch.set(_db.collection('joinCodes').doc(group.joinCode.toUpperCase()),
+        {'gid': gid, 'kind': 'group'});
+
+    await batch.commit();
+  }
+
+  /// Resolves a join code and joins atomically: reads joinCodes/{code}, writes
+  /// members/{uid} + the user's index mirror. Returns the gid, or null when
+  /// the code does not exist.
+  Future<String?> joinByCode(String code, AppUser user) async {
+    final key = code.trim().toUpperCase();
+    final codeSnap = await _db.collection('joinCodes').doc(key).get();
+    if (!codeSnap.exists) return null;
+    final data = Map<String, dynamic>.from(codeSnap.data()!);
+    final gid = data['gid'] as String?;
+    if (gid == null) return null;
+    return joinGroup(gid, user);
+  }
+
+  /// Idempotent join: safe to call when already a member.
+  Future<String?> joinGroup(String gid, AppUser user) async {
+    final meta = await _db.collection('groups').doc(gid).get();
+    if (!meta.exists) return null;
+    final mData = Map<String, dynamic>.from(meta.data()!);
+    final batch = _db.batch();
+    batch.set(
+        _db.collection('groups').doc(gid).collection('members').doc(user.id),
+        {
+          'name': user.name,
+          'role': 'member',
+          'joinedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true));
+    batch.set(
+        userGroupIndexRef(user.id, gid),
+        GroupMembership(
+                groupId: gid,
+                name: (mData['name'] as String?) ?? '',
+                icon: (mData['icon'] as String?) ?? '♠️',
+                pinned: false,
+                role: 'member')
+            .toMap(),
+        SetOptions(merge: true));
+    await batch.commit();
+    return gid;
+  }
+
+  Stream<List<GroupMembership>> groupsIndexStream(String uid) => _db
+      .collection('users').doc(uid).collection('groups')
+      .snapshots()
+      .map((s) => s.docs.map((d) => GroupMembership.fromMap(d.id, d.data())).toList());
+
+  Future<void> updateGroupIndex(String uid, String gid,
+      {String? name, String? icon, bool? pinned, String? role}) =>
+      userGroupIndexRef(uid, gid).set(
+        {
+          'name': ?name,
+          'icon': ?icon,
+          'pinned': ?pinned,
+          'role': ?role,
+        },
+        SetOptions(merge: true),
+      );
+
+  Future<void> setMemberRole(String gid, String targetUid, String role) => _db
+      .collection('groups').doc(gid).collection('members').doc(targetUid)
+      .set({'role': role}, SetOptions(merge: true));
+
+  /// Full group assembly: meta doc + members + chat + polls + games merged
+  /// into a single [Group]. Emits whenever any part changes. The first
+  /// emission only happens once every source has delivered its initial
+  /// snapshot.
+  Stream<Group> groupBundleStream(String gid) {
+    late StreamController<Group> controller;
+    final subs = <StreamSubscription<dynamic>>[];
+
+    Map<String, dynamic>? meta;
+    var metaLoaded = false;
+    List<AppUser> members = const [];
+    var membersLoaded = false;
+    List<ChatMessage> chat = const [];
+    var chatLoaded = false;
+    List<Poll> polls = const [];
+    var pollsLoaded = false;
+    List<LiveGame> games = const [];
+    var gamesLoaded = false;
+
+    void maybeEmit() {
+      if (!(metaLoaded &&
+          membersLoaded &&
+          chatLoaded &&
+          pollsLoaded &&
+          gamesLoaded)) {
+        return;
+      }
+      if (!controller.isClosed) {
+        controller.add(Group(
+          id: gid,
+          name: (meta?['name'] as String?) ?? '',
+          joinCode: (meta?['joinCode'] as String?) ?? '',
+          ownerId: (meta?['ownerId'] as String?) ?? '',
+          icon: (meta?['icon'] as String?) ?? '♠️',
+          members: members,
+          chat: chat,
+          polls: polls,
+          games: games,
+          notifications: const [],
+        ));
+      }
+    }
+
+    final groupRef = _db.collection('groups').doc(gid);
+    controller = StreamController<Group>(
+      onListen: () {
+        subs.add(groupRef.snapshots().listen((s) {
+          meta = s.data();
+          metaLoaded = true;
+          maybeEmit();
+        }, onError: controller.addError));
+        subs.add(groupRef.collection('members').snapshots().listen((s) {
+          members = [
+            for (final d in s.docs)
+              AppUser(
+                id: d.id,
+                name: (d.data()['name'] as String?) ?? '',
+                email: '',
+                isAdmin: (d.data()['role'] as String?) == 'admin',
+                stats: d.data()['stats'] is Map
+                    ? userStatsFromMap(
+                        Map<String, dynamic>.from(d.data()['stats'] as Map))
+                    : const UserStats(
+                        played: 0,
+                        wins: 0,
+                        podium: 0,
+                        avgFinish: 0,
+                        knockouts: 0),
+              ),
+          ];
+          membersLoaded = true;
+          maybeEmit();
+        }, onError: controller.addError));
+        subs.add(groupRef.collection('chat').snapshots().listen((s) {
+          chat = [for (final d in s.docs) chatMessageFromMap(d.data())];
+          chatLoaded = true;
+          maybeEmit();
+        }, onError: controller.addError));
+        subs.add(groupRef.collection('polls').snapshots().listen((s) {
+          polls = [for (final d in s.docs) pollFromMap(d.data())];
+          pollsLoaded = true;
+          maybeEmit();
+        }, onError: controller.addError));
+        subs.add(groupRef.collection('games').snapshots().listen((s) {
+          games = [
+            for (final d in s.docs)
+              liveGameFromFirestoreDoc(Map<String, dynamic>.from(d.data())),
+          ];
+          gamesLoaded = true;
+          maybeEmit();
+        }, onError: controller.addError));
+      },
+      onCancel: () async {
+        for (final s in subs) {
+          await s.cancel();
+        }
+      },
+    );
+    return controller.stream;
+  }
+
+  Future<void> sendGroupChatMessage(String gid, ChatMessage msg) => _db
+      .collection('groups').doc(gid).collection('chat').doc(msg.id)
+      .set(chatMessageToMap(msg));
+
+  Future<void> markChatMessageDeleted(String gid, String msgId) => _db
+      .collection('groups').doc(gid).collection('chat').doc(msgId)
+      .set({'deleted': true}, SetOptions(merge: true));
+
+  Future<void> savePoll(String gid, Poll poll) => _db
+      .collection('groups').doc(gid).collection('polls').doc(poll.id)
+      .set(pollToMap(poll));
+
+  // ── Games ──────────────────────────────────────────────────────────────────
+  Future<void> saveGame(LiveGame game) => _db
+      .collection('groups').doc(game.groupId).collection('games').doc(game.id)
+      .set(_stamp(liveGameToFirestoreDoc(game)));
+
+  /// Targeted per-player / field patches using Firestore dot-paths — avoids
+  /// clobbering unrelated concurrent edits (e.g. RSVPs while admin edits).
+  Future<void> patchGame(
+      String gid, String gameId, Map<String, dynamic> dotPaths) => _db
+      .collection('groups').doc(gid).collection('games').doc(gameId)
+      .set(_stamp(dotPaths), SetOptions(merge: true));
+
+  Stream<DocumentSnapshot<Map<String, dynamic>>> gameDocSnapshots(
+          String gid, String gameId) =>
+      _db.collection('groups').doc(gid).collection('games').doc(gameId)
+          .snapshots();
+
+  /// Registers the game's public/tv codes for lookup flows.
+  Future<void> upsertGameCodes(LiveGame game) async {
+    final batch = _db.batch();
+    batch.set(_db.collection('joinCodes').doc(game.publicCode.toUpperCase()),
+        {'gid': game.groupId, 'gameId': game.id, 'kind': 'game'});
+    batch.set(_db.collection('joinCodes').doc(game.tvCode.toUpperCase()),
+        {'gid': game.groupId, 'gameId': game.id, 'kind': 'tv'});
+    await batch.commit();
+  }
+
+  /// Writes sanitized projection payloads readable by non-members
+  /// (TV mode browsers, guests) under publicGames/{gameId}.
+  Future<void> publishPublicProjections({
+    required LiveGame game,
+    required Map<String, dynamic> tv,
+    required Map<String, dynamic> player,
+    required Map<String, dynamic> guest,
+  }) =>
+      _db.collection('publicGames').doc(game.id).set(_stamp({
+        'gid': game.groupId,
+        'publicCode': game.publicCode,
+        'tvCode': game.tvCode,
+        'status': game.status.name,
+        'tv': tv,
+        'player': player,
+        'guest': guest,
+      }));
+
+  Stream<Map<String, dynamic>> publicGameStream(String gameId) => _db
+      .collection('publicGames').doc(gameId)
+      .snapshots()
+      .map((s) => s.data() ?? const {});
+
+  /// Resolves a public/tv code to `(gid, gameId, kind)` or null.
+  Future<({String gid, String gameId, String kind})?> findGameByCode(
+      String code) async {
+    final key = code.trim().toUpperCase();
+    final snap = await _db.collection('joinCodes').doc(key).get();
+    if (!snap.exists) return null;
+    final data = Map<String, dynamic>.from(snap.data()!);
+    final gameId = data['gameId'] as String?;
+    final gid = data['gid'] as String?;
+    if (gid == null || gameId == null) return null;
+    return (
+      gid: gid,
+      gameId: gameId,
+      kind: (data['kind'] as String?) ?? 'game',
+    );
+  }
+
+  // ── Request queue (guest/member → admin) ───────────────────────────────────
+  CollectionReference<Map<String, dynamic>> _requestsCol(String gameId) =>
+      _db.collection('requests').doc(gameId).collection('items');
+
+  Future<void> pushRequest({
+    required String gameId,
+    required String kind,
+    required Map<String, dynamic> payload,
+  }) =>
+      _requestsCol(gameId).add({
+        'kind': kind,
+        ...payload,
+        'consumed': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+  Stream<List<GameRequest>> requestsStream(String gameId) => _requestsCol(gameId)
+      .where('consumed', isEqualTo: false)
+      .snapshots()
+      .map((s) => [
+            for (final d in s.docs)
+              GameRequest(
+                id: d.id,
+                kind: (d.data()['kind'] as String?) ?? '',
+                payload: Map<String, dynamic>.from(d.data()),
+                createdAt:
+                    (d.data()['createdAt'] as Timestamp?)?.toDate() ??
+                        DateTime.now(),
+              ),
+          ]);
+
+  Future<void> consumeRequest(String gameId, String requestId) =>
+      _requestsCol(gameId)
+          .doc(requestId)
+          .set({'consumed': true}, SetOptions(merge: true));
+
+  // ── Cash sessions ──────────────────────────────────────────────────────────
+  Future<void> saveCashSession(String gid, CashSession session) => _db
+      .collection('groups').doc(gid).collection('cashSessions').doc(session.id)
+      .set(_stamp(cashSessionToMap(session)));
+
+  Stream<List<CashSession>> completedCashSessionsStream(String gid) => _db
+      .collection('groups').doc(gid).collection('cashSessions')
+      .where('isCompleted', isEqualTo: true)
+      .snapshots()
+      .map((s) => [for (final d in s.docs) cashSessionFromMap(d.data())]);
+
+  // ── Presets / chip sets ────────────────────────────────────────────────────
+  Future<void> savePreset(String uid, TournamentPreset preset) => _db
+      .collection('users').doc(uid).collection('presets').doc(preset.id)
+      .set(tournamentPresetToMap(preset));
+
+  Future<void> deletePreset(String uid, String presetId) => _db
+      .collection('users').doc(uid).collection('presets').doc(presetId).delete();
+
+  Stream<List<TournamentPreset>> presetsStream(String uid) => _db
+      .collection('users').doc(uid).collection('presets')
+      .snapshots()
+      .map((s) => [for (final d in s.docs) tournamentPresetFromMap(d.data())]);
+
+  Future<void> saveChipSet(
+          String uid, String id, String name, List<ChipColor> chips) =>
+      _db.collection('users').doc(uid).collection('chipSets').doc(id).set({
+        'name': name,
+        'chips': chips.map(chipColorToMap).toList(),
+      });
+
+  Future<void> deleteChipSet(String uid, String id) => _db
+      .collection('users').doc(uid).collection('chipSets').doc(id).delete();
+
+  Stream<List<({String id, String name, List<ChipColor> chips})>>
+      chipSetsStream(String uid) => _db
+          .collection('users').doc(uid).collection('chipSets')
+          .snapshots()
+          .map((s) => [
+                for (final d in s.docs)
+                  (
+                    id: d.id,
+                    name: (d.data()['name'] as String?) ?? '',
+                    chips: (d.data()['chips'] as List? ?? const [])
+                        .map((e) => chipColorFromMap(Map<String, dynamic>.from(e as Map)))
+                        .toList(),
+                  ),
+              ]);
+
+  // ── Notification fan-out ───────────────────────────────────────────────────
+  Future<void> fanOutNotifications(
+      List<String> memberUids, AppNotification notification) async {
+    if (memberUids.isEmpty) return;
+    final batch = _db.batch();
+    for (final uid in memberUids) {
+      batch.set(
+        _db.collection('users').doc(uid).collection('notifications').doc(notification.id),
+        appNotificationToMap(notification),
+      );
+    }
+    await batch.commit();
+  }
+
+  Stream<List<AppNotification>> notificationsStream(String uid) => _db
+      .collection('users').doc(uid).collection('notifications')
+      .orderBy('timestamp', descending: true)
+      .limit(100)
+      .snapshots()
+      .map((s) => [for (final d in s.docs) appNotificationFromMap(d.data())]);
+
+  Future<void> markNotificationRead(String uid, String notificationId) => _db
+      .collection('users').doc(uid).collection('notifications').doc(notificationId)
+      .set({'read': true}, SetOptions(merge: true));
+
+  Future<void> markAllNotificationsRead(String uid) async {
+    final docs =
+        await _db.collection('users').doc(uid).collection('notifications').get();
+    final unread = docs.docs.where((d) => d.data()['read'] == false);
+    final batch = _db.batch();
+    for (final d in unread) {
+      batch.set(d.reference, {'read': true}, SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+}
+
+/// Debug logger used by repository callers to trace sync behaviour.
+@visibleForTesting
+void logRepo(Object message) => debugPrint('[FirebaseRepository] $message');

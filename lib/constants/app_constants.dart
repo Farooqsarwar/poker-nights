@@ -114,8 +114,4 @@ class AppAssets {
   static const String heart = '♥';
   static const String diamond = '♦';
   static const String club = '♣';
-
-  static const String demoCode = 'FP2608';
-  static const String demoGroupCode = 'FRIDAY7';
-  static const String demoTvCode = 'TV-FP';
 }

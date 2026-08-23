@@ -28,13 +28,14 @@ class _JoinScreenState extends State<JoinScreen> {
     super.dispose();
   }
 
-  void _submitCode() {
+  Future<void> _submitCode() async {
     final code = _codeController.text.trim();
     if (code.isEmpty) {
       setState(() => _codeError = 'Please enter a game code.');
       return;
     }
-    final result = context.read<AppProvider>().enterGameCode(code);
+    final result = await context.read<AppProvider>().enterGameCode(code);
+    if (!mounted) return;
     if (result == CodeLookupResult.notFound) {
       setState(
         () => _codeError = 'Game not found. Check the code and try again.',

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../app/colors.dart';
+import '../app/icons.dart';
 import '../app/route_paths.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
@@ -221,12 +222,12 @@ class Sidebar extends StatelessWidget {
 
 class _NavSpec {
   const _NavSpec(
-    this.path,
-    this.label,
-    this.icon,
-    this.badgeOffset,
-    this.badge,
-  );
+      this.path,
+      this.label,
+      this.icon,
+      this.badgeOffset,
+      this.badge,
+      );
 
   final String path;
   final String label;
@@ -349,10 +350,16 @@ class _GroupRow extends StatelessWidget {
           children: [
             // Client review: the group SYMBOL is the primary identifier in
             // the multi-group list (the name drops to a smaller label).
+            //
+            // Fixed-size box + FittedBox: whatever `group.icon` contains
+            // (single emoji, multi-char initials, etc.) is scaled down to
+            // fit on one line inside the 26x26 box instead of wrapping or
+            // overflowing into the name/member-count text next to it.
             Container(
               width: 26,
               height: 26,
               margin: const EdgeInsets.only(top: 1),
+              padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
                 color: selected ? AppColors.primarySoft : AppColors.secondary,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -361,16 +368,10 @@ class _GroupRow extends StatelessWidget {
                 ),
               ),
               alignment: Alignment.center,
-              child: Text(
-                group.icon,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontFamilyFallback: [
-                    'Noto Color Emoji',
-                    'Apple Color Emoji',
-                    'Segoe UI Emoji',
-                  ],
-                ),
+              child: Icon(
+                groupIconMap[group.icon] ?? Icons.shield_outlined,
+                size: 16,
+                color: selected ? AppColors.primary : AppColors.mutedForeground,
               ),
             ),
             const SizedBox(width: AppSpacing.xs),

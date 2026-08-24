@@ -71,7 +71,7 @@ Future<void> _initAppCheck() async {
     await FirebaseAppCheck.instance.activate(
       // Web: reCAPTCHA v3 in production; debug token in debug mode.
       webProvider: isDebugMode
-          ? ReCaptchaEnterpriseProvider('debug')
+          ? ReCaptchaV3Provider('debug')
           : siteKey.isNotEmpty
               ? ReCaptchaV3Provider(siteKey)
               : ReCaptchaV3Provider('MISSING_SITE_KEY'),

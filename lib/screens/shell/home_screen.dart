@@ -1106,11 +1106,10 @@ class _GroupCard extends StatelessWidget {
                                       color: AppColors.card,
                                       width: 2,
                                     ),
-                                    color:
-                                        AppColors.avatarPalette[g
-                                                .members[i]
-                                                .name
-                                                .codeUnitAt(0) %
+                                    color: AppColors.avatarPalette[
+                                        (g.members[i].name.isNotEmpty
+                                                ? g.members[i].name.codeUnitAt(0)
+                                                : 0) %
                                             AppColors.avatarPalette.length],
                                   ),
                                   alignment: Alignment.center,

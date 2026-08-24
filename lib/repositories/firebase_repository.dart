@@ -553,9 +553,14 @@ class FirebaseRepository {
       .set(_stamp(dotPaths), SetOptions(merge: true));
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> gameDocSnapshots(
-          String gid, String gameId) =>
-      _db.collection('groups').doc(gid).collection('games').doc(gameId)
-          .snapshots();
+          String gid, String gameId, {required bool isAdmin}) {
+    if (isAdmin) {
+      return _db.collection('groups').doc(gid).collection('games').doc(gameId).snapshots();
+    } else {
+      return _db.collection('groups').doc(gid).collection('games').doc(gameId)
+          .collection('memberViews').doc(currentUid).snapshots();
+    }
+  }
 
   /// Registers the game's public/tv codes for lookup flows.
   Future<void> upsertGameCodes(LiveGame game) async {

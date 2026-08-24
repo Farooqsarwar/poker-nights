@@ -11,6 +11,7 @@ import 'app/theme.dart';
 import 'firebase_options.dart';
 import 'providers/app_provider.dart';
 import 'responsive/responsive.dart';
+import 'services/fcm_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,14 @@ Future<void> main() async {
   //   Firebase Console → App Check → Protect resources → Enforce on Firestore
   //   See docs/app_check_setup.md for full setup instructions.
   await _initAppCheck();
+
+  // Initialize Firebase Cloud Messaging for Push Notifications
+  try {
+    await FCMService().init();
+  } catch (e) {
+    debugPrint('FCM init failed: $e');
+  }
+
   final appProvider = AppProvider();
   runApp(
     // Initializes flutter_screenutil before any widget reads scaled sizes, so

@@ -142,9 +142,15 @@ service cloud.firestore {
       // Games: authority writes whole docs; members get a tightly scoped
       // patch path; guests have no access here at all.
       match /games/{gameId} {
-        allow read: if isMember(gid);
+        allow read: if isGroupAdmin(gid);
         allow create, delete: if isGroupAdmin(gid);
         allow update: if isGroupAdmin(gid) || (isMember(gid) && memberGameEdit());
+
+        // Sanitized per-member projection maintained by Cloud Functions
+        match /memberViews/{userId} {
+          allow read: if signedIn() && request.auth.uid == userId;
+          allow write: if false;
+        }
       }
 
       // Group chat.

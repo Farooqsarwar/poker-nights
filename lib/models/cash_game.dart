@@ -11,24 +11,26 @@ class CashPlayer {
 
   final String id;
   final String name;
-  final int stack;
-  final int totalBuyIns;
+  final double stack;
+  final double totalBuyIns;
   final int buyInCount;
-  final int cashedOut;
+  final double cashedOut;
 
   bool get isCashedOut => cashedOut > 0;
 
-  int get net => cashedOut - totalBuyIns;
+  double get net => cashedOut - totalBuyIns;
 
   CashPlayer copyWith({
-    int? stack,
-    int? totalBuyIns,
+    String? id,
+    String? name,
+    double? stack,
+    double? totalBuyIns,
     int? buyInCount,
-    int? cashedOut,
+    double? cashedOut,
   }) {
     return CashPlayer(
-      id: id,
-      name: name,
+      id: id ?? this.id,
+      name: name ?? this.name,
       stack: stack ?? this.stack,
       totalBuyIns: totalBuyIns ?? this.totalBuyIns,
       buyInCount: buyInCount ?? this.buyInCount,

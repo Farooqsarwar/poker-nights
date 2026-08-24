@@ -25,6 +25,7 @@ class AppUser {
     required this.email,
     required this.isAdmin,
     required this.stats,
+    this.fcmTokens = const [],
   });
 
   final String id;
@@ -32,6 +33,7 @@ class AppUser {
   final String email;
   final bool isAdmin;
   final UserStats stats;
+  final List<String> fcmTokens;
 
   String get initials {
     if (name.isEmpty) return '?';
@@ -44,6 +46,7 @@ class AppUser {
     String? email,
     bool? isAdmin,
     UserStats? stats,
+    List<String>? fcmTokens,
   }) {
     return AppUser(
       id: id ?? this.id,
@@ -51,6 +54,7 @@ class AppUser {
       email: email ?? this.email,
       isAdmin: isAdmin ?? this.isAdmin,
       stats: stats ?? this.stats,
+      fcmTokens: fcmTokens ?? this.fcmTokens,
     );
   }
 }

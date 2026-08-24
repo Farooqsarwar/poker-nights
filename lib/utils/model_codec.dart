@@ -65,6 +65,7 @@ Map<String, dynamic> appUserToMap(AppUser u) => {
       'email': u.email,
       'isAdmin': u.isAdmin,
       'stats': userStatsToMap(u.stats),
+      'fcmTokens': u.fcmTokens,
     };
 
 AppUser appUserFromMap(Map<String, dynamic> m) => AppUser(
@@ -73,6 +74,7 @@ AppUser appUserFromMap(Map<String, dynamic> m) => AppUser(
       email: (m['email'] as String?) ?? '',
       isAdmin: (m['isAdmin'] as bool?) ?? false,
       stats: userStatsFromMap(Map<String, dynamic>.from(m['stats'] as Map)),
+      fcmTokens: List<String>.from(m['fcmTokens'] as List? ?? const []),
     );
 
 // ─────────────────────────────────────────────────────────────────────────────

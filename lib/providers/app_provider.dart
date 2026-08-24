@@ -244,7 +244,7 @@ class AppProvider extends ChangeNotifier {
       _gameSaveDebounce?.cancel();
       _pendingGameSave = false;
       if (key != null && game != null && gid != null) {
-        _gameDocSub = _repo.gameDocSnapshots(gid, game.id).listen(
+        _gameDocSub = _repo.gameDocSnapshots(gid, game.id, isAdmin: _isGameAuthority).listen(
           _adoptRemoteGame,
           onError: (Object e) => debugPrint('gameDoc stream error: $e'),
         );
@@ -4322,7 +4322,7 @@ class AppProvider extends ChangeNotifier {
           (_isGameAuthority || _currentGroup.id == hit.gid)) {
         // Group members with dashboard access can follow the raw document.
         _lookupSub =
-            _repo.gameDocSnapshots(hit.gid, hit.gameId).listen((snap) {
+            _repo.gameDocSnapshots(hit.gid, hit.gameId, isAdmin: _isGameAuthority).listen((snap) {
           final data = snap.data();
           if (!snap.exists || data == null) return;
           try {

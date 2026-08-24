@@ -104,6 +104,15 @@ class TournamentEngine {
   static int _levelDurationFor(double hours) =>
       hours <= 3 ? 10 : (hours <= 5 ? 15 : 20);
 
+  /// Default table capacity used to size individual antes (tech spec §8.5:
+  /// "Individual ante candidate = big blind divided by expected table size").
+  static const int defaultTableSize = 9;
+
+  /// Calibration constant for the final blind target (tech spec §8.3):
+  /// targetFinalBB = expectedTotalChips / (2 × this). The default 15 means
+  /// heads-up play should begin with the average stack around 15 big blinds.
+  static const double targetHeadsUpAverageBB = 15;
+
   static int _snapToPracticalBlind(double raw, List<ChipColor> chips) {
     final values = chips.map((c) => c.value).toList()..sort();
     final minChip = values.first;
@@ -506,22 +515,93 @@ class TournamentEngine {
     final addOnStack = params.addOn ? stack : 0;
     final rebuyStack = stack;
 
+    // Expected additional money-chip volume (tech spec §6.3 step 4): rebuys,
+    // re-entries and add-ons inflate total chips in play and therefore the
+    // final blind target. Computed here so the blind curve can use them.
+    final expectedRebuysTotal = params.rebuys
+        ? (params.players * 0.35).round()
+        : 0;
+    final expectedReEntriesTotal = params.reEntry
+        ? (params.players * 0.20).round()
+        : 0;
+    final expectedAddOnsTotal = params.addOn
+        ? (params.players * 0.65).round()
+        : 0;
+
+    // ── Blind curve (tech spec §8.3 / §8.4) ─────────────────────────────────
+    // The final big blind is derived from the total chips that will actually
+    // be in play: starting stacks plus expected rebuys, re-entries and
+    // add-ons. Heads-up should begin with the average stack around
+    // [targetHeadsUpAverageBB] big blinds, so:
+    //   targetFinalBB = expectedTotalChips / (2 × targetHeadsUpAverageBB)
+    //   rawBB(i)      = openingBB × growthFactor^i
+    //   growthFactor  = (targetFinalBB / openingBB)^(1 / max(1, levels − 1))
+    // Every raw value is snapped to a legal, easy-to-post amount from the
+    // blind ladder, the sequence stays strictly monotonically increasing, and
+    // the ladder itself extends in practical +200/+400 steps if a very large
+    // field needs blinds beyond its printed end.
+    final expectedTotalChips =
+        stack * params.players +
+        stack * expectedRebuysTotal +
+        stack * expectedReEntriesTotal +
+        addOnStack * expectedAddOnsTotal;
+    final targetFinalBB =
+        expectedTotalChips / (2 * targetHeadsUpAverageBB);
+    final growthFactor = math.pow(
+      math.max(targetFinalBB, openingBB.toDouble()) / openingBB,
+      1 / math.max(1, numLevels - 1),
+    ).toDouble();
+
+    final ladder = [...validBlindLevels];
     final levels = <BlindLevel>[];
+    var cursor = startIndex;
+    var prevBB = openingBB;
 
     for (var i = 0; i < numLevels; i++) {
-      final levelIndex = math.min(startIndex + i, validBlindLevels.length - 1);
-      final sb = validBlindLevels[levelIndex][0];
-      final bb = validBlindLevels[levelIndex][1];
+      final int sb;
+      final int bb;
+      if (i == 0) {
+        sb = ladder[startIndex][0];
+        bb = openingBB;
+      } else {
+        final raw = openingBB * math.pow(growthFactor, i);
+
+        // Extend the ladder for huge fields once the printed end is reached.
+        if (cursor >= ladder.length - 1 && raw > prevBB) {
+          final lastSb = ladder.last[0];
+          ladder.add([lastSb + 200, (lastSb + 200) * 2]);
+        }
+
+        // First ladder entry strictly above the previous big blind keeps the
+        // curve monotonically increasing even when growth is nearly flat.
+        while (cursor < ladder.length - 1 && ladder[cursor][1] <= prevBB) {
+          cursor++;
+        }
+        // Then track the raw curve: advance whenever the next entry sits
+        // closer to the raw target than the current one.
+        while (cursor < ladder.length - 1 &&
+            ladder[cursor + 1][1] > prevBB &&
+            (ladder[cursor + 1][1] - raw).abs() < (raw - ladder[cursor][1]).abs()) {
+          cursor++;
+        }
+        sb = ladder[cursor][0];
+        bb = ladder[cursor][1];
+      }
+      prevBB = bb;
 
       final useAnte = params.anteEnabled && i >= params.anteAfterLevel;
       // Big blind ante = one ante per table equal to the big blind (the
-      // recommended default); individual ante = every player posts, sized at
-      // half the big blind snapped to the smallest chip in play.
+      // recommended default). Individual ante = big blind divided by the
+      // expected table size, snapped to a practical chip value (tech spec
+      // §8.5) so each player can post it with chips actually in play.
       final ante = useAnte
           ? (params.anteStyle == AnteStyle.individual
                 ? math.max(
                     minChip,
-                    _snapToPracticalBlind(bb * 0.5, sortedChips),
+                    _snapToPracticalBlind(
+                      bb / defaultTableSize,
+                      sortedChips,
+                    ),
                   )
                 : bb)
           : null;
@@ -581,15 +661,6 @@ class TournamentEngine {
       }
     }
 
-    final expectedRebuysTotal = params.rebuys
-        ? (params.players * 0.35).round()
-        : 0;
-    final expectedReEntriesTotal = params.reEntry
-        ? (params.players * 0.20).round()
-        : 0;
-    final expectedAddOnsTotal = params.addOn
-        ? (params.players * 0.65).round()
-        : 0;
     final grossEligible =
         params.buyIn * params.players +
         params.effectiveRebuyCost * expectedRebuysTotal +

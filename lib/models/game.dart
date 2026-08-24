@@ -192,8 +192,9 @@ class ChatMessage {
   }
 }
 
-/// Status of a reserved guest slot under an inviter.
-enum GuestSlotStatus { unclaimed, reserved, checkedIn, cancelled }
+/// Status of a reserved guest slot under an inviter (user-flow spec §7.1:
+/// Unclaimed, Reserved, Check-in Requested, Checked In, Cancelled).
+enum GuestSlotStatus { unclaimed, reserved, checkInRequested, checkedIn, cancelled }
 
 /// A named guest seat reserved through a "Going +N" RSVP. Slots are created
 /// when the member RSVPs and are persisted until the event starts, so the

@@ -11,11 +11,12 @@ class RSVPBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (rsvp == null)
+    if (rsvp == null) {
       return const AppBadge(
         label: 'No response',
         variant: AppBadgeVariant.muted,
       );
+    }
     if (rsvp!.guestCount > 0) {
       return AppBadge(
         label: 'Going +${rsvp!.guestCount}',

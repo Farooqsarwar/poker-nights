@@ -1,1 +1,60 @@
-{"firestore":{"rules":"firestore.rules"},"flutter":{"platforms":{"android":{"default":{"projectId":"poker-night-tools","appId":"1:885018943861:android:8120a34ba8cc08f5bbf33c","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"poker-night-tools","configurations":{"android":"1:885018943861:android:8120a34ba8cc08f5bbf33c","ios":"1:885018943861:ios:8460e140cad8f9f8bbf33c","web":"1:885018943861:web:6c410699650b309bbbf33c"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/**/*.png",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=604800"
+          }
+        ]
+      },
+      {
+        "source": "/main.dart.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
+    ]
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "poker-night-tools",
+          "appId": "1:885018943861:android:8120a34ba8cc08f5bbf33c",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "poker-night-tools",
+          "configurations": {
+            "android": "1:885018943861:android:8120a34ba8cc08f5bbf33c",
+            "ios": "1:885018943861:ios:8460e140cad8f9f8bbf33c",
+            "web": "1:885018943861:web:6c410699650b309bbbf33c"
+          }
+        }
+      }
+    }
+  }
+}

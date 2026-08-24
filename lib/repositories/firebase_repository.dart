@@ -160,6 +160,28 @@ class FirebaseRepository {
   Future<fa.UserCredential> signIn(String email, String password) =>
       _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
 
+  /// Upgrades the current anonymous session to a full email/password account
+  /// via `linkWithCredential`, preserving the uid — so results and stats
+  /// recorded as a guest stay attached to the new account (user-flow spec
+  /// §6.7 "the guest result may be linked to the new account").
+  Future<fa.UserCredential> linkGuestAccount({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null || !user.isAnonymous) {
+      throw StateError('No anonymous session to upgrade.');
+    }
+    final credential = fa.EmailAuthProvider.credential(
+      email: email.trim(),
+      password: password,
+    );
+    final cred = await user.linkWithCredential(credential);
+    await cred.user?.updateDisplayName(name.trim());
+    return cred;
+  }
+
   Future<fa.UserCredential> signInAsGuest() => _auth.signInAnonymously();
 
   Future<void> sendPasswordReset(String email) =>
@@ -589,17 +611,61 @@ class FirebaseRepository {
   CollectionReference<Map<String, dynamic>> _requestsCol(String gameId) =>
       _db.collection('requests').doc(gameId).collection('items');
 
+  /// Queues a request for the admin device. When [idempotencyKey] is given
+  /// the write targets a deterministic doc id, so a double-tap / retry
+  /// overwrites the same request instead of enqueueing a duplicate (spec
+  /// §18.1 idempotency keys).
   Future<void> pushRequest({
     required String gameId,
     required String kind,
     required Map<String, dynamic> payload,
-  }) =>
-      _requestsCol(gameId).add({
-        'kind': kind,
+    String? idempotencyKey,
+  }) {
+    final data = <String, dynamic>{
+      'kind': kind,
+      ...payload,
+      'consumed': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+    final key = idempotencyKey?.trim();
+    if (key == null || key.isEmpty) return _requestsCol(gameId).add(data);
+    return _requestsCol(gameId).doc(key).set(data);
+  }
+
+  /// Atomically reserves guest slot ([inviterId], [slot]) for [gameId] by
+  /// creating the deterministic claim doc `guestCheckIn-$inviterId-$slot`
+  /// inside a transaction (user-flow spec §7.1 "duplicate slot claims are
+  /// blocked server-side", tech spec §21 "first reservation wins"). Racing
+  /// guests are serialized by Firestore: the loser's retry re-reads the doc,
+  /// sees it held and gets an error instead of enqueueing a second request.
+  /// Returns null on success, or a user-facing error string.
+  Future<String?> reserveGuestSlotTx({
+    required String gameId,
+    required String inviterId,
+    required int slot,
+    required Map<String, dynamic> payload,
+  }) {
+    final ref = _requestsCol(gameId).doc('guestCheckIn-$inviterId-$slot');
+    return _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      // A consumed claim means the slot was confirmed — permanently taken.
+      if (snap.exists && snap.data()!['consumed'] != true) {
+        return 'That guest slot is already claimed.';
+      }
+      tx.set(ref, {
+        'kind': 'guestCheckIn',
         ...payload,
         'consumed': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
+      return null;
+    });
+  }
+
+  /// Deletes a slot-claim lock so the slot becomes claimable again (admin
+  /// rejected the guest or freed the seat — user-flow spec §7.1).
+  Future<void> releaseSlotClaim(String gameId, String inviterId, int slot) =>
+      _requestsCol(gameId).doc('guestCheckIn-$inviterId-$slot').delete();
 
   Stream<List<GameRequest>> requestsStream(String gameId) => _requestsCol(gameId)
       .where('consumed', isEqualTo: false)

@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../app/colors.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
-import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';

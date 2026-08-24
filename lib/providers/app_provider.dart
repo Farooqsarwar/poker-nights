@@ -21,6 +21,7 @@ import '../utils/mock_data.dart';
 import '../utils/model_codec.dart';
 import '../utils/tournament_engine.dart';
 import '../utils/voice_service.dart';
+import '../services/browser_notifications.dart';
 import '../services/projections.dart' as projections;
 import '../services/recovery_service.dart';
 
@@ -28,7 +29,7 @@ import '../services/recovery_service.dart';
 typedef LevelEdit = ({int level, int sb, int bb, int? ante, int durationMins});
 
 /// Result of looking up a game / TV code.
-enum CodeLookupResult { game, tv, notFound }
+enum CodeLookupResult { game, tv, notFound, rateLimited }
 
 /// How the admin wants checked-in players distributed to tables/seats
 /// (checklist §13.1). Mirrored by the screen's `SeatingMode`.
@@ -107,6 +108,11 @@ class AppProvider extends ChangeNotifier {
   /// Signature of the last stats summary pushed to roster rows (dedupe).
   String? _lastPushedStatsKey;
 
+  /// Browser-notification delivery bookkeeping: the first inbox emission is
+  /// treated as history (never pushed); afterwards only new unread ids fire.
+  final Set<String> _seenNotificationIds = <String>{};
+  bool _notificationsPrimed = false;
+
   /// Debounces whole-document game saves so rapid admin edits coalesce.
   Timer? _gameSaveDebounce;
 
@@ -179,9 +185,42 @@ class AppProvider extends ChangeNotifier {
   bool _notificationsEnabled = false;
   bool get notificationsEnabled => _notificationsEnabled;
 
-  void setNotificationsEnabled(bool value) {
+  /// Enables browser notifications (web) after explicit permission, or just
+  /// flips the flag where the API is unsupported (in-app inbox remains the
+  /// delivery path there). Returns an error message on denial, null on
+  /// success (spec §14.3 — push when granted, inbox as fallback).
+  Future<String?> setNotificationsEnabled(bool value) async {
+    if (value && BrowserNotify.supported) {
+      final granted = await BrowserNotify.requestPermission();
+      if (!granted) {
+        _notificationsEnabled = false;
+        _persistPref('browserNotify', false);
+        notifyListeners();
+        return 'Permission denied in this browser.';
+      }
+    }
     _notificationsEnabled = value;
+    _persistPref('browserNotify', value);
     notifyListeners();
+    return null;
+  }
+
+  /// Delivers newly-arrived inbox items as browser notifications when the
+  /// user opted in; history is never replayed on sign-in.
+  void _deliverBrowserNotifications(List<AppNotification> list) {
+    if (!_notificationsPrimed) {
+      _notificationsPrimed = true;
+      for (final n in list) {
+        _seenNotificationIds.add(n.id);
+      }
+      return;
+    }
+    for (final n in list) {
+      final isNew = _seenNotificationIds.add(n.id);
+      if (isNew && !n.read && _notificationsEnabled) {
+        BrowserNotify.show(n.title, n.body);
+      }
+    }
   }
 
   // ── Cloud sync plumbing ────────────────────────────────────────────────────
@@ -388,6 +427,8 @@ class AppProvider extends ChangeNotifier {
         inviterId,
         slotNo,
         name: name.trim(),
+        // The queued claim carries the guest's check-in request (spec §7.1).
+        requested: true,
       ),
     );
     return null;
@@ -461,6 +502,7 @@ class AppProvider extends ChangeNotifier {
 
     _notificationsSub?.cancel();
     _notificationsSub = _repo.notificationsStream(uid).listen((list) {
+      _deliverBrowserNotifications(list);
       _notifications = list;
       notifyListeners();
     },
@@ -628,6 +670,8 @@ class AppProvider extends ChangeNotifier {
     _myResults = const [];
     _resultsRecorded.clear();
     _lastPushedStatsKey = null;
+    _seenNotificationIds.clear();
+    _notificationsPrimed = false;
   }
 
   /// Selects a group by id and (re)subscribes its live bundle.
@@ -800,6 +844,8 @@ class AppProvider extends ChangeNotifier {
       final prefs = await _repo.loadUserPrefs(uid);
       final voice = prefs['voiceEnabled'];
       if (voice is bool) _voiceEnabled = voice;
+      final notify = prefs['browserNotify'];
+      if (notify is bool) _notificationsEnabled = notify;
     } catch (e) {
       debugPrint('loadUserPrefs failed: $e');
     }
@@ -853,6 +899,37 @@ class AppProvider extends ChangeNotifier {
         'network-request-failed' => 'Network error. Check your connection.',
         _ => e.message ?? 'Registration failed. Please try again.',
       };
+    }
+  }
+
+  /// Converts the current anonymous guest session into a full account by
+  /// linking credentials onto the existing uid, so stats/results recorded as
+  /// a guest carry over automatically (user-flow spec §6.7). Returns `null`
+  /// on success or a friendly error message for the UI.
+  Future<String?> convertGuestAccount(
+      String name, String email, String password) async {
+    if (!_repo.isSignedInAsGuest) return 'Not a guest session.';
+    try {
+      final cred = await _repo.linkGuestAccount(
+        name: name,
+        email: email,
+        password: password,
+      );
+      if (cred.user != null) await _hydrateUser(cred.user!);
+      return null;
+    } on fa.FirebaseAuthException catch (e) {
+      return switch (e.code) {
+        'email-already-in-use' ||
+        'credential-already-in-use' =>
+          'An account already exists for that email.',
+        'weak-password' =>
+          'That password is too weak — use at least 8 characters.',
+        'invalid-email' => 'Enter a valid email address.',
+        'network-request-failed' => 'Network error. Check your connection.',
+        _ => e.message ?? 'Account creation failed. Please try again.',
+      };
+    } on StateError {
+      return 'Your session expired. Please sign in again.';
     }
   }
 
@@ -1234,19 +1311,19 @@ class AppProvider extends ChangeNotifier {
     // [generateStructureFromRsvps]. Until then the structure stays empty.
     final structure = const TournamentStructure(
       startingStack: 0,
-      chipPlan: const [],
+      chipPlan: [],
       rebuyStack: 0,
-      rebuyChipPlan: const [],
+      rebuyChipPlan: [],
       addOnStack: 0,
-      addOnChipPlan: const [],
-      levels: const [],
+      addOnChipPlan: [],
+      levels: [],
       levelDuration: 15,
       expectedFinishMins: 0,
-      prizes: const [],
+      prizes: [],
       prizePool: 0,
       organizerAmount: 0,
-      colorUpInstructions: const [],
-      warnings: const [],
+      colorUpInstructions: [],
+      warnings: [],
     );
     // Seed participants from the group roster so the RSVP and check-in
     // screens list the real members. Guest seats appear as guest slots when
@@ -1545,6 +1622,16 @@ class AppProvider extends ChangeNotifier {
       );
     }
 
+    // §10.4: persist a visible change timeline on the event record so every
+    // member sees what moved without digging through chat history.
+    if (edits.isNotEmpty) {
+      final stamp = DateTime.now().toString().substring(0, 16);
+      var log = [...game.changeLog, ...edits.map((e) => '$stamp · $e')];
+      if (log.length > 12) log = log.sublist(log.length - 12);
+      _currentGame = _currentGame!.copyWith(changeLog: log);
+      _postUpdatedEventCard(log.last, s);
+    }
+
     _syncGroupGame();
     addAuditRecord('event_edit', 'Event updated: ${edits.join('; ')}.');
     if (edits.isNotEmpty) {
@@ -1564,6 +1651,43 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reposts the pinned event card after a published-event edit (User Flow
+  /// §10.4 "Mark important changes in the pinned chat card"). The card uses
+  /// the exact format of [publishGame]'s announcement card and appends an
+  /// "Updated:" line carrying the newest change-log entry. Posted to both the
+  /// game chat list and the group chat list, with cloud persistence mirroring
+  /// the publish path. Only called when a change-log entry was produced.
+  void _postUpdatedEventCard(String newestChangeLogEntry, GameSettings s) {
+    final game = _currentGame;
+    if (game == null || _user == null) return;
+    final anteText = s.anteEnabled
+        ? 'Ante: L${s.anteAfterLevel}+'
+        : 'No ante';
+    final rebuyText = s.rebuysCloseLevel > 0
+        ? 'Rebuys: until L${s.rebuysCloseLevel}'
+        : 'No rebuys';
+    final addonText = s.addOn ? 'Add-on: Yes' : 'No add-on';
+    final card = ChatMessage(
+      id: 'pinned-${DateTime.now().millisecondsSinceEpoch}',
+      authorId: _user!.id,
+      authorName: _user!.name,
+      body:
+          '${s.name} — ${s.date} at ${s.time}\n'
+          'Buy-in: ${s.buyIn} · Code: ${game.publicCode}\n'
+          '$anteText · $rebuyText · $addonText\n'
+          'Updated: $newestChangeLogEntry',
+      timestamp: DateTime.now(),
+      deleted: false,
+      pinned: true,
+      gameId: game.id,
+    );
+    _currentGame = game.copyWith(chat: [...game.chat, card]);
+    _setGroup(
+      _currentGroup.copyWith(chat: [..._currentGroup.chat, card]),
+    );
+    _postGroupChat(card);
+  }
+
   /// Records that the end-of-rebuy settlement has been confirmed. From this
   /// point the public label reads "Prize Pool" instead of "Estimated Prize
   /// Pool" (12-068, 14-038/14-039, 15-009, 15-030), and no more rebuys,
@@ -1575,8 +1699,9 @@ class AppProvider extends ChangeNotifier {
   ({int organizerAmount, int prizePool, List<Prize> prizes})
   previewSettlementPrizes(int addOnCount) {
     final game = _currentGame;
-    if (game == null)
+    if (game == null) {
       return (organizerAmount: 0, prizePool: 0, prizes: const []);
+    }
     final s = game.settings;
     final participants = game.players
         .where((p) => p.confirmed || p.checkedIn)
@@ -1711,37 +1836,76 @@ class AppProvider extends ChangeNotifier {
     });
   }
 
-  /// Lightweight live recommendation (technical §11.4): compare the expected
-  /// elimination pace against what actually happened so far. If the field is
-  /// falling behind schedule the tournament runs long → suggest shorter future
-  /// levels; if it is ahead → suggest longer ones. Never mutates blinds, level
-  /// count or duration on its own.
-  /// Manually forces recalculation of finish time/speed recommendations
-  void forceEvaluateSpeedRecommendation() {
-    _evaluateSpeedRecommendation();
-    addAnnouncement('Recalculated speed recommendation.', false);
+  /// Estimated minutes still to play from now, minus the minutes the target
+  /// schedule still allows (technical §11.4). Positive drift means the
+  /// tournament is running long; negative means it is running short. Returns
+  /// 0 when no meaningful estimate exists (game not live yet, already over,
+  /// or fewer than two players).
+  ///
+  /// Estimate: remaining levels' durations scaled by a pace factor of expected
+  /// remaining field / actual remaining field (clamped 0.5..2.0). Target:
+  /// settings.durationHours * 60 minus elapsed playing time (summed completed
+  /// level durations plus the consumed part of the current level).
+  int estimatedFinishDriftMinutes() {
+    final game = _currentGame;
+    if (game == null || !game.status.isActiveLive) return 0;
+    if (game.players.length < 2) return 0;
+    final levels = game.structure.levels;
+    // Elapsed playing time: completed levels plus the consumed seconds of the
+    // current level.
+    var elapsedMins = 0.0;
+    for (var i = 0; i < game.currentLevel - 1 && i < levels.length; i++) {
+      elapsedMins += levels[i].durationMins;
+    }
+    final currentLevelData = game.currentLevelData;
+    final currentDurationMins =
+        currentLevelData?.durationMins ?? game.structure.levelDuration;
+    final consumedSeconds =
+        currentDurationMins * 60 - game.currentSecondsRemaining;
+    elapsedMins += consumedSeconds.clamp(0, currentDurationMins * 60) / 60.0;
+    // Remaining scheduled work: future levels only.
+    var remainingLevelsMins = 0;
+    for (var i = game.currentLevel; i < levels.length; i++) {
+      remainingLevelsMins += levels[i].durationMins;
+    }
+    // Pace factor: how the actual remaining field compares with the expected
+    // one (clamped so extreme fields cannot produce absurd estimates).
+    final expectedRemaining = game.settings.players;
+    final actualRemaining = game.activePlayers.length;
+    if (actualRemaining < 1 || expectedRemaining < 1) return 0;
+    final paceFactor =
+        (expectedRemaining / actualRemaining).clamp(0.5, 2.0);
+    final estimateMins = remainingLevelsMins * paceFactor;
+    final targetRemainingMins =
+        game.settings.durationHours * 60 - elapsedMins;
+    return (estimateMins - targetRemainingMins).round();
   }
 
+  /// Live recommendation (technical §11.4): if the estimated finish differs
+  /// from the target by more than 20 minutes, offer a recommendation. Running
+  /// long suggests speeding up future levels; running short suggests slowing
+  /// them down. Never auto-mutates the structure and is cleared again on
+  /// nextLevel/previousLevel/restart.
   void _evaluateSpeedRecommendation() {
     final game = _currentGame;
     if (game == null || game.status != LiveGameStatus.running) return;
-    final total = game.players.length;
-    if (total < 2) return;
-    final levels = game.structure.levels.length;
-    final progress = (game.currentLevel - 1) / levels;
-    final expectedEliminated = (total * progress).round();
-    final eliminated = total - game.activePlayers.length;
-    final diff = eliminated - expectedEliminated;
-    final threshold = (total * 0.15).ceil();
+    if (game.players.length < 2) return;
+    final drift = estimatedFinishDriftMinutes();
     SpeedRecommendation? rec;
-    if (diff < -threshold) {
+    if (drift > 20) {
       rec = SpeedRecommendation.speedUp;
-    } else if (diff > threshold) {
+    } else if (drift < -20) {
       rec = SpeedRecommendation.slowDown;
     }
     if (rec == game.speedRecommendation) return;
     _currentGame = game.copyWith(speedRecommendation: rec);
     notifyListeners();
+  }
+
+  /// Manually forces recalculation of finish time/speed recommendations.
+  void forceEvaluateSpeedRecommendation() {
+    _evaluateSpeedRecommendation();
+    addAnnouncement('Recalculated speed recommendation.', false);
   }
 
   void startTimer() {
@@ -2073,8 +2237,9 @@ class AppProvider extends ChangeNotifier {
     if (player == null ||
         player.eliminated ||
         !player.active ||
-        player.hasAddOn)
+        player.hasAddOn) {
       return;
+    }
 
     _pushUndo();
     final addOnStack = game.structure.addOnStack;
@@ -2212,14 +2377,41 @@ class AppProvider extends ChangeNotifier {
 
   /// Registers an un-invited walk-in player at the door (spec §4.7). They are
   /// checked in immediately and seated by the next seating generation.
-  void addWalkInPlayer(String name) {
+  ///
+  /// Late-registration guard (User Flow §3.2 / §12.5): once the game is live
+  /// and late registration has closed permanently at the end of the selected
+  /// rebuy level, no new players may be added ("A player arrives after late
+  /// registration closes; the system prevents addition"). Rebuy-break, final
+  /// table, completed and cancelled states also block outright. Pre-live
+  /// door walk-ins stay allowed by design even when check-in has been closed.
+  ///
+  /// Returns a validation message when the addition is illegal, or null on
+  /// success. Callers may ignore the result safely.
+  String? addWalkInPlayer(String name) {
     final game = _currentGame;
-    if (game == null || name.trim().isEmpty || game.rebuysClosed) return;
+    if (game == null) return 'No active game.';
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return 'Enter a name for the walk-in.';
+    switch (game.status) {
+      case LiveGameStatus.completed:
+        return 'The tournament has finished — no new players can be added.';
+      case LiveGameStatus.cancelled:
+        return 'The tournament was cancelled — no new players can be added.';
+      case LiveGameStatus.rebuypause:
+        return 'Rebuy break in progress — registration is closed.';
+      case LiveGameStatus.finaltable:
+        return 'Final table is set — no new players can be added.';
+      default:
+        break;
+    }
+    if (game.status.isActiveLive && game.rebuysClosed) {
+      return 'Late registration has closed — no new players can be added.';
+    }
     _pushUndo();
     final id = 'p-${DateTime.now().millisecondsSinceEpoch}';
     final player = Player(
       id: id,
-      name: name.trim(),
+      name: trimmed,
       isGuest: false,
       rsvp: null,
       checkedIn: true,
@@ -2282,6 +2474,7 @@ class AppProvider extends ChangeNotifier {
     _syncGroupGame();
     addAnnouncement('${player.name} walked in and is checked in.', true);
     notifyListeners();
+    return null;
   }
 
   void confirmGuest(String guestId) {
@@ -2370,19 +2563,33 @@ class AppProvider extends ChangeNotifier {
           : _currentGame!.guestSlots,
     );
     addAnnouncement('Guest request rejected.', false);
+    // Free the server-side slot claim too, so another guest can claim the
+    // slot immediately (spec §7.1 — admin correction reopens the slot).
+    if (canFree && _backendUp) {
+      _repo
+          .releaseSlotClaim(_currentGame!.id, inviterId, guestSlot)
+          .catchError((_) {});
+    }
   }
 
-  /// Marks the matching guest slot as reserved/claimed so the free-slot count
-  /// on the guest flow and invitation screens stays accurate.
+  /// Marks the matching guest slot as claimed so the free-slot count
+  /// on the guest flow and invitation screens stays accurate. When
+  /// [requested] is true the claim carries a check-in request and the slot
+  /// moves to [GuestSlotStatus.checkInRequested] (user-flow spec §7.1:
+  /// Unclaimed → Reserved → Check-in Requested → Checked In).
   List<GuestSlot> _markSlotReserved(
     List<GuestSlot> slots,
     String inviterId,
     int slot, {
     String? name,
+    bool requested = false,
   }) {
+    final target = requested
+        ? GuestSlotStatus.checkInRequested
+        : GuestSlotStatus.reserved;
     final updated = slots.map((s) {
       if (s.inviterId == inviterId && s.slot == slot && s.available) {
-        return s.copyWith(guestName: name, status: GuestSlotStatus.reserved);
+        return s.copyWith(guestName: name, status: target);
       }
       return s;
     }).toList();
@@ -2394,7 +2601,7 @@ class AppProvider extends ChangeNotifier {
           inviterId: inviterId,
           slot: slot,
           guestName: name,
-          status: GuestSlotStatus.reserved,
+          status: target,
         ),
       );
     }
@@ -2438,9 +2645,13 @@ class AppProvider extends ChangeNotifier {
 
     if (_backendUp) {
       try {
-        await _repo.pushRequest(
+        // Transactional claim: Firestore serializes racing guests on the
+        // deterministic slot doc, so the first reservation wins server-side
+        // even when both devices hold stale snapshots (spec §7.1).
+        final err = await _repo.reserveGuestSlotTx(
           gameId: game.id,
-          kind: 'guestCheckIn',
+          inviterId: inviterId,
+          slot: slot,
           payload: {
             'guestId': guestId,
             'name': name.trim(),
@@ -2450,8 +2661,9 @@ class AppProvider extends ChangeNotifier {
             'gid': game.groupId,
           },
         );
+        if (err != null) return err;
       } catch (e) {
-        debugPrint('pushRequest(guestCheckIn) failed: $e');
+        debugPrint('reserveGuestSlotTx(guestCheckIn) failed: $e');
         return 'Could not reach the host. Check your connection.';
       }
       // The guest stays pending until the host confirms them at check-in
@@ -2486,6 +2698,8 @@ class AppProvider extends ChangeNotifier {
         inviterId,
         slot,
         name: name.trim(),
+        // Claim + check-in request are one step in this flow (spec §6.3–6.5).
+        requested: true,
       ),
     );
     notifyListeners();
@@ -2863,6 +3077,13 @@ class AppProvider extends ChangeNotifier {
 
     _updatePrizePool();
     _syncGroupGame();
+    // A removed guest frees their slot: drop the server-side claim lock so
+    // the seat can be claimed again (spec §7.1).
+    if (p.isGuest && p.inviterId != null && p.guestSlot != null && _backendUp) {
+      _repo
+          .releaseSlotClaim(game.id, p.inviterId!, p.guestSlot!)
+          .catchError((_) {});
+    }
     addAnnouncement('${p.name} has been removed from the tournament.', true);
     notifyListeners();
   }
@@ -3096,8 +3317,9 @@ class AppProvider extends ChangeNotifier {
   /// whether to attend).
   void generateStructureFromRsvps({bool force = false}) {
     final game = _currentGame;
-    if (game == null || (!game.structureReviewOpen && !(kDebugMode && force)))
+    if (game == null || (!game.structureReviewOpen && !(kDebugMode && force))) {
       return;
+    }
     _pushUndo();
     final count = expectedPlayersFromRsvps(game);
     final s = game.settings.copyWith(players: count);
@@ -3280,6 +3502,78 @@ class AppProvider extends ChangeNotifier {
     addAnnouncement('Level structure updated by admin.', false);
   }
 
+  /// Inserts one intermediate future level directly after [afterLevel]
+  /// (Tech Spec §8.6 permitted slow-down action; User Flow §4.14 "An
+  /// intermediate future blind level may be inserted"). Subsequent levels are
+  /// renumbered with a +1 shift; completed and active levels stay immutable
+  /// (spec §12.4/§8.6), so [afterLevel] must be >= the current level.
+  ///
+  /// Validation: game must exist, durationMins must be one of the allowed
+  /// 10/15/20 minute values, bb > sb > 0 and ante >= 0. Monotonic blind
+  /// progression across neighbours is left to the admin's responsibility.
+  ///
+  /// Returns a validation message when the insert was rejected, or null on
+  /// success. Undoable via [_pushUndo]; audited as 'structure_insert_level'.
+  String? insertFutureLevel(
+    int afterLevel,
+    int sb,
+    int bb,
+    int? ante,
+    int durationMins,
+  ) {
+    final game = _currentGame;
+    if (game == null) return 'No active game.';
+    if (afterLevel < game.currentLevel) {
+      return 'Completed and active levels cannot be changed.';
+    }
+    if (durationMins != 10 && durationMins != 15 && durationMins != 20) {
+      return 'Level duration must be 10, 15 or 20 minutes.';
+    }
+    if (sb <= 0 || bb <= sb) {
+      return 'Blinds must increase — small blind first, then big blind.';
+    }
+    if (ante != null && ante < 0) return 'Ante cannot be negative.';
+    _pushUndo();
+    final inserted = BlindLevel(
+      level: afterLevel + 1,
+      sb: sb,
+      bb: bb,
+      ante: ante,
+      durationMins: durationMins,
+    );
+    final levels = <BlindLevel>[];
+    var appended = false;
+    for (final l in game.structure.levels) {
+      final shifted = BlindLevel(
+        level: l.level >= afterLevel + 1 ? l.level + 1 : l.level,
+        sb: l.sb,
+        bb: l.bb,
+        ante: l.ante,
+        durationMins: l.durationMins,
+      );
+      levels.add(shifted);
+      if (l.level == afterLevel) {
+        levels.add(inserted);
+        appended = true;
+      }
+    }
+    // Appending below the current last level: no anchor row exists.
+    if (!appended) levels.add(inserted);
+    _currentGame = game.copyWith(
+      structure: _structureWithLevels(game.structure, levels),
+    );
+    addAuditRecord(
+      'structure_insert_level',
+      'Inserted level ${inserted.level}: '
+          '$sb/$bb${ante != null ? ' ante $ante' : ''}, $durationMins min.',
+    );
+    addAnnouncement(
+      'Level ${inserted.level} inserted ($sb/$bb, $durationMins min).',
+      false,
+    );
+    return null;
+  }
+
   void confirmFinalTable({
     List<({String playerId, int seat})>? seating,
     String? dealerId,
@@ -3340,7 +3634,91 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
+  /// Validation message explaining why completion was refused (User Flow
+  /// §4.17 "System validates that every paid position has one player"). Set
+  /// by [recordFinishOrder] when the recorded finish order fails
+  /// [validateCompletion]; cleared again on the next attempt.
+  String? _completionError;
+  String? get completionError => _completionError;
+
+  /// Validates that the tournament can be completed cleanly (User Flow
+  /// §4.17). Returns an error message, or null when everything checks out:
+  ///
+  /// - every eliminated player carries a finish position,
+  /// - no two players share the same finishing position,
+  /// - every paid place defined by structure.prizes (places 1..N) is
+  ///   assigned to exactly one player,
+  /// - a winner exists (place 1).
+  ///
+  /// Evaluated prospectively from the current state, so it can be called
+  /// before [recordFinishOrder] commits anything.
+  String? validateCompletion() {
+    final game = _currentGame;
+    if (game == null) return 'No active game.';
+    final eliminated = game.players.where((p) => p.eliminated).toList()
+      ..sort(
+        (a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0),
+      );
+    final prospectiveOrder = [
+      ...eliminated.map((p) => p.id),
+      ...game.activePlayers.map((p) => p.id),
+    ];
+    return _validateCompletionState(game, prospectiveOrder);
+  }
+
+  /// Shared §4.17 validator over an explicit finish order (first-out first).
+  String? _validateCompletionState(LiveGame game, List<String> order) {
+    final unpositioned = game.players
+        .where((p) => p.eliminated && p.eliminationPos == null)
+        .length;
+    if (unpositioned > 0) {
+      return '$unpositioned eliminated player'
+          '${unpositioned == 1 ? ' has' : 's have'} no recorded finish position.';
+    }
+    final placeHolders = <int, String>{};
+    for (final p in game.players.where((p) => p.eliminated)) {
+      final clash = placeHolders[p.eliminationPos!];
+      if (clash != null) {
+        return 'Players $clash and ${p.name} both hold place '
+            '${p.eliminationPos}.';
+      }
+      placeHolders[p.eliminationPos!] = p.id;
+    }
+    final activeCount = game.activePlayers.length;
+    var survivorRank = 0;
+    final seen = <String>{};
+    for (final id in order) {
+      if (!seen.add(id)) continue;
+      final p = game.players.where((x) => x.id == id).firstOrNull;
+      if (p == null || p.eliminated) continue;
+      survivorRank++;
+      final pos = activeCount - survivorRank + 1;
+      final clash = placeHolders[pos];
+      if (clash != null && clash != id) {
+        return 'Two players are recorded for place $pos.';
+      }
+      placeHolders[pos] = id;
+    }
+    final paidPlaces = game.structure.prizes.length;
+    for (var place = 1; place <= paidPlaces; place++) {
+      if (!placeHolders.containsKey(place)) {
+        return 'Paid place $place has no player assigned.';
+      }
+    }
+    return null;
+  }
+
   void recordFinishOrder(List<String> order) {
+    final game = _currentGame;
+    if (game == null) return;
+    final error = _validateCompletionState(game, order);
+    if (error != null) {
+      _completionError = error;
+      addAnnouncement(error, false);
+      notifyListeners();
+      return;
+    }
+    _completionError = null;
     _pushUndo();
     _currentGame = _currentGame!.copyWith(
       finishOrder: order,
@@ -3408,14 +3786,78 @@ class AppProvider extends ChangeNotifier {
   /// Maximum message length (checklist 08-009).
   static const int maxChatMessageLength = 1000;
 
+  /// Basic spam rate limit (tech spec §14.1): at most
+  /// [_chatBurstLimit] messages per sliding [_chatBurstWindow].
+  static const int _chatBurstLimit = 8;
+  static const Duration _chatBurstWindow = Duration(seconds: 30);
+  final Map<String, List<DateTime>> _chatSendTimes = <String, List<DateTime>>{};
+
+  /// True when [userId] has exceeded the chat burst limit right now.
+  bool _chatRateLimited(String userId) {
+    final now = DateTime.now();
+    final times = _chatSendTimes.putIfAbsent(userId, () => <DateTime>[]);
+    times.removeWhere((t) => now.difference(t) > _chatBurstWindow);
+    return times.length >= _chatBurstLimit;
+  }
+
+  void _recordChatSend(String userId) {
+    _chatSendTimes.putIfAbsent(userId, () => <DateTime>[]).add(DateTime.now());
+  }
+
+  // ── Chat unread tracking (Tech Spec §14.1) ────────────────────────────────
+  /// Last-read timestamp per chat scope key. Scope keys are `group:<gid>`
+  /// for the group hub chat and `game:<gid>` for a live game's chat.
+  final Map<String, DateTime> _chatLastRead = {};
+
+  /// Marks an entire chat scope as read up to now so its unread counter
+  /// resets. Callers (chat sheet / group hub screens) invoke this when the
+  /// conversation becomes visible.
+  void markChatRead(String scopeKey) {
+    _chatLastRead[scopeKey] = DateTime.now();
+    notifyListeners();
+  }
+
+  /// Unread count over one chat list: non-deleted messages authored by
+  /// someone else, posted after the scope's last-read timestamp.
+  int _unreadChatCount(String scopeKey, List<ChatMessage> messages) {
+    final uid = _user?.id;
+    if (uid == null) return 0;
+    final lastRead = _chatLastRead[scopeKey];
+    var count = 0;
+    for (final m in messages) {
+      if (m.deleted || m.authorId == uid) continue;
+      if (lastRead != null && !m.timestamp.isAfter(lastRead)) continue;
+      count++;
+    }
+    return count;
+  }
+
+  /// Number of unread group-chat messages for group [gid] (Tech Spec §14.1).
+  int unreadGroupChatCount(String gid) =>
+      _unreadChatCount('group:$gid', _currentGroup.chat);
+
+  /// Number of unread messages in game [gid]'s chat (Tech Spec §14.1). Reads
+  /// the current live game when it matches, otherwise the mirrored copy kept
+  /// on the group bundle.
+  int unreadGameChatCount(String gid) {
+    final LiveGame? target = _currentGame?.id == gid
+        ? _currentGame
+        : _currentGroup.games.where((g) => g.id == gid).firstOrNull;
+    return _unreadChatCount('game:$gid', target?.chat ?? const []);
+  }
+
   /// Sends a chat message. Returns a validation message when the message
-  /// cannot be sent (empty or too long), or null on success.
+  /// cannot be sent (empty, too long or rate limited), or null on success.
   String? sendChatMessage(String? gameId, String body) {
     if (_user == null) return null;
     if (body.trim().isEmpty) return 'Message cannot be empty.';
     if (body.trim().length > maxChatMessageLength) {
       return 'Message is too long — maximum $maxChatMessageLength characters.';
     }
+    if (_chatRateLimited(_user!.id)) {
+      return 'You are sending messages too quickly — wait a moment and try again.';
+    }
+    _recordChatSend(_user!.id);
     final msg = ChatMessage(
       id: 'msg-${DateTime.now().millisecondsSinceEpoch}',
       authorId: _user!.id,
@@ -3560,7 +4002,7 @@ class AppProvider extends ChangeNotifier {
 
   /// Admin closes a poll so it no longer accepts votes (checklist 08-022/08-023).
   void closePoll(String pollId) {
-    var closedPoll;
+    Poll? closedPoll;
     _setGroup(
       _currentGroup.copyWith(
         polls: _currentGroup.polls
@@ -3581,12 +4023,13 @@ class AppProvider extends ChangeNotifier {
       ),
     );
     if (closedPoll != null) {
-      _persistPoll(closedPoll);
+      final poll = closedPoll!;
+      _persistPoll(poll);
       pushNotification(
         AppNotification(
           id: 'n-${DateTime.now().millisecondsSinceEpoch}',
           title: 'Poll closed',
-          body: closedPoll.question,
+          body: poll.question,
           type: NotificationType.admin,
           link: '/group',
           read: false,
@@ -3610,8 +4053,9 @@ class AppProvider extends ChangeNotifier {
 
     // Check cutoff
     if (isCurrent) {
-      if (_currentGame != null && _currentGame!.settings.rsvpCutoffPassed)
+      if (_currentGame != null && _currentGame!.settings.rsvpCutoffPassed) {
         return;
+      }
     } else {
       final g = _currentGroup.games.firstWhere(
         (g) => g.id == gameId,
@@ -3848,6 +4292,19 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── Code lookup ────────────────────────────────────────────────────────────
+  /// Sliding-window throttle for join-code lookups (spec §22 rate limits).
+  /// Firestore rules cannot count reads, so the client caps itself at 10
+  /// lookups per minute per device.
+  final List<DateTime> _codeLookupTimes = <DateTime>[];
+  bool _consumeCodeLookupSlot() {
+    final now = DateTime.now();
+    _codeLookupTimes
+        .removeWhere((t) => now.difference(t) > const Duration(minutes: 1));
+    if (_codeLookupTimes.length >= 10) return false;
+    _codeLookupTimes.add(now);
+    return true;
+  }
+
   /// Resolves a public/TV join code through Firestore and subscribes the
   /// matching feed. TVs and guests read the sanitized `publicGames/{id}`
   /// projections (never the raw game doc); the returned result tells the
@@ -3855,6 +4312,7 @@ class AppProvider extends ChangeNotifier {
   /// unknown codes or when no backend is available.
   Future<CodeLookupResult> enterGameCode(String code) async {
     if (!_backendUp) return CodeLookupResult.notFound;
+    if (!_consumeCodeLookupSlot()) return CodeLookupResult.rateLimited;
     try {
       final hit = await _repo.findGameByCode(code);
       if (hit == null) return CodeLookupResult.notFound;

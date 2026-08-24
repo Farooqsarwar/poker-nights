@@ -77,8 +77,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
     final total = num.tryParse(_editTotal.text.trim())?.toDouble();
     final count = num.tryParse(_editBuyInCount.text.trim())?.toInt();
     final cashedOut = num.tryParse(_editCashedOut.text.trim())?.toDouble();
-    if (stack == null || total == null || count == null || cashedOut == null)
+    if (stack == null || total == null || count == null || cashedOut == null) {
       return;
+    }
     app.cashEditPlayer(
       id,
       stack: stack,

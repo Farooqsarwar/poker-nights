@@ -126,6 +126,38 @@ class _InvitationScreenState extends State<InvitationScreen> {
                 ? () => _openEditModal(context, app, game)
                 : null,
           ),
+          // §10.4: prominent display of recent event changes so members see
+          // updated values without digging through chat or audit history.
+          if (game.changeLog.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              borderColor: AppColors.primary.withValues(alpha: 0.5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '⚠️ Event updated',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  for (final entry in game.changeLog.reversed.take(3))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        entry,
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
           _ContextualMainButton(game: game, user: user, myPlayer: myPlayer),
           // Admin-only: where the structure stands. The AI estimate unlocks
           // 30 minutes before start (client rule) — before that the group is
@@ -517,10 +549,9 @@ class _StructureStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.read<AppProvider>();
     final start = game.settings.scheduledStart;
     final unlockAt = start?.subtract(const Duration(minutes: 30));
-    final hhmm = (DateTime dt) =>
+    String hhmm(DateTime dt) =>
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
     final hasStructure = game.structure.levels.isNotEmpty;
@@ -592,7 +623,11 @@ class _GuestSlotBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, variant) = switch (status) {
       GuestSlotStatus.unclaimed => ('Free', AppBadgeVariant.muted),
-      GuestSlotStatus.reserved => ('Pending', AppBadgeVariant.accent),
+      GuestSlotStatus.reserved => ('Reserved', AppBadgeVariant.accent),
+      GuestSlotStatus.checkInRequested => (
+        'Check-in requested',
+        AppBadgeVariant.accent,
+      ),
       GuestSlotStatus.checkedIn => ('Checked in', AppBadgeVariant.green),
       GuestSlotStatus.cancelled => ('Cancelled', AppBadgeVariant.red),
     };

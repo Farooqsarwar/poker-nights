@@ -246,6 +246,7 @@ class LiveGame {
     this.rebuyRequests = const [],
     this.addOnRequests = const [],
     this.levelEndTime,
+    this.changeLog = const [],
   });
 
   final String id;
@@ -303,6 +304,11 @@ class LiveGame {
 
   /// The exact timestamp when the current timer will hit 0. Null if paused or stopped.
   final DateTime? levelEndTime;
+
+  /// Human-readable audit of post-publication event edits (user-flow spec
+  /// §10.4): "2026-08-24 14:05 · buy-in 15 → 20". Oldest first; the provider
+  /// caps the list when appending. Rendered prominently on the event page.
+  final List<String> changeLog;
 
   List<GuestSlot> get availableGuestSlots =>
       guestSlots.where((s) => s.available).toList();
@@ -434,6 +440,7 @@ class LiveGame {
     List<String>? rebuyRequests,
     List<String>? addOnRequests,
     DateTime? levelEndTime,
+    List<String>? changeLog,
   }) {
     return LiveGame(
       id: id ?? this.id,
@@ -464,6 +471,7 @@ class LiveGame {
       rebuyRequests: rebuyRequests ?? this.rebuyRequests,
       addOnRequests: addOnRequests ?? this.addOnRequests,
       levelEndTime: levelEndTime ?? this.levelEndTime,
+      changeLog: changeLog ?? this.changeLog,
     );
   }
 }

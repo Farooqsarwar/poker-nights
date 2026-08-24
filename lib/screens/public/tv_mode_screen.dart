@@ -41,6 +41,10 @@ class _TVModeScreenState extends State<TVModeScreen> {
     if (!mounted) return;
     if (result == CodeLookupResult.notFound) {
       setState(() => _codeError = 'Code not found — try again');
+    } else if (result == CodeLookupResult.rateLimited) {
+      setState(
+        () => _codeError = 'Too many attempts — wait a minute',
+      );
     } else {
       setState(() => _codeError = null);
     }
@@ -51,13 +55,13 @@ class _TVModeScreenState extends State<TVModeScreen> {
     final app = context.watch<AppProvider>();
     final game = app.tvGame;
 
-    if (game == null)
+    if (game == null) {
       return _CodeEntry(
         controller: _codeController,
         error: _codeError,
         onConnect: _connect,
       );
-
+    }
     return TVBackground(child: _TVLayout(game: game));
   }
 }

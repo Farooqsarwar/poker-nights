@@ -423,6 +423,14 @@ class _GroupScreenState extends State<GroupScreen> {
   }
 
   Widget _buildChat(AppProvider app, Group group, String? userId) {
+    // The conversation is visible while its tab is open — mark it read.
+    if (userId != null && app.unreadGroupChatCount(group.id) > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          app.markChatRead('group:${group.id}');
+        }
+      });
+    }
     final messages = group.chat.where((m) => !m.deleted).toList();
     return AppCard(
       padding: EdgeInsets.zero,

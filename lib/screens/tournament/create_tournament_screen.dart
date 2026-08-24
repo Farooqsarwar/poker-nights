@@ -26,6 +26,134 @@ import '../../widgets/chip_token.dart';
 
 enum _ChipMode { preset, quick, exact }
 
+/// Minimum normalized score for a preset to qualify as a suggestion
+/// (tech spec §6.2).
+const double _presetMatchMinScore = 0.7;
+
+/// Formats [hours] the way the wizard's duration picker does (`4h`, `3.5h`).
+String _hoursLabel(double hours) =>
+    '${hours == hours.roundToDouble() ? hours.round() : hours}h';
+
+/// Tech spec §6.2 — closeness score for suggesting one of the administrator's
+/// saved presets instead of building the tournament from zero. Each compared
+/// facet contributes its weight to a normalized 0..1 score (maxima sum to 1):
+///
+/// | Facet               | Full | Partial                        |
+/// |---------------------|------|--------------------------------|
+/// | Buy-in              | 0.25 | within ±20% → 0.15             |
+/// | Bounty + amount     | 0.15 | same on/off, amount off → 0.075|
+/// | Target duration     | 0.15 | within ±0.5h → 0.08            |
+/// | Expected attendance | 0.10 | posture miss → 0               |
+/// | Rebuys + close lvl  | 0.10 | same on/off, level off → 0.05  |
+/// | Add-on              | 0.10 | —                              |
+/// | Chip set            | 0.15 | same colour count → 0.075      |
+///
+/// Inputs that are not known yet (empty buy-in / bounty field, no attendance
+/// signal) earn half their weight, so an untouched form neither earns nor
+/// loses a suggestion. Presets store no headcount, so attendance fit uses the
+/// rebuy-posture heuristic of `AppProvider.suggestPresets`: fields of ten or
+/// fewer players favour rebuy presets, larger fields favour no-rebuy presets.
+/// Anything that is not a full or partial hit is reported in [diffs] so the
+/// UI can explain the differences.
+({double score, List<String> diffs}) _matchPreset(
+  TournamentPreset p, {
+  required int buyIn,
+  required bool koEnabled,
+  required int koAmount,
+  required double durationHours,
+  required int expectedPlayers,
+  required bool rebuys,
+  required int rebuysCloseLevel,
+  required bool addOn,
+  required String chipSetName,
+  required int chipColorCount,
+}) {
+  final diffs = <String>[];
+  var score = 0.0;
+
+  if (buyIn <= 0) {
+    score += 0.125;
+  } else if (p.buyIn == buyIn) {
+    score += 0.25;
+  } else {
+    if ((p.buyIn - buyIn).abs() / buyIn <= 0.2) score += 0.15;
+    diffs.add('Buy-in ${p.buyIn} (yours: $buyIn)');
+  }
+
+  if (p.koEnabled == koEnabled) {
+    if (!koEnabled) {
+      score += 0.15;
+    } else if (koAmount <= 0 || p.koAmount == koAmount) {
+      score += koAmount <= 0 ? 0.075 : 0.15;
+      if (koAmount > 0) diffs.add('Bounty ${p.koAmount} (yours: $koAmount)');
+    } else {
+      score += 0.075;
+      diffs.add('Bounty ${p.koAmount} (yours: $koAmount)');
+    }
+  } else {
+    diffs.add(
+      'Bounty ${p.koEnabled ? 'on' : 'off'} '
+      '(yours: ${koEnabled ? 'on' : 'off'})',
+    );
+  }
+
+  if (p.durationHours == durationHours) {
+    score += 0.15;
+  } else {
+    if ((p.durationHours - durationHours).abs() <= 0.5) score += 0.08;
+    diffs.add(
+      'Duration ${_hoursLabel(p.durationHours)} '
+      '(yours: ${_hoursLabel(durationHours)})',
+    );
+  }
+
+  if (expectedPlayers <= 0) {
+    score += 0.05;
+  } else if ((expectedPlayers <= 10 && p.rebuys) ||
+      (expectedPlayers > 10 && !p.rebuys)) {
+    score += 0.10;
+  }
+
+  if (p.rebuys == rebuys) {
+    if (!rebuys) {
+      score += 0.10;
+    } else if (p.rebuysCloseLevel == rebuysCloseLevel) {
+      score += 0.10;
+    } else {
+      score += 0.05;
+      diffs.add(
+        'Rebuys close L${p.rebuysCloseLevel} (yours: L$rebuysCloseLevel)',
+      );
+    }
+  } else {
+    diffs.add(
+      'Rebuys ${p.rebuys ? 'on' : 'off'} (yours: ${rebuys ? 'on' : 'off'})',
+    );
+  }
+
+  if (p.addOn == addOn) {
+    score += 0.10;
+  } else {
+    diffs.add(
+      'Add-on ${p.addOn ? 'on' : 'off'} (yours: ${addOn ? 'on' : 'off'})',
+    );
+  }
+
+  if (p.chipSetName == chipSetName) {
+    score += 0.15;
+  } else {
+    if (chipSetName.isNotEmpty && p.chipSet.length == chipColorCount) {
+      score += 0.075;
+    }
+    diffs.add(
+      'Chip set ${p.chipSetName} '
+      '(yours: ${chipSetName.isEmpty ? 'custom' : chipSetName})',
+    );
+  }
+
+  return (score: score, diffs: diffs);
+}
+
 /// 4-step tournament creation wizard mirroring the web `CreateTournamentPage`.
 class CreateTournamentScreen extends StatefulWidget {
   const CreateTournamentScreen({super.key, this.presetId});
@@ -90,10 +218,20 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   final _orgPctController = TextEditingController(text: '0');
   int get _orgPct => int.tryParse(_orgPctController.text.trim()) ?? 0;
 
-  // Preset support (checklist §9.1)
-  List<TournamentPreset> _suggestions = const [];
+  // Preset support (checklist §9.1). Tech spec §6.2: before starting from
+  // zero, saved presets close to the current base inputs are suggested.
+  int _expectedPlayers = 0;
+
+  /// Top §6.2 matches (at most two, best score first), recomputed while the
+  /// admin edits the base inputs.
+  final List<({TournamentPreset preset, double score, List<String> diffs})>
+      _presetMatches = [];
   bool _suggestionsDismissed = false;
   String? _appliedPresetId;
+
+  /// §6.2 guard flag: once the review step is reached the suggestions never
+  /// come back, even if the admin navigates back to edit details.
+  bool _reachedReview = false;
 
   static String get _todayIso {
     final now = DateTime.now();
@@ -145,26 +283,57 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         }
       }
 
-      setState(() {
-        _suggestions = _matchSuggestions(app, expected);
-      });
+      _expectedPlayers = expected;
+      _refreshPresetMatches(app);
     });
   }
 
-  /// Scores presets against signals parsed from closed polls (buy-in, duration,
-  /// etc.) so the wizard can suggest a match (09-007 / 09-008).
-  List<TournamentPreset> _matchSuggestions(AppProvider app, int expected) {
-    final signals = <num>[];
-    for (final poll in app.currentGroup.polls) {
-      if (!poll.closed) continue;
-      for (final opt in poll.options) {
-        final cleaned = opt.trim().replaceAll(RegExp(r'[hH]$'), '').trim();
-        final n = num.tryParse(cleaned);
-        if (n != null && n > 0) signals.add(n);
+  /// Tech spec §6.2 — recomputes which of the administrator's saved presets
+  /// sit close enough (score >= [_presetMatchMinScore]) to the current base
+  /// inputs to be suggested, keeping the two best scores. Runs on wizard load
+  /// and on every base-input edit; the guard stops it for good once a preset
+  /// was explicitly picked ([_appliedPresetId]), the section was dismissed,
+  /// or the review step was reached.
+  void _refreshPresetMatches(AppProvider app) {
+    if (_appliedPresetId != null ||
+        _suggestionsDismissed ||
+        _reachedReview) {
+      _presetMatches.clear();
+      setState(() {});
+      return;
+    }
+    final buyIn = num.tryParse(_buyIn.text)?.toInt() ?? 0;
+    final koAmount = num.tryParse(_koAmount.text)?.toInt() ?? 0;
+    final scored =
+        <({TournamentPreset preset, double score, List<String> diffs})>[];
+    for (final p in app.presets) {
+      final match = _matchPreset(
+        p,
+        buyIn: buyIn,
+        koEnabled: _koEnabled,
+        koAmount: koAmount,
+        durationHours: _duration,
+        expectedPlayers: _expectedPlayers,
+        rebuys: _rebuys,
+        rebuysCloseLevel: _rebuysClose,
+        addOn: _addOn,
+        chipSetName: _chipMode == _ChipMode.preset ? _presetName : '',
+        chipColorCount: _chipSet.length,
+      );
+      if (match.score >= _presetMatchMinScore) {
+        scored.add((preset: p, score: match.score, diffs: match.diffs));
       }
     }
-    return app.suggestPresets(expectedPlayers: expected, pollSignals: signals);
+    scored.sort((a, b) => b.score.compareTo(a.score));
+    _presetMatches
+      ..clear()
+      ..addAll(scored.take(2));
+    setState(() {});
   }
+
+  /// Score-based subtitle for a suggestion card (tech spec §6.2).
+  String _matchLabel(double score) =>
+      score >= 0.85 ? 'Very close match' : 'Close match';
 
   /// Fills every field of the wizard from a saved preset (09-006).
   void _applyPreset(TournamentPreset p) {
@@ -228,7 +397,15 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
   void _next() {
     if (_step == 1 && !_validateStep1()) return;
-    setState(() => _step++);
+    setState(() {
+      _step++;
+      if (_step >= _steps.length) {
+        // Tech spec §6.2 guard: reaching the review step stops suggesting,
+        // even when the admin goes back to edit afterwards.
+        _reachedReview = true;
+        _presetMatches.clear();
+      }
+    });
   }
 
   String get _durationLabel =>
@@ -287,7 +464,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ? 'No'
                 : 'From L$_anteAfterLevel',
           ),
-          _ConfirmItem('Organizational costs', '${_orgPct}%'),
+          _ConfirmItem('Organizational costs', '$_orgPct%'),
         ],
         chipSet: _chipSet,
         chipSetName: _chipMode == _ChipMode.preset ? _presetName : 'Custom',
@@ -488,16 +665,16 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           if (_step == 1 &&
-              _suggestions.isNotEmpty &&
+              _presetMatches.isNotEmpty &&
               !_suggestionsDismissed &&
               _appliedPresetId == null) ...[
-            _buildSuggestionBanner(app),
+            _buildSuggestionBanner(),
             const SizedBox(height: AppSpacing.lg),
           ],
           // Steps
-          if (_step == 1) _buildStep1(),
+          if (_step == 1) _buildStep1(app),
           if (_step == 2) _buildStep2(app),
-          if (_step == 3) _buildStep3(),
+          if (_step == 3) _buildStep3(app),
           if (_step == 4) _buildStep4(app),
           const SizedBox(height: AppSpacing.lg),
           // Nav buttons
@@ -547,7 +724,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     );
   }
 
-  Widget _buildStep1() {
+  Widget _buildStep1(AppProvider app) {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
@@ -603,6 +780,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       label: 'Buy-in amount',
                       error: _errors['buyIn'],
                       keyboardType: TextInputType.number,
+                      onChanged: (_) => _refreshPresetMatches(app),
                     ),
                   ],
                 ),
@@ -619,6 +797,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             onChanged: (v) {
               final val = v.replaceAll('h', '');
               setState(() => _duration = double.tryParse(val) ?? 4.0);
+              // §6.2: base-input edits refresh the suggested presets.
+              _refreshPresetMatches(app);
             },
           ),
         ],
@@ -626,10 +806,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     );
   }
 
-  /// Suggestion banner shown before starting from scratch (09-007). When two
-  /// presets match, both are offered so the admin can choose (09-008), or
-  /// ignore them and start from zero (09-009).
-  Widget _buildSuggestionBanner(AppProvider app) {
+  /// Tech spec §6.2 — "Suggested" section shown above the form before the
+  /// admin starts from zero. Up to two matches are offered (spec: show both
+  /// and explain the differences), each with a closeness subtitle and the
+  /// differences against the current inputs. Tapping applies through the
+  /// existing [_applyPreset] path.
+  Widget _buildSuggestionBanner() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -638,12 +820,15 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             const Icon(Icons.auto_awesome, size: 16, color: AppColors.primary),
             const SizedBox(width: AppSpacing.xs),
             Text(
-              'Matching preset${_suggestions.length > 1 ? 's' : ''} from your poll results',
+              'Suggested preset${_presetMatches.length > 1 ? 's' : ''}',
               style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
             ),
             const Spacer(),
             InkWell(
-              onTap: () => setState(() => _suggestionsDismissed = true),
+              onTap: () => setState(() {
+                _suggestionsDismissed = true;
+                _presetMatches.clear();
+              }),
               child: Text(
                 'Ignore',
                 style: AppTypography.bodyXs.copyWith(
@@ -654,7 +839,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        for (final p in _suggestions)
+        for (final m in _presetMatches)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: Container(
@@ -673,16 +858,24 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          p.name,
+                          m.preset.name,
                           style: AppTypography.bodySm.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Buy-in ${p.buyIn} · ${p.durationHours}h · '
-                          '${p.rebuys ? 'Rebuys to L${p.rebuysCloseLevel}' : 'No rebuys'} · '
-                          '${p.anteEnabled ? 'Ante L${p.anteAfterLevel}+' : 'No ante'}',
+                          _matchLabel(m.score),
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          m.diffs.isEmpty
+                              ? 'Matches your current settings'
+                              : m.diffs.join(' · '),
                           style: AppTypography.bodyXs.copyWith(
                             color: AppColors.mutedForeground,
                           ),
@@ -693,7 +886,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   AppButton(
                     size: AppButtonSize.sm,
                     onPressed: () {
-                      setState(() => _applyPreset(p));
+                      setState(() => _applyPreset(m.preset));
+                      // §6.2 guard: stop suggesting once one is picked.
+                      _presetMatches.clear();
                     },
                     child: const Text('Use preset'),
                   ),
@@ -777,6 +972,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   _presetName = v;
                   _chipSet = List.of(TournamentEngine.getPreset(v));
                 });
+                // §6.2: the chip set facet feeds preset matching.
+                _refreshPresetMatches(app);
               },
               items: [
                 for (final name in TournamentEngine.presetNames)
@@ -1090,6 +1287,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                           );
                           _chipMode = _ChipMode.exact;
                         });
+                        // §6.2: a custom set changes the chip facet.
+                        _refreshPresetMatches(context.read<AppProvider>());
                         Navigator.pop(context);
                       },
                       child: const Text('Add colour'),
@@ -1104,7 +1303,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     );
   }
 
-  Widget _buildStep3() {
+  Widget _buildStep3(AppProvider app) {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
@@ -1134,20 +1333,22 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   selected: _rebuys
                       ? (_rebuyUnlimited ? 'Unlimited' : 'Limited')
                       : 'Off',
-                  onChanged: (v) => setState(() {
-                    if (v == 'Off') {
-                      _rebuys = false;
-                      _rebuyUnlimited = false;
-                    } else if (v == 'Limited') {
-                      _rebuys = true;
-                      _rebuyUnlimited = false;
-                    } else {
-                      // Unlimited rebuys default to closing at the end of L6.
-                      _rebuys = true;
-                      _rebuyUnlimited = true;
-                      _rebuysClose = 6;
-                    }
-                  }),
+                onChanged: (v) => setState(() {
+                  if (v == 'Off') {
+                    _rebuys = false;
+                    _rebuyUnlimited = false;
+                  } else if (v == 'Limited') {
+                    _rebuys = true;
+                    _rebuyUnlimited = false;
+                  } else {
+                    // Unlimited rebuys default to closing at the end of L6.
+                    _rebuys = true;
+                    _rebuyUnlimited = true;
+                    _rebuysClose = 6;
+                  }
+                  // §6.2: rule edits refresh the suggested presets.
+                  _refreshPresetMatches(app);
+                }),
                 ),
               ],
             ),
@@ -1178,7 +1379,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
               ),
             ),
-            if (!_rebuyUnlimited)
               Padding(
                 padding: const EdgeInsets.only(
                   left: AppSpacing.lg,

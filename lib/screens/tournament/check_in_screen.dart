@@ -9,6 +9,7 @@ import '../../constants/app_constants.dart';
 import '../../models/game.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/voice_service.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_back_button.dart';
@@ -19,6 +20,7 @@ import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/event_day_checklist.dart';
 
 enum SeatingMode { random, manual, keepGuests, separateGuests }
 
@@ -146,6 +148,9 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final canStart = checkedIn.length >= 2;
     final seatedYet = checkedIn.any((p) => p.table > 0 && p.seat > 0);
     final seatingConfirmed = game.seatingConfirmed;
+    // Event-day preparation checklist (user-flow spec §4.6): admin-only and
+    // only in the pre-live window (published / check-in / ready).
+    final showChecklist = EventDayChecklist.appliesTo(game);
 
     return AppPage(
       maxWidth: 560,
@@ -177,6 +182,20 @@ class _CheckInScreenState extends State<CheckInScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Event-day preparation (user-flow spec §4.6) — always the first
+          // card so the admin never has to remember the sequence. We are on
+          // the check-in screen itself, so step 2 has no open action.
+          if (showChecklist) ...[
+            EventDayChecklist(
+              game: game,
+              onOpenCheckIn: null,
+              onOpenTvMode: () => context.go(RoutePaths.tvMode),
+              onTestVoice: () {
+                VoiceService.instance.speak('Voice test.');
+              },
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // Summary
           Row(
             children: [

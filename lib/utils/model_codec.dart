@@ -420,6 +420,7 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'rebuyRequests': List<String>.from(game.rebuyRequests),
     'addOnRequests': List<String>.from(game.addOnRequests),
     'levelEndTime': _nullOrIso(game.levelEndTime),
+    'changeLog': List<String>.from(game.changeLog),
   };
 }
 
@@ -473,6 +474,8 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
           List<String>.from(map['rebuyRequests'] as List? ?? const []),
       addOnRequests: List<String>.from(map['addOnRequests'] as List? ?? const []),
       levelEndTime: _isoOrNull(map['levelEndTime']),
+      changeLog:
+          List<String>.from(map['changeLog'] as List? ?? const []),
     );
 
 /// Firestore representation: list-like collections that benefit from targeted

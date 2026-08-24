@@ -363,11 +363,10 @@ class _LbEntry {
 }
 
 class _MiniStat extends StatelessWidget {
-  const _MiniStat({required this.label, required this.value, this.color});
+  const _MiniStat({required this.label, required this.value});
 
   final String label;
   final String value;
-  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -386,7 +385,7 @@ class _MiniStat extends StatelessWidget {
               style: AppTypography.mono(
                 size: AppFontSizes.md,
                 weight: FontWeight.w700,
-                color: color ?? AppColors.foreground,
+                color: AppColors.foreground,
               ),
             ),
           ),

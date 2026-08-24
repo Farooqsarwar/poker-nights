@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../app/Icons.dart';
+import '../app/icons.dart';
 import '../app/colors.dart';
 import '../app/route_paths.dart';
 import '../app/typography.dart';

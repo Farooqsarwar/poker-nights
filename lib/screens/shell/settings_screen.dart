@@ -73,7 +73,14 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: 'Get alerts for RSVPs and game events',
                   trailing: AppToggle(
                     value: app.notificationsEnabled,
-                    onChanged: (v) => app.setNotificationsEnabled(v),
+                    onChanged: (v) async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final error = await app.setNotificationsEnabled(v);
+                      if (error == null) return;
+                      messenger.showSnackBar(
+                        SnackBar(content: Text(error)),
+                      );
+                    },
                   ),
                   showDivider: false,
                 ),

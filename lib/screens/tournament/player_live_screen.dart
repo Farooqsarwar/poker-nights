@@ -192,9 +192,20 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.ghost,
                         onPressed: () => ChatSheet.show(context, game.id),
-                        child: const AppIconLabel(
-                          label: 'Chat',
-                          icon: Icons.chat_bubble_outline,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const AppIconLabel(
+                              label: 'Chat',
+                              icon: Icons.chat_bubble_outline,
+                            ),
+                            if (app.unreadGameChatCount(game.id) > 0) ...[
+                              const SizedBox(width: 4),
+                              ChatUnreadBadge(
+                                count: app.unreadGameChatCount(game.id),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                   ],
@@ -583,10 +594,8 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       ),
                       const SizedBox(height: AppSpacing.md),
                       AppButton(
-                        onPressed: () {
-                          app.logout();
-                          context.go(RoutePaths.landing);
-                        },
+                        onPressed: () =>
+                            _showCreateAccountDialog(context, app),
                         child: const Text('Create Account'),
                       ),
                     ],
@@ -828,6 +837,65 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
             const SizedBox(height: AppSpacing.xxl),
           ],
         ),
+      ),
+    );
+  }
+
+  /// §6.7 guest conversion: links credentials onto the anonymous uid so the
+  /// recorded result and stats carry over to the new account.
+  void _showCreateAccountDialog(BuildContext context, AppProvider app) {
+    final name = TextEditingController();
+    final email = TextEditingController();
+    final password = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Create Account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: name,
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: password,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Password'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final err = await app.convertGuestAccount(
+                name.text.trim(),
+                email.text.trim(),
+                password.text,
+              );
+              if (!ctx.mounted) return;
+              if (err != null) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(err)),
+                );
+                return;
+              }
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Create Account'),
+          ),
+        ],
       ),
     );
   }

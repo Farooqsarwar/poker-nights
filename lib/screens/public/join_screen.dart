@@ -42,6 +42,13 @@ class _JoinScreenState extends State<JoinScreen> {
       );
       return;
     }
+    if (result == CodeLookupResult.rateLimited) {
+      setState(
+        () => _codeError =
+            'Too many attempts. Wait a minute and try again.',
+      );
+      return;
+    }
     if (result == CodeLookupResult.tv) {
       context.go(RoutePaths.tvMode);
     } else {
@@ -111,8 +118,9 @@ class _JoinScreenState extends State<JoinScreen> {
                       textAlign: TextAlign.center,
                       style: AppTypography.monoLg.copyWith(letterSpacing: 3),
                       onChanged: (_) {
-                        if (_codeError != null)
+                        if (_codeError != null) {
                           setState(() => _codeError = null);
+                        }
                       },
                       decoration: InputDecoration(
                         counterText: '',

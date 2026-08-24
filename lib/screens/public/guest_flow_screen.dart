@@ -88,8 +88,9 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     final app = context.read<AppProvider>();
     final session = app.guestSession;
     final game = app.currentGame;
-    if (session == null || game == null || session.gameId != game.id)
+    if (session == null || game == null || session.gameId != game.id) {
       return null;
+    }
     return _matchGuest(game, session);
   }
 
@@ -108,6 +109,11 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     if (result == CodeLookupResult.notFound) {
       setState(
         () => _codeError = 'Game not found — check the code and try again.',
+      );
+    } else if (result == CodeLookupResult.rateLimited) {
+      setState(
+        () => _codeError =
+            'Too many attempts. Wait a minute and try again.',
       );
     } else if (result == CodeLookupResult.game) {
       final app = context.read<AppProvider>();

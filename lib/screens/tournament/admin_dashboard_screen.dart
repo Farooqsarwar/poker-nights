@@ -196,11 +196,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
                       onPressed: () => ChatSheet.show(context, game.id),
-                      child: const FittedBox(
+                      child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: AppIconLabel(
-                          label: 'Chat',
-                          icon: Icons.chat_bubble_outline,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const AppIconLabel(
+                              label: 'Chat',
+                              icon: Icons.chat_bubble_outline,
+                            ),
+                            if (app.unreadGameChatCount(game.id) > 0) ...[
+                              const SizedBox(width: 4),
+                              ChatUnreadBadge(
+                                count: app.unreadGameChatCount(game.id),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),
@@ -265,9 +276,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
                       onPressed: () => ChatSheet.show(context, game.id),
-                      child: const AppIconLabel(
-                        label: 'Chat',
-                        icon: Icons.chat_bubble_outline,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const AppIconLabel(
+                            label: 'Chat',
+                            icon: Icons.chat_bubble_outline,
+                          ),
+                          if (app.unreadGameChatCount(game.id) > 0) ...[
+                            const SizedBox(width: 4),
+                            ChatUnreadBadge(
+                              count: app.unreadGameChatCount(game.id),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     AppButton(

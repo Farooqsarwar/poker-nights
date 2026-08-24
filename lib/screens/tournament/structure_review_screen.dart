@@ -445,8 +445,9 @@ class StructureReviewScreen extends StatelessWidget {
                               Navigator.of(context).pop();
                             },
                             onApply: (levels) {
-                              if (levels.isNotEmpty)
+                              if (levels.isNotEmpty) {
                                 app.applyFutureLevels(levels);
+                              }
                               Navigator.of(context).pop();
                             },
                           ),
@@ -999,7 +1000,7 @@ class _PlayerCountCard extends StatelessWidget {
               InkWell(
                 onTap: () => onChanged(players + 1),
                 child: const Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  padding: EdgeInsets.symmetric(horizontal: 4.0),
                   child: Icon(Icons.add, size: 20, color: AppColors.primary),
                 ),
               ),

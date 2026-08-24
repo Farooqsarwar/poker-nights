@@ -1,3 +1,4 @@
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -14,6 +15,18 @@ import 'responsive/responsive.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // App Check attestation (tech spec §22 rate-limiting hardening). Activated
+  // only when a reCAPTCHA v3 site key is compiled in via
+  // --dart-define=APP_CHECK_RECAPTCHA_SITE_KEY=…; a missing key or activation
+  // failure never blocks startup.
+  try {
+    const siteKey = String.fromEnvironment('APP_CHECK_RECAPTCHA_SITE_KEY');
+    if (siteKey.isNotEmpty) {
+      await FirebaseAppCheck.instance.activate(
+        webProvider: ReCaptchaV3Provider(siteKey),
+      );
+    }
+  } catch (_) {}
   final appProvider = AppProvider();
   runApp(
     // Initializes flutter_screenutil before any widget reads scaled sizes, so

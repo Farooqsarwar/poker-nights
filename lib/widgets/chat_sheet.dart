@@ -40,6 +40,19 @@ class _ChatSheetState extends State<ChatSheet> {
   String? _chatError;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _markRead());
+  }
+
+  // While the sheet is open the conversation is visible, so every message
+  // that arrives is immediately marked read (Tech Spec §14.1).
+  void _markRead() {
+    if (!mounted) return;
+    context.read<AppProvider>().markChatRead('game:${widget.gameId}');
+  }
+
+  @override
   void dispose() {
     _chatController.dispose();
     super.dispose();
@@ -70,6 +83,10 @@ class _ChatSheetState extends State<ChatSheet> {
     if (game == null) return const SizedBox();
 
     final messages = game.chat.where((m) => !m.deleted).toList();
+
+    if (userId != null && app.unreadGameChatCount(widget.gameId) > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _markRead());
+    }
 
     return Column(
       children: [
@@ -183,6 +200,32 @@ class _ChatSheetState extends State<ChatSheet> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Red pill with an unread-message count, shown next to chat entry buttons
+/// until the conversation is opened (Tech Spec §14.1).
+class ChatUnreadBadge extends StatelessWidget {
+  const ChatUnreadBadge({super.key, required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: AppColors.destructive,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$count',
+        style: AppTypography.bodyXs.copyWith(
+          color: Colors.white,
+          fontSize: 10,
+        ),
+      ),
     );
   }
 }

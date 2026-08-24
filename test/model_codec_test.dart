@@ -289,6 +289,36 @@ void main() {
       expect(restored.players.first.rsvp, Rsvp.maybe);
     });
 
+    test('guest slot checkInRequested status round-trips by name', () {
+      const slot = GuestSlot(
+        id: 'slot-3',
+        inviterId: 'u1',
+        slot: 3,
+        guestName: null,
+        status: GuestSlotStatus.checkInRequested,
+      );
+      final map = guestSlotToMap(slot);
+      expect(map['status'], 'checkInRequested');
+      final restored = guestSlotFromMap(map);
+      expect(restored.status, GuestSlotStatus.checkInRequested);
+      expect(guestSlotToMap(restored), map);
+
+      // And through the embedded LiveGame wire format.
+      final gameMap = liveGameToMap(_fixture());
+      (gameMap['guestSlots'] as List).first['status'] =
+          GuestSlotStatus.checkInRequested.name;
+      expect(
+        liveGameFromMap(gameMap).guestSlots.first.status,
+        GuestSlotStatus.checkInRequested,
+      );
+    });
+
+    test('unknown guest slot status string falls back to unclaimed', () {
+      final map = guestSlotToMap(_fixture().guestSlots.first)
+        ..['status'] = 'not-a-status';
+      expect(guestSlotFromMap(map).status, GuestSlotStatus.unclaimed);
+    });
+
     test('firestore doc variant keeps player ordering', () {
       final game = _fixture();
       final doc = liveGameToFirestoreDoc(game);

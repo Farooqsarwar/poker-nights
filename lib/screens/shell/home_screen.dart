@@ -15,6 +15,7 @@ import '../../models/live_game.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
+import '../../utils/main_button.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
@@ -56,26 +57,19 @@ class _HomeScreenState extends State<HomeScreen> {
     // Always set the current game first so every destination screen
     // has the correct game in the provider (fixes navigation dead-ends).
     app.setCurrentGame(game);
-    final isAdmin = app.user?.isAdmin ?? false;
-    if (game.status == LiveGameStatus.completed) {
-      context.go(RoutePaths.resultPodium);
-    } else if (isAdmin && game.status.isActiveLive) {
-      context.go(RoutePaths.adminDashboard);
-    } else if ((game.status == LiveGameStatus.checkin ||
-            game.status == LiveGameStatus.ready) &&
-        isAdmin) {
-      context.go(RoutePaths.checkIn);
-    } else if (isAdmin) {
-      context.go(RoutePaths.invitation);
-    } else {
-      // Members: route to invitation for RSVP/pre-game states,
-      // live screen only once the game is actually running.
-      if (game.status.isActiveLive) {
-        context.go(RoutePaths.playerLive);
-      } else {
-        context.go(RoutePaths.invitation);
-      }
-    }
+    // The destination is the contextual main action (user-flow spec §9):
+    // one event, one dominant next action, resolved from role + state.
+    final user = app.user;
+    final isAdmin = user?.isAdmin ?? false;
+    final me = user == null
+        ? null
+        : game.players.where((p) => p.id == user.id).firstOrNull;
+    final action = mainActionFor(
+      isAdmin ? MainButtonRole.admin : MainButtonRole.member,
+      game,
+      memberRow: me,
+    );
+    context.go(action.route ?? RoutePaths.invitation);
   }
 
   @override
@@ -142,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 // Audit fix E11: no more "Welcome back, Guest".
                                 Text(
                                   user?.name != null && user!.name.isNotEmpty
-                                      ? 'Welcome back, ${user!.name}'
+                                      ? 'Welcome back, ${user.name}'
                                       : 'Welcome back',
                                   style: AppTypography.bodySm.copyWith(
                                     color: AppColors.mutedForeground,
@@ -250,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
               // ── Next required action (User Flow §4.1: Home "should identify
               // the next required action", not just list data). ─────────────
-              if (group != null) ...[
+              ...[
                 _NextActionCard(
                   app: app,
                   group: group,
@@ -307,6 +301,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: _UpcomingGames(
                             games: games,
                             isAdmin: user?.isAdmin ?? false,
+                            userId: user?.id,
                             onOpen: (g) => _openGame(context, app, g),
                           ),
                         ),
@@ -343,6 +338,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _UpcomingGames(
                         games: games,
                         isAdmin: user?.isAdmin ?? false,
+                        userId: user?.id,
                         onOpen: (g) => _openGame(context, app, g),
                       ),
                       const SizedBox(height: AppSpacing.xl),
@@ -696,7 +692,7 @@ class _NextActionCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (subtitle != null && subtitle.isNotEmpty)
+                if (subtitle.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
@@ -725,11 +721,13 @@ class _UpcomingGames extends StatelessWidget {
   const _UpcomingGames({
     required this.games,
     required this.isAdmin,
+    required this.userId,
     required this.onOpen,
   });
 
   final List<LiveGame> games;
   final bool isAdmin;
+  final String? userId;
   final ValueChanged<LiveGame> onOpen;
 
   @override
@@ -788,7 +786,12 @@ class _UpcomingGames extends StatelessWidget {
           Column(
             children: [
               for (var i = 0; i < games.length; i++) ...[
-                _GameRow(game: games[i], onOpen: () => onOpen(games[i]))
+                _GameRow(
+                  game: games[i],
+                  isAdmin: isAdmin,
+                  userId: userId,
+                  onOpen: () => onOpen(games[i]),
+                )
                     .animate()
                     .fadeIn(delay: (i * 100).ms, duration: 450.ms)
                     .slideX(
@@ -808,9 +811,16 @@ class _UpcomingGames extends StatelessWidget {
 }
 
 class _GameRow extends StatelessWidget {
-  const _GameRow({required this.game, required this.onOpen});
+  const _GameRow({
+    required this.game,
+    required this.isAdmin,
+    required this.userId,
+    required this.onOpen,
+  });
 
   final LiveGame game;
+  final bool isAdmin;
+  final String? userId;
   final VoidCallback onOpen;
 
   AppBadgeVariant _colorFor(LiveGameStatus s) {
@@ -835,6 +845,15 @@ class _GameRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final going = game.goingCount;
+    // One dominant next action per card (user-flow spec §7.2, §9).
+    final me = userId == null
+        ? null
+        : game.players.where((p) => p.id == userId).firstOrNull;
+    final action = mainActionFor(
+      isAdmin ? MainButtonRole.admin : MainButtonRole.member,
+      game,
+      memberRow: me,
+    );
     return AppCard(
       onTap: onOpen,
       padding: EdgeInsets.zero,
@@ -976,20 +995,19 @@ class _GameRow extends StatelessWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.lg),
-              child: Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: AppColors.secondary,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 14,
-                  color: AppColors.mutedForeground,
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.lg),
+                child: AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.primary,
+                  onPressed: action.enabled ? onOpen : null,
+                  child: Text(
+                    action.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
             ),

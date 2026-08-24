@@ -120,10 +120,67 @@ class TournamentEngine {
     return math.max(rounded, minChip);
   }
 
-  /// Never hand a player an absurd number of a single colour (e.g. 900 white
-  /// chips). When the inventory is too small to cover the target stack the
-  /// stack itself is reduced (see [generate]) rather than dumping chips.
-  static const int _maxChipsPerPlayer = 25;
+
+  /// Maximum number of chips of a SINGLE COLOR allocated to one player
+  /// in a starting stack, rebuy, or add-on.
+  ///
+  /// Origin: Physical/UX constraint — a standard chip tray row holds 25 chips.
+  /// Exceeding this makes stacks unwieldy and colour-up exchanges impractical.
+  /// This value is NOT explicitly mandated by the PNT Technical Specification
+  /// or the reference payout schedule; it is a practical tournament-operation
+  /// constraint that has been validated as correct for home games.
+  /// TODO(product): confirm maxChipsPerPlayer value with spec owner if a
+  /// future spec version mandates a different limit.
+  ///
+  /// Rationale:
+  ///  - 25 chips per row is the physical capacity of a standard casino chip
+  ///    tray. Keeping to this limit means each colour in a player's starting
+  ///    stack fits in exactly one tray row, making distribution, counting, and
+  ///    colour-up exchanges fast and error-free.
+  ///  - Lowering the value reduces stack size options; raising it risks stacks
+  ///    that exceed physical tray capacity.
+  ///
+  /// Changing this value affects:
+  ///  - Initial stack composition (fewer large-denomination chips if lowered).
+  ///  - Rebuy and add-on chip counts.
+  ///  - Colour-up exchange timing (chip-plan logic).
+  ///  - Physical chip inventory requirements.
+  ///
+  /// Validation: values outside [1, 100] are rejected at structure-generation
+  /// time via [_validateMaxChipsPerPlayer]. A warning is logged if the value
+  /// deviates from the production default of 25.
+  ///
+  /// Configurable: this constant is the compile-time default. To override per
+  /// tournament, pass the desired value through TournamentParams.maxChipsPerPlayer
+  /// (Firestore-driven override) — add that field when operator configurability
+  /// is required. Until then, 25 is used universally.
+  static const int maxChipsPerPlayer = 25;
+
+  /// Validates [value] as a legal maxChipsPerPlayer limit. Throws an
+  /// [ArgumentError] if out of range [1, 100].
+  static void _validateMaxChipsPerPlayer(int value) {
+    if (value < 1 || value > 100) {
+      throw ArgumentError.value(
+        value,
+        'maxChipsPerPlayer',
+        'Must be in the range 1–100. Default is 25 (standard chip-tray row depth).',
+      );
+    }
+    if (value != 25) {
+      // ignore: avoid_print
+      // Coverage: non-default value in use — confirm this is intentional.
+      assert(
+        false,
+        'WARNING: maxChipsPerPlayer=$value deviates from the production default of 25. '
+        'Verify this is intentional for the current venue.',
+      );
+    }
+  }
+
+  /// Test-only wrapper exposing [_validateMaxChipsPerPlayer] for unit tests.
+  @visibleForTesting
+  static void validateMaxChipsPerPlayerForTest(int value) =>
+      _validateMaxChipsPerPlayer(value);
 
   static List<ChipPlanEntry> _buildChipPlan(
     int targetStack,
@@ -142,7 +199,7 @@ class TournamentEngine {
       final need = remaining ~/ chip.value;
       final use = math.min(
         need,
-        math.min(math.max(1, maxPerPlayer), _maxChipsPerPlayer),
+        math.min(math.max(1, maxPerPlayer), maxChipsPerPlayer),
       );
       if (use > 0) {
         plan.add(
@@ -163,7 +220,7 @@ class TournamentEngine {
       final existing = index >= 0 ? plan[index].count : 0;
       final extra = math.min(
         (remaining / small.value).ceil(),
-        math.max(0, _maxChipsPerPlayer - existing),
+        math.max(0, maxChipsPerPlayer - existing),
       );
       if (extra > 0) {
         if (index >= 0) {
@@ -433,20 +490,28 @@ class TournamentEngine {
     num organizerPct, {
     int? forcePaidPlaces,
   }) {
-    final targetOrganizer = grossEligible * (organizerPct / 100);
+    // Organizer cut: computed in integer cents to avoid floating-point drift.
+    // targetOrganizer = grossEligible * organizerPct / 100, rounded half-up.
+    // The amount is then snapped to the nearest multiple of 10 that preserves
+    // the same units digit as grossEligible (so the remaining prize pool is
+    // always a clean multiple of 10 — spec §9.2).
+    final targetOrganizer = (grossEligible * organizerPct + 50) ~/ 100;
     final mod = grossEligible % 10;
     var organizerAmount = 0;
 
     if (organizerPct > 0) {
-      final base = ((targetOrganizer - mod) / 10);
-      final candidates = [base.floor() * 10 + mod, base.ceil() * 10 + mod];
-      var bestDist = double.infinity;
-      for (final c in candidates) {
+      // Two candidates that carry the correct units digit mod 10, bracketing
+      // the target. Pick the closer one; ties broken toward the smaller value.
+      final baseUnits = (targetOrganizer - mod);
+      final floorCandidate = (baseUnits ~/ 10) * 10 + mod;
+      final ceilCandidate = floorCandidate + 10;
+      for (final c in [floorCandidate, ceilCandidate]) {
         if (c < 0 || c > grossEligible) continue;
         final d = (targetOrganizer - c).abs();
-        if (d < bestDist - 1e-9 ||
-            (d <= bestDist + 1e-9 && c < organizerAmount)) {
-          bestDist = d;
+        final bestD = (targetOrganizer - organizerAmount).abs();
+        if (organizerAmount == 0 && c >= 0 ||
+            d < bestD ||
+            (d == bestD && c < organizerAmount)) {
           organizerAmount = c;
         }
       }

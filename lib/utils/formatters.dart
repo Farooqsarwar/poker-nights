@@ -49,14 +49,30 @@ class Formatters {
   }
 
   /// Format money without currency symbol, always 2 decimals.
+  /// [amount] is a double dollar value (cash game UI legacy — prefer [moneyCents]).
   static String money(String currency, double amount) {
     return amount.toStringAsFixed(2);
   }
 
+  /// Format money from integer cents without currency symbol.
+  /// E.g. moneyCents('', 15000) == '150.00'
+  static String moneyCents(String currency, int cents) {
+    final dollars = cents ~/ 100;
+    final remainder = (cents % 100).abs();
+    return '$dollars.${remainder.toString().padLeft(2, '0')}';
+  }
+
   /// Signed money without currency symbol, e.g. '+20.00' / '-5.00'.
+  /// [amount] is a double dollar value (cash game UI legacy — prefer [signedMoneyCents]).
   static String signedMoney(String currency, double amount) {
     final sign = amount >= 0 ? '+' : '-';
     return '$sign${amount.abs().toStringAsFixed(2)}';
+  }
+
+  /// Signed money from integer cents, e.g. '+20.00' / '-5.00'.
+  static String signedMoneyCents(String currency, int cents) {
+    final sign = cents >= 0 ? '+' : '-';
+    return '$sign${moneyCents(currency, cents.abs())}';
   }
 
   /// 'en-GB' style short date+time, e.g. '7 Aug 2026, 20:00'.

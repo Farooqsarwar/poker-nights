@@ -2,6 +2,23 @@ rules_version = '2';
 
 // Poker Night — Cloud Firestore security rules.
 //
+// Security architecture — two-layer rate limiting:
+//  - Layer 1 (UX): Client-side throttling in Flutter prevents the user from
+//    accidentally hammering the UI. NOT a security boundary — can be bypassed.
+//  - Layer 2 (Server): Cloud Functions (functions/src/index.ts) handle all
+//    rate-sensitive writes atomically: they check rate_limits/{uid}_{action},
+//    perform the guarded write, and update the timestamp in one transaction.
+//    The Firestore rules below enforce authentication, ownership, and field
+//    validation as defense-in-depth even with Cloud Functions in place.
+//
+// Rate limit thresholds (per user, per action, per minute — enforced in CF):
+//   RSVP updates:         10 / minute
+//   Check-in requests:     5 / minute
+//   Rebuy/addon requests: 20 / minute
+//   Guest claims:          5 / minute
+//   Chat messages:        30 / minute
+//   Seat/position changes:10 / minute
+//
 // Model:
 //  - Group OWNER (groups/{gid}.ownerId) and group ADMINS (role == 'admin')
 //    are the "authority" devices: they may write whole game documents.
@@ -131,6 +148,10 @@ service cloud.firestore {
       }
 
       // Group chat.
+      // Rate limiting: enforced atomically by the sendChatMessage Cloud Function.
+      // This rule only validates ownership; the CF ensures ≤30 messages/minute.
+      // CLIENT-SIDE throttling (UX only, not a security boundary) remains in
+      // the Flutter chat_sheet.dart widget.
       match /chat/{msgId} {
         allow read: if isMember(gid);
         allow create: if isMember(gid)
@@ -183,6 +204,9 @@ service cloud.firestore {
     // requests/{gameId}/items/{reqId}: guests push check-in requests, members
     // push rebuy/add-on requests. Only group admins of payload.gid may
     // consume (flip consumed:true).
+    // Rate limiting: enforced atomically by Cloud Functions (submitRequest CF).
+    // Limits: check-in 5/min, rebuy/addon 20/min, guest claims 5/min.
+    // CLIENT-SIDE throttling in the Flutter app is a UX aid only.
     match /requests/{gameId} {
       allow read: if false; // parent placeholder doc is never read directly
 
@@ -196,6 +220,20 @@ service cloud.firestore {
         allow delete: if signedIn()
             && isGroupAdmin(resource.data.gid);
       }
+    }
+
+    // ---------- rate limits ----------
+    // Tracks per-user, per-action timestamps for server-side rate limiting.
+    // Document ID format: "{userId}_{actionType}"
+    // Document schema: { timestamp: Timestamp, count: number }
+    //
+    // ONLY Cloud Functions may read or write these documents. Clients must
+    // never be able to reset or spoof their own rate-limit records.
+    // The Cloud Function (functions/src/index.ts) uses a Firestore transaction
+    // to atomically: (1) read this doc, (2) reject if within window, (3)
+    // perform the guarded write, (4) update this timestamp.
+    match /rate_limits/{limitId} {
+      allow read, write: if false; // Cloud Functions only (Admin SDK bypasses rules)
     }
 
     // Deny everything not explicitly matched above.

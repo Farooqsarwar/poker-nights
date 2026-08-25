@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +14,8 @@ import '../providers/app_provider.dart';
 import 'app_avatar.dart';
 import 'brand_lockup.dart';
 import 'create_group_dialog.dart';
+import 'glass_styles.dart';
+import 'glass_surface.dart';
 
 /// Desktop left sidebar mirroring the web `Nav` component.
 class Sidebar extends StatelessWidget {
@@ -38,14 +42,14 @@ class Sidebar extends StatelessWidget {
       _NavSpec(RoutePaths.history, 'History', Icons.history, 0, null),
     ];
 
-    return Container(
-      width: 264,
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border(right: BorderSide(color: AppColors.border)),
-      ),
-      child: Column(
-        children: [
+    return GlassSurface(
+      blur: Glass.blurHeavy,
+      borderRadius: BorderRadius.zero,
+      decoration: Glass.glassNav(),
+      child: SizedBox(
+        width: 264,
+        child: Column(
+          children: [
           // Logo
           Container(
             width: double.infinity,
@@ -54,7 +58,19 @@ class Sidebar extends StatelessWidget {
               vertical: AppSpacing.lg,
             ),
             decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
+              border: Border(
+                bottom: BorderSide(
+                  color: AppColors.border.withValues(alpha: Glass.borderOpacity),
+                ),
+              ),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.04),
+                  Colors.transparent,
+                ],
+              ),
             ),
             child: Row(
               children: [
@@ -127,7 +143,19 @@ class Sidebar extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: AppColors.border)),
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.border.withValues(alpha: Glass.borderOpacity),
+                ),
+              ),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  AppColors.primary.withValues(alpha: 0.03),
+                ],
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,7 +198,7 @@ class Sidebar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                Divider(color: AppColors.border, height: 1),
+                Divider(color: AppColors.border.withValues(alpha: Glass.borderOpacity), height: 1),
                 const SizedBox(height: AppSpacing.sm),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -217,6 +245,7 @@ class Sidebar extends StatelessWidget {
           ),
         ],
       ),
+      ),
     );
   }
 }
@@ -253,9 +282,11 @@ class _NavTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
         clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: active ? AppColors.primarySoft : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.md),
+        decoration: Glass.glassNavActive().copyWith(
+          color: active
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : Colors.transparent,
+          border: null,
         ),
         child: Container(
           padding: const EdgeInsets.symmetric(
@@ -341,13 +372,7 @@ class _GroupRow extends StatelessWidget {
           horizontal: AppSpacing.sm,
           vertical: 8,
         ),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primarySoft : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
-          ),
-        ),
+        decoration: Glass.glassGroupRow(selected: selected),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -459,10 +484,7 @@ class _QuickAction extends StatelessWidget {
               horizontal: AppSpacing.md,
               vertical: 8,
             ),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.border),
-              borderRadius: BorderRadius.circular(50),
-            ),
+            decoration: Glass.glassPill(),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

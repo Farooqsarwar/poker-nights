@@ -50,7 +50,9 @@ class _PokerTableHeroState extends State<PokerTableHero>
         height: 190,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.xl),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(
+            color: AppColors.border.withValues(alpha: 0.20),
+          ),
           gradient: const RadialGradient(
             center: Alignment(0, -0.2),
             radius: 1.1,
@@ -59,9 +61,14 @@ class _PokerTableHeroState extends State<PokerTableHero>
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.12),
-              blurRadius: 40,
+              color: AppColors.primary.withValues(alpha: 0.18),
+              blurRadius: 48,
               spreadRadius: -8,
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.40),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -228,20 +235,57 @@ class _FloatingCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                color: Colors.black.withValues(alpha: 0.55),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.20),
+                blurRadius: 4,
+                offset: const Offset(2, 2),
               ),
             ],
           ),
-          alignment: Alignment.center,
-          child: Text(
-            suit,
-            style: TextStyle(
-              fontSize: 26,
-              height: 1,
-              color: red ? const Color(0xFFB01722) : const Color(0xFF14110F),
-            ),
+          child: Stack(
+            children: [
+              // Glass-like inner highlight on card face
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 28,
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(6),
+                    topRight: Radius.circular(6),
+                  ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.white.withValues(alpha: 0.40),
+                          Colors.white.withValues(alpha: 0.08),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.4, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Center(
+                child: Text(
+                  suit,
+                  style: TextStyle(
+                    fontSize: 26,
+                    height: 1,
+                    color: red ? const Color(0xFFB01722) : const Color(0xFF14110F),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

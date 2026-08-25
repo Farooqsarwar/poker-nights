@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../app/colors.dart';
 import '../constants/app_constants.dart';
 import '../app/typography.dart';
+import 'glass_styles.dart';
 
-/// Toggle switch mirroring the web `Toggle` component.
+/// Toggle switch mirroring the web `Toggle` component with glassmorphism.
+///
+/// Glass track with frosted thumb, ambient glow when active, and subtle
+/// neumorphic shadows.
 class AppToggle extends StatelessWidget {
   const AppToggle({
     super.key,
@@ -27,27 +30,20 @@ class AppToggle extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           AnimatedContainer(
-            duration: AppDurations.fast,
-            width: 40,
-            height: 20,
+            duration: AppDurations.normal,
+            curve: Curves.easeInOut,
+            width: 44,
+            height: 24,
             padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: value ? AppColors.primary : AppColors.border,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-            ),
+            decoration: Glass.glassToggle(active: value),
             child: AnimatedAlign(
-              duration: AppDurations.fast,
+              duration: AppDurations.normal,
+              curve: Curves.easeInOut,
               alignment: value ? Alignment.centerRight : Alignment.centerLeft,
               child: Container(
-                width: 16,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: AppColors.foreground,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: AppColors.shadowSoft, blurRadius: 2),
-                  ],
-                ),
+                width: 20,
+                height: 20,
+                decoration: Glass.glassToggleThumb(),
               ),
             ),
           ),

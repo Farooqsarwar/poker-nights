@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+/// Provides a tactile micro-interaction: hover lifts the element slightly,
+/// press scales it down for neumorphic feedback.
+///
+/// Uses [Curves.easeOutCubic] for a natural spring-like feel on hover
+/// and a slightly faster [Curves.easeIn] on press for crisp tactile response.
 class InteractiveScale extends StatefulWidget {
   const InteractiveScale({
     super.key,
@@ -28,7 +33,10 @@ class _InteractiveScaleState extends State<InteractiveScale> {
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
+      onExit: (_) => setState(() {
+        _isHovered = false;
+        _isPressed = false;
+      }),
       child: GestureDetector(
         onTapDown: (_) => setState(() => _isPressed = true),
         onTapUp: (_) => setState(() => _isPressed = false),
@@ -36,8 +44,8 @@ class _InteractiveScaleState extends State<InteractiveScale> {
         behavior: HitTestBehavior.deferToChild,
         child: AnimatedScale(
           scale: scale,
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeInOut,
+          duration: Duration(milliseconds: _isPressed ? 80 : 180),
+          curve: _isPressed ? Curves.easeIn : Curves.easeOutCubic,
           child: widget.child,
         ),
       ),

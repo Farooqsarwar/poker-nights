@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +10,7 @@ import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 import '../responsive/responsive.dart';
+import 'glass_styles.dart';
 import 'app_avatar.dart';
 import 'app_button.dart';
 import 'bottom_nav.dart';
@@ -171,82 +174,96 @@ class _MobileTopBar extends StatelessWidget {
     final unread = app.unreadCount;
     final user = app.user;
 
-    return Container(
-      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
-      color: AppColors.card,
-      child: Container(
-        height: 60,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.border)),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: Glass.blurMedium,
+          sigmaY: Glass.blurMedium,
         ),
-        child: Row(
-          children: [
-            InkWell(
-              onTap: onMenu,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xs,
-                  vertical: AppSpacing.xs,
-                ),
-                child: Icon(Icons.menu, color: AppColors.foreground, size: 22),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            const PokerNightLogo(size: AppFontSizes.xxl),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              'Poker Night',
-              style: AppTypography.crimsonShimmer(
-                size: AppFontSizes.md,
-                weight: FontWeight.w700,
-              ),
-            ),
-            const Spacer(),
-            InkWell(
-              onTap: () => context.go(RoutePaths.notifications),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                child: Stack(
-                  children: [
-                    Icon(
-                      Icons.notifications_none,
-                      color: AppColors.mutedForeground,
-                      size: 24,
-                    ),
-                    if (unread > 0)
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
+        child: Container(
+          padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
+          decoration: Glass.glassTopBar(),
+          child: SizedBox(
+            height: 60,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: Row(
+                children: [
+                  InkWell(
+                    onTap: onMenu,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xs,
+                        vertical: AppSpacing.xs,
                       ),
-                  ],
-                ),
+                      child: Icon(Icons.menu, color: AppColors.foreground, size: 22),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  const PokerNightLogo(size: AppFontSizes.xxl),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(
+                    'Poker Night',
+                    style: AppTypography.crimsonShimmer(
+                      size: AppFontSizes.md,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  InkWell(
+                    onTap: () => context.go(RoutePaths.notifications),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      child: Stack(
+                        children: [
+                          Icon(
+                            Icons.notifications_none,
+                            color: AppColors.mutedForeground,
+                            size: 24,
+                          ),
+                          if (unread > 0)
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary.withValues(alpha: 0.50),
+                                      blurRadius: 6,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  if (user != null)
+                    InkWell(
+                      onTap: () => context.go(RoutePaths.profile),
+                      borderRadius: BorderRadius.circular(28),
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: AppAvatar(name: user.name),
+                      ),
+                    ),
+                ],
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
-            if (user != null)
-              InkWell(
-                onTap: () => context.go(RoutePaths.profile),
-                borderRadius: BorderRadius.circular(28),
-                child: SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: AppAvatar(name: user.name),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
+
   }
 }

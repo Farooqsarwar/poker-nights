@@ -6,6 +6,8 @@ import '../app/colors.dart';
 import '../app/route_paths.dart';
 import '../app/typography.dart';
 import '../providers/app_provider.dart';
+import 'glass_styles.dart';
+import 'glass_surface.dart';
 
 /// Mobile bottom navigation mirroring the web `Nav` bottom bar.
 class BottomNav extends StatelessWidget {
@@ -29,18 +31,10 @@ class BottomNav extends StatelessWidget {
       _BottomItem(RoutePaths.history, 'History', Icons.history, null),
     ];
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border(top: BorderSide(color: AppColors.border)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+    return GlassSurface(
+      blur: Glass.blurMedium,
+      borderRadius: BorderRadius.zero,
+      decoration: Glass.glassBottomNav(),
       child: SafeArea(
         top: false,
         child: Row(
@@ -65,6 +59,12 @@ class BottomNav extends StatelessWidget {
                                 decoration: BoxDecoration(
                                   color: AppColors.primary,
                                   borderRadius: BorderRadius.circular(2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary.withValues(alpha: 0.50),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
                                 ),
                               )
                             else
@@ -97,10 +97,7 @@ class BottomNav extends StatelessWidget {
                               width: 16,
                               height: 16,
                               alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                              ),
+                              decoration: Glass.glassNotificationBadge(),
                               child: Text(
                                 item.badge! > 9 ? '9+' : '${item.badge}',
                                 style: AppTypography.monoXs.copyWith(

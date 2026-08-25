@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +13,8 @@ import '../providers/app_provider.dart';
 import 'app_avatar.dart';
 import 'brand_lockup.dart';
 import 'create_group_dialog.dart';
+import 'glass_styles.dart';
+import 'glass_surface.dart';
 
 /// Mobile slide-in drawer controlled by [AppProvider.isDrawerOpen].
 class NavDrawer extends StatelessWidget {
@@ -50,17 +54,47 @@ class NavDrawer extends StatelessWidget {
 
     final groups = app.orderedGroups;
 
-    final panel = Container(
-      width: 280,
-      color: AppColors.card,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
+    final panel = GlassSurface(
+      blur: Glass.blurHeavy,
+      borderRadius: BorderRadius.zero,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.card.withValues(alpha: Glass.navOpacity + 0.05),
+            AppColors.card.withValues(alpha: Glass.navOpacity - 0.05),
+          ],
+        ),
+        border: Border(
+          right: BorderSide(
+            color: AppColors.border.withValues(alpha: Glass.borderOpacity),
+          ),
+        ),
+        boxShadow: Glass.navShadow,
+      ),
+      child: SizedBox(
+        width: 280,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
             padding: const EdgeInsets.all(AppSpacing.xl),
             decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
+              border: Border(
+                bottom: BorderSide(
+                  color: AppColors.border.withValues(alpha: Glass.borderOpacity),
+                ),
+              ),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.04),
+                  Colors.transparent,
+                ],
+              ),
             ),
             child: Row(
               children: [
@@ -282,7 +316,19 @@ class NavDrawer extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(AppSpacing.xl),
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: AppColors.border)),
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.border.withValues(alpha: Glass.borderOpacity),
+                ),
+              ),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  AppColors.primary.withValues(alpha: 0.03),
+                ],
+              ),
             ),
             child: Row(
               children: [
@@ -311,6 +357,7 @@ class NavDrawer extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
 

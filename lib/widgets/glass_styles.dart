@@ -14,26 +14,26 @@ class Glass {
   Glass._();
 
   // ── Surface opacities ────────────────────────────────────────────────────
-  /// Primary card / panel background opacity.
-  static double get surfaceOpacity => 0.55;
-  /// Secondary / nested panel opacity (more transparent).
-  static double get surfaceSecondaryOpacity => 0.35;
+  /// Primary card / panel background opacity (lowered for more theme bleed).
+  static double get surfaceOpacity => 0.40;
+  /// Secondary / nested panel opacity.
+  static double get surfaceSecondaryOpacity => 0.25;
   /// Sidebar / nav rail opacity.
-  static double get navOpacity => 0.72;
+  static double get navOpacity => 0.55;
   /// Bottom navigation opacity.
-  static double get bottomNavOpacity => 0.70;
+  static double get bottomNavOpacity => 0.55;
   /// Modal / dialog surface opacity.
-  static double get modalOpacity => 0.80;
+  static double get modalOpacity => 0.65;
   /// Input / select field opacity.
-  static double get inputOpacity => 0.50;
+  static double get inputOpacity => 0.35;
   /// Badge / chip opacity.
-  static double get badgeOpacity => 0.30;
+  static double get badgeOpacity => 0.25;
   /// Small control (toggle) opacity.
-  static double get controlOpacity => 0.25;
+  static double get controlOpacity => 0.20;
   /// Top-bar / app-bar opacity.
-  static double get topBarOpacity => 0.75;
+  static double get topBarOpacity => 0.55;
   /// Tab bar surface opacity.
-  static double get tabBarOpacity => 0.40;
+  static double get tabBarOpacity => 0.30;
 
   // ── Blur radii ───────────────────────────────────────────────────────────
   /// Light blur for small surfaces (badges, chips, tab underlines).
@@ -46,26 +46,26 @@ class Glass {
   static double get blurXHeavy => 40.0;
 
   // ── Border opacity ───────────────────────────────────────────────────────
-  /// Subtle frosted border for glass surfaces.
-  static double get borderOpacity => 0.14;
+  /// Subtle frosted border for glass surfaces (reduced for cleaner look).
+  static double get borderOpacity => 0.08;
   /// Active / highlighted border.
-  static double get borderActiveOpacity => 0.28;
-  /// Inner highlight opacity (top edge).
-  static double get highlightOpacity => 0.10;
+  static double get borderActiveOpacity => 0.18;
+  /// Inner highlight opacity (reduced to prevent milky wash).
+  static double get highlightOpacity => 0.04;
   /// Inner highlight at the very top — slightly stronger for depth.
-  static double get highlightTopOpacity => 0.18;
+  static double get highlightTopOpacity => 0.10;
 
   // ── Shadow helpers ───────────────────────────────────────────────────────
 
   /// Default card-level glass shadow.
   static List<BoxShadow> get cardShadow => [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.28),
-      blurRadius: 24,
-      offset: const Offset(0, 8),
+      color: Colors.black.withValues(alpha: 0.45),
+      blurRadius: 32,
+      offset: const Offset(0, 12),
     ),
     BoxShadow(
-      color: AppColors.primary.withValues(alpha: 0.07),
+      color: AppColors.primary.withValues(alpha: 0.05),
       blurRadius: 48,
       offset: const Offset(0, 4),
     ),
@@ -74,14 +74,14 @@ class Glass {
   /// Elevated card / hover shadow.
   static List<BoxShadow> get cardElevatedShadow => [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.38),
-      blurRadius: 32,
-      offset: const Offset(0, 14),
+      color: Colors.black.withValues(alpha: 0.55),
+      blurRadius: 40,
+      offset: const Offset(0, 20),
     ),
     BoxShadow(
-      color: AppColors.primary.withValues(alpha: 0.12),
+      color: AppColors.primary.withValues(alpha: 0.10),
       blurRadius: 56,
-      offset: const Offset(0, 6),
+      offset: const Offset(0, 8),
     ),
   ];
 

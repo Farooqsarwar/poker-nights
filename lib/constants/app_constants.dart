@@ -9,42 +9,42 @@ class AppSpacing {
   static const double sm = 8;
   static const double md = 12;
   static const double lg = 16;
-  static const double xl = 20;
-  static const double xxl = 24;
-  static const double xxxl = 32;
-  static const double huge = 40;
-  static const double page = 24;
-  static const double section = 32;
+  static const double xl = 24; // Increased from 20 to 24 for more room
+  static const double xxl = 32; // Increased from 24 to 32
+  static const double xxxl = 40; // Increased from 32 to 40
+  static const double huge = 48; // Increased from 40 to 48
+  static const double page = 32; // Increased from 24
+  static const double section = 40; // Increased from 32
 
   static const EdgeInsets pagePadding = EdgeInsets.symmetric(
-    horizontal: lg,
-    vertical: xl,
+    horizontal: xl,
+    vertical: xxl,
   );
 
   static const EdgeInsets mobileContentPadding = EdgeInsets.only(
-    left: lg,
-    right: lg,
-    top: lg,
+    left: xl,
+    right: xl,
+    top: xl,
     bottom: 96,
   );
 
   static const EdgeInsets desktopContentPadding = EdgeInsets.only(
-    left: xxl,
-    right: xxl,
-    top: xxl,
-    bottom: xxl,
+    left: xxxl,
+    right: xxxl,
+    top: xxxl,
+    bottom: xxxl,
   );
 }
 
-/// Centralized border radius scale (mirrors Tailwind radius utilities).
+/// Centralized border radius scale (modern, premium squircle-like rounding).
 class AppRadius {
   AppRadius._();
 
-  static const double xs = 4;
-  static const double sm = 6; // rounded-md
-  static const double md = 8; // rounded-lg
-  static const double lg = 12; // rounded-xl
-  static const double xl = 16; // rounded-2xl
+  static const double xs = 6;
+  static const double sm = 8;
+  static const double md = 12;
+  static const double lg = 16;
+  static const double xl = 24;
   static const double pill = 999;
 }
 

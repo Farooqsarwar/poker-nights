@@ -17,6 +17,7 @@ import 'bottom_nav.dart';
 import 'brand_lockup.dart';
 import 'nav_drawer.dart';
 import 'sidebar.dart';
+import 'backgrounds.dart';
 
 /// App shell that renders the persistent navigation for the four main tabs.
 ///
@@ -55,7 +56,10 @@ class ScreenShell extends StatelessWidget {
     // Guests get a bare scaffold with no navigation chrome — every nav
     // button in the sidebar / drawer / bottom-nav would be a dead end.
     if (!signedIn && guestOk) {
-      return Scaffold(backgroundColor: AppColors.background, body: child);
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ThemedAppBackground(child: child),
+      );
     }
 
     return ResponsiveBuilder(
@@ -64,12 +68,15 @@ class ScreenShell extends StatelessWidget {
           return _MobileShell(child: child);
         }
         return Scaffold(
-          body: Row(
-            children: [
-              const Sidebar(),
-              VerticalDivider(width: 1, color: AppColors.border),
-              Expanded(child: child),
-            ],
+          backgroundColor: Colors.transparent, // Background provided by ThemedAppBackground
+          body: ThemedAppBackground(
+            child: Row(
+              children: [
+                const Sidebar(),
+                VerticalDivider(width: 1, color: AppColors.border),
+                Expanded(child: child),
+              ],
+            ),
           ),
         );
       },
@@ -87,48 +94,50 @@ class _Gate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Icon(
-                  Icons.lock_outline,
-                  size: 40,
-                  color: AppColors.mutedForeground,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Signed out',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.display(size: AppFontSizes.xl),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'This page needs a signed-in account. Guests can only watch the live game.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodySm.copyWith(
+      backgroundColor: Colors.transparent,
+      body: ThemedAppBackground(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Icon(
+                    Icons.lock_outline,
+                    size: 40,
                     color: AppColors.mutedForeground,
                   ),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                AppButton(
-                  fullWidth: true,
-                  onPressed: () => context.go('${RoutePaths.login}?next=$path'),
-                  child: const Text('Sign in'),
-                ),
-                AppButton(
-                  fullWidth: true,
-                  variant: AppButtonVariant.ghost,
-                  onPressed: () => context.go(RoutePaths.landing),
-                  child: const Text('Back to start'),
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Signed out',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.display(size: AppFontSizes.xl),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'This page needs a signed-in account. Guests can only watch the live game.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  AppButton(
+                    fullWidth: true,
+                    onPressed: () => context.go('${RoutePaths.login}?next=$path'),
+                    child: const Text('Sign in'),
+                  ),
+                  AppButton(
+                    fullWidth: true,
+                    variant: AppButtonVariant.ghost,
+                    onPressed: () => context.go(RoutePaths.landing),
+                    child: const Text('Back to start'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -146,18 +155,20 @@ class _MobileShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              _MobileTopBar(onMenu: app.toggleDrawer),
-              Expanded(child: child),
-            ],
-          ),
-          const Positioned(left: 0, right: 0, bottom: 0, child: BottomNav()),
-          const NavDrawer(),
-        ],
+      backgroundColor: Colors.transparent,
+      body: ThemedAppBackground(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                _MobileTopBar(onMenu: app.toggleDrawer),
+                Expanded(child: child),
+              ],
+            ),
+            const Positioned(left: 0, right: 0, bottom: 0, child: BottomNav()),
+            const NavDrawer(),
+          ],
+        ),
       ),
     );
   }

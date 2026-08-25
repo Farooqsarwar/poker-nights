@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app/colors.dart';
@@ -8,6 +9,7 @@ import '../providers/app_provider.dart';
 import 'app_avatar.dart';
 import 'app_button.dart';
 import 'app_text_field.dart';
+import 'glass_styles.dart';
 
 class ChatSheet extends StatefulWidget {
   const ChatSheet({super.key, required this.gameId});
@@ -18,18 +20,40 @@ class ChatSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppRadius.lg),
+      barrierColor: Colors.black.withValues(alpha: 0.75),
+      builder: (context) => ClipRRect(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.lg),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: Glass.blurHeavy,
+            sigmaY: Glass.blurHeavy,
+          ),
+          child: Container(
+            height: MediaQuery.of(context).size.height * 0.75,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.background.withValues(alpha: 0.65),
+                  AppColors.background.withValues(alpha: 0.45),
+                ],
+              ),
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.border.withValues(alpha: Glass.borderOpacity),
+                ),
+              ),
+            ),
+            child: ChatSheet(gameId: gameId),
           ),
         ),
-        child: ChatSheet(gameId: gameId),
       ),
     );
   }
+
 
   @override
   State<ChatSheet> createState() => _ChatSheetState();
@@ -216,8 +240,17 @@ class ChatUnreadBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
       decoration: BoxDecoration(
-        color: AppColors.destructive,
+        color: AppColors.destructive.withValues(alpha: Glass.badgeOpacity),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: AppColors.destructive.withValues(alpha: Glass.borderOpacity),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.destructive.withValues(alpha: 0.30),
+            blurRadius: 8,
+          ),
+        ],
       ),
       child: Text(
         '$count',
@@ -277,12 +310,27 @@ class _ChatBubble extends StatelessWidget {
                     vertical: AppSpacing.sm,
                   ),
                   decoration: BoxDecoration(
-                    color: isMine ? AppColors.primary : AppColors.secondary,
+                    color: isMine
+                        ? AppColors.primary
+                        : AppColors.card.withValues(alpha: Glass.surfaceOpacity),
                     borderRadius: BorderRadius.circular(AppRadius.lg).copyWith(
                       topRight: isMine ? const Radius.circular(2) : null,
                       topLeft: !isMine ? const Radius.circular(2) : null,
                     ),
-                    border: isMine ? null : Border.all(color: AppColors.border),
+                    border: isMine
+                        ? null
+                        : Border.all(
+                            color: AppColors.border.withValues(alpha: Glass.borderOpacity),
+                          ),
+                    boxShadow: isMine
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
                   ),
                   child: Text(
                     message.body,

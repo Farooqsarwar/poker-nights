@@ -21,9 +21,9 @@ class AppTypography {
 
   static TextStyle display({
     double size = AppFontSizes.lg,
-    FontWeight weight = FontWeight.w600,
+    FontWeight weight = FontWeight.w700,
     Color? color,
-    double? height,
+    double? height = 1.1,
     double? letterSpacing,
   }) {
     return GoogleFonts.spaceGrotesk(
@@ -31,7 +31,8 @@ class AppTypography {
       fontWeight: weight,
       color: color ?? AppColors.foreground,
       height: height,
-      letterSpacing: letterSpacing,
+      // Space Grotesk display headers look premium with tighter tracking
+      letterSpacing: letterSpacing ?? (size >= AppFontSizes.xl ? -0.8 : -0.3),
     ).copyWith(
       fontFamilyFallback: const [
         'Noto Color Emoji',
@@ -45,7 +46,7 @@ class AppTypography {
     double size = AppFontSizes.md,
     FontWeight weight = FontWeight.w400,
     Color? color,
-    double? height,
+    double? height = 1.5,
     double? letterSpacing,
   }) {
     return GoogleFonts.spaceGrotesk(
@@ -53,7 +54,8 @@ class AppTypography {
       fontWeight: weight,
       color: color ?? AppColors.foreground,
       height: height,
-      letterSpacing: letterSpacing,
+      // Slight positive tracking for body text improves legibility
+      letterSpacing: letterSpacing ?? 0.2,
     ).copyWith(
       fontFamilyFallback: const [
         'Noto Color Emoji',

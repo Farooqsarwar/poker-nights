@@ -24,7 +24,7 @@ import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/code_display.dart';
-
+import '../../widgets/app_tabs.dart';
 /// Group hub mirroring the web `GroupPage`.
 class GroupScreen extends StatefulWidget {
   const GroupScreen({super.key});
@@ -145,25 +145,25 @@ class _GroupScreenState extends State<GroupScreen> {
           const SizedBox(height: AppSpacing.lg),
           CodeDisplay(code: group.joinCode, label: 'Group code'),
           const SizedBox(height: AppSpacing.lg),
-          _CustomTabBar(
+          AppTabs(
             tabs: [
-              _TabItem(
+              AppTabItem(
                 id: 'games',
                 label: 'Games',
                 count: upcomingGames.length,
               ),
-              _TabItem(
+              AppTabItem(
                 id: 'members',
                 label: 'Members',
                 count: group.members.length,
               ),
-              _TabItem(
+              AppTabItem(
                 id: 'chat',
                 label: 'Chat',
                 count: group.chat.where((m) => !m.deleted).length,
               ),
-              _TabItem(id: 'polls', label: 'Polls', count: group.polls.length),
-              _TabItem(
+              AppTabItem(id: 'polls', label: 'Polls', count: group.polls.length),
+              AppTabItem(
                 id: 'history',
                 label: 'History',
                 count: pastGames.length,
@@ -1399,62 +1399,7 @@ class _GroupHeaderIcon extends StatelessWidget {
   }
 }
 
-class _TabItem {
-  final String id;
-  final String label;
-  final int count;
-  _TabItem({required this.id, required this.label, required this.count});
-}
 
-class _CustomTabBar extends StatelessWidget {
-  final List<_TabItem> tabs;
-  final String active;
-  final ValueChanged<String> onChanged;
-
-  const _CustomTabBar({
-    required this.tabs,
-    required this.active,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: tabs.map((t) {
-          final isActive = t.id == active;
-          return Expanded(
-            child: InkWell(
-              onTap: () => onChanged(t.id),
-              child: Container(
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isActive ? AppColors.primary : Colors.transparent,
-                      width: 2,
-                    ),
-                  ),
-                ),
-                child: Text(
-                  '${t.label} ${t.count > 0 ? '(${t.count})' : ''}',
-                  style: AppTypography.bodySm.copyWith(
-                    color: isActive ? AppColors.foreground : AppColors.mutedForeground,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
 
 class _PremiumGameCard extends StatefulWidget {
   final LiveGame game;

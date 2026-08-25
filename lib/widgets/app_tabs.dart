@@ -23,22 +23,40 @@ class AppTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 46,
-      decoration: Glass.glassTabBar(),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (final tab in tabs)
-              _TabItem(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+
+        return Container(
+          width: double.infinity,
+          height: isMobile ? 58 : 46, // Slightly taller on mobile to fit stacked text
+          decoration: Glass.glassTabBar(),
+          child: Row(
+            // On mobile, expand to fill the screen evenly (no scroll).
+            // On web, left-align them with padding.
+            mainAxisAlignment: isMobile
+                ? MainAxisAlignment.spaceEvenly
+                : MainAxisAlignment.start,
+            children: tabs.map((tab) {
+              Widget child = _TabItem(
                 tab: tab,
                 isActive: active == tab.id,
                 onTap: () => onChanged(tab.id),
-              ),
-          ],
-        ),
-      ),
+                stacked: isMobile,
+              );
+
+              if (isMobile) {
+                return Expanded(child: child);
+              } else {
+                return Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.sm),
+                  child: child,
+                );
+              }
+            }).toList(),
+          ),
+        );
+      },
     );
   }
 }
@@ -48,11 +66,13 @@ class _TabItem extends StatefulWidget {
     required this.tab,
     required this.isActive,
     required this.onTap,
+    required this.stacked,
   });
 
   final AppTabItem tab;
   final bool isActive;
   final VoidCallback onTap;
+  final bool stacked;
 
   @override
   State<_TabItem> createState() => _TabItemState();
@@ -60,6 +80,71 @@ class _TabItem extends StatefulWidget {
 
 class _TabItemState extends State<_TabItem> {
   bool _hovering = false;
+
+  List<Widget> _buildContent(bool isActive) {
+    return [
+      if (isActive && !widget.stacked)
+        // Glowing indicator above the text (accent dot)
+        Container(
+          width: 4,
+          height: 4,
+          margin: const EdgeInsets.only(right: 6),
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.60),
+                blurRadius: 6,
+              ),
+            ],
+          ),
+        ),
+      Text(
+        widget.tab.label,
+        style: AppTypography.bodySm.copyWith(
+          fontWeight: FontWeight.w500,
+          fontSize: widget.stacked ? 12 : 14,
+          color: isActive
+              ? AppColors.primary
+              : _hovering
+                  ? AppColors.foreground
+                  : AppColors.mutedForeground,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      if (widget.tab.count != null) ...[
+        SizedBox(
+          width: widget.stacked ? 0 : 6,
+          height: widget.stacked ? 4 : 0,
+        ),
+        AnimatedContainer(
+          duration: AppDurations.fast,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 6,
+            vertical: 2,
+          ),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.primarySoft : AppColors.muted,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: isActive
+                ? Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.25),
+                  )
+                : null,
+          ),
+          child: Text(
+            '${widget.tab.count}',
+            style: AppTypography.bodyXs.copyWith(
+              fontSize: widget.stacked ? 10 : 12,
+              color: isActive ? AppColors.primary : AppColors.mutedForeground,
+            ),
+          ),
+        ),
+      ],
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,7 +158,10 @@ class _TabItemState extends State<_TabItem> {
         child: AnimatedContainer(
           duration: AppDurations.fast,
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          // Use very small padding when stacked (mobile) so they can squeeze in
+          padding: EdgeInsets.symmetric(
+            horizontal: widget.stacked ? 2 : AppSpacing.lg,
+          ),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: isActive
@@ -84,74 +172,19 @@ class _TabItemState extends State<_TabItem> {
             border: Border(
               bottom: BorderSide(
                 width: 2,
-                color: isActive
-                    ? AppColors.primary
-                    : Colors.transparent,
+                color: isActive ? AppColors.primary : Colors.transparent,
               ),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isActive)
-                // Glowing indicator above the text (accent dot)
-                Container(
-                  width: 4,
-                  height: 4,
-                  margin: const EdgeInsets.only(right: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.60),
-                        blurRadius: 6,
-                      ),
-                    ],
-                  ),
+          child: widget.stacked
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: _buildContent(isActive),
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: _buildContent(isActive),
                 ),
-              Text(
-                widget.tab.label,
-                style: AppTypography.bodySm.copyWith(
-                  fontWeight: FontWeight.w500,
-                  color: isActive
-                      ? AppColors.primary
-                      : _hovering
-                          ? AppColors.foreground
-                          : AppColors.mutedForeground,
-                ),
-              ),
-              if (widget.tab.count != null) ...[
-                const SizedBox(width: 6),
-                AnimatedContainer(
-                  duration: AppDurations.fast,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? AppColors.primarySoft
-                        : AppColors.muted,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                    border: isActive
-                        ? Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.25),
-                          )
-                        : null,
-                  ),
-                  child: Text(
-                    '${widget.tab.count}',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: isActive
-                          ? AppColors.primary
-                          : AppColors.mutedForeground,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
         ),
       ),
     );

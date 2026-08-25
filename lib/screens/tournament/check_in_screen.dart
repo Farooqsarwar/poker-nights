@@ -627,7 +627,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     variant: AppButtonVariant.primary,
                     fullWidth: true,
                     onPressed: app.confirmSeating,
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
@@ -649,7 +649,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
               borderColor: AppColors.successSoftBorder,
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.check_circle,
                     size: AppFontSizes.xl,
                     color: AppColors.success,
@@ -673,7 +673,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 child: AppButton(
                   variant: AppButtonVariant.secondary,
                   onPressed: () => context.go(RoutePaths.invitation),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
@@ -709,7 +709,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                         ),
                         if (canStart && seatingConfirmed) ...[
                           const SizedBox(width: 6),
-                          const Icon(
+                          Icon(
                             Icons.arrow_forward,
                             size: 14,
                             color: AppColors.icon,

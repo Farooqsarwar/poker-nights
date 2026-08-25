@@ -22,14 +22,14 @@ class AppTypography {
   static TextStyle display({
     double size = AppFontSizes.lg,
     FontWeight weight = FontWeight.w600,
-    Color color = AppColors.foreground,
+    Color? color,
     double? height,
     double? letterSpacing,
   }) {
     return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
-      color: color,
+      color: color ?? AppColors.foreground,
       height: height,
       letterSpacing: letterSpacing,
     ).copyWith(
@@ -44,14 +44,14 @@ class AppTypography {
   static TextStyle body({
     double size = AppFontSizes.md,
     FontWeight weight = FontWeight.w400,
-    Color color = AppColors.foreground,
+    Color? color,
     double? height,
     double? letterSpacing,
   }) {
     return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
-      color: color,
+      color: color ?? AppColors.foreground,
       height: height,
       letterSpacing: letterSpacing,
     ).copyWith(
@@ -66,14 +66,14 @@ class AppTypography {
   static TextStyle mono({
     double size = AppFontSizes.md,
     FontWeight weight = FontWeight.w500,
-    Color color = AppColors.foreground,
+    Color? color,
     double? height,
     double? letterSpacing,
   }) {
     return GoogleFonts.spaceMono(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
-      color: color,
+      color: color ?? AppColors.foreground,
       height: height,
       letterSpacing: letterSpacing,
     ).copyWith(
@@ -142,7 +142,10 @@ class AppTypography {
       titleSmall: body(size: AppFontSizes.sm, weight: FontWeight.w500),
       bodyLarge: body(size: AppFontSizes.md),
       bodyMedium: body(size: AppFontSizes.sm),
-      bodySmall: body(size: AppFontSizes.xs, color: AppColors.mutedForeground),
+      bodySmall: body(
+        size: AppFontSizes.xs,
+        color: AppColors.mutedForeground,
+      ),
       labelLarge: body(size: AppFontSizes.sm, weight: FontWeight.w600),
       labelMedium: body(size: AppFontSizes.xs, weight: FontWeight.w500),
       labelSmall: body(size: AppFontSizes.xs),

@@ -23,6 +23,7 @@ class AppModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     if (!open) return const SizedBox.shrink();
     return Dialog(
       insetPadding: const EdgeInsets.all(AppSpacing.lg),
@@ -46,7 +47,7 @@ class AppModal extends StatelessWidget {
                 if (title != null)
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.xl),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(color: AppColors.border),
                       ),
@@ -61,7 +62,7 @@ class AppModal extends StatelessWidget {
                         ),
                         IconButton(
                           onPressed: onClose,
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.close,
                             color: AppColors.mutedForeground,
                             size: 20,

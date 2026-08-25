@@ -75,7 +75,7 @@ class _CodeDisplayState extends State<CodeDisplay> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (_copied) ...[
-                    const Icon(
+                    Icon(
                       Icons.check_circle,
                       size: AppFontSizes.sm,
                       color: AppColors.success,

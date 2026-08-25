@@ -19,6 +19,7 @@ class Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final app = context.watch<AppProvider>();
     final user = app.user;
     final location = GoRouterState.of(context).uri.path;
@@ -39,7 +40,7 @@ class Sidebar extends StatelessWidget {
 
     return Container(
       width: 264,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
         border: Border(right: BorderSide(color: AppColors.border)),
       ),
@@ -52,7 +53,7 @@ class Sidebar extends StatelessWidget {
               horizontal: AppSpacing.lg,
               vertical: AppSpacing.lg,
             ),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: Row(
@@ -77,7 +78,7 @@ class Sidebar extends StatelessWidget {
               children: [
                 for (final item in navItems)
                   _NavTile(item: item, location: location),
-                const Divider(color: AppColors.border, height: 24),
+                Divider(color: AppColors.border, height: 24),
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.sm,
@@ -125,7 +126,7 @@ class Sidebar extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
             child: Column(
@@ -169,7 +170,7 @@ class Sidebar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                const Divider(color: AppColors.border, height: 1),
+                Divider(color: AppColors.border, height: 1),
                 const SizedBox(height: AppSpacing.sm),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -222,12 +223,12 @@ class Sidebar extends StatelessWidget {
 
 class _NavSpec {
   const _NavSpec(
-      this.path,
-      this.label,
-      this.icon,
-      this.badgeOffset,
-      this.badge,
-      );
+    this.path,
+    this.label,
+    this.icon,
+    this.badgeOffset,
+    this.badge,
+  );
 
   final String path;
   final String label;
@@ -244,6 +245,7 @@ class _NavTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final active = location == item.path;
     return InkWell(
       onTap: () => context.go(item.path),
@@ -294,7 +296,7 @@ class _NavTile extends StatelessWidget {
                   width: 20,
                   height: 20,
                   alignment: Alignment.center,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: AppColors.primary,
                     shape: BoxShape.circle,
                   ),
@@ -328,6 +330,7 @@ class _GroupRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return InkWell(
       onTap: onTap,
       hoverColor: AppColors.surfaceHover,
@@ -442,6 +445,7 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Align(

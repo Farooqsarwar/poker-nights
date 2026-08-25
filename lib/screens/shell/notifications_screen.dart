@@ -158,7 +158,7 @@ class NotificationsScreen extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.xxl),
               child: Column(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.notifications_outlined,
                     size: AppFontSizes.display,
                     color: AppColors.icon,
@@ -241,7 +241,7 @@ class _NotificationRow extends StatelessWidget {
               ? AppColors.primary.withValues(alpha: 0.04)
               : Colors.transparent,
           border: showDivider
-              ? const Border(bottom: BorderSide(color: AppColors.border))
+              ? Border(bottom: BorderSide(color: AppColors.border))
               : null,
         ),
         child: Row(
@@ -285,7 +285,7 @@ class _NotificationRow extends StatelessWidget {
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.primary,
                             shape: BoxShape.circle,
                           ),

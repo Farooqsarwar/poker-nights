@@ -36,6 +36,7 @@ import '../screens/tournament/rebuy_settlement_screen.dart';
 import '../screens/tournament/result_podium_screen.dart';
 import '../screens/tournament/structure_review_screen.dart';
 import '../widgets/screen_shell.dart';
+import '../app/colors.dart';
 import 'route_paths.dart';
 
 /// Routes reachable without a signed-in account.
@@ -89,17 +90,17 @@ GoRouter buildAppRouter(AppProvider app) => GoRouter(
   },
   // Catch bad/unknown routes and show a friendly page instead of a red crash.
   errorBuilder: (context, state) => Scaffold(
-    backgroundColor: const Color(0xFF0D0D0D),
+    backgroundColor: AppColors.background,
     body: Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline, color: Color(0xFF666666), size: 48),
+          Icon(Icons.error_outline, color: AppColors.mutedForeground, size: 48),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Page not found',
             style: TextStyle(
-              color: Color(0xFFE5E5E5),
+              color: AppColors.foreground,
               fontSize: 20,
               fontWeight: FontWeight.w600,
             ),
@@ -107,7 +108,7 @@ GoRouter buildAppRouter(AppProvider app) => GoRouter(
           const SizedBox(height: 8),
           Text(
             state.uri.toString(),
-            style: const TextStyle(color: Color(0xFF666666), fontSize: 12),
+            style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
           ),
           const SizedBox(height: 24),
           TextButton(

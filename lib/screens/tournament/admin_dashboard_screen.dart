@@ -352,7 +352,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.schedule_outlined,
                     size: 16,
                     color: AppColors.primary,
@@ -1356,7 +1356,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
                       onPressed: () => _confirmRemovePlayer(context, app, p),
-                      child: const Icon(
+                      child: Icon(
                         Icons.delete_outline,
                         color: AppColors.destructive,
                         size: 16,
@@ -1772,7 +1772,7 @@ class _EliminatedTab extends StatelessWidget {
                         onPressed: () => context
                             .read<AppProvider>()
                             .correctElimination(p.id),
-                        child: const Text(
+                        child: Text(
                           'Correct Result',
                           style: TextStyle(color: AppColors.destructive),
                         ),
@@ -1819,7 +1819,7 @@ class _EliminatedTab extends StatelessWidget {
                           ),
                         );
                       },
-                      child: const Icon(
+                      child: Icon(
                         Icons.delete_outline,
                         color: AppColors.destructive,
                         size: 16,
@@ -2072,7 +2072,7 @@ class _PrizeTab extends StatelessWidget {
                       'Prize amounts are private — only visible to you as admin.',
                 ),
                 const SizedBox(height: AppSpacing.md),
-                const Icon(
+                Icon(
                   Icons.lock_outline,
                   size: 28,
                   color: AppColors.mutedForeground,
@@ -2182,7 +2182,7 @@ class _PrizeTab extends StatelessWidget {
               for (final p in structure.prizes)
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(color: AppColors.border, width: 0.5),
                     ),

@@ -197,7 +197,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                               visualDensity: VisualDensity.compact,
                               tooltip: 'Edit',
                               onPressed: () => _editPreset(app, p),
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.edit_outlined,
                                 size: 18,
                                 color: AppColors.mutedForeground,
@@ -207,7 +207,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                               visualDensity: VisualDensity.compact,
                               tooltip: 'Delete',
                               onPressed: () => _confirmDelete(p, app),
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.delete_outline,
                                 size: 18,
                                 color: AppColors.mutedForeground,
@@ -481,11 +481,11 @@ class _PresetFormState extends State<_PresetForm> {
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(AppRadius.sm),
-                        borderSide: const BorderSide(color: AppColors.border),
+                        borderSide: BorderSide(color: AppColors.border),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(AppRadius.sm),
-                        borderSide: const BorderSide(color: AppColors.ring),
+                        borderSide: BorderSide(color: AppColors.ring),
                       ),
                     ),
                     items: [
@@ -524,7 +524,7 @@ class _PresetFormState extends State<_PresetForm> {
             ),
           ),
         ],
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         _FieldToggle(
           title: 'Rebuys',
           subtitle: 'Players can re-enter after elimination',
@@ -544,21 +544,21 @@ class _PresetFormState extends State<_PresetForm> {
             ],
           ),
         ],
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         _FieldToggle(
           title: 'Re-entry',
           subtitle: 'Buy a new entry stack after elimination',
           value: _reEntry,
           onChanged: (v) => setState(() => _reEntry = v),
         ),
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         _FieldToggle(
           title: 'Add-on',
           subtitle: 'One per active player at rebuy close',
           value: _addOn,
           onChanged: (v) => setState(() => _addOn = v),
         ),
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         _FieldToggle(
           title: 'Ante',
           subtitle: 'Big blind ante',
@@ -578,7 +578,7 @@ class _PresetFormState extends State<_PresetForm> {
             ],
           ),
         ],
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         AppSelect(
           label: 'Chip set',
           value: _chipSetName,

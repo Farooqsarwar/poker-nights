@@ -9,20 +9,21 @@ class MedalIcon extends StatelessWidget {
     this.place, {
     super.key,
     this.size = 24,
-    this.color = AppColors.icon,
+    this.color,
   });
 
   final int place;
   final double size;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = color ?? AppColors.icon;
     final IconData icon = switch (place) {
       1 => Icons.emoji_events,
       2 => Icons.military_tech,
       _ => Icons.workspace_premium,
     };
-    return Icon(icon, size: size, color: color);
+    return Icon(icon, size: size, color: effectiveColor);
   }
 }

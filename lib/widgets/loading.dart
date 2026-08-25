@@ -14,6 +14,7 @@ class LoadingSpinner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final value = switch (size) {
       AppLoaderSize.sm => 16.0,
       AppLoaderSize.md => 24.0,
@@ -22,7 +23,7 @@ class LoadingSpinner extends StatelessWidget {
     return SizedBox(
       width: value,
       height: value,
-      child: const CircularProgressIndicator(
+      child: CircularProgressIndicator(
         strokeWidth: 2,
         color: AppColors.primary,
         backgroundColor: AppColors.border,
@@ -39,6 +40,7 @@ class LoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,

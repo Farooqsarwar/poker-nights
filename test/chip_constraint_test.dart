@@ -1,7 +1,6 @@
 // Tests for TournamentEngine.maxChipsPerPlayer constraint.
 // Verifies: default value, per-color limit enforcement, color-up correctness,
 // and invalid value rejection.
-import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/chip_color.dart';

@@ -123,11 +123,11 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
       maxWidth: 1200,
       child: Container(
         decoration: isFinalTable
-            ? const BoxDecoration(
+            ? BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFF2A0A10), Color(0xFF000000)],
+                  colors: [AppColors.destructive, AppColors.background],
                 ),
               )
             : null,
@@ -135,7 +135,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (isFinalTable)
-              Container(height: 4, color: const Color(0xFFFF2A2A)),
+              Container(height: 4, color: AppColors.destructive),
             // Header
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,7 +157,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                           Container(
                             width: 8,
                             height: 8,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               color: AppColors.success,
                               shape: BoxShape.circle,
                             ),
@@ -657,7 +657,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         padding: const EdgeInsets.symmetric(
                           vertical: AppSpacing.sm,
                         ),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
                               color: AppColors.border,
@@ -771,7 +771,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                           padding: const EdgeInsets.symmetric(
                             vertical: AppSpacing.sm,
                           ),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             border: Border(
                               bottom: BorderSide(
                                 color: AppColors.border,

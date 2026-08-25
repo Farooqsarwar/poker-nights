@@ -587,7 +587,7 @@ class _ChipRowState extends State<_ChipRow> {
           if (widget.showDragHandle)
             ReorderableDragStartListener(
               index: widget.index,
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.only(right: AppSpacing.xs),
                 child: Icon(
                   Icons.drag_handle,
@@ -695,7 +695,7 @@ class _ChipRowState extends State<_ChipRow> {
             ),
           ],
           IconButton(
-            icon: const Icon(Icons.delete, color: AppColors.destructive),
+            icon: Icon(Icons.delete, color: AppColors.destructive),
             onPressed: widget.onDelete,
           ),
         ],

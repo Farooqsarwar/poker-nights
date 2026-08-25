@@ -53,7 +53,7 @@ class _LandingScreenState extends State<LandingScreen> {
         horizontal: isMobile ? AppSpacing.lg : AppSpacing.xxl,
         vertical: AppSpacing.lg,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.hairlineWhite)),
       ),
       child: Row(
@@ -209,7 +209,7 @@ class _LandingScreenState extends State<LandingScreen> {
         horizontal: isDesktop ? AppSpacing.xxxl : AppSpacing.lg,
         vertical: AppSpacing.huge,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.hairlineWhite)),
       ),
       child: Center(
@@ -253,7 +253,7 @@ class _LandingScreenState extends State<LandingScreen> {
         horizontal: AppSpacing.xxl,
         vertical: AppSpacing.lg,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.hairlineWhite)),
       ),
       child: Wrap(
@@ -261,7 +261,7 @@ class _LandingScreenState extends State<LandingScreen> {
         spacing: AppSpacing.lg,
         runSpacing: AppSpacing.sm,
         children: [
-          const Text(
+          Text(
             '© 2026 Poker Night. All rights reserved.',
             style: TextStyle(
               fontSize: AppFontSizes.xs,

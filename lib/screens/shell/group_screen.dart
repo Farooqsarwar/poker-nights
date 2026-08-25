@@ -228,7 +228,7 @@ class _GroupScreenState extends State<GroupScreen> {
                           onPressed: () => setState(() {
                             _pollOptions.removeAt(i).dispose();
                           }),
-                          icon: const Text(
+                          icon: Text(
                             '×',
                             style: TextStyle(
                               color: AppColors.mutedForeground,
@@ -390,7 +390,7 @@ class _GroupScreenState extends State<GroupScreen> {
                               group.ownerId &&
                           m.id != group.ownerId)
                         PopupMenuButton<String>(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.more_vert,
                             size: 18,
                             color: AppColors.mutedForeground,
@@ -472,7 +472,7 @@ class _GroupScreenState extends State<GroupScreen> {
           if (userId != null)
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: AppColors.border)),
               ),
               child: Column(
@@ -536,7 +536,7 @@ class _GroupScreenState extends State<GroupScreen> {
           else
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: AppColors.border)),
               ),
               child: Text(
@@ -755,7 +755,7 @@ class _ChatBubble extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.push_pin,
                       size: 14,
                       color: AppColors.primary,
@@ -1392,8 +1392,9 @@ class _GroupHeaderIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return IgnorePointer(
-      child: Icon(icon, size: size, color: AppColors.destructive),
+      child: Icon(icon, size: size, color: AppColors.primary.withValues(alpha: 0.2)),
     );
   }
 }
@@ -1419,7 +1420,7 @@ class _CustomTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
@@ -1442,7 +1443,7 @@ class _CustomTabBar extends StatelessWidget {
                 child: Text(
                   '${t.label} ${t.count > 0 ? '(${t.count})' : ''}',
                   style: AppTypography.bodySm.copyWith(
-                    color: isActive ? Colors.white : AppColors.mutedForeground,
+                    color: isActive ? AppColors.foreground : AppColors.mutedForeground,
                     fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                   ),
                 ),
@@ -1518,7 +1519,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                           ? AppBadgeVariant.accent
                           : AppBadgeVariant.muted,
                     ),
-                    const Icon(
+                    Icon(
                       Icons.chevron_right,
                       color: AppColors.mutedForeground,
                     ),
@@ -1535,7 +1536,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                 const SizedBox(height: AppSpacing.sm),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.calendar_today,
                       size: 14,
                       color: AppColors.mutedForeground,
@@ -1552,7 +1553,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.access_time,
                       size: 14,
                       color: AppColors.mutedForeground,
@@ -1569,7 +1570,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.location_on,
                       size: 14,
                       color: AppColors.mutedForeground,

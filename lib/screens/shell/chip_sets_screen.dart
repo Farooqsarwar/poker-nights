@@ -140,7 +140,7 @@ class ChipSetsScreen extends StatelessWidget {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.edit,
                           color: AppColors.mutedForeground,
                         ),
@@ -149,7 +149,7 @@ class ChipSetsScreen extends StatelessWidget {
                       ),
                       if (cs.id != 'cs-default')
                         IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.delete,
                             color: AppColors.destructive,
                           ),

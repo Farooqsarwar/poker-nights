@@ -319,7 +319,7 @@ class _AddOnsStep extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.auto_awesome,
                       size: 16,
                       color: AppColors.primary,
@@ -454,7 +454,7 @@ class _AddOnsStep extends StatelessWidget {
                                 ),
                               ),
                               child: selections.contains(p.id)
-                                  ? const Icon(
+                                  ? Icon(
                                       Icons.check,
                                       size: 14,
                                       color: AppColors.primaryForeground,
@@ -724,7 +724,7 @@ class _ConfirmStep extends StatelessWidget {
                   label: 'Ante',
                   value: anteEnabled ? 'Active from next level' : 'Not enabled',
                 ),
-                const Divider(color: AppColors.border, height: AppSpacing.lg),
+                Divider(color: AppColors.border, height: AppSpacing.lg),
                 Row(
                   children: [
                     Text(
@@ -748,7 +748,7 @@ class _ConfirmStep extends StatelessWidget {
                   value: Formatters.chips(organizerAmount),
                 ),
                 if (prizes.isNotEmpty) ...[
-                  const Divider(color: AppColors.border, height: AppSpacing.lg),
+                  Divider(color: AppColors.border, height: AppSpacing.lg),
                   Text(
                     'Final distribution (calculated now)',
                     style: AppTypography.bodyXs.copyWith(
@@ -940,7 +940,7 @@ class _ConfirmPlayersStep extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.people_outline,
                   size: 16,
                   color: AppColors.primary,

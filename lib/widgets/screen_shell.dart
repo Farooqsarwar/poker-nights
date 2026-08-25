@@ -64,7 +64,7 @@ class ScreenShell extends StatelessWidget {
           body: Row(
             children: [
               const Sidebar(),
-              const VerticalDivider(width: 1, color: AppColors.border),
+              VerticalDivider(width: 1, color: AppColors.border),
               Expanded(child: child),
             ],
           ),
@@ -94,7 +94,7 @@ class _Gate extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
+                Icon(
                   Icons.lock_outline,
                   size: 40,
                   color: AppColors.mutedForeground,
@@ -177,7 +177,7 @@ class _MobileTopBar extends StatelessWidget {
       child: Container(
         height: 60,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: AppColors.border)),
         ),
         child: Row(
@@ -185,7 +185,7 @@ class _MobileTopBar extends StatelessWidget {
             InkWell(
               onTap: onMenu,
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: AppSpacing.xs,
                   vertical: AppSpacing.xs,
@@ -211,7 +211,7 @@ class _MobileTopBar extends StatelessWidget {
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 child: Stack(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.notifications_none,
                       color: AppColors.mutedForeground,
                       size: 24,
@@ -223,7 +223,7 @@ class _MobileTopBar extends StatelessWidget {
                         child: Container(
                           width: 10,
                           height: 10,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.primary,
                             shape: BoxShape.circle,
                           ),

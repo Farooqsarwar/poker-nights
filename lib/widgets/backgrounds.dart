@@ -11,7 +11,7 @@ class FeltBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.background,
         gradient: RadialGradient(
           radius: 1.2,
@@ -19,7 +19,7 @@ class FeltBackground extends StatelessWidget {
         ),
       ),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: RadialGradient(
             center: Alignment(0, 0),
             radius: 1.6,
@@ -41,7 +41,7 @@ class TVBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.black,
         gradient: RadialGradient(
           center: Alignment(0, -0.9),

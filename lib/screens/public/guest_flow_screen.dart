@@ -357,11 +357,11 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppRadius.sm),
-                    borderSide: const BorderSide(color: AppColors.border),
+                    borderSide: BorderSide(color: AppColors.border),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppRadius.sm),
-                    borderSide: const BorderSide(color: AppColors.ring),
+                    borderSide: BorderSide(color: AppColors.ring),
                   ),
                 ),
               ),
@@ -610,7 +610,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             onPressed: _selectedInviter == null
                 ? null
                 : () => setState(() => _step = _GuestStep.chooseSlot),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text('Continue'),
@@ -710,7 +710,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             onPressed: _selectedSlot == null
                 ? null
                 : () => setState(() => _step = _GuestStep.enterName),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text('Select slot'),
@@ -771,11 +771,11 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                borderSide: const BorderSide(color: AppColors.ring),
+                borderSide: BorderSide(color: AppColors.ring),
               ),
             ),
           ),
@@ -815,7 +815,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       padding: const EdgeInsets.all(AppSpacing.xxxl),
       child: Column(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 36,
             height: 36,
             child: CircularProgressIndicator(
@@ -876,7 +876,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           padding: const EdgeInsets.all(AppSpacing.xxl),
           child: Column(
             children: [
-              const Icon(
+              Icon(
                 Icons.close,
                 size: AppFontSizes.displayLg,
                 color: AppColors.destructive,
@@ -924,7 +924,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           padding: const EdgeInsets.all(AppSpacing.xxl),
           child: Column(
             children: [
-              const Icon(
+              Icon(
                 Icons.check_circle,
                 size: AppFontSizes.displayLg,
                 color: AppColors.success,
@@ -1062,7 +1062,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           size: AppButtonSize.lg,
           fullWidth: true,
           onPressed: () => context.go(RoutePaths.playerLive),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text('Watch live game'),
@@ -1140,7 +1140,7 @@ class _BackLink extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
+          Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
           const SizedBox(width: 4),
           Text(
             'Back',

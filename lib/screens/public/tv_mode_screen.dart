@@ -93,7 +93,7 @@ class _CodeEntry extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.style,
                         size: 60,
                         color: AppColors.primary,
@@ -156,13 +156,13 @@ class _CodeEntry extends StatelessWidget {
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(AppRadius.sm),
-                              borderSide: const BorderSide(
+                              borderSide: BorderSide(
                                 color: AppColors.border,
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(AppRadius.sm),
-                              borderSide: const BorderSide(
+                              borderSide: BorderSide(
                                 color: AppColors.ring,
                               ),
                             ),
@@ -427,8 +427,8 @@ class _RotatingPanelState extends State<_RotatingPanel> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0D0D),
-        border: Border.all(color: const Color(0xFF222222)),
+        color: AppColors.background,
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -439,7 +439,7 @@ class _RotatingPanelState extends State<_RotatingPanel> {
               size: 15,
               weight: FontWeight.w700,
               letterSpacing: 2.5,
-              color: Color(0xFFFF0015),
+              color: AppColors.primary,
             ),
           ),
           const SizedBox(height: 10),
@@ -490,7 +490,7 @@ class _LeaderboardPanel extends StatelessWidget {
                     style: AppTypography.mono(
                       size: 12,
                       color: p.active
-                          ? Colors.white
+                          ? AppColors.foreground
                           : AppColors.mutedForeground,
                     ),
                   ),
@@ -533,7 +533,7 @@ class _PayoutsPanel extends StatelessWidget {
             style: AppTypography.mono(
               size: 42,
               weight: FontWeight.w300,
-              color: Colors.white,
+              color: AppColors.foreground,
             ),
           ),
           Text(
@@ -547,7 +547,7 @@ class _PayoutsPanel extends StatelessWidget {
           ),
           if (game.status == LiveGameStatus.completed) ...[
             const SizedBox(height: 16),
-            const Divider(height: 1, color: Color(0xFF222222)),
+            Divider(height: 1, color: AppColors.border),
             const SizedBox(height: 8),
             for (var i = 0; i < paidPlaces; i++)
               Padding(
@@ -559,13 +559,13 @@ class _PayoutsPanel extends StatelessWidget {
                       style: AppTypography.mono(
                         size: 12,
                         weight: FontWeight.w700,
-                        color: Color(0xFFFF0015),
+                        color: AppColors.primary,
                       ),
                     ),
                     const Spacer(),
                     Text(
                       _podiumName(i + 1),
-                      style: AppTypography.mono(size: 13, color: Colors.white),
+                      style: AppTypography.mono(size: 13, color: AppColors.foreground),
                     ),
                   ],
                 ),
@@ -606,7 +606,7 @@ class _UpcomingPanel extends StatelessWidget {
           game.status == LiveGameStatus.completed
               ? 'TOURNAMENT COMPLETE'
               : 'END',
-          style: AppTypography.mono(size: 14, color: Color(0xFFFF0015)),
+          style: AppTypography.mono(size: 14, color: AppColors.primary),
         ),
       );
     }
@@ -624,7 +624,7 @@ class _UpcomingPanel extends StatelessWidget {
                     style: AppTypography.mono(
                       size: 13,
                       weight: FontWeight.w700,
-                      color: Color(0xFFFF0015),
+                      color: AppColors.primary,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -632,7 +632,7 @@ class _UpcomingPanel extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     child: Text(
                       'SB ${Formatters.chips(l.sb)} · BB ${Formatters.chips(l.bb)}',
-                      style: AppTypography.mono(size: 13, color: Colors.white),
+                      style: AppTypography.mono(size: 13, color: AppColors.foreground),
                     ),
                   ),
                   if (l.ante != null) ...[

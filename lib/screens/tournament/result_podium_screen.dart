@@ -92,7 +92,7 @@ class ResultPodiumScreen extends StatelessWidget {
             padding: const EdgeInsets.only(top: AppSpacing.lg),
             child: Column(
               children: [
-                const Icon(
+                Icon(
                   Icons.emoji_events,
                   size: AppFontSizes.displayLg,
                   color: AppColors.icon,
@@ -273,7 +273,7 @@ class ResultPodiumScreen extends StatelessWidget {
                                 ? '?'
                                 : r.player.name.trim()[0].toUpperCase(),
                             style: AppTypography.bodyXs.copyWith(
-                              color: Colors.white,
+                              color: AppColors.foreground,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -400,7 +400,7 @@ class ResultPodiumScreen extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.arrow_back,
                         size: 14,
                         color: AppColors.icon,

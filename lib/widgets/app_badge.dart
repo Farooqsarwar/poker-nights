@@ -21,6 +21,7 @@ class AppBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final (background, foreground, edge) = switch (variant) {
       AppBadgeVariant.default_ => (
         AppColors.secondary,

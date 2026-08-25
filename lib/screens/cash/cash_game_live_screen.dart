@@ -203,7 +203,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.success,
                             shape: BoxShape.circle,
                           ),
@@ -227,7 +227,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                     size: AppButtonSize.sm,
                     variant: AppButtonVariant.ghost,
                     onPressed: () => setState(() => _showReconcile = true),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
@@ -333,7 +333,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                                   ? '?'
                                   : players[pi].name.trim()[0].toUpperCase(),
                               style: AppTypography.bodyXs.copyWith(
-                                color: Colors.white,
+                                color: AppColors.foreground,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -659,7 +659,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                               '- ${Formatters.money(currency, totalCashedOut)}',
                           valueColor: AppColors.success,
                         ),
-                        const Divider(
+                        Divider(
                           color: AppColors.border,
                           height: AppSpacing.lg,
                         ),
@@ -675,7 +675,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                           label: 'Actual in play',
                           value: Formatters.money(currency, totalInPlay),
                         ),
-                        const Divider(
+                        Divider(
                           color: AppColors.border,
                           height: AppSpacing.lg,
                         ),

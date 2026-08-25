@@ -69,7 +69,7 @@ class ProfileScreen extends StatelessWidget {
                         style: AppTypography.body(
                           size: AppFontSizes.xl,
                           weight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppColors.foreground,
                         ),
                       ),
                     ),
@@ -81,14 +81,14 @@ class ProfileScreen extends StatelessWidget {
                         customBorder: const CircleBorder(),
                         child: Container(
                           padding: const EdgeInsets.all(6),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.card,
                             shape: BoxShape.circle,
                             border: Border.fromBorderSide(
                               BorderSide(color: AppColors.border),
                             ),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.camera_alt_outlined,
                             size: 14,
                             color: AppColors.primary,
@@ -149,7 +149,7 @@ class ProfileScreen extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.edit_outlined,
                           size: 16,
                           color: AppColors.primary,
@@ -229,7 +229,7 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
           AppButton(
-            variant: AppButtonVariant.danger,
+            variant: AppButtonVariant.secondary,
             onPressed: () => _confirmSignOut(context, app),
             child: const Text('Sign out'),
           ),
@@ -266,7 +266,7 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
                 child: i == app.avatarColorIndex
-                    ? const Icon(Icons.check, color: Colors.white)
+                    ? Icon(Icons.check, color: AppColors.foreground)
                     : null,
               ),
             ),
@@ -431,7 +431,7 @@ class _ProfileRow extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           border: showDivider
-              ? const Border(bottom: BorderSide(color: AppColors.border))
+              ? Border(bottom: BorderSide(color: AppColors.border))
               : null,
         ),
         child: Row(
@@ -458,7 +458,7 @@ class _ProfileRow extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right,
               color: AppColors.mutedForeground,
               size: 18,

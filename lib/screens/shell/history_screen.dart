@@ -148,7 +148,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           children: [
-            const Icon(
+            Icon(
               Icons.style_outlined,
               size: AppFontSizes.xxxl,
               color: AppColors.icon,
@@ -180,7 +180,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           children: [
-            const Icon(
+            Icon(
               Icons.payments_outlined,
               size: AppFontSizes.xxxl,
               color: AppColors.icon,
@@ -235,7 +235,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: Text(
@@ -263,7 +263,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ? AppColors.primary.withValues(alpha: 0.04)
                       : Colors.transparent,
                   border: i < sorted.length - 1
-                      ? const Border(
+                      ? Border(
                           bottom: BorderSide(color: AppColors.border),
                         )
                       : null,
@@ -298,7 +298,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             : sorted[i].value.name[0].toUpperCase(),
                         style: AppTypography.bodyXs.copyWith(
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppColors.foreground,
                         ),
                       ),
                     ),
@@ -457,7 +457,7 @@ class _CashHistoryRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             alignment: Alignment.center,
-            child: const Icon(
+            child: Icon(
               Icons.payments_outlined,
               size: 20,
               color: AppColors.icon,
@@ -565,7 +565,7 @@ class _HistoryRow extends StatelessWidget {
                 alignment: Alignment.center,
                 child: placement != null && placement <= 3
                     ? MedalIcon(placement, size: AppFontSizes.xl)
-                    : const Icon(
+                    : Icon(
                         Icons.style_outlined,
                         size: AppFontSizes.xl,
                         color: AppColors.icon,

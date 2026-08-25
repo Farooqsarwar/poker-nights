@@ -42,6 +42,7 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final isEnabled = !disabled && !loading && onPressed != null;
     final colors = _colorsFor(context);
     final sizes = _sizesFor();
@@ -121,7 +122,7 @@ class AppButton extends StatelessWidget {
   _BtnColors _colorsFor(BuildContext context) {
     switch (variant) {
       case AppButtonVariant.primary:
-        return const _BtnColors(
+        return _BtnColors(
           background: AppColors.primary,
           foreground: AppColors.primaryForeground,
           hover: AppColors.primaryHover,
@@ -141,22 +142,22 @@ class AppButton extends StatelessWidget {
           ),
         );
       case AppButtonVariant.destructive:
-        return const _BtnColors(
+        return _BtnColors(
           background: AppColors.destructive,
           foreground: AppColors.destructiveForeground,
         );
       case AppButtonVariant.ghost:
-        return const _BtnColors(
+        return _BtnColors(
           background: Colors.transparent,
           foreground: AppColors.mutedForeground,
         );
       case AppButtonVariant.gold:
-        return const _BtnColors(
+        return _BtnColors(
           background: AppColors.primary,
           foreground: AppColors.primaryForeground,
         );
       case AppButtonVariant.light:
-        return const _BtnColors(
+        return _BtnColors(
           background: AppColors.foreground,
           foreground: AppColors.background,
         );

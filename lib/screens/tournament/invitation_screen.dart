@@ -342,7 +342,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                       variant: AppButtonVariant.secondary,
                       onPressed: () => _copyLink(game),
                       child: _copied
-                          ? const AppIconLabel(
+                          ? AppIconLabel(
                               label: 'Link copied',
                               icon: Icons.check_circle,
                               color: AppColors.success,
@@ -398,7 +398,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                     ),
                   ),
                 if (going.isNotEmpty) ...[
-                  const Divider(color: AppColors.border),
+                  Divider(color: AppColors.border),
                   const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [
@@ -450,7 +450,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.event_seat_outlined,
                             size: 16,
                             color: AppColors.icon,
@@ -688,7 +688,7 @@ void _showRsvpListModal(BuildContext context, LiveGame game) {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         const SizedBox(height: AppSpacing.sm),
         for (final p in members)
           Padding(
@@ -905,7 +905,7 @@ class _EditEventFormState extends State<_EditEventForm> {
           keyboardType: TextInputType.number,
         ),
         const SizedBox(height: AppSpacing.lg),
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         const SizedBox(height: AppSpacing.sm),
         _SegmentedPicker(
           label: 'Duration',
@@ -1212,7 +1212,7 @@ class _SegmentedPicker extends StatelessWidget {
                 o,
                 style: AppTypography.bodyXs.copyWith(
                   color: o == selected
-                      ? Colors.white
+                      ? AppColors.foreground
                       : AppColors.mutedForeground,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1296,7 +1296,7 @@ void showAppLinkModal(BuildContext context, LiveGame game) {
       insetPadding: const EdgeInsets.all(AppSpacing.lg),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(color: AppColors.border),
       ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xxl),
@@ -1589,7 +1589,7 @@ class _ContextualMainButton extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  const Divider(color: AppColors.border),
+                  Divider(color: AppColors.border),
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     'At your table',
@@ -1801,7 +1801,7 @@ class _PremiumEventHeader extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.calendar_today,
                           size: 16,
                           color: AppColors.mutedForeground,
@@ -1818,7 +1818,7 @@ class _PremiumEventHeader extends StatelessWidget {
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.access_time,
                           size: 16,
                           color: AppColors.mutedForeground,
@@ -1835,7 +1835,7 @@ class _PremiumEventHeader extends StatelessWidget {
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.location_on,
                           size: 16,
                           color: AppColors.mutedForeground,
@@ -1867,7 +1867,7 @@ class _PremiumEventHeader extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
                     IconButton(
                       onPressed: onEdit,
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.edit_outlined,
                         color: AppColors.mutedForeground,
                       ),
@@ -1932,7 +1932,7 @@ class _PremiumEventHeader extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.person_outline,
                     size: 14,
                     color: AppColors.mutedForeground,
@@ -1948,7 +1948,7 @@ class _PremiumEventHeader extends StatelessWidget {
               ),
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.schedule_outlined,
                     size: 14,
                     color: AppColors.mutedForeground,

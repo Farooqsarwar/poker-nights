@@ -77,7 +77,7 @@ class _JoinScreenState extends State<JoinScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.foreground),
+          icon: Icon(Icons.arrow_back, color: AppColors.foreground),
           onPressed: () => context.go(RoutePaths.landing),
         ),
       ),
@@ -138,11 +138,11 @@ class _JoinScreenState extends State<JoinScreen> {
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: const BorderSide(color: AppColors.border),
+                          borderSide: BorderSide(color: AppColors.border),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: const BorderSide(color: AppColors.ring),
+                          borderSide: BorderSide(color: AppColors.ring),
                         ),
                       ),
                     ),
@@ -226,11 +226,11 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Scan Game QR Code'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.foreground,
       ),
       body: MobileScanner(
         onDetect: (capture) {

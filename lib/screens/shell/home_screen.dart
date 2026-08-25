@@ -127,7 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Container(
                                   width: 6,
                                   height: 6,
-                                  decoration: const BoxDecoration(
+                                  decoration: BoxDecoration(
                                     color: AppColors.success,
                                     shape: BoxShape.circle,
                                   ),
@@ -162,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Stack(
                             clipBehavior: Clip.none,
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.notifications_none,
                                 size: 22,
                                 color: AppColors.foreground,
@@ -740,7 +740,7 @@ class _UpcomingGames extends StatelessWidget {
             Expanded(
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.calendar_month_outlined,
                     color: AppColors.primary,
                     size: 24,
@@ -973,7 +973,7 @@ class _GameRow extends StatelessWidget {
                             Container(
                               width: 6,
                               height: 6,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: AppColors.success,
                                 shape: BoxShape.circle,
                               ),
@@ -1039,7 +1039,7 @@ class _GroupCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Icon(
+            Icon(
               Icons.groups_outlined,
               color: AppColors.primary,
               size: 24,
@@ -1075,7 +1075,7 @@ class _GroupCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Icon(
+                    Icon(
                       Icons.chevron_right,
                       color: AppColors.mutedForeground,
                       size: 18,
@@ -1117,10 +1117,10 @@ class _GroupCard extends StatelessWidget {
                                     g.members[i].name.isNotEmpty
                                         ? g.members[i].name[0].toUpperCase()
                                         : '?',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
-                                      color: Colors.white,
+                                      color: AppColors.foreground,
                                     ),
                                   ),
                                 ),
@@ -1181,7 +1181,7 @@ class _GroupCard extends StatelessWidget {
             child: Column(
               children: [
                 const SizedBox(height: AppSpacing.xs),
-                const Icon(
+                Icon(
                   Icons.handshake_outlined,
                   size: 48,
                   color: AppColors.mutedForeground,
@@ -1233,7 +1233,7 @@ class _AlertsPreview extends StatelessWidget {
             Expanded(
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.notifications_active_outlined,
                     color: AppColors.primary,
                     size: 24,
@@ -1280,7 +1280,7 @@ class _AlertsPreview extends StatelessWidget {
                           width: 8,
                           height: 8,
                           margin: const EdgeInsets.only(top: 5),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.primary,
                             shape: BoxShape.circle,
                           ),

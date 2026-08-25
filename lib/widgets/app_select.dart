@@ -23,6 +23,7 @@ class AppSelect<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -42,7 +43,7 @@ class AppSelect<T> extends StatelessWidget {
           isExpanded: true,
           dropdownColor: AppColors.card,
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_drop_down,
             color: AppColors.mutedForeground,
             size: 20,
@@ -69,11 +70,11 @@ class AppSelect<T> extends StatelessWidget {
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: AppColors.border),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              borderSide: const BorderSide(color: AppColors.ring),
+              borderSide: BorderSide(color: AppColors.ring),
             ),
           ),
         ),

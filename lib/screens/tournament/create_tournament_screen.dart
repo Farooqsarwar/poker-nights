@@ -614,7 +614,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     ? context.go(RoutePaths.group)
                     : setState(() => _step--),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
                   child: Icon(
                     Icons.arrow_back,
@@ -688,7 +688,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     : setState(() => _step--),
                 child: _step == 1
                     ? const Text('Cancel')
-                    : const Row(
+                    : Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
@@ -704,7 +704,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               if (_step < 4)
                 AppButton(
                   onPressed: _next,
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text('Next'),
@@ -817,7 +817,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       children: [
         Row(
           children: [
-            const Icon(Icons.auto_awesome, size: 16, color: AppColors.primary),
+            Icon(Icons.auto_awesome, size: 16, color: AppColors.primary),
             const SizedBox(width: AppSpacing.xs),
             Text(
               'Suggested preset${_presetMatches.length > 1 ? 's' : ''}',
@@ -921,7 +921,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.style_outlined,
                     size: 18,
                     color: AppColors.primary,
@@ -1044,7 +1044,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                               _chipSet[i - 1] = _chipSet[i];
                               _chipSet[i] = tmp;
                             }),
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.arrow_upward,
                         size: 14,
                         color: AppColors.mutedForeground,
@@ -1059,7 +1059,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                               _chipSet[i + 1] = _chipSet[i];
                               _chipSet[i] = tmp;
                             }),
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.arrow_downward,
                         size: 14,
                         color: AppColors.mutedForeground,
@@ -1148,7 +1148,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   }
 
   void _showAddChipDialog() {
-    Color pickerColor = const Color(0xFFE8E4D9);
+    Color pickerColor = AppColors.mutedForeground;
     final nameController = TextEditingController(text: 'Custom');
     final valueController = TextEditingController(text: '100');
     final qtyController = TextEditingController(text: '50');
@@ -1166,7 +1166,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          side: const BorderSide(color: AppColors.border),
+          side: BorderSide(color: AppColors.border),
         ),
         child: ConstrainedBox(
           constraints: BoxConstraints(
@@ -1198,7 +1198,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     IconButton(
                       visualDensity: VisualDensity.compact,
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.close,
                         size: 18,
                         color: AppColors.mutedForeground,
@@ -1207,7 +1207,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   ],
                 ),
               ),
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: AppColors.border),
               Flexible(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(AppSpacing.xl),
@@ -1255,7 +1255,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   ),
                 ),
               ),
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: AppColors.border),
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.xl),
                 child: Row(
@@ -1438,7 +1438,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               ),
             ),
           ],
-          const Divider(color: AppColors.border),
+          Divider(color: AppColors.border),
           _ToggleRow(
             title: 'Re-entry',
             subtitle:
@@ -1460,7 +1460,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
               ),
             ),
-          const Divider(color: AppColors.border),
+          Divider(color: AppColors.border),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
             child: Row(
@@ -1543,7 +1543,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ],
               ),
             ),
-          const Divider(color: AppColors.border),
+          Divider(color: AppColors.border),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
             child: Row(
@@ -1609,7 +1609,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ],
               ),
             ),
-          const Divider(color: AppColors.border),
+          Divider(color: AppColors.border),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
             child: Column(
@@ -1717,7 +1717,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               ],
             ),
           ),
-          const Divider(color: AppColors.border),
+          Divider(color: AppColors.border),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1763,7 +1763,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(
+          Icon(
             Icons.casino_outlined,
             size: AppFontSizes.display,
             color: AppColors.icon,
@@ -1954,7 +1954,7 @@ class _ConfirmDetailsDialog extends StatelessWidget {
       insetPadding: inset,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(color: AppColors.border),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -1967,7 +1967,7 @@ class _ConfirmDetailsDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _header(context),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.border),
 
             // Scrollable body.
             Flexible(
@@ -2034,7 +2034,7 @@ class _ConfirmDetailsDialog extends StatelessWidget {
               ),
             ),
 
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.border),
             _footer(context, isCompact),
           ],
         ),
@@ -2060,7 +2060,7 @@ class _ConfirmDetailsDialog extends StatelessWidget {
               color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.fact_check_outlined,
               size: 18,
               color: AppColors.primary,
@@ -2092,7 +2092,7 @@ class _ConfirmDetailsDialog extends StatelessWidget {
             tooltip: 'Close',
             visualDensity: VisualDensity.compact,
             onPressed: () => Navigator.of(context).pop(false),
-            icon: const Icon(
+            icon: Icon(
               Icons.close,
               size: 18,
               color: AppColors.mutedForeground,
@@ -2114,7 +2114,7 @@ class _ConfirmDetailsDialog extends StatelessWidget {
     final Widget confirm = AppButton(
       fullWidth: isCompact,
       onPressed: () => Navigator.of(context).pop(true),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.check, size: 15, color: AppColors.icon),
@@ -2203,7 +2203,7 @@ class _ConfirmRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: last
             ? null
-            : const Border(
+            : Border(
                 bottom: BorderSide(color: AppColors.border, width: 0.6),
               ),
       ),
@@ -2256,7 +2256,7 @@ class _ChipPill extends StatelessWidget {
             decoration: BoxDecoration(
               color: chip.colorValue,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+              border: Border.all(color: AppColors.foreground.withValues(alpha: 0.22)),
             ),
           ),
           const SizedBox(width: AppSpacing.xs),
@@ -2406,11 +2406,11 @@ class _ExactInput extends StatelessWidget {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                borderSide: const BorderSide(color: AppColors.ring),
+                borderSide: BorderSide(color: AppColors.ring),
               ),
             ),
           ),
@@ -2502,7 +2502,7 @@ class _SegmentedPicker extends StatelessWidget {
                 options[i],
                 style: AppTypography.bodyXs.copyWith(
                   color: options[i] == selected
-                      ? Colors.white
+                      ? AppColors.foreground
                       : AppColors.mutedForeground,
                   fontWeight: FontWeight.w600,
                 ),

@@ -261,7 +261,7 @@ class _EventDayChecklistBodyState extends State<_EventDayChecklistBody> {
             const SizedBox(height: AppSpacing.md),
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.check_circle,
                   size: 14,
                   color: AppColors.success,
@@ -293,11 +293,11 @@ class _EventDayChecklistBodyState extends State<_EventDayChecklistBody> {
   }) {
     final Icon icon;
     if (done) {
-      icon = const Icon(Icons.check_circle, size: 20, color: AppColors.success);
+      icon = Icon(Icons.check_circle, size: 20, color: AppColors.success);
     } else if (auto) {
-      icon = const Icon(Icons.circle_outlined, size: 20, color: AppColors.border);
+      icon = Icon(Icons.circle_outlined, size: 20, color: AppColors.border);
     } else {
-      icon = const Icon(
+      icon = Icon(
         Icons.circle_outlined,
         size: 20,
         color: AppColors.mutedForeground,

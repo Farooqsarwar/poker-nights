@@ -846,6 +846,10 @@ class AppProvider extends ChangeNotifier {
       if (voice is bool) _voiceEnabled = voice;
       final notify = prefs['browserNotify'];
       if (notify is bool) _notificationsEnabled = notify;
+      final colorTheme = prefs['colorTheme'];
+      if (colorTheme is String) _colorTheme = colorTheme;
+      final themePref = prefs['themePreference'];
+      if (themePref is String) _themePreference = themePref;
     } catch (e) {
       debugPrint('loadUserPrefs failed: $e');
     }
@@ -4668,6 +4672,18 @@ class AppProvider extends ChangeNotifier {
   void setThemePreference(String value) {
     if (_themePreference == value) return;
     _themePreference = value;
+    _persistPref('themePreference', value);
+    notifyListeners();
+  }
+
+  /// Color theme id — one of the [ThemePalettes.all] ids.
+  String _colorTheme = 'red';
+  String get colorTheme => _colorTheme;
+
+  void setColorTheme(String value) {
+    if (_colorTheme == value) return;
+    _colorTheme = value;
+    _persistPref('colorTheme', value);
     notifyListeners();
   }
 

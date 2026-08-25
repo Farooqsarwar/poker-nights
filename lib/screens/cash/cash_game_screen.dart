@@ -107,7 +107,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
               InkWell(
                 onTap: () => context.go(RoutePaths.home),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
                   child: Icon(
                     Icons.arrow_back,
@@ -289,7 +289,7 @@ class _SetupForm extends StatelessWidget {
               ),
             ],
           ),
-          const Divider(color: AppColors.border, height: AppSpacing.xxl),
+          Divider(color: AppColors.border, height: AppSpacing.xxl),
           Text(
             'Blinds',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
@@ -322,7 +322,7 @@ class _SetupForm extends StatelessWidget {
               ),
             ],
           ),
-          const Divider(color: AppColors.border, height: AppSpacing.xxl),
+          Divider(color: AppColors.border, height: AppSpacing.xxl),
           Text(
             'Buy-in limits',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
@@ -363,7 +363,7 @@ class _SetupForm extends StatelessWidget {
           AppButton(
             fullWidth: true,
             onPressed: onContinue,
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text('Continue to Players'),
@@ -452,7 +452,7 @@ class _PlayersForm extends StatelessWidget {
             onPressed: onAdd,
             child: const Text('+ Add player'),
           ),
-          const Divider(color: AppColors.border, height: AppSpacing.xxl),
+          Divider(color: AppColors.border, height: AppSpacing.xxl),
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
@@ -478,7 +478,7 @@ class _PlayersForm extends StatelessWidget {
             size: AppButtonSize.lg,
             fullWidth: true,
             onPressed: validCount >= 2 ? onStart : null,
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.play_arrow, size: 16, color: AppColors.icon),

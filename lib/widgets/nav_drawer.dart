@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../app/colors.dart';
+import '../app/icons.dart';
 import '../app/route_paths.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
@@ -17,6 +18,7 @@ class NavDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final app = context.watch<AppProvider>();
     final user = app.user;
     final location = GoRouterState.of(context).uri.path;
@@ -57,7 +59,7 @@ class NavDrawer extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(AppSpacing.xl),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: Row(
@@ -111,7 +113,7 @@ class NavDrawer extends StatelessWidget {
                 ),
               ),
             ),
-          const Divider(color: AppColors.border, height: 1),
+          Divider(color: AppColors.border, height: 1),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.sm),
@@ -154,7 +156,7 @@ class NavDrawer extends StatelessWidget {
                               width: 20,
                               height: 20,
                               alignment: Alignment.center,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: AppColors.primary,
                                 shape: BoxShape.circle,
                               ),
@@ -170,7 +172,7 @@ class NavDrawer extends StatelessWidget {
                     ),
                   ),
                 if (groups.isNotEmpty) ...[
-                  const Divider(color: AppColors.border, height: 24),
+                  Divider(color: AppColors.border, height: 24),
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm,
@@ -211,9 +213,12 @@ class NavDrawer extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            Text(
-                              group.icon,
-                              style: const TextStyle(fontSize: 18),
+                            Icon(
+                              groupIconMap[group.icon] ?? Icons.shield_outlined,
+                              size: 18,
+                              color: group.id == app.currentGroup.id
+                                  ? AppColors.primary
+                                  : AppColors.mutedForeground,
                             ),
                             const SizedBox(width: AppSpacing.md),
                             Expanded(
@@ -230,7 +235,7 @@ class NavDrawer extends StatelessWidget {
                               ),
                             ),
                             if (group.pinned)
-                              const Icon(
+                              Icon(
                                 Icons.push_pin,
                                 size: 14,
                                 color: AppColors.primary,
@@ -276,7 +281,7 @@ class NavDrawer extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(AppSpacing.xl),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
             child: Row(
@@ -296,7 +301,7 @@ class NavDrawer extends StatelessWidget {
                 const Spacer(),
                 IconButton(
                   onPressed: app.closeDrawer,
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.close,
                     color: AppColors.mutedForeground,
                     size: 20,

@@ -7,6 +7,7 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
+import '../../theme/theme_palette.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -112,7 +113,7 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.casino_outlined,
                   title: 'Chip sets',
                   subtitle: 'Manage saved chip denominations and colours',
-                  trailing: const Icon(
+                  trailing: Icon(
                     Icons.chevron_right,
                     color: AppColors.mutedForeground,
                   ),
@@ -156,29 +157,43 @@ class SettingsScreen extends StatelessWidget {
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.sm),
+          // Dark / Light / System toggle
           AppCard(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Row(
               children: [
-                _ThemeChip(
+                _ModeChip(
                   label: 'Dark',
                   active: app.themePreference == 'dark',
                   onTap: () => app.setThemePreference('dark'),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                _ThemeChip(
+                _ModeChip(
                   label: 'Light',
                   active: app.themePreference == 'light',
                   onTap: () => app.setThemePreference('light'),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                _ThemeChip(
+                _ModeChip(
                   label: 'System',
                   active: app.themePreference == 'system',
                   onTap: () => app.setThemePreference('system'),
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Color theme selector
+          Text(
+            'Color theme',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _ThemeGrid(
+            activeId: app.colorTheme,
+            onSelect: (id) => app.setColorTheme(id),
           ),
           const SizedBox(height: AppSpacing.xl),
           // Account
@@ -191,7 +206,7 @@ class SettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.person_outline,
                   size: 22,
                   color: AppColors.icon,
@@ -224,7 +239,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           AppButton(
-            variant: AppButtonVariant.danger,
+            variant: AppButtonVariant.secondary,
             onPressed: () => _confirmSignOut(context, app),
             child: const Text('Sign out'),
           ),
@@ -284,8 +299,8 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-class _ThemeChip extends StatelessWidget {
-  const _ThemeChip({
+class _ModeChip extends StatelessWidget {
+  const _ModeChip({
     required this.label,
     required this.active,
     required this.onTap,
@@ -297,6 +312,7 @@ class _ThemeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -324,6 +340,132 @@ class _ThemeChip extends StatelessWidget {
   }
 }
 
+/// 3×2 grid of theme cards showing each palette's colours.
+class _ThemeGrid extends StatelessWidget {
+  const _ThemeGrid({required this.activeId, required this.onSelect});
+
+  final String activeId;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = [
+      ThemePalettes.all.sublist(0, 3),
+      ThemePalettes.all.sublist(3, 5),
+    ];
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        children: [
+          for (final entry in rows.asMap().entries) ...[
+            Row(
+              children: [
+                for (final p in entry.value) ...[
+                  Expanded(
+                    child: _ThemeCard(
+                      palette: p,
+                      selected: p.id == activeId,
+                      onTap: () => onSelect(p.id),
+                    ),
+                  ),
+                  if (p != entry.value.last)
+                    const SizedBox(width: AppSpacing.sm),
+                ],
+              ],
+            ),
+            if (entry.key < rows.length - 1)
+              const SizedBox(height: AppSpacing.sm),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A single theme card showing the palette name, a colour swatch preview,
+/// and a small sample of the UI colours.
+class _ThemeCard extends StatelessWidget {
+  const _ThemeCard({
+    required this.palette,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ThemePalette palette;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    Theme.of(context);
+    return InkWell
+      (
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: AnimatedContainer(
+        duration: AppDurations.fast,
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(
+            color: selected ? palette.primary : palette.border,
+            width: selected ? 1.6 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Colour swatch row: primary, background, card, border
+            Row(
+              children: [
+                _swatch(palette.primary),
+                const SizedBox(width: 4),
+                _swatch(palette.background),
+                const SizedBox(width: 4),
+                _swatch(palette.card),
+                const SizedBox(width: 4),
+                _swatch(palette.border),
+                if (selected) ...[
+                  const Spacer(),
+                  Icon(Icons.check_circle, size: 16, color: palette.primary),
+                ],
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              palette.name,
+              style: AppTypography.bodyXs.copyWith(
+                color: palette.foreground,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _swatch(Color c) {
+    return Container(
+      width: 16,
+      height: 16,
+      decoration: BoxDecoration(
+        color: c,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: c.computeLuminance() > 0.5
+              ? Colors.black.withValues(alpha: 0.15)
+              : Colors.white.withValues(alpha: 0.15),
+        ),
+      ),
+    );
+  }
+}
+
 class _SettingRow extends StatelessWidget {
   const _SettingRow({
     required this.icon,
@@ -343,13 +485,14 @@ class _SettingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return InkWell(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           border: showDivider
-              ? const Border(bottom: BorderSide(color: AppColors.border))
+              ? Border(bottom: BorderSide(color: AppColors.border))
               : null,
         ),
         child: Row(

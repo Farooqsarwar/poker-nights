@@ -19,6 +19,7 @@ class AppToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return InkWell(
       onTap: () => onChanged(!value),
       borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -40,8 +41,8 @@ class AppToggle extends StatelessWidget {
               child: Container(
                 width: 16,
                 height: 16,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
+                decoration: BoxDecoration(
+                  color: AppColors.foreground,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(color: AppColors.shadowSoft, blurRadius: 2),

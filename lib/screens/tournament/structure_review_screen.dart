@@ -89,19 +89,19 @@ class StructureReviewScreen extends StatelessWidget {
                 InkWell(
                   onTap: () => context.go(RoutePaths.invitation),
                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                  child: const Padding(
-                    padding: EdgeInsets.all(AppSpacing.xs),
-                    child: Icon(
-                      Icons.arrow_back,
-                      size: AppFontSizes.xl,
-                      color: AppColors.mutedForeground,
-                    ),
+                child: Padding(
+                  padding: EdgeInsets.all(AppSpacing.xs),
+                  child: Icon(
+                    Icons.arrow_back,
+                    size: AppFontSizes.xl,
+                    color: AppColors.mutedForeground,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                     Text(
                       'Structure Review',
                       style: AppTypography.display(
@@ -125,7 +125,7 @@ class StructureReviewScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.timer_outlined,
                     size: 32,
                     color: AppColors.primary,
@@ -205,8 +205,8 @@ class StructureReviewScreen extends StatelessWidget {
               InkWell(
                 onTap: () => context.go(RoutePaths.invitation),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: const Padding(
-                  padding: EdgeInsets.all(AppSpacing.xs),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xs),
                   child: Icon(
                     Icons.arrow_back,
                     size: AppFontSizes.xl,
@@ -354,7 +354,7 @@ class StructureReviewScreen extends StatelessWidget {
                 if (settings.rebuys) ...[
                   Container(
                     padding: const EdgeInsets.only(top: AppSpacing.md),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       border: Border(top: BorderSide(color: AppColors.border)),
                     ),
                     child: Column(
@@ -493,7 +493,7 @@ class StructureReviewScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Divider(color: AppColors.border, height: 1),
+                Divider(color: AppColors.border, height: 1),
                 for (var i = 0; i < structure.levels.length; i++)
                   Builder(
                     builder: (context) {
@@ -512,13 +512,13 @@ class StructureReviewScreen extends StatelessWidget {
                               ? AppColors.primarySoft.withValues(alpha: 0.15)
                               : null,
                           border: isRebuyClose
-                              ? const Border(
+                              ? Border(
                                   bottom: BorderSide(
                                     color: AppColors.primary,
                                     width: 2,
                                   ),
                                 )
-                              : const Border(
+                              : Border(
                                   bottom: BorderSide(
                                     color: AppColors.hairlineBorder,
                                   ),
@@ -634,7 +634,7 @@ class StructureReviewScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 if (!game.settlementConfirmed) ...[
                   const SizedBox(height: AppSpacing.md),
-                  const Icon(
+                  Icon(
                     Icons.lock_outline,
                     size: 28,
                     color: AppColors.mutedForeground,
@@ -706,7 +706,7 @@ class StructureReviewScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                  const Divider(color: AppColors.border),
+                  Divider(color: AppColors.border),
                 ],
                 Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -804,7 +804,7 @@ class StructureReviewScreen extends StatelessWidget {
                 child: AppButton(
                   variant: AppButtonVariant.secondary,
                   onPressed: () => context.go(RoutePaths.invitation),
-                  child: const FittedBox(
+                  child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -864,7 +864,7 @@ class StructureReviewScreen extends StatelessWidget {
                       ),
                     );
                   },
-                  child: const FittedBox(
+                  child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -884,7 +884,7 @@ class StructureReviewScreen extends StatelessWidget {
                     app.confirmStructure();
                     context.go(RoutePaths.invitation);
                   },
-                  child: const FittedBox(
+                  child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -999,7 +999,7 @@ class _PlayerCountCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               InkWell(
                 onTap: () => onChanged(players + 1),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4.0),
                   child: Icon(Icons.add, size: 20, color: AppColors.primary),
                 ),
@@ -1110,9 +1110,9 @@ class _ChipDot extends StatelessWidget {
             AppTypography.mono(
               size: 8,
               weight: FontWeight.w700,
-              color: Colors.white,
+              color: AppColors.foreground,
             ).copyWith(
-              shadows: const [
+              shadows: [
                 Shadow(color: AppColors.shadowDeep, blurRadius: 2),
               ],
             ),

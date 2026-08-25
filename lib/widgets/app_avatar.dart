@@ -39,7 +39,7 @@ class AppAvatar extends StatelessWidget {
         style: AppTypography.body(
           size: fontSize,
           weight: FontWeight.w600,
-          color: Colors.white,
+          color: AppColors.foreground,
         ),
       ),
     );

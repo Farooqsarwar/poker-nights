@@ -105,7 +105,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
               InkWell(
                 onTap: () => context.go(RoutePaths.adminDashboard),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
                   child: Icon(
                     Icons.arrow_back,
@@ -142,7 +142,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
               padding: const EdgeInsets.all(AppSpacing.xxxl),
               child: Column(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.emoji_events,
                     size: AppFontSizes.displayLg,
                     color: AppColors.icon,
@@ -210,7 +210,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                         ? '?'
                                         : p.name.trim()[0].toUpperCase(),
                                     style: AppTypography.bodyXs.copyWith(
-                                      color: Colors.white,
+                                      color: AppColors.foreground,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -234,7 +234,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 4),
-                                    const Icon(
+                                    Icon(
                                       Icons.arrow_forward,
                                       size: 12,
                                       color: AppColors.icon,
@@ -285,7 +285,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.undo,
                                 size: 14,
                                 color: AppColors.destructive,
@@ -408,7 +408,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.emoji_events,
                     size: 16,
                     color: AppColors.icon,

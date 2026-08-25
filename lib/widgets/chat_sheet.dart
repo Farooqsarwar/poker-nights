@@ -20,7 +20,7 @@ class ChatSheet extends StatefulWidget {
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         height: MediaQuery.of(context).size.height * 0.75,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(AppRadius.lg),
@@ -100,13 +100,13 @@ class _ChatSheetState extends State<ChatSheet> {
                 style: AppTypography.display(size: AppFontSizes.lg),
               ),
               IconButton(
-                icon: const Icon(Icons.close, color: AppColors.foreground),
+                icon: Icon(Icons.close, color: AppColors.foreground),
                 onPressed: () => Navigator.pop(context),
               ),
             ],
           ),
         ),
-        const Divider(height: 1, color: AppColors.border),
+        Divider(height: 1, color: AppColors.border),
         Expanded(
           child: SingleChildScrollView(
             reverse: true,
@@ -145,7 +145,7 @@ class _ChatSheetState extends State<ChatSheet> {
               top: AppSpacing.md,
               bottom: AppSpacing.md + MediaQuery.of(context).viewInsets.bottom,
             ),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
             child: Column(
@@ -188,7 +188,7 @@ class _ChatSheetState extends State<ChatSheet> {
         else
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
             child: Text(
@@ -222,7 +222,7 @@ class ChatUnreadBadge extends StatelessWidget {
       child: Text(
         '$count',
         style: AppTypography.bodyXs.copyWith(
-          color: Colors.white,
+          color: AppColors.destructiveForeground,
           fontSize: 10,
         ),
       ),

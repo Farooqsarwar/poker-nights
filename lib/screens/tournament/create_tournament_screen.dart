@@ -592,7 +592,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final isAdmin = app.user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
 
     if (!isAdmin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

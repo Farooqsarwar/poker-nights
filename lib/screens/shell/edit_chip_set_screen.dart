@@ -72,10 +72,12 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
     final seen = <int>{};
     final dups = <int>{};
     for (final c in _chips) {
-      if (!seen.add(c.value)) dups.add(c.value);
+      if (c.value > 0 && !seen.add(c.value)) dups.add(c.value);
     }
     return dups;
   }
+
+  bool get _hasEmptyChipSet => _chips.isEmpty || _chips.every((c) => c.quantity <= 0);
 
   void _addChip() {
     setState(() {
@@ -133,6 +135,10 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
           : null;
     });
     if (_nameError != null || _dupError != null) return;
+    if (_hasEmptyChipSet) {
+      setState(() => _dupError = 'Add at least one chip with quantity above zero.');
+      return;
+    }
 
     // Unique name within saved sets (10-002).
     final duplicateName = app.savedChipSets.any(
@@ -514,14 +520,24 @@ class _ChipRowState extends State<_ChipRow> {
     final v = int.tryParse(raw.trim());
     final valid = v != null && v > 0;
     setState(() => _valueError = !valid && raw.trim().isNotEmpty);
-    widget.onChanged(widget.chip.copyWith(value: valid ? v : 0));
+    if (valid) {
+      widget.onChanged(widget.chip.copyWith(value: v));
+    } else if (raw.trim().isEmpty) {
+      // Empty field — revert to previous valid value
+      widget.onChanged(widget.chip.copyWith(value: widget.chip.value));
+    }
+    // Invalid but non-empty: don't update model, just show error
   }
 
   void _onQuantity(String raw) {
     final q = int.tryParse(raw.trim());
     final valid = q != null && q >= 0;
     setState(() => _quantityError = !valid && raw.trim().isNotEmpty);
-    widget.onChanged(widget.chip.copyWith(quantity: valid ? q : 0));
+    if (valid) {
+      widget.onChanged(widget.chip.copyWith(quantity: q));
+    } else if (raw.trim().isEmpty) {
+      widget.onChanged(widget.chip.copyWith(quantity: 0));
+    }
   }
 
   void _pickColor() {

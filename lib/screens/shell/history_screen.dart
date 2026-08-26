@@ -35,7 +35,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final allPast = group.pastGames;
     final pastGames = allPast;
     final userId = app.user?.id;
-    final isAdmin = app.user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
 
     final myGames = pastGames
         .where((g) => g.players.any((p) => p.id == userId))
@@ -341,6 +341,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           value: '${sorted[i].value.played}',
                           label: 'played',
                         ),
+                        if (sorted[i].value.knockouts > 0) ...[
+                          const SizedBox(width: AppSpacing.lg),
+                          _LbStat(
+                            value: '${sorted[i].value.knockouts}',
+                            label: 'KOs',
+                          ),
+                        ],
                       ],
                     ),
                   ],

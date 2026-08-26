@@ -93,7 +93,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
 
     if (!isAdmin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -978,6 +978,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             if (_tab == 'audit') _AuditTab(auditHistory: game.auditHistory),
           ],
           const SizedBox(height: AppSpacing.xxl),
+          // Final table trigger for small tournaments (≤9 start, never auto-transition)
+          if (status == LiveGameStatus.running ||
+              status == LiveGameStatus.paused)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: AppButton(
+                size: AppButtonSize.md,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => app.triggerFinalTable(),
+                child: const AppIconLabel(
+                  label: 'Final Table',
+                  icon: Icons.table_chart_outlined,
+                ),
+              ),
+            ),
           // Danger zone: cancel tournament (spec §12 — confirmation + reason)
           if (status != LiveGameStatus.completed &&
               status != LiveGameStatus.cancelled) ...[

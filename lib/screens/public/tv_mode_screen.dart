@@ -259,11 +259,36 @@ class _TVLayout extends StatelessWidget {
                 children: [
                   Expanded(
                     flex: 3,
-                    child: SingleChildScrollView(
-                      child: TournamentDisplayBlock(
-                        game: game,
-                        showPayoutAmounts: false,
-                      ),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: TournamentDisplayBlock(
+                              game: game,
+                              showPayoutAmounts: false,
+                            ),
+                          ),
+                        ),
+                        Consumer<AppProvider>(
+                          builder: (_, app, x) {
+                            final lastSync = app.lastGameUpdate;
+                            if (lastSync == null) return const SizedBox.shrink();
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  'Synced ${_formatLastSync(lastSync)}',
+                                  style: AppTypography.mono(
+                                    size: 10,
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -273,11 +298,37 @@ class _TVLayout extends StatelessWidget {
             );
           }
           return SingleChildScrollView(
-            child: TournamentDisplayBlock(game: game, showPayoutAmounts: false),
+            child: Column(
+              children: [
+                TournamentDisplayBlock(game: game, showPayoutAmounts: false),
+                const SizedBox(height: 12),
+                Consumer<AppProvider>(
+                  builder: (_, app, x) {
+                    final lastSync = app.lastGameUpdate;
+                    if (lastSync == null) return const SizedBox.shrink();
+                    return Text(
+                      'Synced ${_formatLastSync(lastSync)}',
+                      style: AppTypography.mono(
+                        size: 10,
+                        color: AppColors.mutedForeground,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           );
         },
       ),
     );
+  }
+
+  String _formatLastSync(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 10) return 'just now';
+    if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    return '${diff.inHours}h ago';
   }
 }
 
@@ -403,7 +454,7 @@ class _RotatingPanel extends StatefulWidget {
 }
 
 class _RotatingPanelState extends State<_RotatingPanel> {
-  static const _titles = ['LEADERBOARD', 'PRIZE POOL', 'UPCOMING'];
+  static const _titles = ['LEADERBOARD', 'PRIZE POOL', 'ANNOUNCEMENTS', 'UPCOMING'];
 
   int _panel = 0;
   Timer? _timer;
@@ -411,8 +462,10 @@ class _RotatingPanelState extends State<_RotatingPanel> {
   @override
   void initState() {
     super.initState();
+    final hasAnnouncements = widget.game.announcements.isNotEmpty;
     _timer = Timer.periodic(const Duration(seconds: 8), (_) {
-      setState(() => _panel = (_panel + 1) % 3);
+      final maxPanels = hasAnnouncements ? 4 : 3;
+      setState(() => _panel = (_panel + 1) % maxPanels);
     });
   }
 
@@ -424,6 +477,9 @@ class _RotatingPanelState extends State<_RotatingPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final hasAnnouncements = widget.game.announcements.isNotEmpty;
+    final maxPanels = hasAnnouncements ? 4 : 3;
+    final effectivePanel = _panel % maxPanels;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -434,7 +490,7 @@ class _RotatingPanelState extends State<_RotatingPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            _titles[_panel],
+            _titles[effectivePanel],
             style: AppTypography.mono(
               size: 15,
               weight: FontWeight.w700,
@@ -446,13 +502,17 @@ class _RotatingPanelState extends State<_RotatingPanel> {
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
-              child: switch (_panel) {
+              child: switch (effectivePanel) {
                 0 => _LeaderboardPanel(
                   key: const ValueKey(0),
                   game: widget.game,
                 ),
                 1 => _PayoutsPanel(key: const ValueKey(1), game: widget.game),
-                _ => _UpcomingPanel(key: const ValueKey(2), game: widget.game),
+                2 => _AnnouncementsPanel(
+                  key: const ValueKey(2),
+                  game: widget.game,
+                ),
+                _ => _UpcomingPanel(key: const ValueKey(3), game: widget.game),
               },
             ),
           ),
@@ -650,6 +710,40 @@ class _UpcomingPanel extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _AnnouncementsPanel extends StatelessWidget {
+  const _AnnouncementsPanel({super.key, required this.game});
+
+  final LiveGame game;
+
+  @override
+  Widget build(BuildContext context) {
+    final announcements = game.announcements.toList().reversed.take(8).toList();
+    if (announcements.isEmpty) {
+      return Center(
+        child: Text(
+          'No announcements',
+          style: AppTypography.mono(size: 14, color: AppColors.mutedForeground),
+        ),
+      );
+    }
+    return ListView(
+      children: [
+        for (final a in announcements)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              a.text,
+              style: AppTypography.mono(
+                size: 12,
+                color: AppColors.foreground,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

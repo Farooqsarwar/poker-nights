@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart'
-    show DocumentSnapshot, FieldValue;
+    show DocumentSnapshot, FieldValue, FirebaseFirestore;
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/app_notification.dart';
@@ -64,6 +66,7 @@ class AppProvider extends ChangeNotifier {
     _currentGame = null;
     _startTick();
     _loadRecovery();
+    _initConnectivity();
     // Firebase may be unavailable (widget tests run before initializeApp);
     // degrade gracefully by marking auth resolved so route guards open up.
     try {
@@ -137,9 +140,39 @@ class AppProvider extends ChangeNotifier {
 
   bool _isTickUpdate = false;
 
+  /// Timestamp of the last Firestore game sync — shown on TV mode as a
+  /// staleness indicator so viewers know if the feed is stale.
+  DateTime? _lastGameUpdate;
+  DateTime? get lastGameUpdate => _lastGameUpdate;
+
   // ── Connectivity / recovery state (offline indicator, checklist 12-075) ────
   bool _isOffline = false;
   bool get isOffline => _isOffline;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  bool _hasReconnected = false;
+  bool get hasReconnected => _hasReconnected;
+
+  /// Initializes real connectivity monitoring (spec §15).
+  void _initConnectivity() {
+    try {
+      _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+        final wasOffline = _isOffline;
+        _isOffline = results.every((r) => r == ConnectivityResult.none);
+        if (wasOffline && !_isOffline) {
+          _hasReconnected = true;
+        }
+        notifyListeners();
+      });
+    } catch (_) {
+      // connectivity_plus unavailable (tests) — stay with manual toggle
+    }
+  }
+
+  /// Clears the reconnection banner after the user acknowledges it.
+  void clearReconnectedBanner() {
+    _hasReconnected = false;
+    notifyListeners();
+  }
 
   /// True when the active game was restored from local storage on startup.
   bool _restoredFromRecovery = false;
@@ -158,6 +191,7 @@ class AppProvider extends ChangeNotifier {
   /// is lost and the app "reconnects" on tap.
   void toggleOffline() {
     _isOffline = !_isOffline;
+    if (!_isOffline) _hasReconnected = true;
     notifyListeners();
   }
 
@@ -284,13 +318,15 @@ class AppProvider extends ChangeNotifier {
 
   /// True when the signed-in user may write the whole game document (group
   /// owner or admin member). Guests and plain members never qualify.
-  bool get _isGameAuthority {
+  bool get isAdmin {
     final user = _user;
     if (user == null) return false;
     if (_currentGroup.ownerId == user.id) return true;
     return _currentGroup.members
         .any((m) => m.id == user.id && m.isAdmin);
   }
+
+  bool get _isGameAuthority => isAdmin;
 
   /// Resolves `(gid, gameId)` for cloud operations on the active game, or
   /// null when there is nothing to target yet.
@@ -731,15 +767,18 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// True if the locally recovered game state differs from the "cloud" state.
+  /// Compares multiple fields to detect real conflicts, not just audit count.
   bool get hasOfflineConflict {
     if (_currentGame == null || !_restoredFromRecovery) return false;
     final cloudGame = _currentGroup.games
         .where((g) => g.id == _currentGame!.id)
         .firstOrNull;
     if (cloudGame == null) return false;
-    // Simple mock comparison: if local has more audit records or different level, it's out of sync
     return _currentGame!.auditHistory.length != cloudGame.auditHistory.length ||
-        _currentGame!.currentLevel != cloudGame.currentLevel;
+        _currentGame!.currentLevel != cloudGame.currentLevel ||
+        _currentGame!.secondsRemaining != cloudGame.secondsRemaining ||
+        _currentGame!.status != cloudGame.status ||
+        _currentGame!.finishOrder.length != cloudGame.finishOrder.length;
   }
 
   void resolveOfflineConflict({required bool keepLocal}) {
@@ -800,6 +839,7 @@ class AppProvider extends ChangeNotifier {
       return;
     }
     await _hydrateUser(fbUser);
+    _calibrateServerTime();
   }
 
   /// Loads (creating on first sign-in) the Firestore profile for [fbUser] and
@@ -964,7 +1004,25 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> logout() => _repo.signOut();
+  Future<void> logout() async {
+    // Remove current device FCM token before signing out so stale tokens
+    // don't linger on the user's Firestore doc.
+    try {
+      final fcm = FirebaseMessaging.instance;
+      final token = await fcm.getToken();
+      if (token != null) {
+        final uid = _repo.currentUid;
+        if (uid != null) {
+          await FirebaseFirestore.instance.collection('users').doc(uid).update({
+            'fcmTokens': FieldValue.arrayRemove([token]),
+          });
+        }
+      }
+    } catch (_) {
+      // Best-effort cleanup; don't block logout on FCM errors.
+    }
+    await _repo.signOut();
+  }
 
   // ── Chip Sets ──────────────────────────────────────────────────────────────
   /// Starter chip set seeded into new Firestore accounts (doc id `cs-default`
@@ -1260,6 +1318,38 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  /// Owner-only: removes a member from the current group.
+  void removeMember(String userId) {
+    if (_user?.id != _currentGroup.ownerId) return;
+    if (userId == _currentGroup.ownerId) return;
+    final members =
+        _currentGroup.members.where((m) => m.id != userId).toList();
+    _setGroup(_currentGroup.copyWith(members: members));
+    notifyListeners();
+    if (_backendUp) {
+      unawaited(_repo
+          .deleteMember(_currentGroup.id, userId)
+          .catchError(
+              (Object e) => debugPrint('deleteMember failed: $e')));
+    }
+  }
+
+  /// Non-owner members may leave a group voluntarily.
+  void leaveGroup() {
+    final userId = _user?.id;
+    if (userId == null || userId == _currentGroup.ownerId) return;
+    final members =
+        _currentGroup.members.where((m) => m.id != userId).toList();
+    _setGroup(_currentGroup.copyWith(members: members));
+    notifyListeners();
+    if (_backendUp) {
+      unawaited(_repo
+          .deleteMember(_currentGroup.id, userId)
+          .catchError(
+              (Object e) => debugPrint('leaveGroup deleteMember failed: $e')));
+    }
+  }
+
   // ── Game ───────────────────────────────────────────────────────────────────
   LiveGame? _currentGame;
   LiveGame? get currentGame => _currentGame;
@@ -1382,6 +1472,7 @@ class AppProvider extends ChangeNotifier {
   void _syncGroupGame() {
     final game = _currentGame;
     if (game == null) return;
+    _lastGameUpdate = DateTime.now();
     final games = _currentGroup.games;
     final idx = games.indexWhere((g) => g.id == game.id);
     _setGroup(
@@ -1793,7 +1884,7 @@ class AppProvider extends ChangeNotifier {
       int remaining;
       if (_currentGame!.levelEndTime != null) {
         remaining = _currentGame!.levelEndTime!
-            .difference(DateTime.now())
+            .difference(_serverNow)
             .inSeconds;
       } else {
         remaining = _currentGame!.secondsRemaining - 1;
@@ -1912,6 +2003,35 @@ class AppProvider extends ChangeNotifier {
     addAnnouncement('Recalculated speed recommendation.', false);
   }
 
+  /// Used to derive server-authoritative timer from Firestore server time.
+  Duration? _serverTimeOffset;
+
+  /// Calibrates the local-to-server time offset using a Firestore write/read
+  /// round-trip. Call once on startup and periodically to keep drift minimal.
+  Future<void> _calibrateServerTime() async {
+    if (!_backendUp) return;
+    try {
+      final before = DateTime.now();
+      final ref = _repo.serverTimeRef;
+      await ref.set({'t': FieldValue.serverTimestamp()});
+      final snap = await ref.get();
+      final serverTs = snap.data()?['t'];
+      final after = DateTime.now();
+      if (serverTs != null) {
+        final serverDt = (serverTs as dynamic).toDate() as DateTime;
+        final mid = before.add(after.difference(before) ~/ 2);
+        _serverTimeOffset = serverDt.difference(mid);
+      }
+    } catch (_) {
+      // Ignore — fallback to local time
+    }
+  }
+
+  /// Returns the current server-authoritative time, falling back to local time
+  /// if calibration hasn't completed.
+  DateTime get _serverNow =>
+      DateTime.now().add(_serverTimeOffset ?? Duration.zero);
+
   void startTimer() {
     // Client rule: no guessed player count at setup — the AI finalises the
     // stacks/blinds/levels right now, from the actual final headcount
@@ -1932,7 +2052,7 @@ class AppProvider extends ChangeNotifier {
     _currentGame = _currentGame!.copyWith(
       timerRunning: true,
       status: LiveGameStatus.running,
-      levelEndTime: DateTime.now().add(
+      levelEndTime: _serverNow.add(
         Duration(seconds: _currentGame!.secondsRemaining),
       ),
     );
@@ -1968,7 +2088,7 @@ class AppProvider extends ChangeNotifier {
     _currentGame = _currentGame!.copyWith(
       timerRunning: true,
       status: LiveGameStatus.running,
-      levelEndTime: DateTime.now().add(
+      levelEndTime: _serverNow.add(
         Duration(seconds: _currentGame!.secondsRemaining),
       ),
     );
@@ -1981,19 +2101,55 @@ class AppProvider extends ChangeNotifier {
     _pushUndo();
     _levelAnnouncementMarks.clear();
     final level = _currentGame!.structure.levels[next - 1];
-    _currentGame = _currentGame!.copyWith(
-      currentLevel: next,
-      secondsRemaining: level.durationMins * 60,
-      timerRunning: true,
-      status: LiveGameStatus.running,
-      speedRecommendation: null,
-      levelEndTime: DateTime.now().add(Duration(minutes: level.durationMins)),
-    );
-    addAnnouncement(
-      'Level $next. Blinds ${level.sb} and ${level.bb}'
-      '${level.ante != null ? ', ante ${level.ante}' : ''}.',
-      true,
-    );
+    // Auto-trigger rebuy pause when crossing rebuysCloseLevel (spec §1, §12 A12)
+    final wasBelowRebuyClose =
+        _currentGame!.currentLevel < _currentGame!.settings.rebuysCloseLevel;
+    final nowAtOrAboveRebuyClose =
+        next >= _currentGame!.settings.rebuysCloseLevel;
+    final shouldPauseRebuy =
+        _currentGame!.settings.rebuys &&
+        wasBelowRebuyClose &&
+        nowAtOrAboveRebuyClose;
+    if (shouldPauseRebuy) {
+      _currentGame = _currentGame!.copyWith(
+        currentLevel: next,
+        secondsRemaining: level.durationMins * 60,
+        timerRunning: false,
+        status: LiveGameStatus.rebuypause,
+        speedRecommendation: null,
+        levelEndTime: null,
+      );
+      addAnnouncement(
+        'Rebuys are now closed. Add-ons are available.',
+        true,
+      );
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Rebuys closed',
+          body:
+              '${_currentGame!.settings.name} — rebuy period ended. Settlement required.',
+          type: NotificationType.game,
+          link: '/rebuy-settlement',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+    } else {
+      _currentGame = _currentGame!.copyWith(
+        currentLevel: next,
+        secondsRemaining: level.durationMins * 60,
+        timerRunning: true,
+        status: LiveGameStatus.running,
+        speedRecommendation: null,
+        levelEndTime: _serverNow.add(Duration(minutes: level.durationMins)),
+      );
+      addAnnouncement(
+        'Level $next. Blinds ${level.sb} and ${level.bb}'
+        '${level.ante != null ? ', ante ${level.ante}' : ''}.',
+        true,
+      );
+    }
   }
 
   /// Rewinds to the previous level (spec §12 "Previous" control). The clock
@@ -2010,7 +2166,7 @@ class AppProvider extends ChangeNotifier {
       timerRunning: true,
       status: LiveGameStatus.running,
       speedRecommendation: null,
-      levelEndTime: DateTime.now().add(Duration(minutes: level.durationMins)),
+      levelEndTime: _serverNow.add(Duration(minutes: level.durationMins)),
     );
     addAnnouncement(
       'Level $prev. Blinds ${level.sb} and ${level.bb}'
@@ -2038,7 +2194,7 @@ class AppProvider extends ChangeNotifier {
       timerRunning: true,
       status: LiveGameStatus.running,
       speedRecommendation: null,
-      levelEndTime: DateTime.now().add(Duration(minutes: durationMins)),
+      levelEndTime: _serverNow.add(Duration(minutes: durationMins)),
     );
     _syncGroupGame();
     addAuditRecord(
@@ -2109,6 +2265,34 @@ class AppProvider extends ChangeNotifier {
     } else {
       addAnnouncement('${p.name} eliminated.', speakElimination);
     }
+  }
+
+  /// Manual trigger for final table state (small tournaments that never
+  /// auto-transition because they started with ≤9 players).
+  void triggerFinalTable() {
+    if (_currentGame == null) return;
+    if (_currentGame!.status == LiveGameStatus.finaltable) return;
+    _currentGame = _currentGame!.copyWith(
+      status: LiveGameStatus.finaltable,
+      timerRunning: false,
+    );
+    addAuditRecord(
+      'final_table',
+      'Final table triggered manually.',
+    );
+    pushNotification(
+      AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Final table',
+        body: '${_currentGame!.settings.name} — final table triggered.',
+        type: NotificationType.game,
+        link: '/final-table',
+        read: false,
+        timestamp: DateTime.now(),
+      ),
+    );
+    _syncGroupGame();
+    notifyListeners();
   }
 
   /// Explicitly corrects a past elimination without using Undo (which is unsafe
@@ -4603,8 +4787,7 @@ class AppProvider extends ChangeNotifier {
 
   /// Whether announcements may play on this device (no master selected, or
   /// this device is the master).
-  bool get thisDeviceIsAudioMaster =>
-      _audioMasterDeviceId == null || _audioMasterDeviceId == thisDeviceId;
+  bool get thisDeviceIsAudioMaster => _audioMasterDeviceId == thisDeviceId;
 
   /// Selects this device as the Audio Master. Only this device will announce.
   void setAudioMasterDevice() {
@@ -4768,6 +4951,7 @@ class AppProvider extends ChangeNotifier {
   void dispose() {
     _ticker?.cancel();
     _authSub?.cancel();
+    _connectivitySub?.cancel();
     _teardownUserData();
     super.dispose();
   }

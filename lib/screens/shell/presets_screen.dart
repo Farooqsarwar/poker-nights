@@ -40,6 +40,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
       child: _PresetForm(
         preset: preset,
         chipSetNames: _chipSetNames(app),
+        existingNames: app.presets.map((p) => p.name).toList(),
         onSave: (data) {
           final p = _buildPreset(app, preset, data);
           app.savePreset(p);
@@ -75,6 +76,9 @@ class _PresetsScreenState extends State<PresetsScreen> {
       organizerPct: data.organizerPct,
       chipSetName: data.chipSetName,
       chipSet: _chipsFor(app, data.chipSetName),
+      rebuyLimit: existing?.rebuyLimit,
+      rebuyCost: existing?.rebuyCost,
+      addOnCost: existing?.addOnCost,
     );
   }
 
@@ -340,11 +344,13 @@ class _PresetForm extends StatefulWidget {
   const _PresetForm({
     required this.preset,
     required this.chipSetNames,
+    required this.existingNames,
     required this.onSave,
   });
 
   final TournamentPreset? preset;
   final List<String> chipSetNames;
+  final List<String> existingNames;
   final ValueChanged<_PresetDraft> onSave;
 
   @override
@@ -367,10 +373,17 @@ class _PresetFormState extends State<_PresetForm> {
   late String _chipSetName;
   String? _error;
 
+  /// Set of existing preset names (lowercased) for uniqueness check
+  late final Set<String> _existingPresetNames;
+
   @override
   void initState() {
     super.initState();
     final p = widget.preset;
+    _existingPresetNames = widget.existingNames
+        .where((n) => n.toLowerCase() != p?.name.toLowerCase())
+        .map((n) => n.toLowerCase())
+        .toSet();
     _name = TextEditingController(text: p?.name ?? '');
     _buyIn = TextEditingController(text: p?.buyIn.toString() ?? '15');
     _koAmount = TextEditingController(text: p?.koAmount.toString() ?? '5');
@@ -412,6 +425,11 @@ class _PresetFormState extends State<_PresetForm> {
     }
     if (ko == null || ko <= 0) {
       setState(() => _error = 'KO bounty must be a positive number.');
+      return;
+    }
+    // Check name uniqueness
+    if (_existingPresetNames.contains(name.toLowerCase())) {
+      setState(() => _error = 'A preset with this name already exists.');
       return;
     }
     widget.onSave(

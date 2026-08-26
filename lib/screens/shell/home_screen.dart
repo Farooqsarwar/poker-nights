@@ -60,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // The destination is the contextual main action (user-flow spec §9):
     // one event, one dominant next action, resolved from role + state.
     final user = app.user;
-    final isAdmin = user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
     final me = user == null
         ? null
         : game.players.where((p) => p.id == user.id).firstOrNull;
@@ -77,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final app = context.watch<AppProvider>();
     final user = app.user;
     final group = app.currentGroup;
-    final isAdmin = user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
     // Draft games are only visible to admins (spec §3, §25).
     final games = group.games
         .where(
@@ -300,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           flex: 8,
                           child: _UpcomingGames(
                             games: games,
-                            isAdmin: user?.isAdmin ?? false,
+                            isAdmin: app.isAdmin,
                             userId: user?.id,
                             onOpen: (g) => _openGame(context, app, g),
                           ),
@@ -319,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 }),
                                 showCreate: () =>
                                     setState(() => _showCreate = true),
-                                isAdmin: user?.isAdmin ?? false,
+                                isAdmin: app.isAdmin,
                               ),
                               const SizedBox(height: AppSpacing.xl),
                               if (app.notifications.any((n) => !n.read))
@@ -337,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       _UpcomingGames(
                         games: games,
-                        isAdmin: user?.isAdmin ?? false,
+                        isAdmin: app.isAdmin,
                         userId: user?.id,
                         onOpen: (g) => _openGame(context, app, g),
                       ),
@@ -349,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _showJoin = true;
                         }),
                         showCreate: () => setState(() => _showCreate = true),
-                        isAdmin: user?.isAdmin ?? false,
+                        isAdmin: app.isAdmin,
                       ),
                       const SizedBox(height: AppSpacing.xl),
                       if (app.notifications.any((n) => !n.read))
@@ -513,74 +513,69 @@ class _StatsRow extends StatelessWidget {
         final columns = constraints.maxWidth >= 900
             ? 5
             : (constraints.maxWidth >= 480 ? 3 : 2);
-        return GridView.count(
-          crossAxisCount: columns,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: AppSpacing.md,
-          crossAxisSpacing: AppSpacing.md,
-          childAspectRatio: 1.5,
-          children: [
-            for (var i = 0; i < items.length; i++)
-              AppCard(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 26,
-                              height: 26,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.sm,
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: Icon(
-                                items[i].$3,
-                                size: 16,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: Text(
-                                items[i].$1.toUpperCase(),
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                  letterSpacing: 0.5,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          items[i].$2,
-                          style: AppTypography.mono(
-                            size: AppFontSizes.xxl,
-                            weight: FontWeight.w700,
+        return AppCard(
+          padding: EdgeInsets.zero,
+          child: GridView.count(
+            crossAxisCount: columns,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 0,
+            crossAxisSpacing: 0,
+            childAspectRatio: 1.8,
+            children: [
+              for (var i = 0; i < items.length; i++)
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      right: BorderSide(
+                        color: (i + 1) % columns != 0 ? AppColors.border : Colors.transparent,
+                        width: 1,
+                      ),
+                      bottom: BorderSide(
+                        color: i < items.length - (items.length % columns == 0 ? columns : items.length % columns) ? AppColors.border : Colors.transparent,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            items[i].$3,
+                            size: 16,
                             color: AppColors.primary,
                           ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              items[i].$1.toUpperCase(),
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                                letterSpacing: 1.0,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        items[i].$2,
+                        style: AppTypography.mono(
+                          size: AppFontSizes.xxl,
+                          weight: FontWeight.w600,
+                          color: AppColors.foreground,
                         ),
-                      ],
-                    ),
-                  )
-                  .animate()
-                  .fadeIn(delay: (i * 80).ms, duration: 400.ms)
-                  .slideY(
-                    begin: 0.15,
-                    end: 0,
-                    delay: (i * 80).ms,
-                    duration: 400.ms,
-                    curve: Curves.easeOut,
+                      ),
+                    ],
                   ),
-          ],
+                ).animate().fadeIn(delay: (i * 80).ms, duration: 400.ms),
+            ],
+          ),
         );
       },
     );
@@ -672,6 +667,8 @@ class _NextActionCard extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
       glow: game.status.isActiveLive,
+      color: AppColors.primarySoft,
+      borderColor: AppColors.primary.withValues(alpha: 0.3),
       child: Row(
         children: [
           Expanded(

@@ -71,7 +71,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
 
     if (!isAdmin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

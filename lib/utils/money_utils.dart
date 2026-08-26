@@ -57,9 +57,11 @@ class MoneyUtils {
   /// Example: formatCurrency(15000) == '$150.00'
   ///          formatCurrency(5)      == '$0.05'
   static String formatCurrency(int cents) {
-    final dollars = cents ~/ 100;
-    final remainder = (cents % 100).abs();
-    return '\$$dollars.${remainder.toString().padLeft(2, '0')}';
+    final sign = cents < 0 ? '-' : '';
+    final abs = cents.abs();
+    final dollars = abs ~/ 100;
+    final remainder = abs % 100;
+    return '$sign\$$dollars.${remainder.toString().padLeft(2, '0')}';
   }
 
   /// Formats a dollar double as a currency string (display only — never use

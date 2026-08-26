@@ -279,6 +279,18 @@ class Announcement {
   final String id;
   final String text;
   final DateTime timestamp;
+
+  Announcement copyWith({
+    String? id,
+    String? text,
+    DateTime? timestamp,
+  }) {
+    return Announcement(
+      id: id ?? this.id,
+      text: text ?? this.text,
+      timestamp: timestamp ?? this.timestamp,
+    );
+  }
 }
 
 /// An audit record of a system or administrator event.
@@ -296,4 +308,20 @@ class AuditRecord {
   final String type;
   final String actor;
   final String details;
+
+  AuditRecord copyWith({
+    String? id,
+    DateTime? timestamp,
+    String? type,
+    String? actor,
+    String? details,
+  }) {
+    return AuditRecord(
+      id: id ?? this.id,
+      timestamp: timestamp ?? this.timestamp,
+      type: type ?? this.type,
+      actor: actor ?? this.actor,
+      details: details ?? this.details,
+    );
+  }
 }

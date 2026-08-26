@@ -78,7 +78,11 @@ service cloud.firestore {
           && sameVal('dealerPlayerId', 'x')
           && sameVal('announcements', [])
           && sameVal('auditHistory', [])
-          && sameVal('originalLevels', []);
+          && sameVal('originalLevels', [])
+          && sameVal('guestSlots', [])
+          && sameVal('changeLog', [])
+          && sameVal('id', '')
+          && sameVal('chat', []);
     }
 
     // ---------- users ----------
@@ -217,12 +221,14 @@ service cloud.firestore {
       allow read: if false; // parent placeholder doc is never read directly
 
       match /items/{reqId} {
-        allow read: if signedIn();
+        allow read: if signedIn()
+            && isMember(resource.data.gid);
         allow create: if signedIn()
             && request.resource.data.keys().hasAll(['kind', 'gid'])
-            && request.resource.data.gid is string;
+            && request.resource.data.gid is string
+            && isMember(request.resource.data.gid);
         allow update: if signedIn()
-            && isGroupAdmin(request.resource.data.gid);
+            && isGroupAdmin(resource.data.gid);
         allow delete: if signedIn()
             && isGroupAdmin(resource.data.gid);
       }

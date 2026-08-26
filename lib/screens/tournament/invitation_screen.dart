@@ -110,7 +110,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
     // Private addresses are hidden until the viewer is confirmed (11-015).
     final showAddress =
         !settings.locationPrivate ||
-        (user?.isAdmin ?? false) ||
+        (app.isAdmin) ||
         (myPlayer?.confirmed ?? false);
 
     return AppPage(
@@ -1674,6 +1674,7 @@ class _ContextualMainButton extends StatelessWidget {
                         child: _RsvpChip(
                           label: opt.label,
                           active: p.rsvp == opt,
+                          enabled: !app.rsvpCutoffPassed,
                           onTap: () {
                             HapticFeedback.lightImpact();
                             app.setRSVP(opt);
@@ -1975,10 +1976,12 @@ class _PremiumEventHeader extends StatelessWidget {
 class _RsvpChip extends StatefulWidget {
   final String label;
   final bool active;
+  final bool enabled;
   final VoidCallback onTap;
   const _RsvpChip({
     required this.label,
     required this.active,
+    this.enabled = true,
     required this.onTap,
   });
 
@@ -2010,33 +2013,38 @@ class _RsvpChipState extends State<_RsvpChip>
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) {
-        _controller.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () => _controller.reverse(),
+      onTapDown: widget.enabled ? (_) => _controller.forward() : null,
+      onTapUp: widget.enabled
+          ? (_) {
+              _controller.reverse();
+              widget.onTap();
+            }
+          : null,
+      onTapCancel: widget.enabled ? () => _controller.reverse() : null,
       child: ScaleTransition(
         scale: _scaleAnimation,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: BoxDecoration(
-            color: widget.active ? AppColors.primary : AppColors.card,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(
-              color: widget.active ? AppColors.primary : AppColors.border,
+        child: Opacity(
+          opacity: widget.enabled ? 1.0 : 0.4,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
             ),
-          ),
-          child: Text(
-            widget.label,
-            style: AppTypography.bodySm.copyWith(
-              color: widget.active
-                  ? AppColors.primaryForeground
-                  : AppColors.mutedForeground,
-              fontWeight: FontWeight.w600,
+            decoration: BoxDecoration(
+              color: widget.active ? AppColors.primary : AppColors.card,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(
+                color: widget.active ? AppColors.primary : AppColors.border,
+              ),
+            ),
+            child: Text(
+              widget.label,
+              style: AppTypography.bodySm.copyWith(
+                color: widget.active
+                    ? AppColors.primaryForeground
+                    : AppColors.mutedForeground,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),

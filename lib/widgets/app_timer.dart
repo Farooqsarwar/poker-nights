@@ -153,6 +153,7 @@ class _LiveTimerBuilderState extends State<LiveTimerBuilder>
     with SingleTickerProviderStateMixin {
   late Ticker _ticker;
   int _lastSeconds = -1;
+  bool _tickerActive = false;
 
   @override
   void initState() {
@@ -166,13 +167,21 @@ class _LiveTimerBuilderState extends State<LiveTimerBuilder>
         }
       }
     });
-    _ticker.start();
+    if (widget.game.timerRunning) {
+      _ticker.start();
+      _tickerActive = true;
+    }
   }
 
   @override
   void didUpdateWidget(LiveTimerBuilder oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.game.timerRunning) {
+    if (widget.game.timerRunning && !_tickerActive) {
+      _ticker.start();
+      _tickerActive = true;
+    } else if (!widget.game.timerRunning && _tickerActive) {
+      _ticker.stop();
+      _tickerActive = false;
       _lastSeconds = widget.game.currentSecondsRemaining;
     }
   }

@@ -153,7 +153,7 @@ class _ChatSheetState extends State<ChatSheet> {
                           message: msg,
                           isMine: msg.authorId == userId,
                           canDelete:
-                              (app.user?.isAdmin ?? false) &&
+                              (app.isAdmin) &&
                               msg.authorId != userId,
                           onDelete: () => app.deleteMessage(msg.id),
                         ),
@@ -343,7 +343,34 @@ class _ChatBubble extends StatelessWidget {
                 ),
                 if (canDelete)
                   InkWell(
-                    onTap: onDelete,
+                    onTap: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: AppColors.card,
+                          title: const Text('Delete message?'),
+                          content: Text(
+                            'This message will be removed from the chat.',
+                            style: AppTypography.bodySm,
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(false),
+                              child: Text('Cancel',
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.mutedForeground)),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(true),
+                              child: Text('Delete',
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.destructive)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) onDelete();
+                    },
                     child: Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(

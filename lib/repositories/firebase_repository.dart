@@ -427,6 +427,16 @@ class FirebaseRepository {
       .collection('groups').doc(gid).collection('members').doc(targetUid)
       .set({'role': role}, SetOptions(merge: true));
 
+  Future<void> deleteMember(String gid, String targetUid) async {
+    final batch = _db.batch();
+    batch.delete(_db.collection('groups').doc(gid).collection('members').doc(targetUid));
+    batch.delete(userGroupIndexRef(targetUid, gid));
+    await batch.commit();
+  }
+
+  DocumentReference<Map<String, dynamic>> get serverTimeRef =>
+      _db.collection('_meta').doc('serverTime');
+
   /// Full group assembly: meta doc + members + chat + polls + games merged
   /// into a single [Group]. Emits whenever any part changes. The first
   /// emission only happens once every source has delivered its initial

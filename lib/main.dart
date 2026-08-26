@@ -1,5 +1,6 @@
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
@@ -17,6 +18,33 @@ import 'theme/theme_palette.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Production error handling — show a friendly error overlay instead of a red screen.
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 48),
+              const SizedBox(height: 12),
+              Text(
+                kDebugMode
+                    ? details.exception.toString()
+                    : 'Something went wrong. Please restart the app.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // -- Firebase App Check (tech spec section 22) --
   await _initAppCheck();

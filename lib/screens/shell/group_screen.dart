@@ -102,11 +102,70 @@ class _GroupScreenState extends State<GroupScreen> {
     });
   }
 
+  void _confirmRemoveMember(BuildContext context, AppUser member) {
+    final app = context.read<AppProvider>();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Member'),
+        content: Text(
+          'Remove ${member.name} from this group? '
+          'They can rejoin with the group code.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              app.removeMember(member.id);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text(
+              'Remove',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmLeaveGroup(BuildContext context) {
+    final app = context.read<AppProvider>();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Leave Group'),
+        content: const Text(
+          'Leave this group? You can rejoin with the group code.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              app.leaveGroup();
+              Navigator.of(ctx).pop();
+              if (context.mounted) context.go(RoutePaths.home);
+            },
+            child: Text(
+              'Leave',
+              style: TextStyle(color: AppColors.destructive),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openGame(BuildContext context, AppProvider app, LiveGame game) {
     // Always set the current game first so destination screens
     // have the correct game in the provider.
     app.setCurrentGame(game);
-    final isAdmin = app.user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
     if (game.status == LiveGameStatus.completed) {
       context.go(RoutePaths.resultPodium);
     } else if (isAdmin && game.status.isActiveLive) {
@@ -129,7 +188,7 @@ class _GroupScreenState extends State<GroupScreen> {
     final app = context.watch<AppProvider>();
     final group = app.currentGroup;
     final user = app.user;
-    final isAdmin = user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
     // Draft games are only visible to admins (spec §3, §25).
     final upcomingGames = group.upcomingGames
         .where((g) => isAdmin || g.status != LiveGameStatus.draft)
@@ -141,7 +200,11 @@ class _GroupScreenState extends State<GroupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _GroupHeader(group: group, isAdmin: isAdmin),
+          _GroupHeader(
+            group: group,
+            isAdmin: isAdmin,
+            onLeaveGroup: () => _confirmLeaveGroup(context),
+          ),
           const SizedBox(height: AppSpacing.lg),
           CodeDisplay(code: group.joinCode, label: 'Group code'),
           const SizedBox(height: AppSpacing.lg),
@@ -401,6 +464,8 @@ class _GroupScreenState extends State<GroupScreen> {
                                 m.id,
                                 !m.isAdmin,
                               );
+                            } else if (val == 'remove_member') {
+                              _confirmRemoveMember(context, m);
                             }
                           },
                           itemBuilder: (context) => [
@@ -408,6 +473,13 @@ class _GroupScreenState extends State<GroupScreen> {
                               value: 'toggle_admin',
                               child: Text(
                                 m.isAdmin ? 'Revoke Admin' : 'Make Admin',
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'remove_member',
+                              child: Text(
+                                'Remove from Group',
+                                style: TextStyle(color: AppColors.destructive),
                               ),
                             ),
                           ],
@@ -460,7 +532,7 @@ class _GroupScreenState extends State<GroupScreen> {
                             isMine: msg.authorId == userId,
                             // Audit fix E12: the admin can delete any inappropriate
                             // message — including their own (Tech §14.1).
-                            canDelete: (app.user?.isAdmin ?? false),
+                            canDelete: (app.isAdmin),
                             onDelete: () => app.deleteMessage(msg.id),
                             app: app,
                             userId: userId,
@@ -481,7 +553,7 @@ class _GroupScreenState extends State<GroupScreen> {
                   // here in the chat, not a guessed player count — the setup
                   // screen only asks for rules, and RSVPs (posted back into
                   // this same chat) count the real attendance automatically.
-                  if (app.user?.isAdmin ?? false)
+                  if (app.isAdmin)
                     Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                       child: SizedBox(
@@ -1224,7 +1296,8 @@ class _RsvpBtn extends StatelessWidget {
 class _GroupHeader extends StatelessWidget {
   final Group group;
   final bool isAdmin;
-  const _GroupHeader({required this.group, required this.isAdmin});
+  final VoidCallback? onLeaveGroup;
+  const _GroupHeader({required this.group, required this.isAdmin, this.onLeaveGroup});
 
   static const double _mobileBreakpoint = 640;
 
@@ -1299,24 +1372,33 @@ class _GroupHeader extends StatelessWidget {
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: [
-            AppButton(
-              size: AppButtonSize.sm,
-              variant: AppButtonVariant.secondary,
-              onPressed: () => context.go(RoutePaths.presets),
-              child: const Text('Presets'),
-            ),
-            AppButton(
-              size: AppButtonSize.sm,
-              variant: AppButtonVariant.secondary,
-              onPressed: () =>
-                  context.read<AppProvider>().togglePinGroup(group),
-              child: Text(group.pinned ? 'Unpin' : 'Pin'),
-            ),
-            AppButton(
-              size: AppButtonSize.sm,
-              onPressed: () => context.go(RoutePaths.createTournament),
-              child: const Text('+ New game'),
-            ),
+            if (isAdmin) ...[
+              AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => context.go(RoutePaths.presets),
+                child: const Text('Presets'),
+              ),
+              AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: () =>
+                    context.read<AppProvider>().togglePinGroup(group),
+                child: Text(group.pinned ? 'Unpin' : 'Pin'),
+              ),
+              AppButton(
+                size: AppButtonSize.sm,
+                onPressed: () => context.go(RoutePaths.createTournament),
+                child: const Text('+ New game'),
+              ),
+            ] else if (onLeaveGroup != null) ...[
+              AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: onLeaveGroup,
+                child: const Text('Leave Group'),
+              ),
+            ],
           ],
         );
 

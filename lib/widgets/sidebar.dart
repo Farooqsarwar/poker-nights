@@ -26,20 +26,17 @@ class Sidebar extends StatelessWidget {
     Theme.of(context);
     final app = context.watch<AppProvider>();
     final user = app.user;
-    final location = GoRouterState.of(context).uri.path;
+    final location = GoRouterState.of(context).uri.toString();
     final unread = app.unreadCount;
 
     final navItems = [
       _NavSpec(RoutePaths.home, 'Home', Icons.home_outlined, 0, null),
-      _NavSpec(RoutePaths.group, 'Group', Icons.groups_outlined, 0, null),
-      _NavSpec(
-        RoutePaths.notifications,
-        'Alerts',
-        Icons.notifications_none,
-        0,
-        unread,
-      ),
+      _NavSpec('${RoutePaths.group}?tab=chat', 'Chat', Icons.chat_bubble_outline, 0, null),
+      _NavSpec('${RoutePaths.group}?tab=games', 'Events', Icons.sports_esports_outlined, 0, null),
+      _NavSpec('${RoutePaths.group}?tab=polls', 'Polls', Icons.poll_outlined, 0, null),
+      _NavSpec(RoutePaths.notifications, 'Alerts', Icons.notifications_none, 0, unread),
       _NavSpec(RoutePaths.history, 'History', Icons.history, 0, null),
+      _NavSpec(RoutePaths.settings, 'Settings', Icons.settings_outlined, 0, null),
     ];
 
     return GlassSurface(
@@ -117,7 +114,7 @@ class Sidebar extends StatelessWidget {
                     selected: group.id == app.currentGroup.id,
                     onTap: () {
                       app.setCurrentGroup(group);
-                      context.go(RoutePaths.group);
+                      context.go('${RoutePaths.group}?tab=games');
                     },
                     onPin: () => app.togglePinGroup(group),
                   ),
@@ -203,24 +200,6 @@ class Sidebar extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    InkWell(
-                      onTap: () => context.go(RoutePaths.settings),
-                      hoverColor: AppColors.surfaceHover,
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                          vertical: 4,
-                        ),
-                        child: Text(
-                          'Settings',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
                     InkWell(
                       onTap: app.logout,
                       hoverColor: AppColors.surfaceHover,

@@ -12,7 +12,6 @@ import '../../constants/app_constants.dart';
 import '../../models/app_notification.dart';
 import '../../models/group.dart';
 import '../../models/live_game.dart';
-import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../utils/main_button.dart';
@@ -25,7 +24,6 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
-import '../../widgets/poker_night_hero.dart';
 
 /// Dashboard mirroring the web `HomePage`.
 class HomeScreen extends StatefulWidget {
@@ -210,15 +208,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   .fadeIn(duration: 400.ms)
                   .slideY(begin: -0.2, end: 0, curve: Curves.easeOut),
               const SizedBox(height: AppSpacing.xl),
-              // Hero Banner
-              ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1000),
-                    child: const PokerNightHero(),
-                  )
-                  .animate()
-                  .fadeIn(duration: 800.ms)
-                  .slideY(begin: 0.1, curve: Curves.easeOutBack),
-              const SizedBox(height: AppSpacing.xl),
               // Offline Conflict Banner
               if (app.hasOfflineConflict) ...[
                 AppAlertBanner(
@@ -230,8 +219,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ).animate().fadeIn(duration: 400.ms),
                 const SizedBox(height: AppSpacing.xl),
               ] else if (app.restoredFromRecovery && activeGame != null) ...[
-                // Audit fix B8: the restore is surfaced with the last-saved
-                // time and an explicit review (Tech §20.1).
                 AppAlertBanner(
                   type: AppAlertType.info,
                   message:
@@ -242,8 +229,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ).animate().fadeIn(duration: 400.ms),
                 const SizedBox(height: AppSpacing.xl),
               ],
-              // ── Next required action (User Flow §4.1: Home "should identify
-              // the next required action", not just list data). ─────────────
+
+              // Next required action (User Flow §4.1)
               ...[
                 _NextActionCard(
                   app: app,
@@ -253,8 +240,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
               ],
-              // Primary actions: Create Event + Start Cash Game (§4.1).
-              // Audit fix B2 — "Start Cash Game" was missing from Home.
+
+              // Primary actions (User Flow §4.1)
               if (isAdmin) ...[
                 Row(
                   children: [
@@ -282,11 +269,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
-              ],
-              // Stats row
-              if (user?.stats != null) ...[
-                _StatsRow(stats: user!.stats),
-                const SizedBox(height: AppSpacing.xl),
               ],
               // Two-column layout
               LayoutBuilder(
@@ -429,16 +411,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 disabled: _groupNameController.text.trim().length < 2,
                 onPressed: () async {
                   if (_groupNameController.text.trim().length < 2) return;
-                  final created =
-                      await app.createGroup(_groupNameController.text.trim());
+                  final created = await app.createGroup(
+                    _groupNameController.text.trim(),
+                  );
                   if (!context.mounted) return;
                   if (created == null) {
-                    setState(() => _joinError =
-                        'Could not create the group. Please try again.');
+                    setState(
+                      () => _joinError =
+                          'Could not create the group. Please try again.',
+                    );
                     return;
                   }
                   setState(() => _showCreate = false);
-                  context.go(RoutePaths.group);
+                  context.go('${RoutePaths.group}?tab=games');
                 },
                 child: const Text('Create Group'),
               ),
@@ -486,98 +471,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.stats});
-
-  final UserStats stats;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      ('Games', '${stats.played}', Icons.style_outlined),
-      ('Wins', '${stats.wins}', Icons.emoji_events_outlined),
-      ('Podiums', '${stats.podium}', Icons.workspace_premium_outlined),
-      (
-        'Avg Finish',
-        '#${stats.avgFinish.toStringAsFixed(1)}',
-        Icons.leaderboard_outlined,
-      ),
-      ('Knockouts', '${stats.knockouts}', Icons.track_changes_outlined),
-    ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900
-            ? 5
-            : (constraints.maxWidth >= 480 ? 3 : 2);
-        return AppCard(
-          padding: EdgeInsets.zero,
-          child: GridView.count(
-            crossAxisCount: columns,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 0,
-            crossAxisSpacing: 0,
-            childAspectRatio: 1.8,
-            children: [
-              for (var i = 0; i < items.length; i++)
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      right: BorderSide(
-                        color: (i + 1) % columns != 0 ? AppColors.border : Colors.transparent,
-                        width: 1,
-                      ),
-                      bottom: BorderSide(
-                        color: i < items.length - (items.length % columns == 0 ? columns : items.length % columns) ? AppColors.border : Colors.transparent,
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            items[i].$3,
-                            size: 16,
-                            color: AppColors.primary,
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: Text(
-                              items[i].$1.toUpperCase(),
-                              style: AppTypography.bodyXs.copyWith(
-                                color: AppColors.mutedForeground,
-                                letterSpacing: 1.0,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        items[i].$2,
-                        style: AppTypography.mono(
-                          size: AppFontSizes.xxl,
-                          weight: FontWeight.w600,
-                          color: AppColors.foreground,
-                        ),
-                      ),
-                    ],
-                  ),
-                ).animate().fadeIn(delay: (i * 80).ms, duration: 400.ms),
-            ],
-          ),
-        );
-      },
     );
   }
 }
@@ -784,11 +677,11 @@ class _UpcomingGames extends StatelessWidget {
             children: [
               for (var i = 0; i < games.length; i++) ...[
                 _GameRow(
-                  game: games[i],
-                  isAdmin: isAdmin,
-                  userId: userId,
-                  onOpen: () => onOpen(games[i]),
-                )
+                      game: games[i],
+                      isAdmin: isAdmin,
+                      userId: userId,
+                      onOpen: () => onOpen(games[i]),
+                    )
                     .animate()
                     .fadeIn(delay: (i * 100).ms, duration: 450.ms)
                     .slideX(
@@ -1036,11 +929,7 @@ class _GroupCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(
-              Icons.groups_outlined,
-              color: AppColors.primary,
-              size: 24,
-            ),
+            Icon(Icons.groups_outlined, color: AppColors.primary, size: 24),
             const SizedBox(width: AppSpacing.sm),
             Text(
               'My Group',
@@ -1054,7 +943,7 @@ class _GroupCard extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         if (g != null)
           AppCard(
-            onTap: () => context.go(RoutePaths.group),
+            onTap: () => context.go('${RoutePaths.group}?tab=games'),
             glow: true,
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
@@ -1103,9 +992,14 @@ class _GroupCard extends StatelessWidget {
                                       color: AppColors.card,
                                       width: 2,
                                     ),
-                                    color: AppColors.avatarPalette[
-                                        (g.members[i].name.isNotEmpty
-                                                ? g.members[i].name.codeUnitAt(0)
+                                    color:
+                                        AppColors.avatarPalette[(g
+                                                    .members[i]
+                                                    .name
+                                                    .isNotEmpty
+                                                ? g.members[i].name.codeUnitAt(
+                                                    0,
+                                                  )
                                                 : 0) %
                                             AppColors.avatarPalette.length],
                                   ),

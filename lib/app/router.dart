@@ -176,8 +176,10 @@ GoRouter buildAppRouter(AppProvider app) => GoRouter(
     ),
     GoRoute(
       path: RoutePaths.group,
-      builder: (context, state) =>
-          shell(const GroupScreen(), path: RoutePaths.group),
+      builder: (context, state) {
+        final tab = state.uri.queryParameters['tab'];
+        return shell(GroupScreen(initialTab: tab), path: RoutePaths.group);
+      },
     ),
     GoRoute(
       path: RoutePaths.notifications,

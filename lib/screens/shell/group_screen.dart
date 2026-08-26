@@ -27,14 +27,31 @@ import '../../widgets/code_display.dart';
 import '../../widgets/app_tabs.dart';
 /// Group hub mirroring the web `GroupPage`.
 class GroupScreen extends StatefulWidget {
-  const GroupScreen({super.key});
+  const GroupScreen({super.key, this.initialTab});
+
+  final String? initialTab;
 
   @override
   State<GroupScreen> createState() => _GroupScreenState();
 }
 
 class _GroupScreenState extends State<GroupScreen> {
-  String _tab = 'games';
+  late String _tab;
+
+  @override
+  void initState() {
+    super.initState();
+    _tab = widget.initialTab ?? 'games';
+  }
+
+  @override
+  void didUpdateWidget(GroupScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialTab != null && widget.initialTab != oldWidget.initialTab) {
+      _tab = widget.initialTab!;
+    }
+  }
+
   final _chatController = TextEditingController();
   String? _chatError;
   bool _showPollModal = false;

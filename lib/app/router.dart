@@ -61,7 +61,11 @@ const _guestAllowed = {RoutePaths.playerLive, RoutePaths.resultPodium};
 
 /// Builds the app router wired to [app] so the auth guard re-evaluates on
 /// every provider change (sign-in/out and the initial `authReady` flip).
-GoRouter buildAppRouter(AppProvider app) => GoRouter(
+GoRouter buildAppRouter(AppProvider app) {
+  // Preserve deep-link paths that arrive before Firebase resolves.
+  String? pendingDeepLink;
+
+  return GoRouter(
   initialLocation: RoutePaths.splash,
   refreshListenable: app,
   redirect: (context, state) {
@@ -72,6 +76,11 @@ GoRouter buildAppRouter(AppProvider app) => GoRouter(
     // Hold every navigation at splash until Firebase resolves the persisted
     // session, so guards never run against a half-initialised auth state.
     if (!ready) {
+      // Save the original deep-link only once (the splash screen may navigate
+      // to / before Firebase resolves, which must not overwrite it).
+      if (path != RoutePaths.splash && pendingDeepLink == null) {
+        pendingDeepLink = state.uri.toString();
+      }
       return path == RoutePaths.splash ? null : RoutePaths.splash;
     }
 
@@ -80,11 +89,29 @@ GoRouter buildAppRouter(AppProvider app) => GoRouter(
       final query = state.uri.query.isEmpty ? '' : '?${state.uri.query}';
       return '${RoutePaths.login}?next=${Uri.encodeComponent('$path$query')}';
     }
+
+    // Consume a saved deep link as soon as auth resolves — the splash screen
+    // may have already navigated to landing (/) before we could redirect.
+    if (pendingDeepLink != null) {
+      if (authed) {
+        final deepLink = pendingDeepLink!;
+        pendingDeepLink = null;
+        return deepLink;
+      }
+      // Not authed: redirect to login with the deep link as next param.
+      final deepLink = pendingDeepLink!;
+      pendingDeepLink = null;
+      return '${RoutePaths.login}?next=${Uri.encodeComponent(deepLink)}';
+    }
     if (authed &&
         (path == RoutePaths.splash ||
             path == RoutePaths.login ||
             path == RoutePaths.register ||
             path == RoutePaths.forgotPassword)) {
+      // If the auth screen captured a ?next= deep link, honour it so that
+      // join-via-link and other protected-route flows survive the sign-in.
+      final next = state.uri.queryParameters['next'];
+      if (next != null && next.startsWith('/')) return next;
       return RoutePaths.home;
     }
     return null;
@@ -308,6 +335,7 @@ GoRouter buildAppRouter(AppProvider app) => GoRouter(
     ),
   ],
 );
+}
 
 /// Wraps a content page in the persistent app shell with a smooth entrance
 /// animation and records the route path for the shell's access guard.

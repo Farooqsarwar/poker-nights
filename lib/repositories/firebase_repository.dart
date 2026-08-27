@@ -368,8 +368,10 @@ class FirebaseRepository {
                 role: 'admin')
             .toMap());
 
+    // Store name + icon so joinByCode can populate the membership index
+    // without reading groups/{gid} (which is member-only).
     batch.set(_db.collection('joinCodes').doc(group.joinCode.toUpperCase()),
-        {'gid': gid, 'kind': 'group'});
+        {'gid': gid, 'kind': 'group', 'name': group.name, 'icon': group.icon});
 
     await batch.commit();
   }
@@ -384,14 +386,18 @@ class FirebaseRepository {
     final data = Map<String, dynamic>.from(codeSnap.data()!);
     final gid = data['gid'] as String?;
     if (gid == null) return null;
-    return joinGroup(gid, user);
+    // Read name/icon from the joinCodes doc (world-readable for signed-in users)
+    // so we never have to touch groups/{gid} — non-members cannot read that doc.
+    final name = (data['name'] as String?) ?? '';
+    final icon = (data['icon'] as String?) ?? '♠️';
+    return joinGroup(gid, user, groupName: name, groupIcon: icon);
   }
 
   /// Idempotent join: safe to call when already a member.
-  Future<String?> joinGroup(String gid, AppUser user) async {
-    final meta = await _db.collection('groups').doc(gid).get();
-    if (!meta.exists) return null;
-    final mData = Map<String, dynamic>.from(meta.data()!);
+  /// [groupName] and [groupIcon] are used to populate the user's mirror index;
+  /// they come from the joinCodes doc so this method never reads groups/{gid}.
+  Future<String?> joinGroup(String gid, AppUser user,
+      {String groupName = '', String groupIcon = '♠️'}) async {
     final batch = _db.batch();
     batch.set(
         _db.collection('groups').doc(gid).collection('members').doc(user.id),
@@ -405,8 +411,8 @@ class FirebaseRepository {
         userGroupIndexRef(user.id, gid),
         GroupMembership(
                 groupId: gid,
-                name: (mData['name'] as String?) ?? '',
-                icon: (mData['icon'] as String?) ?? '♠️',
+                name: groupName,
+                icon: groupIcon,
                 pinned: false,
                 role: 'member')
             .toMap(),

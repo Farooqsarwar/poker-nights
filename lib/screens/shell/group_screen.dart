@@ -573,7 +573,7 @@ class _GroupScreenState extends State<GroupScreen> {
 
   void _showInviteModal(BuildContext context, Group group) {
     final link =
-        'https://pokernight.app/join-group?code=${group.joinCode}';
+        'https://poker-night-tools.web.app/join-group?code=${group.joinCode}';
     showAppModal(
       context: context,
       title: 'Invite to ${group.name}',

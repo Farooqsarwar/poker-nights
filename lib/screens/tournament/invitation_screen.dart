@@ -40,7 +40,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
 
   Future<void> _copyLink(LiveGame game) async {
     await Clipboard.setData(
-      ClipboardData(text: 'https://pokernight.app/game/${game.publicCode}'),
+      ClipboardData(text: 'https://poker-night-tools.web.app/game/${game.publicCode}'),
     );
     if (!mounted) return;
     setState(() => _copied = true);
@@ -1316,7 +1316,7 @@ void showAppLinkModal(BuildContext context, LiveGame game) {
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               child: QrImageView(
-                data: 'https://pokernight.app/game/${game.publicCode}',
+                data: 'https://poker-night-tools.web.app/game/${game.publicCode}',
                 version: QrVersions.auto,
                 size: 200,
                 gapless: false,
@@ -1326,7 +1326,7 @@ void showAppLinkModal(BuildContext context, LiveGame game) {
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
-              'https://pokernight.app/game/${game.publicCode}',
+              'https://poker-night-tools.web.app/game/${game.publicCode}',
               textAlign: TextAlign.center,
               style: AppTypography.monoSm.copyWith(color: AppColors.primary),
             ),

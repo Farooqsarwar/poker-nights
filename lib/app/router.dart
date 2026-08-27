@@ -18,6 +18,7 @@ import '../screens/public/join_screen.dart';
 import '../screens/shell/group_screen.dart';
 import '../screens/shell/history_screen.dart';
 import '../screens/shell/home_screen.dart';
+import '../screens/shell/join_group_screen.dart';
 import '../screens/shell/notifications_screen.dart';
 import '../screens/shell/profile_screen.dart';
 import '../screens/shell/settings_screen.dart';
@@ -180,6 +181,13 @@ GoRouter buildAppRouter(AppProvider app) => GoRouter(
         final tab = state.uri.queryParameters['tab'];
         return shell(GroupScreen(initialTab: tab), path: RoutePaths.group);
       },
+    ),
+    GoRoute(
+      path: RoutePaths.joinGroup,
+      builder: (context, state) => shell(
+        JoinGroupScreen(code: state.uri.queryParameters['code'] ?? ''),
+        path: RoutePaths.joinGroup,
+      ),
     ),
     GoRoute(
       path: RoutePaths.notifications,

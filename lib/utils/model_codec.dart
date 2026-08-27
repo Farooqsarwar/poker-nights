@@ -4,6 +4,7 @@ import '../models/chip_color.dart';
 import '../models/game.dart';
 import '../models/group.dart';
 import '../models/live_game.dart';
+import '../models/table_settings.dart';
 import '../models/tournament.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
@@ -66,6 +67,7 @@ Map<String, dynamic> appUserToMap(AppUser u) => {
       'isAdmin': u.isAdmin,
       'stats': userStatsToMap(u.stats),
       'fcmTokens': u.fcmTokens,
+      'isCoAdmin': u.isCoAdmin,
     };
 
 AppUser appUserFromMap(Map<String, dynamic> m) => AppUser(
@@ -75,6 +77,23 @@ AppUser appUserFromMap(Map<String, dynamic> m) => AppUser(
       isAdmin: (m['isAdmin'] as bool?) ?? false,
       stats: userStatsFromMap(Map<String, dynamic>.from(m['stats'] as Map)),
       fcmTokens: List<String>.from(m['fcmTokens'] as List? ?? const []),
+      isCoAdmin: (m['isCoAdmin'] as bool?) ?? false,
+    );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Table settings
+// ─────────────────────────────────────────────────────────────────────────────
+
+Map<String, dynamic> tableSettingsToMap(TableSettings s) => {
+      'maxPerTable': s.maxPerTable,
+      'randomizeByDefault': s.randomizeByDefault,
+    };
+
+TableSettings tableSettingsFromMap(Map<String, dynamic> m) => TableSettings(
+      maxPerTable: (m['maxPerTable'] as num?)?.toInt() ??
+          TableSettings.fallback.maxPerTable,
+      randomizeByDefault: (m['randomizeByDefault'] as bool?) ??
+          TableSettings.fallback.randomizeByDefault,
     );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -204,6 +223,9 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'rebuyCost': s.rebuyCost,
       'addOnCost': s.addOnCost,
       'locationPrivate': s.locationPrivate,
+      'tableSettingsOverride': s.tableSettingsOverride == null
+          ? null
+          : tableSettingsToMap(s.tableSettingsOverride!),
     };
 
 GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
@@ -238,6 +260,10 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
       rebuyCost: (m['rebuyCost'] as num?)?.toInt(),
       addOnCost: (m['addOnCost'] as num?)?.toInt(),
       locationPrivate: (m['locationPrivate'] as bool?) ?? false,
+      tableSettingsOverride: m['tableSettingsOverride'] == null
+          ? null
+          : tableSettingsFromMap(
+              Map<String, dynamic>.from(m['tableSettingsOverride'] as Map)),
     );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -416,6 +442,7 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'seatingConfirmed': game.seatingConfirmed,
     'checkInClosed': game.checkInClosed,
     'structureConfirmed': game.structureConfirmed,
+    'structureLockedAtT10': game.structureLockedAtT10,
     'dealerPlayerId': game.dealerPlayerId,
     'guestSlots': game.guestSlots.map(guestSlotToMap).toList(),
     'originalLevels': game.originalLevels?.map(blindLevelToMap).toList(),
@@ -465,6 +492,7 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       seatingConfirmed: (map['seatingConfirmed'] as bool?) ?? false,
       checkInClosed: (map['checkInClosed'] as bool?) ?? false,
       structureConfirmed: (map['structureConfirmed'] as bool?) ?? false,
+      structureLockedAtT10: (map['structureLockedAtT10'] as bool?) ?? false,
       dealerPlayerId: map['dealerPlayerId'] as String?,
       guestSlots: _mapList(map['guestSlots'] as List? ?? const [])
           .map(guestSlotFromMap)
@@ -680,6 +708,7 @@ Map<String, dynamic> groupToMap(Group g) => {
       'notifications': g.notifications.map(appNotificationToMap).toList(),
       'icon': g.icon,
       'pinned': g.pinned,
+      'tableSettings': tableSettingsToMap(g.tableSettings),
     };
 
 Group groupFromMap(Map<String, dynamic> m) => Group(
@@ -702,4 +731,8 @@ Group groupFromMap(Map<String, dynamic> m) => Group(
           .toList(),
       icon: (m['icon'] as String?) ?? '♠️',
       pinned: (m['pinned'] as bool?) ?? false,
+      tableSettings: m['tableSettings'] == null
+          ? TableSettings.fallback
+          : tableSettingsFromMap(
+              Map<String, dynamic>.from(m['tableSettings'] as Map)),
     );

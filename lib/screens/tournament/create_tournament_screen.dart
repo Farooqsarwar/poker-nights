@@ -9,6 +9,7 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
 import '../../models/live_game.dart';
+import '../../models/table_settings.dart';
 import '../../models/tournament.dart';
 import '../../models/tournament_preset.dart';
 import '../../providers/app_provider.dart';
@@ -210,6 +211,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   final _koAmount = TextEditingController(text: '5');
   AntePreference _antePreference = AntePreference.recommend;
   int _anteAfterLevel = 6;
+
+  // Table-capacity/randomization — defaults to the group's setting; the host
+  // may override it for just this tournament.
+  bool _overrideTableSettings = false;
+  int _maxPerTable = 10;
+  bool _randomizeSeating = false;
   AnteStyle get _anteStyle => switch (_antePreference) {
     AntePreference.recommend || AntePreference.bigBlind => AnteStyle.bigBlind,
     AntePreference.none || AntePreference.individual => AnteStyle.individual,
@@ -253,6 +260,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       if (!mounted) return;
       final app = context.read<AppProvider>();
       final group = app.currentGroup;
+      _maxPerTable = group.tableSettings.maxPerTable;
+      _randomizeSeating = group.tableSettings.randomizeByDefault;
 
       int expected = group.members.length;
       for (final poll in group.polls) {
@@ -582,6 +591,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         chipSet: _chipSet,
         chipSetName: _chipMode == _ChipMode.preset ? _presetName : 'Custom',
         locationPrivate: _locationPrivate,
+        tableSettingsOverride: _overrideTableSettings
+            ? TableSettings(
+                maxPerTable: _maxPerTable,
+                randomizeByDefault: _randomizeSeating,
+              )
+            : null,
       ),
     );
     app.setCurrentGame(game);
@@ -1605,6 +1620,59 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     style: AppTypography.bodyXs.copyWith(
                       color: AppColors.mutedForeground,
                     ),
+                  ),
+                ],
+              ),
+            ),
+          Divider(color: AppColors.border),
+          _ToggleRow(
+            title: 'Override table settings',
+            subtitle:
+                'Group default: $_maxPerTable per table, randomize '
+                '${_randomizeSeating ? 'on' : 'off'}',
+            value: _overrideTableSettings,
+            onChanged: (v) => setState(() => _overrideTableSettings = v),
+          ),
+          if (_overrideTableSettings)
+            Padding(
+              padding: const EdgeInsets.only(
+                left: AppSpacing.lg,
+                top: AppSpacing.sm,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Players per table before splitting',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _maxPerTable <= 6
+                            ? null
+                            : () => setState(() => _maxPerTable--),
+                        icon: const Icon(Icons.remove_circle_outline),
+                      ),
+                      Text('$_maxPerTable', style: AppTypography.bodySm),
+                      IconButton(
+                        onPressed: _maxPerTable >= 12
+                            ? null
+                            : () => setState(() => _maxPerTable++),
+                        icon: const Icon(Icons.add_circle_outline),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _ToggleRow(
+                    title: 'Randomize seating',
+                    subtitle: 'Defaults seating generation to fully random',
+                    value: _randomizeSeating,
+                    onChanged: (v) => setState(() => _randomizeSeating = v),
                   ),
                 ],
               ),

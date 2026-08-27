@@ -1,6 +1,7 @@
 import 'app_notification.dart';
 import 'game.dart';
 import 'live_game.dart';
+import 'table_settings.dart';
 import 'user.dart';
 
 /// A private poker club / group.
@@ -17,6 +18,7 @@ class Group {
     required this.notifications,
     this.icon = '♠️',
     this.pinned = false,
+    this.tableSettings = TableSettings.fallback,
   });
 
   final String id;
@@ -35,6 +37,10 @@ class Group {
   /// When true the group floats to the top of the sidebar's group list.
   final bool pinned;
 
+  /// Default table-capacity/randomization rules for every tournament this
+  /// group runs, overridable per tournament on [GameSettings.tableSettingsOverride].
+  final TableSettings tableSettings;
+
   List<LiveGame> get upcomingGames =>
       games.where((g) => g.status.isUpcoming).toList();
 
@@ -51,6 +57,7 @@ class Group {
     List<AppNotification>? notifications,
     String? icon,
     bool? pinned,
+    TableSettings? tableSettings,
   }) {
     return Group(
       id: id,
@@ -64,6 +71,7 @@ class Group {
       notifications: notifications ?? this.notifications,
       icon: icon ?? this.icon,
       pinned: pinned ?? this.pinned,
+      tableSettings: tableSettings ?? this.tableSettings,
     );
   }
 }

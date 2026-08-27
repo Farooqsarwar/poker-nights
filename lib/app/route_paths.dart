@@ -14,6 +14,12 @@ abstract final class RoutePaths {
   static const String support = '/support';
   static const String join = '/join';
 
+  /// Group invite deep link (`?code=CODE`) — shared as a link or encoded in
+  /// the group's QR code. Requires sign-in; unauthenticated visitors are
+  /// bounced through login with `?next=` and land back here to complete the
+  /// join.
+  static const String joinGroup = '/join-group';
+
   // ── App shell ──────────────────────────────────────────────────────────────
   static const String home = '/home';
   static const String group = '/group';

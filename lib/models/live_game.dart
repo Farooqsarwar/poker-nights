@@ -1,5 +1,6 @@
 import 'chip_color.dart';
 import 'game.dart';
+import 'table_settings.dart';
 import 'tournament.dart';
 
 /// Settings captured when creating a tournament game.
@@ -32,6 +33,7 @@ class GameSettings {
     this.rebuyCost,
     this.addOnCost,
     this.locationPrivate = false,
+    this.tableSettingsOverride,
   });
 
   final String name;
@@ -90,6 +92,11 @@ class GameSettings {
   /// 11-015).
   final bool locationPrivate;
 
+  /// Per-tournament override of the group's default table-capacity/
+  /// randomization rules. Null means "use the group default"
+  /// ([AppProvider.effectiveTableSettings] resolves this).
+  final TableSettings? tableSettingsOverride;
+
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
 
@@ -121,6 +128,8 @@ class GameSettings {
     int? rebuyCost,
     int? addOnCost,
     bool? locationPrivate,
+    TableSettings? tableSettingsOverride,
+    bool clearTableSettingsOverride = false,
   }) {
     return GameSettings(
       name: name ?? this.name,
@@ -150,6 +159,9 @@ class GameSettings {
       rebuyCost: rebuyCost ?? this.rebuyCost,
       addOnCost: addOnCost ?? this.addOnCost,
       locationPrivate: locationPrivate ?? this.locationPrivate,
+      tableSettingsOverride: clearTableSettingsOverride
+          ? null
+          : (tableSettingsOverride ?? this.tableSettingsOverride),
     );
   }
 
@@ -240,6 +252,7 @@ class LiveGame {
     this.seatingConfirmed = false,
     this.checkInClosed = false,
     this.structureConfirmed = false,
+    this.structureLockedAtT10 = false,
     this.dealerPlayerId,
     this.guestSlots = const [],
     this.originalLevels,
@@ -284,6 +297,12 @@ class LiveGame {
   /// True once the admin has reviewed and confirmed the AI-generated
   /// structure (30-minute pre-start estimate).
   final bool structureConfirmed;
+
+  /// True once the firm, one-time structure recalculation at T-minus-10-
+  /// minutes (using the final "Going" headcount) has run. Set once by
+  /// [AppProvider]'s ticker and never cleared, so the firm lock only fires
+  /// a single time per tournament regardless of how long the app stays open.
+  final bool structureLockedAtT10;
 
   /// Randomly assigned initial dealer for the current seating (13-012,
   /// 13-026). The system does not track subsequent dealer-button rotation
@@ -411,6 +430,17 @@ class LiveGame {
   bool get estimateDue =>
       !stacksLocked && structureReviewOpen && settings.scheduledStart != null;
 
+  /// True once the scheduled start is 10 minutes away (or past) and the firm
+  /// pre-start lock hasn't run yet. Feature spec: at T-10 the system takes
+  /// the final "Going" headcount and locks the blind structure, on top of
+  /// (not replacing) the existing 30-minute rolling estimate.
+  bool get t10LockDue {
+    if (structureLockedAtT10 || stacksLocked) return false;
+    final start = settings.scheduledStart;
+    if (start == null) return false;
+    return DateTime.now().isAfter(start.subtract(const Duration(minutes: 10)));
+  }
+
   LiveGame copyWith({
     String? id,
     String? groupId,
@@ -434,6 +464,7 @@ class LiveGame {
     bool? seatingConfirmed,
     bool? checkInClosed,
     bool? structureConfirmed,
+    bool? structureLockedAtT10,
     String? dealerPlayerId,
     List<GuestSlot>? guestSlots,
     List<BlindLevel>? originalLevels,
@@ -465,6 +496,7 @@ class LiveGame {
       seatingConfirmed: seatingConfirmed ?? this.seatingConfirmed,
       checkInClosed: checkInClosed ?? this.checkInClosed,
       structureConfirmed: structureConfirmed ?? this.structureConfirmed,
+      structureLockedAtT10: structureLockedAtT10 ?? this.structureLockedAtT10,
       dealerPlayerId: dealerPlayerId ?? this.dealerPlayerId,
       guestSlots: guestSlots ?? this.guestSlots,
       originalLevels: originalLevels ?? this.originalLevels,

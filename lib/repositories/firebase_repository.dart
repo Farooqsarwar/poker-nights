@@ -10,6 +10,7 @@ import '../models/chip_color.dart';
 import '../models/game.dart';
 import '../models/group.dart';
 import '../models/live_game.dart';
+import '../models/table_settings.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
 import '../utils/model_codec.dart';
@@ -233,6 +234,7 @@ class FirebaseRepository {
       batch.set(ref, _stamp({
         'name': name,
         'email': email,
+        'emailLower': email.trim().toLowerCase(),
         'stats': userStatsToMap(const UserStats(
             played: 0, wins: 0, podium: 0, avgFinish: 0, knockouts: 0)),
         'prefs': <String, dynamic>{},
@@ -252,7 +254,12 @@ class FirebaseRepository {
       }
       await batch.commit();
     } else {
-      await ref.set(_stamp({'name': name, 'email': email}),
+      await ref.set(
+          _stamp({
+            'name': name,
+            'email': email,
+            'emailLower': email.trim().toLowerCase(),
+          }),
           SetOptions(merge: true));
     }
   }
@@ -278,6 +285,7 @@ class FirebaseRepository {
             _stamp({
               'name': ?name,
               'email': ?email,
+              if (email != null) 'emailLower': email.trim().toLowerCase(),
             }),
             SetOptions(merge: true),
           );
@@ -340,6 +348,7 @@ class FirebaseRepository {
       'joinCode': group.joinCode,
       'ownerId': group.ownerId,
       'icon': group.icon,
+      'tableSettings': tableSettingsToMap(group.tableSettings),
       'createdAt': FieldValue.serverTimestamp(),
     }));
 
@@ -434,6 +443,29 @@ class FirebaseRepository {
     await batch.commit();
   }
 
+  /// Persists the group's default table-capacity/randomization settings
+  /// (owner/admin only — enforced by the caller, not by the client SDK).
+  Future<void> updateGroupTableSettings(String gid, TableSettings settings) =>
+      _db.collection('groups').doc(gid).update({
+        'tableSettings': tableSettingsToMap(settings),
+      });
+
+  /// Looks up a registered user by exact (case-insensitive) email match, for
+  /// the Co-Admin "add member directly" flow. Returns null when no account
+  /// uses that email.
+  Future<AppUser?> findUserByEmail(String email) async {
+    final key = email.trim().toLowerCase();
+    if (key.isEmpty) return null;
+    final snap = await _db
+        .collection('users')
+        .where('emailLower', isEqualTo: key)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final d = snap.docs.first;
+    return loadUser(d.id);
+  }
+
   DocumentReference<Map<String, dynamic>> get serverTimeRef =>
       _db.collection('_meta').doc('serverTime');
 
@@ -476,6 +508,10 @@ class FirebaseRepository {
           polls: polls,
           games: games,
           notifications: const [],
+          tableSettings: meta?['tableSettings'] == null
+              ? TableSettings.fallback
+              : tableSettingsFromMap(
+                  Map<String, dynamic>.from(meta!['tableSettings'] as Map)),
         ));
       }
     }
@@ -496,6 +532,7 @@ class FirebaseRepository {
                 name: (d.data()['name'] as String?) ?? '',
                 email: '',
                 isAdmin: (d.data()['role'] as String?) == 'admin',
+                isCoAdmin: (d.data()['role'] as String?) == 'coadmin',
                 stats: d.data()['stats'] is Map
                     ? userStatsFromMap(
                         Map<String, dynamic>.from(d.data()['stats'] as Map))

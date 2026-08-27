@@ -94,8 +94,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
     final isAdmin = app.isAdmin;
+    // Co-Admin can open this dashboard to grant rebuys/add-ons, but every
+    // tournament-advancing / blinds / seating control below is gated to
+    // isAdmin specifically — Co-Admin's scope stops at membership + rebuys.
+    final canOpenDashboard = isAdmin || app.isCoAdmin;
 
-    if (!isAdmin) {
+    if (!canOpenDashboard) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) context.go(RoutePaths.invitation);
       });
@@ -378,6 +382,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: AppSpacing.md),
             const SizedBox(height: AppSpacing.lg),
 
+            // ── CONTROLS — Row 1 & 2 are Host/Admin only (advancing the
+            // tournament and touching blinds/seating is out of Co-Admin's
+            // scope) ─────────────────────────────────────────────────────
+            if (isAdmin) ...[
             // ── CONTROLS — Row 1: Timer ──────────────────────────────────
             AppCard(
               padding: const EdgeInsets.symmetric(
@@ -583,6 +591,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ],
               ),
             ),
+            ],
             const SizedBox(height: AppSpacing.xl),
 
             // Row 3: "Other things"
@@ -641,6 +650,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   currentLevel: currentLevel,
                                   onGrantRebuy: app.grantRebuy,
                                   onGrantReEntry: app.grantReEntry,
+                                  isAdmin: isAdmin,
                                 ),
                               if (_tab == 'seating')
                                 _SeatingTab(players: activePlayers),
@@ -718,6 +728,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
+            // Timer controls + speed/structure quick actions — Host/Admin
+            // only, same reasoning as the desktop layout above.
+            if (isAdmin) ...[
             // Timer controls
             Wrap(
               spacing: AppSpacing.sm,
@@ -897,6 +910,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ],
               ),
             ),
+            ],
             const SizedBox(height: AppSpacing.lg),
             // TV code + announcement
             Column(
@@ -964,6 +978,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 currentLevel: currentLevel,
                 onGrantRebuy: app.grantRebuy,
                 onGrantReEntry: app.grantReEntry,
+                isAdmin: isAdmin,
               ),
             // Seating tab
             if (_tab == 'seating') _SeatingTab(players: activePlayers),
@@ -979,8 +994,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ],
           const SizedBox(height: AppSpacing.xxl),
           // Final table trigger for small tournaments (≤9 start, never auto-transition)
-          if (status == LiveGameStatus.running ||
-              status == LiveGameStatus.paused)
+          // Host/Admin only — Co-Admin's scope stops at membership + rebuys.
+          if (isAdmin &&
+              (status == LiveGameStatus.running ||
+                  status == LiveGameStatus.paused))
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.md),
               child: AppButton(
@@ -993,8 +1010,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ),
             ),
-          // Danger zone: cancel tournament (spec §12 — confirmation + reason)
-          if (status != LiveGameStatus.completed &&
+          // Danger zone: cancel tournament (spec §12 — confirmation + reason).
+          // Host/Admin only.
+          if (isAdmin &&
+              status != LiveGameStatus.completed &&
               status != LiveGameStatus.cancelled) ...[
             AppCard(
               borderColor: AppColors.destructive.withValues(alpha: 0.3),
@@ -1275,7 +1294,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         settings.rebuys && currentLevel <= settings.rebuysCloseLevel;
 
     return [
-      if (app.lateRegistrationOpen)
+      if (app.isAdmin && app.lateRegistrationOpen)
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.md),
           child: AppButton(
@@ -1345,12 +1364,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   runSpacing: AppSpacing.xs,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.danger,
-                      onPressed: () => _showEliminateModal(context, app, p),
-                      child: const Text('Out'),
-                    ),
+                    if (app.isAdmin)
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.danger,
+                        onPressed: () => _showEliminateModal(context, app, p),
+                        child: const Text('Out'),
+                      ),
                     if (canRebuy)
                       AppButton(
                         size: AppButtonSize.sm,
@@ -1367,16 +1387,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         onPressed: () => _confirmAddOn(context, app, p),
                         child: const Text('Add-on'),
                       ),
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: () => _confirmRemovePlayer(context, app, p),
-                      child: Icon(
-                        Icons.delete_outline,
-                        color: AppColors.destructive,
-                        size: 16,
+                    if (app.isAdmin)
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.ghost,
+                        onPressed: () => _confirmRemovePlayer(context, app, p),
+                        child: Icon(
+                          Icons.delete_outline,
+                          color: AppColors.destructive,
+                          size: 16,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ],
@@ -1704,6 +1725,7 @@ class _EliminatedTab extends StatelessWidget {
     required this.currentLevel,
     required this.onGrantRebuy,
     required this.onGrantReEntry,
+    required this.isAdmin,
   });
 
   final List<Player> players;
@@ -1711,6 +1733,10 @@ class _EliminatedTab extends StatelessWidget {
   final int currentLevel;
   final void Function(String playerId) onGrantRebuy;
   final void Function(String playerId) onGrantReEntry;
+
+  /// Host/Admin only — result corrections and full removal are tournament-
+  /// advancing actions, out of Co-Admin's rebuy-only scope.
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -1779,6 +1805,7 @@ class _EliminatedTab extends StatelessWidget {
                           child: const Text('Re-entry'),
                         ),
                       ),
+                    if (isAdmin) ...[
                     Padding(
                       padding: const EdgeInsets.only(left: AppSpacing.xs),
                       child: AppButton(
@@ -1840,6 +1867,7 @@ class _EliminatedTab extends StatelessWidget {
                         size: 16,
                       ),
                     ),
+                    ],
                   ],
                 ),
               ),
@@ -1866,10 +1894,14 @@ class _SeatingTab extends StatelessWidget {
 
     final app = context.watch<AppProvider>();
     final rec = app.seatingRecommendation;
+    // Seating/balance management is Host/Admin only (Co-Admin's scope stops
+    // at membership + rebuys) — everyone else sees the read-only table view
+    // below.
+    final isAdmin = app.isAdmin;
 
     return Column(
       children: [
-        if (rec == null)
+        if (isAdmin && rec == null)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: Row(
@@ -1884,7 +1916,7 @@ class _SeatingTab extends StatelessWidget {
               ],
             ),
           ),
-        if (rec != null)
+        if (isAdmin && rec != null)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: AppAlertBanner(
@@ -1897,7 +1929,7 @@ class _SeatingTab extends StatelessWidget {
               // but AppAlertBanner only supports one action. So let's wrap it.
             ),
           ),
-        if (rec != null)
+        if (isAdmin && rec != null)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: Row(

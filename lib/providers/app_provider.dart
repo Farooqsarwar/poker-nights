@@ -13,6 +13,7 @@ import '../models/cash_game.dart';
 import '../models/game.dart';
 import '../models/group.dart';
 import '../models/live_game.dart';
+import '../models/table_settings.dart';
 import '../models/tournament.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
@@ -325,6 +326,28 @@ class AppProvider extends ChangeNotifier {
     return _currentGroup.members
         .any((m) => m.id == user.id && m.isAdmin);
   }
+
+  /// True when the signed-in user holds the elevated Co-Admin role in the
+  /// current group: can add members directly and grant rebuys, but cannot
+  /// advance the tournament or touch blinds/seating settings.
+  bool get isCoAdmin {
+    final user = _user;
+    if (user == null || isAdmin) return false;
+    return _currentGroup.members.any((m) => m.id == user.id && m.isCoAdmin);
+  }
+
+  /// Host/Admin or Co-Admin: may add members directly (in addition to the
+  /// invite-link/QR/join-code methods every member can share).
+  bool get canManageMembers => isAdmin || isCoAdmin;
+
+  /// Host/Admin or Co-Admin: may grant a rebuy/add-on. Members may only
+  /// *request* one (spec §4 — rebuys are never self-service).
+  bool get canGrantRebuys => isAdmin || isCoAdmin;
+
+  /// This member's role in the current group, for role-picker UIs.
+  GroupRole roleOf(AppUser member) => member.isAdmin
+      ? GroupRole.admin
+      : (member.isCoAdmin ? GroupRole.coAdmin : GroupRole.member);
 
   bool get _isGameAuthority => isAdmin;
 
@@ -1299,23 +1322,95 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  void toggleAdminRole(String userId, bool isAdmin) {
+  /// Owner-only: sets a member's role (Member / Co-Admin / Admin). Co-Admin
+  /// can add members directly and grant rebuys; only Admin (or the owner)
+  /// can advance the tournament or touch blinds/seating settings.
+  void setGroupRole(String userId, GroupRole role) {
     if (_user?.id != _currentGroup.ownerId) return; // Only owner can do this
     if (userId == _currentGroup.ownerId) return; // Cannot change owner's role
     final members = _currentGroup.members.map((m) {
-      if (m.id == userId) {
-        return m.copyWith(isAdmin: isAdmin);
-      }
-      return m;
+      if (m.id != userId) return m;
+      return m.copyWith(
+        isAdmin: role == GroupRole.admin,
+        isCoAdmin: role == GroupRole.coAdmin,
+      );
     }).toList();
     _setGroup(_currentGroup.copyWith(members: members));
     notifyListeners();
     if (_backendUp) {
       unawaited(_repo
-          .setMemberRole(_currentGroup.id, userId, isAdmin ? 'admin' : 'member')
+          .setMemberRole(_currentGroup.id, userId, role.storageValue)
           .catchError(
               (Object e) => debugPrint('setMemberRole failed: $e')));
     }
+  }
+
+  /// Host/Admin or Co-Admin: adds a registered user directly to the group by
+  /// email, without going through an invite link/QR/join code. Returns null
+  /// on success, or a friendly error message for the UI.
+  Future<String?> addMemberByEmail(String email) async {
+    if (!canManageMembers) return 'Only the Host or a Co-Admin can add members.';
+    if (!_backendUp) return 'You are offline.';
+    final trimmed = email.trim();
+    if (trimmed.isEmpty) return 'Enter an email address.';
+    AppUser? found;
+    try {
+      found = await _repo.findUserByEmail(trimmed);
+    } catch (e) {
+      debugPrint('findUserByEmail failed: $e');
+      return 'Could not look up that email. Please try again.';
+    }
+    if (found == null) {
+      return 'No account found for that email.';
+    }
+    if (_currentGroup.members.any((m) => m.id == found!.id)) {
+      return '${found.name.isEmpty ? 'That user' : found.name} is already in this group.';
+    }
+    try {
+      final gid = await _repo.joinGroup(_currentGroup.id, found);
+      if (gid == null) return 'Could not add that member. Please try again.';
+    } catch (e) {
+      debugPrint('addMemberByEmail failed: $e');
+      return 'Could not add that member. Please try again.';
+    }
+    return null;
+  }
+
+  /// Owner-only: updates the group's default table-capacity/randomization
+  /// settings. Individual tournaments may still override this
+  /// ([updateTournamentTableSettings]).
+  void updateGroupTableSettings(TableSettings settings) {
+    if (_user?.id != _currentGroup.ownerId) return;
+    _setGroup(_currentGroup.copyWith(tableSettings: settings));
+    notifyListeners();
+    if (_backendUp) {
+      unawaited(_repo
+          .updateGroupTableSettings(_currentGroup.id, settings)
+          .catchError((Object e) =>
+              debugPrint('updateGroupTableSettings failed: $e')));
+    }
+  }
+
+  /// The table-capacity/randomization rules that actually apply to the
+  /// active tournament: its own override if set, otherwise the group
+  /// default.
+  TableSettings get effectiveTableSettings =>
+      _currentGame?.settings.tableSettingsOverride ??
+      _currentGroup.tableSettings;
+
+  /// Admin-only: sets (or clears, passing null) this tournament's override of
+  /// the group's default table settings.
+  void updateTournamentTableSettings(TableSettings? override) {
+    final game = _currentGame;
+    if (game == null || !isAdmin) return;
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(
+        tableSettingsOverride: override,
+        clearTableSettingsOverride: override == null,
+      ),
+    );
+    _syncGroupGame();
+    notifyListeners();
   }
 
   /// Owner-only: removes a member from the current group.
@@ -1880,6 +1975,9 @@ class AppProvider extends ChangeNotifier {
   void _startTick() {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      // Firm T-10 structure lock — checked every tick regardless of whether
+      // the tournament timer itself is running yet (it isn't, pre-start).
+      _maybeApplyT10Lock();
       if (_currentGame == null || !_currentGame!.timerRunning) return;
       int remaining;
       if (_currentGame!.levelEndTime != null) {
@@ -2326,9 +2424,11 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
+  /// Host/Admin- or Co-Admin-only (spec §4: rebuys are never self-service —
+  /// a member may only [requestRebuy]).
   void grantRebuy(String playerId) {
     final game = _currentGame;
-    if (game == null) return;
+    if (game == null || !canGrantRebuys) return;
     if (!game.settings.rebuys || game.rebuysClosed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
     if (player == null || !player.eliminated) return;
@@ -2393,7 +2493,7 @@ class AppProvider extends ChangeNotifier {
   /// enforced by only showing the action while rebuys are still open.
   void grantReEntry(String playerId) {
     final game = _currentGame;
-    if (game == null) return;
+    if (game == null || !canGrantRebuys) return;
     if (!game.settings.reEntry || game.rebuysClosed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
     if (player == null || !player.eliminated) return;
@@ -2419,7 +2519,7 @@ class AppProvider extends ChangeNotifier {
 
   void grantAddOn(String playerId) {
     final game = _currentGame;
-    if (game == null) return;
+    if (game == null || !canGrantRebuys) return;
     if (!game.settings.addOn || game.settlementConfirmed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
     if (player == null ||
@@ -2945,7 +3045,9 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// Assign table + seat numbers to every checked-in player (spec §12.1).
-  /// Max 9 per table; 10+ checked-in players create multiple balanced tables.
+  /// Tables are capped at [effectiveTableSettings.maxPerTable] (configurable
+  /// per group, overridable per tournament — defaults to 10); once checked-in
+  /// count exceeds that, multiple balanced tables are created automatically.
   /// Every player gets exactly one unique (table, seat) — no duplicates.
   void generateSeating(TableSeatingMode mode) {
     final game = _currentGame;
@@ -2977,9 +3079,12 @@ class AppProvider extends ChangeNotifier {
         break;
     }
 
-    // Balanced tables: ceil(count / 9), distributed as evenly as possible.
+    // Balanced tables: ceil(count / maxPerTable), distributed as evenly as
+    // possible. maxPerTable comes from the tournament's override, or the
+    // group's default otherwise (spec: configurable, defaults to 10).
+    final maxPerTable = effectiveTableSettings.maxPerTable.clamp(2, 999);
     final count = ordered.length;
-    final tableCount = (count / 9).ceil();
+    final tableCount = (count / maxPerTable).ceil();
     final perTable = List<int>.filled(tableCount, count ~/ tableCount);
     for (var i = 0; i < count % tableCount; i++) {
       perTable[i]++;
@@ -3286,12 +3391,14 @@ class AppProvider extends ChangeNotifier {
     for (final p in seated) {
       counts[p.table] = (counts[p.table] ?? 0) + 1;
     }
-    final tableCount = (game.activePlayers.length / 9).ceil().clamp(1, 9);
+    final maxPerTable = effectiveTableSettings.maxPerTable.clamp(2, 999);
+    final tableCount =
+        (game.activePlayers.length / maxPerTable).ceil().clamp(1, maxPerTable);
     var bestTable = 1;
     var bestCount = 1 << 30;
     for (var t = 1; t <= tableCount; t++) {
       final c = counts[t] ?? 0;
-      if (c < 9 && c < bestCount) {
+      if (c < maxPerTable && c < bestCount) {
         bestTable = t;
         bestCount = c;
       }
@@ -3625,6 +3732,22 @@ class AppProvider extends ChangeNotifier {
     addAuditRecord(
       'structure_estimate',
       'AI refreshed the structure estimate for ${game.settings.players} expected players.',
+    );
+    notifyListeners();
+  }
+
+  /// Firm, one-time lock at T-minus-10-minutes: takes the final "Going"
+  /// headcount and recalculates the blind structure a last time, on top of
+  /// (not replacing) the rolling 30-minute estimate above. Runs once per
+  /// tournament — [LiveGame.structureLockedAtT10] prevents repeats.
+  void _maybeApplyT10Lock() {
+    final game = _currentGame;
+    if (game == null || !game.t10LockDue) return;
+    generateStructureFromRsvps();
+    _currentGame = _currentGame?.copyWith(structureLockedAtT10: true);
+    addAuditRecord(
+      'structure_lock_t10',
+      'Blind structure locked at T-10 minutes for ${expectedPlayersFromRsvps(_currentGame!)} confirmed players.',
     );
     notifyListeners();
   }

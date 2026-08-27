@@ -50,6 +50,77 @@ class CheckInScreen extends StatefulWidget {
 
 class _CheckInScreenState extends State<CheckInScreen> {
   SeatingMode _seatingMode = SeatingMode.random;
+  bool _seatingModeInitialized = false;
+
+  /// The checked-in count the split prompt was last shown/dismissed for, so
+  /// it doesn't re-open every rebuild once the admin has responded to it at
+  /// this count.
+  int? _splitPromptRespondedAtCount;
+  bool _splitPromptShowing = false;
+
+  /// Once seating is generated the count naturally sits at/above the
+  /// threshold on every rebuild; only prompt before that first generation.
+  void _maybeShowSplitPrompt(
+    BuildContext context,
+    AppProvider app,
+    int checkedInCount,
+    int maxPerTable,
+    bool seatedYet,
+  ) {
+    if (seatedYet ||
+        checkedInCount < maxPerTable ||
+        _splitPromptShowing ||
+        _splitPromptRespondedAtCount == checkedInCount) {
+      return;
+    }
+    _splitPromptShowing = true;
+    showAppModal(
+      context: context,
+      title: 'Split into multiple tables?',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '$checkedInCount players have checked in — that\'s enough to '
+            'split across multiple tables (max $maxPerTable per table). '
+            'Generate seating now?',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () {
+                    _splitPromptRespondedAtCount = checkedInCount;
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Not yet'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppButton(
+                  onPressed: () {
+                    _splitPromptRespondedAtCount = checkedInCount;
+                    app.generateSeating(_seatingMode.tableMode);
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Generate seating'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ).then((_) {
+      _splitPromptShowing = false;
+    });
+  }
 
   void _showWalkInModal(BuildContext context, AppProvider app) {
     final controller = TextEditingController();
@@ -130,6 +201,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
       return const SizedBox.shrink();
     }
 
+    if (!_seatingModeInitialized) {
+      _seatingModeInitialized = true;
+      _seatingMode = app.effectiveTableSettings.randomizeByDefault
+          ? SeatingMode.random
+          : SeatingMode.manual;
+    }
+
     final players = game.players;
     final checkedIn = players.where((p) => p.checkedIn && p.confirmed).toList();
     final notCheckedIn = players
@@ -150,6 +228,23 @@ class _CheckInScreenState extends State<CheckInScreen> {
     // Event-day preparation checklist (user-flow spec §4.6): admin-only and
     // only in the pre-live window (published / check-in / ready).
     final showChecklist = EventDayChecklist.appliesTo(game);
+
+    // Table-split prompt (configurable threshold, spec §5e): once check-in
+    // reaches the group/tournament's configured capacity, offer to generate
+    // seating across multiple tables instead of silently waiting for a
+    // manual click.
+    final maxPerTable = app.effectiveTableSettings.maxPerTable;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _maybeShowSplitPrompt(
+          context,
+          app,
+          checkedIn.length,
+          maxPerTable,
+          seatedYet,
+        );
+      }
+    });
 
     return AppPage(
       maxWidth: 560,

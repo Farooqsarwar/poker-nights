@@ -77,7 +77,8 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
     return dups;
   }
 
-  bool get _hasEmptyChipSet => _chips.isEmpty || _chips.every((c) => c.quantity <= 0);
+  bool get _hasEmptyChipSet =>
+      _chips.isEmpty || _chips.every((c) => c.quantity <= 0);
 
   void _addChip() {
     setState(() {
@@ -136,7 +137,9 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
     });
     if (_nameError != null || _dupError != null) return;
     if (_hasEmptyChipSet) {
-      setState(() => _dupError = 'Add at least one chip with quantity above zero.');
+      setState(
+        () => _dupError = 'Add at least one chip with quantity above zero.',
+      );
       return;
     }
 
@@ -354,7 +357,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: _chips.length,
-      onReorderItem: (oldIndex, newIndex) {
+      onReorder: (oldIndex, newIndex) {
         setState(() {
           final chip = _chips.removeAt(oldIndex);
           _chips.insert(newIndex, chip);

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'package:qr_flutter/qr_flutter.dart';
+
 import '../../app/Icons.dart';
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
@@ -10,6 +12,7 @@ import '../../constants/app_constants.dart';
 import '../../models/game.dart';
 import '../../models/group.dart';
 import '../../models/live_game.dart';
+import '../../models/table_settings.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
@@ -223,7 +226,41 @@ class _GroupScreenState extends State<GroupScreen> {
             onLeaveGroup: () => _confirmLeaveGroup(context),
           ),
           const SizedBox(height: AppSpacing.lg),
-          CodeDisplay(code: group.joinCode, label: 'Group code'),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              CodeDisplay(code: group.joinCode, label: 'Group code'),
+              AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => _showInviteModal(context, group),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.qr_code, size: 16),
+                    SizedBox(width: AppSpacing.xs),
+                    Text('Invite link / QR'),
+                  ],
+                ),
+              ),
+              if (isAdmin)
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => _showTableSettingsModal(context, app, group),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.table_bar_outlined, size: 16),
+                      SizedBox(width: AppSpacing.xs),
+                      Text('Table settings'),
+                    ],
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.lg),
           AppTabs(
             tabs: [
@@ -256,7 +293,7 @@ class _GroupScreenState extends State<GroupScreen> {
           if (_tab == 'games')
             _buildGames(app, group, upcomingGames, isAdmin, user)
           else if (_tab == 'members')
-            _buildMembers(group)
+            _buildMembers(app, group)
           else if (_tab == 'chat')
             _buildChat(app, group, user?.id)
           else if (_tab == 'polls')
@@ -413,101 +450,300 @@ class _GroupScreenState extends State<GroupScreen> {
     );
   }
 
-  Widget _buildMembers(Group group) {
+  Widget _buildMembers(AppProvider app, Group group) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoCol = constraints.maxWidth >= 640;
         final width = twoCol
             ? (constraints.maxWidth - AppSpacing.sm) / 2
             : constraints.maxWidth;
-        return Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (final m in group.members)
-              SizedBox(
-                width: width,
-                child: AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Row(
-                    children: [
-                      AppAvatar(name: m.name),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              m.name,
-                              style: AppTypography.bodySm.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Text(
-                              m.email,
-                              style: AppTypography.bodyXs.copyWith(
-                                color: AppColors.mutedForeground,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (m.isAdmin) ...[
-                        const AppBadge(
-                          label: 'Admin',
-                          variant: AppBadgeVariant.accent,
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                      ],
-                      Text(
-                        '${m.stats.played}G · ${m.stats.wins}W',
-                        style: AppTypography.mono(
-                          size: AppFontSizes.xs,
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                      if (context.read<AppProvider>().user?.id ==
-                              group.ownerId &&
-                          m.id != group.ownerId)
-                        PopupMenuButton<String>(
-                          icon: Icon(
-                            Icons.more_vert,
-                            size: 18,
-                            color: AppColors.mutedForeground,
-                          ),
-                          onSelected: (val) {
-                            if (val == 'toggle_admin') {
-                              context.read<AppProvider>().toggleAdminRole(
-                                m.id,
-                                !m.isAdmin,
-                              );
-                            } else if (val == 'remove_member') {
-                              _confirmRemoveMember(context, m);
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            PopupMenuItem(
-                              value: 'toggle_admin',
-                              child: Text(
-                                m.isAdmin ? 'Revoke Admin' : 'Make Admin',
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'remove_member',
-                              child: Text(
-                                'Remove from Group',
-                                style: TextStyle(color: AppColors.destructive),
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
+            if (app.canManageMembers) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => _showAddMemberDialog(context),
+                  child: const Text('+ Add member'),
                 ),
               ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                for (final m in group.members)
+                  SizedBox(
+                    width: width,
+                    child: AppCard(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: Row(
+                        children: [
+                          AppAvatar(name: m.name),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  m.name,
+                                  style: AppTypography.bodySm.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  m.email,
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (m.isAdmin) ...[
+                            const AppBadge(
+                              label: 'Admin',
+                              variant: AppBadgeVariant.accent,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                          ] else if (m.isCoAdmin) ...[
+                            const AppBadge(
+                              label: 'Co-Admin',
+                              variant: AppBadgeVariant.gold,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                          ],
+                          Text(
+                            '${m.stats.played}G · ${m.stats.wins}W',
+                            style: AppTypography.mono(
+                              size: AppFontSizes.xs,
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                          if (app.user?.id == group.ownerId &&
+                              m.id != group.ownerId)
+                            PopupMenuButton<GroupRole>(
+                              icon: Icon(
+                                Icons.more_vert,
+                                size: 18,
+                                color: AppColors.mutedForeground,
+                              ),
+                              onSelected: (role) =>
+                                  app.setGroupRole(m.id, role),
+                              itemBuilder: (context) => [
+                                for (final role in GroupRole.values)
+                                  CheckedPopupMenuItem(
+                                    value: role,
+                                    checked: app.roleOf(m) == role,
+                                    child: Text(role.label),
+                                  ),
+                                PopupMenuItem<GroupRole>(
+                                  enabled: false,
+                                  height: 8,
+                                  child: Divider(
+                                    color: AppColors.border,
+                                    height: 1,
+                                  ),
+                                ),
+                                PopupMenuItem<GroupRole>(
+                                  onTap: () => _confirmRemoveMember(context, m),
+                                  child: Text(
+                                    'Remove from Group',
+                                    style:
+                                        TextStyle(color: AppColors.destructive),
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         );
       },
+    );
+  }
+
+  void _showInviteModal(BuildContext context, Group group) {
+    final link =
+        'https://pokernight.app/join-group?code=${group.joinCode}';
+    showAppModal(
+      context: context,
+      title: 'Invite to ${group.name}',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: QrImageView(
+                data: link,
+                size: 180,
+                backgroundColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Scan to join, or share the link. Opening it signs the person in '
+            '(or asks them to) and adds them to the group.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          CodeDisplay(code: link, label: 'Link'),
+          const SizedBox(height: AppSpacing.sm),
+          CodeDisplay(code: group.joinCode, label: 'Or enter code'),
+        ],
+      ),
+    );
+  }
+
+  void _showTableSettingsModal(BuildContext context, AppProvider app, Group group) {
+    var maxPerTable = group.tableSettings.maxPerTable;
+    var randomize = group.tableSettings.randomizeByDefault;
+    showAppModal(
+      context: context,
+      title: 'Table settings',
+      child: StatefulBuilder(
+        builder: (context, setState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Default for every tournament this group runs. A host can '
+              'still override it for a specific tournament.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Players per table before splitting',
+                    style: AppTypography.bodySm,
+                  ),
+                ),
+                IconButton(
+                  onPressed: maxPerTable <= 6
+                      ? null
+                      : () => setState(() => maxPerTable--),
+                  icon: const Icon(Icons.remove_circle_outline),
+                ),
+                Text('$maxPerTable', style: AppTypography.bodySm),
+                IconButton(
+                  onPressed: maxPerTable >= 12
+                      ? null
+                      : () => setState(() => maxPerTable++),
+                  icon: const Icon(Icons.add_circle_outline),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Randomize seating by default', style: AppTypography.bodySm),
+                      Text(
+                        'Seating generation defaults to fully random instead '
+                        'of the last-used mode.',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                AppToggle(
+                  value: randomize,
+                  onChanged: (v) => setState(() => randomize = v),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(
+              fullWidth: true,
+              onPressed: () {
+                app.updateGroupTableSettings(TableSettings(
+                  maxPerTable: maxPerTable,
+                  randomizeByDefault: randomize,
+                ));
+                Navigator.of(context).pop();
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddMemberDialog(BuildContext context) {
+    final app = context.read<AppProvider>();
+    final controller = TextEditingController();
+    String? error;
+    showAppModal(
+      context: context,
+      title: 'Add member',
+      child: StatefulBuilder(
+        builder: (context, setState) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Add a registered user directly by their account email — no '
+              'invite link, QR, or join code needed.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppTextField(
+              controller: controller,
+              label: 'Email',
+              placeholder: 'name@example.com',
+              keyboardType: TextInputType.emailAddress,
+              autofocus: true,
+              error: error,
+              onChanged: (_) {
+                if (error != null) setState(() => error = null);
+              },
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(
+              fullWidth: true,
+              onPressed: () async {
+                final result = await app.addMemberByEmail(controller.text);
+                if (result != null) {
+                  setState(() => error = result);
+                  return;
+                }
+                if (context.mounted) Navigator.of(context).pop();
+              },
+              child: const Text('Add to group'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

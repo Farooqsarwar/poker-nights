@@ -24,6 +24,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
+import '../public/join_screen.dart' show ScanQRScreen;
 
 /// Dashboard mirroring the web `HomePage`.
 class HomeScreen extends StatefulWidget {
@@ -34,6 +35,22 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  Future<void> _submitJoinCode(AppProvider app, String rawCode) async {
+    final ok = await app.joinGroup(rawCode);
+    if (!mounted) return;
+    if (!ok) {
+      setState(
+        () => _joinError = 'Group not found. Check the code and try again.',
+      );
+    } else {
+      setState(() {
+        _showJoin = false;
+        _joinController.clear();
+        _joinError = '';
+      });
+    }
+  }
+
   final _joinController = TextEditingController();
   final _groupNameController = TextEditingController();
   String _joinError = '';
@@ -369,23 +386,28 @@ class _HomeScreenState extends State<HomeScreen> {
               AppButton(
                 fullWidth: true,
                 size: AppButtonSize.lg,
-                onPressed: () async {
-                  final ok = await app.joinGroup(_joinController.text);
-                  if (!mounted) return;
-                  if (!ok) {
-                    setState(
-                      () => _joinError =
-                          'Group not found. Check the code and try again.',
-                    );
-                  } else {
-                    setState(() {
-                      _showJoin = false;
-                      _joinController.clear();
-                      _joinError = '';
-                    });
-                  }
-                },
+                onPressed: () => _submitJoinCode(app, _joinController.text),
                 child: const Text('Join Group'),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              AppButton(
+                fullWidth: true,
+                variant: AppButtonVariant.secondary,
+                onPressed: () async {
+                  final scanned = await Navigator.push<String>(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ScanQRScreen()),
+                  );
+                  if (scanned != null) _submitJoinCode(app, scanned);
+                },
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.qr_code_scanner),
+                    SizedBox(width: AppSpacing.sm),
+                    Text('Scan QR Code'),
+                  ],
+                ),
               ),
             ],
           ),

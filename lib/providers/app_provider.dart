@@ -451,6 +451,9 @@ class AppProvider extends ChangeNotifier {
     final existingSlot = game.guestSlots
         .where((s) => s.inviterId == inviterId && s.slot == slotNo)
         .firstOrNull;
+    if (game.status.isActiveLive && game.rebuysClosed) {
+      return 'Late registration has closed - no new players can be added.';
+    }
     if (existingSlot != null && !existingSlot.available) {
       return 'slot taken';
     }
@@ -2607,6 +2610,10 @@ class AppProvider extends ChangeNotifier {
     final requester = _currentGame!.players
         .where((p) => p.id == playerId)
         .firstOrNull;
+    if (_currentGame!.status.isActiveLive && _currentGame!.rebuysClosed) {
+      addAnnouncement('Late registration has closed.', false);
+      return;
+    }
     _currentGame = _currentGame!.copyWith(
       players: _currentGame!.players
           .map(
@@ -2633,6 +2640,10 @@ class AppProvider extends ChangeNotifier {
   }
 
   void checkInPlayer(String playerId) {
+    if (_currentGame!.status.isActiveLive && _currentGame!.rebuysClosed) {
+      addAnnouncement('Late registration has closed.', false);
+      return;
+    }
     _pushUndo();
     _currentGame = _currentGame!.copyWith(
       players: _currentGame!.players

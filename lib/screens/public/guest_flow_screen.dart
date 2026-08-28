@@ -211,6 +211,17 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       return const SizedBox.shrink();
     }
 
+    // Race-safe: if we arrived via JoinScreen and the game just loaded,
+    // auto-advance from enterCode to eventIntro (tech spec §4.2).
+    if (_step == _GuestStep.enterCode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _step == _GuestStep.enterCode) {
+          setState(() => _step = _GuestStep.eventIntro);
+        }
+      });
+      return _buildCodeEntry();
+    }
+
     final registeredPlayers = game.players.where((p) => !p.isGuest).toList();
     final inviter = _selectedInviter == null
         ? null

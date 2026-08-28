@@ -1122,7 +1122,7 @@ class _ChatBubble extends StatelessWidget {
                         label: game.settings.rebuys
                             ? (game.settings.rebuyLimit == null
                                 ? 'Unlimited rebuys to L${game.settings.rebuysCloseLevel}'
-                                : '${game.settings.rebuyLimit} rebuys to L${game.settings.rebuysCloseLevel}${game.settings.rebuyCost != null ? ' @ \\${game.settings.rebuyCost}' : ''}')
+                                : '${game.settings.rebuyLimit} rebuys to L${game.settings.rebuysCloseLevel}${game.settings.rebuyCost != null ? ' @ ${game.settings.rebuyCost}' : ''}')
                             : 'No rebuys',
                         variant: game.settings.rebuys
                             ? AppBadgeVariant.gold

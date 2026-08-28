@@ -49,6 +49,11 @@ class _JoinScreenState extends State<JoinScreen> {
       );
       return;
     }
+    // Authenticate as guest so the Firestore projection and request queue
+    // are accessible after navigation (tech spec §10.2).
+    final app = context.read<AppProvider>();
+    await app.ensureGuestAuth();
+    if (!mounted) return;
     if (result == CodeLookupResult.tv) {
       context.go(RoutePaths.tvMode);
     } else {
@@ -245,7 +250,9 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
             if (code.contains('code=')) {
               extracted = code.split('code=').last.split('&').first;
             } else if (code.contains('/game/')) {
-              extracted = code.split('/game/').last;
+              // Strip query params and fragments after the code segment.
+              final segment = code.split('/game/').last;
+              extracted = segment.split('?').first.split('#').first;
             }
 
             Navigator.pop(context, extracted);

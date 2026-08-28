@@ -52,26 +52,27 @@ class MoneyUtils {
 
   // ── Display ───────────────────────────────────────────────────────────────
 
-  /// Formats integer cents as a currency string with 2 decimal places.
+  /// Formats integer cents as a plain number with 2 decimal places.
+  /// No currency symbol — spec §2.4 requires symbol-free display.
   ///
-  /// Example: formatCurrency(15000) == '$150.00'
-  ///          formatCurrency(5)      == '$0.05'
+  /// Example: formatCurrency(15000) == '150.00'
+  ///          formatCurrency(5)      == '0.05'
   static String formatCurrency(int cents) {
     final sign = cents < 0 ? '-' : '';
     final abs = cents.abs();
     final dollars = abs ~/ 100;
     final remainder = abs % 100;
-    return '$sign\$$dollars.${remainder.toString().padLeft(2, '0')}';
+    return '$sign$dollars.${remainder.toString().padLeft(2, '0')}';
   }
 
-  /// Formats a dollar double as a currency string (display only — never use
+  /// Formats a dollar double as a plain number (display only — never use
   /// double for intermediate calculations).
   ///
-  /// Example: formatCurrencyDollars(150.0) == '$150.00'
+  /// Example: formatCurrencyDollars(150.0) == '150.00'
   static String formatCurrencyDollars(double dollars) =>
       formatCurrency(toCents(dollars));
 
-  /// Signed display string, e.g. '+$15.00' / '-$5.00'.
+  /// Signed display string, e.g. '+15.00' / '-5.00'.
   static String formatSigned(int cents) {
     final sign = cents >= 0 ? '+' : '-';
     return '$sign${formatCurrency(cents.abs())}';

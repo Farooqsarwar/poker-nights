@@ -11,6 +11,7 @@ import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_alert_banner.dart';
 import '../../widgets/backgrounds.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/tournament_display_block.dart';
@@ -249,8 +250,25 @@ class _TVLayout extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
+      body: Column(
+        children: [
+          // Reconnection banner for TV mode (tech spec §4.2).
+          Consumer<AppProvider>(
+            builder: (_, app, x) {
+              if (app.hasReconnected) {
+                return AppAlertBanner(
+                  type: AppAlertType.success,
+                  message: 'Back online — data is live.',
+                  actionLabel: 'Dismiss',
+                  onAction: () => app.clearReconnectedBanner(),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
           if (constraints.maxWidth >= 900) {
             return Padding(
               padding: const EdgeInsets.all(16),
@@ -273,17 +291,24 @@ class _TVLayout extends StatelessWidget {
                           builder: (_, app, x) {
                             final lastSync = app.lastGameUpdate;
                             if (lastSync == null) return const SizedBox.shrink();
+                            final stale = DateTime.now().difference(lastSync).inSeconds > 10;
                             return Padding(
                               padding: const EdgeInsets.only(top: 8),
                               child: Align(
                                 alignment: Alignment.centerRight,
-                                child: Text(
-                                  'Synced ${_formatLastSync(lastSync)}',
-                                  style: AppTypography.mono(
-                                    size: 10,
-                                    color: AppColors.mutedForeground,
-                                  ),
-                                ),
+                                child: stale
+                                    ? AppAlertBanner(
+                                        type: AppAlertType.warning,
+                                        message:
+                                            'Connection interrupted — feed may be stale.',
+                                      )
+                                    : Text(
+                                        'Synced ${_formatLastSync(lastSync)}',
+                                        style: AppTypography.mono(
+                                          size: 10,
+                                          color: AppColors.mutedForeground,
+                                        ),
+                                      ),
                               ),
                             );
                           },
@@ -306,19 +331,29 @@ class _TVLayout extends StatelessWidget {
                   builder: (_, app, x) {
                     final lastSync = app.lastGameUpdate;
                     if (lastSync == null) return const SizedBox.shrink();
-                    return Text(
-                      'Synced ${_formatLastSync(lastSync)}',
-                      style: AppTypography.mono(
-                        size: 10,
-                        color: AppColors.mutedForeground,
-                      ),
-                    );
+                    final stale = DateTime.now().difference(lastSync).inSeconds > 10;
+                    return stale
+                        ? AppAlertBanner(
+                            type: AppAlertType.warning,
+                            message:
+                                'Connection interrupted — feed may be stale.',
+                          )
+                        : Text(
+                            'Synced ${_formatLastSync(lastSync)}',
+                            style: AppTypography.mono(
+                              size: 10,
+                              color: AppColors.mutedForeground,
+                            ),
+                          );
                   },
                 ),
               ],
             ),
           );
         },
+      ),
+          ),
+        ],
       ),
     );
   }

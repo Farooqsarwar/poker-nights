@@ -15,6 +15,7 @@ import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_timer.dart';
 import '../../widgets/app_avatar.dart';
@@ -233,6 +234,33 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Connection status banner (tech spec §4.2 — stale-state for guests).
+        Consumer<AppProvider>(
+          builder: (_, app, x) {
+            if (app.isOffline) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: AppAlertBanner(
+                  type: AppAlertType.warning,
+                  message:
+                      'Connection interrupted — showing last known state.',
+                ),
+              );
+            }
+            if (app.hasReconnected) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: AppAlertBanner(
+                  type: AppAlertType.success,
+                  message: 'Back online — data is live.',
+                  actionLabel: 'Dismiss',
+                  onAction: () => app.clearReconnectedBanner(),
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
         // Header
         Column(
           children: [

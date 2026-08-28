@@ -96,6 +96,14 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+
+    // Spec §3.3: Only admin can run final table.
+    if (!app.isAdmin) {
+      return const Scaffold(
+        body: Center(child: Text('Admin access required.')),
+      );
+    }
+
     final game = app.currentGame;
 
     if (game == null) {

@@ -115,7 +115,6 @@ class ResultPodiumScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                if (showAmounts)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.lg,
@@ -129,7 +128,7 @@ class ResultPodiumScreen extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      '${Formatters.chips(game.structure.prizePool)} prize pool',
+                      '${game.settings.name} prize pool',
                       style: AppTypography.monoSm.copyWith(
                         color: AppColors.primary,
                         fontWeight: FontWeight.w600,

@@ -6,6 +6,23 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 admin.initializeApp();
 const db = getFirestore();
 
+// ── Input Sanitization ───────────────────────────────────────────────────────
+// Spec §22: "Sanitize all chat, poll and name input."
+function sanitize(input: string): string {
+  return input
+    .replace(/<(script|style|iframe|object|embed)[^>]*>.*?<\/\1>/gis, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .substring(0, 1000); // max chat length
+}
+
 // ── Rate Limiting ────────────────────────────────────────────────────────────
 const RATE_LIMITS: Record<string, number> = {
   rsvp: 10,
@@ -86,12 +103,16 @@ export const rateLimitedChat = onCall(
     const allowed = await checkRateLimit(request.auth.uid, "chat", RATE_LIMITS.chat);
     if (!allowed) throw new HttpsError("resource-exhausted", "Too many messages. Wait a moment.");
 
+    // Spec §22: sanitize chat body server-side before persisting.
+    const sanitizedBody = sanitize(body);
+    if (!sanitizedBody) throw new HttpsError("invalid-argument", "Message cannot be empty.");
+
     const msgRef = db.collection("groups").doc(groupId).collection("chat").doc();
     await msgRef.set({
       id: msgRef.id,
       authorId,
       authorName,
-      body,
+      body: sanitizedBody,
       timestamp: FieldValue.serverTimestamp(),
       deleted: false,
       pinned: false,

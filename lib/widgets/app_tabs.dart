@@ -149,42 +149,46 @@ class _TabItemState extends State<_TabItem> {
   @override
   Widget build(BuildContext context) {
     final isActive = widget.isActive;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: AppDurations.fast,
-          curve: Curves.easeOut,
-          // Use very small padding when stacked (mobile) so they can squeeze in
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.stacked ? 2 : AppSpacing.lg,
-          ),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isActive
-                ? AppColors.primary.withValues(alpha: 0.05)
-                : _hovering
-                    ? AppColors.card.withValues(alpha: 0.20)
-                    : Colors.transparent,
-            border: Border(
-              bottom: BorderSide(
-                width: 2,
-                color: isActive ? AppColors.primary : Colors.transparent,
+    return Semantics(
+      selected: isActive,
+      button: true,
+      label: '${widget.tab.label}${widget.tab.count != null ? ', ${widget.tab.count}' : ''}',
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: AppDurations.fast,
+            curve: Curves.easeOut,
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.stacked ? 2 : AppSpacing.lg,
+            ),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isActive
+                  ? AppColors.primary.withValues(alpha: 0.05)
+                  : _hovering
+                      ? AppColors.card.withValues(alpha: 0.20)
+                      : Colors.transparent,
+              border: Border(
+                bottom: BorderSide(
+                  width: 2,
+                  color: isActive ? AppColors.primary : Colors.transparent,
+                ),
               ),
             ),
+            child: widget.stacked
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: _buildContent(isActive),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: _buildContent(isActive),
+                  ),
           ),
-          child: widget.stacked
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: _buildContent(isActive),
-                )
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: _buildContent(isActive),
-                ),
         ),
       ),
     );

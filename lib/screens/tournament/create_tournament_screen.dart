@@ -397,7 +397,30 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   bool _validateStep1() {
     _errors.clear();
     if (_name.text.trim().isEmpty) _errors['name'] = 'Required';
-    if (_date.text.trim().isEmpty) _errors['date'] = 'Required';
+    if (_date.text.trim().isEmpty) {
+      _errors['date'] = 'Required';
+    } else {
+      final parsed = DateTime.tryParse(_date.text.trim());
+      if (parsed == null) {
+        _errors['date'] = 'Invalid date format (YYYY-MM-DD)';
+      } else if (parsed.isBefore(DateTime.now())) {
+        _errors['date'] = 'Date must be in the future';
+      }
+    }
+    if (_time.text.trim().isEmpty) {
+      _errors['time'] = 'Required';
+    } else {
+      final parts = _time.text.trim().split(':');
+      if (parts.length != 2) {
+        _errors['time'] = 'Invalid time format (HH:MM)';
+      } else {
+        final h = int.tryParse(parts[0]);
+        final m = int.tryParse(parts[1]);
+        if (h == null || m == null || h < 0 || h > 23 || m < 0 || m > 59) {
+          _errors['time'] = 'Invalid time (HH:MM)';
+        }
+      }
+    }
     final b = num.tryParse(_buyIn.text) ?? 0;
     if (b <= 0) _errors['buyIn'] = 'Must be positive';
     setState(() {});

@@ -694,6 +694,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     ),
                   ],
                 ),
+                if (game.rebuysClosed) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  AppAlertBanner(
+                    type: AppAlertType.warning,
+                    message: 'Late registration is permanently closed. No new players can be added.',
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.sm),
                 AppButton(
                   variant: AppButtonVariant.ghost,

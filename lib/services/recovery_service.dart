@@ -145,12 +145,21 @@ class RecoveryService {
       final lastSavedString = data['lastSavedAt'] as String?;
       if (lastSavedString != null) {
         _lastSavedAt = DateTime.parse(lastSavedString);
-        final lastSavedAt = DateTime.parse(lastSavedString);
-        if (game.timerRunning) {
-          final elapsed = DateTime.now().difference(lastSavedAt).inSeconds;
-          var remaining = game.secondsRemaining - elapsed;
-          if (remaining < 0) remaining = 0;
-          return game.copyWith(secondsRemaining: remaining);
+        // Tech spec §4.3: persist timestamps and derive remaining time.
+        // When levelEndTime is preserved, the computed getter handles the
+        // derivation — no manual adjustment needed.  Only fall back to the
+        // secondsRemaining adjustment when the timer was paused (no
+        // levelEndTime) so the paused value stays accurate across recovery.
+        if (game.timerRunning && game.levelEndTime != null) {
+          // levelEndTime is preserved via the codec; the computed
+          // currentSecondsRemaining getter will derive the correct remaining
+          // time from the wall clock.  No modification needed.
+          return game;
+        }
+        if (!game.timerRunning) {
+          // Timer was paused — secondsRemaining is the source of truth and
+          // does not need adjustment (no time elapsed against the clock).
+          return game;
         }
       }
       return game;

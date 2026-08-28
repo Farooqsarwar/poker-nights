@@ -63,34 +63,38 @@ class _CodeDisplayState extends State<CodeDisplay> {
               ),
             ),
           ),
-          InkWell(
-            onTap: _copy,
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: AppSpacing.xs,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_copied) ...[
-                    Icon(
-                      Icons.check_circle,
-                      size: AppFontSizes.sm,
-                      color: AppColors.success,
+          Semantics(
+            button: true,
+            label: _copied ? 'Copied to clipboard' : 'Copy code',
+            child: InkWell(
+              onTap: _copy,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_copied) ...[
+                      Icon(
+                        Icons.check_circle,
+                        size: AppFontSizes.sm,
+                        color: AppColors.success,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                    ],
+                    Text(
+                      _copied ? 'Copied' : 'Copy',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: _copied
+                            ? AppColors.success
+                            : AppColors.mutedForeground,
+                      ),
                     ),
-                    const SizedBox(width: AppSpacing.xs),
                   ],
-                  Text(
-                    _copied ? 'Copied' : 'Copy',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: _copied
-                          ? AppColors.success
-                          : AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

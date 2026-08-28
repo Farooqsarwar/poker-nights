@@ -23,35 +23,40 @@ class AppToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Theme.of(context);
-    return InkWell(
-      onTap: () => onChanged(!value),
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedContainer(
-            duration: AppDurations.normal,
-            curve: Curves.easeInOut,
-            width: 44,
-            height: 24,
-            padding: const EdgeInsets.all(2),
-            decoration: Glass.glassToggle(active: value),
-            child: AnimatedAlign(
+    return Semantics(
+      toggled: value,
+      label: label ?? 'Toggle',
+      button: true,
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
               duration: AppDurations.normal,
               curve: Curves.easeInOut,
-              alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-              child: Container(
-                width: 20,
-                height: 20,
-                decoration: Glass.glassToggleThumb(),
+              width: 44,
+              height: 24,
+              padding: const EdgeInsets.all(2),
+              decoration: Glass.glassToggle(active: value),
+              child: AnimatedAlign(
+                duration: AppDurations.normal,
+                curve: Curves.easeInOut,
+                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: Glass.glassToggleThumb(),
+                ),
               ),
             ),
-          ),
-          if (label != null) ...[
-            const SizedBox(width: AppSpacing.md),
-            Text(label!, style: AppTypography.bodySm),
+            if (label != null) ...[
+              const SizedBox(width: AppSpacing.md),
+              Text(label!, style: AppTypography.bodySm),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

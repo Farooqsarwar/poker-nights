@@ -104,7 +104,7 @@ MainAction mainActionFor(
   }
 }
 
-/// Admin matrix (§7.2): Draft → Edit Event; Published → Review RSVPs;
+/// Admin matrix (§7.2): Draft → Review RSVPs; Published → Review RSVPs;
 /// Check-in available → Open Check-in; Attendance confirmed → Generate Final
 /// Structure; Ready → Start Tournament; Live → Manage Tournament; Rebuy
 /// break → Complete Rebuy & Add-on Break; Finished → View Results.
@@ -115,12 +115,11 @@ MainAction mainActionFor(
 MainAction _adminAction(LiveGame game) {
   switch (game.status) {
     case LiveGameStatus.draft:
-      // Label per spec §7.2 ("Edit Event"). This implementation edits and
-      // publishes drafts through the event page rather than re-entering the
-      // creation wizard, so the destination is the invitation/event route.
+      // Spec §7.2: Draft → "Review RSVPs". The event page allows editing
+      // draft settings and also shows the RSVP list once published.
       return const MainAction(
-        MainActionId.editEvent,
-        'Edit Event',
+        MainActionId.reviewRsvps,
+        'Review RSVPs',
         route: RoutePaths.invitation,
       );
     case LiveGameStatus.published:

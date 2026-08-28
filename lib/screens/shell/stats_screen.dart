@@ -52,12 +52,11 @@ class StatsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          // The FIVE basic player statistics only (Tech §15.2 — "no ROI,
+          // The SIX basic player statistics (Tech §15.2 — "no ROI,
           // profit …, graphs, streaks or advanced filters"; no separate
-          // personal game-history page). Audit fix C4: win/podium rate bars
-          // and the personal "Recent results" list were removed.
+          // personal game-history page).
           GridView.count(
-            crossAxisCount: MediaQuery.of(context).size.width < 600 ? 3 : 5,
+            crossAxisCount: MediaQuery.of(context).size.width < 600 ? 3 : 6,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: AppSpacing.sm,
@@ -84,6 +83,13 @@ class StatsScreen extends StatelessWidget {
               _HeadlineStat(
                 label: 'Knockouts',
                 value: '${user.stats.knockouts}',
+              ),
+              _HeadlineStat(
+                label: 'Win rate',
+                value: user.stats.played > 0
+                    ? '${((user.stats.wins / user.stats.played) * 100).toStringAsFixed(0)}%'
+                    : '—',
+                accent: AppColors.gold,
               ),
             ],
           ),

@@ -94,10 +94,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
     final isAdmin = app.isAdmin;
-    // Co-Admin can open this dashboard to grant rebuys/add-ons, but every
-    // tournament-advancing / blinds / seating control below is gated to
-    // isAdmin specifically — Co-Admin's scope stops at membership + rebuys.
-    final canOpenDashboard = isAdmin || app.isCoAdmin;
+    // MVP spec §3.1: exactly one administrator per event.
+    final canOpenDashboard = isAdmin;
 
     if (!canOpenDashboard) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

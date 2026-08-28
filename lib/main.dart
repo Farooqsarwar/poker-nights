@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -47,7 +48,17 @@ Future<void> main() async {
   };
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  
+
+  // Enable Firestore offline persistence (tech spec §4.1 — local recovery).
+  try {
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+    );
+  } catch (_) {
+    // Settings may already be set or Firestore unavailable in tests.
+  }
+
   // Use clean URLs (no #) so deep links like /join-group?code=X work directly.
   if (kIsWeb) usePathUrlStrategy();
   // -- Firebase App Check (tech spec section 22) --

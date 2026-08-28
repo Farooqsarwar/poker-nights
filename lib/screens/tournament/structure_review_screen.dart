@@ -117,9 +117,9 @@ class StructureReviewScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.xl),
               child: Column(
@@ -257,55 +257,63 @@ class StructureReviewScreen extends StatelessWidget {
               child: AppAlertBanner(type: AppAlertType.error, message: s),
             ),
           ),
-          // Summary cards
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
+          // Summary cards — use responsive widths so they don't overflow
+          // on screens narrower than 360px.
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth < 400
+                  ? constraints.maxWidth
+                  : (constraints.maxWidth / 3).floorToDouble().clamp(100.0, 180.0);
+              return Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: _PlayerCountCard(
+                      players: settings.players,
+                      isAdmin: isAdmin,
+                      onChanged: (v) => app.updateStructurePlayerCount(v),
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: _SummaryCard(
+                      label: 'Starting stack',
+                      value: Formatters.chips(structure.startingStack),
+                    ),
+                  ),
               SizedBox(
-                width: 150,
-                child: _PlayerCountCard(
-                  players: settings.players,
-                  isAdmin: isAdmin,
-                  onChanged: (v) => app.updateStructurePlayerCount(v),
-                ),
-              ),
-              SizedBox(
-                width: 150,
-                child: _SummaryCard(
-                  label: 'Starting stack',
-                  value: Formatters.chips(structure.startingStack),
-                ),
-              ),
-              SizedBox(
-                width: 150,
+                width: cardWidth,
                 child: _SummaryCard(
                   label: 'Total chips',
                   value: Formatters.chips(totalChips),
                 ),
               ),
               SizedBox(
-                width: 150,
+                width: cardWidth,
                 child: _SummaryCard(
                   label: 'Level duration',
                   value: '${structure.levelDuration}m',
                 ),
               ),
               SizedBox(
-                width: 150,
+                width: cardWidth,
                 child: _SummaryCard(
                   label: 'Levels',
                   value: '${structure.levels.length}',
                 ),
               ),
               SizedBox(
-                width: 150,
+                width: cardWidth,
                 child: _SummaryCard(
                   label: 'Est. finish',
                   value: finishWindow ?? Formatters.duration(totalMins),
                 ),
               ),
             ],
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.lg),
           // Starting chip plan
@@ -811,7 +819,7 @@ class StructureReviewScreen extends StatelessWidget {
                       children: [
                         Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
                         SizedBox(width: 6),
-                        Text('Event details'),
+                        Text('Edit settings'),
                       ],
                     ),
                   ),
@@ -889,7 +897,7 @@ class StructureReviewScreen extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Confirm structure'),
+                        Text('Confirm & Publish'),
                         SizedBox(width: 6),
                         Icon(
                           Icons.check_circle,

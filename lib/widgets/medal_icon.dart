@@ -22,7 +22,8 @@ class MedalIcon extends StatelessWidget {
     final IconData icon = switch (place) {
       1 => Icons.emoji_events,
       2 => Icons.military_tech,
-      _ => Icons.workspace_premium,
+      3 => Icons.workspace_premium,
+      _ => Icons.emoji_events_outlined,
     };
     return Icon(icon, size: size, color: effectiveColor);
   }

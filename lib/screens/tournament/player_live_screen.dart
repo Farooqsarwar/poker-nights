@@ -18,6 +18,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_tabs.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/tournament_display_block.dart';
@@ -136,10 +137,36 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
           children: [
             if (isFinalTable)
               Container(height: 4, color: AppColors.destructive),
+            // Connection status banner (tech spec §4.2 — stale-state).
+            Consumer<AppProvider>(
+              builder: (_, app, x) {
+                if (app.isOffline) {
+                  return AppAlertBanner(
+                    type: AppAlertType.warning,
+                    message:
+                        'Connection interrupted — showing last known state.',
+                    onDismiss: null,
+                  );
+                }
+                if (app.hasReconnected) {
+                  return AppAlertBanner(
+                    type: AppAlertType.success,
+                    message: 'Back online — data is live.',
+                    actionLabel: 'Dismiss',
+                    onAction: () => app.clearReconnectedBanner(),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
             // Header
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                AppBackButton(
+                  onTap: () => context.go(RoutePaths.invitation),
+                ),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

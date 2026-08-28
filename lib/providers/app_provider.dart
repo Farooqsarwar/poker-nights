@@ -22,6 +22,7 @@ import '../repositories/firebase_repository.dart';
 import '../utils/formatters.dart';
 import '../utils/mock_data.dart';
 import '../utils/model_codec.dart';
+import '../utils/sanitization.dart';
 import '../utils/tournament_engine.dart';
 import '../utils/voice_service.dart';
 import '../services/browser_notifications.dart';
@@ -336,13 +337,12 @@ class AppProvider extends ChangeNotifier {
     return _currentGroup.members.any((m) => m.id == user.id && m.isCoAdmin);
   }
 
-  /// Host/Admin or Co-Admin: may add members directly (in addition to the
-  /// invite-link/QR/join-code methods every member can share).
-  bool get canManageMembers => isAdmin || isCoAdmin;
+  /// MVP spec §3.1: exactly one administrator per event. Co-admin permissions
+  /// are restricted to admin-only until the multi-admin feature is implemented.
+  bool get canManageMembers => isAdmin;
 
-  /// Host/Admin or Co-Admin: may grant a rebuy/add-on. Members may only
-  /// *request* one (spec §4 — rebuys are never self-service).
-  bool get canGrantRebuys => isAdmin || isCoAdmin;
+  /// MVP spec §3.3: only admin can grant rebuys/add-ons.
+  bool get canGrantRebuys => isAdmin;
 
   /// This member's role in the current group, for role-picker UIs.
   GroupRole roleOf(AppUser member) => member.isAdmin
@@ -1349,7 +1349,7 @@ class AppProvider extends ChangeNotifier {
   /// email, without going through an invite link/QR/join code. Returns null
   /// on success, or a friendly error message for the UI.
   Future<String?> addMemberByEmail(String email) async {
-    if (!canManageMembers) return 'Only the Host or a Co-Admin can add members.';
+    if (!canManageMembers) return 'Only the Host can add members.';
     if (!_backendUp) return 'You are offline.';
     final trimmed = email.trim();
     if (trimmed.isEmpty) return 'Enter an email address.';
@@ -1948,6 +1948,7 @@ class AppProvider extends ChangeNotifier {
 
   // ── Timer ──────────────────────────────────────────────────────────────────
   Timer? _ticker;
+  Timer? _serverTimeRecalibration;
 
   /// Marks already announced per level (checklist 15-047/15-048) so the
   /// five-minute and one-minute warnings fire only once per level.
@@ -2130,6 +2131,17 @@ class AppProvider extends ChangeNotifier {
   DateTime get _serverNow =>
       DateTime.now().add(_serverTimeOffset ?? Duration.zero);
 
+  /// Starts periodic server-time re-calibration (tech spec §4.3). During a
+  /// long tournament the local clock can drift; re-calibrating every 10 minutes
+  /// keeps the timer display accurate across all connected devices.
+  void _startServerTimeRecalibration() {
+    _serverTimeRecalibration?.cancel();
+    _serverTimeRecalibration = Timer.periodic(
+      const Duration(minutes: 10),
+      (_) => _calibrateServerTime(),
+    );
+  }
+
   void startTimer() {
     // Client rule: no guessed player count at setup — the AI finalises the
     // stacks/blinds/levels right now, from the actual final headcount
@@ -2146,6 +2158,10 @@ class AppProvider extends ChangeNotifier {
     );
 
     _levelAnnouncementMarks.clear();
+    // Re-calibrate server time and start periodic re-calibration for long
+    // tournaments (tech spec §4.3).
+    _calibrateServerTime();
+    _startServerTimeRecalibration();
     final level = _currentGame!.currentLevelData;
     _currentGame = _currentGame!.copyWith(
       timerRunning: true,
@@ -2326,9 +2342,13 @@ class AppProvider extends ChangeNotifier {
       return p;
     }).toList();
     final remaining = updated.where((p) => p.active).length;
-    final wasMoreThanNine =
-        _currentGame!.players.where((p) => p.active).length > 9;
-    if (remaining == 9 && wasMoreThanNine) {
+    final prevActive = _currentGame!.players.where((p) => p.active).length;
+    final maxPerTable = effectiveTableSettings.maxPerTable;
+    // Final table redraw only fires for multi-table events (spec §7: "If a
+    // multi-table event hits 9 players, a complete random redraw occurs.
+    // Single table events do NOT trigger a redraw at 9 players.").
+    final wasMultiTable = prevActive > maxPerTable;
+    if (remaining == 9 && wasMultiTable) {
       _currentGame = _currentGame!.copyWith(
         players: updated,
         status: LiveGameStatus.finaltable,
@@ -2678,7 +2698,7 @@ class AppProvider extends ChangeNotifier {
   String? addWalkInPlayer(String name) {
     final game = _currentGame;
     if (game == null) return 'No active game.';
-    final trimmed = name.trim();
+    final trimmed = Sanitization.sanitizeName(name);
     if (trimmed.isEmpty) return 'Enter a name for the walk-in.';
     switch (game.status) {
       case LiveGameStatus.completed:
@@ -2922,10 +2942,11 @@ class AppProvider extends ChangeNotifier {
     }
 
     final guestId = 'g-${DateTime.now().millisecondsSinceEpoch}';
+    final sanitizedName = Sanitization.sanitizeName(name);
     _saveGuestSession(
       GuestSession(
         gameId: game.id,
-        name: name.trim(),
+        name: sanitizedName,
         inviterId: inviterId,
         slot: slot,
       ),
@@ -4161,8 +4182,10 @@ class AppProvider extends ChangeNotifier {
   /// cannot be sent (empty, too long or rate limited), or null on success.
   String? sendChatMessage(String? gameId, String body) {
     if (_user == null) return null;
-    if (body.trim().isEmpty) return 'Message cannot be empty.';
-    if (body.trim().length > maxChatMessageLength) {
+    // Spec §22: sanitize input before processing.
+    final sanitized = Sanitization.sanitizeChat(body);
+    if (sanitized.isEmpty) return 'Message cannot be empty.';
+    if (sanitized.length > maxChatMessageLength) {
       return 'Message is too long — maximum $maxChatMessageLength characters.';
     }
     if (_chatRateLimited(_user!.id)) {
@@ -4173,7 +4196,7 @@ class AppProvider extends ChangeNotifier {
       id: 'msg-${DateTime.now().millisecondsSinceEpoch}',
       authorId: _user!.id,
       authorName: _user!.name,
-      body: body.trim(),
+      body: sanitized,
       timestamp: DateTime.now(),
       deleted: false,
     );
@@ -4239,9 +4262,10 @@ class AppProvider extends ChangeNotifier {
     List<String> options, {
     bool multi = false,
   }) {
-    final trimmedQuestion = question.trim();
+    // Spec §22: sanitize all poll input.
+    final trimmedQuestion = Sanitization.sanitizePollQuestion(question);
     final trimmed = options
-        .map((o) => o.trim())
+        .map((o) => Sanitization.sanitizePollOption(o))
         .where((o) => o.isNotEmpty)
         .toList();
     if (trimmedQuestion.isEmpty) return 'Poll needs a question.';
@@ -4393,6 +4417,24 @@ class AppProvider extends ChangeNotifier {
       // edits are never clobbered (locked architecture §writes).
       if (!_isGameAuthority) {
         _patchActiveGame(_rsvpDotPatch(before, updated));
+      }
+      // Notify the admin of RSVP changes (spec §8 notification triggers).
+      if (_currentGroup.ownerId != userId) {
+        final playerName = _currentGame!.players
+            .where((p) => p.id == userId)
+            .firstOrNull
+            ?.name;
+        pushNotification(
+          AppNotification(
+            id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+            title: 'RSVP update',
+            body: '${playerName ?? 'A member'} is ${rsvp?.label ?? 'no response'}.',
+            type: NotificationType.rsvp,
+            link: '/invitation',
+            read: false,
+            timestamp: DateTime.now(),
+          ),
+        );
       }
     }
 
@@ -5073,6 +5115,7 @@ class AppProvider extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+    _serverTimeRecalibration?.cancel();
     _authSub?.cancel();
     _connectivitySub?.cancel();
     _teardownUserData();

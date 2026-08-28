@@ -59,28 +59,31 @@ class AppBadge extends StatelessWidget {
       ),
     };
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppRadius.xs),
-        border: Border.all(
-          color: tint.withValues(
-            alpha: border ? Glass.borderActiveOpacity : Glass.borderOpacity,
+    return Semantics(
+      label: label,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(AppRadius.xs),
+          border: Border.all(
+            color: tint.withValues(
+              alpha: border ? Glass.borderActiveOpacity : Glass.borderOpacity,
+            ),
           ),
+          boxShadow: [
+            BoxShadow(
+              color: tint.withValues(alpha: 0.08),
+              blurRadius: 6,
+            ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: tint.withValues(alpha: 0.08),
-            blurRadius: 6,
+        child: Text(
+          label,
+          style: AppTypography.bodyXs.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w500,
           ),
-        ],
-      ),
-      child: Text(
-        label,
-        style: AppTypography.bodyXs.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w500,
         ),
       ),
     );

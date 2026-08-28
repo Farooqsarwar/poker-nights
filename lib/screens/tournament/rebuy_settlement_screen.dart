@@ -234,8 +234,8 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                       app.grantAddOn(id);
                     }
                     app.confirmSettlement();
-                    app.updateGameStatus(LiveGameStatus.running);
-                    app.resumeTimer();
+                    // Spec §3.2: timer must NOT auto-resume — admin manually
+                    // starts the next level from the dashboard.
                     context.go(RoutePaths.adminDashboard);
                   },
                 );

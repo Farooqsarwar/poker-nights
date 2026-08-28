@@ -55,6 +55,18 @@ const _publicPaths = {
   RoutePaths.join,
 };
 
+/// Admin-only routes — non-admins are bounced to invitation (if a game exists)
+/// or home.
+const _adminPaths = {
+  RoutePaths.createTournament,
+  RoutePaths.checkIn,
+  RoutePaths.adminDashboard,
+  RoutePaths.finalTable,
+  RoutePaths.rebuySettlement,
+  RoutePaths.completeTournament,
+  RoutePaths.structureReview,
+};
+
 /// Shell routes a guest session (no account) may enter — mirrors
 /// `ScreenShell._guestAllowed`.
 const _guestAllowed = {RoutePaths.playerLive, RoutePaths.resultPodium};
@@ -82,6 +94,11 @@ GoRouter buildAppRouter(AppProvider app) {
         pendingDeepLink = state.uri.toString();
       }
       return path == RoutePaths.splash ? null : RoutePaths.splash;
+    }
+
+    // Admin-only routes: bounce non-admins away before the screen renders.
+    if (_adminPaths.contains(path) && !app.isAdmin) {
+      return app.currentGame != null ? RoutePaths.invitation : RoutePaths.home;
     }
 
     final guestOk = app.hasGuestSession && _guestAllowed.contains(path);

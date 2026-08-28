@@ -26,6 +26,7 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/code_display.dart';
 import '../../widgets/rsvp_badge.dart';
+import '../../widgets/chat_sheet.dart';
 
 /// Invitation / RSVP page mirroring the web `InvitationPage`.
 class InvitationScreen extends StatefulWidget {
@@ -85,6 +86,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
     }
 
     final settings = game.settings;
+    final group = app.currentGroup;
     final myPlayer = game.players.where((p) => p.id == user?.id).firstOrNull;
     final going = game.players
         .where((p) => p.rsvp != null && p.rsvp!.isGoing)
@@ -474,6 +476,74 @@ class _InvitationScreenState extends State<InvitationScreen> {
             const SizedBox(height: AppSpacing.lg),
           ],
 
+          // Chat & Polls — visible to members only (spec §1: "Event rules,
+          // own RSVP, chat, polls"; guests see none of these).
+          if (!app.isGuest) ...[
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.chat_bubble_outline, size: 16, color: AppColors.icon),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        'Chat & Polls',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (game.chat.isNotEmpty)
+                        AppBadge(
+                          label: '${game.chat.length}',
+                          variant: AppBadgeVariant.green,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppButton(
+                    fullWidth: true,
+                    size: AppButtonSize.sm,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => ChatSheet.show(context, game.id),
+                    child: const Text('Open chat'),
+                  ),
+                  if (group.polls.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    for (final poll in group.polls.take(3))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: AppCard(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                poll.question,
+                                style: AppTypography.bodySm.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Text(
+                                '${poll.totalVotes} vote${poll.totalVotes == 1 ? '' : 's'}${poll.closed ? ' · closed' : ''}',
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+
           // Admin actions
         ],
       ),
@@ -802,12 +872,43 @@ class _EditEventFormState extends State<_EditEventForm> {
 
   void _save() {
     final s = widget.settings;
+    // Validate required fields before saving.
+    final name = _name.text.trim();
+    if (name.isEmpty) {
+      showAppModal(
+        context: context,
+        title: 'Validation Error',
+        child: const Text('Event name cannot be empty.'),
+      );
+      return;
+    }
+    final buyInVal = num.tryParse(_buyIn.text) ?? 0;
+    if (buyInVal <= 0) {
+      showAppModal(
+        context: context,
+        title: 'Validation Error',
+        child: const Text('Buy-in must be a positive number.'),
+      );
+      return;
+    }
     final newDate = _date.text.trim().isEmpty ? s.date : _date.text.trim();
     final newTime = _time.text.trim().isEmpty ? s.time : _time.text.trim();
+    // Validate date format if changed.
+    if (newDate != s.date) {
+      final parsed = DateTime.tryParse(newDate);
+      if (parsed == null) {
+        showAppModal(
+          context: context,
+          title: 'Validation Error',
+          child: const Text('Invalid date format (YYYY-MM-DD).'),
+        );
+        return;
+      }
+    }
     // Player count is intentionally not editable here — it is derived from
     // who RSVPs (Going / Going +1/+2) and who actually checks in.
     final newS = s.copyWith(
-      name: _name.text.trim().isEmpty ? s.name : _name.text.trim(),
+      name: name,
       date: newDate,
       time: newTime,
       location: _location.text.trim(),
@@ -1466,7 +1567,7 @@ class _ContextualMainButton extends StatelessWidget {
             fullWidth: true,
             size: AppButtonSize.xl,
             onPressed: () => _openEditModal(context, app, game),
-            child: const Text('Edit Event'),
+            child: const Text('Review RSVPs'),
           );
         case LiveGameStatus.published:
           // Audit fix (E4): the button used to jump to Check-in. It now

@@ -56,6 +56,14 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+
+    // Spec §3.3: Only admin can complete a tournament.
+    if (!app.isAdmin) {
+      return const Scaffold(
+        body: Center(child: Text('Admin access required.')),
+      );
+    }
+
     final game = app.currentGame;
 
     if (game == null) {

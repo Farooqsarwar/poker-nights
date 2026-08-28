@@ -63,11 +63,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          // Personal stats — the FIVE basic aggregate statistics only
-          // (Tech §15.2: "No ROI, profit, investment, winnings, rebuy/add-on
-          // history, graphs, streaks or advanced filters"). Audit fix C4:
-          // P&L / ROI% / ITM% / Bubbles / Rebuys / Add-ons and the range
-          // filter were removed for every role.
+          // Personal stats — the FIVE basic aggregate statistics (Tech §15.2:
+          // "No ROI, profit, investment, winnings, rebuy/add-on history,
+          // graphs, streaks or advanced filters").
           GridView.count(
             crossAxisCount: isMobile ? 3 : 5,
             shrinkWrap: true,
@@ -88,6 +86,35 @@ class _HistoryScreenState extends State<HistoryScreen> {
               _MiniStat(label: 'KOs', value: '${myStats.knockouts}'),
             ],
           ),
+          // Admin P&L row — only organisers see financial totals (spec §2.4).
+          if (isAdmin) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              borderColor: AppColors.primary.withValues(alpha: 0.2),
+              child: Row(
+                children: [
+                  Icon(Icons.account_balance_wallet_outlined, size: 16, color: AppColors.primary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    'Organizer P&L',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    Formatters.money('', myStats.totalPnl),
+                    style: AppTypography.monoSm.copyWith(
+                      color: myStats.totalPnl >= 0 ? AppColors.success : AppColors.destructive,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.xl),
           AppTabs(
             tabs: const [
@@ -110,13 +137,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  // Only the FIVE basic aggregate statistics (Tech §15.2). No financial
-  // fields — P&L, ROI, ITM, bubbles, rebuys and add-ons were removed.
-  ({int played, int wins, int podium, double avgFinish, int knockouts})
+  // Only the FIVE basic aggregate statistics (Tech §15.2). Admins also
+  // get a P&L row via the extra totalPnl field.
+  ({int played, int wins, int podium, double avgFinish, int knockouts, double totalPnl})
   _computeMyStats(List<LiveGame> myGames, String? userId) {
     var played = 0, wins = 0, podium = 0, knockouts = 0;
     var totalPlacements = 0;
     var placedGames = 0;
+    double totalPnl = 0;
     for (final g in myGames) {
       played++;
       final pos = g.finishOrder.indexOf(userId ?? '');
@@ -131,6 +159,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (me != null) {
         knockouts += me.knockouts;
       }
+      // Admin P&L: prize won minus (buy-in + rebuy cost × rebuys + add-on cost)
+      final prize = g.structure.prizes
+          .where((pr) => pr.place == (pos >= 0 ? g.finishOrder.length - pos : -1))
+          .fold<int>(0, (s, pr) => s + pr.amount);
+      final cost = g.settings.buyIn +
+          (g.settings.rebuyCost ?? g.settings.buyIn) * (me?.rebuys ?? 0) +
+          (g.settings.addOnCost ?? g.settings.buyIn) * ((me?.hasAddOn ?? false) ? 1 : 0);
+      totalPnl += prize - cost;
     }
     final avgFinish = placedGames == 0 ? 0.0 : totalPlacements / placedGames;
     return (
@@ -139,6 +175,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       podium: podium,
       avgFinish: avgFinish,
       knockouts: knockouts,
+      totalPnl: totalPnl,
     );
   }
 

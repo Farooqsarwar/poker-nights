@@ -7,8 +7,15 @@ import '../models/tournament.dart';
 
 /// Tournament structure engine — a faithful Dart port of the web app's
 /// `src/engine/tournament.ts`. Used to generate mock structures for the UI.
+///
+/// Engine version is tracked for deterministic structure regeneration and
+/// future compatibility (tech spec §4.1 — shared, versioned module).
 class TournamentEngine {
   TournamentEngine._();
+
+  /// Semantic version of this engine implementation. Persisted with each
+  /// generated structure so the UI can detect engine upgrades.
+  static const String engineVersion = '2.0.0';
 
   static const Map<String, List<ChipColor>> chipPresets = {
     'Standard 300': [

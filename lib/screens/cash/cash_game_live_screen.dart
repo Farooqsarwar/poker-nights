@@ -133,6 +133,14 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+
+    // Spec §3.3: Cash game module is admin-only.
+    if (!app.isAdmin) {
+      return const Scaffold(
+        body: Center(child: Text('Admin access required.')),
+      );
+    }
+
     final session = app.cashSession;
 
     if (session == null) {

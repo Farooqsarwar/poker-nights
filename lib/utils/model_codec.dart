@@ -442,7 +442,6 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'seatingConfirmed': game.seatingConfirmed,
     'checkInClosed': game.checkInClosed,
     'structureConfirmed': game.structureConfirmed,
-    'structureLockedAtT10': game.structureLockedAtT10,
     'dealerPlayerId': game.dealerPlayerId,
     'guestSlots': game.guestSlots.map(guestSlotToMap).toList(),
     'originalLevels': game.originalLevels?.map(blindLevelToMap).toList(),
@@ -492,7 +491,6 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       seatingConfirmed: (map['seatingConfirmed'] as bool?) ?? false,
       checkInClosed: (map['checkInClosed'] as bool?) ?? false,
       structureConfirmed: (map['structureConfirmed'] as bool?) ?? false,
-      structureLockedAtT10: (map['structureLockedAtT10'] as bool?) ?? false,
       dealerPlayerId: map['dealerPlayerId'] as String?,
       guestSlots: _mapList(map['guestSlots'] as List? ?? const [])
           .map(guestSlotFromMap)

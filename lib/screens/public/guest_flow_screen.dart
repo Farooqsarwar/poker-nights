@@ -161,7 +161,22 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       );
       if (!mounted) return;
       if (err != null) {
-        setState(() => _nameError = err);
+        if (err.contains('already')) {
+          // C3: Guide guest back to pick another slot on conflict
+          setState(() {
+            _selectedSlot = null;
+            _step = _GuestStep.chooseSlot;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(err + ' Please select a different slot.'),
+                backgroundColor: AppColors.warning,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          });
+        } else {
+          setState(() => _nameError = err);
+        }
         return;
       }
     }

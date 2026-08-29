@@ -625,7 +625,7 @@ class _StructureStatusCard extends StatelessWidget {
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
     final hasStructure = game.structure.levels.isNotEmpty;
-    final reviewOpen = game.structureReviewOpen;
+    final reviewOpen = (game.status == LiveGameStatus.ready);
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -1747,50 +1747,236 @@ class _ContextualMainButton extends StatelessWidget {
             child: const Text('Check In'),
           );
         } else {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your RSVP',
-                style: AppTypography.bodySm.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final opt in const [
-                      Rsvp.going,
-                      Rsvp.goingPlus1,
-                      Rsvp.goingPlus2,
-                      Rsvp.goingPlus3,
-                      Rsvp.goingPlus4,
-                      Rsvp.maybe,
-                      Rsvp.cant,
-                    ])
-                      Padding(
-                        padding: const EdgeInsets.only(right: AppSpacing.sm),
-                        child: _RsvpChip(
-                          label: opt.label,
-                          active: p.rsvp == opt,
-                          enabled: !app.rsvpCutoffPassed,
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            app.setRSVP(opt);
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+          return _RsvpSection(
+            myPlayer: p,
+            cutoffPassed: app.rsvpCutoffPassed,
+            onRsvp: (rsvp) {
+              HapticFeedback.lightImpact();
+              app.setRSVP(rsvp);
+            },
           );
         }
       }
     }
     return const SizedBox.shrink();
+  }
+}
+
+/// The full member RSVP section: three status chips (Going / Maybe / Can't)
+/// and, when "Going" is selected, an inline guest-count stepper (0–4).
+/// Spec §4.3: guest count is part of the Going answer, not a separate chip.
+class _RsvpSection extends StatefulWidget {
+  const _RsvpSection({
+    required this.myPlayer,
+    required this.cutoffPassed,
+    required this.onRsvp,
+  });
+
+  final Player myPlayer;
+  final bool cutoffPassed;
+  final void Function(Rsvp?) onRsvp;
+
+  @override
+  State<_RsvpSection> createState() => _RsvpSectionState();
+}
+
+class _RsvpSectionState extends State<_RsvpSection> {
+  /// The number of extra guests the user wants to bring (0–4).
+  int _guestCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Restore current guest count from the existing RSVP.
+    final rsvp = widget.myPlayer.rsvp;
+    if (rsvp != null && rsvp.isGoing) {
+      _guestCount = rsvp.guestCount;
+    }
+  }
+
+  Rsvp _rsvpForGuestCount(int guests) => switch (guests) {
+        1 => Rsvp.goingPlus1,
+        2 => Rsvp.goingPlus2,
+        3 => Rsvp.goingPlus3,
+        4 => Rsvp.goingPlus4,
+        _ => Rsvp.going,
+      };
+
+  bool get _isGoing {
+    final r = widget.myPlayer.rsvp;
+    return r != null && r.isGoing;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = widget.myPlayer.rsvp;
+    final enabled = !widget.cutoffPassed;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Your RSVP',
+          style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        // Primary status chips: Going / Maybe / Can't
+        Row(
+          children: [
+            _RsvpChip(
+              label: 'Going',
+              active: _isGoing,
+              enabled: enabled,
+              onTap: () {
+                // Preserve current guest count when re-tapping "Going".
+                widget.onRsvp(_rsvpForGuestCount(_guestCount));
+              },
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            _RsvpChip(
+              label: 'Maybe',
+              active: current == Rsvp.maybe,
+              enabled: enabled,
+              onTap: () => widget.onRsvp(Rsvp.maybe),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            _RsvpChip(
+              label: "Can't come",
+              active: current == Rsvp.cant,
+              enabled: enabled,
+              onTap: () => widget.onRsvp(Rsvp.cant),
+            ),
+          ],
+        ),
+        // Guest-count stepper — only visible when "Going" is selected.
+        if (_isGoing && enabled) ...[
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Icon(
+                Icons.group_outlined,
+                size: 16,
+                color: AppColors.mutedForeground,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                'Bringing guests',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const Spacer(),
+              _GuestCountStepper(
+                value: _guestCount,
+                max: 4,
+                onChanged: (n) {
+                  setState(() => _guestCount = n);
+                  widget.onRsvp(_rsvpForGuestCount(n));
+                },
+              ),
+            ],
+          ),
+          if (_guestCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(
+                'You + $_guestCount guest${_guestCount > 1 ? 's' : ''} = ${_guestCount + 1} total seats',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.success,
+                ),
+              ),
+            ),
+        ],
+        if (widget.cutoffPassed)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Text(
+              'RSVPs are now closed.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A compact +/− stepper for the guest count (0–max).
+class _GuestCountStepper extends StatelessWidget {
+  const _GuestCountStepper({
+    required this.value,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final int value;
+  final int max;
+  final void Function(int) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _StepButton(
+          icon: Icons.remove,
+          enabled: value > 0,
+          onTap: () => onChanged(value - 1),
+        ),
+        SizedBox(
+          width: 32,
+          child: Center(
+            child: Text(
+              '$value',
+              style: AppTypography.monoSm.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.foreground,
+              ),
+            ),
+          ),
+        ),
+        _StepButton(
+          icon: Icons.add,
+          enabled: value < max,
+          onTap: () => onChanged(value + 1),
+        ),
+      ],
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  const _StepButton({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: enabled ? AppColors.primary : AppColors.muted,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+        child: Icon(
+          icon,
+          size: 16,
+          color: enabled
+              ? AppColors.primaryForeground
+              : AppColors.mutedForeground,
+        ),
+      ),
+    );
   }
 }
 

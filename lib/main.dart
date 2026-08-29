@@ -14,6 +14,7 @@ import 'app/router.dart';
 import 'app/theme.dart';
 import 'firebase_options.dart';
 import 'providers/app_provider.dart';
+import 'repositories/firebase_repository.dart';
 import 'responsive/responsive.dart';
 import 'services/fcm_service.dart';
 import 'theme/theme_palette.dart';
@@ -70,6 +71,9 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('FCM init failed: $e');
   }
+
+  // Initialize Google Sign-In singleton (must happen before signInWithGoogle).
+  await FirebaseRepository.initGoogleSignIn();
 
   final appProvider = AppProvider();
   runApp(

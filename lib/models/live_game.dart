@@ -252,7 +252,6 @@ class LiveGame {
     this.seatingConfirmed = false,
     this.checkInClosed = false,
     this.structureConfirmed = false,
-    this.structureLockedAtT10 = false,
     this.dealerPlayerId,
     this.guestSlots = const [],
     this.originalLevels,
@@ -291,7 +290,7 @@ class LiveGame {
   final bool seatingConfirmed;
 
   /// True once the admin closes door check-in. Further walk-ins are not added
-  /// and the host is prompted to start the tournament (spec §4.7).
+  /// (spec §4.7).
   final bool checkInClosed;
 
   /// True once the admin has reviewed and confirmed the AI-generated
@@ -302,7 +301,6 @@ class LiveGame {
   /// minutes (using the final "Going" headcount) has run. Set once by
   /// [AppProvider]'s ticker and never cleared, so the firm lock only fires
   /// a single time per tournament regardless of how long the app stays open.
-  final bool structureLockedAtT10;
 
   /// Randomly assigned initial dealer for the current seating (13-012,
   /// 13-026). The system does not track subsequent dealer-button rotation
@@ -402,20 +400,6 @@ class LiveGame {
     return currentLevel > settings.rebuysCloseLevel;
   }
 
-  /// Client feedback (07-018): the AI only finalises stacks/blinds/levels and
-  /// the structure review opens 30 minutes before the scheduled start — or as
-  /// soon as the game moves out of draft/published (check-in is imminent).
-  bool get structureReviewOpen {
-    if (status == LiveGameStatus.checkin ||
-        status.isActiveLive ||
-        status == LiveGameStatus.completed ||
-        status == LiveGameStatus.cancelled) {
-      return true;
-    }
-    final start = settings.scheduledStart;
-    if (start == null) return false;
-    return DateTime.now().isAfter(start.subtract(const Duration(minutes: 30)));
-  }
 
   /// Starting stacks are frozen the moment the tournament goes live. Blinds,
   /// levels and the player count stay editable during play (client feedback).
@@ -424,22 +408,6 @@ class LiveGame {
       status == LiveGameStatus.paused ||
       status == LiveGameStatus.rebuypause ||
       status == LiveGameStatus.finaltable;
-
-  /// The AI re-estimates the structure with the current expected player count
-  /// inside the 30-minute window before start (07-018).
-  bool get estimateDue =>
-      !stacksLocked && structureReviewOpen && settings.scheduledStart != null;
-
-  /// True once the scheduled start is 10 minutes away (or past) and the firm
-  /// pre-start lock hasn't run yet. Feature spec: at T-10 the system takes
-  /// the final "Going" headcount and locks the blind structure, on top of
-  /// (not replacing) the existing 30-minute rolling estimate.
-  bool get t10LockDue {
-    if (structureLockedAtT10 || stacksLocked) return false;
-    final start = settings.scheduledStart;
-    if (start == null) return false;
-    return DateTime.now().isAfter(start.subtract(const Duration(minutes: 10)));
-  }
 
   LiveGame copyWith({
     String? id,
@@ -464,7 +432,6 @@ class LiveGame {
     bool? seatingConfirmed,
     bool? checkInClosed,
     bool? structureConfirmed,
-    bool? structureLockedAtT10,
     String? dealerPlayerId,
     List<GuestSlot>? guestSlots,
     List<BlindLevel>? originalLevels,
@@ -496,7 +463,6 @@ class LiveGame {
       seatingConfirmed: seatingConfirmed ?? this.seatingConfirmed,
       checkInClosed: checkInClosed ?? this.checkInClosed,
       structureConfirmed: structureConfirmed ?? this.structureConfirmed,
-      structureLockedAtT10: structureLockedAtT10 ?? this.structureLockedAtT10,
       dealerPlayerId: dealerPlayerId ?? this.dealerPlayerId,
       guestSlots: guestSlots ?? this.guestSlots,
       originalLevels: originalLevels ?? this.originalLevels,

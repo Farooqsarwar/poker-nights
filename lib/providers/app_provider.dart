@@ -1030,6 +1030,53 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  /// Triggers Google Sign-In and authenticates with Firebase. Returns `null`
+  /// on success, an empty string when the user cancels (caller should no-op),
+  /// or a friendly error message on failure.
+  Future<String?> loginWithGoogle() async {
+    try {
+      final cred = await _repo.signInWithGoogle();
+      if (cred == null) return ''; // user cancelled — silent abort
+      if (cred.user != null) await _hydrateUser(cred.user!);
+      return null;
+    } on fa.FirebaseAuthException catch (e) {
+      return switch (e.code) {
+        'account-exists-with-different-credential' =>
+          'An account already exists with this email using a different sign-in method.',
+        'invalid-credential' => 'Google sign-in failed. Please try again.',
+        'user-disabled' => 'This account has been disabled.',
+        'network-request-failed' => 'Network error. Check your connection.',
+        _ => e.message ?? 'Google sign-in failed. Please try again.',
+      };
+    } catch (e) {
+      return 'Google sign-in failed. Please try again.';
+    }
+  }
+
+  /// Upgrades the current anonymous guest session to a Google-linked account.
+  /// Returns `null` on success, empty string on cancel, or an error message.
+  Future<String?> convertGuestWithGoogle() async {
+    if (!_repo.isSignedInAsGuest) return 'Not a guest session.';
+    try {
+      final cred = await _repo.linkGuestWithGoogle();
+      if (cred == null) return ''; // user cancelled
+      if (cred.user != null) await _hydrateUser(cred.user!);
+      return null;
+    } on fa.FirebaseAuthException catch (e) {
+      return switch (e.code) {
+        'credential-already-in-use' ||
+        'email-already-in-use' =>
+          'A Google account already exists for this email.',
+        'network-request-failed' => 'Network error. Check your connection.',
+        _ => e.message ?? 'Google sign-in failed. Please try again.',
+      };
+    } on StateError {
+      return 'Your session expired. Please sign in again.';
+    } catch (e) {
+      return 'Google sign-in failed. Please try again.';
+    }
+  }
+
   Future<void> logout() async {
     // Remove current device FCM token before signing out so stale tokens
     // don't linger on the user's Firestore doc.
@@ -1498,9 +1545,9 @@ class AppProvider extends ChangeNotifier {
 
   LiveGame createGame(GameSettings settings) {
     // Client flow: creating an event does NOT generate the structure. The AI
-    // estimates stacks/blinds/levels 30 minutes before start, using the
-    // attendance taken from RSVPs (Going + Going +N) — see
-    // [generateStructureFromRsvps]. Until then the structure stays empty.
+    // finalises stacks/blinds/levels when the Admin taps "Generate Final
+    // Structure" during check-in, using confirmed attendance.
+    // Until then the structure stays empty.
     final structure = const TournamentStructure(
       startingStack: 0,
       chipPlan: [],
@@ -1585,7 +1632,7 @@ class AppProvider extends ChangeNotifier {
     _currentGame = _currentGame!.copyWith(status: status);
     // Client feedback (07-018): inside the 30-minute window before start the
     // AI refreshes the stacks/blinds/levels estimate from the expected count.
-    if (status == LiveGameStatus.checkin) refreshEstimate();
+    if (status == LiveGameStatus.checkin) generateFinalStructure(currentGame!.confirmedCount);
     if (status == LiveGameStatus.checkin && wasPublished) {
       pushNotification(
         AppNotification(
@@ -1755,7 +1802,7 @@ class AppProvider extends ChangeNotifier {
     }
 
     if (affectsStructure) {
-      if (game.structure.levels.isEmpty && !game.structureReviewOpen) {
+      if (game.structure.levels.isEmpty && !(game.status == LiveGameStatus.ready)) {
         _currentGame = game.copyWith(
           settings: s,
           players: clearRsvps
@@ -1979,9 +2026,6 @@ class AppProvider extends ChangeNotifier {
   void _startTick() {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      // Firm T-10 structure lock — checked every tick regardless of whether
-      // the tournament timer itself is running yet (it isn't, pre-start).
-      _maybeApplyT10Lock();
       if (_currentGame == null || !_currentGame!.timerRunning) return;
       int remaining;
       if (_currentGame!.levelEndTime != null) {
@@ -3642,13 +3686,12 @@ class AppProvider extends ChangeNotifier {
   /// the 30-minute pre-start window is open (client rule: the structure is
   /// reviewed ~30 minutes before the game, while people are still deciding
   /// whether to attend).
-  void generateStructureFromRsvps({bool force = false}) {
+  /// C1: Admin-Triggered Final Structure Generation at Check-in
+  void generateFinalStructure(int confirmedCount, {bool force = false}) {
     final game = _currentGame;
-    if (game == null || (!game.structureReviewOpen && !(kDebugMode && force))) {
-      return;
-    }
+    if (game == null) return;
     _pushUndo();
-    final count = expectedPlayersFromRsvps(game);
+    final count = confirmedCount;
     final s = game.settings.copyWith(players: count);
     final structure = TournamentEngine.generate(
       TournamentParams(
@@ -3754,35 +3797,7 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
-  /// Client feedback (07-018): inside the 30-minute window before start the AI
-  /// refreshes stacks/blinds/levels from the current expected player count.
-  /// No-op once stacks are locked (game running).
-  void refreshEstimate() {
-    final game = _currentGame;
-    if (game == null || !game.estimateDue) return;
-    recalculateStructure();
-    addAuditRecord(
-      'structure_estimate',
-      'AI refreshed the structure estimate for ${game.settings.players} expected players.',
-    );
-    notifyListeners();
-  }
 
-  /// Firm, one-time lock at T-minus-10-minutes: takes the final "Going"
-  /// headcount and recalculates the blind structure a last time, on top of
-  /// (not replacing) the rolling 30-minute estimate above. Runs once per
-  /// tournament — [LiveGame.structureLockedAtT10] prevents repeats.
-  void _maybeApplyT10Lock() {
-    final game = _currentGame;
-    if (game == null || !game.t10LockDue) return;
-    generateStructureFromRsvps();
-    _currentGame = _currentGame?.copyWith(structureLockedAtT10: true);
-    addAuditRecord(
-      'structure_lock_t10',
-      'Blind structure locked at T-10 minutes for ${expectedPlayersFromRsvps(_currentGame!)} confirmed players.',
-    );
-    notifyListeners();
-  }
 
   /// Applies admin edits to future levels (the structure editor modal).
   /// The active and already-finished levels are left untouched.
@@ -4049,6 +4064,19 @@ class AppProvider extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  /// Updates the payout prizes (for custom deals/chops before finalizing results).
+  void updatePrizes(List<Prize> customPrizes) {
+    if (_currentGame == null) return;
+    _pushUndo();
+    _currentGame = _currentGame!.copyWith(
+      structure: _currentGame!.structure.copyWith(
+        prizes: customPrizes,
+      ),
+    );
+    _syncGroupGame();
+    notifyListeners();
   }
 
   void recordFinishOrder(List<String> order) {

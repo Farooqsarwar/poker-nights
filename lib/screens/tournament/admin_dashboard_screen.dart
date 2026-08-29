@@ -419,11 +419,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ),
                           );
                         } else {
+                          final canResume = status != LiveGameStatus.rebuypause &&
+                              status != LiveGameStatus.finaltable;
                           return AppButton(
                             size: AppButtonSize.lg,
                             variant: AppButtonVariant.primary,
-                            onPressed: app.resumeTimer,
-                            child: const AppIconLabel(
+                            onPressed: canResume ? app.resumeTimer : null,
+                            child: AppIconLabel(
                               label: 'Resume Timer',
                               icon: Icons.play_arrow,
                             ),

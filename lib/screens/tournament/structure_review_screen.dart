@@ -73,12 +73,8 @@ class StructureReviewScreen extends StatelessWidget {
     String hhmm(DateTime dt) =>
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
-    // ── Client rule: the structure is only generated/seen 30 minutes before
-    // start, when the AI can use the total attendance from RSVPs. ──────────
     if (!hasStructure) {
-      final start = settings.scheduledStart;
-      final unlockAt = start?.subtract(const Duration(minutes: 30));
-      final reviewOpen = game.structureReviewOpen;
+      final checkedInCount = game.confirmedCount;
       return AppPage(
         maxWidth: 640,
         child: Column(
@@ -89,19 +85,19 @@ class StructureReviewScreen extends StatelessWidget {
                 InkWell(
                   onTap: () => context.go(RoutePaths.invitation),
                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(
-                    Icons.arrow_back,
-                    size: AppFontSizes.xl,
-                    color: AppColors.mutedForeground,
+                  child: Padding(
+                    padding: EdgeInsets.all(AppSpacing.xs),
+                    child: Icon(
+                      Icons.arrow_back,
+                      size: AppFontSizes.xl,
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                const SizedBox(width: AppSpacing.md),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
                       'Structure Review',
                       style: AppTypography.display(
@@ -126,58 +122,37 @@ class StructureReviewScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    Icons.timer_outlined,
+                    Icons.settings_suggest,
                     size: 32,
                     color: AppColors.primary,
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    reviewOpen
-                        ? 'Ready to generate the estimate'
-                        : 'Structure unlocks 30 minutes before start',
+                    'Ready to generate final structure',
                     style: AppTypography.bodyLg.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    reviewOpen
-                        ? 'The AI can now calculate stacks, blinds and levels from the total '
-                              'attendance (everyone who answered Going or Going +N) and the inputs '
-                              'you provided.'
-                        : 'While the group is still deciding whether to attend, there is nothing '
-                              'to calculate yet. Once the window opens, the AI estimates stacks, '
-                              'blinds and levels from the total number of players. '
-                              '${unlockAt != null ? 'Unlocks at ${hhmm(unlockAt)}.' : ''}',
+                    'The AI will calculate starting stacks, blinds, and levels based on '
+                    'the $checkedInCount checked-in players, target duration, and available chips.',
                     style: AppTypography.bodySm.copyWith(
                       color: AppColors.mutedForeground,
                     ),
                   ),
-                  if (reviewOpen) ...[
-                    const SizedBox(height: AppSpacing.xl),
-                    AppButton(
-                      fullWidth: true,
-                      size: AppButtonSize.lg,
-                      onPressed: () => context
-                          .read<AppProvider>()
-                          .generateStructureFromRsvps(),
-                      child: const AppIconLabel(
-                        label: 'Generate structure estimate',
-                        trailing: Icons.auto_awesome,
-                      ),
+                  const SizedBox(height: AppSpacing.xl),
+                  AppButton(
+                    fullWidth: true,
+                    size: AppButtonSize.lg,
+                    onPressed: () => context
+                        .read<AppProvider>()
+                        .generateFinalStructure(checkedInCount),
+                    child: const AppIconLabel(
+                      label: 'Generate Final Structure',
+                      trailing: Icons.auto_awesome,
                     ),
-                  ] else if (kDebugMode) ...[
-                    const SizedBox(height: AppSpacing.xl),
-                    AppButton(
-                      fullWidth: true,
-                      size: AppButtonSize.md,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: () => context
-                          .read<AppProvider>()
-                          .generateStructureFromRsvps(force: true),
-                      child: const Text('Bypass wait (testing)'),
-                    ),
-                  ],
+                  ),
                 ],
               ),
             ),

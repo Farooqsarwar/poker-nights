@@ -10,6 +10,7 @@ import '../../models/game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
@@ -376,11 +377,36 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Prize distribution (admin only)',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Prize distribution (admin only)',
+                          style: AppTypography.bodySm.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                        if (unranked.isEmpty)
+                          InkWell(
+                            onTap: () {
+                              showAppModal(
+                                context: context,
+                                title: 'Edit Deal / Chop',
+                                child: _EditPrizesModal(
+                                  initialPrizes: prizes,
+                                  onSave: (newPrizes) => app.updatePrizes(newPrizes),
+                                ),
+                              );
+                            },
+                            child: Text(
+                              'Edit Deal/Chop',
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.primary,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     for (var i = 0; i < prizes.length; i++)
@@ -460,4 +486,83 @@ class _RankedPlayer {
   final Player? player;
   final int pos;
   final Prize? prize;
+}
+
+
+class _EditPrizesModal extends StatefulWidget {
+  const _EditPrizesModal({required this.initialPrizes, required this.onSave});
+
+  final List<Prize> initialPrizes;
+  final void Function(List<Prize>) onSave;
+
+  @override
+  State<_EditPrizesModal> createState() => _EditPrizesModalState();
+}
+
+class _EditPrizesModalState extends State<_EditPrizesModal> {
+  late final List<TextEditingController> _controllers;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = widget.initialPrizes
+        .map((p) => TextEditingController(text: p.amount.toString()))
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < widget.initialPrizes.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Place ${widget.initialPrizes[i].place}',
+                    style: AppTypography.bodySm,
+                  ),
+                ),
+                SizedBox(
+                  width: 120,
+                  child: TextFormField(
+                    controller: _controllers[i],
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      prefixText: '\$',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          onPressed: () {
+            final newPrizes = <Prize>[];
+            for (var i = 0; i < widget.initialPrizes.length; i++) {
+              final amt = int.tryParse(_controllers[i].text.replaceAll(',', '')) ?? 0;
+              newPrizes.add(Prize(place: widget.initialPrizes[i].place, amount: amt));
+            }
+            widget.onSave(newPrizes);
+            Navigator.of(context).pop();
+          },
+          child: const Text('Save Custom Deal'),
+        ),
+      ],
+    );
+  }
 }

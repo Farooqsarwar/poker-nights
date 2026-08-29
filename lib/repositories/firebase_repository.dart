@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../models/app_notification.dart';
 import '../models/cash_game.dart';
@@ -184,6 +185,64 @@ class FirebaseRepository {
   }
 
   Future<fa.UserCredential> signInAsGuest() => _auth.signInAnonymously();
+
+  // ── Google Sign-In (v7 API) ────────────────────────────────────────────────
+
+  /// Initialises the [GoogleSignIn] singleton. Must be called once before
+  /// [signInWithGoogle] or [linkGuestWithGoogle]. Safe to call multiple times.
+  static Future<void> initGoogleSignIn() async {
+    try {
+      await GoogleSignIn.instance.initialize();
+    } catch (_) {
+      // Already initialized or not supported on this platform — ignore.
+    }
+  }
+
+  /// Builds a Firebase credential from a [GoogleSignInAccount]. Uses the
+  /// idToken only (v7 no longer exposes accessToken via `authentication`).
+  Future<fa.OAuthCredential> _googleCredential(
+    GoogleSignInAccount account,
+  ) async {
+    final auth = account.authentication;
+    return fa.GoogleAuthProvider.credential(idToken: auth.idToken);
+  }
+
+  /// Signs in (or creates) a Firebase account via Google OAuth. Returns
+  /// `null` when the user cancels the flow.
+  Future<fa.UserCredential?> signInWithGoogle() async {
+    try {
+      final account = await GoogleSignIn.instance.authenticate();
+      final credential = await _googleCredential(account);
+      return _auth.signInWithCredential(credential);
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) return null;
+      rethrow;
+    }
+  }
+
+  /// Upgrades the current anonymous session to a Google-linked account.
+  /// Preserves the uid so guest stats/results carry over.
+  Future<fa.UserCredential?> linkGuestWithGoogle() async {
+    final user = _auth.currentUser;
+    if (user == null || !user.isAnonymous) {
+      throw StateError('No anonymous session to upgrade.');
+    }
+    try {
+      final account = await GoogleSignIn.instance.authenticate();
+      final credential = await _googleCredential(account);
+      return user.linkWithCredential(credential);
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) return null;
+      rethrow;
+    }
+  }
+
+  /// Signs out from Firebase **and** clears the Google Sign-In session so the
+  /// next `signInWithGoogle()` call always shows the account chooser.
+  Future<void> signOutWithGoogle() async {
+    await GoogleSignIn.instance.signOut();
+    await _auth.signOut();
+  }
 
   Future<void> sendPasswordReset(String email) =>
       _auth.sendPasswordResetEmail(email: email.trim());

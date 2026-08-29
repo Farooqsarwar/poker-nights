@@ -64,6 +64,24 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _error = null;
+      _loading = true;
+    });
+    final app = context.read<AppProvider>();
+    final error = await app.loginWithGoogle();
+    if (!mounted) return;
+    setState(() => _loading = false);
+    if (error == null) {
+      // Success — router redirect will take over once auth state updates.
+      context.go(widget.next ?? RoutePaths.home);
+    } else if (error.isNotEmpty) {
+      // Empty string == user cancelled; don't show an error.
+      setState(() => _error = error);
+    }
+  }
+
   Future<void> _handleSubmit() async {
     setState(() {
       _error = null;
@@ -258,6 +276,33 @@ class _AuthScreenState extends State<AuthScreen> {
                       style: AppTypography.display(size: AppFontSizes.xxl),
                     ),
                     const SizedBox(height: AppSpacing.xl),
+                    // Google Sign-In — shown on login & register, not on
+                    // forgot-password (which is email-only by nature).
+                    if (!_isForgot) ...[
+                      _GoogleSignInButton(
+                        loading: _loading,
+                        onPressed: _handleGoogleSignIn,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: AppColors.border)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                            ),
+                            child: Text(
+                              'or continue with email',
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ),
+                          Expanded(child: Divider(color: AppColors.border)),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
                     if (_isRegister) ...[
                       AppTextField(
                         controller: _nameController,
@@ -353,14 +398,34 @@ class _AuthScreenState extends State<AuthScreen> {
                         context,
                         prompt: "Don't have an account? ",
                         action: 'Create Account',
-                        onTap: () => context.go(RoutePaths.register),
+                        onTap: () {
+                          // Carry the deep-link destination through to the
+                          // register screen so it isn't lost mid-flow (C2).
+                          final next = widget.next;
+                          if (next != null) {
+                            context.go(
+                              '${RoutePaths.register}?next=${Uri.encodeComponent(next)}',
+                            );
+                          } else {
+                            context.go(RoutePaths.register);
+                          }
+                        },
                       ),
                     ] else if (_isRegister) ...[
                       _switchLine(
                         context,
                         prompt: 'Already have an account? ',
                         action: 'Sign In',
-                        onTap: () => context.go(RoutePaths.login),
+                        onTap: () {
+                          final next = widget.next;
+                          if (next != null) {
+                            context.go(
+                              '${RoutePaths.login}?next=${Uri.encodeComponent(next)}',
+                            );
+                          } else {
+                            context.go(RoutePaths.login);
+                          }
+                        },
                       ),
                     ] else ...[
                       Center(
@@ -419,4 +484,119 @@ class _AuthScreenState extends State<AuthScreen> {
       ),
     );
   }
+}
+
+/// A full-width "Continue with Google" button that renders the official
+/// Google coloured "G" using a CustomPainter — no asset files required.
+class _GoogleSignInButton extends StatelessWidget {
+  const _GoogleSignInButton({required this.onPressed, this.loading = false});
+
+  final VoidCallback onPressed;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton(
+        onPressed: loading ? null : onPressed,
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: AppColors.border),
+          backgroundColor: AppColors.card,
+          foregroundColor: AppColors.foreground,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        ),
+        child: loading
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.mutedForeground,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Inline Google "G" logo rendered via CustomPaint.
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CustomPaint(painter: _GoogleGPainter()),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Text(
+                    'Continue with Google',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.foreground,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+/// Paints the official Google "G" logo using 4 coloured arcs + a bar cutout.
+/// No external assets required — everything is drawn with Canvas primitives.
+class _GoogleGPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width / 2;
+    const pi = 3.14159265359;
+
+    // Outer ring stroke width.
+    final sw = r * 0.30;
+    // Ring radius (center of the stroke band).
+    final rr = r - sw / 2;
+
+    void arc(double start, double sweep, Color color) {
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset(cx, cy), radius: rr),
+        start,
+        sweep,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = sw
+          ..color = color
+          ..strokeCap = StrokeCap.butt,
+      );
+    }
+
+    // 1) Blue — left & top (from 180° to 345°, i.e. 165°).
+    arc(pi, pi * 165 / 180, const Color(0xFF4285F4));
+    // 2) Red — top-right (345° to 90°, i.e. from -15° for 75°).
+    arc(-pi * 15 / 180, pi * 75 / 180, const Color(0xFFEA4335));
+    // 3) Yellow — right-bottom (75° to 165°, i.e. 90°).
+    arc(pi * 75 / 180, pi * 90 / 180, const Color(0xFFFBBC05));
+    // 4) Green — bottom-left (165° to 180°, i.e. 15°).
+    arc(pi * 165 / 180, pi * 15 / 180, const Color(0xFF34A853));
+
+    // Horizontal bar of the "G" — blue rectangle on the right half.
+    final barTop = cy - sw * 0.45;
+    final barBottom = cy + sw * 0.45;
+    canvas.drawRect(
+      Rect.fromLTRB(cx, barTop, cx + r, barBottom),
+      Paint()..color = const Color(0xFF4285F4),
+    );
+
+    // White inner circle to create the ring shape.
+    canvas.drawCircle(
+      Offset(cx, cy),
+      rr - sw / 2,
+      Paint()..color = const Color(0xFFFFFFFF),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_GoogleGPainter oldDelegate) => false;
 }

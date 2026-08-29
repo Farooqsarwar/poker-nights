@@ -580,9 +580,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     }
 
     // Client flow: the event is created and published straight away so the
-    // group can RSVP. The structure is NOT generated here — the AI estimates
-    // stacks/blinds/levels 30 minutes before start from the actual
-    // attendance (Going + Going +N answers).
+    // group can RSVP. The structure is NOT generated here — it is generated
+    // by the Admin during check-in from confirmed actual attendance.
     final game = app.createGame(
       GameSettings(
         name: _name.text.trim(),

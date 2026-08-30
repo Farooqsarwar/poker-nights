@@ -7,6 +7,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in_all_platforms/google_sign_in_all_platforms.dart';
 
 import '../models/app_notification.dart';
 import '../models/cash_game.dart';
@@ -87,6 +88,14 @@ class AppProvider extends ChangeNotifier {
     // degrade gracefully by marking auth resolved so route guards open up.
     try {
       _authSub = _repo.authStateChanges().listen(_onAuthStateChanged);
+      
+      if (kIsWeb) {
+        _googleSignInSub = FirebaseRepository.googleSignIn.authenticationState.listen((credentials) {
+           if (credentials != null) {
+              _handleWebGoogleSignIn(credentials);
+           }
+        });
+      }
     } catch (_) {
       _backendUp = false;
       _authReady = true;
@@ -123,7 +132,7 @@ class AppProvider extends ChangeNotifier {
   /// Future that resolves when post-login data is ready (see [_userBootstrap]).
   Future<void> get userDataReady =>
       _userBootstrap?.future ?? Future<void>.value();
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _gameDocSub;
+  StreamSubscription? _gameDocSub;
   StreamSubscription<dynamic>? _lookupSub;
   StreamSubscription<List<TournamentPreset>>? _presetsSub;
   StreamSubscription<
@@ -134,6 +143,7 @@ class AppProvider extends ChangeNotifier {
   StreamSubscription<List<CashSession>>? _cashSub;
   StreamSubscription<List<GameResultRow>>? _resultsSub;
   StreamSubscription<List<Map<String, dynamic>>>? _pendingInvitesSub;
+  StreamSubscription? _googleSignInSub;
 
   /// Live member-rosters per group id, so the index-derived group list on the
   /// home screen / sidebar shows real-time member counts (free plan — no Cloud
@@ -317,10 +327,19 @@ class AppProvider extends ChangeNotifier {
       _gameSaveDebounce?.cancel();
       _pendingGameSave = false;
       if (key != null && game != null && gid != null) {
-        _gameDocSub = _repo.gameDocSnapshots(gid, game.id, isAdmin: _isGameAuthority).listen(
-          _adoptRemoteGame,
-          onError: (Object e) => debugPrint('gameDoc stream error: $e'),
-        );
+        if (_isGameAuthority) {
+          _gameDocSub = _repo.gameDocSnapshots(gid, game.id, isAdmin: true).listen(
+            _adoptRemoteGame,
+            onError: (Object e) => debugPrint('gameDoc stream error: $e'),
+          );
+        } else {
+          // F-001 Fix: Members use the publicGames projection because there are no Cloud Functions.
+          _gameDocSub = _repo.publicGameStream(game.id).listen((doc) {
+            final payload = doc['player'] as Map<String, dynamic>?;
+            if (payload == null) return;
+            _adoptRemoteMap(payload);
+          }, onError: (Object e) => debugPrint('publicGameStream error: $e'));
+        }
       }
     }
 
@@ -540,6 +559,10 @@ class AppProvider extends ChangeNotifier {
     final data = snap.data();
     if (!snap.exists || data == null) return;
     if (snap.metadata.hasPendingWrites) return;
+    _adoptRemoteMap(data);
+  }
+
+  void _adoptRemoteMap(Map<String, dynamic> data) {
     if (!_gameSyncPrimed) {
       _gameSyncPrimed = true;
     } else if (data['writerId'] == _repo.deviceId) {
@@ -798,6 +821,7 @@ class AppProvider extends ChangeNotifier {
       _cashSub,
       _resultsSub,
       _pendingInvitesSub,
+      _googleSignInSub,
     ]) {
       s?.cancel();
     }
@@ -816,6 +840,7 @@ class AppProvider extends ChangeNotifier {
     _cashSub = null;
     _resultsSub = null;
     _pendingInvitesSub = null;
+    _googleSignInSub = null;
     _gameSaveDebounce?.cancel();
     _pendingGameSave = false;
     _syncedGameKey = null;
@@ -1283,6 +1308,19 @@ class AppProvider extends ChangeNotifier {
       };
     } catch (e) {
       return 'Google sign-in failed. Please try again.';
+    }
+  }
+
+  /// Called automatically on web when the native Google Sign-In button completes.
+  Future<void> _handleWebGoogleSignIn(GoogleSignInCredentials credentials) async {
+    if (_user != null && !_repo.isSignedInAsGuest) return; // Already signed in fully
+    try {
+      final cred = await _repo.signInWithGoogleCredentials(credentials);
+      if (cred != null && cred.user != null) {
+        await _hydrateUser(cred.user!);
+      }
+    } catch (e) {
+      debugPrint('Web google sign in failed: $e');
     }
   }
 
@@ -2521,9 +2559,9 @@ class AppProvider extends ChangeNotifier {
     final level = _currentGame!.structure.levels[next - 1];
     // Auto-trigger rebuy pause when crossing rebuysCloseLevel (spec §1, §12 A12)
     final wasBelowRebuyClose =
-        _currentGame!.currentLevel < _currentGame!.settings.rebuysCloseLevel;
+        _currentGame!.currentLevel <= _currentGame!.settings.rebuysCloseLevel;
     final nowAtOrAboveRebuyClose =
-        next >= _currentGame!.settings.rebuysCloseLevel;
+        next > _currentGame!.settings.rebuysCloseLevel;
     final shouldPauseRebuy =
         _currentGame!.settings.rebuys &&
         wasBelowRebuyClose &&
@@ -3243,15 +3281,30 @@ class AppProvider extends ChangeNotifier {
     final existingSlot = game.guestSlots
         .where((s) => s.inviterId == inviterId && s.slot == slot)
         .firstOrNull;
-    if (existingSlot != null && !existingSlot.available) {
-      return 'That guest slot is already reserved or checked in.';
-    }
-    final alreadyClaimed = game.players.any(
+    final claimedPlayer = game.players.where(
       (p) => p.isGuest && p.inviterId == inviterId && p.guestSlot == slot,
-    );
-    if (alreadyClaimed) {
-      return 'That guest slot is already claimed.';
+    ).firstOrNull;
+
+    final isReserved = (existingSlot != null && !existingSlot.available) || claimedPlayer != null;
+
+    if (isReserved) {
+      final claimedName = claimedPlayer?.name ?? existingSlot?.guestName;
+      if (claimedName != null && claimedName.trim().toLowerCase() == name.trim().toLowerCase()) {
+        // Re-identification successful
+        _saveGuestSession(
+          GuestSession(
+            gameId: game.id,
+            name: claimedName,
+            inviterId: inviterId,
+            slot: slot,
+          ),
+        );
+        return null;
+      }
+      return 'That guest slot is already reserved. To re-identify, enter the exact name you used.';
     }
+
+
 
     final guestId = 'g-${DateTime.now().millisecondsSinceEpoch}';
     final sanitizedName = Sanitization.sanitizeName(name);
@@ -5057,11 +5110,10 @@ class AppProvider extends ChangeNotifier {
       if (hit == null) return CodeLookupResult.notFound;
 
       _lookupSub?.cancel();
-      if (hit.kind == 'game' &&
-          (_isGameAuthority || _currentGroup.id == hit.gid)) {
-        // Group members with dashboard access can follow the raw document.
+      if (hit.kind == 'game' && _isGameAuthority) {
+        // Admins can follow the raw document.
         _lookupSub =
-            _repo.gameDocSnapshots(hit.gid, hit.gameId, isAdmin: _isGameAuthority).listen((snap) {
+            _repo.gameDocSnapshots(hit.gid, hit.gameId, isAdmin: true).listen((snap) {
           final data = snap.data();
           if (!snap.exists || data == null) return;
           try {
@@ -5076,10 +5128,10 @@ class AppProvider extends ChangeNotifier {
           }
         }, onError: (Object e) => debugPrint('lookup stream error: $e'));
       } else {
-        // Guests / TVs: sanitized projection feed.
-        final projectionKey = hit.kind == 'tv' ? 'tv' : 'guest';
+        // Guests / TVs / Members (F-001 Fix): sanitized projection feed.
+        final projectionKey = hit.kind == 'tv' ? 'tv' : (hit.kind == 'game' ? 'player' : 'guest');
         _lookupSub = _repo.publicGameStream(hit.gameId).listen((doc) {
-          final payload = doc[projectionKey];
+          final payload = doc[projectionKey] as Map<String, dynamic>?;
           if (payload == null) return;
           try {
             _clearUndoStack();

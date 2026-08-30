@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/colors.dart';
+import '../../repositories/firebase_repository.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
@@ -279,10 +281,13 @@ class _AuthScreenState extends State<AuthScreen> {
                     // Google Sign-In — shown on login & register, not on
                     // forgot-password (which is email-only by nature).
                     if (!_isForgot) ...[
-                      _GoogleSignInButton(
-                        loading: _loading,
-                        onPressed: _handleGoogleSignIn,
-                      ),
+                      if (kIsWeb)
+                         FirebaseRepository.googleSignIn.signInButton() ?? const SizedBox.shrink()
+                      else
+                        _GoogleSignInButton(
+                          loading: _loading,
+                          onPressed: _handleGoogleSignIn,
+                        ),
                       const SizedBox(height: AppSpacing.lg),
                       Row(
                         children: [

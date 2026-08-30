@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:flutter/foundation.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:google_sign_in_all_platforms/google_sign_in_all_platforms.dart';
 
 import '../models/app_notification.dart';
 import '../models/cash_game.dart';
@@ -188,35 +188,58 @@ class FirebaseRepository {
 
   // ── Google Sign-In (v7 API) ────────────────────────────────────────────────
 
-  /// Initialises the [GoogleSignIn] singleton. Must be called once before
-  /// [signInWithGoogle] or [linkGuestWithGoogle]. Safe to call multiple times.
+  static final GoogleSignIn googleSignIn = GoogleSignIn(
+    params: const GoogleSignInParams(
+      clientId: 'YOUR_CLIENT_ID.apps.googleusercontent.com', // Replace with your Client ID
+      clientSecret: 'YOUR_CLIENT_SECRET', // Replace with your Client Secret for desktop
+      scopes: ['openid', 'profile', 'email'],
+    ),
+  );
+
+  /// Initialises the [GoogleSignIn] singleton. 
+  /// The new package handles initialization automatically, so this can be a no-op or silentSignIn.
   static Future<void> initGoogleSignIn() async {
     try {
-      await GoogleSignIn.instance.initialize();
+      if (!kIsWeb) {
+        await googleSignIn.silentSignIn();
+      }
     } catch (_) {
-      // Already initialized or not supported on this platform — ignore.
+      // Ignore
     }
   }
 
-  /// Builds a Firebase credential from a [GoogleSignInAccount]. Uses the
-  /// idToken only (v7 no longer exposes accessToken via `authentication`).
+  /// Builds a Firebase credential from [GoogleSignInCredentials].
   Future<fa.OAuthCredential> _googleCredential(
-    GoogleSignInAccount account,
+    GoogleSignInCredentials credentials,
   ) async {
-    final auth = account.authentication;
-    return fa.GoogleAuthProvider.credential(idToken: auth.idToken);
+    return fa.GoogleAuthProvider.credential(
+      idToken: credentials.idToken,
+      accessToken: credentials.accessToken,
+    );
   }
 
   /// Signs in (or creates) a Firebase account via Google OAuth. Returns
   /// `null` when the user cancels the flow.
   Future<fa.UserCredential?> signInWithGoogle() async {
     try {
-      final account = await GoogleSignIn.instance.authenticate();
-      final credential = await _googleCredential(account);
+      final credentials = await googleSignIn.signIn();
+      if (credentials == null) return null;
+      final credential = await _googleCredential(credentials);
       return _auth.signInWithCredential(credential);
-    } on GoogleSignInException catch (e) {
-      if (e.code == GoogleSignInExceptionCode.canceled) return null;
-      rethrow;
+    } catch (e) {
+      debugPrint('signInWithGoogle failed: $e');
+      return null;
+    }
+  }
+
+  /// Signs in to Firebase with existing credentials.
+  Future<fa.UserCredential?> signInWithGoogleCredentials(GoogleSignInCredentials credentials) async {
+    try {
+      final credential = await _googleCredential(credentials);
+      return _auth.signInWithCredential(credential);
+    } catch (e) {
+      debugPrint('signInWithGoogleCredentials failed: $e');
+      return null;
     }
   }
 
@@ -228,19 +251,20 @@ class FirebaseRepository {
       throw StateError('No anonymous session to upgrade.');
     }
     try {
-      final account = await GoogleSignIn.instance.authenticate();
-      final credential = await _googleCredential(account);
+      final credentials = await googleSignIn.signIn();
+      if (credentials == null) return null;
+      final credential = await _googleCredential(credentials);
       return user.linkWithCredential(credential);
-    } on GoogleSignInException catch (e) {
-      if (e.code == GoogleSignInExceptionCode.canceled) return null;
-      rethrow;
+    } catch (e) {
+      debugPrint('linkGuestWithGoogle failed: $e');
+      return null;
     }
   }
 
   /// Signs out from Firebase **and** clears the Google Sign-In session so the
   /// next `signInWithGoogle()` call always shows the account chooser.
   Future<void> signOutWithGoogle() async {
-    await GoogleSignIn.instance.signOut();
+    await googleSignIn.signOut();
     await _auth.signOut();
   }
 

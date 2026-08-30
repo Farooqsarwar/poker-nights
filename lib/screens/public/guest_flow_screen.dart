@@ -714,25 +714,19 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                       p.guestSlot == slot,
                 );
                 return InkWell(
-                  onTap: taken
-                      ? null
-                      : () => setState(() => _selectedSlot = slot),
+                  onTap: () => setState(() => _selectedSlot = slot),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Container(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: taken
-                          ? AppColors.muted
-                          : (_selectedSlot == slot
-                                ? AppColors.primarySoft
-                                : Colors.transparent),
+                      color: _selectedSlot == slot
+                          ? AppColors.primarySoft
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(AppRadius.md),
                       border: Border.all(
-                        color: taken
-                            ? AppColors.border
-                            : (_selectedSlot == slot
-                                  ? AppColors.primary
-                                  : AppColors.border),
+                        color: _selectedSlot == slot
+                            ? AppColors.primary
+                            : AppColors.border,
                       ),
                     ),
                     child: Row(

@@ -183,9 +183,15 @@ service cloud.firestore {
         allow create, delete: if false;
       }
 
-      // Membership index mirror (one doc per joined group). Self-managed.
+      // Membership index mirror (one doc per joined group). The user manages
+      // their own rows; a group's admin may also write the mirror row for a
+      // member of THAT group (the "add member by email" flow — no Cloud
+      // Function). Scoped tightly: an admin can only touch mirror docs whose
+      // {gid} is a group they administer.
       match /groups/{gid} {
-        allow read, write: if signedIn() && request.auth.uid == uid;
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow write: if signedIn()
+            && (request.auth.uid == uid || isGroupAdmin(gid));
       }
 
       // Personal tournament results (one doc per settled game; spec §5.1

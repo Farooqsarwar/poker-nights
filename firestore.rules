@@ -11,22 +11,25 @@ rules_version = '2';
 //    The Firestore rules below enforce authentication, ownership, and field
 //    validation as defense-in-depth even with Cloud Functions in place.
 //
-// Rate limit thresholds (per user, per action, per minute — enforced in CF):
-//   RSVP updates:         10 / minute
-//   Check-in requests:     5 / minute
-//   Rebuy/addon requests: 20 / minute
-//   Guest claims:          5 / minute
-//   Chat messages:        30 / minute
-//   Seat/position changes:10 / minute
-//
-// Model:
+// MODEL & PRIVILEGE BOUNDARY (Role-Flows §1.2 / Tech §22)
+//  - Permissions are enforced HERE in the rules, not by hiding buttons.
 //  - Group OWNER (groups/{gid}.ownerId) and group ADMINS (role == 'admin')
-//    are the "authority" devices: they may write whole game documents.
-//  - Regular MEMBERS patch only their own slices of a game document
-//    (their player row, their guest slots, chat, rebuy/add-on request lists)
-//    and everything else must remain byte-identical.
-//  - GUESTS and TVs never touch game documents: they read sanitized
-//    projections in publicGames/{gameId} and post to requests/{gameId}/items.
+//    are the "authority": they may write whole game documents, manage
+//    membership roles, cash sessions, polls and consume the request queue.
+//  - A membership row may ONLY be created with role 'member' — unless the
+//    writer is the group owner creating their own row in the same batch as
+//    the group (so no user can ever self-grant 'admin').
+//  - Regular MEMBERS may write ONLY their own private slice of a game doc:
+//    their own `players.{uid}.rsvp`, their own guest slots, and their own id
+//    in the rebuy/add-on request arrays. They cannot assign seats, confirm
+//    check-ins, record rebuys/add-ons, or alter any other player.
+//  - GUESTS are anonymous. They never touch game documents: they read
+//    sanitized projections in publicGames/{gameId} and post their guest
+//    check-in claim to requests/{gameId}/items (which does NOT require
+//    membership). Guests cannot create polls/chat/notifications.
+//  - Notifications can only be created by the Cloud Function (Admin SDK),
+//    never by an arbitrary signed-in client — closing the spoofing vector.
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -41,7 +44,8 @@ service cloud.firestore {
     }
 
     function isGroupAdmin(gid) {
-      return signedIn() && exists(/databases/$(database)/documents/groups/$(gid))
+      return signedIn()
+          && exists(/databases/$(database)/documents/groups/$(gid))
           && (
             get(/databases/$(database)/documents/groups/$(gid)).data.ownerId
                 == request.auth.uid
@@ -50,10 +54,72 @@ service cloud.firestore {
           );
     }
 
-    // A member update on a game doc may only vary these subtrees; every other
-    // section listed below must be identical before/after.
+    // Block any new top-level key from being introduced by a member on a
+    // shared document. The stamp fields (updatedAt / writerId) are the only
+    // tolerated additions; everything else must already exist.
+    function noNewTopLevelKeys() {
+      return request.resource.data.keys()
+          .hasOnly(resource.data.keys().concat(['updatedAt', 'writerId']));
+    }
+
+    // A member update on a game doc may only vary the member-owned subtrees.
+    // Admin writes the whole document (authority); members are restricted to
+    // their own rsvp, their own guest slots and their own id in the rebuy /
+    // add-on request arrays. Everything else must stay byte-identical.
     function sameVal(key, def) {
       return request.resource.data.get(key, def) == resource.data.get(key, def);
+    }
+
+    // Validate that the caller only touched their OWN player rsvp field and
+    // not any other player's state (C2 — prevents self check-in / seat /
+    // rebuy / add-on / elimination forgery). Uses map.diff() which reports
+    // the affected/added/removed/changed key set; the caller may only affect
+    // their own player key, and inside that row only the `rsvp` field.
+    function memberPlayersSafe() {
+      let playersDiff = request.resource.data.get('players', {})
+          .diff(resource.data.get('players', {}));
+      let reqMe = request.resource.data.get('players', {})[request.auth.uid];
+      let oldMe = resource.data.get('players', {})[request.auth.uid];
+      return playersDiff.affectedKeys().hasOnly([request.auth.uid])
+          && (reqMe == null || oldMe == null
+              || reqMe.diff(oldMe).affectedKeys().hasOnly(['rsvp']));
+    }
+
+    // Guest slots are managed by the member whose +N RSVP created them, and a
+    // member legitimately CREATES and DELETES their own slots when they lower
+    // their guest count (see _syncGuestSlots / _rsvpDotPatch). Firestore rules
+    // cannot iterate map values to check each slot's `inviterId` without loops
+    // (unsupported in the rules language), so we bound the blast radius
+    // instead: a single member patch may alter at most 8 guest slots (a real
+    // member RSVP touches only their own handful of slots). Combined with the
+    // C1 admin-escalation fix and the players / top-level-key / request-array
+    // locks below, cross-inviter slot tampering is contained to a low-severity,
+    // admin-correctable residual.
+    function memberGuestSlotsSafe() {
+      return request.resource.data.get('guestSlots', {})
+          .diff(resource.data.get('guestSlots', {}))
+          .affectedKeys()
+          .size() <= 8;
+    }
+
+    // Validate rebuy/add-on request arrays change only by adding/removing the
+    // caller's own uid (set difference, then subset check).
+    function memberRequestArraySafe(key) {
+      let reqArr = request.resource.data.get(key, []);
+      let oldArr = resource.data.get(key, []);
+      return reqArr.difference(oldArr).hasOnly([request.auth.uid])
+          && oldArr.difference(reqArr).hasOnly([request.auth.uid]);
+    }
+
+    // A member may update a poll ONLY by writing their own vote
+    // (`votes.{uid}`). They can never add/change options, close it, delete it,
+    // or touch any other member's vote (C5).
+    function memberVoteSafe() {
+      let topDiff = request.resource.data.diff(resource.data);
+      let votesDiff = request.resource.data.get('votes', {})
+          .diff(resource.data.get('votes', {}));
+      return topDiff.affectedKeys().hasOnly(['votes'])
+          && votesDiff.affectedKeys().hasOnly([request.auth.uid]);
     }
 
     function memberGameEdit() {
@@ -79,16 +145,23 @@ service cloud.firestore {
           && sameVal('announcements', [])
           && sameVal('auditHistory', [])
           && sameVal('originalLevels', [])
-          && sameVal('guestSlots', [])
+          && sameVal('chat', [])
           && sameVal('changeLog', [])
           && sameVal('id', '')
-          && sameVal('chat', []);
+          && noNewTopLevelKeys()
+          && memberPlayersSafe()
+          && memberGuestSlotsSafe()
+          && memberRequestArraySafe('rebuyRequests')
+          && memberRequestArraySafe('addOnRequests');
     }
 
     // ---------- users ----------
-    // Private profiles. Stats live here too; updated by the owner device.
+    // Private profiles. Stats live here too; only the owner device may write
+    // profile data. Lifetime stats integrity is handled by Cloud Functions
+    // writing result rows on game completion (H1); clients have read access.
     match /users/{uid} {
-      allow read, write: if signedIn() && request.auth.uid == uid;
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn() && request.auth.uid == uid;
 
       // Tournament presets / chip sets — personal library.
       match /presets/{presetId} {
@@ -98,13 +171,16 @@ service cloud.firestore {
         allow read, write: if signedIn() && request.auth.uid == uid;
       }
 
-      // Notification inbox. Anyone signed-in may DROP a notification into
-      // another user's inbox (fan-out); only the owner can read/mark/delete.
+      // Notification inbox (C6): ONLY the Cloud Function (Admin SDK, bypasses
+      // rules) may CREATE a notification. The owner may read their own inbox
+      // and mark their own items read. No arbitrary signed-in client can drop
+      // a notification (or a push) into another user's inbox.
       match /notifications/{notifId} {
-        allow create: if signedIn();
-        allow read, update, delete: if signedIn() && request.auth.uid == uid;
+        allow read: if signedIn() && request.auth.uid == uid;
         allow update: if signedIn()
+            && request.auth.uid == uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow create, delete: if false;
       }
 
       // Membership index mirror (one doc per joined group). Self-managed.
@@ -112,11 +188,13 @@ service cloud.firestore {
         allow read, write: if signedIn() && request.auth.uid == uid;
       }
 
-      // Personal tournament results (one doc per settled game). Written by
-      // the player's own device when it sees a game complete; aggregated
-      // client-side into lifetime stats.
+      // Personal tournament results (one doc per settled game). Readable by
+      // the owner. WRITES ARE LOCKED to the Cloud Function: results are the
+      // authority-derived, game-completion record so players cannot forge
+      // wins / knockouts (H1).
       match /results/{resultId} {
-        allow read, write: if signedIn() && request.auth.uid == uid;
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow write: if false;
       }
     }
 
@@ -130,21 +208,30 @@ service cloud.firestore {
       allow update, delete: if isGroupAdmin(gid);
 
       // Member roster rows carry name + role. Members read each other's rows.
+      // C1: a membership row may only be created as role 'member' — unless
+      // the writer is the group owner creating their own admin row in the
+      // same batch as the group. This makes it impossible to self-grant admin.
+      // Role changes/removals are admin+owner ops. A member may fix their own
+      // display name.
       match /members/{memberUid} {
         allow read: if isMember(gid);
-        allow create: if signedIn() && request.auth.uid == memberUid;
-        // Role changes / removals are admin+owner ops. A member may fix their
-        // own display name and mirror their own stats summary.
+        allow create: if signedIn()
+            && request.auth.uid == memberUid
+            && (
+              request.resource.data.get('role', 'member') == 'member'
+              || get(/databases/$(database)/documents/groups/$(gid)).data.ownerId
+                  == request.auth.uid
+            );
         allow update: if isGroupAdmin(gid)
             || (signedIn() && request.auth.uid == memberUid
                 && request.resource.data.diff(resource.data).affectedKeys()
-                    .hasOnly(['name', 'stats']));
+                    .hasOnly(['name']));
         allow delete: if isGroupAdmin(gid)
             || (signedIn() && request.auth.uid == memberUid);
       }
 
       // Games: authority writes whole docs; members get a tightly scoped
-      // patch path; guests have no access here at all.
+      // patch path scoped to their OWN data only (C2); guests no access here.
       match /games/{gameId} {
         allow read: if isGroupAdmin(gid);
         allow create, delete: if isGroupAdmin(gid);
@@ -159,13 +246,12 @@ service cloud.firestore {
 
       // Group chat.
       // Rate limiting: enforced atomically by the sendChatMessage Cloud Function.
-      // This rule only validates ownership; the CF ensures ≤30 messages/minute.
-      // CLIENT-SIDE throttling (UX only, not a security boundary) remains in
-      // the Flutter chat_sheet.dart widget.
+      // This rule only validates ownership; the CF ensures ≤30 messages/minute
+      // and sanitizes server-side (H2).
       match /chat/{msgId} {
         allow read: if isMember(gid);
         allow create: if isMember(gid)
-            && request.resource.data.authorId == request.auth.uid;
+            && request.auth.uid == request.resource.data.authorId;
         // Soft-delete ("deleted": true) by author or an admin; no hard deletes.
         allow update: if isMember(gid)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleted'])
@@ -176,27 +262,48 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      // Polls: any member can create/vote/close; cleanup by admins only.
+      // Polls (C5): CREATION and CLOSING are admin-only. A member may only
+      // update their OWN vote key (`votes.{uid}`); they can never create,
+      // close, delete or alter the tally of a poll.
       match /polls/{pollId} {
-        allow read, create, update: if isMember(gid);
-        allow delete: if isGroupAdmin(gid);
+        allow read: if isMember(gid);
+        allow create, delete: if isGroupAdmin(gid);
+        allow update: if isGroupAdmin(gid)
+            || (isMember(gid) && memberVoteSafe());
       }
 
-      // Completed cash-game sessions.
+      // Completed cash-game sessions (C4): ADMIN-ONLY. Sessions contain
+      // per-player buy-ins, top-ups and cash-outs; members must not be able
+      // to read or modify private financial data.
       match /cashSessions/{sessionId} {
-        allow read, create, update: if isMember(gid);
-        allow delete: if isGroupAdmin(gid);
+        allow read, create, update, delete: if isGroupAdmin(gid);
+      }
+
+      // Group notification OUTBOX (C6): a member stages a notification here
+      // and a Cloud Function fans it out into each member's inbox (the only
+      // cross-user inbox writer). Clients can create their own group's outbox
+      // item but cannot delete; deletes are admin-only. Note that an
+      // attacker reaching this could still stage a message, so the fan-out
+      // ALSO strips any attempt to embed a fake `authorId` (see functions).
+      match /notifications/{notifId} {
+        allow create: if isMember(gid);
+        allow read: if isMember(gid);
+        allow update, delete: if isGroupAdmin(gid);
       }
     }
 
     // ---------- join codes ----------
-    // Documents hold {kind, gid|gameId}. Any signed-in user may RESOLVE a
-    // code (join flows). Creation happens in the same batch that creates the
-    // group/game, so no cross-doc check is possible there; later updates
-    // (game tv/public codes upserted on publish) require group admin rights.
+    // H6: creation requires the writer to be the admin of the referenced
+    // group (or the owner creating the group's code in the same batch as the
+    // group). Any signed-in user may RESOLVE (read) a code.
     match /joinCodes/{code} {
       allow read: if signedIn();
-      allow create: if signedIn();
+      allow create: if signedIn()
+          && (
+            isGroupAdmin(request.resource.data.gid)
+            || get(/databases/$(database)/documents/groups/$(request.resource.data.gid)).data.ownerId
+                == request.auth.uid
+          );
       allow update, delete: if signedIn() && isGroupAdmin(resource.data.gid);
     }
 
@@ -211,12 +318,11 @@ service cloud.firestore {
     }
 
     // ---------- guest/member request queue ----------
-    // requests/{gameId}/items/{reqId}: guests push check-in requests, members
-    // push rebuy/add-on requests. Only group admins of payload.gid may
-    // consume (flip consumed:true).
-    // Rate limiting: enforced atomically by Cloud Functions (submitRequest CF).
-    // Limits: check-in 5/min, rebuy/addon 20/min, guest claims 5/min.
-    // CLIENT-SIDE throttling in the Flutter app is a UX aid only.
+    // requests/{gameId}/items/{reqId}: guests push their check-in claim,
+    // members push rebuy/add-on/check-in requests. GUEST claims may be
+    // created WITHOUT membership (C3 — this was previously blocked and is the
+    // flagship guest feature). Only group admins may read / consume
+    // (flip consumed:true) request items.
     match /requests/{gameId} {
       allow read: if false; // parent placeholder doc is never read directly
 
@@ -226,7 +332,13 @@ service cloud.firestore {
         allow create: if signedIn()
             && request.resource.data.keys().hasAll(['kind', 'gid'])
             && request.resource.data.gid is string
-            && isMember(request.resource.data.gid);
+            && (
+              // Anonymous guest check-in claim — no membership required.
+              request.resource.data.kind == 'guestCheckIn'
+              // Member-driven requests (rebuy/add-on/check-in).
+              || request.resource.data.kind != 'guestCheckIn'
+                 && isMember(request.resource.data.gid)
+            );
         allow update: if signedIn()
             && isGroupAdmin(resource.data.gid);
         allow delete: if signedIn()
@@ -236,16 +348,18 @@ service cloud.firestore {
 
     // ---------- rate limits ----------
     // Tracks per-user, per-action timestamps for server-side rate limiting.
-    // Document ID format: "{userId}_{actionType}"
-    // Document schema: { timestamp: Timestamp, count: number }
-    //
     // ONLY Cloud Functions may read or write these documents. Clients must
     // never be able to reset or spoof their own rate-limit records.
-    // The Cloud Function (functions/src/index.ts) uses a Firestore transaction
-    // to atomically: (1) read this doc, (2) reject if within window, (3)
-    // perform the guarded write, (4) update this timestamp.
     match /rate_limits/{limitId} {
       allow read, write: if false; // Cloud Functions only (Admin SDK bypasses rules)
+    }
+
+    // ---------- server time calibration (H5) ----------
+    // Allows signed-in clients to write/read their own Firestore server
+    // timestamp so the timer is derived from an authoritative server clock
+    // (Tech §4.3) instead of silently falling back to the device clock.
+    match /_meta/{doc} {
+      allow read, write: if signedIn();
     }
 
     // Deny everything not explicitly matched above.

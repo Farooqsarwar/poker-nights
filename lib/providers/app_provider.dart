@@ -4937,20 +4937,18 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  /// Prepends a notification locally and fans it out to every other member of
-  /// the current group's inbox (`users/{uid}/notifications`).
+  /// Prepends a notification locally and stages it in the current group's
+  /// outbox (`groups/{gid}/notifications/{id}`). The Cloud Function fans it
+  /// out to every member's inbox (C6) — clients can no longer write directly
+  /// into arbitrary recipients' inboxes.
   void pushNotification(AppNotification notification) {
     _notifications = [notification, ..._notifications];
     notifyListeners();
-    final uid = _repo.currentUid;
-    if (_backendUp && uid != null) {
-      final targets = _currentGroup.members
-          .map((m) => m.id)
-          .where((id) => id != uid)
-          .toList();
-      if (targets.isNotEmpty) {
-        unawaited(_repo.fanOutNotifications(targets, notification)
-            .catchError((Object e) => debugPrint('fanOut failed: $e')));
+    if (_backendUp) {
+      final gid = _currentGroup.id;
+      if (gid.isNotEmpty) {
+        unawaited(_repo.stageGroupNotification(gid, notification)
+            .catchError((Object e) => debugPrint('stageGroupNotification failed: $e')));
       }
     }
   }

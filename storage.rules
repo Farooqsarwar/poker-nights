@@ -1,17 +1,36 @@
 service firebase.storage {
   match /b/{bucket}/o {
-    // By default, deny all access.
+    // Deny everything not explicitly allowed below.
     match /{allPaths=**} {
       allow read, write: if false;
     }
 
-    // Public game assets (TV mode images, etc.) — world-readable
-    match /public/{gameId}/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    // Group admin verification via Firestore (storage rules can read the
+    // authority model). M6 — an arbitrary signed-in user must NOT be able to
+    // overwrite public assets; only the group's admin may publish them.
+    function isGroupAdmin(gid) {
+      return firestore.exists(/databases/(default)/documents/groups/$(gid))
+          && (
+            firestore.get(/databases/(default)/documents/groups/$(gid)).data.ownerId
+                == request.auth.uid
+            || firestore.get(/databases/(default)/documents/groups/$(gid)/members/$(request.auth.uid)).data.role
+                == 'admin'
+          );
     }
 
-    // User profile photos — owner-only
+    // Public game assets (TV mode images, etc.) — world-readable; writeable
+    // only by the group admin that owns the game (resolved from the
+    // publicGames/{gameId} projection's gid).
+    match /public/{gameId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+          && isGroupAdmin(
+              firestore.get(/databases/(default)/documents/publicGames/$(gameId)).data.gid
+          );
+    }
+
+    // User profile photos — owner-only. (Owner-only write prevents one user
+    // overwriting another's avatar.)
     match /users/{uid}/{allPaths=**} {
       allow read: if true;
       allow write: if request.auth != null && request.auth.uid == uid;

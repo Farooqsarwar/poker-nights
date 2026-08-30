@@ -765,8 +765,13 @@ class FirebaseRepository {
     final ref = _requestsCol(gameId).doc('guestCheckIn-$inviterId-$slot');
     return _db.runTransaction((tx) async {
       final snap = await tx.get(ref);
-      // A consumed claim means the slot was confirmed — permanently taken.
-      if (snap.exists && snap.data()!['consumed'] != true) {
+      // M5 fix: ANY existing claim (consumed or pending) means the slot is
+      // already taken. The previous logic only blocked when
+      // `consumed != true`, so a CONFIRMED (consumed=true) slot could be
+      // re-claimed by another guest. A consumed claim = permanently taken; a
+      // pending claim = locked while awaiting admin confirmation. Only a
+      // nonexistent doc (slot freed via releaseSlotClaim) is claimable.
+      if (snap.exists) {
         return 'That guest slot is already claimed.';
       }
       tx.set(ref, {
@@ -854,18 +859,24 @@ class FirebaseRepository {
               ]);
 
   // ── Notification fan-out ───────────────────────────────────────────────────
-  Future<void> fanOutNotifications(
-      List<String> memberUids, AppNotification notification) async {
-    if (memberUids.isEmpty) return;
-    final batch = _db.batch();
-    for (final uid in memberUids) {
-      batch.set(
-        _db.collection('users').doc(uid).collection('notifications').doc(notification.id),
-        appNotificationToMap(notification),
-      );
-    }
-    await batch.commit();
-  }
+  // C6: clients no longer write straight into arbitrary recipients' inboxes
+  // (that allowed a member to forge/notify everyone). Instead a game event
+  // stages ONE notification in the group outbox; the Cloud Function
+  // fanOutGroupNotification (Admin SDK) sanitizes and fans it out to every
+  // member's inbox, and only it may write cross-user inboxes (rules enforce
+  // this).
+  Future<void> stageGroupNotification(
+      String gid, AppNotification notification) =>
+      _db
+          .collection('groups').doc(gid).collection('notifications')
+          .doc(notification.id)
+          .set(_stamp({
+            'title': notification.title,
+            'body': notification.body,
+            'type': notification.type.name,
+            'link': notification.link,
+            'read': false,
+          }));
 
   Stream<List<AppNotification>> notificationsStream(String uid) => _db
       .collection('users').doc(uid).collection('notifications')

@@ -3,12 +3,21 @@ import * as admin from "firebase-admin";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 
+// L12 / C6: the ONLY cross-user notification path is the group fan-out
+// function (Admin SDK), because Firestore rules deny clients from writing into
+// any inbox other than their own. This trigger therefore only ever pushes a
+// box-owner-scoped notification. As defense-in-depth we still validate the
+// document shape and refuse to push malformed/blank notifications.
 export const sendPushNotification = onDocumentCreated(
   "users/{uid}/notifications/{notifId}",
   async (event) => {
     const { uid } = event.params;
     const notification = event.data?.data();
     if (!notification) return;
+
+    const title = String(notification.title || "").slice(0, 200);
+    const body = String(notification.body || "").slice(0, 300);
+    if (!title && !body) return; // nothing meaningful to push
 
     const db = getFirestore();
     const fcm = getMessaging();

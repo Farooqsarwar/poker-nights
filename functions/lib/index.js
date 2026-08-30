@@ -36,7 +36,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onGameWrite = exports.rateLimitedChat = exports.rateLimitedSubmitRequest = void 0;
+exports.fanOutGroupNotification = exports.onGameWrite = exports.rateLimitedChat = exports.rateLimitedSubmitRequest = exports.serverNow = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const admin = __importStar(require("firebase-admin"));
@@ -45,16 +45,28 @@ admin.initializeApp();
 const db = (0, firestore_2.getFirestore)();
 // ── Input Sanitization ───────────────────────────────────────────────────────
 // Spec §22: "Sanitize all chat, poll and name input."
-function sanitize(input) {
+//
+// H3 fix: entity DECODING must happen BEFORE tag stripping. The previous order
+// (strip raw tags, then un-escape entities) let an attacker smuggle markup in
+// as entities — e.g. "&lt;script&gt;" survived the tag strip and was then
+// decoded into a live <script> tag after sanitization. Decoding first means
+// any decoded markup is then removed by the tag strips below, so the stored
+// output can never contain live markup.
+function decodeEntities(input) {
+    // Decode &amp; LAST so double-encoded entities stay inert text.
     return input
-        .replace(/<(script|style|iframe|object|embed)[^>]*>.*?<\/\1>/gis, "")
-        .replace(/<[^>]*>/g, "")
-        .replace(/&amp;/g, "&")
         .replace(/&lt;/g, "<")
         .replace(/&gt;/g, ">")
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
+        .replace(/&#x27;/gi, "'")
         .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&");
+}
+function sanitize(input) {
+    return decodeEntities(input)
+        .replace(/<(script|style|iframe|object|embed)[^>]*>.*?<\/\1>/gis, "")
+        .replace(/<[^>]*>/g, "")
         .replace(/\s{2,}/g, " ")
         .trim()
         .substring(0, 1000); // max chat length
@@ -68,32 +80,46 @@ const RATE_LIMITS = {
     chat: 30,
     seatChange: 10,
 };
+// H2 fix: the rate-limit check + write is now a single atomic transaction, so
+// concurrent bursts cannot all observe an under-limit counter and slip through.
+// Documents live in /rate_limits which my Firestore rules lock to functions
+// only (clients can never read or reset their own window).
 async function checkRateLimit(uid, action, limit) {
-    var _a, _b;
-    var _c, _d, _e;
     const docId = `${uid}_${action}`;
     const ref = db.collection("rate_limits").doc(docId);
-    const snap = await ref.get();
     const now = Date.now();
     const windowMs = 60000; // 1 minute
-    if (snap.exists) {
-        const data = snap.data();
-        const ts = (_d = (_c = (_b = (_a = data.timestamp) === null || _a === void 0 ? void 0 : _a.toMillis) === null || _b === void 0 ? void 0 : _b.call(_a)) !== null && _c !== void 0 ? _c : data.timestamp) !== null && _d !== void 0 ? _d : 0;
-        const count = (_e = data.count) !== null && _e !== void 0 ? _e : 0;
-        if (now - ts < windowMs) {
-            if (count >= limit)
-                return false;
-            await ref.update({ count: count + 1 });
+    return db.runTransaction(async (tx) => {
+        var _a, _b;
+        var _c, _d, _e;
+        const snap = await tx.get(ref);
+        let count = 1;
+        if (snap.exists) {
+            const data = snap.data();
+            const ts = (_d = (_c = (_b = (_a = data.timestamp) === null || _a === void 0 ? void 0 : _a.toMillis) === null || _b === void 0 ? void 0 : _b.call(_a)) !== null && _c !== void 0 ? _c : data.timestamp) !== null && _d !== void 0 ? _d : 0;
+            const prior = (_e = data.count) !== null && _e !== void 0 ? _e : 0;
+            if (now - ts < windowMs) {
+                if (prior >= limit)
+                    return false;
+                count = prior + 1;
+                tx.update(ref, { count });
+            }
+            else {
+                count = 1;
+                tx.set(ref, { timestamp: now, count });
+            }
         }
         else {
-            await ref.set({ timestamp: now, count: 1 });
+            tx.set(ref, { timestamp: now, count });
         }
-    }
-    else {
-        await ref.set({ timestamp: now, count: 1 });
-    }
-    return true;
+        return true;
+    });
 }
+exports.serverNow = (0, https_1.onCall)(() => {
+    // H5: authoritative server clock for the client's timer calibration. The
+    // client can diff this against its local clock to compute a stable offset.
+    return { now: Date.now() };
+});
 exports.rateLimitedSubmitRequest = (0, https_1.onCall)(async (request) => {
     if (!request.auth)
         throw new https_1.HttpsError("unauthenticated", "Sign in required.");
@@ -154,25 +180,115 @@ exports.rateLimitedChat = (0, https_1.onCall)(async (request) => {
     return { ok: true };
 });
 // ── Game Write Projections ───────────────────────────────────────────────────
-exports.onGameWrite = (0, firestore_1.onDocumentWritten)("groups/{gid}/games/{gameId}", async (event) => {
-    var _a;
-    const { gid, gameId } = event.params;
-    const change = event.data;
-    if (!change) {
-        await db.collection("publicGames").doc(gameId).delete();
+// The client stores list-like subtrees (players/guestSlots/pendingGuests) as
+// id-keyed MAPS in the Firestore doc (see liveGameToFirestoreDoc), so the raw
+// doc delivered by onDocumentWritten has objects, not arrays. Normalize both
+// so the projection logic and the completion stats writer are robust.
+function asArray(value) {
+    if (Array.isArray(value))
+        return value;
+    if (value && typeof value === "object")
+        return Object.values(value);
+    return [];
+}
+// H1: writes each finishing (non-guest) player's result row and mirrors
+// lifetime stats, computed from every result row, onto the member roster.
+// Runs exactly once per game completion (guarded by a server marker on the
+// game doc). Clients are blocked by Firestore rules from writing their own
+// results/stats, so these numbers are server-authoritative.
+async function writeCompletionResults(gid, gameId, game) {
+    var _a, _b, _c, _d;
+    if (game.status !== "completed")
+        return;
+    if (game.statsWritten === true)
+        return;
+    const finishOrder = Array.isArray(game.finishOrder) ? game.finishOrder : [];
+    const players = asArray(game.players);
+    if (finishOrder.length === 0) {
+        // Still mark the guard so we don't re-scan on every save of a completed game.
+        await db
+            .collection("groups").doc(gid).collection("games").doc(gameId)
+            .set({ statsWritten: true }, { merge: true });
         return;
     }
-    if (!change.after.exists) {
+    const knockoutsById = {};
+    for (const p of players) {
+        if (p.isGuest)
+            continue;
+        if (typeof p.id === "string")
+            knockoutsById[p.id] = Number((_a = p.knockouts) !== null && _a !== void 0 ? _a : 0);
+    }
+    const batch = db.batch();
+    for (let i = 0; i < finishOrder.length; i++) {
+        const uid = finishOrder[i];
+        if (!uid || uid.startsWith("guest-") || knockoutsById[uid] === undefined)
+            continue;
+        const position = i + 1;
+        const resultRef = db.collection("users").doc(uid).collection("results").doc(gameId);
+        batch.set(resultRef, {
+            gameId,
+            groupId: gid,
+            position,
+            playerCount: finishOrder.length,
+            knockouts: (_b = knockoutsById[uid]) !== null && _b !== void 0 ? _b : 0,
+            finishedAt: firestore_2.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    }
+    // Recompute and mirror lifetime stats for each finishing non-guest player.
+    const finishedPlayers = finishOrder.filter((u) => !u.startsWith("guest-") && knockoutsById[u] !== undefined);
+    for (const uid of finishedPlayers) {
+        const rows = await db.collection("users").doc(uid).collection("results").get();
+        let wins = 0, podium = 0, kOs = 0, finishSum = 0, played = 0;
+        for (const d of rows.docs) {
+            const r = d.data();
+            const pos = Number((_c = r.position) !== null && _c !== void 0 ? _c : 0);
+            if (pos <= 0)
+                continue;
+            played++;
+            if (pos === 1)
+                wins++;
+            if (pos <= 3)
+                podium++;
+            kOs += Number((_d = r.knockouts) !== null && _d !== void 0 ? _d : 0);
+            finishSum += pos;
+        }
+        const stats = {
+            played,
+            wins,
+            podium,
+            avgFinish: played === 0 ? 0 : finishSum / played,
+            knockouts: kOs,
+        };
+        batch.set(db.collection("groups").doc(gid).collection("members").doc(uid), { stats }, { merge: true });
+    }
+    batch.set(db.collection("groups").doc(gid).collection("games").doc(gameId), { statsWritten: true }, { merge: true });
+    await batch.commit();
+}
+exports.onGameWrite = (0, firestore_1.onDocumentWritten)("groups/{gid}/games/{gameId}", async (event) => {
+    var _a, _b, _c, _d;
+    var _e, _f;
+    const { gid, gameId } = event.params;
+    const change = event.data;
+    if (!change || !change.after || !change.after.exists) {
         await db.collection("publicGames").doc(gameId).delete();
         return;
     }
     const game = change.after.data();
-    if (!game) {
-        await db.collection("publicGames").doc(gameId).delete();
+    if (!game)
         return;
+    // H1: on the transition into "completed", write authoritative results +
+    // stats. Deliberately isolated/try-caught so a stats failure never breaks
+    // projection publishing (which feeds live TV/guest views).
+    try {
+        if (((_a = change.before) === null || _a === void 0 ? void 0 : _a.exists) && ((_c = (_b = change.before) === null || _b === void 0 ? void 0 : _b.data()) === null || _c === void 0 ? void 0 : _c.status) !== "completed") {
+            await writeCompletionResults(gid, gameId, game);
+        }
+    }
+    catch (e) {
+        console.error("writeCompletionResults failed:", e);
     }
     const publicSettings = {
-        ...game.settings,
+        ...((_e = game.settings) !== null && _e !== void 0 ? _e : {}),
         organizerPct: 0,
         forcePaidPlaces: null,
     };
@@ -207,14 +323,14 @@ exports.onGameWrite = (0, firestore_1.onDocumentWritten)("groups/{gid}/games/{ga
         status: game.status,
         settings: publicSettings,
         structure: {
-            ...game.structure,
+            ...((_f = game.structure) !== null && _f !== void 0 ? _f : {}),
             organizerAmount: 0,
-            prizes: (((_a = game.structure) === null || _a === void 0 ? void 0 : _a.prizes) || []).map((p) => ({
+            prizes: asArray((_d = game.structure) === null || _d === void 0 ? void 0 : _d.prizes).map((p) => ({
                 place: p.place,
                 amount: 0,
             })),
         },
-        players: (game.players || []).map(projectPlayer),
+        players: asArray(game.players).map(projectPlayer),
         currentLevel: game.currentLevel,
         timerRunning: game.timerRunning,
         secondsRemaining: game.secondsRemaining,
@@ -227,7 +343,7 @@ exports.onGameWrite = (0, firestore_1.onDocumentWritten)("groups/{gid}/games/{ga
         checkInClosed: game.checkInClosed,
         structureConfirmed: game.structureConfirmed,
         dealerPlayerId: game.dealerPlayerId,
-        guestSlots: (game.guestSlots || []).map(projectGuestSlot),
+        guestSlots: asArray(game.guestSlots).map(projectGuestSlot),
         announcements: game.announcements || [],
         changeLog: game.changeLog || [],
         chat: [],
@@ -248,12 +364,12 @@ exports.onGameWrite = (0, firestore_1.onDocumentWritten)("groups/{gid}/games/{ga
         guest: guestProjection,
     }, { merge: true });
     const memberViewsRef = change.after.ref.collection("memberViews");
-    const activePlayers = (game.players || []).filter((p) => !p.isGuest && p.id);
+    const activePlayers = asArray(game.players).filter((p) => !p.isGuest && p.id);
     for (const p of activePlayers) {
         const viewerId = p.id;
         const playerProjection = {
             ...tvProjection,
-            players: (game.players || []).map((otherP) => {
+            players: asArray(game.players).map((otherP) => {
                 if (otherP.id === viewerId)
                     return otherP;
                 return projectPlayer(otherP);
@@ -265,6 +381,42 @@ exports.onGameWrite = (0, firestore_1.onDocumentWritten)("groups/{gid}/games/{ga
         batch.set(memberViewsRef.doc(viewerId), playerProjection, {
             merge: true,
         });
+    }
+    await batch.commit();
+});
+// ── Group Notification Fan-out (C6) ──────────────────────────────────────────
+// Clients no longer write directly into arbitrary users' notification inboxes
+// (which allowed a member to forge/notify every other member). Instead a game
+// event writes ONE notification doc to the group-scoped outbox
+// (groups/{gid}/notifications/{id}), and this function fans it out — via the
+// Admin SDK, which is the only writer allowed by the rules — into each
+// member's inbox. The existing per-user push trigger then delivers the push.
+exports.fanOutGroupNotification = (0, firestore_1.onDocumentCreated)("groups/{gid}/notifications/{notifId}", async (event) => {
+    var _a;
+    const { gid, notifId } = event.params;
+    const notif = (_a = event.data) === null || _a === void 0 ? void 0 : _a.data();
+    if (!notif)
+        return;
+    // C6: never trust client-supplied style/trust fields. We build a clean,
+    // sanitized envelope (matching the client's inbox schema) and re-stamp it,
+    // so a member can't forge a "system" sender, inject markup, or spoof
+    // recipients. The only trusted bits are the display fields, sanitized.
+    const envelope = {
+        id: notifId,
+        title: sanitize(String(notif.title || "")),
+        body: sanitize(String(notif.body || "")),
+        type: String(notif.type || "game"),
+        link: String(notif.link || ""),
+        read: false,
+        timestamp: firestore_2.FieldValue.serverTimestamp(),
+    };
+    const membersSnap = await db
+        .collection("groups").doc(gid).collection("members")
+        .get();
+    const batch = db.batch();
+    for (const m of membersSnap.docs) {
+        const uid = m.id;
+        batch.set(db.collection("users").doc(uid).collection("notifications").doc(notifId), envelope);
     }
     await batch.commit();
 });

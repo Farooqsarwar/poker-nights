@@ -124,6 +124,12 @@ class AppProvider extends ChangeNotifier {
   StreamSubscription<List<GameRequest>>? _requestsSub;
   StreamSubscription<List<CashSession>>? _cashSub;
   StreamSubscription<List<GameResultRow>>? _resultsSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _pendingInvitesSub;
+
+  /// Live member-rosters per group id, so the index-derived group list on the
+  /// home screen / sidebar shows real-time member counts (free plan — no Cloud
+  /// Function, and the membership index itself is not live).
+  final Map<String, StreamSubscription<List<AppUser>>> _groupMembersSubs = {};
 
   /// Game ids whose own-result has already been written this session
   /// (doc id = gameId makes the write idempotent anyway).
@@ -554,6 +560,7 @@ class AppProvider extends ChangeNotifier {
     _groupsSub?.cancel();
     _groupsSub = _repo.groupsIndexStream(uid).listen((rows) {
       _groups = [for (final r in rows) _groupFromMembership(r)];
+      _syncGroupMembersSubs();
       // First group after sign-in is auto-selected (pinned first, then
       // alphabetical — same ordering the sidebar uses).
       if (_currentGroupId == null && rows.isNotEmpty) {
@@ -605,6 +612,33 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     },
         onError: (Object e) => debugPrint('results stream error: $e'));
+
+    // Free-plan: accept pending admin-by-email invites by self-writing the
+    // user's own membership index (there is no Cloud Function to mirror it).
+    _pendingInvitesSub?.cancel();
+    _pendingInvitesSub = _repo.pendingInvitesStream(uid).listen((invites) {
+      for (final invite in invites) {
+        final gid = invite['gid'] as String?;
+        if (gid == null) continue;
+        if (_groups.any((g) => g.id == gid)) continue;
+        unawaited(_repo
+            .updateGroupIndex(
+              uid,
+              gid,
+              name: invite['name'] as String?,
+              icon: invite['icon'] as String?,
+              role: 'member',
+            )
+            .catchError((Object e) => debugPrint('accept invite failed: $e')));
+        final inviteId = invite['id'] as String? ?? invite['__inviteId'] as String?;
+        if (inviteId != null) {
+          unawaited(_repo.removePendingInvite(inviteId).catchError(
+              (Object e) => debugPrint('remove invite failed: $e')));
+        }
+      }
+      notifyListeners();
+    },
+        onError: (Object e) => debugPrint('pendingInvites stream error: $e'));
   }
 
   /// Mirrors the lifetime stats summary onto this user's roster row in every
@@ -718,9 +752,14 @@ class AppProvider extends ChangeNotifier {
       _requestsSub,
       _cashSub,
       _resultsSub,
+      _pendingInvitesSub,
     ]) {
       s?.cancel();
     }
+    for (final s in _groupMembersSubs.values) {
+      s.cancel();
+    }
+    _groupMembersSubs.clear();
     _groupsSub = null;
     _bundleSub = null;
     _gameDocSub = null;
@@ -731,6 +770,7 @@ class AppProvider extends ChangeNotifier {
     _requestsSub = null;
     _cashSub = null;
     _resultsSub = null;
+    _pendingInvitesSub = null;
     _gameSaveDebounce?.cancel();
     _pendingGameSave = false;
     _syncedGameKey = null;
@@ -829,6 +869,30 @@ class AppProvider extends ChangeNotifier {
         icon: r.icon,
         pinned: r.pinned,
       );
+
+  /// Keeps the index-derived group list's `members` populated live so member
+  /// counts on the home screen / sidebar are real-time. Subscribes a members
+  /// stream per group and cancels subs for groups that were left/removed.
+  void _syncGroupMembersSubs() {
+    final wanted = {for (final g in _groups) g.id};
+    final stale = [
+      for (final entry in _groupMembersSubs.entries)
+        if (!wanted.contains(entry.key)) entry.key,
+    ];
+    for (final gid in stale) {
+      _groupMembersSubs.remove(gid)?.cancel();
+    }
+    for (final g in _groups) {
+      if (_groupMembersSubs.containsKey(g.id)) continue;
+      _groupMembersSubs[g.id] =
+          _repo.groupMembersStream(g.id).listen((members) {
+        final i = _groups.indexWhere((x) => x.id == g.id);
+        if (i == -1) return;
+        _groups = [..._groups]..[i] = _groups[i].copyWith(members: members);
+        notifyListeners();
+      }, onError: (Object e) => debugPrint('group members stream error: $e'));
+    }
+  }
 
   Future<void> _loadRecovery() async {
     final recovered = await RecoveryService.loadGame();
@@ -1476,7 +1540,12 @@ class AppProvider extends ChangeNotifier {
       return '${found.name.isEmpty ? 'That user' : found.name} is already in this group.';
     }
     try {
-      await _repo.addMemberToGroup(_currentGroup.id, found);
+      await _repo.addMemberToGroup(
+        _currentGroup.id,
+        found,
+        groupName: _currentGroup.name,
+        groupIcon: _currentGroup.icon,
+      );
     } catch (e) {
       debugPrint('addMemberByEmail failed: $e');
       return 'Could not add that member. Please try again.';

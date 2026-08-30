@@ -94,13 +94,29 @@ Future<void> main() async {
 Future<void> _initAppCheck() async {
   const isDebugMode = bool.fromEnvironment('APP_CHECK_DEBUG');
   const siteKey = String.fromEnvironment('APP_CHECK_RECAPTCHA_SITE_KEY');
+
+  // On Flutter WEB the ReCaptchaV3Provider requires a REAL reCAPTCHA
+  // Enterprise site key — there is no "debug" web provider (unlike
+  // Android/iOS, where AndroidProvider.debug / AppleProvider.debug emit debug
+  // tokens without a site key). Passing a fake/absent key makes the browser
+  // try to load ReCAPTCHA and fail with appCheck/recaptcha-error, which blocks
+  // google sign-in and Firestore locally.
+  //
+  // So on web we skip activating App Check in DEBUG builds AND whenever no real
+  // site key is supplied. This project does not enforce App Check, so skipping
+  // is non-blocking; web keeps App Check only when a genuine reCAPTCHA
+  // Enterprise site key is provided via --dart-define.
+  if (kIsWeb && (kDebugMode || siteKey.isEmpty)) {
+    // ignore: avoid_print
+    print('[AppCheck] Skipped on web (debug or no site key) -- not enforced.');
+    return;
+  }
+
   try {
     await FirebaseAppCheck.instance.activate(
-      webProvider: isDebugMode
-          ? ReCaptchaV3Provider('debug')
-          : siteKey.isNotEmpty
-              ? ReCaptchaV3Provider(siteKey)
-              : ReCaptchaV3Provider('MISSING_SITE_KEY'),
+      webProvider: siteKey.isNotEmpty
+          ? ReCaptchaV3Provider(siteKey)
+          : ReCaptchaV3Provider('MISSING_SITE_KEY'),
       androidProvider:
           isDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
       appleProvider: isDebugMode

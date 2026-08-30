@@ -84,7 +84,6 @@ class _HomeScreenState extends State<HomeScreen> {
         )
         .toList();
     final activeGame = games.where((g) => g.status.isActiveLive).firstOrNull;
-    final unread = app.unreadCount;
 
     return Stack(
       children: [
@@ -144,69 +143,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ),
-                      InkWell(
-                        onTap: () => context.go(RoutePaths.notifications),
-                        borderRadius: BorderRadius.circular(AppRadius.lg),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: AppColors.card,
-                            borderRadius: BorderRadius.circular(AppRadius.lg),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          alignment: Alignment.center,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Icon(
-                                Icons.notifications_none,
-                                size: 22,
-                                color: AppColors.foreground,
-                              ),
-                              if (unread > 0)
-                                Positioned(
-                                  right: -4,
-                                  top: -4,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary,
-                                      borderRadius: BorderRadius.circular(
-                                        AppRadius.pill,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.primary.withValues(
-                                            alpha: 0.4,
-                                          ),
-                                          blurRadius: 8,
-                                        ),
-                                      ],
-                                    ),
-                                    child: Text(
-                                      '$unread',
-                                      style: AppTypography.mono(
-                                        size: 10,
-                                        weight: FontWeight.w700,
-                                        color: AppColors.primaryForeground,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
                     ],
-                  )
-                  .animate()
-                  .fadeIn(duration: 400.ms)
-                  .slideY(begin: -0.2, end: 0, curve: Curves.easeOut),
-              const SizedBox(height: AppSpacing.xl),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
               // Offline Conflict Banner
               if (app.hasOfflineConflict) ...[
                 AppAlertBanner(

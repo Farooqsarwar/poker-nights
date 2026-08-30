@@ -182,7 +182,6 @@ class _MobileTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final unread = app.unreadCount;
     final user = app.user;
 
     return ClipRect(
@@ -222,41 +221,6 @@ class _MobileTopBar extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  InkWell(
-                    onTap: () => context.go(RoutePaths.notifications),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.sm),
-                      child: Stack(
-                        children: [
-                          Icon(
-                            Icons.notifications_none,
-                            color: AppColors.mutedForeground,
-                            size: 24,
-                          ),
-                          if (unread > 0)
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.primary.withValues(alpha: 0.50),
-                                      blurRadius: 6,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
                   const SizedBox(width: AppSpacing.sm),
                   if (user != null)
                     InkWell(

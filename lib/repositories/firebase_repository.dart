@@ -509,6 +509,32 @@ class FirebaseRepository {
       .snapshots()
       .map((s) => s.docs.map((d) => GroupMembership.fromMap(d.id, d.data())).toList());
 
+  /// Live member roster for a group (name/role only — the index-based group
+  /// list on home/sidebar has no live member data, so we maintain it here to
+  /// keep member counts real-time on the free plan).
+  Stream<List<AppUser>> groupMembersStream(String gid) => _db
+      .collection('groups').doc(gid).collection('members')
+      .snapshots()
+      .map((s) => [
+            for (final d in s.docs)
+              AppUser(
+                id: d.id,
+                name: (d.data()['name'] as String?) ?? '',
+                email: '',
+                isAdmin: (d.data()['role'] as String?) == 'admin',
+                isCoAdmin: (d.data()['role'] as String?) == 'coadmin',
+                stats: d.data()['stats'] is Map
+                    ? userStatsFromMap(
+                        Map<String, dynamic>.from(d.data()['stats'] as Map))
+                    : const UserStats(
+                        played: 0,
+                        wins: 0,
+                        podium: 0,
+                        avgFinish: 0,
+                        knockouts: 0),
+              ),
+          ]);
+
   Future<void> updateGroupIndex(String uid, String gid,
       {String? name, String? icon, bool? pinned, String? role}) =>
       userGroupIndexRef(uid, gid).set(
@@ -559,16 +585,50 @@ class FirebaseRepository {
     );
   }
 
-  /// Group admin adds a registered user directly. Writes only the member row —
-  /// the `onMemberWrite` function mirrors it into the target user's index
-  /// (the client cannot write another user's document tree).
-  Future<void> addMemberToGroup(String gid, AppUser user) => _db
-      .collection('groups').doc(gid).collection('members').doc(user.id)
-      .set({
+  /// Group admin adds a registered user directly. Writes the member row AND a
+  /// `pendingInvites` doc (free plan — no Cloud Function, so `onMemberWrite`
+  /// cannot mirror into the target user's /users tree; the added user instead
+  /// reads their own pending invite on next open and self-writes their index).
+  Future<void> addMemberToGroup(String gid, AppUser user,
+      {String groupName = '', String groupIcon = '♠️'}) async {
+    final batch = _db.batch();
+    batch.set(
+      _db.collection('groups').doc(gid).collection('members').doc(user.id),
+      {
         'name': user.name,
         'role': 'member',
         'joinedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      },
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _db.collection('pendingInvites').doc('$gid:${user.id}'),
+      {
+        'uid': user.id,
+        'gid': gid,
+        'name': groupName,
+        'icon': groupIcon,
+        'role': 'member',
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+    );
+    await batch.commit();
+  }
+
+  /// Live stream of this user's pending group invites. Each invite carries the
+  /// group id + name/icon so the client can self-write its own membership index
+  /// without needing to read `groups/{gid}` (which is member-only).
+  Stream<List<Map<String, dynamic>>> pendingInvitesStream(String uid) => _db
+      .collection('pendingInvites')
+      .where('uid', isEqualTo: uid)
+      .snapshots()
+      .map((s) => [
+            for (final d in s.docs) {...d.data(), '__inviteId': d.id},
+          ]);
+
+  /// Removes a pending invite once the user has accepted (self-mirrored) it.
+  Future<void> removePendingInvite(String inviteId) => _db
+      .collection('pendingInvites').doc(inviteId).delete();
 
   DocumentReference<Map<String, dynamic>> get serverTimeRef =>
       _db.collection('_meta').doc('serverTime');

@@ -26,14 +26,12 @@ class NavDrawer extends StatelessWidget {
     final app = context.watch<AppProvider>();
     final user = app.user;
     final location = GoRouterState.of(context).uri.toString();
-    final unread = app.unreadCount;
 
     final items = [
       _DrawerItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
       _DrawerItem('${RoutePaths.group}?tab=chat', 'Chat', Icons.chat_bubble_outline, null),
       _DrawerItem('${RoutePaths.group}?tab=games', 'Events', Icons.sports_esports_outlined, null),
       _DrawerItem('${RoutePaths.group}?tab=polls', 'Polls', Icons.poll_outlined, null),
-      _DrawerItem(RoutePaths.notifications, 'Alerts', Icons.notifications_none, unread),
       _DrawerItem(RoutePaths.history, 'History', Icons.history, null),
       _DrawerItem(RoutePaths.settings, 'Settings', Icons.settings_outlined, null),
     ];

@@ -27,14 +27,12 @@ class Sidebar extends StatelessWidget {
     final app = context.watch<AppProvider>();
     final user = app.user;
     final location = GoRouterState.of(context).uri.toString();
-    final unread = app.unreadCount;
 
     final navItems = [
       _NavSpec(RoutePaths.home, 'Home', Icons.home_outlined, 0, null),
       _NavSpec('${RoutePaths.group}?tab=chat', 'Chat', Icons.chat_bubble_outline, 0, null),
       _NavSpec('${RoutePaths.group}?tab=games', 'Events', Icons.sports_esports_outlined, 0, null),
       _NavSpec('${RoutePaths.group}?tab=polls', 'Polls', Icons.poll_outlined, 0, null),
-      _NavSpec(RoutePaths.notifications, 'Alerts', Icons.notifications_none, 0, unread),
       _NavSpec(RoutePaths.history, 'History', Icons.history, 0, null),
       _NavSpec(RoutePaths.settings, 'Settings', Icons.settings_outlined, 0, null),
     ];

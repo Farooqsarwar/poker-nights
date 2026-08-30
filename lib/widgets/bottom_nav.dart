@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
 import '../app/colors.dart';
 import '../app/route_paths.dart';
 import '../app/typography.dart';
-import '../providers/app_provider.dart';
 import 'glass_styles.dart';
 import 'glass_surface.dart';
 
@@ -15,16 +13,13 @@ class BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
     final location = GoRouterState.of(context).uri.toString();
-    final unread = app.unreadCount;
 
     final items = [
       _BottomItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
       _BottomItem('${RoutePaths.group}?tab=chat', 'Chat', Icons.chat_bubble_outline, null),
       _BottomItem('${RoutePaths.group}?tab=games', 'Events', Icons.sports_esports_outlined, null),
       _BottomItem('${RoutePaths.group}?tab=polls', 'Polls', Icons.poll_outlined, null),
-      _BottomItem(RoutePaths.notifications, 'Alerts', Icons.notifications_none, unread),
       _BottomItem(RoutePaths.history, 'History', Icons.history, null),
     ];
 

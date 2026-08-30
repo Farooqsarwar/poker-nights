@@ -68,20 +68,18 @@ class SettingsScreen extends StatelessWidget {
                 // Audit fix C6: SMS alerts ("Email and SMS are not required",
                 // Tech §14.3) and chip-sound effects (not in the voice spec,
                 // §13.2) were out of MVP scope and were removed.
+                // Push notifications are unavailable on the free (Spark) plan:
+                // there is no Cloud Function to fan out cross-user inbox items,
+                // so the feature was dropped. Kept as a disabled informational
+                // row rather than a broken toggle.
                 _SettingRow(
-                  icon: Icons.notifications_outlined,
+                  icon: Icons.notifications_off_outlined,
                   title: 'Push notifications',
-                  subtitle: 'Get alerts for RSVPs and game events',
-                  trailing: AppToggle(
-                    value: app.notificationsEnabled,
-                    onChanged: (v) async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final error = await app.setNotificationsEnabled(v);
-                      if (error == null) return;
-                      messenger.showSnackBar(
-                        SnackBar(content: Text(error)),
-                      );
-                    },
+                  subtitle: 'Unavailable on the free plan',
+                  trailing: Icon(
+                    Icons.lock_outline,
+                    size: 18,
+                    color: AppColors.mutedForeground,
                   ),
                   showDivider: false,
                 ),

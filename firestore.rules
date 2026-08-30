@@ -188,13 +188,21 @@ service cloud.firestore {
         allow read, write: if signedIn() && request.auth.uid == uid;
       }
 
-      // Personal tournament results (one doc per settled game). Readable by
-      // the owner. WRITES ARE LOCKED to the Cloud Function: results are the
-      // authority-derived, game-completion record so players cannot forge
-      // wins / knockouts (H1).
+      // Personal tournament results (one doc per settled game; spec §5.1
+      // "game_results"). FREE-PLAN variant (no Cloud Function): each signed-in
+      // player writes ONLY their own per-game result row, read by the owner
+      // alone ("paid places privately"). The doc id must equal the game's id
+      // (one immutable row per game) and the row must declare the same gameId,
+      // so a player can only ever record their own finish for that specific
+      // game. The authoritative finish order / knockouts themselves remain
+      // admin-gated on the game document — this row is the player's private
+      // mirror derived from it. Deletes are forbidden (history is immutable).
       match /results/{resultId} {
         allow read: if signedIn() && request.auth.uid == uid;
-        allow write: if false;
+        allow create, update: if signedIn()
+            && request.auth.uid == uid
+            && resultId == request.resource.data.get('gameId', '');
+        allow delete: if false;
       }
     }
 
@@ -329,6 +337,25 @@ service cloud.firestore {
       allow create, update: if signedIn()
           && request.resource.data.uid == request.auth.uid;
       allow delete: if false;
+    }
+
+    // ---------- pending member invites (free-plan replacement) ----------
+    // Cloud-function-free replacement for the `onMemberWrite` mirror. When a
+    // group ADMIN adds a registered user by email, the client writes BOTH the
+    // member row (allowed above) AND a pendingInvites doc here — because the
+    // admin cannot write into another user's /users tree. The invited user may
+    // read/delete ONLY their own pending invites (uid match, no cross-user
+    // reads) and self-writes their own membership index on next app open, then
+    // removes the invite. Admin-create is verified by looking up the writer's
+    // own admin membership row, so a plain member can never forge an invite.
+    match /pendingInvites/{inviteId} {
+      allow read: if signedIn()
+          && resource.data.uid == request.auth.uid;
+      allow delete: if signedIn()
+          && resource.data.uid == request.auth.uid;
+      allow create, update: if signedIn()
+          && request.resource.data.uid != request.auth.uid
+          && get(/databases/$(database)/documents/groups/$(request.resource.data.gid)/members/$(request.auth.uid)).data.role == 'admin';
     }
 
     // ---------- public game projections ----------

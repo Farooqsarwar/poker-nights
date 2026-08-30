@@ -28,9 +28,15 @@ class FCMService {
     await _saveToken();
 
     // Listen for token updates
-    _fcm.onTokenRefresh.listen((token) {
-      _saveTokenToFirestore(token);
-    });
+    try {
+      _fcm.onTokenRefresh.listen((token) {
+        _saveTokenToFirestore(token);
+      }, onError: (Object e) {
+        debugPrint('FCM onTokenRefresh error: $e');
+      });
+    } catch (e) {
+      debugPrint('FCM onTokenRefresh setup failed: $e');
+    }
   }
 
   Future<void> _saveToken() async {

@@ -281,13 +281,10 @@ class _AuthScreenState extends State<AuthScreen> {
                     // Google Sign-In — shown on login & register, not on
                     // forgot-password (which is email-only by nature).
                     if (!_isForgot) ...[
-                      if (kIsWeb)
-                         FirebaseRepository.googleSignIn.signInButton() ?? const SizedBox.shrink()
-                      else
-                        _GoogleSignInButton(
-                          loading: _loading,
-                          onPressed: _handleGoogleSignIn,
-                        ),
+                      _GoogleSignInButton(
+                        loading: _loading,
+                        onPressed: _handleGoogleSignIn,
+                      ),
                       const SizedBox(height: AppSpacing.lg),
                       Row(
                         children: [

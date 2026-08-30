@@ -226,65 +226,61 @@ GoRouter buildAppRouter(AppProvider app) {
     // ── App shell ────────────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.home,
-      builder: (context, state) =>
-          shell(const HomeScreen(), path: RoutePaths.home),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const HomeScreen(), path: RoutePaths.home)),
     ),
     GoRoute(
       path: RoutePaths.group,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final tab = state.uri.queryParameters['tab'];
-        return shell(GroupScreen(initialTab: tab), path: RoutePaths.group);
+        return NoTransitionPage(
+          key: ValueKey(state.uri.path),
+          child: shell(GroupScreen(initialTab: tab), path: RoutePaths.group),
+        );
       },
     ),
     GoRoute(
       path: RoutePaths.joinGroup,
-      builder: (context, state) => shell(
-        JoinGroupScreen(code: state.uri.queryParameters['code'] ?? ''),
-        path: RoutePaths.joinGroup,
-      ),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        JoinGroupScreen(code: state.uri.queryParameters['code'] ?? ''), path: RoutePaths.joinGroup,
+      )),
     ),
     GoRoute(
       path: RoutePaths.notifications,
-      builder: (context, state) =>
-          shell(const NotificationsScreen(), path: RoutePaths.notifications),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const NotificationsScreen(), path: RoutePaths.notifications)),
     ),
     GoRoute(
       path: RoutePaths.history,
-      builder: (context, state) =>
-          shell(const HistoryScreen(), path: RoutePaths.history),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const HistoryScreen(), path: RoutePaths.history)),
     ),
     GoRoute(
       path: RoutePaths.profile,
-      builder: (context, state) =>
-          shell(const ProfileScreen(), path: RoutePaths.profile),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ProfileScreen(), path: RoutePaths.profile)),
     ),
     GoRoute(
       path: RoutePaths.settings,
-      builder: (context, state) =>
-          shell(const SettingsScreen(), path: RoutePaths.settings),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const SettingsScreen(), path: RoutePaths.settings)),
     ),
     GoRoute(
       path: RoutePaths.stats,
-      builder: (context, state) =>
-          shell(const StatsScreen(), path: RoutePaths.stats),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const StatsScreen(), path: RoutePaths.stats)),
     ),
     GoRoute(
       path: RoutePaths.chipSets,
-      builder: (context, state) =>
-          shell(const ChipSetsScreen(), path: RoutePaths.chipSets),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ChipSetsScreen(), path: RoutePaths.chipSets)),
     ),
     GoRoute(
       path: RoutePaths.presets,
-      builder: (context, state) =>
-          shell(const PresetsScreen(), path: RoutePaths.presets),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const PresetsScreen(), path: RoutePaths.presets)),
     ),
     GoRoute(
       path: RoutePaths.editChipSet,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final id = state.extra as String?;
-        return shell(
-          EditChipSetScreen(chipSetId: id),
-          path: RoutePaths.editChipSet,
+        return NoTransitionPage(
+          key: ValueKey(state.uri.path),
+          child: shell(
+          EditChipSetScreen(chipSetId: id), path: RoutePaths.editChipSet,
+        ),
         );
       },
     ),
@@ -292,73 +288,61 @@ GoRouter buildAppRouter(AppProvider app) {
     // ── Tournament flow ──────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.createTournament,
-      builder: (context, state) => shell(
-        CreateTournamentScreen(presetId: state.uri.queryParameters['preset']),
-        path: RoutePaths.createTournament,
-      ),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        CreateTournamentScreen(presetId: state.uri.queryParameters['preset']), path: RoutePaths.createTournament,
+      )),
     ),
     GoRoute(
       path: RoutePaths.structureReview,
-      builder: (context, state) => shell(
-        const StructureReviewScreen(),
-        path: RoutePaths.structureReview,
-      ),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        const StructureReviewScreen(), path: RoutePaths.structureReview,
+      )),
     ),
     GoRoute(
       path: RoutePaths.invitation,
-      builder: (context, state) =>
-          shell(const InvitationScreen(), path: RoutePaths.invitation),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const InvitationScreen(), path: RoutePaths.invitation)),
     ),
     GoRoute(
       path: RoutePaths.checkIn,
-      builder: (context, state) =>
-          shell(const CheckInScreen(), path: RoutePaths.checkIn),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const CheckInScreen(), path: RoutePaths.checkIn)),
     ),
     GoRoute(
       path: RoutePaths.adminDashboard,
-      builder: (context, state) =>
-          shell(const AdminDashboardScreen(), path: RoutePaths.adminDashboard),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const AdminDashboardScreen(), path: RoutePaths.adminDashboard)),
     ),
     GoRoute(
       path: RoutePaths.playerLive,
-      builder: (context, state) =>
-          shell(const PlayerLiveScreen(), path: RoutePaths.playerLive),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const PlayerLiveScreen(), path: RoutePaths.playerLive)),
     ),
     GoRoute(
       path: RoutePaths.rebuySettlement,
-      builder: (context, state) => shell(
-        const RebuySettlementScreen(),
-        path: RoutePaths.rebuySettlement,
-      ),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        const RebuySettlementScreen(), path: RoutePaths.rebuySettlement,
+      )),
     ),
     GoRoute(
       path: RoutePaths.finalTable,
-      builder: (context, state) =>
-          shell(const FinalTableScreen(), path: RoutePaths.finalTable),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const FinalTableScreen(), path: RoutePaths.finalTable)),
     ),
     GoRoute(
       path: RoutePaths.completeTournament,
-      builder: (context, state) => shell(
-        const CompleteTournamentScreen(),
-        path: RoutePaths.completeTournament,
-      ),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        const CompleteTournamentScreen(), path: RoutePaths.completeTournament,
+      )),
     ),
     GoRoute(
       path: RoutePaths.resultPodium,
-      builder: (context, state) =>
-          shell(const ResultPodiumScreen(), path: RoutePaths.resultPodium),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ResultPodiumScreen(), path: RoutePaths.resultPodium)),
     ),
 
     // ── Cash game ────────────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.cashGame,
-      builder: (context, state) =>
-          shell(const CashGameScreen(), path: RoutePaths.cashGame),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const CashGameScreen(), path: RoutePaths.cashGame)),
     ),
     GoRoute(
       path: RoutePaths.cashGameLive,
-      builder: (context, state) =>
-          shell(const CashGameLiveScreen(), path: RoutePaths.cashGameLive),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const CashGameLiveScreen(), path: RoutePaths.cashGameLive)),
     ),
   ],
 );

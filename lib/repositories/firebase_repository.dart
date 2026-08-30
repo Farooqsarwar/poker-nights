@@ -222,10 +222,14 @@ class FirebaseRepository {
   /// `null` when the user cancels the flow.
   Future<fa.UserCredential?> signInWithGoogle() async {
     try {
-      final credentials = await googleSignIn.signIn();
-      if (credentials == null) return null;
-      final credential = await _googleCredential(credentials);
-      return _auth.signInWithCredential(credential);
+      if (kIsWeb) {
+        return await _auth.signInWithPopup(fa.GoogleAuthProvider());
+      } else {
+        final credentials = await googleSignIn.signIn();
+        if (credentials == null) return null;
+        final credential = await _googleCredential(credentials);
+        return _auth.signInWithCredential(credential);
+      }
     } catch (e) {
       debugPrint('signInWithGoogle failed: $e');
       return null;
@@ -251,10 +255,14 @@ class FirebaseRepository {
       throw StateError('No anonymous session to upgrade.');
     }
     try {
-      final credentials = await googleSignIn.signIn();
-      if (credentials == null) return null;
-      final credential = await _googleCredential(credentials);
-      return user.linkWithCredential(credential);
+      if (kIsWeb) {
+        return await user.linkWithPopup(fa.GoogleAuthProvider());
+      } else {
+        final credentials = await googleSignIn.signIn();
+        if (credentials == null) return null;
+        final credential = await _googleCredential(credentials);
+        return user.linkWithCredential(credential);
+      }
     } catch (e) {
       debugPrint('linkGuestWithGoogle failed: $e');
       return null;

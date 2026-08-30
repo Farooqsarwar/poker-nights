@@ -88,14 +88,6 @@ class AppProvider extends ChangeNotifier {
     // degrade gracefully by marking auth resolved so route guards open up.
     try {
       _authSub = _repo.authStateChanges().listen(_onAuthStateChanged);
-      
-      if (kIsWeb) {
-        _googleSignInSub = FirebaseRepository.googleSignIn.authenticationState.listen((credentials) {
-           if (credentials != null) {
-              _handleWebGoogleSignIn(credentials);
-           }
-        });
-      }
     } catch (_) {
       _backendUp = false;
       _authReady = true;
@@ -143,7 +135,6 @@ class AppProvider extends ChangeNotifier {
   StreamSubscription<List<CashSession>>? _cashSub;
   StreamSubscription<List<GameResultRow>>? _resultsSub;
   StreamSubscription<List<Map<String, dynamic>>>? _pendingInvitesSub;
-  StreamSubscription? _googleSignInSub;
 
   /// Live member-rosters per group id, so the index-derived group list on the
   /// home screen / sidebar shows real-time member counts (free plan — no Cloud
@@ -821,7 +812,6 @@ class AppProvider extends ChangeNotifier {
       _cashSub,
       _resultsSub,
       _pendingInvitesSub,
-      _googleSignInSub,
     ]) {
       s?.cancel();
     }
@@ -840,7 +830,6 @@ class AppProvider extends ChangeNotifier {
     _cashSub = null;
     _resultsSub = null;
     _pendingInvitesSub = null;
-    _googleSignInSub = null;
     _gameSaveDebounce?.cancel();
     _pendingGameSave = false;
     _syncedGameKey = null;
@@ -1308,19 +1297,6 @@ class AppProvider extends ChangeNotifier {
       };
     } catch (e) {
       return 'Google sign-in failed. Please try again.';
-    }
-  }
-
-  /// Called automatically on web when the native Google Sign-In button completes.
-  Future<void> _handleWebGoogleSignIn(GoogleSignInCredentials credentials) async {
-    if (_user != null && !_repo.isSignedInAsGuest) return; // Already signed in fully
-    try {
-      final cred = await _repo.signInWithGoogleCredentials(credentials);
-      if (cred != null && cred.user != null) {
-        await _hydrateUser(cred.user!);
-      }
-    } catch (e) {
-      debugPrint('Web google sign in failed: $e');
     }
   }
 

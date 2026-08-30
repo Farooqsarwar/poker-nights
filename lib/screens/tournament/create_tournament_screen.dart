@@ -403,8 +403,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       final parsed = DateTime.tryParse(_date.text.trim());
       if (parsed == null) {
         _errors['date'] = 'Invalid date format (YYYY-MM-DD)';
-      } else if (parsed.isBefore(DateTime.now())) {
-        _errors['date'] = 'Date must be in the future';
+      } else {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        if (parsed.isBefore(today)) {
+          _errors['date'] = 'Date must be today or in the future';
+        }
       }
     }
     if (_time.text.trim().isEmpty) {
@@ -777,15 +781,65 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           Row(
             children: [
               Expanded(
-                child: AppTextField(
-                  controller: _date,
-                  label: 'Date',
-                  error: _errors['date'],
+                child: GestureDetector(
+                  onTap: () async {
+                    final initialDate = DateTime.tryParse(_date.text) ?? DateTime.now();
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: initialDate,
+                      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                    );
+                    if (picked != null) {
+                      final y = picked.year;
+                      final m = picked.month.toString().padLeft(2, '0');
+                      final d = picked.day.toString().padLeft(2, '0');
+                      setState(() => _date.text = '$y-$m-$d');
+                      _refreshPresetMatches(app);
+                    }
+                  },
+                  child: AbsorbPointer(
+                    child: AppTextField(
+                      controller: _date,
+                      label: 'Date',
+                      error: _errors['date'],
+                      readOnly: true,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: AppTextField(controller: _time, label: 'Start time'),
+                child: GestureDetector(
+                  onTap: () async {
+                    final parts = _time.text.split(':');
+                    var initialTime = TimeOfDay.now();
+                    if (parts.length == 2) {
+                      final h = int.tryParse(parts[0]);
+                      final m = int.tryParse(parts[1]);
+                      if (h != null && m != null) {
+                        initialTime = TimeOfDay(hour: h, minute: m);
+                      }
+                    }
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: initialTime,
+                    );
+                    if (picked != null) {
+                      final h = picked.hour.toString().padLeft(2, '0');
+                      final m = picked.minute.toString().padLeft(2, '0');
+                      setState(() => _time.text = '$h:$m');
+                      _refreshPresetMatches(app);
+                    }
+                  },
+                  child: AbsorbPointer(
+                    child: AppTextField(
+                      controller: _time,
+                      label: 'Start time',
+                      readOnly: true,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),

@@ -215,13 +215,17 @@ service cloud.firestore {
       // display name.
       match /members/{memberUid} {
         allow read: if isMember(gid);
+        // C1-hardened create: a user adds themselves as role 'member' (join
+        // code / invite link), OR the group owner creates their own row in the
+        // same batch as the group, OR a genuine group ADMIN adds a registered
+        // member directly by email. A plain member can never self-grant 'admin'
+        // (they may only create their own row with role 'member').
         allow create: if signedIn()
             && request.auth.uid == memberUid
-            && (
-              request.resource.data.get('role', 'member') == 'member'
-              || get(/databases/$(database)/documents/groups/$(gid)).data.ownerId
-                  == request.auth.uid
-            );
+            && request.resource.data.get('role', 'member') == 'member'
+            || get(/databases/$(database)/documents/groups/$(gid)).data.ownerId
+                == request.auth.uid
+            || isGroupAdmin(gid);
         allow update: if isGroupAdmin(gid)
             || (signedIn() && request.auth.uid == memberUid
                 && request.resource.data.diff(resource.data).affectedKeys()
@@ -231,7 +235,12 @@ service cloud.firestore {
       }
 
       // Games: authority writes whole docs; members get a tightly scoped
-      // patch path scoped to their OWN data only (C2); guests no access here.
+      // Games: authority writes whole docs; non-authority viewers get the
+      // sanitized memberViews projection (see gameDocSnapshots), so RAW READ of
+      // the game doc is admin-only. Members reach their own sanitized slice via
+      // memberViews/{userId}, keeping player stacks / eliminations / request
+      // queues private. Guests have no access here at all — they use the
+      // sanitized publicGames projections.
       match /games/{gameId} {
         allow read: if isGroupAdmin(gid);
         allow create, delete: if isGroupAdmin(gid);
@@ -293,11 +302,15 @@ service cloud.firestore {
     }
 
     // ---------- join codes ----------
-    // H6: creation requires the writer to be the admin of the referenced
-    // group (or the owner creating the group's code in the same batch as the
-    // group). Any signed-in user may RESOLVE (read) a code.
+    // Codes are public by design — they are printed on QR codes and shared as
+    // invite links — so RESOLVING a code is world-readable, letting guests
+    // enter the join flow without first creating an account. CREATION is
+    // H6-guarded: only the admin/owner of the referenced group may mint a code
+    // (a random signed-in user must not create a code pointing at an arbitrary
+    // group). Later updates (game tv/public codes upserted on publish) require
+    // group admin rights.
     match /joinCodes/{code} {
-      allow read: if signedIn();
+      allow read: if true;
       allow create: if signedIn()
           && (
             isGroupAdmin(request.resource.data.gid)
@@ -305,6 +318,17 @@ service cloud.firestore {
                 == request.auth.uid
           );
       allow update, delete: if signedIn() && isGroupAdmin(resource.data.gid);
+    }
+
+    // ---------- email → uid index ----------
+    // Lets a group admin resolve a registered user by their account email for
+    // the "add member directly" flow, without exposing the users collection.
+    // Each user writes only their own row (keyed by lower-cased email).
+    match /emailIndex/{emailLower} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+          && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
     }
 
     // ---------- public game projections ----------

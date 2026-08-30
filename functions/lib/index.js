@@ -36,7 +36,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.fanOutGroupNotification = exports.onGameWrite = exports.rateLimitedChat = exports.rateLimitedSubmitRequest = exports.serverNow = void 0;
+exports.onMemberWrite = exports.fanOutGroupNotification = exports.onGameWrite = exports.rateLimitedChat = exports.rateLimitedSubmitRequest = exports.serverNow = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const admin = __importStar(require("firebase-admin"));
@@ -419,6 +419,36 @@ exports.fanOutGroupNotification = (0, firestore_1.onDocumentCreated)("groups/{gi
         batch.set(db.collection("users").doc(uid).collection("notifications").doc(notifId), envelope);
     }
     await batch.commit();
+});
+// ── Membership mirror ────────────────────────────────────────────────────────
+// Keeps users/{uid}/groups/{gid} in sync with groups/{gid}/members/{uid} so the
+// sidebar index is correct no matter who wrote the member row — the member
+// themselves (join code / invite link) or a group admin ("add member by
+// email"), who cannot write into another user's document tree from the client.
+exports.onMemberWrite = (0, firestore_1.onDocumentWritten)("groups/{gid}/members/{uid}", async (event) => {
+    const { gid, uid } = event.params;
+    const change = event.data;
+    const mirrorRef = db
+        .collection("users").doc(uid)
+        .collection("groups").doc(gid);
+    if (!change || !change.after.exists) {
+        await mirrorRef.delete().catch(() => undefined);
+        return;
+    }
+    const member = change.after.data() || {};
+    const [groupSnap, mirrorSnap] = await Promise.all([
+        db.collection("groups").doc(gid).get(),
+        mirrorRef.get(),
+    ]);
+    const group = groupSnap.data() || {};
+    const existing = mirrorSnap.data() || {};
+    await mirrorRef.set({
+        groupId: gid,
+        name: group.name || existing.name || "",
+        icon: group.icon || existing.icon || "♠️",
+        role: member.role || "member",
+        pinned: existing.pinned === true,
+    }, { merge: true });
 });
 __exportStar(require("./push"), exports);
 __exportStar(require("./scheduler"), exports);

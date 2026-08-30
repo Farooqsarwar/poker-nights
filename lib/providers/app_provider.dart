@@ -35,6 +35,20 @@ typedef LevelEdit = ({int level, int sb, int bb, int? ante, int durationMins});
 /// Result of looking up a game / TV code.
 enum CodeLookupResult { game, tv, notFound, rateLimited }
 
+/// What a scanned / typed / pasted join code points at. Produced by
+/// [AppProvider.resolveJoinCode] so the unified join screen can pick a flow.
+enum JoinCodeKind { group, game, tv, notFound, rateLimited, error }
+
+/// Outcome of [AppProvider.resolveJoinCode] — the [kind] plus the cleaned
+/// [code] that was extracted from whatever the user entered (bare code,
+/// full invite link, or QR payload).
+class JoinCodeResolution {
+  const JoinCodeResolution(this.kind, this.code);
+
+  final JoinCodeKind kind;
+  final String code;
+}
+
 /// How the admin wants checked-in players distributed to tables/seats
 /// (checklist §13.1). Mirrored by the screen's `SeatingMode`.
 enum TableSeatingMode { random, manual, keepGuests, separateGuests }
@@ -92,6 +106,14 @@ class AppProvider extends ChangeNotifier {
   /// group and cancelled on sign-out or dispose.
   StreamSubscription<List<GroupMembership>>? _groupsSub;
   StreamSubscription<Group>? _bundleSub;
+
+  /// Whether the current group's live bundle has delivered its first snapshot.
+  /// Reset to false on every [_selectGroup]; flipped true on the first emit.
+  bool _bundleLoaded = false;
+
+  /// Completes when the current group's bundle first loads (or errors). Lets
+  /// [joinGroup] wait for real-time group data before the caller navigates.
+  Completer<void>? _bundleReady;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _gameDocSub;
   StreamSubscription<dynamic>? _lookupSub;
   StreamSubscription<List<TournamentPreset>>? _presetsSub;
@@ -714,19 +736,11 @@ class AppProvider extends ChangeNotifier {
     _syncedGameKey = null;
     _gameSyncPrimed = false;
     _currentGroupId = null;
+    _bundleLoaded = false;
+    _bundleReady = null;
     // Drop any group-scoped state from the previous session so a different
     // account signing in on this device never sees it.
-    _currentGroup = const Group(
-      id: '',
-      name: '',
-      joinCode: '',
-      ownerId: '',
-      members: [],
-      games: [],
-      chat: [],
-      polls: [],
-      notifications: [],
-    );
+    _currentGroup = _kEmptyGroup;
     _notifications = const [];
     _cashHistory = const [];
     _myResults = const [];
@@ -744,21 +758,63 @@ class AppProvider extends ChangeNotifier {
     _cashSub?.cancel();
     _cashSub = null;
     _bundleSub = null;
-    if (!_backendUp) return;
+    _bundleLoaded = false;
+    _bundleReady = Completer<void>();
+    // Until the full bundle arrives, show the lightweight index row (name +
+    // icon) for this group rather than the previously-selected group's data.
+    final row = _groups.where((g) => g.id == gid).firstOrNull;
+    _currentGroup = row ?? _kEmptyGroup;
+
+    void markReady() {
+      if (!(_bundleReady?.isCompleted ?? true)) _bundleReady!.complete();
+    }
+
+    if (!_backendUp) {
+      markReady();
+      return;
+    }
     _bundleSub = _repo.groupBundleStream(gid).listen((g) {
       _currentGroup = g;
+      _bundleLoaded = true;
+      markReady();
       // Catch results of games this device never followed live (e.g. the
       // player sat out or never opened the game screen).
       for (final finished in g.pastGames) {
         _maybeRecordOwnResult(finished);
       }
       notifyListeners();
-    }, onError: (Object e) => debugPrint('groupBundle stream error: $e'));
+    }, onError: (Object e) {
+      debugPrint('groupBundle stream error: $e');
+      markReady();
+    });
     _cashSub = _repo.completedCashSessionsStream(gid).listen((list) {
       _cashHistory = list;
       notifyListeners();
     }, onError: (Object e) => debugPrint('cashSessions stream error: $e'));
   }
+
+  /// Lightweight placeholder used before a group's live bundle has loaded and
+  /// after the user leaves their last group.
+  static const Group _kEmptyGroup = Group(
+    id: '',
+    name: '',
+    joinCode: '',
+    ownerId: '',
+    members: [],
+    games: [],
+    chat: [],
+    polls: [],
+    notifications: [],
+  );
+
+  /// True while a group is selected but its live bundle (members, games, chat,
+  /// settings) has not delivered its first snapshot — the group hub should
+  /// render a loading state rather than an empty shell.
+  bool get groupBundleLoading => _currentGroupId != null && !_bundleLoaded;
+
+  /// Completes once the selected group's bundle has loaded (or errored).
+  Future<void> get groupReady =>
+      _bundleReady?.future ?? Future<void>.value();
 
   Group _groupFromMembership(GroupMembership r) => Group(
         id: r.groupId,
@@ -1267,18 +1323,12 @@ class AppProvider extends ChangeNotifier {
   // ── Group ──────────────────────────────────────────────────────────────────
   /// Neutral placeholder until the first group of the signed-in user is
   /// auto-selected (or the user creates/joins one).
-  Group _currentGroup = const Group(
-    id: '',
-    name: '',
-    joinCode: '',
-    ownerId: '',
-    members: [],
-    games: [],
-    chat: [],
-    polls: [],
-    notifications: [],
-  );
+  Group _currentGroup = _kEmptyGroup;
   Group get currentGroup => _currentGroup;
+
+  /// Id of the selected group — set the instant a group is chosen, even before
+  /// its live bundle has loaded (unlike `currentGroup.id`, which lags).
+  String? get currentGroupId => _currentGroupId;
 
   /// True once a real group bundle is subscribed (id is non-empty).
   bool get hasCurrentGroup => _currentGroupId != null;
@@ -1322,6 +1372,11 @@ class AppProvider extends ChangeNotifier {
       if (gid == null) return false;
       _subscribeUserData(); // refresh the index with the new row promptly
       _selectGroup(gid);
+      notifyListeners();
+      // Wait for the group's live bundle (members, games, chat, polls,
+      // settings) so the caller navigates into a fully-populated hub that then
+      // keeps updating in real time — not an empty shell.
+      await groupReady.timeout(const Duration(seconds: 10), onTimeout: () {});
       notifyListeners();
       return true;
     } catch (e) {
@@ -1411,14 +1466,17 @@ class AppProvider extends ChangeNotifier {
       return 'Could not look up that email. Please try again.';
     }
     if (found == null) {
-      return 'No account found for that email.';
+      return 'No account found for that email. Ask them to sign up '
+          '(or open the app once) first, then try again.';
+    }
+    if (found.id == _user?.id) {
+      return "You're already in this group.";
     }
     if (_currentGroup.members.any((m) => m.id == found!.id)) {
       return '${found.name.isEmpty ? 'That user' : found.name} is already in this group.';
     }
     try {
-      final gid = await _repo.joinGroup(_currentGroup.id, found);
-      if (gid == null) return 'Could not add that member. Please try again.';
+      await _repo.addMemberToGroup(_currentGroup.id, found);
     } catch (e) {
       debugPrint('addMemberByEmail failed: $e');
       return 'Could not add that member. Please try again.';
@@ -1483,16 +1541,30 @@ class AppProvider extends ChangeNotifier {
   void leaveGroup() {
     final userId = _user?.id;
     if (userId == null || userId == _currentGroup.ownerId) return;
-    final members =
-        _currentGroup.members.where((m) => m.id != userId).toList();
-    _setGroup(_currentGroup.copyWith(members: members));
-    notifyListeners();
-    if (_backendUp) {
+    final leftGid = _currentGroup.id;
+    if (_backendUp && leftGid.isNotEmpty) {
       unawaited(_repo
-          .deleteMember(_currentGroup.id, userId)
+          .deleteMember(leftGid, userId)
           .catchError(
               (Object e) => debugPrint('leaveGroup deleteMember failed: $e')));
     }
+    // Drop the left group locally and switch the hub to another group (or an
+    // empty state) straight away, tearing down its now-inaccessible bundle.
+    _bundleSub?.cancel();
+    _bundleSub = null;
+    _cashSub?.cancel();
+    _cashSub = null;
+    _currentGroupId = null;
+    _bundleLoaded = false;
+    _bundleReady = null;
+    _groups = _groups.where((g) => g.id != leftGid).toList();
+    final next = orderedGroups.firstOrNull;
+    if (next != null) {
+      _selectGroup(next.id);
+    } else {
+      _currentGroup = _kEmptyGroup;
+    }
+    notifyListeners();
   }
 
   // ── Game ───────────────────────────────────────────────────────────────────
@@ -4418,88 +4490,97 @@ class AppProvider extends ChangeNotifier {
   /// 07-011/07-012, UAT-025) has passed for the current game.
   bool get rsvpCutoffPassed => _currentGame?.settings.rsvpCutoffPassed ?? false;
 
+  /// Sets (or clears) the signed-in member's RSVP for a game — the one open on
+  /// screen, or any game in the current group (e.g. tapped from the chat invite
+  /// card). Re-selecting the response the member already holds is a no-op; a
+  /// different response is persisted and stays selected after the round-trip.
   void setRSVP(Rsvp? rsvp, {String? gameId}) {
     final userId = _user?.id;
     if (userId == null) return;
 
-    final isCurrent =
-        gameId == null || (_currentGame != null && gameId == _currentGame!.id);
+    final targetId = gameId ?? _currentGame?.id;
+    if (targetId == null) return;
 
-    // Check cutoff
-    if (isCurrent) {
-      if (_currentGame != null && _currentGame!.settings.rsvpCutoffPassed) {
-        return;
-      }
-    } else {
-      final g = _currentGroup.games.firstWhere(
-        (g) => g.id == gameId,
-        orElse: () => _currentGame!,
-      );
-      if (g.settings.rsvpCutoffPassed) return;
-    }
+    final isCurrent = _currentGame?.id == targetId;
+    final target = isCurrent
+        ? _currentGame
+        : _currentGroup.games.where((g) => g.id == targetId).firstOrNull;
+    if (target == null) return;
+    if (target.settings.rsvpCutoffPassed) return;
 
-    if (isCurrent && _currentGame != null) {
-      final before = _currentGame!;
-      var updated = before.copyWith(
-        players: before.players
+    // The member must already be on the game's roster (seeded when the tourney
+    // is published). No-op when they already hold exactly this response — a tap
+    // on the already-selected button must not churn a write or flicker the UI.
+    final mine = target.players.where((p) => p.id == userId).firstOrNull;
+    if (mine == null || mine.rsvp == rsvp) return;
+
+    LiveGame applyRsvp(LiveGame g) {
+      var updated = g.copyWith(
+        players: g.players
             .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
             .toList(),
       );
       updated = _syncGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
-      updated = _reconcileExcessGuestSlots(
-        updated,
-        userId,
-        rsvp?.guestCount ?? 0,
-      );
-      _currentGame = updated;
-      // Members write only their own fields via dot-path so concurrent admin
-      // edits are never clobbered (locked architecture §writes).
-      if (!_isGameAuthority) {
-        _patchActiveGame(_rsvpDotPatch(before, updated));
-      }
-      // Notify the admin of RSVP changes (spec §8 notification triggers).
-      if (_currentGroup.ownerId != userId) {
-        final playerName = _currentGame!.players
-            .where((p) => p.id == userId)
-            .firstOrNull
-            ?.name;
-        pushNotification(
-          AppNotification(
-            id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-            title: 'RSVP update',
-            body: '${playerName ?? 'A member'} is ${rsvp?.label ?? 'no response'}.',
-            type: NotificationType.rsvp,
-            link: '/invitation',
-            read: false,
-            timestamp: DateTime.now(),
-          ),
-        );
-      }
+      updated = _reconcileExcessGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
+      return updated;
     }
 
-    // Keep the group's copy of the game in sync so badges update on the hub.
+    final before = target;
+    final after = applyRsvp(target);
+
+    if (isCurrent) {
+      _currentGame = after;
+      // Members write only their own fields via dot-path so concurrent admin
+      // edits are never clobbered (locked architecture §writes). The admin's
+      // whole-doc save is handled by _syncGameToCloud on notifyListeners.
+      if (!_isGameAuthority) {
+        _patchActiveGame(_rsvpDotPatch(before, after));
+      }
+    } else {
+      // RSVP on a group game that isn't the one open on screen (chat invite
+      // card). Persist the same scoped member patch against that game doc so
+      // the selection survives the live-bundle round-trip.
+      _patchGroupGame(targetId, _rsvpDotPatch(before, after));
+    }
+
+    // Notify the admin of RSVP changes (spec §8 notification triggers).
+    if (_currentGroup.ownerId != userId) {
+      final playerName = mine.name.isEmpty ? 'A member' : mine.name;
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'RSVP update',
+          body: '$playerName is ${rsvp?.label ?? 'no response'}.',
+          type: NotificationType.rsvp,
+          link: '/invitation',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+    }
+
+    // Keep the group's copy of the game in sync so hub badges update at once.
     _setGroup(
       _currentGroup.copyWith(
-        games: _currentGroup.games.map((g) {
-          if (isCurrent ? (g.id == _currentGame?.id) : (g.id == gameId)) {
-            var updated = g.copyWith(
-              players: g.players
-                  .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
-                  .toList(),
-            );
-            updated = _syncGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
-            updated = _reconcileExcessGuestSlots(
-              updated,
-              userId,
-              rsvp?.guestCount ?? 0,
-            );
-            return updated;
-          }
-          return g;
-        }).toList(),
+        games: _currentGroup.games
+            .map((g) => g.id == targetId ? applyRsvp(g) : g)
+            .toList(),
       ),
     );
     notifyListeners();
+  }
+
+  /// Member/guest-safe field patch on *any* game in the current group — not
+  /// just the one wired into [_cloudGameContext]. Used for RSVPs posted from
+  /// the chat invite card.
+  void _patchGroupGame(String gameId, Map<String, dynamic> dotPaths) {
+    if (!_backendUp || _user == null || dotPaths.isEmpty) return;
+    final g = _currentGroup.games.where((g) => g.id == gameId).firstOrNull;
+    final gid = (g != null && g.groupId.isNotEmpty) ? g.groupId : _currentGroupId;
+    if (gid == null) return;
+    unawaited(_repo
+        .patchGame(gid, gameId, dotPaths)
+        .catchError((Object e) => debugPrint('patchGame(group) failed: $e')));
   }
 
   /// Builds the dot-path patch describing an RSVP change: the member's own
@@ -4684,6 +4765,64 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── Code lookup ────────────────────────────────────────────────────────────
+
+  /// Extracts a bare join code from anything the user might enter: a raw code
+  /// (`FRIDAY7`), a full invite link
+  /// (`https://poker-night-tools.web.app/join-group?code=FRIDAY7`), a game link
+  /// (`.../game/FP2608`) or a QR payload. Returns an upper-cased `[A-Z0-9]`
+  /// string, or `''` when nothing code-like is present.
+  static String extractJoinCode(String input) {
+    var s = input.trim();
+    if (s.isEmpty) return '';
+
+    final uri = Uri.tryParse(s);
+    if (uri != null && uri.hasScheme) {
+      final q = uri.queryParameters['code'];
+      if (q != null && q.isNotEmpty) {
+        s = q;
+      } else if (uri.pathSegments.isNotEmpty) {
+        // `/game/FP2608`, `/join/FP2608`, `/join-group/FRIDAY7`
+        s = uri.pathSegments.last;
+      }
+    } else if (s.contains('code=')) {
+      s = s.split('code=').last.split('&').first;
+    } else if (s.contains('/')) {
+      s = s.split('/').last.split('?').first.split('#').first;
+    }
+
+    return s.toUpperCase().replaceAll(RegExp('[^A-Z0-9]'), '');
+  }
+
+  /// Classifies a join code (or invite link / QR payload) as a group code, a
+  /// game code or a TV code — without joining or subscribing to anything.
+  /// The unified join screen uses this to route guests and signed-in users to
+  /// the right flow. Safe to call unauthenticated (join codes are world-
+  /// readable by design).
+  Future<JoinCodeResolution> resolveJoinCode(String input) async {
+    final code = extractJoinCode(input);
+    if (code.isEmpty) return const JoinCodeResolution(JoinCodeKind.notFound, '');
+    if (!_backendUp) return JoinCodeResolution(JoinCodeKind.error, code);
+    if (!_consumeCodeLookupSlot()) {
+      return JoinCodeResolution(JoinCodeKind.rateLimited, code);
+    }
+    try {
+      final data = await _repo.peekJoinCode(code);
+      if (data == null) return JoinCodeResolution(JoinCodeKind.notFound, code);
+      final gameId = data['gameId'] as String?;
+      if (gameId == null || gameId.isEmpty) {
+        return JoinCodeResolution(JoinCodeKind.group, code);
+      }
+      final kind = (data['kind'] as String?) ?? 'game';
+      return JoinCodeResolution(
+        kind == 'tv' ? JoinCodeKind.tv : JoinCodeKind.game,
+        code,
+      );
+    } catch (e) {
+      debugPrint('resolveJoinCode failed: $e');
+      return JoinCodeResolution(JoinCodeKind.error, code);
+    }
+  }
+
   /// Sliding-window throttle for join-code lookups (spec §22 rate limits).
   /// Firestore rules cannot count reads, so the client caps itself at 10
   /// lookups per minute per device.

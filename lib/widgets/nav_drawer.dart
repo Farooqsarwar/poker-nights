@@ -221,12 +221,12 @@ class NavDrawer extends StatelessWidget {
                           vertical: 10,
                         ),
                         decoration: BoxDecoration(
-                          color: group.id == app.currentGroup.id
+                          color: group.id == app.currentGroupId
                               ? AppColors.primarySoft
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(AppRadius.md),
                           border: Border.all(
-                            color: group.id == app.currentGroup.id
+                            color: group.id == app.currentGroupId
                                 ? AppColors.primary
                                 : Colors.transparent,
                           ),
@@ -236,7 +236,7 @@ class NavDrawer extends StatelessWidget {
                             Icon(
                               groupIconMap[group.icon] ?? Icons.shield_outlined,
                               size: 18,
-                              color: group.id == app.currentGroup.id
+                              color: group.id == app.currentGroupId
                                   ? AppColors.primary
                                   : AppColors.mutedForeground,
                             ),
@@ -247,7 +247,7 @@ class NavDrawer extends StatelessWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTypography.bodySm.copyWith(
-                                  color: group.id == app.currentGroup.id
+                                  color: group.id == app.currentGroupId
                                       ? AppColors.primary
                                       : AppColors.foreground,
                                   fontWeight: FontWeight.w500,

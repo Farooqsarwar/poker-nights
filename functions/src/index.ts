@@ -425,5 +425,42 @@ export const fanOutGroupNotification = onDocumentCreated(
   }
 );
 
+// ── Membership mirror ────────────────────────────────────────────────────────
+// Keeps users/{uid}/groups/{gid} in sync with groups/{gid}/members/{uid} so the
+// sidebar index is correct no matter who wrote the member row — the member
+// themselves (join code / invite link) or a group admin ("add member by
+// email"), who cannot write into another user's document tree from the client.
+export const onMemberWrite = onDocumentWritten(
+  "groups/{gid}/members/{uid}",
+  async (event) => {
+    const { gid, uid } = event.params;
+    const change = event.data;
+    const mirrorRef = db
+      .collection("users").doc(uid)
+      .collection("groups").doc(gid);
+
+    if (!change || !change.after.exists) {
+      await mirrorRef.delete().catch(() => undefined);
+      return;
+    }
+
+    const member = change.after.data() || {};
+    const [groupSnap, mirrorSnap] = await Promise.all([
+      db.collection("groups").doc(gid).get(),
+      mirrorRef.get(),
+    ]);
+    const group = groupSnap.data() || {};
+    const existing = mirrorSnap.data() || {};
+
+    await mirrorRef.set({
+      groupId: gid,
+      name: group.name || existing.name || "",
+      icon: group.icon || existing.icon || "♠️",
+      role: member.role || "member",
+      pinned: existing.pinned === true,
+    }, { merge: true });
+  }
+);
+
 export * from "./push";
 export * from "./scheduler";

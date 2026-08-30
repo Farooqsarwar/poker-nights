@@ -15,6 +15,10 @@ export declare const fanOutGroupNotification: import("firebase-functions/core").
     gid: string;
     notifId: string;
 }>>;
+export declare const onMemberWrite: import("firebase-functions/core").CloudFunction<import("firebase-functions/v2/firestore").FirestoreEvent<import("firebase-functions/core").Change<import("firebase-functions/v2/firestore").DocumentSnapshot> | undefined, {
+    gid: string;
+    uid: string;
+}>>;
 export * from "./push";
 export * from "./scheduler";
 //# sourceMappingURL=index.d.ts.map

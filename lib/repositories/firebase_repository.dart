@@ -287,18 +287,24 @@ class FirebaseRepository {
     ({String id, String name, List<ChipColor> chips})? starterChipSet,
   }) async {
     final ref = _db.collection('users').doc(uid);
+    final emailLower = email.trim().toLowerCase();
     final snap = await ref.get();
     if (!snap.exists) {
       final batch = _db.batch();
       batch.set(ref, _stamp({
         'name': name,
         'email': email,
-        'emailLower': email.trim().toLowerCase(),
+        'emailLower': emailLower,
         'stats': userStatsToMap(const UserStats(
             played: 0, wins: 0, podium: 0, avgFinish: 0, knockouts: 0)),
         'prefs': <String, dynamic>{},
         'createdAt': FieldValue.serverTimestamp(),
       }));
+      if (emailLower.isNotEmpty) {
+        // Public email→uid index for the admin "add member by email" flow.
+        batch.set(_db.collection('emailIndex').doc(emailLower),
+            {'uid': uid, 'name': name, 'emailLower': emailLower});
+      }
       for (final p in starterPresets) {
         batch.set(
             ref.collection('presets').doc(p.id), tournamentPresetToMap(p));
@@ -317,9 +323,15 @@ class FirebaseRepository {
           _stamp({
             'name': name,
             'email': email,
-            'emailLower': email.trim().toLowerCase(),
+            'emailLower': emailLower,
           }),
           SetOptions(merge: true));
+      if (emailLower.isNotEmpty) {
+        await _db.collection('emailIndex').doc(emailLower).set(
+          {'uid': uid, 'name': name, 'emailLower': emailLower},
+          SetOptions(merge: true),
+        );
+      }
     }
   }
 
@@ -435,6 +447,18 @@ class FirebaseRepository {
     await batch.commit();
   }
 
+  /// Reads the raw `joinCodes/{code}` document without joining anything.
+  /// Returns `{kind, gid, gameId?, name?, icon?}` or `null` when unknown.
+  /// Used by the unified join screen to classify a code (group vs game/tv)
+  /// before deciding which flow to run.
+  Future<Map<String, dynamic>?> peekJoinCode(String code) async {
+    final key = code.trim().toUpperCase();
+    if (key.isEmpty) return null;
+    final snap = await _db.collection('joinCodes').doc(key).get();
+    if (!snap.exists) return null;
+    return Map<String, dynamic>.from(snap.data()!);
+  }
+
   /// Resolves a join code and joins atomically: reads joinCodes/{code}, writes
   /// members/{uid} + the user's index mirror. Returns the gid, or null when
   /// the code does not exist.
@@ -516,20 +540,35 @@ class FirebaseRepository {
       });
 
   /// Looks up a registered user by exact (case-insensitive) email match, for
-  /// the Co-Admin "add member directly" flow. Returns null when no account
-  /// uses that email.
+  /// the admin "add member directly" flow. Reads the public `emailIndex`
+  /// (the `users` collection is private to each owner). Returns null when no
+  /// account uses that email.
   Future<AppUser?> findUserByEmail(String email) async {
     final key = email.trim().toLowerCase();
     if (key.isEmpty) return null;
-    final snap = await _db
-        .collection('users')
-        .where('emailLower', isEqualTo: key)
-        .limit(1)
-        .get();
-    if (snap.docs.isEmpty) return null;
-    final d = snap.docs.first;
-    return loadUser(d.id);
+    final snap = await _db.collection('emailIndex').doc(key).get();
+    final uid = snap.data()?['uid'] as String?;
+    if (uid == null || uid.isEmpty) return null;
+    return AppUser(
+      id: uid,
+      name: (snap.data()?['name'] as String?) ?? '',
+      email: email.trim(),
+      isAdmin: false,
+      stats: const UserStats(
+          played: 0, wins: 0, podium: 0, avgFinish: 0, knockouts: 0),
+    );
   }
+
+  /// Group admin adds a registered user directly. Writes only the member row —
+  /// the `onMemberWrite` function mirrors it into the target user's index
+  /// (the client cannot write another user's document tree).
+  Future<void> addMemberToGroup(String gid, AppUser user) => _db
+      .collection('groups').doc(gid).collection('members').doc(user.id)
+      .set({
+        'name': user.name,
+        'role': 'member',
+        'joinedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
   DocumentReference<Map<String, dynamic>> get serverTimeRef =>
       _db.collection('_meta').doc('serverTime');
@@ -582,13 +621,28 @@ class FirebaseRepository {
     }
 
     final groupRef = _db.collection('groups').doc(gid);
+
+    // A section that errors (e.g. a rule denies one subcollection, or a brief
+    // permission-propagation gap right after joining) must not wedge the whole
+    // bundle: mark it "loaded" with whatever data we have so [maybeEmit] can
+    // still deliver the rest of the group and the UI leaves its loading state.
+    void Function(Object, StackTrace) onSectionError(
+      String section,
+      void Function() markLoaded,
+    ) =>
+        (Object e, StackTrace _) {
+          debugPrint('groupBundle "$section" error: $e');
+          markLoaded();
+          maybeEmit();
+        };
+
     controller = StreamController<Group>(
       onListen: () {
         subs.add(groupRef.snapshots().listen((s) {
           meta = s.data();
           metaLoaded = true;
           maybeEmit();
-        }, onError: controller.addError));
+        }, onError: onSectionError('meta', () => metaLoaded = true)));
         subs.add(groupRef.collection('members').snapshots().listen((s) {
           members = [
             for (final d in s.docs)
@@ -611,17 +665,17 @@ class FirebaseRepository {
           ];
           membersLoaded = true;
           maybeEmit();
-        }, onError: controller.addError));
+        }, onError: onSectionError('members', () => membersLoaded = true)));
         subs.add(groupRef.collection('chat').snapshots().listen((s) {
           chat = [for (final d in s.docs) chatMessageFromMap(d.data())];
           chatLoaded = true;
           maybeEmit();
-        }, onError: controller.addError));
+        }, onError: onSectionError('chat', () => chatLoaded = true)));
         subs.add(groupRef.collection('polls').snapshots().listen((s) {
           polls = [for (final d in s.docs) pollFromMap(d.data())];
           pollsLoaded = true;
           maybeEmit();
-        }, onError: controller.addError));
+        }, onError: onSectionError('polls', () => pollsLoaded = true)));
         subs.add(groupRef.collection('games').snapshots().listen((s) {
           games = [
             for (final d in s.docs)
@@ -629,7 +683,7 @@ class FirebaseRepository {
           ];
           gamesLoaded = true;
           maybeEmit();
-        }, onError: controller.addError));
+        }, onError: onSectionError('games', () => gamesLoaded = true)));
       },
       onCancel: () async {
         for (final s in subs) {

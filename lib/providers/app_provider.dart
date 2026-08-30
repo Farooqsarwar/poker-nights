@@ -114,6 +114,15 @@ class AppProvider extends ChangeNotifier {
   /// Completes when the current group's bundle first loads (or errors). Lets
   /// [joinGroup] wait for real-time group data before the caller navigates.
   Completer<void>? _bundleReady;
+
+  /// Completes once the signed-in user's data has bootstrapped after login —
+  /// the groups index has loaded and (if a group was auto-selected) its bundle
+  /// too. Lets [login] / [register] land the user on a populated dashboard.
+  Completer<void>? _userBootstrap;
+
+  /// Future that resolves when post-login data is ready (see [_userBootstrap]).
+  Future<void> get userDataReady =>
+      _userBootstrap?.future ?? Future<void>.value();
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _gameDocSub;
   StreamSubscription<dynamic>? _lookupSub;
   StreamSubscription<List<TournamentPreset>>? _presetsSub;
@@ -551,9 +560,34 @@ class AppProvider extends ChangeNotifier {
     final uid = _repo.currentUid;
     if (!_backendUp || uid == null) return;
 
+    // Release anyone waiting on a previous (now-cancelled) subscription before
+    // starting a fresh bootstrap.
+    if (!(_userBootstrap?.isCompleted ?? true)) _userBootstrap!.complete();
+    _userBootstrap = Completer<void>();
+    final bootstrap = _userBootstrap!;
+    void bootstrapDone() {
+      if (!bootstrap.isCompleted) bootstrap.complete();
+    }
+
     _groupsSub?.cancel();
     _groupsSub = _repo.groupsIndexStream(uid).listen((rows) {
-      _groups = [for (final r in rows) _groupFromMembership(r)];
+      // Rebuild from the lightweight index, but keep the already-loaded rich
+      // bundle for the selected group (its members/games) so the sidebar count
+      // doesn't flip back to 0 on every index re-delivery — apply the index's
+      // pinned/name/icon on top.
+      _groups = [
+        for (final r in rows)
+          if (r.groupId == _currentGroupId &&
+              _currentGroup.id == r.groupId &&
+              _currentGroup.members.isNotEmpty)
+            _currentGroup.copyWith(
+              name: r.name.isNotEmpty ? r.name : null,
+              icon: r.icon,
+              pinned: r.pinned,
+            )
+          else
+            _groupFromMembership(r),
+      ];
       // First group after sign-in is auto-selected (pinned first, then
       // alphabetical — same ordering the sidebar uses).
       if (_currentGroupId == null && rows.isNotEmpty) {
@@ -562,9 +596,18 @@ class AppProvider extends ChangeNotifier {
         sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
         _selectGroup(sorted.first.groupId);
       }
+      // The index has loaded; if it picked a group, chain readiness to that
+      // group's bundle so callers land on a populated dashboard.
+      if (_currentGroupId != null) {
+        groupReady.then((_) => bootstrapDone());
+      } else {
+        bootstrapDone();
+      }
       notifyListeners();
-    },
-        onError: (Object e) => debugPrint('groupsIndex stream error: $e'));
+    }, onError: (Object e) {
+      debugPrint('groupsIndex stream error: $e');
+      bootstrapDone();
+    });
 
     _presetsSub?.cancel();
     _presetsSub = _repo.presetsStream(uid).listen((list) {
@@ -738,6 +781,7 @@ class AppProvider extends ChangeNotifier {
     _currentGroupId = null;
     _bundleLoaded = false;
     _bundleReady = null;
+    _userBootstrap = null;
     // Drop any group-scoped state from the previous session so a different
     // account signing in on this device never sees it.
     _currentGroup = _kEmptyGroup;
@@ -774,7 +818,11 @@ class AppProvider extends ChangeNotifier {
       return;
     }
     _bundleSub = _repo.groupBundleStream(gid).listen((g) {
-      _currentGroup = g;
+      // _setGroup (not a bare `_currentGroup = g`) so the full group — members,
+      // games, code — is also written into `_groups`, which backs the sidebar
+      // / drawer / orderedGroups (they'd otherwise show the lightweight index
+      // row with 0 members).
+      _setGroup(g);
       _bundleLoaded = true;
       markReady();
       // Catch results of games this device never followed live (e.g. the
@@ -924,20 +972,56 @@ class AppProvider extends ChangeNotifier {
     _calibrateServerTime();
   }
 
+  /// Runs [op], retrying on any failure with a short back-off. Right after
+  /// sign-in on web the first Firestore calls can fail with permission-denied
+  /// until the fresh auth token propagates into the Firestore SDK; retrying a
+  /// few times bridges that window so the UI doesn't need a page refresh.
+  Future<T?> _retryRead<T>(Future<T> Function() op, {int tries = 6}) async {
+    for (var attempt = 0; attempt < tries; attempt++) {
+      try {
+        return await op();
+      } catch (e) {
+        if (attempt == tries - 1) {
+          debugPrint('hydration read failed after $tries attempts: $e');
+          return null;
+        }
+        await Future<void>.delayed(Duration(milliseconds: 200 + attempt * 250));
+      }
+    }
+    return null;
+  }
+
+  Future<void>? _hydrating;
+
   /// Loads (creating on first sign-in) the Firestore profile for [fbUser] and
-  /// mirrors it into [_user]. Called from both the auth stream and directly
-  /// after login/register so navigation is never gated on stream latency.
-  Future<void> _hydrateUser(fa.User fbUser) async {
+  /// mirrors it into [_user], then subscribes the user-scoped live streams.
+  /// Called from the auth-state listener and directly after login/register;
+  /// concurrent calls for the same session are coalesced.
+  Future<void> _hydrateUser(fa.User fbUser) {
+    final inFlight = _hydrating;
+    if (inFlight != null) return inFlight;
+    final run = _doHydrateUser(fbUser).whenComplete(() => _hydrating = null);
+    _hydrating = run;
+    return run;
+  }
+
+  Future<void> _doHydrateUser(fa.User fbUser) async {
     try {
-      await _repo.ensureUserDoc(
-        uid: fbUser.uid,
-        name: fbUser.displayName ?? 'Player',
-        email: fbUser.email ?? '',
-        starterPresets: seedPresets,
-        starterChipSet: seedChipSet,
-      );
-      final loaded = await _repo.loadUser(fbUser.uid);
+      // Nudge the Firestore SDK to pick up the just-issued auth token.
+      try {
+        await fbUser.getIdToken();
+      } catch (_) {}
+
+      await _retryRead(() => _repo.ensureUserDoc(
+            uid: fbUser.uid,
+            name: fbUser.displayName ?? 'Player',
+            email: fbUser.email ?? '',
+            starterPresets: seedPresets,
+            starterChipSet: seedChipSet,
+          ));
+      final loaded = await _retryRead(() => _repo.loadUser(fbUser.uid));
       _user = loaded ??
+          _user ?? // never downgrade an already-hydrated profile
           AppUser(
             id: fbUser.uid,
             name: fbUser.displayName ?? 'Player',
@@ -953,9 +1037,12 @@ class AppProvider extends ChangeNotifier {
           );
       notifyListeners();
       await _loadUserPrefs(fbUser.uid);
+      // Subscribe only now — after the retried reads confirm the token works —
+      // so the .snapshots() streams don't immediately error out (a Firestore
+      // stream that hits permission-denied is dead until re-created).
       _subscribeUserData();
-    } on fa.FirebaseAuthException catch (e) {
-      debugPrint('AppProvider: profile hydration failed (${e.code})');
+    } catch (e) {
+      debugPrint('AppProvider: profile hydration failed: $e');
     }
   }
 
@@ -991,6 +1078,9 @@ class AppProvider extends ChangeNotifier {
     try {
       final cred = await _repo.signIn(email, password);
       if (cred.user != null) await _hydrateUser(cred.user!);
+      // Wait (bounded) for groups + the auto-selected group's bundle so the
+      // dashboard is populated the moment we navigate to it.
+      await userDataReady.timeout(const Duration(seconds: 8), onTimeout: () {});
       return null;
     } on fa.FirebaseAuthException catch (e) {
       return switch (e.code) {
@@ -1015,7 +1105,18 @@ class AppProvider extends ChangeNotifier {
         email: email,
         password: password,
       );
-      if (cred.user != null) await _hydrateUser(cred.user!);
+      if (cred.user != null) {
+        await _hydrateUser(cred.user!);
+        // Guarantee the chosen name is stored even if displayName propagation
+        // lagged during hydration's ensureUserDoc.
+        if (_user != null && _user!.name != name) {
+          await _retryRead(
+              () => _repo.updateUserProfile(cred.user!.uid, name: name));
+          _user = _user!.copyWith(name: name);
+          notifyListeners();
+        }
+      }
+      await userDataReady.timeout(const Duration(seconds: 8), onTimeout: () {});
       return null;
     } on fa.FirebaseAuthException catch (e) {
       return switch (e.code) {
@@ -1094,6 +1195,7 @@ class AppProvider extends ChangeNotifier {
       final cred = await _repo.signInWithGoogle();
       if (cred == null) return ''; // user cancelled — silent abort
       if (cred.user != null) await _hydrateUser(cred.user!);
+      await userDataReady.timeout(const Duration(seconds: 8), onTimeout: () {});
       return null;
     } on fa.FirebaseAuthException catch (e) {
       return switch (e.code) {
@@ -1476,7 +1578,12 @@ class AppProvider extends ChangeNotifier {
       return '${found.name.isEmpty ? 'That user' : found.name} is already in this group.';
     }
     try {
-      await _repo.addMemberToGroup(_currentGroup.id, found);
+      await _repo.addMemberToGroup(
+        _currentGroup.id,
+        found,
+        groupName: _currentGroup.name,
+        groupIcon: _currentGroup.icon,
+      );
     } catch (e) {
       debugPrint('addMemberByEmail failed: $e');
       return 'Could not add that member. Please try again.';
@@ -4508,18 +4615,21 @@ class AppProvider extends ChangeNotifier {
     if (target == null) return;
     if (target.settings.rsvpCutoffPassed) return;
 
-    // The member must already be on the game's roster (seeded when the tourney
-    // is published). No-op when they already hold exactly this response — a tap
-    // on the already-selected button must not churn a write or flicker the UI.
+    // No-op when the member already holds exactly this response — a tap on the
+    // already-selected button must not churn a write or flicker the UI.
     final mine = target.players.where((p) => p.id == userId).firstOrNull;
-    if (mine == null || mine.rsvp == rsvp) return;
+    if (mine != null && mine.rsvp == rsvp) return;
 
     LiveGame applyRsvp(LiveGame g) {
-      var updated = g.copyWith(
-        players: g.players
-            .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
-            .toList(),
-      );
+      final onRoster = g.players.any((p) => p.id == userId);
+      // A member who joined the group *after* this game was created is not on
+      // the seeded roster yet — add them when they answer the invite.
+      final players = onRoster
+          ? g.players
+              .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
+              .toList()
+          : [...g.players, _memberAsPlayer(userId, rsvp)];
+      var updated = g.copyWith(players: players);
       updated = _syncGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
       updated = _reconcileExcessGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
       return updated;
@@ -4545,7 +4655,8 @@ class AppProvider extends ChangeNotifier {
 
     // Notify the admin of RSVP changes (spec §8 notification triggers).
     if (_currentGroup.ownerId != userId) {
-      final playerName = mine.name.isEmpty ? 'A member' : mine.name;
+      final name = mine?.name ?? _user?.name ?? '';
+      final playerName = name.isEmpty ? 'A member' : name;
       pushNotification(
         AppNotification(
           id: 'n-${DateTime.now().millisecondsSinceEpoch}',
@@ -4583,24 +4694,42 @@ class AppProvider extends ChangeNotifier {
         .catchError((Object e) => debugPrint('patchGame(group) failed: $e')));
   }
 
+  /// A roster [Player] for the signed-in member, from the group roster. Used
+  /// when a member RSVPs to a game created before they joined the group.
+  Player _memberAsPlayer(String userId, Rsvp? rsvp) {
+    final m = _currentGroup.members.where((x) => x.id == userId).firstOrNull;
+    return Player(
+      id: userId,
+      name: m?.name ?? _user?.name ?? '',
+      isGuest: false,
+      rsvp: rsvp,
+      checkedIn: false,
+      confirmed: false,
+      eliminated: false,
+      rebuys: 0,
+      hasAddOn: false,
+      knockouts: 0,
+      table: 0,
+      seat: 0,
+      active: true,
+    );
+  }
+
   /// Builds the dot-path patch describing an RSVP change: the member's own
-  /// `players.{id}.rsvp` plus the guest-slot rows their +N count creates,
-  /// updates or removes. Slot docs are written whole (they belong to this
-  /// inviter), player entries field-by-field.
+  /// `players.{id}` entry plus the guest-slot rows their +N count creates,
+  /// updates or removes. A member new to the roster is written whole; an
+  /// existing one gets a field-level `players.{id}.rsvp` patch.
   Map<String, dynamic> _rsvpDotPatch(LiveGame before, LiveGame after) {
     final patch = <String, dynamic>{};
+    final uid = _user?.id;
 
-    String? oldRsvp;
-    for (final p in before.players) {
-      if (p.id == _user?.id) {
-        oldRsvp = p.rsvp?.name;
-        break;
-      }
-    }
-    for (final p in after.players) {
-      if (p.id == _user?.id && p.rsvp?.name != oldRsvp) {
-        patch['players.${p.id}.rsvp'] = p.rsvp?.name;
-        break;
+    final beforePlayer = before.players.where((p) => p.id == uid).firstOrNull;
+    final afterPlayer = after.players.where((p) => p.id == uid).firstOrNull;
+    if (afterPlayer != null) {
+      if (beforePlayer == null) {
+        patch['players.$uid'] = playerToMap(afterPlayer);
+      } else if (afterPlayer.rsvp?.name != beforePlayer.rsvp?.name) {
+        patch['players.$uid.rsvp'] = afterPlayer.rsvp?.name;
       }
     }
 

@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +10,8 @@ import '../constants/app_constants.dart';
 import '../models/group.dart';
 import '../providers/app_provider.dart';
 import 'app_avatar.dart';
+import 'app_button.dart';
+import 'app_icon_label.dart';
 import 'brand_lockup.dart';
 import 'create_group_dialog.dart';
 import 'glass_styles.dart';
@@ -31,12 +31,42 @@ class Sidebar extends StatelessWidget {
 
     final navItems = [
       _NavSpec(RoutePaths.home, 'Home', Icons.home_outlined, 0, null),
-      _NavSpec('${RoutePaths.group}?tab=chat', 'Chat', Icons.chat_bubble_outline, 0, null),
-      _NavSpec('${RoutePaths.group}?tab=games', 'Events', Icons.sports_esports_outlined, 0, null),
-      _NavSpec('${RoutePaths.group}?tab=polls', 'Polls', Icons.poll_outlined, 0, null),
-      _NavSpec(RoutePaths.notifications, 'Alerts', Icons.notifications_none, 0, unread),
+      _NavSpec(
+        '${RoutePaths.group}?tab=chat',
+        'Chat',
+        Icons.chat_bubble_outline,
+        0,
+        null,
+      ),
+      _NavSpec(
+        '${RoutePaths.group}?tab=games',
+        'Events',
+        Icons.sports_esports_outlined,
+        0,
+        null,
+      ),
+      _NavSpec(
+        '${RoutePaths.group}?tab=polls',
+        'Polls',
+        Icons.poll_outlined,
+        0,
+        null,
+      ),
+      _NavSpec(
+        RoutePaths.notifications,
+        'Alerts',
+        Icons.notifications_none,
+        0,
+        unread,
+      ),
       _NavSpec(RoutePaths.history, 'History', Icons.history, 0, null),
-      _NavSpec(RoutePaths.settings, 'Settings', Icons.settings_outlined, 0, null),
+      _NavSpec(
+        RoutePaths.settings,
+        'Settings',
+        Icons.settings_outlined,
+        0,
+        null,
+      ),
     ];
 
     return GlassSurface(
@@ -47,183 +77,223 @@ class Sidebar extends StatelessWidget {
         width: 264,
         child: Column(
           children: [
-          // Logo
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.lg,
-            ),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: AppColors.border.withValues(alpha: Glass.borderOpacity),
-                ),
+            // Logo
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.lg,
               ),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.primary.withValues(alpha: 0.04),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-            child: Row(
-              children: [
-                const PokerNightLogo(size: 24),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Poker Night',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.crimsonShimmer(size: AppFontSizes.lg),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Nav items
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              children: [
-                for (final item in navItems)
-                  _NavTile(item: item, location: location),
-                Divider(color: AppColors.border, height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: AppSpacing.xs,
-                  ),
-                  child: Text(
-                    'MY GROUPS',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.0,
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: AppColors.border.withValues(
+                      alpha: Glass.borderOpacity,
                     ),
                   ),
                 ),
-                // Every group the user belongs to — pinnable, with an icon
-                // (client feedback: groups, not a single slot).
-                for (final group in app.orderedGroups)
-                  _GroupRow(
-                    group: group,
-                    selected: group.id == app.currentGroupId,
-                    onTap: () {
-                      app.setCurrentGroup(group);
-                      context.go('${RoutePaths.group}?tab=games');
-                    },
-                    onPin: () => app.togglePinGroup(group),
-                  ),
-                // Client review: the funnel is group-first. Events ("New
-                // Game") are created INSIDE a group (admin only) — the
-                // global quick action for games was removed; "+ New Group"
-                // is the top-level action.
-                _QuickAction(
-                  icon: Icons.group_add_outlined,
-                  label: 'New Group',
-                  onTap: () => openCreateGroupDialog(context),
-                ),
-                _QuickAction(
-                  icon: Icons.add,
-                  label: 'Cash Game',
-                  onTap: () => context.go(RoutePaths.cashGame),
-                ),
-              ],
-            ),
-          ),
-          // User section
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                  color: AppColors.border.withValues(alpha: Glass.borderOpacity),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primary.withValues(alpha: 0.04),
+                    Colors.transparent,
+                  ],
                 ),
               ),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  AppColors.primary.withValues(alpha: 0.03),
+              child: Row(
+                children: [
+                  const PokerNightLogo(size: 24),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'Poker Night',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.crimsonShimmer(
+                        size: AppFontSizes.lg,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                InkWell(
-                  onTap: () => context.go(RoutePaths.profile),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Padding(
+            // Nav items
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                children: [
+                  for (final item in navItems)
+                    _NavTile(item: item, location: location),
+                  Divider(color: AppColors.border, height: 24),
+                  Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm,
-                      vertical: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
                     ),
-                    child: Row(
-                      children: [
-                        if (user != null) AppAvatar(name: user.name),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                user?.name ?? '—',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.bodySm.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              Text(
-                                user?.isAdmin == true ? 'Admin' : 'Player',
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'MY GROUPS',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ),
+                  // Every group the user belongs to — pinnable, with an icon
+                  // (client feedback: groups, not a single slot).
+                  for (final group in app.orderedGroups)
+                    _GroupRow(
+                      group: group,
+                      selected: group.id == app.currentGroupId,
+                      onTap: () {
+                        app.setCurrentGroup(group);
+                        context.go('${RoutePaths.group}?tab=games');
+                      },
+                      onPin: () => app.togglePinGroup(group),
+                    ),
+                ],
+              ),
+            ),
+            // Top-level quick actions, pinned above the account section.
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: AppColors.border.withValues(
+                      alpha: Glass.borderOpacity,
                     ),
                   ),
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                Divider(color: AppColors.border.withValues(alpha: Glass.borderOpacity), height: 1),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    InkWell(
-                      onTap: app.logout,
-                      hoverColor: AppColors.surfaceHover,
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                          vertical: 4,
-                        ),
-                        child: Text(
-                          'Sign out',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
+              ),
+              child: Column(
+                children: [
+                  AppButton(
+                    fullWidth: true,
+                    size: AppButtonSize.sm,
+                    onPressed: () => openCreateGroupDialog(context),
+                    child: const AppIconLabel(
+                      label: 'New Group',
+                      icon: Icons.group_add_outlined,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppButton(
+                    fullWidth: true,
+                    size: AppButtonSize.sm,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => context.go(RoutePaths.cashGame),
+                    child: const AppIconLabel(
+                      label: 'Cash Game',
+                      icon: Icons.sports_esports_outlined,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // User section
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: AppColors.border.withValues(
+                      alpha: Glass.borderOpacity,
+                    ),
+                  ),
+                ),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    AppColors.primary.withValues(alpha: 0.03),
+                  ],
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap: () => context.go(RoutePaths.profile),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.sm,
+                      ),
+                      child: Row(
+                        children: [
+                          if (user != null) AppAvatar(name: user.name),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user?.name ?? '—',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.bodySm.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  user?.isAdmin == true ? 'Admin' : 'Player',
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Divider(
+                    color: AppColors.border.withValues(
+                      alpha: Glass.borderOpacity,
+                    ),
+                    height: 1,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      InkWell(
+                        onTap: app.logout,
+                        hoverColor: AppColors.surfaceHover,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: 4,
+                          ),
+                          child: Text(
+                            'Sign out',
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -399,15 +469,17 @@ class _GroupRow extends StatelessWidget {
                       height: 1.2,
                     ),
                   ),
-                  Text(
-                    '${group.members.length} members',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                      fontSize: 10,
+                  if (group.members.isNotEmpty)
+                    Text(
+                      '${group.members.length} member'
+                      '${group.members.length == 1 ? '' : 's'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                        fontSize: 10,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -429,55 +501,6 @@ class _GroupRow extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Opens the "create group" dialog: name + icon, then switches to it.
-class _QuickAction extends StatelessWidget {
-  const _QuickAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(50),
-          hoverColor: AppColors.surfaceHover,
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: 8,
-            ),
-            decoration: Glass.glassPill(),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 16, color: AppColors.foreground),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  label,
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

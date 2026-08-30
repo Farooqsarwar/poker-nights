@@ -319,16 +319,20 @@ class FirebaseRepository {
       }
       await batch.commit();
     } else {
-      await ref.set(
-          _stamp({
-            'name': name,
-            'email': email,
-            'emailLower': emailLower,
-          }),
-          SetOptions(merge: true));
+      // The doc already exists — DO NOT overwrite the stored display name with
+      // the caller's fallback (`fbUser.displayName ?? 'Player'`), which is what
+      // made every login reset the name to "Player". Only keep the email fields
+      // in sync, and only when they actually changed.
+      final data = Map<String, dynamic>.from(snap.data() ?? const {});
+      final storedName = (data['name'] as String?) ?? name;
+      if ((data['emailLower'] as String?) != emailLower && emailLower.isNotEmpty) {
+        await ref.set(
+            _stamp({'email': email, 'emailLower': emailLower}),
+            SetOptions(merge: true));
+      }
       if (emailLower.isNotEmpty) {
         await _db.collection('emailIndex').doc(emailLower).set(
-          {'uid': uid, 'name': name, 'emailLower': emailLower},
+          {'uid': uid, 'name': storedName, 'emailLower': emailLower},
           SetOptions(merge: true),
         );
       }
@@ -559,16 +563,39 @@ class FirebaseRepository {
     );
   }
 
-  /// Group admin adds a registered user directly. Writes only the member row —
-  /// the `onMemberWrite` function mirrors it into the target user's index
-  /// (the client cannot write another user's document tree).
-  Future<void> addMemberToGroup(String gid, AppUser user) => _db
-      .collection('groups').doc(gid).collection('members').doc(user.id)
-      .set({
+  /// Group admin adds a registered user directly. Writes the member row *and*
+  /// the target user's membership-index mirror in one batch — the rules let a
+  /// group admin write into `users/{targetUid}/groups/{gid}` for a group they
+  /// administer, so no Cloud Function is needed.
+  Future<void> addMemberToGroup(
+    String gid,
+    AppUser user, {
+    String groupName = '',
+    String groupIcon = '♠️',
+  }) async {
+    final batch = _db.batch();
+    batch.set(
+      _db.collection('groups').doc(gid).collection('members').doc(user.id),
+      {
         'name': user.name,
         'role': 'member',
         'joinedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      },
+      SetOptions(merge: true),
+    );
+    batch.set(
+      userGroupIndexRef(user.id, gid),
+      GroupMembership(
+        groupId: gid,
+        name: groupName,
+        icon: groupIcon,
+        pinned: false,
+        role: 'member',
+      ).toMap(),
+      SetOptions(merge: true),
+    );
+    await batch.commit();
+  }
 
   DocumentReference<Map<String, dynamic>> get serverTimeRef =>
       _db.collection('_meta').doc('serverTime');
@@ -718,15 +745,19 @@ class FirebaseRepository {
       .collection('groups').doc(gid).collection('games').doc(gameId)
       .set(_stamp(dotPaths), SetOptions(merge: true));
 
+  /// Live game document. Both admins and members follow the raw doc — members
+  /// are gated to `isMember(gid)` by rules and the app sanitizes payout /
+  /// organizer figures for non-authority viewers before display. (The old
+  /// per-member `memberViews` projection needed a Cloud Function to maintain
+  /// it; this build runs without functions.)
   Stream<DocumentSnapshot<Map<String, dynamic>>> gameDocSnapshots(
-          String gid, String gameId, {required bool isAdmin}) {
-    if (isAdmin) {
-      return _db.collection('groups').doc(gid).collection('games').doc(gameId).snapshots();
-    } else {
-      return _db.collection('groups').doc(gid).collection('games').doc(gameId)
-          .collection('memberViews').doc(currentUid).snapshots();
-    }
-  }
+          String gid, String gameId, {bool isAdmin = false}) =>
+      _db
+          .collection('groups')
+          .doc(gid)
+          .collection('games')
+          .doc(gameId)
+          .snapshots();
 
   /// Registers the game's public/tv codes for lookup flows.
   Future<void> upsertGameCodes(LiveGame game) async {

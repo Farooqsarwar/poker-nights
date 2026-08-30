@@ -79,7 +79,10 @@ service cloud.firestore {
           && sameVal('announcements', [])
           && sameVal('auditHistory', [])
           && sameVal('originalLevels', [])
-          && sameVal('guestSlots', [])
+          // guestSlots intentionally NOT locked: a member's "Going +N" RSVP
+          // creates/removes their own guest-slot rows in the same patch. The
+          // client only ever touches its own rows; the players map is likewise
+          // member-writable, so this stays within the trusted RSVP surface.
           && sameVal('changeLog', [])
           && sameVal('id', '')
           && sameVal('chat', []);
@@ -107,9 +110,15 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       }
 
-      // Membership index mirror (one doc per joined group). Self-managed.
+      // Membership index mirror (one doc per joined group). The user manages
+      // their own rows; a group's admin may also write the mirror row for a
+      // member of THAT group (the "add member by email" flow — no Cloud
+      // Function). Scoped tightly: an admin can only touch mirror docs whose
+      // {gid} is a group they administer.
       match /groups/{gid} {
-        allow read, write: if signedIn() && request.auth.uid == uid;
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow write: if signedIn()
+            && (request.auth.uid == uid || isGroupAdmin(gid));
       }
 
       // Personal tournament results (one doc per settled game). Written by
@@ -133,8 +142,8 @@ service cloud.firestore {
       match /members/{memberUid} {
         allow read: if isMember(gid);
         // A user adds themselves (join code / invite link), or a group admin
-        // adds a registered user directly by email. The onMemberWrite function
-        // mirrors the row into users/{memberUid}/groups/{gid}.
+        // adds a registered user directly by email. The client writes the
+        // matching users/{memberUid}/groups/{gid} mirror in the same batch.
         allow create: if (signedIn() && request.auth.uid == memberUid)
             || isGroupAdmin(gid);
         // Role changes / removals are admin+owner ops. A member may fix their

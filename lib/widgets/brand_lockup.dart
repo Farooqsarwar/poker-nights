@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/colors.dart';
 class PokerNightLogo extends StatelessWidget {
   final double size;
   final Color? frameColor;
@@ -19,6 +20,7 @@ class PokerNightLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Theme.of(context);
-    return Image.asset('assets/logo.png', width: size, fit: BoxFit.contain);
+    final logoPath = 'assets/logo_${AppColors.currentPalette.id.replaceAll("-", "_")}.png';
+    return Image.asset(logoPath, width: size, fit: BoxFit.contain);
   }
 }

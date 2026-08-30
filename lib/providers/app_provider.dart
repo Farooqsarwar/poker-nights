@@ -1025,8 +1025,9 @@ class AppProvider extends ChangeNotifier {
   bool get isGuest => _repo.isSignedInAsGuest;
 
   Future<void> _onAuthStateChanged(fa.User? fbUser) async {
-    _authReady = true;
     if (fbUser == null) {
+      // Nothing to hydrate for a signed-out user — release the router now.
+      _authReady = true;
       _teardownUserData();
       if (_user != null) {
         _user = null;
@@ -1034,8 +1035,16 @@ class AppProvider extends ChangeNotifier {
       }
       return;
     }
+    // Keep the router gated at splash until the restored session is actually
+    // usable (profile + streams). Flipping `_authReady` before this made the
+    // guard see `ready=true, authed=false` during hydration and bounce a
+    // signed-in user to the login page until a rebuild happened (the "tap a
+    // field / login button and it logs me in" bug).
     await _hydrateUser(fbUser);
+    _authReady = true;
     _calibrateServerTime();
+    // Re-run the router guard now that both `ready` and `authed` are settled.
+    notifyListeners();
   }
 
   /// Runs [op], retrying on any failure with a short back-off. Right after
@@ -2347,7 +2356,7 @@ class AppProvider extends ChangeNotifier {
     final currentDurationMins =
         currentLevelData?.durationMins ?? game.structure.levelDuration;
     final consumedSeconds =
-        currentDurationMins * 60 - game.currentSecondsRemaining;
+        currentDurationMins * 60 - game.currentSecondsRemaining();
     elapsedMins += consumedSeconds.clamp(0, currentDurationMins * 60) / 60.0;
     // Remaining scheduled work: future levels only.
     var remainingLevelsMins = 0;
@@ -2396,6 +2405,9 @@ class AppProvider extends ChangeNotifier {
 
   /// Used to derive server-authoritative timer from Firestore server time.
   Duration? _serverTimeOffset;
+
+  /// The calibrated offset between local device time and server truth.
+  Duration get serverTimeOffset => _serverTimeOffset ?? Duration.zero;
 
   /// Calibrates the local-to-server time offset using a Firestore write/read
   /// round-trip. Call once on startup and periodically to keep drift minimal.
@@ -2484,7 +2496,7 @@ class AppProvider extends ChangeNotifier {
     _currentGame = _currentGame!.copyWith(
       timerRunning: false,
       status: LiveGameStatus.paused,
-      secondsRemaining: _currentGame!.currentSecondsRemaining,
+      secondsRemaining: _currentGame!.currentSecondsRemaining(),
       levelEndTime: null,
     );
     notifyListeners();
@@ -2634,13 +2646,13 @@ class AppProvider extends ChangeNotifier {
       return p;
     }).toList();
     final remaining = updated.where((p) => p.active).length;
-    final prevActive = _currentGame!.players.where((p) => p.active).length;
     final maxPerTable = effectiveTableSettings.maxPerTable;
-    // Final table redraw only fires for multi-table events (spec §7: "If a
-    // multi-table event hits 9 players, a complete random redraw occurs.
-    // Single table events do NOT trigger a redraw at 9 players.").
-    final wasMultiTable = prevActive > maxPerTable;
-    if (remaining == 9 && wasMultiTable) {
+    // Final table redraw only fires for multi-table events (spec §7 and BR-020: "If a
+    // multi-table event hits <= 9 players, a complete random redraw occurs.
+    // Single table events do NOT trigger a redraw.").
+    final multiTableEvent = _currentGame!.confirmedCount > maxPerTable;
+    final redrawNotCompleted = !_currentGame!.finalTableRedrawCompleted;
+    if (remaining <= 9 && multiTableEvent && redrawNotCompleted) {
       _currentGame = _currentGame!.copyWith(
         players: updated,
         status: LiveGameStatus.finaltable,
@@ -4214,6 +4226,7 @@ class AppProvider extends ChangeNotifier {
       players: players,
       status: LiveGameStatus.running,
       timerRunning: true,
+      finalTableRedrawCompleted: true,
       dealerPlayerId: dealer?.id,
       // The paused level is over — restart the clock for the current level.
       secondsRemaining: durationMins * 60,

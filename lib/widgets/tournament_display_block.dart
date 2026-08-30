@@ -1,6 +1,8 @@
 import 'app_timer.dart';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_provider.dart';
 
 import '../app/colors.dart';
 import '../app/typography.dart';
@@ -96,7 +98,7 @@ TextStyle _numberStyle({
 }
 
 class _GameValues {
-  _GameValues(this.game)
+  _GameValues(this.game, Duration offset)
       : level = game.currentLevelData,
         next = game.nextLevelData,
         isBreak = game.status == LiveGameStatus.rebuypause,
@@ -114,12 +116,12 @@ class _GameValues {
 
     levelSeconds = (level?.durationMins ?? 1) * 60;
     if (level != null) {
-      totalSeconds += levelSeconds - game.currentSecondsRemaining;
+      totalSeconds += levelSeconds - game.currentSecondsRemaining(offset);
     }
 
     progress = level == null
         ? 0
-        : ((levelSeconds - game.currentSecondsRemaining) / levelSeconds)
+        : ((levelSeconds - game.currentSecondsRemaining(offset)) / levelSeconds)
         .clamp(0.0, 1.0)
         .toDouble();
   }
@@ -150,7 +152,8 @@ class _WideLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data = _GameValues(game);
+    final offset = context.watch<AppProvider>().serverTimeOffset;
+    final data = _GameValues(game, offset);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -779,7 +782,8 @@ class _CompactLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data = _GameValues(game);
+    final offset = context.watch<AppProvider>().serverTimeOffset;
+    final data = _GameValues(game, offset);
 
     return ColoredBox(
       color: TournamentDisplayBlock._black,
@@ -1081,8 +1085,9 @@ class _StatusSpade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final logoPath = 'assets/logo_${AppColors.currentPalette.id.replaceAll("-", "_")}.png';
     return Image.asset(
-      'assets/logo.png',
+      logoPath,
       width: width,
       height: height,
       fit: BoxFit.contain,

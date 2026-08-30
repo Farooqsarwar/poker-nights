@@ -12,7 +12,20 @@
           "package_name": "com.pokernight.poker_night"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "885018943861-b6es946nqmioksjdu78rusmhbisrtigc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pokernight.poker_night",
+            "certificate_hash": "b2428f6831d8662a16da2366b462567d2e2b49d0"
+          }
+        },
+        {
+          "client_id": "885018943861-j9abh2tqc4eiqr58bc9ihel3l2d3q89f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDz1oVEyLxbKLhRGo4-k1QCfX02lKtyzEU"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "885018943861-atu8q8bgltjo5nj6uih7tn21fub57d7m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "885018943861-0vnbqo98jct7vrpfe0grq8kl21t23d44.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.pokernight.pokerNight"
+              }
+            }
+          ]
         }
       }
     }

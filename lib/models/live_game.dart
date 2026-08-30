@@ -252,6 +252,7 @@ class LiveGame {
     this.seatingConfirmed = false,
     this.checkInClosed = false,
     this.structureConfirmed = false,
+    this.finalTableRedrawCompleted = false,
     this.dealerPlayerId,
     this.guestSlots = const [],
     this.originalLevels,
@@ -296,6 +297,9 @@ class LiveGame {
   /// True once the admin has reviewed and confirmed the AI-generated
   /// structure (30-minute pre-start estimate).
   final bool structureConfirmed;
+
+  /// True once the final table redraw has been triggered and completed (BR-020).
+  final bool finalTableRedrawCompleted;
 
   /// True once the firm, one-time structure recalculation at T-minus-10-
   /// minutes (using the final "Going" headcount) has run. Set once by
@@ -388,9 +392,10 @@ class LiveGame {
     return structure.levels[currentLevel - 1];
   }
 
-  int get currentSecondsRemaining {
+  int currentSecondsRemaining([Duration offset = Duration.zero]) {
     if (!timerRunning || levelEndTime == null) return secondsRemaining;
-    final diff = levelEndTime!.difference(DateTime.now()).inSeconds;
+    final serverNow = DateTime.now().add(offset);
+    final diff = levelEndTime!.difference(serverNow).inSeconds;
     return diff > 0 ? diff : 0;
   }
 
@@ -438,6 +443,7 @@ class LiveGame {
     bool? seatingConfirmed,
     bool? checkInClosed,
     bool? structureConfirmed,
+    bool? finalTableRedrawCompleted,
     String? dealerPlayerId,
     List<GuestSlot>? guestSlots,
     List<BlindLevel>? originalLevels,
@@ -469,6 +475,7 @@ class LiveGame {
       seatingConfirmed: seatingConfirmed ?? this.seatingConfirmed,
       checkInClosed: checkInClosed ?? this.checkInClosed,
       structureConfirmed: structureConfirmed ?? this.structureConfirmed,
+      finalTableRedrawCompleted: finalTableRedrawCompleted ?? this.finalTableRedrawCompleted,
       dealerPlayerId: dealerPlayerId ?? this.dealerPlayerId,
       guestSlots: guestSlots ?? this.guestSlots,
       originalLevels: originalLevels ?? this.originalLevels,

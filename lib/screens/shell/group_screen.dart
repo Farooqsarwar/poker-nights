@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -226,6 +227,38 @@ class _GroupScreenState extends State<GroupScreen> {
                   style: AppTypography.bodySm.copyWith(
                     color: AppColors.mutedForeground,
                   ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!app.hasCurrentGroup) {
+      return AppPage(
+        maxWidth: 960,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 96),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.handshake_outlined, size: 64, color: AppColors.mutedForeground),
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  'No group selected',
+                  style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Join a group or create your own to see events and members.',
+                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                AppButton(
+                  onPressed: () => context.go(RoutePaths.home),
+                  child: const Text('Go to Dashboard'),
                 ),
               ],
             ),
@@ -600,43 +633,96 @@ class _GroupScreenState extends State<GroupScreen> {
   }
 
   void _showInviteModal(BuildContext context, Group group) {
-    final link =
-        'https://poker-night-tools.web.app/join-group?code=${group.joinCode}';
+    final link = 'https://poker-night-tools.web.app/join-group?code=${group.joinCode}';
+    final messenger = ScaffoldMessenger.of(context);
+    var copiedLink = false;
     showAppModal(
       context: context,
-      title: 'Invite to ${group.name}',
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
+      maxWidth: 400,
+      title: 'Invite people',
+      child: StatefulBuilder(
+        builder: (context, setState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Anyone with this link or code can join in one tap.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.10),
+                      blurRadius: 18,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: QrImageView(
+                  data: link,
+                  size: 140,
+                  backgroundColor: Colors.white,
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            // The one-lined small copy link field
+            Container(
+              padding: const EdgeInsets.only(
+                left: AppSpacing.md,
+                right: AppSpacing.xs,
+                top: AppSpacing.xs,
+                bottom: AppSpacing.xs,
+              ),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.muted,
                 borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.border),
               ),
-              child: QrImageView(
-                data: link,
-                size: 180,
-                backgroundColor: Colors.white,
+              child: Row(
+                children: [
+                  Icon(Icons.link, size: 16, color: AppColors.mutedForeground),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'poker-night-tools.web.app/...',
+                      style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    variant: copiedLink ? AppButtonVariant.secondary : AppButtonVariant.primary,
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: link));
+                      if (!mounted) return;
+                      setState(() => copiedLink = true);
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('Invite link copied'), duration: Duration(seconds: 2)),
+                      );
+                      Future.delayed(const Duration(seconds: 2), () {
+                        if (mounted) setState(() => copiedLink = false);
+                      });
+                    },
+                    child: Text(copiedLink ? 'Copied' : 'Copy link'),
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Scan to join, or share the link. Opening it signs the person in '
-            '(or asks them to) and adds them to the group.',
-            textAlign: TextAlign.center,
-            style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          CodeDisplay(code: link, label: 'Link'),
-          const SizedBox(height: AppSpacing.sm),
-          CodeDisplay(code: group.joinCode, label: 'Or enter code'),
-        ],
+            const SizedBox(height: AppSpacing.sm),
+            CodeDisplay(code: group.joinCode, label: 'Or enter code'),
+          ],
+        ),
       ),
     );
   }

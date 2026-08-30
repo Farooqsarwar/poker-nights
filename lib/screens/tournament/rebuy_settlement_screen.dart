@@ -569,12 +569,12 @@ class _ColorUpStep extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Color-up instructions',
+            'Color-up recommendations (Global)',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Exchange small chips before continuing. The $_anteName will begin next level.',
+            'The system does not track individual stacks. Execute these global recommendations physically at the table. The $_anteName will begin next level.',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),

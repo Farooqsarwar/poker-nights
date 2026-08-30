@@ -52,10 +52,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   /// Estimated finish time: remaining clock + the durations of the levels
   /// still to play (+5% buffer). [futureDurationOverride] previews a
   /// speed-up/slow-down of all future levels.
-  String? _estimateFinish(LiveGame game, {int? futureDurationOverride}) {
+  String? _estimateFinish(LiveGame game, Duration clockOffset, {int? futureDurationOverride}) {
     final levels = game.structure.levels;
     if (levels.isEmpty) return null;
-    var mins = game.currentSecondsRemaining ~/ 60;
+    var mins = game.currentSecondsRemaining(clockOffset) ~/ 60;
     for (final l in levels) {
       if (l.level >= game.currentLevel) {
         mins += l.level > game.currentLevel && futureDurationOverride != null
@@ -130,7 +130,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final settings = game.settings;
     final status = game.status;
     final currentLevel = game.currentLevel;
-    final secondsRemaining = game.currentSecondsRemaining;
+    final secondsRemaining = game.currentSecondsRemaining(app.serverTimeOffset);
     final level = game.currentLevelData;
     final activePlayers = game.activePlayers;
     final eliminatedPlayers = game.eliminatedPlayers;
@@ -361,7 +361,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
-                    'Estimated finish ≈ ${_estimateFinish(game) ?? '—'}',
+                    'Estimated finish ≈ ${_estimateFinish(game, app.serverTimeOffset) ?? '—'}',
                     style: AppTypography.bodySm.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -1108,7 +1108,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             child: _PreviewCol(
                               label: 'Current',
                               duration: '$oldDur min levels',
-                              finish: _estimateFinish(game2) ?? '—',
+                              finish: _estimateFinish(game2, app.serverTimeOffset) ?? '—',
                             ),
                           ),
                           const SizedBox(width: AppSpacing.lg),
@@ -1119,6 +1119,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               finish:
                                   _estimateFinish(
                                     game2,
+                                    app.serverTimeOffset,
                                     futureDurationOverride: newDur,
                                   ) ??
                                   '—',

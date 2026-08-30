@@ -375,6 +375,12 @@ class LiveGame {
   int get goingCount =>
       players.where((p) => p.rsvp != null && p.rsvp!.isGoing).length;
 
+  /// Members marked going, counting each one *plus* the guests their "Going +N"
+  /// response brings — the headcount shown next to the invite in chat.
+  int get goingWithGuestsCount => players
+      .where((p) => !p.isGuest && (p.rsvp?.isGoing ?? false))
+      .fold(0, (sum, p) => sum + 1 + p.rsvp!.guestCount);
+
   int get confirmedCount => players.where((p) => p.confirmed).length;
 
   BlindLevel? get currentLevelData {

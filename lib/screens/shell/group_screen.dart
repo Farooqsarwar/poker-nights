@@ -206,6 +206,34 @@ class _GroupScreenState extends State<GroupScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+
+    // Freshly selected / just-joined group whose live bundle is still loading.
+    if (app.groupBundleLoading) {
+      return AppPage(
+        maxWidth: 960,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 96),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppColors.primary),
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  app.currentGroup.name.isEmpty
+                      ? 'Loading group…'
+                      : 'Loading ${app.currentGroup.name}…',
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final group = app.currentGroup;
     final user = app.user;
     final isAdmin = app.isAdmin;
@@ -1047,7 +1075,7 @@ class _ChatBubble extends StatelessWidget {
           .where((p) => p.id == userId)
           .firstOrNull
           ?.rsvp;
-      final goingCount = game != null ? app.expectedPlayersFromRsvps(game) : null;
+      final goingCount = game?.goingWithGuestsCount;
       final rsvpOpen = game != null &&
           !game.settings.rsvpCutoffPassed &&
           game.status == LiveGameStatus.published;
@@ -1194,6 +1222,7 @@ class _ChatBubble extends StatelessWidget {
         ),
       );
     }
+    final avatar = AppAvatar(name: message.authorName, size: AppAvatarSize.sm);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
@@ -1203,7 +1232,7 @@ class _ChatBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isMine) ...[
-            AppAvatar(name: message.authorName, size: AppAvatarSize.sm),
+            avatar,
             const SizedBox(width: AppSpacing.sm),
           ],
           Flexible(
@@ -1213,22 +1242,35 @@ class _ChatBubble extends StatelessWidget {
                   : CrossAxisAlignment.start,
               children: [
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (isMine) ...[
+                      Text(
+                        Formatters.relativeTime(message.timestamp),
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                          fontSize: 10,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                    ],
                     Text(
-                      message.authorName,
+                      isMine ? 'You' : message.authorName,
                       style: AppTypography.bodyXs.copyWith(
                         color: AppColors.foreground,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      Formatters.relativeTime(message.timestamp),
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                        fontSize: 10,
+                    if (!isMine) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        Formatters.relativeTime(message.timestamp),
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                          fontSize: 10,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -1269,6 +1311,10 @@ class _ChatBubble extends StatelessWidget {
               ],
             ),
           ),
+          if (isMine) ...[
+            const SizedBox(width: AppSpacing.sm),
+            avatar,
+          ],
         ],
       ),
     );
@@ -1514,9 +1560,10 @@ class _RsvpBtn extends StatelessWidget {
   final Rsvp? current;
   @override
   Widget build(BuildContext context) {
-    final active =
-        current != null &&
-        (opt == Rsvp.going ? current!.isGoing : current == opt);
+    // Exact match: each response (Going, Going +1 … Going +4, Maybe, Can't)
+    // highlights only its own button, so the member can see precisely what
+    // they picked and switch cleanly.
+    final active = current == opt;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,

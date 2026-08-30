@@ -486,8 +486,8 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-/// A full-width "Continue with Google" button that renders the official
-/// Google coloured "G" using a CustomPainter — no asset files required.
+/// A full-width "Continue with Google" button using the official Google "G"
+/// logo asset (assets/google_logo.png).
 class _GoogleSignInButton extends StatelessWidget {
   const _GoogleSignInButton({required this.onPressed, this.loading = false});
 
@@ -522,11 +522,12 @@ class _GoogleSignInButton extends StatelessWidget {
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Inline Google "G" logo rendered via CustomPaint.
-                  SizedBox(
+                  // Official Google "G" logo asset.
+                  Image.asset(
+                    'assets/google_logo.png',
                     width: 20,
                     height: 20,
-                    child: CustomPaint(painter: _GoogleGPainter()),
+                    filterQuality: FilterQuality.high,
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Text(
@@ -541,62 +542,4 @@ class _GoogleSignInButton extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Paints the official Google "G" logo using 4 coloured arcs + a bar cutout.
-/// No external assets required — everything is drawn with Canvas primitives.
-class _GoogleGPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final r = size.width / 2;
-    const pi = 3.14159265359;
-
-    // Outer ring stroke width.
-    final sw = r * 0.30;
-    // Ring radius (center of the stroke band).
-    final rr = r - sw / 2;
-
-    void arc(double start, double sweep, Color color) {
-      canvas.drawArc(
-        Rect.fromCircle(center: Offset(cx, cy), radius: rr),
-        start,
-        sweep,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = sw
-          ..color = color
-          ..strokeCap = StrokeCap.butt,
-      );
-    }
-
-    // 1) Blue — left & top (from 180° to 345°, i.e. 165°).
-    arc(pi, pi * 165 / 180, const Color(0xFF4285F4));
-    // 2) Red — top-right (345° to 90°, i.e. from -15° for 75°).
-    arc(-pi * 15 / 180, pi * 75 / 180, const Color(0xFFEA4335));
-    // 3) Yellow — right-bottom (75° to 165°, i.e. 90°).
-    arc(pi * 75 / 180, pi * 90 / 180, const Color(0xFFFBBC05));
-    // 4) Green — bottom-left (165° to 180°, i.e. 15°).
-    arc(pi * 165 / 180, pi * 15 / 180, const Color(0xFF34A853));
-
-    // Horizontal bar of the "G" — blue rectangle on the right half.
-    final barTop = cy - sw * 0.45;
-    final barBottom = cy + sw * 0.45;
-    canvas.drawRect(
-      Rect.fromLTRB(cx, barTop, cx + r, barBottom),
-      Paint()..color = const Color(0xFF4285F4),
-    );
-
-    // White inner circle to create the ring shape.
-    canvas.drawCircle(
-      Offset(cx, cy),
-      rr - sw / 2,
-      Paint()..color = const Color(0xFFFFFFFF),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_GoogleGPainter oldDelegate) => false;
 }

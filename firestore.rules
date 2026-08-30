@@ -132,7 +132,11 @@ service cloud.firestore {
       // Member roster rows carry name + role. Members read each other's rows.
       match /members/{memberUid} {
         allow read: if isMember(gid);
-        allow create: if signedIn() && request.auth.uid == memberUid;
+        // A user adds themselves (join code / invite link), or a group admin
+        // adds a registered user directly by email. The onMemberWrite function
+        // mirrors the row into users/{memberUid}/groups/{gid}.
+        allow create: if (signedIn() && request.auth.uid == memberUid)
+            || isGroupAdmin(gid);
         // Role changes / removals are admin+owner ops. A member may fix their
         // own display name and mirror their own stats summary.
         allow update: if isGroupAdmin(gid)
@@ -144,9 +148,12 @@ service cloud.firestore {
       }
 
       // Games: authority writes whole docs; members get a tightly scoped
-      // patch path; guests have no access here at all.
+      // patch path (RSVP etc.) and need read access to build those patches and
+      // render the group hub. Guests have no access here at all — they use the
+      // sanitized publicGames projections. The Flutter client further strips
+      // payout/organizer figures for non-authority viewers before display.
       match /games/{gameId} {
-        allow read: if isGroupAdmin(gid);
+        allow read: if isMember(gid);
         allow create, delete: if isGroupAdmin(gid);
         allow update: if isGroupAdmin(gid) || (isMember(gid) && memberGameEdit());
 
@@ -190,14 +197,28 @@ service cloud.firestore {
     }
 
     // ---------- join codes ----------
-    // Documents hold {kind, gid|gameId}. Any signed-in user may RESOLVE a
-    // code (join flows). Creation happens in the same batch that creates the
-    // group/game, so no cross-doc check is possible there; later updates
-    // (game tv/public codes upserted on publish) require group admin rights.
+    // Documents hold {kind, gid|gameId}. Codes are public by design — they are
+    // printed on QR codes and shared as invite links — so RESOLVING a code is
+    // world-readable (mirrors publicGames), letting guests enter the join flow
+    // without first creating an anonymous account. Creation happens in the same
+    // batch that creates the group/game, so no cross-doc check is possible
+    // there; later updates (game tv/public codes upserted on publish) require
+    // group admin rights.
     match /joinCodes/{code} {
-      allow read: if signedIn();
+      allow read: if true;
       allow create: if signedIn();
       allow update, delete: if signedIn() && isGroupAdmin(resource.data.gid);
+    }
+
+    // ---------- email → uid index ----------
+    // Lets a group admin resolve a registered user by their account email for
+    // the "add member directly" flow, without exposing the users collection.
+    // Each user writes only their own row (keyed by lower-cased email).
+    match /emailIndex/{emailLower} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+          && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
     }
 
     // ---------- public game projections ----------

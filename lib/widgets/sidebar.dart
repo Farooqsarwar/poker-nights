@@ -111,7 +111,7 @@ class Sidebar extends StatelessWidget {
                 for (final group in app.orderedGroups)
                   _GroupRow(
                     group: group,
-                    selected: group.id == app.currentGroup.id,
+                    selected: group.id == app.currentGroupId,
                     onTap: () {
                       app.setCurrentGroup(group);
                       context.go('${RoutePaths.group}?tab=games');

@@ -19,7 +19,7 @@ class LandingScreen extends StatefulWidget {
 }
 
 class _LandingScreenState extends State<LandingScreen> {
-  void _joinAsGuest() {
+  void _openJoin() {
     context.go(RoutePaths.join);
   }
 
@@ -170,8 +170,8 @@ class _LandingScreenState extends State<LandingScreen> {
               AppButton(
                 variant: AppButtonVariant.primary,
                 size: AppButtonSize.sm,
-                onPressed: _joinAsGuest,
-                child: const Text('Join as guest'),
+                onPressed: _openJoin,
+                child: const Text('Join with a code'),
               ),
             ],
           ),

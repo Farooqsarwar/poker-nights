@@ -24,7 +24,6 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
-import '../public/join_screen.dart' show ScanQRScreen;
 
 /// Dashboard mirroring the web `HomePage`.
 class HomeScreen extends StatefulWidget {
@@ -35,35 +34,18 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Future<void> _submitJoinCode(AppProvider app, String rawCode) async {
-    final ok = await app.joinGroup(rawCode);
-    if (!mounted) return;
-    if (!ok) {
-      setState(
-        () => _joinError = 'Group not found. Check the code and try again.',
-      );
-    } else {
-      setState(() {
-        _showJoin = false;
-        _joinController.clear();
-        _joinError = '';
-      });
-    }
-  }
-
-  final _joinController = TextEditingController();
   final _groupNameController = TextEditingController();
-  String _joinError = '';
-  bool _showJoin = false;
+  String _createError = '';
   bool _showCreate = false;
   bool _showRestoreModal = false;
+
+  void _openJoin() => context.go(RoutePaths.join);
 
   static String _hhmm(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
   @override
   void dispose() {
-    _joinController.dispose();
     _groupNameController.dispose();
     super.dispose();
   }
@@ -311,11 +293,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               _GroupCard(
-                                group: group,
-                                showJoin: () => setState(() {
-                                  _joinError = '';
-                                  _showJoin = true;
-                                }),
+                                group: app.hasCurrentGroup ? group : null,
+                                loading: app.groupBundleLoading,
+                                showJoin: _openJoin,
                                 showCreate: () =>
                                     setState(() => _showCreate = true),
                                 isAdmin: app.isAdmin,
@@ -342,11 +322,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: AppSpacing.xl),
                       _GroupCard(
-                        group: group,
-                        showJoin: () => setState(() {
-                          _joinError = '';
-                          _showJoin = true;
-                        }),
+                        group: app.hasCurrentGroup ? group : null,
+                        loading: app.groupBundleLoading,
+                        showJoin: _openJoin,
                         showCreate: () => setState(() => _showCreate = true),
                         isAdmin: app.isAdmin,
                       ),
@@ -362,57 +340,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         // Modals
         AppModal(
-          open: _showJoin,
-          onClose: () => setState(() => _showJoin = false),
-          title: 'Join a group',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.sm),
-              AppTextField(
-                controller: _joinController,
-                placeholder: 'e.g. FRIDAY7',
-                error: _joinError,
-                keyboardType: TextInputType.visiblePassword,
-                textAlign: TextAlign.center,
-                textStyle: AppTypography.mono(
-                  size: AppFontSizes.xl,
-                  weight: FontWeight.w700,
-                  letterSpacing: 3.2,
-                ),
-                onChanged: (_) => setState(() => _joinError = ''),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              AppButton(
-                fullWidth: true,
-                size: AppButtonSize.lg,
-                onPressed: () => _submitJoinCode(app, _joinController.text),
-                child: const Text('Join Group'),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              AppButton(
-                fullWidth: true,
-                variant: AppButtonVariant.secondary,
-                onPressed: () async {
-                  final scanned = await Navigator.push<String>(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ScanQRScreen()),
-                  );
-                  if (scanned != null) _submitJoinCode(app, scanned);
-                },
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.qr_code_scanner),
-                    SizedBox(width: AppSpacing.sm),
-                    Text('Scan QR Code'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        AppModal(
           open: _showCreate,
           onClose: () => setState(() => _showCreate = false),
           title: 'Create a group',
@@ -424,7 +351,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 controller: _groupNameController,
                 label: 'Group name',
                 placeholder: 'e.g. Friday Poker Club',
-                onChanged: (_) => setState(() {}),
+                error: _createError.isEmpty ? null : _createError,
+                onChanged: (_) => setState(() => _createError = ''),
               ),
               const SizedBox(height: AppSpacing.xl),
               AppButton(
@@ -439,7 +367,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (!context.mounted) return;
                   if (created == null) {
                     setState(
-                      () => _joinError =
+                      () => _createError =
                           'Could not create the group. Please try again.',
                     );
                     return;
@@ -936,12 +864,17 @@ class _GroupCard extends StatelessWidget {
     required this.showJoin,
     required this.showCreate,
     required this.isAdmin,
+    this.loading = false,
   });
 
   final Group? group;
   final VoidCallback showJoin;
   final VoidCallback showCreate;
   final bool isAdmin;
+
+  /// A group is selected but its live bundle is still loading (e.g. just
+  /// joined) — show a spinner instead of the card or the empty state.
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -963,7 +896,37 @@ class _GroupCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        if (g != null)
+        if (loading)
+          AppCard(
+            color: Colors.transparent,
+            borderColor: AppColors.border,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'Loading your group…',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else if (g != null) ...[
           AppCard(
             onTap: () => context.go('${RoutePaths.group}?tab=games'),
             glow: true,
@@ -1086,8 +1049,23 @@ class _GroupCard extends StatelessWidget {
                 ),
               ],
             ),
-          )
-        else
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.secondary,
+            size: AppButtonSize.sm,
+            onPressed: showJoin,
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add, size: 16),
+                SizedBox(width: AppSpacing.xs),
+                Text('Join another group'),
+              ],
+            ),
+          ),
+        ] else
           AppCard(
             color: Colors.transparent,
             borderColor: AppColors.border,

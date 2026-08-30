@@ -85,6 +85,13 @@ GoRouter buildAppRouter(AppProvider app) {
     final ready = app.authReady;
     final authed = app.isAuthenticated;
 
+    // Legacy shared game links (`/game/FP2608`) resolve through the public
+    // unified join screen — rewrite before the auth guard can bounce a guest.
+    if (path.startsWith('/game/')) {
+      final code = path.substring('/game/'.length);
+      return '${RoutePaths.join}?code=${Uri.encodeComponent(code)}';
+    }
+
     // Hold every navigation at splash until Firebase resolves the persisted
     // session, so guards never run against a half-initialised auth state.
     if (!ready) {
@@ -110,14 +117,16 @@ GoRouter buildAppRouter(AppProvider app) {
     // Consume a saved deep link as soon as auth resolves — the splash screen
     // may have already navigated to landing (/) before we could redirect.
     if (pendingDeepLink != null) {
-      if (authed) {
-        final deepLink = pendingDeepLink!;
-        pendingDeepLink = null;
-        return deepLink;
-      }
-      // Not authed: redirect to login with the deep link as next param.
       final deepLink = pendingDeepLink!;
       pendingDeepLink = null;
+      // Public deep links (guest join, game links, TV) resolve for everyone;
+      // only protected targets route through sign-in first.
+      final deepPath = Uri.tryParse(deepLink)?.path ?? deepLink;
+      if (authed ||
+          _publicPaths.contains(deepPath) ||
+          deepPath.startsWith('/game/')) {
+        return deepLink;
+      }
       return '${RoutePaths.login}?next=${Uri.encodeComponent(deepLink)}';
     }
     if (authed &&
@@ -210,7 +219,8 @@ GoRouter buildAppRouter(AppProvider app) {
     ),
     GoRoute(
       path: RoutePaths.join,
-      builder: (context, state) => const JoinScreen(),
+      builder: (context, state) =>
+          JoinScreen(initialCode: state.uri.queryParameters['code']),
     ),
 
     // ── App shell ────────────────────────────────────────────────────────────

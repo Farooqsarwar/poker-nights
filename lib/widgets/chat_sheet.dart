@@ -278,6 +278,7 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final avatar = AppAvatar(name: message.authorName, size: AppAvatarSize.sm);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
@@ -287,7 +288,7 @@ class _ChatBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isMine) ...[
-            AppAvatar(name: message.authorName, size: AppAvatarSize.sm),
+            avatar,
             const SizedBox(width: AppSpacing.sm),
           ],
           Flexible(
@@ -297,7 +298,7 @@ class _ChatBubble extends StatelessWidget {
                   : CrossAxisAlignment.start,
               children: [
                 Text(
-                  message.authorName,
+                  isMine ? 'You' : message.authorName,
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
                     fontSize: 10,
@@ -385,6 +386,10 @@ class _ChatBubble extends StatelessWidget {
               ],
             ),
           ),
+          if (isMine) ...[
+            const SizedBox(width: AppSpacing.sm),
+            avatar,
+          ],
         ],
       ),
     );

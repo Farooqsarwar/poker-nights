@@ -27,6 +27,14 @@
 
   <title>Poker Night</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- OneSignal Web Push (free-plan push — no Cloud Functions).
+       The Dart side drives this SDK through js interop
+       (lib/services/push/platform_push_web.dart). -->
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+  </script>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

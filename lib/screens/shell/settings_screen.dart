@@ -65,21 +65,23 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   showDivider: true,
                 ),
-                // Audit fix C6: SMS alerts ("Email and SMS are not required",
-                // Tech §14.3) and chip-sound effects (not in the voice spec,
-                // §13.2) were out of MVP scope and were removed.
-                // Push notifications are unavailable on the free (Spark) plan:
-                // there is no Cloud Function to fan out cross-user inbox items,
-                // so the feature was dropped. Kept as a disabled informational
-                // row rather than a broken toggle.
+                // Push notifications via OneSignal (free-plan fan-out — no
+                // Cloud Function). Toggling on shows the OS/browser prompt.
                 _SettingRow(
-                  icon: Icons.notifications_off_outlined,
+                  icon: Icons.notifications_outlined,
                   title: 'Push notifications',
-                  subtitle: 'Unavailable on the free plan',
-                  trailing: Icon(
-                    Icons.lock_outline,
-                    size: 18,
-                    color: AppColors.mutedForeground,
+                  subtitle:
+                      'Tournament, RSVP and result alerts on every device',
+                  trailing: AppToggle(
+                    value: app.notificationsEnabled,
+                    onChanged: (v) async {
+                      final error = await app.setNotificationsEnabled(v);
+                      if (error != null && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(error)),
+                        );
+                      }
+                    },
                   ),
                   showDivider: false,
                 ),

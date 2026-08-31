@@ -171,16 +171,16 @@ service cloud.firestore {
         allow read, write: if signedIn() && request.auth.uid == uid;
       }
 
-      // Notification inbox (C6): ONLY the Cloud Function (Admin SDK, bypasses
-      // rules) may CREATE a notification. The owner may read their own inbox
-      // and mark their own items read. No arbitrary signed-in client can drop
-      // a notification (or a push) into another user's inbox.
+      // Notification inbox: the OWNER mirrors staged group-outbox items into
+      // their OWN inbox (free-plan fan-out — no Cloud Function). A client can
+      // still only ever write its own inbox, never another user's.
       match /notifications/{notifId} {
         allow read: if signedIn() && request.auth.uid == uid;
+        allow create: if signedIn() && request.auth.uid == uid;
         allow update: if signedIn()
             && request.auth.uid == uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-        allow create, delete: if false;
+        allow delete: if false;
       }
 
       // Membership index mirror (one doc per joined group). The user manages
@@ -301,12 +301,11 @@ service cloud.firestore {
         allow read, create, update, delete: if isGroupAdmin(gid);
       }
 
-      // Group notification OUTBOX (C6): a member stages a notification here
-      // and a Cloud Function fans it out into each member's inbox (the only
-      // cross-user inbox writer). Clients can create their own group's outbox
-      // item but cannot delete; deletes are admin-only. Note that an
-      // attacker reaching this could still stage a message, so the fan-out
-      // ALSO strips any attempt to embed a fake `authorId` (see functions).
+      // Group notification OUTBOX (free-plan fan-out, no Cloud Function): a
+      // member stages ONE notification here; every member device mirrors
+      // unseen items into its OWN inbox (users/{uid}/notifications). Clients
+      // can create their own group's outbox item but cannot delete; deletes
+      // are admin-only.
       match /notifications/{notifId} {
         allow create: if isMember(gid);
         allow read: if isMember(gid);

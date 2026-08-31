@@ -27,9 +27,12 @@ dependencies:
   flex_color_picker: ^3.8.0
   flutter_colorpicker: ^1.1.0
   firebase_app_check: ^0.3.2+10
-  firebase_messaging: ^15.2.10
   connectivity_plus: ^6.1.0
   google_sign_in_all_platforms: ^2.0.3
+  # Push notifications on every platform (Android / iOS / Web) via OneSignal —
+  # the free-plan replacement for the Cloud Function fan-out (no Blaze plan).
+  onesignal_flutter: ^5.6.8
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:

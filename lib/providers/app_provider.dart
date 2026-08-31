@@ -2,10 +2,9 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart'
-    show DocumentSnapshot, FieldValue, FirebaseFirestore;
+    show DocumentSnapshot, FieldValue;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in_all_platforms/google_sign_in_all_platforms.dart';
 
@@ -27,7 +26,9 @@ import '../utils/sanitization.dart';
 import '../utils/tournament_engine.dart';
 import '../utils/voice_service.dart';
 import '../services/browser_notifications.dart';
+import '../services/onesignal_sender.dart';
 import '../services/projections.dart' as projections;
+import '../services/push_service.dart';
 import '../services/recovery_service.dart';
 
 /// One future-level edit produced by the admin structure editor.
@@ -259,12 +260,24 @@ class AppProvider extends ChangeNotifier {
   bool _notificationsEnabled = false;
   bool get notificationsEnabled => _notificationsEnabled;
 
-  /// Enables browser notifications (web) after explicit permission, or just
-  /// flips the flag where the API is unsupported (in-app inbox remains the
-  /// delivery path there). Returns an error message on denial, null on
-  /// success (spec §14.3 — push when granted, inbox as fallback).
+  /// Enables push notifications. On Android/iOS this shows the OneSignal
+  /// permission prompt; on web it prefers OneSignal web push and falls back
+  /// to the plain Notification API when OneSignal isn't loaded. Returns an
+  /// error message on denial, null on success.
   Future<String?> setNotificationsEnabled(bool value) async {
-    if (value && BrowserNotify.supported) {
+    final push = PushService.instance;
+    if (value && push.isConfigured) {
+      final granted = await push.requestPermission();
+      if (!granted) {
+        _notificationsEnabled = false;
+        _persistPref('browserNotify', false);
+        notifyListeners();
+        if (kIsWeb) return 'Permission denied in this browser.';
+        return 'Permission denied. Enable notifications for Poker Night '
+            'in your device settings.';
+      }
+    } else if (value && kIsWeb && BrowserNotify.supported) {
+      // OneSignal not configured — legacy web Notification API fallback.
       final granted = await BrowserNotify.requestPermission();
       if (!granted) {
         _notificationsEnabled = false;
@@ -273,14 +286,30 @@ class AppProvider extends ChangeNotifier {
         return 'Permission denied in this browser.';
       }
     }
+    if (!value && push.isConfigured) {
+      // Soft-off: stop delivering pushes without revoking the OS permission.
+      unawaited(push.optOut().catchError(
+          (Object e) => debugPrint('push optOut failed: $e')));
+    }
     _notificationsEnabled = value;
     _persistPref('browserNotify', value);
     notifyListeners();
     return null;
   }
 
+  /// Called by [PushService] when the OS/browser permission changes.
+  void syncPushPermission(bool granted) {
+    if (!granted && _notificationsEnabled) {
+      _notificationsEnabled = false;
+      _persistPref('browserNotify', false);
+      notifyListeners();
+    }
+  }
+
   /// Delivers newly-arrived inbox items as browser notifications when the
-  /// user opted in; history is never replayed on sign-in.
+  /// user opted in; history is never replayed on sign-in. Skipped when
+  /// OneSignal web push is live (the service worker already showed the
+  /// system notification).
   void _deliverBrowserNotifications(List<AppNotification> list) {
     if (!_notificationsPrimed) {
       _notificationsPrimed = true;
@@ -291,7 +320,10 @@ class AppProvider extends ChangeNotifier {
     }
     for (final n in list) {
       final isNew = _seenNotificationIds.add(n.id);
-      if (isNew && !n.read && _notificationsEnabled) {
+      if (isNew &&
+          !n.read &&
+          _notificationsEnabled &&
+          !PushService.instance.suppressesInAppWebBanners) {
         BrowserNotify.show(n.title, n.body);
       }
     }
@@ -611,6 +643,9 @@ class AppProvider extends ChangeNotifier {
       // Additionally keep live member rosters for every group so home/sidebar
       // counts stay real-time even when no rich bundle is loaded yet.
       _syncGroupMembersSubs();
+      // Mirror every group's notification outbox into this user's inbox
+      // (free-plan fan-out — replaces the Cloud Function).
+      _syncGroupOutboxSubs();
       // First group after sign-in is auto-selected (pinned first, then
       // alphabetical — same ordering the sidebar uses).
       if (_currentGroupId == null && rows.isNotEmpty) {
@@ -819,6 +854,13 @@ class AppProvider extends ChangeNotifier {
       s.cancel();
     }
     _groupMembersSubs.clear();
+    for (final s in _groupOutboxSubs.values) {
+      s.cancel();
+    }
+    _groupOutboxSubs.clear();
+    _outboxPrimed.clear();
+    _mirrorCursors.clear();
+    _mirroredOutboxIds.clear();
     _groupsSub = null;
     _bundleSub = null;
     _gameDocSub = null;
@@ -933,6 +975,71 @@ class AppProvider extends ChangeNotifier {
         icon: r.icon,
         pinned: r.pinned,
       );
+
+  // ── Notification outbox mirror (free-plan fan-out) ─────────────────────────
+  final Map<String, StreamSubscription<List<OutboxNotification>>>
+      _groupOutboxSubs = {};
+  final Set<String> _mirroredOutboxIds = <String>{};
+  final Map<String, bool> _outboxPrimed = {};
+  final Map<String, int> _mirrorCursors = {};
+
+  /// Subscribes each group's notification outbox and mirrors unseen items into
+  /// the signed-in user's own inbox — the free-plan replacement for a Cloud
+  /// Function. Cancels subs for groups that were left.
+  void _syncGroupOutboxSubs() {
+    final wanted = {for (final g in _groups) g.id};
+    for (final gid in [
+      for (final k in _groupOutboxSubs.keys)
+        if (!wanted.contains(k)) k,
+    ]) {
+      _groupOutboxSubs.remove(gid)?.cancel();
+      _outboxPrimed.remove(gid);
+    }
+    for (final g in _groups) {
+      if (_groupOutboxSubs.containsKey(g.id)) continue;
+      final gid = g.id;
+      _mirrorCursors[gid] ??= -1;
+      _groupOutboxSubs[gid] = _repo.groupOutboxStream(gid).listen(
+        (docs) => _mirrorOutbox(gid, docs),
+        onError: (Object e) => debugPrint('outbox stream error: $e'),
+      );
+    }
+  }
+
+  /// Copies staged group notifications into the user's own inbox. First
+  /// emission is baselined silently (history); afterwards only items newer
+  /// than the persisted cursor are mirrored — as unread.
+  void _mirrorOutbox(String gid, List<OutboxNotification> docs) {
+    final uid = _repo.currentUid;
+    if (uid == null || !_backendUp) return;
+    final primed = _outboxPrimed[gid] ?? false;
+    var cursor = _mirrorCursors[gid] ?? -1;
+
+    if (!primed) {
+      _outboxPrimed[gid] = true;
+      for (final d in docs) {
+        cursor = max(cursor, d.updatedAtMillis);
+        _mirroredOutboxIds.add(d.id);
+      }
+    } else {
+      for (final d in docs) {
+        if (_mirroredOutboxIds.contains(d.id)) continue;
+        _mirroredOutboxIds.add(d.id);
+        if (d.updatedAtMillis <= cursor) continue;
+        cursor = max(cursor, d.updatedAtMillis);
+        if (!d.isFor(uid)) continue;
+        unawaited(_repo
+            .mirrorInboxNotification(uid, d.toAppNotification(read: false))
+            .catchError((Object e) => debugPrint('mirror inbox failed: $e')));
+      }
+    }
+
+    if (cursor != (_mirrorCursors[gid] ?? -1)) {
+      _mirrorCursors[gid] = cursor;
+      // No dots in the key — saveUserPref writes via a Firestore dot-path.
+      _persistPref('notifMirrorCursor_$gid', cursor);
+    }
+  }
 
   /// Keeps the index-derived group list's `members` populated live so member
   /// counts on the home screen / sidebar are real-time. Subscribes a members
@@ -1148,6 +1255,15 @@ class AppProvider extends ChangeNotifier {
       if (colorTheme is String) _colorTheme = colorTheme;
       final themePref = prefs['themePreference'];
       if (themePref is String) _themePreference = themePref;
+      // Restore per-group notification-mirror cursors so history isn't
+      // re-mirrored on every sign-in.
+      for (final entry in prefs.entries) {
+        if (entry.key.startsWith('notifMirrorCursor_')) {
+          final gid = entry.key.substring('notifMirrorCursor_'.length);
+          final v = entry.value;
+          if (v is num) _mirrorCursors[gid] = v.toInt();
+        }
+      }
     } catch (e) {
       debugPrint('loadUserPrefs failed: $e');
     }
@@ -1325,22 +1441,8 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    // Remove current device FCM token before signing out so stale tokens
-    // don't linger on the user's Firestore doc.
-    try {
-      final fcm = FirebaseMessaging.instance;
-      final token = await fcm.getToken();
-      if (token != null) {
-        final uid = _repo.currentUid;
-        if (uid != null) {
-          await FirebaseFirestore.instance.collection('users').doc(uid).update({
-            'fcmTokens': FieldValue.arrayRemove([token]),
-          });
-        }
-      }
-    } catch (_) {
-      // Best-effort cleanup; don't block logout on FCM errors.
-    }
+    // OneSignal external-id detach happens automatically via the auth-state
+    // listener in PushService — no stale subscriptions linger on the account.
     await _repo.signOut();
   }
 
@@ -5312,20 +5414,47 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  /// Prepends a notification locally and stages it in the current group's
-  /// outbox (`groups/{gid}/notifications/{id}`). The Cloud Function fans it
-  /// out to every member's inbox (C6) — clients can no longer write directly
-  /// into arbitrary recipients' inboxes.
+  /// Prepends a notification locally, stages it in the current group's outbox
+  /// and fans it out to group members as a REAL push via OneSignal — all from
+  /// this device, with no Cloud Function (free plan).
   void pushNotification(AppNotification notification) {
     _notifications = [notification, ..._notifications];
+    // This device originated the event — never re-banner it on itself when
+    // the mirrored inbox copy arrives.
+    _seenNotificationIds.add(notification.id);
     notifyListeners();
     if (_backendUp) {
       final gid = _currentGroup.id;
       if (gid.isNotEmpty) {
-        unawaited(_repo.stageGroupNotification(gid, notification)
-            .catchError((Object e) => debugPrint('stageGroupNotification failed: $e')));
+        unawaited(_repo.stageGroupNotification(gid, notification).catchError(
+            (Object e) => debugPrint('stageGroupNotification failed: $e')));
+        _fanOutPush(gid, notification);
       }
     }
+  }
+
+  /// OneSignal fan-out (the free-plan replacement for the Cloud Function).
+  /// Only the staging device sends; every other device just mirrors the
+  /// outbox into its inbox, so pushes are never duplicated.
+  void _fanOutPush(String gid, AppNotification notification) {
+    if (!OneSignalSender.instance.configured) return;
+    final uid = _repo.currentUid;
+    final memberIds = _currentGroup.members.map((m) => m.id).toList();
+    final targets = <String>[
+      if (notification.audience != null && notification.audience!.isNotEmpty)
+        ...notification.audience!.where(memberIds.contains)
+      else
+        ...memberIds,
+    ].where((id) => id != uid).toList();
+    if (targets.isEmpty) return;
+    unawaited(OneSignalSender.instance
+        .send(
+          title: notification.title,
+          body: notification.body,
+          appUrlPath: notification.link,
+          externalIds: targets,
+        )
+        .catchError((Object e) => debugPrint('push fan-out failed: $e')));
   }
 
   // ── Voice & misc ───────────────────────────────────────────────────────────

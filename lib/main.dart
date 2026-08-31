@@ -16,7 +16,7 @@ import 'firebase_options.dart';
 import 'providers/app_provider.dart';
 import 'repositories/firebase_repository.dart';
 import 'responsive/responsive.dart';
-import 'services/fcm_service.dart';
+import 'services/push_service.dart';
 import 'theme/theme_palette.dart';
 
 Future<void> main() async {
@@ -65,17 +65,21 @@ Future<void> main() async {
   // -- Firebase App Check (tech spec section 22) --
   await _initAppCheck();
 
-  // Initialize Firebase Cloud Messaging for Push Notifications
-  try {
-    await FCMService().init();
-  } catch (e) {
-    debugPrint('FCM init failed: $e');
-  }
-
   // Initialize Google Sign-In singleton (must happen before signInWithGoogle).
   await FirebaseRepository.initGoogleSignIn();
 
   final appProvider = AppProvider();
+  final router = buildAppRouter(appProvider);
+
+  // Initialize OneSignal push notifications (Android / iOS / Web). Free-plan
+  // replacement for a Cloud Function fan-out — see services/push_service.dart
+  // and services/onesignal_sender.dart.
+  try {
+    await PushService.instance.initialize(appProvider, router);
+  } catch (e) {
+    debugPrint('Push init failed: $e');
+  }
+
   runApp(
     ScreenUtilInit(
       designSize: const Size(390, 844),
@@ -83,7 +87,7 @@ Future<void> main() async {
       minTextAdapt: true,
       builder: (context, child) => ChangeNotifierProvider.value(
         value: appProvider,
-        child: PokerNightApp(router: buildAppRouter(appProvider)),
+        child: PokerNightApp(router: router),
       ),
     ),
   );

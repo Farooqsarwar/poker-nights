@@ -674,6 +674,11 @@ TournamentPreset tournamentPresetFromMap(Map<String, dynamic> m) =>
       addOnCost: (m['addOnCost'] as num?)?.toInt(),
     );
 
+/// Public [NotificationType] parser for callers outside this file (the
+/// notification outbox stream in the repository).
+NotificationType notificationTypeByName(Object? raw) =>
+    _enumByName(NotificationType.values, raw, NotificationType.system);
+
 Map<String, dynamic> appNotificationToMap(AppNotification n) => {
       'id': n.id,
       'title': n.title,
@@ -682,6 +687,7 @@ Map<String, dynamic> appNotificationToMap(AppNotification n) => {
       'link': n.link,
       'read': n.read,
       'timestamp': n.timestamp.toIso8601String(),
+      if (n.audience != null && n.audience!.isNotEmpty) 'audience': n.audience,
     };
 
 AppNotification appNotificationFromMap(Map<String, dynamic> m) =>
@@ -694,6 +700,7 @@ AppNotification appNotificationFromMap(Map<String, dynamic> m) =>
       link: m['link'] as String?,
       read: (m['read'] as bool?) ?? false,
       timestamp: _isoOrNull(m['timestamp']) ?? DateTime.now(),
+      audience: (m['audience'] as List?)?.map((e) => e.toString()).toList(),
     );
 
 Map<String, dynamic> groupToMap(Group g) => {

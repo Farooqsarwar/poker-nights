@@ -53,6 +53,47 @@ class GroupMembership {
       );
 }
 
+/// One staged notification in a group's outbox
+/// (`groups/{gid}/notifications/{id}`). Member devices mirror unseen items
+/// into their own inbox — the free-plan replacement for a fan-out function.
+class OutboxNotification {
+  const OutboxNotification({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.type,
+    required this.link,
+    required this.audience,
+    required this.timestamp,
+    required this.updatedAtMillis,
+  });
+
+  final String id;
+  final String title;
+  final String body;
+  final NotificationType type;
+  final String? link;
+  final List<String>? audience;
+  final DateTime timestamp;
+
+  /// Server write time in epoch ms — the cursor the mirror advances past.
+  final int updatedAtMillis;
+
+  bool isFor(String uid) =>
+      audience == null || audience!.isEmpty || audience!.contains(uid);
+
+  AppNotification toAppNotification({required bool read}) => AppNotification(
+        id: id,
+        title: title,
+        body: body,
+        type: type,
+        link: link,
+        read: read,
+        timestamp: timestamp,
+        audience: audience,
+      );
+}
+
 /// A queued request posted by a member/guest device for the admin device to
 /// consume (guest check-in, rebuy/add-on/check-in requests).
 class GameRequest {
@@ -1013,12 +1054,12 @@ class FirebaseRepository {
               ]);
 
   // ── Notification fan-out ───────────────────────────────────────────────────
-  // C6: clients no longer write straight into arbitrary recipients' inboxes
-  // (that allowed a member to forge/notify everyone). Instead a game event
-  // stages ONE notification in the group outbox; the Cloud Function
-  // fanOutGroupNotification (Admin SDK) sanitizes and fans it out to every
-  // member's inbox, and only it may write cross-user inboxes (rules enforce
-  // this).
+  // FREE-PLAN fan-out (no Cloud Function, no Blaze plan):
+  //  1. The originating device stages ONE notification in the group outbox.
+  //  2. Every member device mirrors outbox items it hasn't seen into ITS OWN
+  //     inbox — rules only allow the inbox owner to create docs.
+  //  3. The originating device also fans the event out as a REAL push
+  //     (OneSignal REST API, include_aliases = member uids).
   Future<void> stageGroupNotification(
       String gid, AppNotification notification) =>
       _db
@@ -1030,7 +1071,52 @@ class FirebaseRepository {
             'type': notification.type.name,
             'link': notification.link,
             'read': false,
+            'timestamp': FieldValue.serverTimestamp(),
+            if (notification.audience != null &&
+                notification.audience!.isNotEmpty)
+              'audience': notification.audience,
           }));
+
+  /// Live stream of a group's staged-notification outbox.
+  Stream<List<OutboxNotification>> groupOutboxStream(String gid) => _db
+      .collection('groups').doc(gid).collection('notifications')
+      .snapshots()
+      .map((s) => [
+            for (final d in s.docs)
+              OutboxNotification(
+                id: d.id,
+                title: (d.data()['title'] as String?) ?? '',
+                body: (d.data()['body'] as String?) ?? '',
+                type: notificationTypeByName(d.data()['type']),
+                link: d.data()['link'] as String?,
+                audience: (d.data()['audience'] as List?)
+                    ?.map((e) => e.toString())
+                    .toList(),
+                timestamp: (d.data()['timestamp'] as Timestamp?)?.toDate() ??
+                    DateTime.now(),
+                updatedAtMillis: (d.data()['updatedAt'] as Timestamp?)
+                        ?.millisecondsSinceEpoch ??
+                    0,
+              ),
+          ]);
+
+  /// Mirrors a staged outbox notification into the signed-in user's OWN inbox.
+  Future<void> mirrorInboxNotification(
+    String uid,
+    AppNotification notification, {
+    bool read = false,
+  }) =>
+      _db.collection('users').doc(uid).collection('notifications')
+          .doc(notification.id)
+          .set({
+            'id': notification.id,
+            'title': notification.title,
+            'body': notification.body,
+            'type': notification.type.name,
+            'link': notification.link,
+            'read': read,
+            'timestamp': notification.timestamp.toIso8601String(),
+          });
 
   Stream<List<AppNotification>> notificationsStream(String uid) => _db
       .collection('users').doc(uid).collection('notifications')

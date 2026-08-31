@@ -459,6 +459,25 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     return ro.localToGlobal(Offset.zero) & ro.size;
   }
 
+  Widget _centerDialog(BuildContext context, Widget? child) {
+    return Builder(
+      builder: (ctx) {
+        final Size screen = MediaQuery.sizeOf(ctx);
+        final bool isCompact = screen.width < 480;
+        final Rect? a = _contentRect;
+        if (!isCompact && a != null && a.width > 360) {
+          final double left = a.left;
+          final double right = (screen.width - a.right);
+          return Padding(
+            padding: EdgeInsets.only(left: left, right: right),
+            child: child,
+          );
+        }
+        return child ?? const SizedBox();
+      },
+    );
+  }
+
   /// Centered, width-capped review dialog (07-018).
   Future<bool?> _showConfirmDialog() {
     final Rect? anchor = _contentRect;
@@ -789,6 +808,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       initialDate: initialDate,
                       firstDate: DateTime.now().subtract(const Duration(days: 1)),
                       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                      builder: _centerDialog,
                     );
                     if (picked != null) {
                       final y = picked.year;
@@ -824,6 +844,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     final picked = await showTimePicker(
                       context: context,
                       initialTime: initialTime,
+                      builder: _centerDialog,
                     );
                     if (picked != null) {
                       final h = picked.hour.toString().padLeft(2, '0');

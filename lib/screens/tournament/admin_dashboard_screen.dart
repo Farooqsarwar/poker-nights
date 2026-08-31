@@ -44,6 +44,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _showRestartModal = false;
   bool _showCancelModal = false;
   bool _showUndoModal = false;
+  bool _showedFinalTablePrompt = false;
   // Pending speed change shown in the preview modal (audit fix B4: the admin
   // must see old vs. proposed structure + both finish estimates BEFORE
   // anything is applied).
@@ -95,13 +96,57 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final game = app.currentGame;
     final isAdmin = app.isAdmin;
     // MVP spec §3.1: exactly one administrator per event.
-    final canOpenDashboard = isAdmin;
+    // Auth guarding is handled securely by GoRouter's redirect logic.
 
-    if (!canOpenDashboard) {
+    // Final Table Auto-Trigger (Audit fix)
+    final isNinePlayers = game != null && game.activePlayers.length == 9;
+    if (isNinePlayers && game.status == LiveGameStatus.running && !_showStructureModal && !_showRestartModal && !_showCancelModal && !_showUndoModal && !_showedFinalTablePrompt) {
+      _showedFinalTablePrompt = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.go(RoutePaths.invitation);
+        if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AppModal(
+              open: true,
+              onClose: () => Navigator.pop(ctx),
+              title: 'Final Table Reached!',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.xl),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Exactly 9 players remain. It is time for the final table redraw.'),
+                    const SizedBox(height: AppSpacing.xl),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        AppButton(
+                          variant: AppButtonVariant.secondary,
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Not Yet'),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        AppButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            context.push(RoutePaths.finalTable);
+                          },
+                          child: const Text('Start Redraw'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ).then((_) {
+            if (mounted) {
+               // Let them re-trigger it if they want by some other means, but don't auto-show again.
+            }
+          });
+        }
       });
-      return const SizedBox.shrink();
     }
 
     if (game == null) {

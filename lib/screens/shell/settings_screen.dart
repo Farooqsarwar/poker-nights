@@ -7,6 +7,8 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
+import '../../services/push_service.dart';
+import '../../services/onesignal_sender.dart';
 import '../../theme/theme_palette.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
@@ -194,6 +196,54 @@ class SettingsScreen extends StatelessWidget {
           _ThemeGrid(
             activeId: app.colorTheme,
             onSelect: (id) => app.setColorTheme(id),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          // Developer / Debug
+          Text(
+            'Developer',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: InkWell(
+              onTap: () {
+                final push = PushService.instance;
+                if (!push.permissionGranted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Push permission not granted!')),
+                  );
+                  return;
+                }
+                OneSignalSender.instance.send(
+                  title: 'Debug Push',
+                  body: 'Hello! Your push notifications are working perfectly.',
+                  externalIds: [app.user!.id],
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Test push sent! It should arrive shortly.')),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Row(
+                  children: [
+                    Icon(Icons.bug_report, size: 20, color: AppColors.icon),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Send Test Push (Debug)', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 2),
+                          Text('Fires a real push to this device.', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: AppSpacing.xl),
           // Account

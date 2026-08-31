@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../app/typography.dart';
+import 'package:go_router/go_router.dart';
 import '../../app/colors.dart';
+import '../../app/route_paths.dart';
+import '../../app/typography.dart';
 import '../../widgets/app_button.dart';
 import '../../constants/app_constants.dart';
 
@@ -48,6 +50,16 @@ class SupportScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text('Support', style: AppTypography.displaySm),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (GoRouter.of(context).canPop()) {
+              context.pop();
+            } else {
+              context.go(RoutePaths.home);
+            }
+          },
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(AppSpacing.xxl),
@@ -91,7 +103,13 @@ class SupportScreen extends StatelessWidget {
                 ],
                 const SizedBox(height: AppSpacing.md),
                 AppButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    if (GoRouter.of(context).canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(RoutePaths.home);
+                    }
+                  },
                   variant: AppButtonVariant.secondary,
                   child: const Text('Back'),
                 ),

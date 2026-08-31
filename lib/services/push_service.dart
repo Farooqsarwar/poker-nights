@@ -68,17 +68,18 @@ class PushService {
       return;
     }
 
-    // Fire-and-forget: web init may take a moment (CDN script + service
-    // worker), and mobile buffers notification clicks until the click
-    // listener registers, so nothing is lost by not awaiting.
-    unawaited(_platform.initialize(
-      appId,
-      onPermissionChanged: (granted) {
-        _webPushActive = kIsWeb && granted;
-        app.syncPushPermission(granted);
-      },
-      onNotificationClick: _handleNotificationClick,
-    ).catchError((Object e) => debugPrint('[Push] init failed: $e')));
+    try {
+      await _platform.initialize(
+        appId,
+        onPermissionChanged: (granted) {
+          _webPushActive = kIsWeb && granted;
+          app.syncPushPermission(granted);
+        },
+        onNotificationClick: _handleNotificationClick,
+      );
+    } catch (e) {
+      debugPrint('[Push] init failed: $e');
+    }
 
     // Register the restored session (e.g. app reopened from a push).
     final current = fa.FirebaseAuth.instance.currentUser;

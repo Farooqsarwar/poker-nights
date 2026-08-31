@@ -69,13 +69,25 @@ class WebPlatformPush implements PlatformPush {
     await _withSdk((one) async {
       final config = <String, Object?>{
         'appId': appId,
+        'safari_web_id': 'web.onesignal.auto.13d8bf97-93cf-4a09-b799-2a50baaf1ebd',
         // Subdirectory scope so OneSignal's worker coexists with Flutter's
         // flutter_service_worker.js (PWA caching) at the root scope.
         'serviceWorkerPath': 'onesignal/OneSignalSDKWorker.js',
         'serviceWorkerParam': <String, Object?>{'scope': '/onesignal/'},
       }.jsify();
-      await (one.callMethod('init'.toJS, config) as JSPromise).toDart;
-      _ready = true;
+      try {
+        await (one.callMethod('init'.toJS, config) as JSPromise).toDart;
+        _ready = true;
+      } catch (e) {
+        final err = e.toString();
+        if (err.contains('already initialized') || err.contains('already been initialized')) {
+          _ready = true;
+        }
+        debugPrint('[Push] web init skipped: $e');
+      }
+      
+      if (!_ready) return; // Stop executing further if SDK is entirely blocked (e.g. localhost)
+
       _granted = _readPermission(one);
 
       final notifications = one['Notifications'] as JSObject?;
@@ -142,6 +154,7 @@ class WebPlatformPush implements PlatformPush {
 
   @override
   Future<void> setExternalId(String uid) async {
+    if (!_ready) return;
     await _withSdk((one) async {
       await (one.callMethod('login'.toJS, uid.toJS) as JSPromise).toDart;
       try {

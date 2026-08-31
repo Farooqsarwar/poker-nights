@@ -3,6 +3,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/app_provider.dart';
 
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
@@ -112,7 +115,8 @@ class _SplashScreenState extends State<SplashScreen>
   void _goNext() {
     if (_navigated || !mounted) return;
     _navigated = true;
-    context.go(RoutePaths.landing);
+    final authed = context.read<AppProvider>().isAuthenticated;
+    context.go(authed ? RoutePaths.home : RoutePaths.landing);
   }
 
   @override

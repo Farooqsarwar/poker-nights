@@ -24,8 +24,14 @@ class OneSignalSender {
     'ONESIGNAL_APP_ID',
     defaultValue: 'e9f508d1-19ef-44ed-aafc-c1578b955715',
   );
-  static const String _apiKey =
-      String.fromEnvironment('ONESIGNAL_REST_API_KEY');
+  // Scoped to "Send messages only". Ships in the app by design — there is no
+  // server. Provide at build time with: --dart-define=ONESIGNAL_REST_API_KEY=...
+  static const String _apiKey = String.fromEnvironment('ONESIGNAL_REST_API_KEY');
+
+  /// OneSignal's newer keys (the `os_v2_app_` prefix) authenticate with the
+  /// `Key` scheme; legacy hex keys use `Basic`.
+  static String get _authHeader =>
+      _apiKey.startsWith('os_v2_') ? 'Key $_apiKey' : 'Basic $_apiKey';
 
   /// Host this web build is deployed on — used to build the full `url` for
   /// web push click-through. Must match the Site URL configured for the Web
@@ -78,13 +84,13 @@ class OneSignalSender {
       try {
         final resp = await http
             .post(
-              Uri.parse('https://api.onesignal.com/notifications'),
-              headers: {
-                'Content-Type': 'application/json; charset=utf-8',
-                'Authorization': 'Basic $_apiKey',
-              },
-              body: jsonEncode(payload),
-            )
+          Uri.parse('https://api.onesignal.com/notifications'),
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Authorization': _authHeader,
+          },
+          body: jsonEncode(payload),
+        )
             .timeout(const Duration(seconds: 12));
         if (resp.statusCode != 200) {
           final snippet = resp.body.length > 200

@@ -848,6 +848,30 @@ class FirebaseRepository {
       .collection('groups').doc(game.groupId).collection('games').doc(game.id)
       .set(_stamp(liveGameToFirestoreDoc(game)));
 
+  /// Saves the admin's undo history to a sidecar subcollection so it travels
+  /// with the account across devices, without forcing players to download it.
+  Future<void> saveUndoStack(String groupId, String gameId, List<LiveGame> stack) => _db
+      .collection('groups').doc(groupId).collection('games').doc(gameId)
+      .collection('admin').doc('undoStack')
+      .set({
+        'snapshots': stack.map(liveGameToFirestoreDoc).toList(),
+      });
+
+  /// Loads the admin's undo history sidecar document.
+  Future<List<LiveGame>> loadUndoStack(String groupId, String gameId) async {
+    final doc = await _db
+        .collection('groups').doc(groupId).collection('games').doc(gameId)
+        .collection('admin').doc('undoStack').get();
+    if (!doc.exists) return [];
+    
+    final snapshots = doc.data()?['snapshots'] as List?;
+    if (snapshots == null) return [];
+    
+    return snapshots
+        .map((s) => liveGameFromFirestoreDoc(s as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Targeted per-player / field patches using Firestore dot-paths — avoids
   /// clobbering unrelated concurrent edits (e.g. RSVPs while admin edits).
   Future<void> patchGame(

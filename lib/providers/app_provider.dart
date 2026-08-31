@@ -257,7 +257,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── Preferences ────────────────────────────────────────────────────────────
-  bool _notificationsEnabled = false;
+  bool _notificationsEnabled = true;
   bool get notificationsEnabled => _notificationsEnabled;
 
   /// Enables push notifications. On Android/iOS this shows the OneSignal
@@ -1250,7 +1250,15 @@ class AppProvider extends ChangeNotifier {
       final voice = prefs['voiceEnabled'];
       if (voice is bool) _voiceEnabled = voice;
       final notify = prefs['browserNotify'];
-      if (notify is bool) _notificationsEnabled = notify;
+      if (notify is bool) {
+        _notificationsEnabled = notify;
+      } else {
+        // By default turn on if no preference is set
+        _notificationsEnabled = true;
+        _persistPref('browserNotify', true);
+        // Fire-and-forget the permission request so it prompts the user automatically
+        Future.microtask(() => setNotificationsEnabled(true));
+      }
       final colorTheme = prefs['colorTheme'];
       if (colorTheme is String) _colorTheme = colorTheme;
       final themePref = prefs['themePreference'];
@@ -1264,6 +1272,7 @@ class AppProvider extends ChangeNotifier {
           if (v is num) _mirrorCursors[gid] = v.toInt();
         }
       }
+      notifyListeners();
     } catch (e) {
       debugPrint('loadUserPrefs failed: $e');
     }
@@ -1892,16 +1901,39 @@ class AppProvider extends ChangeNotifier {
     if (_currentGame == null) return;
     if (_undoStack.length >= _maxUndoDepth) _undoStack.removeAt(0);
     _undoStack.add(_currentGame);
+    _saveUndoStack();
   }
 
   void _clearUndoStack() {
     _undoStack.clear();
   }
 
+  void _saveUndoStack() {
+    final game = _currentGame;
+    if (game == null) return;
+    final stack = _undoStack.whereType<LiveGame>().toList();
+    _repo.saveUndoStack(game.groupId, game.id, stack).catchError((Object e) {
+      debugPrint('saveUndoStack failed: $e');
+    });
+  }
+
   void setCurrentGame(LiveGame game) {
     _clearUndoStack();
     _currentGame = game;
     notifyListeners();
+
+    // Asynchronously load the undo stack if we are the admin of this game.
+    if (isAdmin && game.status.isActiveLive) {
+      _repo.loadUndoStack(game.groupId, game.id).then((stack) {
+        if (_currentGame?.id == game.id) {
+          _undoStack.clear();
+          _undoStack.addAll(stack);
+          notifyListeners();
+        }
+      }).catchError((Object e) {
+        debugPrint('Failed to load undo stack: $e');
+      });
+    }
   }
 
   /// Resolves a game (live or past) by id from the group's synced list,
@@ -3019,6 +3051,7 @@ class AppProvider extends ChangeNotifier {
     final previous = _undoStack.removeLast();
     if (previous == null) return;
     _currentGame = previous;
+    _saveUndoStack(); // <-- newly added sidecar persistence
     notifyListeners();
     addAnnouncement('Last action undone.', false);
   }

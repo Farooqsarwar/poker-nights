@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
+import '../../widgets/coin_animation_widget.dart';
+import '../../widgets/coin_shuffle_animation.dart';
 
 /// Splash screen reproducing the Poker Night Tools product mockup:
 /// a rounded matte-black card with a metal rim that spins on its Y axis,

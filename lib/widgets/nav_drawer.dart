@@ -34,6 +34,7 @@ class NavDrawer extends StatelessWidget {
         _DrawerItem('${RoutePaths.group}?tab=games', 'Events', Icons.sports_esports_outlined, null),
         _DrawerItem('${RoutePaths.group}?tab=polls', 'Polls', Icons.poll_outlined, null),
       ],
+      _DrawerItem(RoutePaths.cashGame, 'Cash Game', Icons.payments_outlined, null),
       _DrawerItem(RoutePaths.history, 'History', Icons.history, null),
       _DrawerItem(RoutePaths.settings, 'Settings', Icons.settings_outlined, null),
     ];
@@ -191,8 +192,8 @@ class NavDrawer extends StatelessWidget {
                       ),
                     ),
                   ),
+                Divider(color: AppColors.border, height: 24),
                 if (groups.isNotEmpty) ...[
-                  Divider(color: AppColors.border, height: 24),
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm,
@@ -264,37 +265,37 @@ class NavDrawer extends StatelessWidget {
                         ),
                       ),
                     ),
-                  InkWell(
-                    onTap: () {
-                      app.closeDrawer();
-                      openCreateGroupDialog(context);
-                    },
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: 10,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.group_add_outlined,
-                            size: 18,
+                ],
+                InkWell(
+                  onTap: () {
+                    app.closeDrawer();
+                    openCreateGroupDialog(context);
+                  },
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.group_add_outlined,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Text(
+                          'New Group',
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w500,
                             color: AppColors.primary,
                           ),
-                          const SizedBox(width: AppSpacing.md),
-                          Text(
-                            'New Group',
-                            style: AppTypography.bodySm.copyWith(
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ],
             ),
           ),

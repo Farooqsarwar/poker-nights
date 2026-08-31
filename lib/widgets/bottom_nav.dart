@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../app/colors.dart';
 import '../app/route_paths.dart';
 import '../app/typography.dart';
+import '../providers/app_provider.dart';
+import 'create_group_dialog.dart';
 import 'glass_styles.dart';
 import 'glass_surface.dart';
 
@@ -15,12 +18,23 @@ class BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
 
+    final app = context.watch<AppProvider>();
     final items = [
-      _BottomItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
-      _BottomItem('${RoutePaths.group}?tab=chat', 'Chat', Icons.chat_bubble_outline, null),
-      _BottomItem('${RoutePaths.group}?tab=games', 'Events', Icons.sports_esports_outlined, null),
-      _BottomItem('${RoutePaths.group}?tab=polls', 'Polls', Icons.poll_outlined, null),
-      _BottomItem(RoutePaths.history, 'History', Icons.history, null),
+      _BottomItem(path: RoutePaths.home, label: 'Home', icon: Icons.home_outlined),
+      if (app.hasCurrentGroup) ...[
+        _BottomItem(path: '${RoutePaths.group}?tab=chat', label: 'Chat', icon: Icons.chat_bubble_outline),
+        _BottomItem(path: '${RoutePaths.group}?tab=games', label: 'Events', icon: Icons.sports_esports_outlined),
+        _BottomItem(path: '${RoutePaths.group}?tab=polls', label: 'Polls', icon: Icons.poll_outlined),
+      ] else ...[
+        _BottomItem(
+          path: '#new-group',
+          label: 'New Group',
+          icon: Icons.group_add_outlined,
+          onTap: () => openCreateGroupDialog(context),
+        ),
+        _BottomItem(path: RoutePaths.cashGame, label: 'Cash Game', icon: Icons.payments_outlined),
+      ],
+      _BottomItem(path: RoutePaths.history, label: 'History', icon: Icons.history),
     ];
 
     return GlassSurface(
@@ -34,7 +48,7 @@ class BottomNav extends StatelessWidget {
             for (final item in items)
               Expanded(
                 child: InkWell(
-                  onTap: () => context.go(item.path),
+                  onTap: item.onTap ?? () => context.go(item.path),
                   child: SizedBox(
                     height: 64,
                     child: Stack(
@@ -112,10 +126,17 @@ class BottomNav extends StatelessWidget {
 }
 
 class _BottomItem {
-  const _BottomItem(this.path, this.label, this.icon, this.badge);
+  const _BottomItem({
+    required this.path,
+    required this.label,
+    required this.icon,
+    this.badge,
+    this.onTap,
+  });
 
   final String path;
   final String label;
   final IconData icon;
   final int? badge;
+  final VoidCallback? onTap;
 }

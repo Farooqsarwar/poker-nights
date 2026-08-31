@@ -234,12 +234,11 @@ service cloud.firestore {
         // same batch as the group, OR a genuine group ADMIN adds a registered
         // member directly by email. A plain member can never self-grant 'admin'
         // (they may only create their own row with role 'member').
-        allow create: if signedIn()
-            && request.auth.uid == memberUid
-            && request.resource.data.get('role', 'member') == 'member'
-            || get(/databases/$(database)/documents/groups/$(gid)).data.ownerId
-                == request.auth.uid
-            || isGroupAdmin(gid);
+        allow create: if signedIn() && (
+            (request.auth.uid == memberUid && request.resource.data.get('role', 'member') == 'member') ||
+            (request.auth.uid == memberUid && existsAfter(/databases/$(database)/documents/groups/$(gid)) && getAfter(/databases/$(database)/documents/groups/$(gid)).data.ownerId == request.auth.uid) ||
+            isGroupAdmin(gid)
+        );
         allow update: if isGroupAdmin(gid)
             || (signedIn() && request.auth.uid == memberUid
                 && request.resource.data.diff(resource.data).affectedKeys()
@@ -325,11 +324,10 @@ service cloud.firestore {
     // group admin rights.
     match /joinCodes/{code} {
       allow read: if true;
-      allow create: if signedIn()
-          && (
-            isGroupAdmin(request.resource.data.gid)
-            || get(/databases/$(database)/documents/groups/$(request.resource.data.gid)).data.ownerId
-                == request.auth.uid
+      allow create: if signedIn() && (
+            isGroupAdmin(request.resource.data.gid) ||
+            (existsAfter(/databases/$(database)/documents/groups/$(request.resource.data.gid)) &&
+             getAfter(/databases/$(database)/documents/groups/$(request.resource.data.gid)).data.ownerId == request.auth.uid)
           );
       allow update, delete: if signedIn() && isGroupAdmin(resource.data.gid);
     }

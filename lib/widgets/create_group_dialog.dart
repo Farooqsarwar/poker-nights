@@ -16,6 +16,7 @@ import 'app_text_field.dart';
 Future<void> openCreateGroupDialog(BuildContext context) {
   final controller = TextEditingController();
   String selectedIconName = 'Card';
+  bool isCreating = false;
 
   return showAppModal(
     context: context,
@@ -29,7 +30,13 @@ Future<void> openCreateGroupDialog(BuildContext context) {
             controller: controller,
             label: 'Group name',
             autofocus: true,
-            onSubmitted: (_) => _create(context, controller, selectedIconName),
+            enabled: !isCreating,
+            onSubmitted: isCreating
+                ? null
+                : (_) async {
+                    setState(() => isCreating = true);
+                    await _create(context, controller, selectedIconName, (val) => setState(() => isCreating = val));
+                  },
           ),
           const SizedBox(height: AppSpacing.md),
           Container(
@@ -60,7 +67,9 @@ Future<void> openCreateGroupDialog(BuildContext context) {
                   children: [
                     for (final name in groupIconNames)
                       InkWell(
-                        onTap: () => setState(() => selectedIconName = name),
+                        onTap: isCreating
+                            ? null
+                            : () => setState(() => selectedIconName = name),
                         borderRadius: BorderRadius.circular(AppRadius.md),
                         child: Container(
                           width: 48,
@@ -116,8 +125,23 @@ Future<void> openCreateGroupDialog(BuildContext context) {
           const SizedBox(height: AppSpacing.xl),
           AppButton(
             fullWidth: true,
-            onPressed: () => _create(context, controller, selectedIconName),
-            child: const Text('Create group'),
+            disabled: isCreating,
+            onPressed: isCreating
+                ? null
+                : () async {
+                    setState(() => isCreating = true);
+                    await _create(context, controller, selectedIconName, (val) => setState(() => isCreating = val));
+                  },
+            child: isCreating
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('Create group'),
           ),
         ],
       ),
@@ -129,14 +153,19 @@ Future<void> _create(
   BuildContext context,
   TextEditingController controller,
   String iconName,
+  void Function(bool) setCreating,
 ) async {
   final name = controller.text.trim();
-  if (name.isEmpty) return;
+  if (name.isEmpty) {
+    setCreating(false);
+    return;
+  }
   final app = context.read<AppProvider>();
   final messenger = ScaffoldMessenger.of(context);
   final navigator = Navigator.of(context);
   final created = await app.createGroup(name, icon: iconName);
   if (created == null) {
+    setCreating(false);
     messenger.showSnackBar(const SnackBar(
       content: Text('Could not create the group. Please try again.'),
     ));

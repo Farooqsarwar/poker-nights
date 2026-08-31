@@ -564,10 +564,15 @@ class _Detail extends StatelessWidget {
   final Color? valueColor;
   final bool mono;
 
-  @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
       width: 160,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.secondary.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -575,9 +580,10 @@ class _Detail extends StatelessWidget {
             label,
             style: AppTypography.bodyXs.copyWith(
               color: AppColors.mutedForeground,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             value,
             style: mono
@@ -585,7 +591,7 @@ class _Detail extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     color: valueColor ?? AppColors.foreground,
                   )
-                : AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500),
+                : AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -1747,13 +1753,17 @@ class _ContextualMainButton extends StatelessWidget {
             child: const Text('Check In'),
           );
         } else {
-          return _RsvpSection(
-            myPlayer: p,
-            cutoffPassed: app.rsvpCutoffPassed,
-            onRsvp: (rsvp) {
-              HapticFeedback.lightImpact();
-              app.setRSVP(rsvp);
-            },
+          return AppCard(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            glow: true,
+            child: _RsvpSection(
+              myPlayer: p,
+              cutoffPassed: app.rsvpCutoffPassed,
+              onRsvp: (rsvp) {
+                HapticFeedback.lightImpact();
+                app.setRSVP(rsvp);
+              },
+            ),
           );
         }
       }

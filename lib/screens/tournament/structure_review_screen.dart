@@ -19,7 +19,10 @@ import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
+import '../../widgets/coin_shuffle_animation.dart';
+import '../../widgets/glass_styles.dart';
 import '../../widgets/medal_icon.dart';
+import '../../widgets/screen_shell.dart';
 import '../../widgets/structure_editor.dart';
 
 /// Structure review mirroring the web `StructureReviewPage`.
@@ -145,9 +148,38 @@ class StructureReviewScreen extends StatelessWidget {
                   AppButton(
                     fullWidth: true,
                     size: AppButtonSize.lg,
-                    onPressed: () => context
-                        .read<AppProvider>()
-                        .generateFinalStructure(checkedInCount),
+                    onPressed: () async {
+                      // Show the splash animation while "generating"
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctx) => const Dialog(
+                          backgroundColor: Colors.transparent,
+                          elevation: 0,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CoinShuffleAnimation(),
+                              SizedBox(height: 24),
+                              Text(
+                                'AI is generating structure...',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                      // Fake delay to show off the animation
+                      await Future.delayed(const Duration(seconds: 3));
+                      if (!context.mounted) return;
+                      // Generate and close dialog
+                      context.read<AppProvider>().generateFinalStructure(checkedInCount);
+                      Navigator.of(context).pop();
+                    },
                     child: const AppIconLabel(
                       label: 'Generate Final Structure',
                       trailing: Icons.auto_awesome,
@@ -863,8 +895,37 @@ class StructureReviewScreen extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: AppButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    // Show the splash animation while "generating/publishing"
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (ctx) => const Dialog(
+                        backgroundColor: Colors.transparent,
+                        elevation: 0,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CoinShuffleAnimation(),
+                            SizedBox(height: 24),
+                            Text(
+                              'AI is generating structure...',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                    // Fake delay to show off the animation
+                    await Future.delayed(const Duration(seconds: 3));
+                    if (!context.mounted) return;
+                    
                     app.confirmStructure();
+                    Navigator.of(context).pop();
                     context.go(RoutePaths.invitation);
                   },
                   child: FittedBox(

@@ -106,7 +106,8 @@ class _ChatSheetState extends State<ChatSheet> {
     final userId = app.user?.id;
     if (game == null) return const SizedBox();
 
-    final messages = game.chat.where((m) => !m.deleted).toList();
+    final messages =
+        app.gameChatMessages(widget.gameId).where((m) => !m.deleted).toList();
 
     if (userId != null && app.unreadGameChatCount(widget.gameId) > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _markRead());
@@ -148,7 +149,7 @@ class _ChatSheetState extends State<ChatSheet> {
                   )
                 : Column(
                     children: [
-                      for (final msg in messages.reversed)
+                      for (final msg in messages)
                         _ChatBubble(
                           message: msg,
                           isMine: msg.authorId == userId,

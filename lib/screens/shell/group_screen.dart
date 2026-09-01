@@ -489,7 +489,9 @@ class _GroupScreenState extends State<GroupScreen> {
       return AppEmptyState(
         icon: Icons.sports_esports_outlined,
         title: 'No upcoming games',
-        description: 'No upcoming games — create the first one!',
+        description: isAdmin
+            ? 'No upcoming games — create the first one!'
+            : 'No upcoming game — wait for the first game to be created.',
         action: isAdmin
             ? AppButton(
                 onPressed: () => context.go(RoutePaths.createTournament),
@@ -870,7 +872,8 @@ class _GroupScreenState extends State<GroupScreen> {
         }
       });
     }
-    final messages = group.chat.where((m) => !m.deleted).toList();
+    final messages = group.chat.where((m) => !m.deleted).toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
     return AppCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -893,7 +896,7 @@ class _GroupScreenState extends State<GroupScreen> {
                     )
                   : Column(
                       children: [
-                        for (final msg in messages.reversed)
+                        for (final msg in messages)
                           _ChatBubble(
                             message: msg,
                             isMine: msg.authorId == userId,

@@ -211,9 +211,11 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             horizontal: AppSpacing.xxl,
             vertical: AppSpacing.xxxl,
           ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 384),
-            child: Center(child: _buildBody(app, game)),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 384),
+              child: _buildBody(app, game),
+            ),
           ),
         ),
       ),

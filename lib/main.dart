@@ -33,7 +33,11 @@ Future<void> main() async {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 48),
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.amber,
+                size: 48,
+              ),
               const SizedBox(height: 12),
               Text(
                 kDebugMode
@@ -140,8 +144,9 @@ Future<void> _initAppCheck() async {
       webProvider: siteKey.isNotEmpty
           ? ReCaptchaV3Provider(siteKey)
           : ReCaptchaV3Provider('MISSING_SITE_KEY'),
-      androidProvider:
-          isDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+      androidProvider: isDebugMode
+          ? AndroidProvider.debug
+          : AndroidProvider.playIntegrity,
       appleProvider: isDebugMode
           ? AppleProvider.debug
           : AppleProvider.appAttestWithDeviceCheckFallback,
@@ -154,8 +159,10 @@ Future<void> _initAppCheck() async {
     }
   } catch (e) {
     // ignore: avoid_print
-    print('[AppCheck] Activation failed: $e. '
-        'Firestore requests will be rejected in enforced mode.');
+    print(
+      '[AppCheck] Activation failed: $e. '
+      'Firestore requests will be rejected in enforced mode.',
+    );
   }
 }
 
@@ -187,23 +194,23 @@ class PokerNightApp extends StatelessWidget {
       },
       routerConfig: router,
       builder: (context, child) => ResponsiveBreakpoints.builder(
-          child: Builder(
-            builder: (innerContext) => ResponsiveScaledBox(
-              width: ResponsiveValue<double?>(
-                innerContext,
-                conditionalValues: [
-                  const Condition.equals(name: MOBILE, value: 450),
-                ],
-              ).value,
-              child: BouncingScrollWrapper.builder(
-                innerContext,
-                child ?? const SizedBox.shrink(),
-              ),
+        child: Builder(
+          builder: (innerContext) => ResponsiveScaledBox(
+            width: ResponsiveValue<double?>(
+              innerContext,
+              conditionalValues: [
+                const Condition.equals(name: MOBILE, value: 450),
+              ],
+            ).value,
+            child: BouncingScrollWrapper.builder(
+              innerContext,
+              child ?? const SizedBox.shrink(),
             ),
           ),
-          breakpoints: const [
-            Breakpoint(start: 0, end: AppBreakpoints.tablet, name: MOBILE),
-            Breakpoint(
+        ),
+        breakpoints: const [
+          Breakpoint(start: 0, end: AppBreakpoints.tablet, name: MOBILE),
+          Breakpoint(
             start: AppBreakpoints.tablet,
             end: AppBreakpoints.desktop,
             name: TABLET,

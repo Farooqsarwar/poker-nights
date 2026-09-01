@@ -489,17 +489,23 @@ class _InvitationScreenState extends State<InvitationScreen> {
                       Icon(Icons.chat_bubble_outline, size: 16, color: AppColors.icon),
                       const SizedBox(width: AppSpacing.sm),
                       Text(
-                        'Chat & Polls',
+                        'Chat',
                         style: AppTypography.bodySm.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       const Spacer(),
-                      if (game.chat.isNotEmpty)
-                        AppBadge(
-                          label: '${game.chat.length}',
+                      Builder(builder: (_) {
+                        final count = app
+                            .gameChatMessages(game.id)
+                            .where((m) => !m.deleted)
+                            .length;
+                        if (count == 0) return const SizedBox.shrink();
+                        return AppBadge(
+                          label: '$count',
                           variant: AppBadgeVariant.green,
-                        ),
+                        );
+                      }),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),

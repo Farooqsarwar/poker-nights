@@ -129,6 +129,16 @@ class AppProvider extends ChangeNotifier {
   Future<void> get userDataReady =>
       _userBootstrap?.future ?? Future<void>.value();
   StreamSubscription? _gameDocSub;
+
+  /// Per-game chat lives in `groups/{gid}/games/{gameId}/chat` — a subcollection
+  /// both the host and members append to directly. This keeps a member's
+  /// message from being rolled back by the game-doc rule that forbids member
+  /// `chat` writes, and from vanishing while it waits for the host to
+  /// re-publish a projection.
+  StreamSubscription<List<ChatMessage>>? _gameChatSub;
+  List<ChatMessage> _gameChatMessages = const [];
+  String? _gameChatKey;
+
   StreamSubscription<dynamic>? _lookupSub;
   StreamSubscription<List<TournamentPreset>>? _presetsSub;
   StreamSubscription<
@@ -358,14 +368,40 @@ class AppProvider extends ChangeNotifier {
             _adoptRemoteGame,
             onError: (Object e) => debugPrint('gameDoc stream error: $e'),
           );
+        } else if (!isGuest) {
+          // Signed-in members follow the raw game doc (rules gate it to
+          // isMember; payout/organizer figures are already scrubbed server-side
+          // in saveGame). Reading their own writes straight back stops an RSVP
+          // from being reverted by a lagging projection snapshot.
+          _gameDocSub = _repo.gameDocSnapshots(gid, game.id).listen(
+            _adoptRemoteGame,
+            onError: (Object e) => debugPrint('gameDoc stream error (member): $e'),
+          );
         } else {
-          // F-001 Fix: Members use the publicGames projection because there are no Cloud Functions.
+          // Guests have no read access to the game doc — they follow the
+          // sanitized publicGames projection.
           _gameDocSub = _repo.publicGameStream(game.id).listen((doc) {
             final payload = doc['player'] as Map<String, dynamic>?;
             if (payload == null) return;
             _adoptRemoteMap(payload);
           }, onError: (Object e) => debugPrint('publicGameStream error: $e'));
         }
+      }
+    }
+
+    // Per-game chat subcollection — followed by the host and every member so
+    // messages appear immediately and survive the game-doc sync (see
+    // [_gameChatMessages]).
+    if (key != _gameChatKey) {
+      _gameChatKey = key;
+      _gameChatSub?.cancel();
+      _gameChatSub = null;
+      _gameChatMessages = const [];
+      if (key != null && game != null && gid != null && !isGuest) {
+        _gameChatSub = _repo.gameChatStream(gid, game.id).listen((msgs) {
+          _gameChatMessages = msgs;
+          notifyListeners();
+        }, onError: (Object e) => debugPrint('gameChat stream error: $e'));
       }
     }
 
@@ -855,6 +891,7 @@ class AppProvider extends ChangeNotifier {
       _groupsSub,
       _bundleSub,
       _gameDocSub,
+      _gameChatSub,
       _lookupSub,
       _presetsSub,
       _chipSetsSub,
@@ -880,6 +917,9 @@ class AppProvider extends ChangeNotifier {
     _groupsSub = null;
     _bundleSub = null;
     _gameDocSub = null;
+    _gameChatSub = null;
+    _gameChatMessages = const [];
+    _gameChatKey = null;
     _lookupSub = null;
     _presetsSub = null;
     _chipSetsSub = null;
@@ -4676,12 +4716,8 @@ class AppProvider extends ChangeNotifier {
   /// Number of unread messages in game [gid]'s chat (Tech Spec §14.1). Reads
   /// the current live game when it matches, otherwise the mirrored copy kept
   /// on the group bundle.
-  int unreadGameChatCount(String gid) {
-    final LiveGame? target = _currentGame?.id == gid
-        ? _currentGame
-        : _currentGroup.games.where((g) => g.id == gid).firstOrNull;
-    return _unreadChatCount('game:$gid', target?.chat ?? const []);
-  }
+  int unreadGameChatCount(String gid) =>
+      _unreadChatCount('game:$gid', gameChatMessages(gid));
 
   /// Sends a chat message. Returns a validation message when the message
   /// cannot be sent (empty, too long or rate limited), or null on success.
@@ -4697,6 +4733,7 @@ class AppProvider extends ChangeNotifier {
       return 'You are sending messages too quickly — wait a moment and try again.';
     }
     _recordChatSend(_user!.id);
+    final isGameChat = gameId != null && _currentGame?.id == gameId;
     final msg = ChatMessage(
       id: 'msg-${DateTime.now().millisecondsSinceEpoch}',
       authorId: _user!.id,
@@ -4704,15 +4741,21 @@ class AppProvider extends ChangeNotifier {
       body: sanitized,
       timestamp: DateTime.now(),
       deleted: false,
+      gameId: isGameChat ? gameId : null,
     );
-    if (gameId != null && gameId == _currentGame!.id) {
-      _currentGame = _currentGame!.copyWith(chat: [..._currentGame!.chat, msg]);
-      if (!_isGameAuthority) {
-        // Game chat is a plain list in the doc — append via array union so
-        // member devices never rewrite the whole document.
-        _patchActiveGame({
-          'chat': FieldValue.arrayUnion([chatMessageToMap(msg)]),
-        });
+    if (isGameChat) {
+      final ctx = _cloudGameContext;
+      if (_backendUp && ctx != null) {
+        // Per-game chat is its own subcollection the host and every member may
+        // append to directly — no game-doc write (members are forbidden the
+        // `chat` field) and no projection round-trip, so the message stays put.
+        _gameChatMessages = [..._gameChatMessages, msg];
+        unawaited(_repo
+            .sendGameChatMessage(ctx.$1, ctx.$2, msg)
+            .catchError((Object e) => debugPrint('sendGameChat failed: $e')));
+      } else {
+        // Offline / mock mode — keep it on the local game model.
+        _currentGame = _currentGame!.copyWith(chat: [..._currentGame!.chat, msg]);
       }
     } else {
       _setGroup(_currentGroup.copyWith(chat: [..._currentGroup.chat, msg]));
@@ -4720,6 +4763,25 @@ class AppProvider extends ChangeNotifier {
     }
     notifyListeners();
     return null;
+  }
+
+  /// Every visible message for a game's chat: the per-game chat subcollection
+  /// merged with any pinned/system cards carried on the game document, sorted
+  /// oldest-first so the chat view reads top-to-bottom.
+  List<ChatMessage> gameChatMessages(String gameId) {
+    final LiveGame? base = _currentGame?.id == gameId
+        ? _currentGame
+        : _currentGroup.games.where((g) => g.id == gameId).firstOrNull;
+    final byId = <String, ChatMessage>{};
+    for (final m in base?.chat ?? const <ChatMessage>[]) {
+      byId[m.id] = m;
+    }
+    for (final m in _gameChatMessages) {
+      byId[m.id] = m;
+    }
+    final list = byId.values.toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    return list;
   }
 
   /// Persists a group-chat message to `groups/{gid}/chat` (fire-and-forget).
@@ -4739,6 +4801,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void deleteMessage(String msgId) {
+    final inGameChat = _gameChatMessages.any((m) => m.id == msgId);
     _setGroup(
       _currentGroup.copyWith(
         chat: _currentGroup.chat
@@ -4746,13 +4809,29 @@ class AppProvider extends ChangeNotifier {
             .toList(),
       ),
     );
-    _currentGame = _currentGame!.copyWith(
-      chat: _currentGame!.chat
+    final game = _currentGame;
+    if (game != null) {
+      _currentGame = game.copyWith(
+        chat: game.chat
+            .map((m) => m.id == msgId ? m.copyWith(deleted: true) : m)
+            .toList(),
+      );
+    }
+    if (inGameChat) {
+      _gameChatMessages = _gameChatMessages
           .map((m) => m.id == msgId ? m.copyWith(deleted: true) : m)
-          .toList(),
-    );
+          .toList();
+    }
     notifyListeners();
-    if (_backendUp && _currentGroupId != null) {
+    if (!_backendUp) return;
+    final ctx = _cloudGameContext;
+    if (inGameChat && ctx != null) {
+      unawaited(_repo
+          .markGameChatMessageDeleted(ctx.$1, ctx.$2, msgId)
+          .catchError((Object e) => debugPrint('deleteGameChat failed: $e')));
+      return;
+    }
+    if (_currentGroupId != null) {
       unawaited(_repo
           .markChatMessageDeleted(_currentGroupId!, msgId)
           .catchError((Object e) => debugPrint('deleteMessage failed: $e')));

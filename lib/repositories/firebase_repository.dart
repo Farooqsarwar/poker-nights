@@ -839,6 +839,27 @@ class FirebaseRepository {
       .collection('groups').doc(gid).collection('chat').doc(msgId)
       .set({'deleted': true}, SetOptions(merge: true));
 
+  // ── Per-game chat (groups/{gid}/games/{gameId}/chat) ───────────────────────
+  // A subcollection the host and every member append to directly, so a
+  // member's message is not rolled back by the game-doc rules and does not
+  // wait on a projection round-trip.
+  CollectionReference<Map<String, dynamic>> _gameChatCol(
+          String gid, String gameId) =>
+      _db.collection('groups').doc(gid).collection('games').doc(gameId)
+          .collection('chat');
+
+  Stream<List<ChatMessage>> gameChatStream(String gid, String gameId) =>
+      _gameChatCol(gid, gameId).snapshots().map((s) =>
+          [for (final d in s.docs) chatMessageFromMap(d.data())]);
+
+  Future<void> sendGameChatMessage(String gid, String gameId, ChatMessage msg) =>
+      _gameChatCol(gid, gameId).doc(msg.id).set(chatMessageToMap(msg));
+
+  Future<void> markGameChatMessageDeleted(
+          String gid, String gameId, String msgId) =>
+      _gameChatCol(gid, gameId).doc(msgId)
+          .set({'deleted': true}, SetOptions(merge: true));
+
   Future<void> savePoll(String gid, Poll poll) => _db
       .collection('groups').doc(gid).collection('polls').doc(poll.id)
       .set(pollToMap(poll));

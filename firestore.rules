@@ -271,6 +271,23 @@ service cloud.firestore {
         match /admin/{document=**} {
           allow read, write: if isGroupAdmin(gid);
         }
+
+        // Per-game chat. Kept in its own subcollection (not the game doc's
+        // `chat` field, which members may not write) so the host and every
+        // member append messages directly. Same ownership / soft-delete model
+        // as group chat.
+        match /chat/{msgId} {
+          allow read: if isMember(gid);
+          allow create: if isMember(gid)
+              && request.auth.uid == request.resource.data.authorId;
+          allow update: if isMember(gid)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleted'])
+              && (
+                resource.data.authorId == request.auth.uid
+                || isGroupAdmin(gid)
+              );
+          allow delete: if false;
+        }
       }
 
       // Group chat.
@@ -388,8 +405,17 @@ service cloud.firestore {
       allow read: if false; // parent placeholder doc is never read directly
 
       match /items/{reqId} {
-        allow read: if signedIn()
-            && isMember(resource.data.gid);
+        // A guest (signed-in anonymously, not a group member) must be able to
+        // GET their own deterministic slot-claim doc — reserveGuestSlotTx reads
+        // it inside a transaction before writing. Non-existent docs read as
+        // null; a member may read any item; enumeration (list) stays members-only.
+        allow get: if signedIn() && (
+              resource == null
+           || resource.data.get('kind', '') == 'guestCheckIn'
+           || isMember(resource.data.get('gid', '__none__'))
+        );
+        allow list: if signedIn()
+            && isMember(resource.data.get('gid', '__none__'));
         allow create: if signedIn()
             && request.resource.data.keys().hasAll(['kind', 'gid'])
             && request.resource.data.gid is string

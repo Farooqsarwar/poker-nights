@@ -139,6 +139,14 @@ class AppProvider extends ChangeNotifier {
   List<ChatMessage> _gameChatMessages = const [];
   String? _gameChatKey;
 
+  /// The signed-in member's own pending RSVP per game id. The write is
+  /// committed the instant [setRSVP] runs; this overlay is re-applied on top
+  /// of every adopted remote game so a lagging or racing snapshot never
+  /// visibly reverts the member's own selection before their ack lands. The
+  /// entry is dropped once a remote snapshot agrees, or if the write is
+  /// rejected. `containsKey` distinguishes "no overlay" from "overlay = clear".
+  final Map<String, Rsvp?> _pendingOwnRsvp = {};
+
   StreamSubscription<dynamic>? _lookupSub;
   StreamSubscription<List<TournamentPreset>>? _presetsSub;
   StreamSubscription<
@@ -648,7 +656,7 @@ class AppProvider extends ChangeNotifier {
         );
       }
       
-      _currentGame = remote;
+      _currentGame = _withOwnRsvpOverlay(remote);
       _lastSavedGame = remote;
       RecoveryService.saveGame(remote);
       // Another device may have settled the tournament — record my result.
@@ -657,6 +665,31 @@ class AppProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('remote game decode failed: $e');
     }
+  }
+
+  /// Re-applies the member's own pending RSVP (see [_pendingOwnRsvp]) on top of
+  /// a freshly adopted remote game, and drops the overlay once the remote
+  /// agrees. No-op for the authority (they write the whole doc) and when
+  /// there is no overlay for this game.
+  LiveGame _withOwnRsvpOverlay(LiveGame game) {
+    if (_isGameAuthority || !_pendingOwnRsvp.containsKey(game.id)) return game;
+    final uid = _user?.id;
+    if (uid == null) return game;
+    final want = _pendingOwnRsvp[game.id];
+    final mine = game.players.where((p) => p.id == uid).firstOrNull;
+    if (mine?.rsvp == want) {
+      // The remote has caught up with the member's own selection — done.
+      _pendingOwnRsvp.remove(game.id);
+      return game;
+    }
+    final players = game.players.any((p) => p.id == uid)
+        ? game.players
+            .map((p) => p.id == uid ? p.copyWith(rsvp: want) : p)
+            .toList()
+        : [...game.players, _memberAsPlayer(uid, want)];
+    var updated = game.copyWith(players: players);
+    updated = _syncGuestSlots(updated, uid, want?.guestCount ?? 0);
+    return updated;
   }
 
   /// Subscribes every user-scoped collection after sign-in / hydration.
@@ -920,6 +953,7 @@ class AppProvider extends ChangeNotifier {
     _gameChatSub = null;
     _gameChatMessages = const [];
     _gameChatKey = null;
+    _pendingOwnRsvp.clear();
     _lookupSub = null;
     _presetsSub = null;
     _chipSetsSub = null;
@@ -976,7 +1010,12 @@ class AppProvider extends ChangeNotifier {
       // games, code — is also written into `_groups`, which backs the sidebar
       // / drawer / orderedGroups (they'd otherwise show the lightweight index
       // row with 0 members).
-      _setGroup(g);
+      // Keep the member's own not-yet-acked RSVP visible on the hub's game
+      // cards too, not just the game screen (see [_pendingOwnRsvp]).
+      final hydrated = _pendingOwnRsvp.isEmpty
+          ? g
+          : g.copyWith(games: g.games.map(_withOwnRsvpOverlay).toList());
+      _setGroup(hydrated);
       _bundleLoaded = true;
       markReady();
       // Catch results of games this device never followed live (e.g. the
@@ -5006,18 +5045,21 @@ class AppProvider extends ChangeNotifier {
 
     if (isCurrent) {
       _currentGame = after;
-      // Members write only their own fields via dot-path so concurrent admin
-      // edits are never clobbered (locked architecture §writes). The admin's
-      // whole-doc save is handled by _syncGameToCloud on notifyListeners.
-      if (!_isGameAuthority) {
-        _patchActiveGame(_rsvpDotPatch(before, after));
-      }
-    } else {
-      // RSVP on a group game that isn't the one open on screen (chat invite
-      // card). Persist the same scoped member patch against that game doc so
-      // the selection survives the live-bundle round-trip.
-      _patchGroupGame(targetId, _rsvpDotPatch(before, after));
     }
+    // Members write only their own fields via dot-path so concurrent admin
+    // edits are never clobbered (locked architecture §writes).
+    if (!_isGameAuthority) {
+      // Hold the selection locally until a remote snapshot confirms it, so a
+      // lagging/racing snapshot can't visibly revert the member's own tap.
+      _pendingOwnRsvp[targetId] = rsvp;
+      _persistOwnRsvpPatch(targetId, _rsvpDotPatch(before, after));
+    } else if (!isCurrent) {
+      // Authority RSVPing a group game that isn't open on screen: the
+      // on-screen game's whole-doc save won't cover it, so patch it directly.
+      _persistOwnRsvpPatch(targetId, _rsvpDotPatch(before, after));
+    }
+    // (authority + on-screen game: persisted by _syncGameToCloud's whole-doc
+    // save when notifyListeners fires below.)
 
     // Notify the admin of RSVP changes (spec §8 notification triggers).
     if (_currentGroup.ownerId != userId) {
@@ -5047,17 +5089,27 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Member/guest-safe field patch on *any* game in the current group — not
-  /// just the one wired into [_cloudGameContext]. Used for RSVPs posted from
-  /// the chat invite card.
-  void _patchGroupGame(String gameId, Map<String, dynamic> dotPaths) {
-    if (!_backendUp || _user == null || dotPaths.isEmpty) return;
-    final g = _currentGroup.games.where((g) => g.id == gameId).firstOrNull;
-    final gid = (g != null && g.groupId.isNotEmpty) ? g.groupId : _currentGroupId;
+  /// Persists the member's own RSVP dot-path patch against a game doc (the one
+  /// open on screen or any game in the current group — chat invite card). On
+  /// rejection the optimistic overlay ([_pendingOwnRsvp]) is dropped so the
+  /// next remote snapshot shows the real state instead of a phantom RSVP.
+  void _persistOwnRsvpPatch(String gameId, Map<String, dynamic> dotPaths) {
+    if (dotPaths.isEmpty) {
+      _pendingOwnRsvp.remove(gameId);
+      return;
+    }
+    if (!_backendUp || _user == null) return;
+    final g = _currentGame?.id == gameId
+        ? _currentGame
+        : _currentGroup.games.where((x) => x.id == gameId).firstOrNull;
+    final gid =
+        (g != null && g.groupId.isNotEmpty) ? g.groupId : _currentGroupId;
     if (gid == null) return;
-    unawaited(_repo
-        .patchGame(gid, gameId, dotPaths)
-        .catchError((Object e) => debugPrint('patchGame(group) failed: $e')));
+    unawaited(_repo.patchGame(gid, gameId, dotPaths).catchError((Object e) {
+      debugPrint('RSVP patch failed: $e');
+      _pendingOwnRsvp.remove(gameId);
+      notifyListeners();
+    }));
   }
 
   /// A roster [Player] for the signed-in member, from the group roster. Used

@@ -440,7 +440,7 @@ class FirebaseRepository {
 
   Future<void> saveUserPref(String uid, String key, Object? value) => _db
       .collection('users').doc(uid)
-      .set(_stamp({'prefs.$key': value}), SetOptions(merge: true));
+      .set(_stamp({'prefs': {key: value}}), SetOptions(merge: true));
 
   /// Reads the stored per-user preferences map (`users/{uid}.prefs`).
   Future<Map<String, dynamic>> loadUserPrefs(String uid) async {

@@ -8,6 +8,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:localstore/localstore.dart';
 
 import 'app/colors.dart';
 import 'app/router.dart';
@@ -68,7 +69,25 @@ Future<void> main() async {
   // Initialize Google Sign-In singleton (must happen before signInWithGoogle).
   await FirebaseRepository.initGoogleSignIn();
 
-  final appProvider = AppProvider();
+  // Read the locally cached theme preference before booting the app so the
+  // splash screen doesn't jitter while waiting for Firebase.
+  String? cachedColorTheme;
+  String? cachedThemePref;
+  try {
+    final db = Localstore.instance;
+    final prefs = await db.collection('app').doc('prefs').get();
+    if (prefs != null) {
+      cachedColorTheme = prefs['colorTheme'] as String?;
+      cachedThemePref = prefs['themePreference'] as String?;
+    }
+  } catch (e) {
+    debugPrint('Failed to load local theme cache: $e');
+  }
+
+  final appProvider = AppProvider(
+    initialColorTheme: cachedColorTheme,
+    initialThemePreference: cachedThemePref,
+  );
   final router = buildAppRouter(appProvider);
 
   // Initialize OneSignal push notifications (Android / iOS / Web). Free-plan

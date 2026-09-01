@@ -159,32 +159,6 @@ class SettingsScreen extends StatelessWidget {
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.sm),
-          // Dark / Light / System toggle
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                _ModeChip(
-                  label: 'Dark',
-                  active: app.themePreference == 'dark',
-                  onTap: () => app.setThemePreference('dark'),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                _ModeChip(
-                  label: 'Light',
-                  active: app.themePreference == 'light',
-                  onTap: () => app.setThemePreference('light'),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                _ModeChip(
-                  label: 'System',
-                  active: app.themePreference == 'system',
-                  onTap: () => app.setThemePreference('system'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
           // Color theme selector
           Text(
             'Color theme',
@@ -344,47 +318,6 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ModeChip extends StatelessWidget {
-  const _ModeChip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color: active ? AppColors.primarySoft : AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          border: Border.all(
-            color: active ? AppColors.primary : AppColors.border,
-          ),
-        ),
-        child: Text(
-          label,
-          style: AppTypography.bodySm.copyWith(
-            color: active ? AppColors.primary : AppColors.mutedForeground,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
       ),
     );
   }

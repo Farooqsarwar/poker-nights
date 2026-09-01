@@ -7,6 +7,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in_all_platforms/google_sign_in_all_platforms.dart';
+import 'package:localstore/localstore.dart';
 
 import '../models/app_notification.dart';
 import '../models/cash_game.dart';
@@ -80,7 +81,9 @@ class SeatMoveRecommendation {
 
 /// Application-level UI state (no business logic / backend).
 class AppProvider extends ChangeNotifier {
-  AppProvider() {
+  AppProvider({String? initialColorTheme, String? initialThemePreference}) {
+    if (initialColorTheme != null) _colorTheme = initialColorTheme;
+    if (initialThemePreference != null) _themePreference = initialThemePreference;
     _currentGame = null;
     _startTick();
     _loadRecovery();
@@ -1280,6 +1283,15 @@ class AppProvider extends ChangeNotifier {
 
   /// Fire-and-forget write of a single preference key.
   void _persistPref(String key, Object? value) {
+    if (key == 'colorTheme' || key == 'themePreference') {
+      try {
+        final db = Localstore.instance;
+        db.collection('app').doc('prefs').set({key: value}, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Failed to save theme to localstore: $e');
+      }
+    }
+    
     final uid = _repo.currentUid;
     if (!_backendUp || uid == null) return;
     unawaited(_repo

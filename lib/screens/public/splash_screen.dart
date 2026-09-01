@@ -162,14 +162,14 @@ class _SplashScreenState extends State<SplashScreen>
                       child: Container(
                         width: cardSize * 2.2,
                         height: cardSize * 2.2,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
                             colors: <Color>[
-                              Color(0x33E41B23),
-                              Color(0x00000000),
+                              AppColors.primary.withValues(alpha: 0.20),
+                              const Color(0x00000000),
                             ],
-                            stops: <double>[0.0, 1.0],
+                            stops: const <double>[0.0, 1.0],
                           ),
                         ),
                       ),
@@ -204,8 +204,6 @@ class _SplashScreenState extends State<SplashScreen>
 // =============================================================================
 // Brand constants (sampled from the reference render)
 // =============================================================================
-
-const Color _kBrandRed = Color(0xFFE01F26);
 
 /// Card height as a fraction of its width — measured 0.953 in the mockup.
 const double _kCardAspect = 0.953;
@@ -303,7 +301,7 @@ class _CardShell extends StatelessWidget {
             offset: Offset(0.0, height * 0.10),
           ),
           BoxShadow(
-            color: _kBrandRed.withValues(alpha: 0.10 + 0.10 * sheen),
+            color: AppColors.primary.withValues(alpha: 0.10 + 0.10 * sheen),
             blurRadius: width * 0.35,
             spreadRadius: width * 0.02,
           ),
@@ -404,14 +402,14 @@ class _FrontFacePainter extends CustomPainter {
     final double sh = h * _spadeH;
     canvas.save();
     canvas.translate((w - sw) / 2, (h - sh) / 2);
-    canvas.drawPath(_spadePath(sw, sh), Paint()..color = _kBrandRed);
+    canvas.drawPath(_spadePath(sw, sh), Paint()..color = AppColors.primary);
     canvas.restore();
   }
 
   void _paintBrackets(Canvas canvas, double w, double h) {
     final double t = w * _thick;
     final Paint p = Paint()
-      ..color = _kBrandRed
+      ..color = AppColors.primary
       ..style = PaintingStyle.stroke
       ..strokeWidth = t
       ..strokeCap = StrokeCap.round
@@ -504,7 +502,7 @@ class _BackFace extends StatelessWidget {
     return Stack(
       children: <Widget>[
         _word('POKER', Colors.white, 0, w, h, blockW, wordSize),
-        _word('NIGHT', _kBrandRed, 1, w, h, blockW, wordSize),
+        _word('NIGHT', AppColors.primary, 1, w, h, blockW, wordSize),
         _word('TOOLS', Colors.white, 2, w, h, blockW, wordSize),
 
         // Red rule under the lockup.
@@ -514,7 +512,7 @@ class _BackFace extends StatelessWidget {
           child: Container(
             width: w * _ruleW,
             height: math.max(1.0, h * 0.004),
-            color: _kBrandRed,
+            color: AppColors.primary,
           ),
         ),
 
@@ -542,7 +540,7 @@ class _BackFace extends StatelessWidget {
                     TextSpan(
                       text: 'WIN.',
                       style: TextStyle(
-                        color: _kBrandRed,
+                        color: AppColors.primary,
                         fontSize: tagSize,
                         height: 1.0,
                         fontWeight: FontWeight.w700,

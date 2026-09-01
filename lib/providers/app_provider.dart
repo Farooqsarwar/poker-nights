@@ -596,9 +596,22 @@ class AppProvider extends ChangeNotifier {
     }
     if (_pendingGameSave) return;
     try {
-      final remote =
-          liveGameFromFirestoreDoc(Map<String, dynamic>.from(data));
+      var remote = liveGameFromFirestoreDoc(Map<String, dynamic>.from(data));
       if (_currentGame?.id != remote.id) return;
+      
+      // Preserve private fields that are scrubbed from the public remote stream
+      if (isAdmin && _currentGame != null) {
+        remote = remote.copyWith(
+          settings: remote.settings.copyWith(
+            organizerPct: _currentGame!.settings.organizerPct,
+          ),
+          structure: remote.structure?.copyWith(
+            prizes: _currentGame!.structure!.prizes,
+            organizerAmount: _currentGame!.structure!.organizerAmount,
+          ) ?? _currentGame!.structure,
+        );
+      }
+      
       _currentGame = remote;
       _lastSavedGame = remote;
       RecoveryService.saveGame(remote);
@@ -1934,17 +1947,36 @@ class AppProvider extends ChangeNotifier {
     _currentGame = game;
     notifyListeners();
 
-    // Asynchronously load the undo stack if we are the admin of this game.
-    if (isAdmin && game.status.isActiveLive) {
-      _repo.loadUndoStack(game.groupId, game.id).then((stack) {
-        if (_currentGame?.id == game.id) {
-          _undoStack.clear();
-          _undoStack.addAll(stack);
+    // Asynchronously load private sidecar data and undo stack if admin
+    if (isAdmin) {
+      _repo.loadPrivateGameData(game.groupId, game.id).then((privateData) {
+        if (_currentGame?.id == game.id && privateData != null) {
+          _currentGame = _currentGame!.copyWith(
+            settings: _currentGame!.settings.copyWith(
+              organizerPct: (privateData['organizerPct'] as num?)?.toInt() ?? _currentGame!.settings.organizerPct,
+            ),
+            structure: _currentGame!.structure?.copyWith(
+              prizes: privateData['prizes'] != null ? (privateData['prizes'] as List).map((e) => Prize(place: e['place'], amount: e['amount'])).toList() : _currentGame!.structure!.prizes,
+              organizerAmount: (privateData['organizerAmount'] as num?)?.toInt() ?? _currentGame!.structure!.organizerAmount,
+            ) ?? _currentGame!.structure,
+          );
           notifyListeners();
         }
       }).catchError((Object e) {
-        debugPrint('Failed to load undo stack: $e');
+        debugPrint('Failed to load private sidecar: $e');
       });
+
+      if (game.status.isActiveLive) {
+        _repo.loadUndoStack(game.groupId, game.id).then((stack) {
+          if (_currentGame?.id == game.id) {
+            _undoStack.clear();
+            _undoStack.addAll(stack);
+            notifyListeners();
+          }
+        }).catchError((Object e) {
+          debugPrint('Failed to load undo stack: $e');
+        });
+      }
     }
   }
 

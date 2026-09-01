@@ -255,7 +255,9 @@ service cloud.firestore {
       // queues private. Guests have no access here at all — they use the
       // sanitized publicGames projections.
       match /games/{gameId} {
-        allow read: if isGroupAdmin(gid);
+        // Because private financial data is split into the admin sidecar,
+        // all members can safely read the main public game document.
+        allow read: if isMember(gid);
         allow create, delete: if isGroupAdmin(gid);
         allow update: if isGroupAdmin(gid) || (isMember(gid) && memberGameEdit());
 
@@ -263,6 +265,11 @@ service cloud.firestore {
         match /memberViews/{userId} {
           allow read: if signedIn() && request.auth.uid == userId;
           allow write: if false;
+        }
+
+        // Private sidecar documents (e.g. undoStack, privateData)
+        match /admin/{document=**} {
+          allow read, write: if isGroupAdmin(gid);
         }
       }
 

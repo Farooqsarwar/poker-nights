@@ -844,9 +844,42 @@ class FirebaseRepository {
       .set(pollToMap(poll));
 
   // ── Games ──────────────────────────────────────────────────────────────────
-  Future<void> saveGame(LiveGame game) => _db
-      .collection('groups').doc(game.groupId).collection('games').doc(game.id)
-      .set(_stamp(liveGameToFirestoreDoc(game)));
+  Future<void> saveGame(LiveGame game) async {
+    final fullDoc = liveGameToFirestoreDoc(game);
+    
+    // Save private sidecar so admin can recover on a new device
+    final privateDoc = <String, dynamic>{
+      'organizerPct': game.settings.organizerPct,
+      if (game.structure != null) ...{
+        'prizes': fullDoc['structure']['prizes'],
+        'organizerAmount': fullDoc['structure']['organizerAmount'],
+      }
+    };
+    await _db
+        .collection('groups').doc(game.groupId)
+        .collection('games').doc(game.id)
+        .collection('admin').doc('privateData')
+        .set(privateDoc, SetOptions(merge: true));
+
+    // Scrub private fields from the public document
+    final publicDoc = Map<String, dynamic>.from(fullDoc);
+    
+    final publicSettings = Map<String, dynamic>.from(publicDoc['settings'] as Map? ?? {});
+    publicSettings.remove('organizerPct');
+    publicDoc['settings'] = publicSettings;
+    
+    if (publicDoc['structure'] != null) {
+      final publicStructure = Map<String, dynamic>.from(publicDoc['structure'] as Map);
+      publicStructure.remove('prizes');
+      publicStructure.remove('organizerAmount');
+      publicDoc['structure'] = publicStructure;
+    }
+    
+    await _db
+        .collection('groups').doc(game.groupId)
+        .collection('games').doc(game.id)
+        .set(_stamp(publicDoc));
+  }
 
   /// Saves the admin's undo history to a sidecar subcollection so it travels
   /// with the account across devices, without forcing players to download it.
@@ -870,6 +903,15 @@ class FirebaseRepository {
     return snapshots
         .map((s) => liveGameFromFirestoreDoc(s as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<Map<String, dynamic>?> loadPrivateGameData(String groupId, String gameId) async {
+    final snap = await _db
+        .collection('groups').doc(groupId)
+        .collection('games').doc(gameId)
+        .collection('admin').doc('privateData')
+        .get();
+    return snap.data();
   }
 
   /// Targeted per-player / field patches using Firestore dot-paths — avoids

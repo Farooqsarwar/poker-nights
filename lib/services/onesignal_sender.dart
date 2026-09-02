@@ -25,8 +25,12 @@ class OneSignalSender {
     defaultValue: 'e9f508d1-19ef-44ed-aafc-c1578b955715',
   );
   // Scoped to "Send messages only". Ships in the app by design — there is no
-  // server. Provide at build time with: --dart-define=ONESIGNAL_REST_API_KEY=...
-  static const String _apiKey = String.fromEnvironment('ONESIGNAL_REST_API_KEY');
+  // server. Must be provided at build time with:
+  //   --dart-define=ONESIGNAL_REST_API_KEY=...
+  // Never hardcode the key in source so it cannot be committed.
+  static const String _apiKey = String.fromEnvironment(
+    'ONESIGNAL_REST_API_KEY',
+  );
 
   /// OneSignal's newer keys (the `os_v2_app_` prefix) authenticate with the
   /// `Key` scheme; legacy hex keys use `Basic`.
@@ -75,12 +79,8 @@ class OneSignalSender {
         'contents': {'en': body},
         'include_aliases': {'external_id': externalIds},
         if (appUrlPath != null && appUrlPath.startsWith('/'))
-          'app_url': appUrlPath,
+          'app_url': '$webOrigin$appUrlPath',
       };
-      if (kIsWeb) {
-        // Web push click-through requires a full URL on the site origin.
-        payload['url'] = '$webOrigin${appUrlPath ?? '/'}';
-      }
       try {
         final resp = await http
             .post(

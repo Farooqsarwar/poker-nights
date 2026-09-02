@@ -2012,35 +2012,44 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 if (widget.user != null)
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (final opt in [
-                          Rsvp.going,
-                          Rsvp.goingPlus1,
-                          Rsvp.goingPlus2,
-                          Rsvp.goingPlus3,
-                          Rsvp.goingPlus4,
-                          Rsvp.maybe,
-                          Rsvp.cant,
-                        ])
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              right: AppSpacing.xs,
-                            ),
-                            child: InkWell(
-                              onTap: () =>
-                                  widget.app.setRSVP(opt, gameId: game.id),
-                              borderRadius: BorderRadius.circular(
-                                AppRadius.pill,
+                  if (game.settings.rsvpCutoffPassed)
+                    Text(
+                      'RSVPs are closed',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    )
+                  else
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final opt in [
+                            Rsvp.going,
+                            Rsvp.goingPlus1,
+                            Rsvp.goingPlus2,
+                            Rsvp.goingPlus3,
+                            Rsvp.goingPlus4,
+                            Rsvp.maybe,
+                            Rsvp.cant,
+                          ])
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                right: AppSpacing.xs,
                               ),
-                              child: _RsvpBtn(opt: opt, current: rsvp),
+                              child: InkWell(
+                                onTap: () =>
+                                    widget.app.setRSVP(opt, gameId: game.id),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.pill,
+                                ),
+                                child: _RsvpBtn(opt: opt, current: rsvp),
+                              ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
               ],
             ),
           ),

@@ -1050,10 +1050,12 @@ class AppProvider extends ChangeNotifier {
       debugPrint('groupBundle stream error: $e');
       markReady();
     });
-    _cashSub = _repo.completedCashSessionsStream(gid).listen((list) {
-      _cashHistory = list;
-      notifyListeners();
-    }, onError: (Object e) => debugPrint('cashSessions stream error: $e'));
+    if (row?.ownerId == _user?.id) {
+      _cashSub = _repo.completedCashSessionsStream(gid).listen((list) {
+        _cashHistory = list;
+        notifyListeners();
+      }, onError: (Object e) => debugPrint('cashSessions stream error: $e'));
+    }
   }
 
   /// Lightweight placeholder used before a group's live bundle has loaded and
@@ -4834,6 +4836,23 @@ class AppProvider extends ChangeNotifier {
       _setGroup(_currentGroup.copyWith(chat: [..._currentGroup.chat, msg]));
       _postGroupChat(msg);
     }
+    
+    // Fan out a push notification for this chat message (UAT 12-108/13-059).
+    // The sender is excluded inside _fanOutPush so they don't banner themselves.
+    pushNotification(
+      AppNotification(
+        id: 'chat-${msg.id}',
+        title: isGameChat 
+            ? 'Game Chat: ${_currentGame?.settings.name ?? 'Live Game'}' 
+            : 'Group Chat: ${_currentGroup.name}',
+        body: '${_user!.name}: $sanitized',
+        timestamp: DateTime.now(),
+        type: NotificationType.chat,
+        link: isGameChat && gameId != null ? '/game/$gameId' : '/group?tab=chat',
+        read: false,
+      ),
+    );
+
     notifyListeners();
     return null;
   }
@@ -5721,6 +5740,7 @@ class AppProvider extends ChangeNotifier {
           appUrlPath: notification.link,
           externalIds: targets,
         )
+        .then((_) => debugPrint('🔥 SUCCESS: Fanned out push to $targets!'))
         .catchError((Object e) => debugPrint('push fan-out failed: $e')));
   }
 

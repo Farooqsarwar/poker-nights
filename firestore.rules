@@ -205,7 +205,7 @@ service cloud.firestore {
         allow update: if isGroupAdmin(gid)
             || (signedIn() && request.auth.uid == memberUid
                 && request.resource.data.diff(resource.data).affectedKeys()
-                    .hasOnly(['name']));
+                    .hasOnly(['name', 'stats']));
         allow delete: if isGroupAdmin(gid)
             || (signedIn() && request.auth.uid == memberUid);
       }

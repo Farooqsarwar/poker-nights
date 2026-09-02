@@ -221,7 +221,7 @@ class TournamentEngine {
       }
     }
 
-    if (remaining > 0) {
+    if (remaining > 0 && sorted.isNotEmpty) {
       final small = sorted.first;
       final index = plan.indexWhere((p) => p.color == small.color);
       final existing = index >= 0 ? plan[index].count : 0;
@@ -556,7 +556,7 @@ class TournamentEngine {
     int startIndex = validBlindLevels.indexWhere(
       (level) => level[0] >= minChip,
     );
-    if (startIndex < 0) startIndex = 0;
+    if (startIndex < 0) startIndex = validBlindLevels.length - 1;
     final openingLevel = validBlindLevels[startIndex];
     final openingBB = openingLevel[1];
 
@@ -581,7 +581,9 @@ class TournamentEngine {
       );
       final covered = chipPlan.fold<int>(0, (s, e) => s + e.count * e.value);
       if (covered >= stack || stack <= openingBB) break;
-      stack = math.max(openingBB, ((stack - 100) ~/ 100) * 100);
+      final newStack = math.max(openingBB, ((stack - 100) ~/ 100) * 100);
+      if (newStack == stack) break;
+      stack = newStack;
     }
 
     final addOnStack = params.addOn ? stack : 0;

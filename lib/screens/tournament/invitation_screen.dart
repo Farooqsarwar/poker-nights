@@ -161,6 +161,26 @@ class _InvitationScreenState extends State<InvitationScreen> {
             ),
           ],
           _ContextualMainButton(game: game, user: user, myPlayer: myPlayer),
+          // The host is an attendee too — their own RSVP, the same simple
+          // Going / Maybe / Can't control every member gets.
+          if (app.isAdmin &&
+              user != null &&
+              (game.status == LiveGameStatus.published ||
+                  game.status == LiveGameStatus.checkin ||
+                  game.status == LiveGameStatus.ready)) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: _RsvpSection(
+                myPlayer: myPlayer ?? _rosterPlaceholder(user),
+                cutoffPassed: app.rsvpCutoffPassed,
+                onRsvp: (rsvp) {
+                  HapticFeedback.lightImpact();
+                  app.setRSVP(rsvp);
+                },
+              ),
+            ),
+          ],
           // Admin-only: where the structure stands. The AI estimate unlocks
           // 30 minutes before start (client rule) — before that the group is
           // still deciding who is coming.
@@ -1881,24 +1901,27 @@ class _ContextualMainButton extends StatelessWidget {
     }
   }
 
-  /// A roster placeholder for a member who isn't on this game's player list
-  /// yet (they joined the group after the game was created).
-  Player _placeholderPlayer(AppUser user) => Player(
-        id: user.id,
-        name: user.name,
-        isGuest: false,
-        rsvp: null,
-        checkedIn: false,
-        confirmed: false,
-        eliminated: false,
-        rebuys: 0,
-        hasAddOn: false,
-        knockouts: 0,
-        table: 0,
-        seat: 0,
-        active: true,
-      );
+  Player _placeholderPlayer(AppUser user) => _rosterPlaceholder(user);
 }
+
+/// A roster placeholder for a member (or the host) who isn't on this game's
+/// player list yet — they joined the group after the game was created, or the
+/// game seeded from a roster that didn't include them.
+Player _rosterPlaceholder(AppUser user) => Player(
+      id: user.id,
+      name: user.name,
+      isGuest: false,
+      rsvp: null,
+      checkedIn: false,
+      confirmed: false,
+      eliminated: false,
+      rebuys: 0,
+      hasAddOn: false,
+      knockouts: 0,
+      table: 0,
+      seat: 0,
+      active: true,
+    );
 
 /// The full member RSVP section: three status chips (Going / Maybe / Can't)
 /// and, when "Going" is selected, an inline guest-count stepper (0–4).

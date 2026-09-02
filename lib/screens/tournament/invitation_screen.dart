@@ -425,6 +425,92 @@ if (app.isAdmin &&
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Admin RSVP review — every guest awaiting a decision, with
+          // Accept / Decline. The event cannot move forward to check-in while
+          // any guest is still pending (see [_ContextualMainButton]).
+          if (app.isAdmin) ...[
+            Builder(builder: (context) {
+              final pendingGuests = game.players
+                  .where((p) =>
+                      p.isGuest && !p.confirmed && p.name.trim().isNotEmpty)
+                  .toList();
+              return AppCard(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                borderColor: pendingGuests.isNotEmpty
+                    ? AppColors.primary.withValues(alpha: 0.5)
+                    : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Guest requests',
+                          style: AppTypography.bodySm
+                              .copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const Spacer(),
+                        if (pendingGuests.isNotEmpty)
+                          AppBadge(
+                            label: '${pendingGuests.length} to review',
+                            variant: AppBadgeVariant.red,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (pendingGuests.isEmpty)
+                      Text(
+                        'No guests waiting. Everyone who requested a seat has been reviewed.',
+                        style: AppTypography.bodyXs
+                            .copyWith(color: AppColors.mutedForeground),
+                      )
+                    else
+                      for (final g in pendingGuests)
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: Row(
+                            children: [
+                              AppAvatar(
+                                  name: g.name, size: AppAvatarSize.sm),
+                              const SizedBox(width: AppSpacing.md),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(g.name,
+                                        style: AppTypography.bodySm),
+                                    Text(
+                                      'Guest of ${_memberName(game, g.inviterId ?? '')}',
+                                      style: AppTypography.bodyXs.copyWith(
+                                        color: AppColors.mutedForeground,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              AppButton(
+                                size: AppButtonSize.sm,
+                                onPressed: () => app.confirmGuest(g.id),
+                                child: const Text('Accept'),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                              AppButton(
+                                size: AppButtonSize.sm,
+                                variant: AppButtonVariant.danger,
+                                onPressed: () => app.rejectGuest(g.id),
+                                child: const Text('Decline'),
+                              ),
+                            ],
+                          ),
+                        ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // Guest slots (07-014) — the persisted named seats for "Going +N"
           // RSVPs, shown with their current status so the host can see which
           // guest seats are still open.
@@ -1596,6 +1682,22 @@ class _ContextualMainButton extends StatelessWidget {
               .where((p) => p.checkedIn && p.confirmed)
               .length;
           final seatingConfirmed = game.seatingConfirmed;
+          final pendingGuestCount = game.players
+              .where((p) =>
+                  p.isGuest && !p.confirmed && p.name.trim().isNotEmpty)
+              .length;
+          if (pendingGuestCount > 0) {
+            // Spec: the admin reviews every attendee — accept/decline each
+            // guest — before the event can move forward.
+            return AppButton(
+              fullWidth: true,
+              size: AppButtonSize.xl,
+              onPressed: null,
+              child: Text(
+                'Review $pendingGuestCount guest request${pendingGuestCount == 1 ? '' : 's'} first',
+              ),
+            );
+          }
           if (checkedInCount >= 2 && seatingConfirmed) {
             return AppButton(
               fullWidth: true,

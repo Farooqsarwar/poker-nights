@@ -4848,7 +4848,7 @@ class AppProvider extends ChangeNotifier {
         body: '${_user!.name}: $sanitized',
         timestamp: DateTime.now(),
         type: NotificationType.chat,
-        link: isGameChat && gameId != null ? '/game/$gameId' : '/group?tab=chat',
+        link: isGameChat ? '/game/$gameId' : '/group?tab=chat',
         read: false,
       ),
     );

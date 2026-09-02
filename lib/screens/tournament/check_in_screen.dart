@@ -222,7 +222,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final confirmedGuests = players
         .where((p) => p.isGuest && p.confirmed)
         .toList();
-    final canStart = checkedIn.length >= 2;
+    // Every guest who asked for a seat must be accepted or declined before the
+    // tournament can start (admin RSVP review gate).
+    final pendingGuestRequests = players
+        .where((p) => p.isGuest && !p.confirmed && p.name.trim().isNotEmpty)
+        .toList();
+    final canStart =
+        checkedIn.length >= 2 && pendingGuestRequests.isEmpty;
     final seatedYet = checkedIn.any((p) => p.table > 0 && p.seat > 0);
     final seatingConfirmed = game.seatingConfirmed;
     // Event-day preparation checklist (user-flow spec §4.6): admin-only and
@@ -826,7 +832,9 @@ class _CheckInScreenState extends State<CheckInScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          !canStart
+                          pendingGuestRequests.isNotEmpty
+                              ? 'Review ${pendingGuestRequests.length} guest request${pendingGuestRequests.length == 1 ? '' : 's'} first'
+                              : !canStart
                               ? 'Need at least 2 checked in'
                               : !seatingConfirmed
                               ? 'Confirm seating first'

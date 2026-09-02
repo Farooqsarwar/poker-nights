@@ -29,6 +29,7 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/code_display.dart';
 import '../../widgets/app_tabs.dart';
+import '../../widgets/rsvp_badge.dart';
 /// Group hub mirroring the web `GroupPage`.
 class GroupScreen extends StatefulWidget {
   const GroupScreen({super.key, this.initialTab});
@@ -1272,37 +1273,27 @@ class _ChatBubble extends StatelessWidget {
                     fontSize: 10,
                   ),
                 ),
-                // RSVP directly from the invite card — no need to leave chat;
-                // counts update immediately for everyone (client rule).
-                if (rsvpOpen && userId != null) ...[
+                // RSVP is set on the game screen (tap this card) — shown here
+                // read-only so chat and the hub never carry a second control.
+                if (game != null && userId != null) ...[
                   const SizedBox(height: AppSpacing.sm),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (final opt in [
-                          Rsvp.going,
-                          Rsvp.goingPlus1,
-                          Rsvp.goingPlus2,
-                          Rsvp.goingPlus3,
-                          Rsvp.goingPlus4,
-                          Rsvp.maybe,
-                          Rsvp.cant,
-                        ])
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              right: AppSpacing.xs,
-                            ),
-                            child: InkWell(
-                              onTap: () => app.setRSVP(opt, gameId: game.id),
-                              borderRadius: BorderRadius.circular(
-                                AppRadius.pill,
-                              ),
-                              child: _RsvpBtn(opt: opt, current: myRsvp),
-                            ),
-                          ),
-                      ],
-                    ),
+                  Row(
+                    children: [
+                      RSVPBadge(rsvp: myRsvp),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        rsvpOpen
+                            ? (myRsvp == null
+                                ? 'Tap to respond'
+                                : 'Tap to change')
+                            : 'RSVPs closed',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: rsvpOpen
+                              ? AppColors.primary
+                              : AppColors.mutedForeground,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ],
@@ -1643,41 +1634,6 @@ class _PollOption extends StatelessWidget {
   }
 }
 
-class _RsvpBtn extends StatelessWidget {
-  const _RsvpBtn({required this.opt, this.current});
-  final Rsvp opt;
-  final Rsvp? current;
-  @override
-  Widget build(BuildContext context) {
-    // Exact match: each response (Going, Going +1 … Going +4, Maybe, Can't)
-    // highlights only its own button, so the member can see precisely what
-    // they picked and switch cleanly.
-    final active = current == opt;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 4,
-      ),
-      decoration: BoxDecoration(
-        color: active ? AppColors.primary : AppColors.muted,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(
-          color: active ? AppColors.primary : AppColors.border,
-        ),
-      ),
-      child: Text(
-        opt.label,
-        style: AppTypography.bodyXs.copyWith(
-          color: active
-              ? AppColors.primaryForeground
-              : AppColors.mutedForeground,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
 /// Group header. Responsive: stacks the title/members row above the admin
 /// action buttons on narrow (mobile) widths, and lays them out side-by-side
 /// on wider (tablet/laptop) widths. The decorative group icon in the
@@ -2011,45 +1967,30 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
+                // RSVP is set on the game screen only — here it is read-only.
                 if (widget.user != null)
-                  if (game.settings.rsvpCutoffPassed)
-                    Text(
-                      'RSVPs are closed',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                        fontStyle: FontStyle.italic,
+                  Row(
+                    children: [
+                      Text(
+                        game.settings.rsvpCutoffPassed
+                            ? 'RSVPs closed'
+                            : 'Your RSVP',
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
                       ),
-                    )
-                  else
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          for (final opt in [
-                            Rsvp.going,
-                            Rsvp.goingPlus1,
-                            Rsvp.goingPlus2,
-                            Rsvp.goingPlus3,
-                            Rsvp.goingPlus4,
-                            Rsvp.maybe,
-                            Rsvp.cant,
-                          ])
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                right: AppSpacing.xs,
-                              ),
-                              child: InkWell(
-                                onTap: () =>
-                                    widget.app.setRSVP(opt, gameId: game.id),
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.pill,
-                                ),
-                                child: _RsvpBtn(opt: opt, current: rsvp),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                      const SizedBox(width: AppSpacing.sm),
+                      RSVPBadge(rsvp: rsvp),
+                      const Spacer(),
+                      if (!game.settings.rsvpCutoffPassed)
+                        Text(
+                          rsvp == null ? 'Tap to respond' : 'Tap to change',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.primary,
+                          ),
+                        ),
+                    ],
+                  ),
               ],
             ),
           ),

@@ -940,7 +940,7 @@ class FirebaseRepository {
   Future<void> patchGame(
       String gid, String gameId, Map<String, dynamic> dotPaths) => _db
       .collection('groups').doc(gid).collection('games').doc(gameId)
-      .set(_stamp(dotPaths), SetOptions(merge: true));
+      .update(_stamp(dotPaths));
 
   /// Live game document. Both admins and members follow the raw doc — members
   /// are gated to `isMember(gid)` by rules and the app sanitizes payout /

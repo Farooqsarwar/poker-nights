@@ -124,7 +124,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
             game: game,
             showAddress: showAddress,
             hostName: _hostName(app.currentGroup),
-            onEdit: user?.isAdmin == true
+            onEdit: app.isAdmin
                 ? () => _openEditModal(context, app, game)
                 : null,
           ),
@@ -164,13 +164,13 @@ class _InvitationScreenState extends State<InvitationScreen> {
           // Admin-only: where the structure stands. The AI estimate unlocks
           // 30 minutes before start (client rule) — before that the group is
           // still deciding who is coming.
-          if (user?.isAdmin == true &&
+          if (app.isAdmin &&
               game.status != LiveGameStatus.completed &&
               game.status != LiveGameStatus.cancelled) ...[
             const SizedBox(height: AppSpacing.sm),
             _StructureStatusCard(game: game),
           ],
-          if (user?.isAdmin == true &&
+          if (app.isAdmin &&
               game.status != LiveGameStatus.completed &&
               game.status != LiveGameStatus.cancelled) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -254,12 +254,12 @@ class _InvitationScreenState extends State<InvitationScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           // Event-day preparation checklist (spec §4.6) — admin only, pre-live.
-          if (user?.isAdmin == true &&
-              game.status != LiveGameStatus.running &&
-              game.status != LiveGameStatus.paused &&
-              game.status != LiveGameStatus.finaltable &&
-              game.status != LiveGameStatus.completed &&
-              game.status != LiveGameStatus.cancelled) ...[
+if (app.isAdmin &&
+            game.status != LiveGameStatus.running &&
+            game.status != LiveGameStatus.paused &&
+            game.status != LiveGameStatus.finaltable &&
+            game.status != LiveGameStatus.completed &&
+            game.status != LiveGameStatus.cancelled) ...[
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.lg),
               borderColor: AppColors.primary.withValues(alpha: 0.2),
@@ -1570,7 +1570,7 @@ class _ContextualMainButton extends StatelessWidget {
   Widget build(BuildContext context) {
     if (user == null) return const SizedBox.shrink();
     final app = context.read<AppProvider>();
-    final isAdmin = user!.isAdmin;
+    final isAdmin = app.isAdmin;
 
     if (isAdmin) {
       switch (game.status) {
@@ -1758,24 +1758,44 @@ class _ContextualMainButton extends StatelessWidget {
             onPressed: () => app.requestCheckIn(p.id),
             child: const Text('Check In'),
           );
-        } else {
-          return AppCard(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            glow: true,
-            child: _RsvpSection(
-              myPlayer: p,
-              cutoffPassed: app.rsvpCutoffPassed,
-              onRsvp: (rsvp) {
-                HapticFeedback.lightImpact();
-                app.setRSVP(rsvp);
-              },
-            ),
-          );
         }
       }
+      // A member who joined the group *after* this game was created is not on
+      // the seeded roster yet — synthesise a placeholder so they can still
+      // answer the invite (setRSVP adds them via _memberAsPlayer).
+      final rosterPlayer = p ?? _placeholderPlayer(user!);
+      return AppCard(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        glow: true,
+        child: _RsvpSection(
+          myPlayer: rosterPlayer,
+          cutoffPassed: app.rsvpCutoffPassed,
+          onRsvp: (rsvp) {
+            HapticFeedback.lightImpact();
+            app.setRSVP(rsvp);
+          },
+        ),
+      );
     }
-    return const SizedBox.shrink();
   }
+
+  /// A roster placeholder for a member who isn't on this game's player list
+  /// yet (they joined the group after the game was created).
+  Player _placeholderPlayer(AppUser user) => Player(
+        id: user.id,
+        name: user.name,
+        isGuest: false,
+        rsvp: null,
+        checkedIn: false,
+        confirmed: false,
+        eliminated: false,
+        rebuys: 0,
+        hasAddOn: false,
+        knockouts: 0,
+        table: 0,
+        seat: 0,
+        active: true,
+      );
 }
 
 /// The full member RSVP section: three status chips (Going / Maybe / Can't)
@@ -1827,6 +1847,9 @@ class _RsvpSectionState extends State<_RsvpSection> {
   Widget build(BuildContext context) {
     final current = widget.myPlayer.rsvp;
     final enabled = !widget.cutoffPassed;
+    final lastError = context.select<AppProvider, String?>(
+      (a) => a.lastRsvpError,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1910,6 +1933,16 @@ class _RsvpSectionState extends State<_RsvpSection> {
               'RSVPs are now closed.',
               style: AppTypography.bodyXs.copyWith(
                 color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+        if (lastError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Text(
+              lastError,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.destructive,
               ),
             ),
           ),

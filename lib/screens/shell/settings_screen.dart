@@ -189,6 +189,16 @@ class SettingsScreen extends StatelessWidget {
                   );
                   return;
                 }
+                if (!OneSignalSender.instance.configured) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Push not configured — missing ONESIGNAL_REST_API_KEY.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
                 OneSignalSender.instance.send(
                   title: 'Debug Push',
                   body: 'Hello! Your push notifications are working perfectly.',
@@ -256,7 +266,7 @@ class SettingsScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (user?.isAdmin == true)
+                if (app.isAdmin)
                   const AppBadge(label: 'Admin', variant: AppBadgeVariant.gold),
               ],
             ),

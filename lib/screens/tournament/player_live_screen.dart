@@ -49,7 +49,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final isAdmin = app.user?.isAdmin == true;
+    final isAdmin = app.isAdmin;
     // Guests get the LIMITED live view: timer, blinds, next level, players
     // remaining, average stack, their seat and announcements — no chat,
     // polls, payouts or full structure (Tech §6.6/§17, audit fix C1).

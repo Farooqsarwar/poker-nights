@@ -62,7 +62,7 @@ class ResultPodiumScreen extends StatelessWidget {
 
     // Individual payout amounts are private: only organisers see them
     // (checklist 14-042, 19-020). Public completed results carry no money.
-    final showAmounts = user?.isAdmin == true;
+    final showAmounts = app.isAdmin;
 
     final ranked = [
       for (var i = 0; i < finishOrder.length; i++)

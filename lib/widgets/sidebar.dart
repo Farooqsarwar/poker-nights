@@ -221,7 +221,7 @@ class Sidebar extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  user?.isAdmin == true ? 'Admin' : 'Player',
+                                  app.isAdmin ? 'Admin' : 'Player',
                                   style: AppTypography.bodyXs.copyWith(
                                     color: AppColors.mutedForeground,
                                   ),

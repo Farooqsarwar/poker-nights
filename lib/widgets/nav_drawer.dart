@@ -122,7 +122,7 @@ class NavDrawer extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            user.isAdmin ? 'Admin' : 'Player',
+                            app.isAdmin ? 'Admin' : 'Player',
                             style: AppTypography.bodyXs.copyWith(
                               color: AppColors.mutedForeground,
                             ),

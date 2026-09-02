@@ -147,6 +147,11 @@ class AppProvider extends ChangeNotifier {
   /// rejected. `containsKey` distinguishes "no overlay" from "overlay = clear".
   final Map<String, Rsvp?> _pendingOwnRsvp = {};
 
+  /// Last member-RSVP patch failure, surfaced on the invitation screen so
+  /// backend rejections are never invisible (vs silent optimistic state that
+  /// vanishes on refresh). Debug aid for the persistence audit.
+  String? lastRsvpError;
+
   StreamSubscription<dynamic>? _lookupSub;
   StreamSubscription<List<TournamentPreset>>? _presetsSub;
   StreamSubscription<
@@ -619,6 +624,20 @@ class AppProvider extends ChangeNotifier {
         requested: true,
       ),
     );
+    
+    // Alert the admin that a guest is waiting
+    pushNotification(
+      AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Guest Arrived',
+        body: '$name is waiting to be checked in.',
+        type: NotificationType.admin,
+        link: '/game/${game.id}/check-in',
+        read: false,
+        timestamp: DateTime.now(),
+      ),
+    );
+    
     return null;
   }
 
@@ -661,6 +680,9 @@ class AppProvider extends ChangeNotifier {
       RecoveryService.saveGame(remote);
       // Another device may have settled the tournament — record my result.
       _maybeRecordOwnResult(remote);
+      if (_isGameAuthority) {
+        _publishProjections(_currentGame!);
+      }
       notifyListeners();
     } catch (e) {
       debugPrint('remote game decode failed: $e');
@@ -1111,7 +1133,13 @@ class AppProvider extends ChangeNotifier {
     var cursor = _mirrorCursors[gid] ?? -1;
 
     if (!primed) {
+      // First-ever view of this group's outbox on this device: baseline
+      // silently so a brand-new user's inbox isn't flooded with the group's
+      // back-history. The flag is persisted, so this ONLY happens once — on
+      // later app starts the cursor is restored and anything staged while
+      // the app was closed IS delivered.
       _outboxPrimed[gid] = true;
+      _persistPref('notifMirrorPrimed_$gid', true);
       for (final d in docs) {
         cursor = max(cursor, d.updatedAtMillis);
         _mirroredOutboxIds.add(d.id);
@@ -1365,6 +1393,10 @@ class AppProvider extends ChangeNotifier {
           final gid = entry.key.substring('notifMirrorCursor_'.length);
           final v = entry.value;
           if (v is num) _mirrorCursors[gid] = v.toInt();
+        } else if (entry.key.startsWith('notifMirrorPrimed_')) {
+          final gid = entry.key.substring('notifMirrorPrimed_'.length);
+          final v = entry.value;
+          if (v is bool) _outboxPrimed[gid] = v;
         }
       }
       notifyListeners();
@@ -3574,12 +3606,14 @@ class AppProvider extends ChangeNotifier {
         debugPrint('reserveGuestSlotTx(guestCheckIn) failed: $e');
         return 'Could not reach the host. Check your connection.';
       }
-      // The guest stays pending until the host confirms them at check-in
-      // (spec §6 "waiting for admin confirmation", checklist 07-027/07-028).
-      return null;
     }
 
-    // Offline / mock mode: apply locally (same rules the admin would apply).
+    // The guest stays pending until the host confirms them at check-in
+    // (spec §6 "waiting for admin confirmation", checklist 07-027/07-028).
+    // Apply the pending guest locally (online AND offline) so this device
+    // shows "waiting" instead of collapsing to "rejected" while the host's
+    // request queue still holds the claim; the published projection then
+    // reconciles to confirmed/rejected once the host decides.
     _pushUndo();
     final guest = Player(
       id: guestId,
@@ -5094,22 +5128,47 @@ class AppProvider extends ChangeNotifier {
   /// rejection the optimistic overlay ([_pendingOwnRsvp]) is dropped so the
   /// next remote snapshot shows the real state instead of a phantom RSVP.
   void _persistOwnRsvpPatch(String gameId, Map<String, dynamic> dotPaths) {
-    if (dotPaths.isEmpty) {
+    String? fail(String reason) {
+      debugPrint('RSVP patch SKIPPED: $reason (gameId=$gameId)');
+      lastRsvpError = 'RSVP not saved: $reason';
       _pendingOwnRsvp.remove(gameId);
+      notifyListeners();
+      return reason;
+    }
+
+    if (dotPaths.isEmpty) {
+      fail('empty dotPaths (rsvp diff produced no change)');
       return;
     }
-    if (!_backendUp || _user == null) return;
+    if (!_backendUp || _user == null) {
+      fail('!_backendUp=${!_backendUp} / user=${_user?.id}');
+      return;
+    }
     final g = _currentGame?.id == gameId
         ? _currentGame
         : _currentGroup.games.where((x) => x.id == gameId).firstOrNull;
     final gid =
         (g != null && g.groupId.isNotEmpty) ? g.groupId : _currentGroupId;
-    if (gid == null) return;
-    unawaited(_repo.patchGame(gid, gameId, dotPaths).catchError((Object e) {
-      debugPrint('RSVP patch failed: $e');
-      _pendingOwnRsvp.remove(gameId);
-      notifyListeners();
-    }));
+    if (gid == null) {
+      fail('gid null (game on screen: ${_currentGame?.id}, group: $_currentGroupId)');
+      return;
+    }
+    unawaited(
+      _repo.patchGame(gid, gameId, dotPaths).then((_) {
+        if (lastRsvpError != null) {
+          lastRsvpError = null;
+          notifyListeners();
+        }
+        if (g != null) {
+          _publishProjections(g);
+        }
+      }).catchError((Object e) {
+        debugPrint('RSVP patch failed: $e');
+        lastRsvpError = 'RSVP save failed: $e';
+        _pendingOwnRsvp.remove(gameId);
+        notifyListeners();
+      }),
+    );
   }
 
   /// A roster [Player] for the signed-in member, from the group roster. Used

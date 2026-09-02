@@ -115,7 +115,7 @@ class ProfileScreen extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (user.isAdmin) ...[
+                          if (app.isAdmin) ...[
                             const SizedBox(width: AppSpacing.sm),
                             const AppBadge(
                               label: 'Admin',

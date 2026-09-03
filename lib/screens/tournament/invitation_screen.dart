@@ -161,6 +161,40 @@ class _InvitationScreenState extends State<InvitationScreen> {
             ),
           ],
           _ContextualMainButton(game: game, user: user, myPlayer: myPlayer),
+
+          if (user != null && 
+              !app.isGuest &&
+              game.status != LiveGameStatus.completed &&
+              game.status != LiveGameStatus.cancelled && 
+              (myPlayer == null || (!myPlayer.checkedIn && !myPlayer.isGuest))) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              glow: true,
+              child: _RsvpSection(
+                myPlayer: myPlayer ?? Player(
+                  id: user.id,
+                  name: user.name,
+                  isGuest: false,
+                  rsvp: null,
+                  checkedIn: false,
+                  confirmed: false,
+                  eliminated: false,
+                  rebuys: 0,
+                  hasAddOn: false,
+                  knockouts: 0,
+                  table: 0,
+                  seat: 0,
+                  active: true,
+                ),
+                cutoffPassed: app.rsvpCutoffPassed,
+                onRsvp: (rsvp) {
+                  HapticFeedback.lightImpact();
+                  app.setRSVP(rsvp);
+                },
+              ),
+            ),
+          ],
           // Admin-only: where the structure stands. The AI estimate unlocks
           // 30 minutes before start (client rule) — before that the group is
           // still deciding who is coming.
@@ -870,6 +904,18 @@ void _showRsvpListModal(BuildContext context, LiveGame game) {
               ],
             ),
           ),
+        const SizedBox(height: AppSpacing.xl),
+        AppButton(
+          fullWidth: true,
+          size: AppButtonSize.xl,
+          onPressed: () {
+            Navigator.of(context).pop();
+            final app = context.read<AppProvider>();
+            app.updateGameStatus(LiveGameStatus.checkin);
+            context.go(RoutePaths.checkIn);
+          },
+          child: const Text('Open Check-in'),
+        ),
       ],
     ),
   );
@@ -1665,7 +1711,7 @@ class _ContextualMainButton extends StatelessWidget {
             fullWidth: true,
             size: AppButtonSize.xl,
             onPressed: () => _openEditModal(context, app, game),
-            child: const Text('Review RSVPs'),
+            child: const Text('Edit Event'),
           );
         case LiveGameStatus.published:
           // Audit fix (E4): the button used to jump to Check-in. It now
@@ -1862,42 +1908,9 @@ class _ContextualMainButton extends StatelessWidget {
           );
         }
       }
-      // A member who joined the group *after* this game was created is not on
-      // the seeded roster yet — synthesise a placeholder so they can still
-      // answer the invite (setRSVP adds them via _memberAsPlayer).
-      final rosterPlayer = p ?? _placeholderPlayer(user!);
-      return AppCard(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        glow: true,
-        child: _RsvpSection(
-          myPlayer: rosterPlayer,
-          cutoffPassed: app.rsvpCutoffPassed,
-          onRsvp: (rsvp) {
-            HapticFeedback.lightImpact();
-            app.setRSVP(rsvp);
-          },
-        ),
-      );
+      return const SizedBox.shrink();
     }
   }
-
-  /// A roster placeholder for a member who isn't on this game's player list
-  /// yet (they joined the group after the game was created).
-  Player _placeholderPlayer(AppUser user) => Player(
-        id: user.id,
-        name: user.name,
-        isGuest: false,
-        rsvp: null,
-        checkedIn: false,
-        confirmed: false,
-        eliminated: false,
-        rebuys: 0,
-        hasAddOn: false,
-        knockouts: 0,
-        table: 0,
-        seat: 0,
-        active: true,
-      );
 }
 
 /// The full member RSVP section: three status chips (Going / Maybe / Can't)
@@ -1929,6 +1942,17 @@ class _RsvpSectionState extends State<_RsvpSection> {
     final rsvp = widget.myPlayer.rsvp;
     if (rsvp != null && rsvp.isGoing) {
       _guestCount = rsvp.guestCount;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _RsvpSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final rsvp = widget.myPlayer.rsvp;
+    if (rsvp != null && rsvp.isGoing) {
+      if (_guestCount != rsvp.guestCount) {
+        _guestCount = rsvp.guestCount;
+      }
     }
   }
 

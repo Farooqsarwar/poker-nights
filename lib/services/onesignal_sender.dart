@@ -30,6 +30,7 @@ class OneSignalSender {
   // Never hardcode the key in source so it cannot be committed.
   static const String _apiKey = String.fromEnvironment(
     'ONESIGNAL_REST_API_KEY',
+    defaultValue: '',
   );
 
   /// OneSignal's newer keys (the `os_v2_app_` prefix) authenticate with the

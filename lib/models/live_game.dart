@@ -260,6 +260,8 @@ class LiveGame {
     this.addOnRequests = const [],
     this.levelEndTime,
     this.changeLog = const [],
+    this.revision = 0,
+    this.lastIdempotencyKey,
   });
 
   final String id;
@@ -330,6 +332,17 @@ class LiveGame {
   /// §10.4): "2026-08-24 14:05 · buy-in 15 → 20". Oldest first; the provider
   /// caps the list when appending. Rendered prominently on the event page.
   final List<String> changeLog;
+
+  /// Monotonic revision counter bumped on every accepted administrator
+  /// operational action (elimination, rebuy, add-on, level transition, etc.).
+  /// Combined with [lastIdempotencyKey] this guards against double-applying a
+  /// duplicate action after a browser retry or an offline-restore replay
+  /// (technical §18.1).
+  final int revision;
+
+  /// The idempotency key of the most recently accepted administrator action.
+  /// A replayed action carrying the same key is skipped — never applied twice.
+  final String? lastIdempotencyKey;
 
   List<GuestSlot> get availableGuestSlots =>
       guestSlots.where((s) => s.available).toList();
@@ -451,6 +464,8 @@ class LiveGame {
     List<String>? addOnRequests,
     DateTime? levelEndTime,
     List<String>? changeLog,
+    int? revision,
+    String? lastIdempotencyKey,
   }) {
     return LiveGame(
       id: id ?? this.id,
@@ -483,6 +498,8 @@ class LiveGame {
       addOnRequests: addOnRequests ?? this.addOnRequests,
       levelEndTime: levelEndTime ?? this.levelEndTime,
       changeLog: changeLog ?? this.changeLog,
+      revision: revision ?? this.revision,
+      lastIdempotencyKey: lastIdempotencyKey ?? this.lastIdempotencyKey,
     );
   }
 }

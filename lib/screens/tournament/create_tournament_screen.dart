@@ -24,6 +24,7 @@ import '../../widgets/app_toggle.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/chip_token.dart';
+import '../../widgets/coin_shuffle_animation.dart';
 
 enum _ChipMode { preset, quick, exact }
 
@@ -646,6 +647,41 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     );
     app.setCurrentGame(game);
     app.publishGame();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.card,
+        elevation: 24,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xxxl,
+            vertical: AppSpacing.xxxl,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CoinShuffleAnimation(),
+              const SizedBox(height: AppSpacing.xxl),
+              Text(
+                'AI is generating tournament...',
+                textAlign: TextAlign.center,
+                style: AppTypography.display(size: AppFontSizes.lg),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await Future.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
+    Navigator.of(context).pop();
+
     context.go(RoutePaths.invitation);
   }
 

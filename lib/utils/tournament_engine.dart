@@ -386,6 +386,7 @@ class TournamentEngine {
     int prizePool,
     int players, [
     int? forcePaidPlaces,
+    int roundingUnit = 10,
   ]) {
     if (prizePool <= 0) return const [];
 
@@ -408,7 +409,7 @@ class TournamentEngine {
 
     // Whether every place can, in principle, be a multiple of 10. Only false
     // for the rare non-round pool; drives how strictly we validate below.
-    final poolIsRound = prizePool % 10 == 0;
+    final poolIsRound = prizePool % roundingUnit == 0;
 
     // Distribution weights approximating the section-25 reference style.
     // Index 0 is place 1 (largest). Chosen per place count:
@@ -432,8 +433,8 @@ class TournamentEngine {
       // per-place minimum of 10 so no paid place is ever 0.
       var allocatedToLower = 0;
       for (var i = paidPlaces - 1; i >= 1; i--) {
-        var amt = ((weights[i] * prizePool) / 10).floor() * 10;
-        if (amt < 10) amt = 10;
+        var amt = ((weights[i] * prizePool) / roundingUnit).floor() * roundingUnit;
+        if (amt < roundingUnit) amt = roundingUnit;
         amounts[i] = amt;
         allocatedToLower += amt;
       }
@@ -444,7 +445,7 @@ class TournamentEngine {
       // When the pool is round, place 1 is already a multiple of 10 — but a 5
       // digit can still surface if a lower place absorbed odd units. Fix it by
       // transferring 5 to/from place 2, preserving the sum.
-      if (poolIsRound && amounts[0] % 10 == 5) {
+      if (roundingUnit == 10 && poolIsRound && amounts[0] % 10 == 5) {
         if (amounts[1] >= 15) {
           amounts[0] += 5;
           amounts[1] -= 5;
@@ -464,7 +465,7 @@ class TournamentEngine {
       for (var i = 0; i < paidPlaces && valid; i++) {
         if (amounts[i] <= 0) valid = false;
         final mustBeRound = i != 0 || poolIsRound;
-        if (mustBeRound && amounts[i] % 10 != 0) valid = false;
+        if (mustBeRound && amounts[i] % roundingUnit != 0) valid = false;
       }
       if (!valid) {
         paidPlaces--;
@@ -486,7 +487,7 @@ class TournamentEngine {
   /// Test-only wrapper exposing [_calcPrizes] for the payout acceptance tests.
   @visibleForTesting
   static List<Prize> calcPrizesForTest(int prizePool, int players) =>
-      _calcPrizes(prizePool, players);
+      _calcPrizes(prizePool, players, null, 10);
 
   /// Recalculates the organizer amount, final prize pool, and prize distribution.
   /// This is used dynamically when late players join or rebuys/add-ons are taken.
@@ -496,6 +497,7 @@ class TournamentEngine {
     int players,
     num organizerPct, {
     int? forcePaidPlaces,
+    int roundingUnit = 10,
   }) {
     // Organizer cut: computed in integer cents to avoid floating-point drift.
     // targetOrganizer = grossEligible * organizerPct / 100, rounded half-up.
@@ -503,15 +505,15 @@ class TournamentEngine {
     // the same units digit as grossEligible (so the remaining prize pool is
     // always a clean multiple of 10 — spec §9.2).
     final targetOrganizer = (grossEligible * organizerPct + 50) ~/ 100;
-    final mod = grossEligible % 10;
+    final mod = grossEligible % roundingUnit;
     var organizerAmount = 0;
 
     if (organizerPct > 0) {
       // Two candidates that carry the correct units digit mod 10, bracketing
       // the target. Pick the closer one; ties broken toward the smaller value.
       final baseUnits = (targetOrganizer - mod);
-      final floorCandidate = (baseUnits ~/ 10) * 10 + mod;
-      final ceilCandidate = floorCandidate + 10;
+      final floorCandidate = (baseUnits ~/ roundingUnit) * roundingUnit + mod;
+      final ceilCandidate = floorCandidate + roundingUnit;
       for (final c in [floorCandidate, ceilCandidate]) {
         if (c < 0 || c > grossEligible) continue;
         final d = (targetOrganizer - c).abs();
@@ -527,7 +529,7 @@ class TournamentEngine {
     var prizePool = grossEligible - organizerAmount;
     if (prizePool < 0) prizePool = 0;
 
-    final prizes = _calcPrizes(prizePool, players, forcePaidPlaces);
+    final prizes = _calcPrizes(prizePool, players, forcePaidPlaces, roundingUnit);
     return (
       organizerAmount: organizerAmount,
       prizePool: prizePool,
@@ -573,10 +575,11 @@ class TournamentEngine {
     var stack = startingStack;
     List<ChipPlanEntry> chipPlan;
     while (true) {
+      final int bufferedPlayers = params.players + (params.players * 0.20).ceil();
       chipPlan = _buildChipPlan(
         stack,
         params.chipSet,
-        params.players,
+        bufferedPlayers,
         params.rebuys ? 2 : 1.2,
       );
       final covered = chipPlan.fold<int>(0, (s, e) => s + e.count * e.value);
@@ -740,10 +743,15 @@ class TournamentEngine {
         params.effectiveRebuyCost * expectedRebuysTotal +
         params.buyIn * expectedReEntriesTotal +
         params.effectiveAddOnCost * expectedAddOnsTotal;
+    int roundingUnit = 10;
+    if (params.buyIn < 10) roundingUnit = 1;
+    else if (params.buyIn % 5 == 0) roundingUnit = 5;
+
     final recalculated = recalculatePrizes(
       grossEligible,
       params.players,
       params.organizerPct,
+      roundingUnit: roundingUnit,
     );
     final organizerAmount = recalculated.organizerAmount;
     final prizePool = recalculated.prizePool;

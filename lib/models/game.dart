@@ -91,6 +91,7 @@ class Player {
 
   Player copyWith({
     String? name,
+    String? inviterId,
     Rsvp? rsvp,
     bool? checkedIn,
     bool? confirmed,
@@ -108,7 +109,7 @@ class Player {
       id: id,
       name: name ?? this.name,
       isGuest: isGuest,
-      inviterId: inviterId,
+      inviterId: inviterId ?? this.inviterId,
       guestSlot: guestSlot,
       rsvp: rsvp ?? this.rsvp,
       checkedIn: checkedIn ?? this.checkedIn,

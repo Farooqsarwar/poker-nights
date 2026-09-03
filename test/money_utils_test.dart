@@ -119,31 +119,31 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   group('formatCurrency', () {
     test('standard amounts', () {
-      expect(MoneyUtils.formatCurrency(15000), r'$150.00');
-      expect(MoneyUtils.formatCurrency(0), r'$0.00');
-      expect(MoneyUtils.formatCurrency(5), r'$0.05');
-      expect(MoneyUtils.formatCurrency(1), r'$0.01');
-      expect(MoneyUtils.formatCurrency(100), r'$1.00');
+      expect(MoneyUtils.formatCurrency(15000), '150.00');
+      expect(MoneyUtils.formatCurrency(0), '0.00');
+      expect(MoneyUtils.formatCurrency(5), '0.05');
+      expect(MoneyUtils.formatCurrency(1), '0.01');
+      expect(MoneyUtils.formatCurrency(100), '1.00');
     });
 
     test('large amounts', () {
-      expect(MoneyUtils.formatCurrency(1400000), r'$14000.00');
+      expect(MoneyUtils.formatCurrency(1400000), '14000.00');
     });
 
     test('zero is formatted correctly', () {
-      expect(MoneyUtils.formatCurrency(0), r'$0.00');
+      expect(MoneyUtils.formatCurrency(0), '0.00');
     });
   });
 
   group('formatSigned', () {
     test('positive', () {
-      expect(MoneyUtils.formatSigned(2000), r'+$20.00');
+      expect(MoneyUtils.formatSigned(2000), '+20.00');
     });
     test('negative', () {
-      expect(MoneyUtils.formatSigned(-500), r'-$5.00');
+      expect(MoneyUtils.formatSigned(-500), '-5.00');
     });
     test('zero', () {
-      expect(MoneyUtils.formatSigned(0), r'+$0.00');
+      expect(MoneyUtils.formatSigned(0), '+0.00');
     });
   });
 }

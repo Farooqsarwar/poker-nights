@@ -30,6 +30,8 @@ enum _GuestStep {
   waiting,
   confirmed,
   rejected,
+  notLive,
+  wrongOwner,
 }
 
 /// Guest join flow mirroring the web `GuestFlowPage`.
@@ -48,6 +50,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   String? _nameError;
   String? _selectedInviter;
   int? _selectedSlot;
+  bool _submittingCheckIn = false;
 
   @override
   void initState() {
@@ -61,13 +64,31 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       _selectedSlot = session.slot;
       _nameController.text = session.name;
       final guest = _matchGuest(game, session);
-      _step = guest != null && guest.confirmed
-          ? _GuestStep.confirmed
-          : _GuestStep.waiting;
+      _step = _routeAfterBooking(game, guest);
     } else {
       // No saved session: show the event details first, then claim.
       _step = game == null ? _GuestStep.enterCode : _GuestStep.eventIntro;
     }
+  }
+
+  /// Decides where a guest who now owns a booking should land — straight into
+  /// the confirmed seat view (from where they enter the live match) when the
+  /// game is already live, or the "come back later" screen when it hasn't
+  /// started yet.
+  static _GuestStep _routeAfterBooking(LiveGame game, Player? guest) {
+    return game.status.isActiveLive
+        ? _GuestStep.confirmed
+        : _GuestStep.notLive;
+  }
+
+  /// Renders the schedule date/time, uppercasing the time suffix so e.g.
+  /// "8:00 PM" reads consistently.
+  static String _formatSchedule(String date, String time) {
+    final t = time.trim();
+    if (t.toLowerCase().endsWith('am') || t.toLowerCase().endsWith('pm')) {
+      return '$date · ${t.toUpperCase()}';
+    }
+    return '$date · $t';
   }
 
   /// Finds the guest in [game]'s player list that matches the stored session.
@@ -131,9 +152,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         final guest = _matchGuest(game, session);
         setState(() {
           _codeError = null;
-          _step = guest != null && guest.confirmed
-              ? _GuestStep.confirmed
-              : _GuestStep.waiting;
+          _step = _routeAfterBooking(game, guest);
         });
       } else {
         setState(() {
@@ -150,39 +169,46 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   }
 
   Future<void> _requestCheckIn() async {
+    if (_submittingCheckIn) return; // #5: block double-tap / double-claim race
     final app = context.read<AppProvider>();
-    if (_selectedInviter != null &&
-        _selectedSlot != null &&
-        _nameController.text.trim().isNotEmpty) {
-      final err = await app.requestGuestCheckIn(
-        _nameController.text.trim(),
-        _selectedInviter!,
-        _selectedSlot!,
-      );
-      if (!mounted) return;
-      if (err != null) {
-        if (err.contains('already')) {
-          // C3: Guide guest back to pick another slot on conflict
-          setState(() {
-            _selectedSlot = null;
-            _step = _GuestStep.chooseSlot;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(err + ' Please select a different slot.'),
-                backgroundColor: AppColors.warning,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          });
-        } else {
-          setState(() => _nameError = err);
-        }
-        return;
-      }
+    if (_selectedInviter == null ||
+        _selectedSlot == null ||
+        _nameController.text.trim().isEmpty) {
+      return;
     }
+    setState(() => _submittingCheckIn = true);
+    final result = await app.requestGuestCheckIn(
+      _nameController.text.trim(),
+      _selectedInviter!,
+      _selectedSlot!,
+    );
+    if (mounted) setState(() => _submittingCheckIn = false);
+    if (!mounted) return;
+
+    if (result.status == GuestCheckInStatus.taken) {
+      // The slot is booked under a different name — don't overwrite it. Show
+      // the conflict and send the guest back to pick another slot.
+      setState(() {
+        _nameError = null;
+        _step = _GuestStep.wrongOwner;
+      });
+      return;
+    }
+    if (!result.ok) {
+      // Transient / validation failure — keep them at the name step.
+      setState(() =>
+          _nameError = result.message ?? 'Could not reserve that slot.');
+      return;
+    }
+
+    // Booked (new) or confirmed (re-identified): route by whether the game is
+    // live. Live -> seat view (from there they enter the match); not live ->
+    // "come back later" with the start schedule.
+    final game = app.currentGame;
+    final guest = _currentGuest();
     setState(() {
       _nameError = null;
-      _step = _GuestStep.waiting;
+      _step = _routeAfterBooking(game!, guest);
     });
   }
 
@@ -247,14 +273,15 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     final level = game.currentLevelData;
 
     // While waiting, react to the admin's decision in real time: the guest is
-    // confirmed once their player record is confirmed, and rejected once it is
-    // removed from the game (07-027/07-028).
+    // confirmed once their player record is confirmed (07-027/07-028). A
+    // pending guest is deliberately NOT downgraded to "rejected" here — their
+    // own booking is authoritative until the host explicitly frees the slot,
+    // so a projection refresh while the request is still pending must not show
+    // a false decline.
     var view = _step;
     if (view == _GuestStep.waiting) {
       final guest = _currentGuest();
-      if (guest == null) {
-        view = _GuestStep.rejected;
-      } else if (guest.confirmed) {
+      if (guest != null && guest.confirmed) {
         view = _GuestStep.confirmed;
       }
     }
@@ -340,14 +367,17 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             registeredPlayers,
           ),
           _GuestStep.chooseSlot => _buildChooseSlot(
+            game,
             inviter,
             availableSlots,
             game.players,
           ),
           _GuestStep.enterName => _buildEnterName(inviter),
-          _GuestStep.waiting => _buildWaiting(inviter),
+          _GuestStep.waiting => _buildWaiting(game, inviter),
           _GuestStep.confirmed => _buildConfirmed(level),
           _GuestStep.rejected => _buildRejected(),
+          _GuestStep.notLive => _buildNotLive(game),
+          _GuestStep.wrongOwner => _buildWrongOwner(),
           _GuestStep.enterCode => const SizedBox.shrink(),
         },
       ],
@@ -681,6 +711,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   }
 
   Widget _buildChooseSlot(
+    LiveGame game,
     Player? inviter,
     int availableSlots,
     List<Player> players,
@@ -715,15 +746,24 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                       p.inviterId == inviter?.id &&
                       p.guestSlot == slot,
                 );
+                
+                final slotRecord = game.guestSlots
+                    .where((s) => s.inviterId == inviter?.id && s.slot == slot)
+                    .firstOrNull;
+                final reservedName = slotRecord?.guestName;
+                final isReserved = slotRecord?.status == GuestSlotStatus.reserved && reservedName != null && reservedName.isNotEmpty;
+
                 return InkWell(
-                  onTap: () => setState(() => _selectedSlot = slot),
+                  onTap: taken ? null : () => setState(() => _selectedSlot = slot),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Container(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: _selectedSlot == slot
-                          ? AppColors.primarySoft
-                          : Colors.transparent,
+                      color: taken 
+                          ? AppColors.muted
+                          : (_selectedSlot == slot
+                              ? AppColors.primarySoft
+                              : Colors.transparent),
                       borderRadius: BorderRadius.circular(AppRadius.md),
                       border: Border.all(
                         color: _selectedSlot == slot
@@ -734,9 +774,10 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                     child: Row(
                       children: [
                         Text(
-                          "${inviter?.name ?? ''}'s Guest $slot",
+                          isReserved ? "Reserved for $reservedName" : "${inviter?.name ?? ''}'s Guest $slot",
                           style: AppTypography.bodySm.copyWith(
                             fontWeight: FontWeight.w500,
+                            color: taken ? AppColors.mutedForeground : null,
                           ),
                         ),
                         if (taken) ...[
@@ -744,6 +785,12 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                           const AppBadge(
                             label: 'Taken',
                             variant: AppBadgeVariant.red,
+                          ),
+                        ] else if (isReserved) ...[
+                          const Spacer(),
+                          const AppBadge(
+                            label: 'Reserved',
+                            variant: AppBadgeVariant.accent,
                           ),
                         ],
                       ],
@@ -754,6 +801,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
+          const SizedBox(height: AppSpacing.sm),
           AppButton(
             variant: AppButtonVariant.primary,
             fullWidth: true,
@@ -763,7 +811,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Select slot'),
+                Text('Continue'),
                 SizedBox(width: 6),
                 Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
               ],
@@ -842,14 +890,15 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           AppButton(
             variant: AppButtonVariant.primary,
             fullWidth: true,
-            onPressed: _nameController.text.trim().isEmpty
+            onPressed: (_nameController.text.trim().isEmpty ||
+                    _submittingCheckIn)
                 ? null
                 : _requestCheckIn,
-            child: const Text('Request check-in'),
+            child: const Text('Confirm'),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'The host will confirm your seat.',
+            'If this slot is free, it will be booked for you. If it is already booked, it must match the name you used.',
             textAlign: TextAlign.center,
             style: AppTypography.bodyXs.copyWith(
               color: AppColors.mutedForeground,
@@ -860,7 +909,13 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     );
   }
 
-  Widget _buildWaiting(Player? inviter) {
+  Widget _buildWaiting(LiveGame game, Player? inviter) {
+    final slotRecord = game.guestSlots
+        .where((s) => s.inviterId == inviter?.id && s.slot == (_selectedSlot ?? 1))
+        .firstOrNull;
+    final reservedName = slotRecord?.guestName;
+    final isReserved = slotRecord?.status == GuestSlotStatus.reserved && reservedName != null && reservedName.isNotEmpty;
+
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xxxl),
       child: Column(
@@ -904,7 +959,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                   ),
                 ),
                 Text(
-                  "${inviter?.name ?? ''}'s Guest ${_selectedSlot ?? 1}",
+                  isReserved ? "Reserved for $reservedName" : "${inviter?.name ?? ''}'s Guest ${_selectedSlot ?? 1}",
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -958,6 +1013,198 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           fullWidth: true,
           onPressed: _startOver,
           child: const Text('Start over'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotLive(LiveGame game) {
+    final session = context.read<AppProvider>().guestSession;
+    final reservedName = session?.name;
+    final guest = _currentGuest();
+    final confirmed = guest != null && guest.confirmed;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppCard(
+          glow: true,
+          borderColor: AppColors.successSoftBorder,
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: Column(
+            children: [
+              Icon(
+                confirmed ? Icons.check_circle : Icons.event_available,
+                size: AppFontSizes.displayLg,
+                color: AppColors.success,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                confirmed ? 'You\u2019re confirmed!' : 'Your slot is booked',
+                style: AppTypography.display(
+                  size: AppFontSizes.xl,
+                  weight: FontWeight.w600,
+                  color: AppColors.success,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                confirmed
+                    ? 'The host has accepted your seat.'
+                    : (reservedName == null || reservedName.isEmpty
+                          ? 'You have a reserved seat.'
+                          : 'Reserved for $reservedName.'),
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (confirmed) ...[
+          const SizedBox(height: AppSpacing.md),
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your seat',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  guest.table > 0 && guest.seat > 0
+                      ? 'Table ${guest.table} · Seat ${guest.seat}'
+                      : 'Table 1 · Seat ${_selectedSlot ?? 1}',
+                  style: AppTypography.mono(
+                    size: AppFontSizes.xxl,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+                if (!(guest.table > 0 && guest.seat > 0))
+                  Text(
+                    'Seats are assigned once the host generates the seating plan.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'The game isn\u2019t live yet',
+                style: AppTypography.display(size: AppFontSizes.lg),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'The tournament goes live once the host starts it. Come back then to watch your match live.',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.muted,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'Scheduled for',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    Text(
+                      _formatSchedule(game.settings.date, game.settings.time),
+                      style: AppTypography.bodyStyle.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          variant: AppButtonVariant.secondary,
+          size: AppButtonSize.lg,
+          fullWidth: true,
+          onPressed: _startOver,
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWrongOwner() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppCard(
+          borderColor: AppColors.warning.withValues(alpha: 0.6),
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: Column(
+            children: [
+              Icon(
+                Icons.event_busy,
+                size: AppFontSizes.displayLg,
+                color: AppColors.warning,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Not booked on your name',
+                style: AppTypography.display(
+                  size: AppFontSizes.xl,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'This slot is not booked on the name you entered — it is reserved for someone else. It was not changed.',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          variant: AppButtonVariant.primary,
+          size: AppButtonSize.lg,
+          fullWidth: true,
+          onPressed: () {
+            _nameController.clear();
+            setState(() => _step = _GuestStep.chooseSlot);
+          },
+          child: const Text('Pick a different slot'),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AppButton(
+          variant: AppButtonVariant.secondary,
+          size: AppButtonSize.lg,
+          fullWidth: true,
+          onPressed: () {
+            setState(() => _step = _GuestStep.enterName);
+          },
+          child: const Text('Try another name'),
         ),
       ],
     );

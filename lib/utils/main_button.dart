@@ -131,7 +131,7 @@ MainAction _adminAction(LiveGame game) {
     case LiveGameStatus.checkin:
       return const MainAction(
         MainActionId.openCheckIn,
-        'Open Check-in',
+        'Manage Check-in',
         route: RoutePaths.checkIn,
       );
     case LiveGameStatus.ready:

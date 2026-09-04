@@ -442,23 +442,50 @@ class AppProvider extends ChangeNotifier {
     if (identical(_lastSavedGame, game)) return;
     _gameSaveDebounce?.cancel();
     final effectiveGid = game.groupId.isNotEmpty ? game.groupId : gid;
-    _gameSaveDebounce = Timer(const Duration(milliseconds: 400), () async {
+    _gameSaveDebounce = Timer(const Duration(milliseconds: 400), () {
       final g = _currentGame;
       if (g == null || _user == null) return;
-      try {
-        // Stamp the owning group so recovered/draft games land in the right
-        // collection even when the model was built before selection.
-        final toSave =
-            g.groupId.isNotEmpty ? g : g.copyWith(groupId: effectiveGid);
-        await _repo.saveGame(toSave);
-        await _publishProjections(toSave);
-        _lastSavedGame = g;
-      } catch (e) {
-        debugPrint('saveGame failed: $e');
-      }
-      _pendingGameSave = false;
+      _pendingLatestSave = g;
+      _pendingGameSave = true;
+      unawaited(_drainGameSaveQueue(effectiveGid));
     });
-    _pendingGameSave = true;
+  }
+
+  /// Serializes whole-document game saves so rapid admin actions (pause /
+  /// resume, check-in accept, level changes) can never land out of order.
+  /// Only one `.set()` runs at a time and the freshest snapshot always wins,
+  /// so a slower earlier write can no longer clobber a newer one (the
+  /// "tap 2-3-5 times then it works" / self-resume-pause symptom).
+  bool _gameSaveInFlight = false;
+  LiveGame? _pendingLatestSave;
+
+  Future<void> _drainGameSaveQueue(String effectiveGid) async {
+    if (_gameSaveInFlight) return;
+    _gameSaveInFlight = true;
+    try {
+      do {
+        final target = _pendingLatestSave;
+        _pendingLatestSave = null;
+        if (target == null || _user == null) break;
+        final g = _currentGame;
+        // Prefer the very latest authoritative state for this game.
+        final freshest = (g != null && g.id == target.id) ? g : target;
+        if (identical(_lastSavedGame, freshest)) continue;
+        final toWrite = freshest.groupId.isNotEmpty
+            ? freshest
+            : freshest.copyWith(groupId: effectiveGid);
+        try {
+          await _repo.saveGame(toWrite);
+          await _publishProjections(toWrite);
+          _lastSavedGame = toWrite;
+        } catch (e) {
+          debugPrint('saveGame failed: $e');
+        }
+      } while (_pendingLatestSave != null);
+    } finally {
+      _gameSaveInFlight = false;
+      if (_pendingLatestSave == null) _pendingGameSave = false;
+    }
   }
 
   LiveGame? _lastSavedGame;
@@ -2876,7 +2903,9 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void nextLevel() {
+  void nextLevel({String? idempotencyKey}) {
+    final rev = _claimIdempotency(idempotencyKey ?? '');
+    if (rev == null) return; // replayed action — already applied
     final next = _currentGame!.currentLevel + 1;
     _pushUndo();
     _levelAnnouncementMarks.clear();
@@ -2900,6 +2929,8 @@ class AppProvider extends ChangeNotifier {
         status: LiveGameStatus.rebuypause,
         speedRecommendation: null,
         levelEndTime: null,
+        revision: rev,
+        lastIdempotencyKey: idempotencyKey ?? '',
       );
       addAnnouncement(
         'Rebuys are now closed. Add-ons are available.',
@@ -2950,6 +2981,8 @@ class AppProvider extends ChangeNotifier {
         status: LiveGameStatus.running,
         speedRecommendation: null,
         levelEndTime: _serverNow.add(Duration(minutes: extLevel.durationMins)),
+        revision: rev,
+        lastIdempotencyKey: idempotencyKey ?? '',
       );
       addAnnouncement(
         'Level $next. Blinds ${extLevel.sb} / ${extLevel.bb}'
@@ -2963,7 +2996,9 @@ class AppProvider extends ChangeNotifier {
 
   /// Rewinds to the previous level (spec §12 "Previous" control). The clock
   /// resets to the full previous-level duration and the game resumes running.
-  void previousLevel() {
+  void previousLevel({String? idempotencyKey}) {
+    final rev = _claimIdempotency(idempotencyKey ?? '');
+    if (rev == null) return; // replayed action — already applied
     final prev = _currentGame!.currentLevel - 1;
     if (prev < 1) return;
     _pushUndo();
@@ -2976,6 +3011,8 @@ class AppProvider extends ChangeNotifier {
       status: LiveGameStatus.running,
       speedRecommendation: null,
       levelEndTime: _serverNow.add(Duration(minutes: level.durationMins)),
+      revision: rev,
+      lastIdempotencyKey: idempotencyKey ?? '',
     );
     addAnnouncement(
       'Level $prev. Blinds ${level.sb} and ${level.bb}'
@@ -2983,12 +3020,13 @@ class AppProvider extends ChangeNotifier {
       true,
     );
     _syncGroupGame();
+    notifyListeners();
   }
 
   /// Restarts the clock for the current level (spec §12: requires
   /// confirmation showing its exact effect — the admin UI gates this behind a
   /// confirm dialog). Resets to the full level duration and resumes running.
-  void restartLevel() {
+  void restartLevel({String? idempotencyKey}) {
     final game = _currentGame;
     if (game == null) return;
     if (game.status != LiveGameStatus.running &&
@@ -2996,6 +3034,8 @@ class AppProvider extends ChangeNotifier {
         game.status != LiveGameStatus.rebuypause) {
       return;
     }
+    final rev = _claimIdempotency(idempotencyKey ?? '');
+    if (rev == null) return; // replayed action — already applied
     _pushUndo();
     _levelAnnouncementMarks.clear();
     final level = game.currentLevelData;
@@ -3006,6 +3046,8 @@ class AppProvider extends ChangeNotifier {
       status: LiveGameStatus.running,
       speedRecommendation: null,
       levelEndTime: _serverNow.add(Duration(minutes: durationMins)),
+      revision: rev,
+      lastIdempotencyKey: idempotencyKey ?? '',
     );
     _syncGroupGame();
     addAuditRecord(
@@ -3733,6 +3775,23 @@ class AppProvider extends ChangeNotifier {
       );
     }
 
+    final session = _guestSession;
+    // A guest's own booking lives in the request queue and, on a guest device,
+    // the game is seen through the guest projection which strips pendingGuests.
+    // So the slot may not look booked here even though THIS device reserved it.
+    // Trust the device-local session: if the same person re-enters the same
+    // name on the same inviter+slot, it's a re-identification, not a new claim —
+    // never a spurious "this slot is for someone else". Falls through otherwise
+    // so a genuinely different person is still blocked / redirected.
+    if (session != null &&
+        session.gameId == game.id &&
+        session.inviterId == inviterId &&
+        session.slot == slot &&
+        session.name.trim().toLowerCase() == name.trim().toLowerCase()) {
+      _saveGuestSession(session);
+      return const GuestCheckInResult(GuestCheckInStatus.confirmed);
+    }
+
     final existingSlot = game.guestSlots
         .where((s) => s.inviterId == inviterId && s.slot == slot)
         .firstOrNull;
@@ -4412,6 +4471,8 @@ class AppProvider extends ChangeNotifier {
           : 'Future levels slowed down to $clamped minutes.',
       true,
     );
+    _syncGroupGame();
+    notifyListeners();
   }
 
   TournamentStructure _structureWithLevels(
@@ -4860,8 +4921,10 @@ class AppProvider extends ChangeNotifier {
       }
       placeHolders[pos] = id;
     }
-    final paidPlaces = game.structure.prizes.length;
-    for (var place = 1; place <= paidPlaces; place++) {
+    final paidPlaces = game.structure.prizes.isEmpty
+        ? activeCount
+        : game.structure.prizes.length;
+    for (var place = 1; place <= min(paidPlaces, activeCount); place++) {
       if (!placeHolders.containsKey(place)) {
         return 'Paid place $place has no player assigned.';
       }
@@ -4882,9 +4945,9 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void recordFinishOrder(List<String> order) {
+  bool recordFinishOrder(List<String> order) {
     final game = _currentGame;
-    if (game == null) return;
+    if (game == null) return false;
     final error = _validateCompletionState(game, order);
     if (error != null) {
       _completionError = error;
@@ -4901,7 +4964,7 @@ class AppProvider extends ChangeNotifier {
         ),
       );
       notifyListeners();
-      return;
+      return false;
     }
     _completionError = null;
     _pushUndo();
@@ -4931,6 +4994,7 @@ class AppProvider extends ChangeNotifier {
         timestamp: DateTime.now(),
       ),
     );
+    return true;
   }
 
   void addAnnouncement(String text, [bool speakOutLoud = true]) {
@@ -5437,10 +5501,27 @@ class AppProvider extends ChangeNotifier {
           _publishProjections(g);
         }
       }).catchError((Object e) {
-        debugPrint('RSVP patch failed: $e');
-        lastRsvpError = 'RSVP save failed: $e';
-        _pendingOwnRsvp.remove(gameId);
-        notifyListeners();
+        debugPrint('RSVP patch failed (attempt 1): $e');
+        // A transient failure must not instantly undo the member's selection
+        // (the "not selecting / auto fares" symptom). Retry the same write once
+        // while keeping the optimistic overlay; only drop it after the retry
+        // also fails so the next snapshot shows the real state.
+        unawaited(
+          _repo.patchGame(gid, gameId, dotPaths).then((_) {
+            if (lastRsvpError != null) {
+              lastRsvpError = null;
+              notifyListeners();
+            }
+            if (g != null) {
+              _publishProjections(g);
+            }
+          }).catchError((Object e2) {
+            debugPrint('RSVP patch failed (attempt 2): $e2');
+            lastRsvpError = 'RSVP save failed. Tap again to retry.';
+            _pendingOwnRsvp.remove(gameId);
+            notifyListeners();
+          }),
+        );
       }),
     );
   }

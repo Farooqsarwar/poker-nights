@@ -487,7 +487,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       child: AppButton(
                         size: AppButtonSize.lg,
                         variant: AppButtonVariant.secondary,
-                        onPressed: currentLevel <= 1 ? null : app.previousLevel,
+                        onPressed: currentLevel <= 1
+                            ? null
+                            : () => app.previousLevel(
+                                idempotencyKey: _idemKey('prev'),
+                              ),
                         child: const AppIconLabel(
                           label: 'Previous',
                           icon: Icons.skip_previous,
@@ -503,7 +507,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         variant: AppButtonVariant.secondary,
                         onPressed: currentLevel >= structure.levels.length
                             ? null
-                            : app.nextLevel,
+                            : () =>
+                                app.nextLevel(idempotencyKey: _idemKey('next')),
                         child: const AppIconLabel(
                           label: 'Next Level',
                           trailing: Icons.skip_next,
@@ -546,6 +551,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
+
+            // ── FINISH CTA — the structure clock has run out with players still
+            // in; surface finishing prominently so the game never looks stuck.
+            if ((status == LiveGameStatus.running ||
+                    status == LiveGameStatus.paused ||
+                    status == LiveGameStatus.finaltable ||
+                    status == LiveGameStatus.rebuypause) &&
+                !game.timerRunning &&
+                game.secondsRemaining == 0) ...[
+              AppCard(
+                borderColor: AppColors.warning.withValues(alpha: 0.5),
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Structure complete — record final positions',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.warning,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppButton(
+                      size: AppButtonSize.lg,
+                      variant: AppButtonVariant.primary,
+                      onPressed: () =>
+                          context.go(RoutePaths.completeTournament),
+                      child: const AppIconLabel(
+                        label: 'Record finish order',
+                        trailing: Icons.arrow_forward,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
 
             // ── CONTROLS — Row 2: Structure / Nav (secondary actions) ───
             // Restart Level lives here (secondary + confirmation), not next
@@ -716,6 +760,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   settings: settings,
                                   remainingPlayers: activePlayers.length,
                                   settled: game.settlementConfirmed,
+                                  structureEnded:
+                                      (status == LiveGameStatus.running ||
+                                          status == LiveGameStatus.paused ||
+                                          status == LiveGameStatus.finaltable ||
+                                          status == LiveGameStatus.rebuypause) &&
+                                      !game.timerRunning &&
+                                      game.secondsRemaining == 0,
                                 ),
                               if (_tab == 'audit')
                                 _AuditTab(auditHistory: game.auditHistory),
@@ -828,7 +879,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   AppButton(
                     size: AppButtonSize.md,
                     variant: AppButtonVariant.secondary,
-                    onPressed: currentLevel <= 1 ? null : app.previousLevel,
+                    onPressed: currentLevel <= 1
+                        ? null
+                        : () =>
+                            app.previousLevel(idempotencyKey: _idemKey('prev')),
                     child: const AppIconLabel(
                       label: 'Previous',
                       icon: Icons.skip_previous,
@@ -839,7 +893,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     variant: AppButtonVariant.secondary,
                     onPressed: currentLevel >= (structure.levels.length)
                         ? null
-                        : app.nextLevel,
+                        : () =>
+                            app.nextLevel(idempotencyKey: _idemKey('next')),
                     child: const AppIconLabel(
                       label: 'Next level',
                       trailing: Icons.arrow_forward,
@@ -1054,6 +1109,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 settings: settings,
                 remainingPlayers: activePlayers.length,
                 settled: game.settlementConfirmed,
+                structureEnded:
+                    (status == LiveGameStatus.running ||
+                        status == LiveGameStatus.paused ||
+                        status == LiveGameStatus.finaltable ||
+                        status == LiveGameStatus.rebuypause) &&
+                        !game.timerRunning &&
+                        game.secondsRemaining == 0,
               ),
             if (_tab == 'audit') _AuditTab(auditHistory: game.auditHistory),
           ],
@@ -1072,6 +1134,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: const AppIconLabel(
                   label: 'Final Table',
                   icon: Icons.table_chart_outlined,
+                ),
+              ),
+            ),
+          // Record finish order — shown once heads-up (≤3 players) while the
+          // clock is still running. The structure-ended case is surfaced by the
+          // prominent CTA above the controls.
+          if (isAdmin &&
+              status != LiveGameStatus.completed &&
+              status != LiveGameStatus.cancelled &&
+              activePlayers.length <= 3 &&
+              game.timerRunning)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: AppButton(
+                size: AppButtonSize.md,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => context.go(RoutePaths.completeTournament),
+                child: const AppIconLabel(
+                  label: 'Record finish order',
+                  icon: Icons.emoji_events_outlined,
                 ),
               ),
             ),
@@ -1444,7 +1526,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               Expanded(
                 child: AppButton(
                   onPressed: () {
-                    app.restartLevel();
+                    app.restartLevel(idempotencyKey: _idemKey('restart'));
                     Navigator.pop(context);
                   },
                   child: const Text('Restart level'),
@@ -2161,12 +2243,17 @@ class _PrizeTab extends StatelessWidget {
     required this.settings,
     required this.remainingPlayers,
     required this.settled,
+    this.structureEnded = false,
   });
 
   final TournamentStructure structure;
   final GameSettings settings;
   final int remainingPlayers;
   final bool settled;
+
+  /// True when the structure's final level countdown has reached zero while
+  /// players remain — the tournament can still be finished per §4.17.
+  final bool structureEnded;
 
   @override
   Widget build(BuildContext context) {
@@ -2416,7 +2503,7 @@ class _PrizeTab extends StatelessWidget {
             ),
           ),
         ],
-        if (remainingPlayers <= 3) ...[
+        if (remainingPlayers <= 3 || structureEnded) ...[
           const SizedBox(height: AppSpacing.md),
           AppButton(
             fullWidth: true,
@@ -2717,3 +2804,9 @@ class _CancelTournamentFormState extends State<_CancelTournamentForm> {
     );
   }
 }
+
+/// Unique idempotency key for a single admin tap. A fresh value per press lets
+/// the provider's idempotency guard drop repeat/retried submissions of the
+/// same action (technical spec §18.1) — identical on mobile and large screens.
+String _idemKey(String prefix) =>
+    '$prefix-${DateTime.now().microsecondsSinceEpoch}';

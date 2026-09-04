@@ -637,107 +637,112 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
+                    Table(
+                      columnWidths: const {
+                        0: FlexColumnWidth(1),
+                        1: FlexColumnWidth(2.5),
+                        2: FlexColumnWidth(1.5),
+                        3: FlexColumnWidth(1.5),
+                      },
+                      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                       children: [
-                        SizedBox(
-                          width: 56,
-                          child: Text(
-                            'Level',
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            'Blinds',
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 40,
-                          child: Text(
-                            'Ante',
-                            textAlign: TextAlign.right,
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 64,
-                          child: Text(
-                            'Duration',
-                            textAlign: TextAlign.right,
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    for (final l in game.structure.levels)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: AppColors.border,
-                              width: 0.5,
-                            ),
-                          ),
-                        ),
-                        child: Row(
+                        TableRow(
                           children: [
-                            SizedBox(
-                              width: 56,
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                               child: Text(
-                                'Level ${l.level}',
-                                style: AppTypography.monoSm.copyWith(
-                                  fontWeight: FontWeight.w600,
+                                'Lv',
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
                                 ),
                               ),
                             ),
-                            Expanded(
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                               child: Text(
-                                '${Formatters.chips(l.sb)} / ${Formatters.chips(l.bb)}',
-                                style: AppTypography.monoSm.copyWith(
-                                  color: AppColors.foreground,
+                                'Blinds',
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
                                 ),
                               ),
                             ),
-                            SizedBox(
-                              width: 40,
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                               child: Text(
-                                l.ante == null
-                                    ? '—'
-                                    : Formatters.chips(l.ante!),
+                                'Ante',
                                 textAlign: TextAlign.right,
-                                style: AppTypography.monoXs.copyWith(
-                                  color: l.ante == null
-                                      ? AppColors.mutedForeground
-                                      : AppColors.accent,
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
                                 ),
                               ),
                             ),
-                            SizedBox(
-                              width: 64,
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                               child: Text(
-                                '${l.durationMins}m',
+                                'Time',
                                 textAlign: TextAlign.right,
-                                style: AppTypography.monoXs.copyWith(
+                                style: AppTypography.bodyXs.copyWith(
                                   color: AppColors.mutedForeground,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      ),
+                        for (final l in game.structure.levels)
+                          TableRow(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: AppColors.border,
+                                  width: 0.5,
+                                ),
+                              ),
+                            ),
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                                child: Text(
+                                  '${l.level}',
+                                  style: AppTypography.monoSm.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                                child: Text(
+                                  '${Formatters.chips(l.sb)} / ${Formatters.chips(l.bb)}',
+                                  style: AppTypography.monoSm.copyWith(
+                                    color: AppColors.foreground,
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                                child: Text(
+                                  l.ante == null ? '—' : Formatters.chips(l.ante!),
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: l.ante == null
+                                        ? AppColors.mutedForeground
+                                        : AppColors.accent,
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                                child: Text(
+                                  '${l.durationMins}m',
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
                     if (game.settings.rebuys) ...[
                       const SizedBox(height: AppSpacing.md),
                       Container(

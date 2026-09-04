@@ -428,12 +428,12 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                   ],
                                 ),
                               ),
-                              if (p.checkedIn)
+                              if (p.checkedIn && p.confirmed)
                                 const AppBadge(
                                   label: 'Checked in',
                                   variant: AppBadgeVariant.green,
                                 )
-                              else
+                              else if (p.checkedIn)
                                 AppButton(
                                   size: AppButtonSize.sm,
                                   variant: AppButtonVariant.secondary,
@@ -443,7 +443,27 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                   child: Text(
                                     game.checkInClosed
                                         ? 'Check-in closed'
-                                        : 'Check in',
+                                        : 'Accept check-in',
+                                  ),
+                                )
+                              else if (p.id == app.user?.id)
+                                AppButton(
+                                  size: AppButtonSize.sm,
+                                  variant: AppButtonVariant.secondary,
+                                  onPressed: game.checkInClosed
+                                      ? null
+                                      : () => app.checkInPlayer(p.id),
+                                  child: Text(
+                                    game.checkInClosed
+                                        ? 'Check-in closed'
+                                        : 'Mark me in',
+                                  ),
+                                )
+                              else
+                                Text(
+                                  'Not checked in yet',
+                                  style: AppTypography.bodySm.copyWith(
+                                    color: AppColors.mutedForeground,
                                   ),
                                 ),
                             ],

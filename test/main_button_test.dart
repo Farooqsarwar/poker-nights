@@ -113,10 +113,10 @@ void main() {
       _expectAction(a, MainActionId.reviewRsvps, 'Review RSVPs');
     });
 
-    test('checkin -> Open Check-in', () {
+    test('checkin -> Manage Check-in', () {
       final a =
           mainActionFor(MainButtonRole.admin, _game(LiveGameStatus.checkin));
-      _expectAction(a, MainActionId.openCheckIn, 'Open Check-in');
+      _expectAction(a, MainActionId.openCheckIn, 'Manage Check-in');
     });
 
     test('ready without confirmed structure -> Generate Final Structure', () {

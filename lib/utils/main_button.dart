@@ -115,11 +115,11 @@ MainAction mainActionFor(
 MainAction _adminAction(LiveGame game) {
   switch (game.status) {
     case LiveGameStatus.draft:
-      // Spec §7.2: Draft → "Review RSVPs". The event page allows editing
-      // draft settings and also shows the RSVP list once published.
+      // Spec §7.2: Draft → "Edit Event". The event page allows editing
+      // draft settings before anything is shared with members.
       return const MainAction(
-        MainActionId.reviewRsvps,
-        'Review RSVPs',
+        MainActionId.editEvent,
+        'Edit Event',
         route: RoutePaths.invitation,
       );
     case LiveGameStatus.published:
@@ -131,7 +131,7 @@ MainAction _adminAction(LiveGame game) {
     case LiveGameStatus.checkin:
       return const MainAction(
         MainActionId.openCheckIn,
-        'Open Check-in',
+        'Manage Check-in',
         route: RoutePaths.checkIn,
       );
     case LiveGameStatus.ready:
@@ -224,7 +224,9 @@ MainAction _memberAction(LiveGame game, Player? me) {
     return const MainAction(
       MainActionId.checkIn,
       'Check In',
-      route: RoutePaths.checkIn,
+      // Members self-check-in from the invitation screen (the admin-only
+      // check-in page redirects them away). Routing here avoids the dead-end.
+      route: RoutePaths.invitation,
     );
   }
   return const MainAction(

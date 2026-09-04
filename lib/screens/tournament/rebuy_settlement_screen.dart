@@ -231,7 +231,11 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                   organizerAmount: finalPrizes.organizerAmount,
                   onStart: () {
                     for (final id in _addOnSelections) {
-                      app.grantAddOn(id);
+                      app.grantAddOn(
+                        id,
+                        idempotencyKey:
+                            'addon-$id-${DateTime.now().microsecondsSinceEpoch}',
+                      );
                     }
                     app.confirmSettlement();
                     // Spec §3.2: timer must NOT auto-resume — admin manually

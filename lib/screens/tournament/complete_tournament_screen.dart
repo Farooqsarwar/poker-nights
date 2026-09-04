@@ -47,7 +47,20 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
       ..sort(
         (a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0),
       );
-    app.recordFinishOrder([...eliminated.map((p) => p.id), ..._order]);
+    final ok = app.recordFinishOrder(
+      [...eliminated.map((p) => p.id), ..._order],
+    );
+    if (!ok) {
+      // Surface why finishing failed instead of falsely showing "complete".
+      final msg = app.completionError ?? 'Could not finish the tournament.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
     setState(() => _confirmed = true);
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) context.go(RoutePaths.resultPodium);

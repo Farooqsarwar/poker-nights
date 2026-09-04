@@ -900,23 +900,30 @@ class StructureReviewScreen extends StatelessWidget {
                     showDialog(
                       context: context,
                       barrierDismissible: false,
-                      builder: (ctx) => const Dialog(
-                        backgroundColor: Colors.transparent,
-                        elevation: 0,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CoinShuffleAnimation(),
-                            SizedBox(height: 24),
-                            Text(
-                              'AI is generating structure...',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
+                      builder: (ctx) => Dialog(
+                        backgroundColor: AppColors.card,
+                        elevation: 24,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.lg),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xxxl,
+                            vertical: AppSpacing.xxxl,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const CoinShuffleAnimation(),
+                              const SizedBox(height: AppSpacing.xxl),
+                              Text(
+                                'AI is generating structure...',
+                                textAlign: TextAlign.center,
+                                style: AppTypography.display(size: AppFontSizes.lg),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     );

@@ -46,13 +46,21 @@ class AppPage extends StatelessWidget {
     if (!scrollable) {
       return ColoredBox(
         color: effectiveColor,
-        child: Padding(padding: effectivePadding, child: content),
+        child: SafeArea(
+          bottom: true, 
+          top: false, 
+          child: Padding(padding: effectivePadding, child: content)
+        ),
       );
     }
 
     return ColoredBox(
       color: effectiveColor,
-      child: SingleChildScrollView(padding: effectivePadding, child: content),
+      child: SafeArea(
+        bottom: true, 
+        top: false, 
+        child: SingleChildScrollView(padding: effectivePadding, child: content)
+      ),
     );
   }
 }

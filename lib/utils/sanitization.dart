@@ -25,22 +25,25 @@ class Sanitization {
   /// Strips HTML tags and script content from user input.
   /// Returns a trimmed, safe plain-text string.
   static String sanitize(String input) {
-    // Remove script/style blocks entirely
-    var result = input.replaceAll(
-      RegExp(r'<(script|style|iframe|object|embed)[^>]*>.*?</\1>',
-          caseSensitive: false, dotAll: true),
-      '',
-    );
-    // Strip remaining HTML tags
-    result = result.replaceAll(RegExp(r'<[^>]*>'), '');
-    // Decode common HTML entities
-    result = result
+    // Decode common HTML entities first so that obfuscated tags (e.g. &lt;script&gt;) 
+    // are exposed before stripping.
+    var result = input
         .replaceAll('&amp;', '&')
         .replaceAll('&lt;', '<')
         .replaceAll('&gt;', '>')
         .replaceAll('&quot;', '"')
         .replaceAll('&#39;', "'")
         .replaceAll('&nbsp;', ' ');
+        
+    // Remove script/style blocks entirely
+    result = result.replaceAll(
+      RegExp(r'<(script|style|iframe|object|embed)[^>]*>.*?</\1>',
+          caseSensitive: false, dotAll: true),
+      '',
+    );
+    // Strip remaining HTML tags
+    result = result.replaceAll(RegExp(r'<[^>]*>'), '');
+    
     // Collapse multiple spaces
     result = result.replaceAll(RegExp(r'\s{2,}'), ' ');
     return result.trim();

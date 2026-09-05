@@ -93,6 +93,7 @@ class _RouterRefresh extends ChangeNotifier {
         _app.isAdmin,
         _app.currentGame?.id,
         _app.currentGame?.status,
+        _app.currentGroup.id,
       ];
 
   void _onProviderChanged() {

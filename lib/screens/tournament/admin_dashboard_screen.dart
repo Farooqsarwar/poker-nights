@@ -58,7 +58,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (levels.isEmpty) return null;
     var mins = game.currentSecondsRemaining(clockOffset) ~/ 60;
     for (final l in levels) {
-      if (l.level >= game.currentLevel) {
+      if (l.level > game.currentLevel) {
         mins += l.level > game.currentLevel && futureDurationOverride != null
             ? futureDurationOverride
             : l.durationMins;
@@ -2089,7 +2089,7 @@ class _SeatingTab extends StatelessWidget {
     final unseated = players.where((p) => p.table <= 0).toList();
     final tables = seated.map((p) => p.table).toSet().toList()..sort();
     final allTables = tables.isEmpty
-        ? const [1]
+        ? const <int>[]
         : [for (var t = tables.first; t <= tables.last; t++) t];
 
     final app = context.watch<AppProvider>();

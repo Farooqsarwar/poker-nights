@@ -57,9 +57,10 @@ class Formatters {
   /// Format money from integer cents without currency symbol.
   /// E.g. moneyCents('', 15000) == '150.00'
   static String moneyCents(String currency, int cents) {
+    final sign = (cents < 0 && cents > -100) ? '-' : '';
     final dollars = cents ~/ 100;
     final remainder = (cents % 100).abs();
-    return '$dollars.${remainder.toString().padLeft(2, '0')}';
+    return '$sign$dollars.${remainder.toString().padLeft(2, '0')}';
   }
 
   /// Signed money without currency symbol, e.g. '+20.00' / '-5.00'.

@@ -449,14 +449,41 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         }
       }
     }
-    final b = num.tryParse(_buyIn.text) ?? 0;
-    if (b <= 0) _errors['buyIn'] = 'Must be positive';
+    final b = num.tryParse(_buyIn.text);
+    if (b == null || b <= 0) _errors['buyIn'] = 'Must be positive';
+    setState(() {});
+    return _errors.isEmpty;
+  }
+
+  bool _validateStep3() {
+    _errors.clear();
+
+    if (_rebuys && !_rebuyUnlimited) {
+      final rbLimit = num.tryParse(_rebuyLimit.text)?.toInt();
+      if (rbLimit == null || rbLimit < 0) {
+        _errors['rebuyLimit'] = 'Must be >= 0';
+      }
+    }
+
+    if (_koEnabled) {
+      final koAmount = num.tryParse(_koAmount.text)?.toInt();
+      if (koAmount == null || koAmount < 0) {
+        _errors['koAmount'] = 'Must be >= 0';
+      }
+    }
+
+    final orgPct = num.tryParse(_orgPctController.text)?.toInt();
+    if (orgPct == null || orgPct < 0 || orgPct > 100) {
+      _errors['orgPct'] = 'Must be 0-100';
+    }
+
     setState(() {});
     return _errors.isEmpty;
   }
 
   void _next() {
     if (_step == 1 && !_validateStep1()) return;
+    if (_step == 3 && !_validateStep3()) return;
     setState(() {
       _step++;
       if (_step >= _steps.length) {
@@ -639,7 +666,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         // input field (client rule).
         players: app.currentGroup.members.length,
         durationHours: _duration,
-        buyIn: num.tryParse(_buyIn.text)?.toInt() ?? 15,
+        buyIn: num.tryParse(_buyIn.text)?.toInt() ?? 0,
         koEnabled: _koEnabled,
         koAmount: num.tryParse(_koAmount.text)?.toInt() ?? 5,
         rebuys: _rebuys,
@@ -1571,6 +1598,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       child: AppTextField(
                         controller: _rebuyLimit,
                         keyboardType: TextInputType.number,
+                        error: _errors['rebuyLimit'],
                       ),
                     ),
                   ],
@@ -1769,6 +1797,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     child: AppTextField(
                       controller: _koAmount,
                       keyboardType: TextInputType.number,
+                      error: _errors['koAmount'],
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xs),
@@ -1966,6 +1995,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   controller: _orgPctController,
                   keyboardType: TextInputType.number,
                   label: 'Percentage (%)',
+                  error: _errors['orgPct'],
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),

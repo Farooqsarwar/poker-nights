@@ -57,6 +57,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
     _editTotal.dispose();
     _editBuyInCount.dispose();
     _editCashedOut.dispose();
+    _unresolvedNote.dispose();
     super.dispose();
   }
 
@@ -102,7 +103,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
 
   void _confirmAction(AppProvider app) {
     final amt = num.tryParse(_amount.text)?.toDouble();
-    if (amt == null || amt < 0) return;
+    if (amt == null || amt <= 0) return;
     final action = _action;
     if (action == null) return;
 

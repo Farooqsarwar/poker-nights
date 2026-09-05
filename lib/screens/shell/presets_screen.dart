@@ -76,9 +76,9 @@ class _PresetsScreenState extends State<PresetsScreen> {
       organizerPct: data.organizerPct,
       chipSetName: data.chipSetName,
       chipSet: _chipsFor(app, data.chipSetName),
-      rebuyLimit: existing?.rebuyLimit,
-      rebuyCost: existing?.rebuyCost,
-      addOnCost: existing?.addOnCost,
+      rebuyLimit: data.rebuyLimit,
+      rebuyCost: data.rebuyCost,
+      addOnCost: data.addOnCost,
     );
   }
 
@@ -323,6 +323,9 @@ class _PresetDraft {
     required this.anteAfterLevel,
     required this.organizerPct,
     required this.chipSetName,
+    this.rebuyLimit,
+    this.rebuyCost,
+    this.addOnCost,
   });
 
   final String name;
@@ -338,6 +341,9 @@ class _PresetDraft {
   final int anteAfterLevel;
   final int organizerPct;
   final String chipSetName;
+  final int? rebuyLimit;
+  final int? rebuyCost;
+  final int? addOnCost;
 }
 
 class _PresetForm extends StatefulWidget {
@@ -361,6 +367,9 @@ class _PresetFormState extends State<_PresetForm> {
   late final TextEditingController _name;
   late final TextEditingController _buyIn;
   late final TextEditingController _koAmount;
+  late final TextEditingController _rebuyCost;
+  late final TextEditingController _rebuyLimit;
+  late final TextEditingController _addOnCost;
   late bool _koEnabled;
   late bool _rebuys;
   late int _rebuysCloseLevel;
@@ -387,6 +396,9 @@ class _PresetFormState extends State<_PresetForm> {
     _name = TextEditingController(text: p?.name ?? '');
     _buyIn = TextEditingController(text: p?.buyIn.toString() ?? '15');
     _koAmount = TextEditingController(text: p?.koAmount.toString() ?? '5');
+    _rebuyCost = TextEditingController(text: p?.rebuyCost?.toString() ?? '');
+    _rebuyLimit = TextEditingController(text: p?.rebuyLimit?.toString() ?? '0');
+    _addOnCost = TextEditingController(text: p?.addOnCost?.toString() ?? '');
     _koEnabled = p?.koEnabled ?? false;
     _rebuys = p?.rebuys ?? true;
     _rebuysCloseLevel = p?.rebuysCloseLevel ?? 6;
@@ -408,6 +420,9 @@ class _PresetFormState extends State<_PresetForm> {
     _name.dispose();
     _buyIn.dispose();
     _koAmount.dispose();
+    _rebuyCost.dispose();
+    _rebuyLimit.dispose();
+    _addOnCost.dispose();
     super.dispose();
   }
 
@@ -415,6 +430,10 @@ class _PresetFormState extends State<_PresetForm> {
     final name = _name.text.trim();
     final buyIn = num.tryParse(_buyIn.text.trim());
     final ko = num.tryParse(_koAmount.text.trim());
+    final rCost = int.tryParse(_rebuyCost.text.trim());
+    final rLimit = int.tryParse(_rebuyLimit.text.trim());
+    final aCost = int.tryParse(_addOnCost.text.trim());
+
     if (name.length < 2) {
       setState(() => _error = 'Preset name must be at least 2 characters.');
       return;
@@ -447,6 +466,9 @@ class _PresetFormState extends State<_PresetForm> {
         anteAfterLevel: _anteAfterLevel,
         organizerPct: _orgPct.round(),
         chipSetName: _chipSetName,
+        rebuyCost: rCost,
+        rebuyLimit: (rLimit != null && rLimit > 0) ? rLimit : null,
+        addOnCost: aCost,
       ),
     );
   }
@@ -551,6 +573,26 @@ class _PresetFormState extends State<_PresetForm> {
         ),
         if (_rebuys) ...[
           const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: AppTextField(
+                  controller: _rebuyCost,
+                  label: 'Rebuy cost (empty = buy-in)',
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppTextField(
+                  controller: _rebuyLimit,
+                  label: 'Limit (0 = unl)',
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
           AppSelect(
             label: 'Close rebuys',
             value: '$_rebuysCloseLevel',
@@ -576,6 +618,17 @@ class _PresetFormState extends State<_PresetForm> {
           value: _addOn,
           onChanged: (v) => setState(() => _addOn = v),
         ),
+        if (_addOn) ...[
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            width: 160,
+            child: AppTextField(
+              controller: _addOnCost,
+              label: 'Add-on cost (empty = buy-in)',
+              keyboardType: TextInputType.number,
+            ),
+          ),
+        ],
         Divider(color: AppColors.border),
         _FieldToggle(
           title: 'Ante',

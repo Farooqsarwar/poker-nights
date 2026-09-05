@@ -32,6 +32,7 @@ enum _GuestStep {
   rejected,
   notLive,
   wrongOwner,
+  completed,
 }
 
 /// Guest join flow mirroring the web `GuestFlowPage`.
@@ -76,6 +77,10 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   /// game is already live, or the "come back later" screen when it hasn't
   /// started yet.
   static _GuestStep _routeAfterBooking(LiveGame game, Player? guest) {
+    if (game.status == LiveGameStatus.completed) {
+      return _GuestStep.completed;
+    }
+    
     if (guest != null && !guest.confirmed) {
       // Check-in opens at LiveGameStatus.checkin. Once open, unconfirmed guests
       // wait for admin approval instead of being told to come back later.
@@ -400,6 +405,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           _GuestStep.confirmed => _buildConfirmed(level),
           _GuestStep.rejected => _buildRejected(),
           _GuestStep.notLive => _buildNotLive(game),
+          _GuestStep.completed => _buildCompleted(),
           _GuestStep.wrongOwner => _buildWrongOwner(),
           _GuestStep.enterCode => const SizedBox.shrink(),
         },
@@ -1047,6 +1053,42 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     );
   }
 
+  Widget _buildCompleted() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: Column(
+            children: [
+              Icon(
+                Icons.emoji_events,
+                size: AppFontSizes.displayLg,
+                color: AppColors.mutedForeground,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Game Completed',
+                style: AppTypography.display(
+                  size: AppFontSizes.xl,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'This tournament has already finished.',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildNotLive(LiveGame game) {
     final session = context.read<AppProvider>().guestSession;
     final reservedName = session?.name;
@@ -1479,3 +1521,4 @@ class _BackLink extends StatelessWidget {
     );
   }
 }
+

@@ -432,8 +432,7 @@ class LiveGame {
 
   bool get rebuysClosed {
     if (!settings.rebuys) return true;
-    if (status.index > LiveGameStatus.rebuypause.index) return true;
-    if (status == LiveGameStatus.rebuypause) return false;
+    if (status.index >= LiveGameStatus.rebuypause.index) return true;
     return currentLevel > settings.rebuysCloseLevel;
   }
 

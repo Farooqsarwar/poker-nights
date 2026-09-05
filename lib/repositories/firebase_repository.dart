@@ -684,12 +684,17 @@ class FirebaseRepository {
   /// Atomically transfers group ownership to [newOwnerId]: updates the group
   /// doc's `ownerId` field and promotes the new owner's member row to `admin`.
   Future<void> transferGroupOwnership(
-      String gid, String newOwnerId, String newOwnerName) async {
+      String gid, String oldOwnerId, String newOwnerId, String newOwnerName) async {
     final batch = _db.batch();
     batch.update(_db.collection('groups').doc(gid), {'ownerId': newOwnerId});
     batch.set(
       _db.collection('groups').doc(gid).collection('members').doc(newOwnerId),
       {'name': newOwnerName, 'role': 'admin'},
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _db.collection('groups').doc(gid).collection('members').doc(oldOwnerId),
+      {'role': 'member'},
       SetOptions(merge: true),
     );
     await batch.commit();
@@ -1220,7 +1225,8 @@ class FirebaseRepository {
   Future<void> releaseSlotClaim(String gameId, String inviterId, int slot) =>
       _requestsCol(gameId).doc('guestCheckIn-$inviterId-$slot').delete();
 
-  Stream<List<GameRequest>> requestsStream(String gameId) => _requestsCol(gameId)
+  Stream<List<GameRequest>> requestsStream(String gameId, String groupId) => _requestsCol(gameId)
+      .where('gid', isEqualTo: groupId)
       .where('consumed', isEqualTo: false)
       .snapshots()
       .map((s) => [

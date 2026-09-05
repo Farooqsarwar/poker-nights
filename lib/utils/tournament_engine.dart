@@ -121,13 +121,35 @@ class TournamentEngine {
   static const double targetHeadsUpAverageBB = 15;
 
   static int snapToPracticalBlind(double raw, List<ChipColor> chips) {
-    final values = chips.map((c) => c.value).where((v) => v > 0).toList()
-      ..sort();
-    // An empty or all-zero chip set must not blow up (`values.first` throws,
-    // and dividing by a 0-value chip yields Infinity, which `.round()` rejects).
+    final values = chips.map((c) => c.value).where((v) => v > 0).toList()..sort();
     final minChip = values.isEmpty ? 1 : values.first;
-    final rounded = (raw / minChip).round() * minChip;
-    return math.max(rounded, minChip);
+    
+    if (raw <= minChip) return minChip;
+
+    int magnitude = 1;
+    while (raw / magnitude >= 10) {
+      magnitude *= 10;
+    }
+
+    // Standard practical blind prefixes used universally in poker.
+    final standardPrefixes = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0];
+    
+    int bestBlind = (raw / minChip).round() * minChip;
+    double minDiff = (bestBlind - raw).abs();
+
+    for (final prefix in standardPrefixes) {
+      final candidate = (prefix * magnitude).round();
+      if (candidate < minChip || candidate % minChip != 0) continue;
+      
+      final diff = (candidate - raw).abs();
+      // Heavily favor standard poker increments if the difference is reasonable.
+      if (diff <= minDiff * 1.5) {
+        minDiff = diff;
+        bestBlind = candidate;
+      }
+    }
+
+    return math.max(bestBlind, minChip);
   }
 
   /// Maximum number of chips of a SINGLE COLOR allocated to one player
@@ -537,8 +559,8 @@ class TournamentEngine {
     if (organizerPct > 0) {
       // Two candidates that carry the correct units digit mod 10, bracketing
       // the target. Pick the closer one; ties broken toward the smaller value.
-      final baseUnits = (targetOrganizer - mod);
-      final floorCandidate = (baseUnits ~/ roundingUnit) * roundingUnit + mod;
+      final baseUnits = (targetOrganizer - mod).toDouble();
+      final floorCandidate = (baseUnits / roundingUnit).floor() * roundingUnit + mod;
       final ceilCandidate = floorCandidate + roundingUnit;
       for (final c in [floorCandidate, ceilCandidate]) {
         if (c < 0 || c > grossEligible) continue;

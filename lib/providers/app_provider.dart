@@ -110,9 +110,19 @@ LiveGame mergeMemberOwnedFields(LiveGame local, LiveGame remote,
       else
         () {
           final r = remote.players.where((x) => x.id == p.id).firstOrNull;
-          if (r != null && r.rsvp != p.rsvp) {
-            changed = true;
-            return p.copyWith(rsvp: r.rsvp);
+          if (r != null) {
+            final rsvpChanged = r.rsvp != p.rsvp;
+            // Merge checkedIn if the member checked themselves in remotely,
+            // taking care not to let a stale remote overwrite an admin's local check-in.
+            final checkInArrived = r.checkedIn && !p.checkedIn;
+            
+            if (rsvpChanged || checkInArrived) {
+              changed = true;
+              return p.copyWith(
+                rsvp: r.rsvp,
+                checkedIn: checkInArrived ? true : p.checkedIn,
+              );
+            }
           }
           return p;
         }(),
@@ -288,6 +298,7 @@ class AppProvider extends ChangeNotifier {
 
   /// Debounces whole-document game saves so rapid admin edits coalesce.
   Timer? _gameSaveDebounce;
+  Timer? _projectionDebounce;
 
   /// The game doc currently mirrored via [_gameDocSub] — used to skip
   /// adopting our own server acks (echo prevention).
@@ -516,6 +527,7 @@ class AppProvider extends ChangeNotifier {
       _gameDocSub = null;
       _gameDocRetryTimer?.cancel();
       _gameSaveDebounce?.cancel();
+    _projectionDebounce?.cancel();
       _pendingGameSave = false;
       _localGameDirty = false;
       _lastSavedSignature = null;
@@ -571,6 +583,7 @@ class AppProvider extends ChangeNotifier {
     // un-persisted edit.
     _localGameDirty = true;
     _gameSaveDebounce?.cancel();
+    _projectionDebounce?.cancel();
     final effectiveGid = game.groupId.isNotEmpty ? game.groupId : gid;
     // Short debounce: the save queue ([_drainGameSaveQueue]) already coalesces
     // and serialises bursts, so a long wait only widens the window where a
@@ -651,10 +664,14 @@ class AppProvider extends ChangeNotifier {
         if (!saved) {
           // Never rethrow out of this fire-and-forget drain — surface it
           // instead so the admin sees that their change did not persist.
-          lastSaveError = _isRetriablePermissionError(lastError ?? '')
-              ? 'Changes not saved — this account does not have admin write '
-                  'access to this game.'
-              : 'Changes could not be saved. Check your connection.';
+          final errorStr = (lastError ?? '').toString().toLowerCase();
+          if (_isRetriablePermissionError(lastError ?? '')) {
+            lastSaveError = 'Changes not saved — this account does not have admin write access to this game.';
+          } else if (errorStr.contains('quota-exceeded') || errorStr.contains('resource-exhausted') || errorStr.contains('quota')) {
+            lastSaveError = 'Changes not saved — database quota exceeded (free tier limit reached).';
+          } else {
+            lastSaveError = 'Changes could not be saved. Check your connection.';
+          }
           notifyListeners();
           break;
         }
@@ -725,8 +742,8 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// True when the signed-in user holds the elevated Co-Admin role in the
-  /// current group: can add members directly and grant rebuys, but cannot
-  /// advance the tournament or touch blinds/seating settings.
+  /// current group. Currently a cosmetic badge (permissions are restricted to 
+  /// admin-only until multi-admin support is fully implemented).
   bool get isCoAdmin {
     final user = _user;
     if (user == null || isAdmin) return false;
@@ -843,7 +860,7 @@ class AppProvider extends ChangeNotifier {
     if (!_backendUp || _currentGame == null || !_isGameAuthority) return;
     if (_requestsSub != null) return;
     final gameId = _currentGame!.id;
-    _requestsSub = _repo.requestsStream(gameId).listen(
+    _requestsSub = _repo.requestsStream(gameId, _currentGame!.groupId).listen(
       _consumeRequests,
       onError: (Object e) => debugPrint('requests stream error: $e'),
     );
@@ -862,6 +879,13 @@ class AppProvider extends ChangeNotifier {
       switch (req.kind) {
         case 'guestCheckIn':
           error = _applyQueuedGuestCheckIn(req.payload);
+          break;
+        case 'memberCheckIn':
+          final pid = req.payload['playerId'] as String?;
+          if (pid != null) {
+            checkInPlayer(pid); // Auto-confirms and updates state
+            changed = true;
+          }
           break;
         case 'rebuyReq':
           requestRebuy((req.payload['playerId'] as String?) ?? '');
@@ -889,7 +913,7 @@ class AppProvider extends ChangeNotifier {
   String? _applyQueuedGuestCheckIn(Map<String, dynamic> payload) {
     final game = _currentGame;
     if (game == null) return 'no active game';
-    final name = (payload['name'] as String?) ?? 'Guest';
+    final name = Sanitization.sanitizeName((payload['name'] as String?) ?? 'Guest');
     final inviterId = (payload['inviterId'] as String?) ?? '';
     final slotNo = (payload['slot'] as num?)?.toInt() ?? 0;
     final guestId =
@@ -1078,7 +1102,12 @@ class AppProvider extends ChangeNotifier {
         // Fire-and-forget, but explicitly swallowed: `_publishProjections`
         // rethrows, and an un-caught rethrow out of a stream callback surfaced
         // as an unhandled async error (the RethrownDartError stack dumps).
-        unawaited(_publishProjections(_currentGame!).catchError((Object _) {}));
+        _projectionDebounce?.cancel();
+        _projectionDebounce = Timer(const Duration(milliseconds: 1500), () {
+          if (_currentGame != null) {
+            unawaited(_publishProjections(_currentGame!).catchError((Object _) {}));
+          }
+        });
       }
       notifyListeners();
     } catch (e) {
@@ -1109,7 +1138,7 @@ class AppProvider extends ChangeNotifier {
     debugPrint('RSVP re-assert #${n + 1} for ${remote.id} '
         '(server=${serverMine?.rsvp?.name}, want=${want?.name})');
     final after = _withOwnRsvpOverlay(remote);
-    _persistOwnRsvpPatch(remote.id, _rsvpDotPatch(remote, after));
+    _persistOwnRsvpPatch(remote.id, _rsvpDotPatch(remote, after), want);
   }
 
   /// Re-applies the member's own pending RSVP (see [_pendingOwnRsvp]) on top of
@@ -1437,6 +1466,7 @@ class AppProvider extends ChangeNotifier {
     _resultsSub = null;
     _pendingInvitesSub = null;
     _gameSaveDebounce?.cancel();
+    _projectionDebounce?.cancel();
     _pendingGameSave = false;
     _syncedGameKey = null;
     _gameSyncPrimed = false;
@@ -2522,7 +2552,7 @@ class AppProvider extends ChangeNotifier {
     if (newOwner == null) return;
     if (_backendUp) {
       await _repo
-          .transferGroupOwnership(gid, newOwnerId, newOwner.name)
+          .transferGroupOwnership(gid, userId, newOwnerId, newOwner.name)
           .catchError(
             (Object e) => debugPrint('transferOwnership failed: $e'),
           );
@@ -3602,6 +3632,7 @@ class AppProvider extends ChangeNotifier {
 
   // ── Player management ──────────────────────────────────────────────────────
   void eliminatePlayer(String playerId, {String? koRecipientId, String? idempotencyKey}) {
+    if (!_isGameAuthority) return;
     final (rev, key) =
         _claimIdempotency(idempotencyKey ?? '', action: 'eliminatePlayer', target: playerId);
     if (rev == null) return; // replayed action — already applied
@@ -3615,7 +3646,7 @@ class AppProvider extends ChangeNotifier {
         : 0;
     final updated = _currentGame!.players.map((p) {
       if (p.id == playerId) {
-        return p.copyWith(eliminated: true, active: false, eliminationPos: pos);
+        return p.copyWith(eliminated: true, active: false, eliminationPos: pos, table: 0, seat: 0);
       }
       // Optional single knockout recipient (technical §11.3). The bounty
       // chips transfer from the eliminated player, so total chips in play
@@ -3707,6 +3738,7 @@ class AppProvider extends ChangeNotifier {
   /// Explicitly corrects a past elimination without using Undo (which is unsafe
   /// if dependent actions occurred). Adds a compensating audit action.
   void correctElimination(String playerId) {
+    if (!_isGameAuthority) return;
     if (_currentGame == null) return;
 
     // We intentionally bypass `_pushUndo()` for audit preservation,
@@ -3762,6 +3794,7 @@ class AppProvider extends ChangeNotifier {
               ? p.copyWith(
                   rebuys: p.rebuys + 1,
                   eliminated: false,
+                  clearEliminationPos: true,
                   active: true,
                 )
               : p)
@@ -3831,6 +3864,7 @@ class AppProvider extends ChangeNotifier {
                 ? p.copyWith(
                     reEntries: p.reEntries + 1,
                     eliminated: false,
+                    clearEliminationPos: true,
                     active: true,
                   )
                 : p,
@@ -3945,26 +3979,11 @@ class AppProvider extends ChangeNotifier {
           : _currentGroupId;
       final gameId = _currentGame?.id;
       if (gid != null && gameId != null && _backendUp) {
-        unawaited(
-          _repo.patchGame(gid, gameId, {
-            'players.$playerId.checkedIn': true,
-            'players.$playerId.confirmed': false,
-          }).then((_) {
-            // Overlay stays until admin confirms (checkedIn && confirmed == true).
-          }).catchError((Object e) {
-            debugPrint('requestCheckIn patch failed: $e');
-            // On failure revert local state so the button is tappable again.
-            _pendingCheckIn.remove(playerId);
-            _currentGame = _currentGame?.copyWith(
-              players: _currentGame!.players
-                  .map((p) => p.id == playerId
-                      ? p.copyWith(checkedIn: false, confirmed: false)
-                      : p)
-                  .toList(),
-            );
-            notifyListeners();
-          }),
-        );
+        unawaited(_repo.pushRequest(
+          gameId: gameId,
+          kind: 'memberCheckIn',
+          payload: {'playerId': playerId, 'gid': gid},
+        ));
       }
     }
     // Admin path: whole-doc save via _syncGameToCloud handles persistence.
@@ -4022,6 +4041,7 @@ class AppProvider extends ChangeNotifier {
   /// Closes door check-in (spec §4.7). Once closed, the host is prompted to
   /// start the tournament and no further walk-ins are accepted.
   void closeCheckIn() {
+    if (!_isGameAuthority) return;
     _currentGame = _currentGame!.copyWith(
       checkInClosed: true,
       status: LiveGameStatus.ready,
@@ -4035,6 +4055,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void reopenCheckIn() {
+    if (!_isGameAuthority) return;
     _currentGame = _currentGame!.copyWith(
       checkInClosed: false,
       status: LiveGameStatus.checkin,
@@ -4147,6 +4168,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void confirmGuest(String guestId) {
+    if (!_isGameAuthority) return;
     _pushUndo();
     final game = _currentGame!;
     final guest = game.players.where((p) => p.id == guestId).firstOrNull;
@@ -4232,6 +4254,7 @@ class AppProvider extends ChangeNotifier {
   /// players list and no longer sits at the table (07-026). Their slot is
   /// freed so another guest can claim it.
   void rejectGuest(String guestId) {
+    if (!_isGameAuthority) return;
     _pushUndo();
     final guest = _currentGame!.players
         .where((p) => p.id == guestId)
@@ -4411,7 +4434,7 @@ class AppProvider extends ChangeNotifier {
           slot: slot,
           payload: {
             'guestId': guestId,
-            'name': name.trim(),
+            'name': sanitizedName,
             'inviterId': inviterId,
             'slot': slot,
             // Lets security rules verify only group admins consume requests.
@@ -4441,7 +4464,7 @@ class AppProvider extends ChangeNotifier {
     _pushUndo();
     final guest = Player(
       id: guestId,
-      name: name,
+      name: sanitizedName,
       isGuest: true,
       inviterId: inviterId,
       guestSlot: slot,
@@ -4463,7 +4486,7 @@ class AppProvider extends ChangeNotifier {
         game.guestSlots,
         inviterId,
         slot,
-        name: name.trim(),
+        name: sanitizedName,
         // Claim + check-in request are one step in this flow (spec §6.3–6.5).
         requested: true,
       ),
@@ -4528,6 +4551,7 @@ class AppProvider extends ChangeNotifier {
   /// count exceeds that, multiple balanced tables are created automatically.
   /// Every player gets exactly one unique (table, seat) — no duplicates.
   void generateSeating(TableSeatingMode mode) {
+    if (!_isGameAuthority) return;
     final game = _currentGame;
     if (game == null) return;
 
@@ -4613,12 +4637,14 @@ class AppProvider extends ChangeNotifier {
   void confirmSeating() {
     final game = _currentGame;
     if (game == null) return;
-    if (isAdmin && !_isGameAuthority) {
-      // Another admin device owns the edit role — don't silently no-op.
-      addAnnouncement(
-        'Another device is editing this game. Changes here are not saved.',
-        false,
-      );
+    if (!_isGameAuthority) {
+      if (isAdmin) {
+        // Another admin device owns the edit role — don't silently no-op.
+        addAnnouncement(
+          'Another device is editing this game. Changes here are not saved.',
+          false,
+        );
+      }
       return;
     }
     _currentGame = game.copyWith(seatingConfirmed: true);
@@ -4740,6 +4766,7 @@ class AppProvider extends ChangeNotifier {
   /// Applies the confirmed recommendation: the player moves, source and
   /// destination seats update consistently (13-018/13-019).
   void confirmSeatMove() {
+    if (!_isGameAuthority) return;
     final rec = _pendingSeatMove;
     if (rec == null) return;
     final game = _currentGame;
@@ -4830,6 +4857,7 @@ class AppProvider extends ChangeNotifier {
   /// Deducts starting stack, rebuys, and add-ons from total chips.
   /// Recalculates prize pool and distribution.
   void removePlayer(String playerId) {
+    if (!_isGameAuthority) return;
     if (_currentGame == null) return;
     _pushUndo();
     final game = _currentGame!;
@@ -4927,11 +4955,14 @@ class AppProvider extends ChangeNotifier {
     );
     final totalAddOns = game.players.where((p) => p.hasAddOn).length;
 
+    final koTotal = s.koEnabled ? (confirmedCount + totalReEntries) * s.koAmount : 0;
+    
     final grossEligible =
-        confirmedCount * s.buyIn +
-        totalRebuys * s.effectiveRebuyCost +
-        totalReEntries * s.buyIn +
-        totalAddOns * (s.addOn ? s.effectiveAddOnCost : 0);
+        (confirmedCount * s.buyIn) +
+        (totalRebuys * s.effectiveRebuyCost) +
+        (totalReEntries * s.buyIn) +
+        (totalAddOns * (s.addOn ? s.effectiveAddOnCost : 0)) -
+        koTotal;
 
     // Delegate the organizer-cut and prize-split maths to the shared helper in
     // TournamentEngine so the rules stay consistent everywhere.
@@ -4958,6 +4989,7 @@ class AppProvider extends ChangeNotifier {
 
   /// Manually overrides the number of paid places and recalculates prizes.
   void overridePaidPlaces(int? count) {
+    if (!_isGameAuthority) return;
     if (_currentGame == null) return;
     _pushUndo();
     _currentGame = _currentGame!.copyWith(
@@ -5004,6 +5036,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void acceptSpeedRecommendation({SpeedRecommendation? rec}) {
+    if (!_isGameAuthority) return;
     final game = _currentGame;
     if (game == null) return;
     final recommendation = rec ?? game.speedRecommendation;
@@ -5129,6 +5162,7 @@ class AppProvider extends ChangeNotifier {
         levels: allLevels,
       ),
     );
+    _syncGroupGame();
     notifyListeners();
   }
 
@@ -5172,6 +5206,7 @@ class AppProvider extends ChangeNotifier {
 
   /// Admin has reviewed the generated structure (30-minute estimate).
   void confirmStructure() {
+    if (!_isGameAuthority) return;
     final game = _currentGame;
     if (game == null) return;
     _currentGame = game.copyWith(structureConfirmed: true);
@@ -5379,12 +5414,10 @@ class AppProvider extends ChangeNotifier {
       }
     }
     _pushUndo();
-    final startIdx = game.currentLevel - 1;
-    final prefix = startIdx > 0
-        ? game.structure.levels.take(startIdx).toList()
-        : <BlindLevel>[];
+    // Keep all completed levels PLUS the currently active level.
+    final prefix = game.structure.levels.take(game.currentLevel).toList();
     // Renumber sequentially so inserting a level shifts the rest correctly.
-    var n = startIdx + 1;
+    var n = game.currentLevel + 1;
     final renumbered = [
       for (final l in futureLevels)
         BlindLevel(
@@ -5624,6 +5657,7 @@ class AppProvider extends ChangeNotifier {
 
   /// Updates the payout prizes (for custom deals/chops before finalizing results).
   void updatePrizes(List<Prize> customPrizes) {
+    if (!_isGameAuthority) return;
     if (_currentGame == null) return;
     _pushUndo();
     _currentGame = _currentGame!.copyWith(
@@ -6168,7 +6202,7 @@ class AppProvider extends ChangeNotifier {
         // dropping the tap on the floor.
         patch = {'players.$userId.rsvp': rsvp?.name};
       }
-      _persistOwnRsvpPatch(targetId, patch);
+      _persistOwnRsvpPatch(targetId, patch, rsvp);
     }
     // (authority + on-screen game: persisted by _syncGameToCloud's whole-doc
     // save when notifyListeners fires below.)
@@ -6208,7 +6242,7 @@ class AppProvider extends ChangeNotifier {
   /// window and only dropped once every attempt has failed — so a tap never
   /// "un-selects itself" while the group id is still resolving or the auth
   /// token is still propagating right after login.
-  void _persistOwnRsvpPatch(String gameId, Map<String, dynamic> dotPaths) {
+  void _persistOwnRsvpPatch(String gameId, Map<String, dynamic> dotPaths, Rsvp? targetRsvp) {
     if (dotPaths.isEmpty) {
       // before == after at field level — nothing to write. Logged because a
       // silent return here is indistinguishable from a successful save and
@@ -6228,7 +6262,7 @@ class AppProvider extends ChangeNotifier {
           await Future<void>.delayed(Duration(milliseconds: delaysMs[attempt]));
         }
         // A newer RSVP for this game supersedes this write.
-        if (!_pendingOwnRsvp.containsKey(gameId)) return;
+        if (_pendingOwnRsvp[gameId] != targetRsvp) return;
         if (!_backendUp || _user == null) continue;
 
         // Re-resolve the group id every attempt — it may still be settling
@@ -6275,10 +6309,14 @@ class AppProvider extends ChangeNotifier {
           }
         }
       }
-      lastRsvpError = _isRetriablePermissionError(lastError ?? '')
-          ? 'RSVP not saved — you may not have write access to this game. '
-              'Ask the host to add you to the group.'
-          : 'RSVP save failed. Tap again to retry.';
+      final errorStr = (lastError ?? '').toString().toLowerCase();
+      if (_isRetriablePermissionError(lastError ?? '')) {
+        lastRsvpError = 'RSVP not saved — you may not have write access to this game. Ask the host to add you to the group.';
+      } else if (errorStr.contains('quota-exceeded') || errorStr.contains('resource-exhausted') || errorStr.contains('quota')) {
+        lastRsvpError = 'RSVP not saved — database quota exceeded (free tier limit reached).';
+      } else {
+        lastRsvpError = 'RSVP save failed. Tap again to retry.';
+      }
       _pendingOwnRsvp.remove(gameId);
       _rsvpReassertCount.remove(gameId);
       notifyListeners();
@@ -6418,12 +6456,17 @@ class AppProvider extends ChangeNotifier {
     if (excess.isEmpty) return game;
     final confirmed = excess.where((p) => p.confirmed).toList();
     // Spec B3/L-20: Only remove UNCLAIMED (unconfirmed) excess guests.
-    // Confirmed excess guests block the RSVP shrink upstream via GUEST_SLOT_CONFLICT.
     final unconfirmedExcessIds = excess.where((p) => !p.confirmed).map((p) => p.id).toSet();
+    final unconfirmedExcessSlots = excess
+        .where((p) => !p.confirmed)
+        .map((p) => p.guestSlot)
+        .toSet();
     final updated = game.copyWith(
       players: game.players.where((p) => !unconfirmedExcessIds.contains(p.id)).toList(),
       pendingGuests: game.pendingGuests.where((p) => !unconfirmedExcessIds.contains(p.id)).toList(),
-      guestSlots: game.guestSlots,
+      guestSlots: game.guestSlots.where((s) => 
+        !(s.inviterId == userId && unconfirmedExcessSlots.contains(s.slot))
+      ).toList(),
     );
     if (confirmed.isNotEmpty) {
       pushNotification(
@@ -6667,7 +6710,7 @@ class AppProvider extends ChangeNotifier {
         players: [
           ...session.players,
           CashPlayer(
-            id: 'cp-${DateTime.now().millisecondsSinceEpoch}',
+            id: 'cp-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}',
             name: playerIdOrName,
             stack: amount,
             totalBuyIns: amount,
@@ -7083,3 +7126,6 @@ class GuestCheckInResult {
   bool get ok =>
       status == GuestCheckInStatus.booked || status == GuestCheckInStatus.confirmed;
 }
+
+
+

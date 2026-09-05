@@ -75,7 +75,7 @@ AppUser appUserFromMap(Map<String, dynamic> m) => AppUser(
       name: (m['name'] as String?) ?? '',
       email: (m['email'] as String?) ?? '',
       isAdmin: (m['isAdmin'] as bool?) ?? false,
-      stats: userStatsFromMap(Map<String, dynamic>.from(m['stats'] as Map)),
+      stats: userStatsFromMap(Map<String, dynamic>.from((m['stats'] as Map?) ?? const {})),
       fcmTokens: List<String>.from(m['fcmTokens'] as List? ?? const []),
       isCoAdmin: (m['isCoAdmin'] as bool?) ?? false,
     );

@@ -200,6 +200,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                     final claimedSlots = game.guestSlots
                         .where((s) =>
                             s.inviterId == (myPlayer?.id ?? '') &&
+                            s.slot > newGuestCount &&
                             !s.available)
                         .length;
                     final slotsToRemove = currentGuestCount - newGuestCount;
@@ -2156,30 +2157,6 @@ class _RsvpSection extends StatefulWidget {
 }
 
 class _RsvpSectionState extends State<_RsvpSection> {
-  /// The number of extra guests the user wants to bring (0–4).
-  int _guestCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    // Restore current guest count from the existing RSVP.
-    final rsvp = widget.myPlayer.rsvp;
-    if (rsvp != null && rsvp.isGoing) {
-      _guestCount = rsvp.guestCount;
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _RsvpSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final rsvp = widget.myPlayer.rsvp;
-    if (rsvp != null && rsvp.isGoing) {
-      if (_guestCount != rsvp.guestCount) {
-        _guestCount = rsvp.guestCount;
-      }
-    }
-  }
-
   Rsvp _rsvpForGuestCount(int guests) => switch (guests) {
         1 => Rsvp.goingPlus1,
         2 => Rsvp.goingPlus2,
@@ -2192,6 +2169,8 @@ class _RsvpSectionState extends State<_RsvpSection> {
     final r = widget.myPlayer.rsvp;
     return r != null && r.isGoing;
   }
+
+  int get _currentGuestCount => widget.myPlayer.rsvp?.guestCount ?? 0;
 
   @override
   Widget build(BuildContext context) {
@@ -2218,7 +2197,9 @@ class _RsvpSectionState extends State<_RsvpSection> {
         ),
         const SizedBox(height: AppSpacing.md),
         // Primary status chips: Going / Maybe / Can't
-        Row(
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
             _RsvpChip(
               label: 'Going',
@@ -2226,17 +2207,15 @@ class _RsvpSectionState extends State<_RsvpSection> {
               enabled: enabled,
               onTap: () {
                 // Preserve current guest count when re-tapping "Going".
-                widget.onRsvp(_rsvpForGuestCount(_guestCount));
+                widget.onRsvp(_rsvpForGuestCount(_currentGuestCount));
               },
             ),
-            const SizedBox(width: AppSpacing.sm),
             _RsvpChip(
               label: 'Maybe',
               active: current == Rsvp.maybe,
               enabled: enabled,
               onTap: () => widget.onRsvp(Rsvp.maybe),
             ),
-            const SizedBox(width: AppSpacing.sm),
             _RsvpChip(
               label: "Can't come",
               active: current == Rsvp.cant,
@@ -2264,20 +2243,19 @@ class _RsvpSectionState extends State<_RsvpSection> {
               ),
               const Spacer(),
               _GuestCountStepper(
-                value: _guestCount,
+                value: _currentGuestCount,
                 max: 4,
                 onChanged: (n) {
-                  setState(() => _guestCount = n);
                   widget.onRsvp(_rsvpForGuestCount(n));
                 },
               ),
             ],
           ),
-          if (_guestCount > 0)
+          if (_currentGuestCount > 0)
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.xs),
               child: Text(
-                'You + $_guestCount guest${_guestCount > 1 ? 's' : ''} = ${_guestCount + 1} total seats',
+                'You + $_currentGuestCount guest${_currentGuestCount > 1 ? 's' : ''} = ${_currentGuestCount + 1} total seats',
                 style: AppTypography.bodyXs.copyWith(
                   color: AppColors.success,
                 ),
@@ -2332,7 +2310,7 @@ class _GuestCountStepper extends StatelessWidget {
           onTap: () => onChanged(value - 1),
         ),
         SizedBox(
-          width: 32,
+          width: 44,
           child: Center(
             child: Text(
               '$value',
@@ -2369,8 +2347,8 @@ class _StepButton extends StatelessWidget {
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: Container(
-        width: 32,
-        height: 32,
+        width: 44,
+        height: 44,
         decoration: BoxDecoration(
           color: enabled ? AppColors.primary : AppColors.muted,
           borderRadius: BorderRadius.circular(AppRadius.sm),

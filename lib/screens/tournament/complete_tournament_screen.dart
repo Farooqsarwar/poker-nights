@@ -36,6 +36,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
   }
 
   void _undo() {
+    if (_order.isEmpty) return;
     setState(() => _order.removeLast());
   }
 
@@ -137,23 +138,25 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Record Finish Order',
-                    style: AppTypography.display(
-                      size: AppFontSizes.xxxl,
-                      weight: FontWeight.w700,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Record Finish Order',
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxxl,
+                        weight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'Tap players in order of elimination (first-out first)',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
+                    Text(
+                      'Tap players in order of elimination (first-out first)',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -393,10 +396,12 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Prize distribution (admin only)',
-                          style: AppTypography.bodySm.copyWith(
-                            color: AppColors.mutedForeground,
+                        Expanded(
+                          child: Text(
+                            'Prize distribution (admin only)',
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
                         ),
                         if (unranked.isEmpty)
@@ -476,12 +481,15 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
     );
   }
 
-  String _placeName(int place) => switch (place) {
-    1 => '1st place',
-    2 => '2nd place',
-    3 => '3rd place',
-    _ => '${place}th place',
-  };
+  String _placeName(int place) {
+    if (place % 100 >= 11 && place % 100 <= 13) return '${place}th place';
+    return switch (place % 10) {
+      1 => '${place}st place',
+      2 => '${place}nd place',
+      3 => '${place}rd place',
+      _ => '${place}th place',
+    };
+  }
 
   Prize? _prizeFor(List<Prize> prizes, int pos) {
     if (pos <= 0) return null;

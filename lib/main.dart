@@ -49,7 +49,7 @@ Future<void> main() async {
   // Production error handling — show a friendly error overlay instead of a red screen.
   ErrorWidget.builder = (FlutterErrorDetails details) {
     return Material(
-      color: Colors.black,
+      color: const Color(0xFF131315),
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -58,7 +58,7 @@ Future<void> main() async {
             children: [
               const Icon(
                 Icons.warning_amber_rounded,
-                color: Colors.amber,
+                color: Color(0xFFFACC15),
                 size: 48,
               ),
               const SizedBox(height: 12),
@@ -67,7 +67,7 @@ Future<void> main() async {
                     ? details.exception.toString()
                     : 'Something went wrong. Please restart the app.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70),
+                style: const TextStyle(color: Color(0xB3FFFFFF)),
               ),
             ],
           ),

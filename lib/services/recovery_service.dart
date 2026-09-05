@@ -161,6 +161,17 @@ class RecoveryService {
           // does not need adjustment (no time elapsed against the clock).
           return game;
         }
+        // Fallback: timer is running but levelEndTime was somehow lost.
+        // Deduct elapsed wall-clock time and explicitly synthesize a new
+        // levelEndTime so the timer behaves correctly post-recovery.
+        final elapsed = DateTime.now().difference(_lastSavedAt!).inSeconds;
+        final remaining = (game.secondsRemaining - elapsed) > 0 
+            ? (game.secondsRemaining - elapsed) 
+            : 0;
+        return game.copyWith(
+          secondsRemaining: remaining,
+          levelEndTime: DateTime.now().add(Duration(seconds: remaining)),
+        );
       }
       return game;
     } catch (e) {

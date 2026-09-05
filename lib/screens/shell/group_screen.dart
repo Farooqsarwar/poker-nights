@@ -188,6 +188,59 @@ class _GroupScreenState extends State<GroupScreen> {
     );
   }
 
+  void _showTransferOwnershipDialog(BuildContext context) {
+    final app = context.read<AppProvider>();
+    final members = app.currentGroup.members
+        .where((m) => m.id != app.user?.id)
+        .toList();
+    if (members.isEmpty) return;
+    String? selectedId;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          backgroundColor: AppColors.card,
+          title: const Text('Transfer Ownership'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Select a member to become the new group owner. This cannot be undone.',
+                style: AppTypography.bodySm
+                    .copyWith(color: AppColors.mutedForeground),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              ...members.map(
+                (m) => RadioListTile<String>(
+                  value: m.id,
+                  groupValue: selectedId,
+                  onChanged: (v) => setState(() => selectedId = v),
+                  title: Text(m.name, style: AppTypography.bodySm),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: selectedId == null
+                  ? null
+                  : () async {
+                      Navigator.of(ctx).pop();
+                      await app.transferGroupOwnership(selectedId!);
+                    },
+              child: const Text('Transfer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openGame(BuildContext context, AppProvider app, LiveGame game) {
     // Always set the current game first so destination screens
     // have the correct game in the provider.
@@ -291,6 +344,7 @@ class _GroupScreenState extends State<GroupScreen> {
             group: group,
             isAdmin: isAdmin,
             onLeaveGroup: () => _confirmLeaveGroup(context),
+            onTransferOwnership: isAdmin ? () => _showTransferOwnershipDialog(context) : null,
           ),
           const SizedBox(height: AppSpacing.lg),
           Wrap(
@@ -431,7 +485,7 @@ class _GroupScreenState extends State<GroupScreen> {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                        vertical: AppSpacing.xs,
+                        vertical: 12.0,
                       ),
                       child: Text(
                         '+ Add option',
@@ -1671,7 +1725,8 @@ class _GroupHeader extends StatelessWidget {
   final Group group;
   final bool isAdmin;
   final VoidCallback? onLeaveGroup;
-  const _GroupHeader({required this.group, required this.isAdmin, this.onLeaveGroup});
+  final VoidCallback? onTransferOwnership;
+  const _GroupHeader({required this.group, required this.isAdmin, this.onLeaveGroup, this.onTransferOwnership});
 
   static const double _mobileBreakpoint = 640;
 
@@ -1765,6 +1820,13 @@ class _GroupHeader extends StatelessWidget {
                 onPressed: () => context.go(RoutePaths.createTournament),
                 child: const Text('+ New game'),
               ),
+              if (isAdmin && onTransferOwnership != null)
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: onTransferOwnership,
+                  child: const Text('Transfer Ownership'),
+                ),
             ] else if (onLeaveGroup != null) ...[
               AppButton(
                 size: AppButtonSize.sm,

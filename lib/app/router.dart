@@ -108,6 +108,26 @@ GoRouter buildAppRouter(AppProvider app) {
       return app.currentGame != null ? RoutePaths.invitation : RoutePaths.home;
     }
 
+    // Auto-redirect members from invitation to live game when game goes live.
+    // GoRouter re-evaluates redirect on every notifyListeners() call, so this
+    // fires automatically when the admin starts the tournament (P1 fix).
+    final game = app.currentGame;
+    if (authed &&
+        !app.isAdmin &&
+        path == RoutePaths.invitation &&
+        game != null &&
+        game.status.isActiveLive) {
+      return RoutePaths.playerLive;
+    }
+    // Guard: prevent admin from back-navigating to pre-game screens during live tournament.
+    if (authed &&
+        app.isAdmin &&
+        game != null &&
+        game.status.isActiveLive &&
+        (path == RoutePaths.structureReview)) {
+      return RoutePaths.adminDashboard;
+    }
+
     final guestOk = app.hasGuestSession && _guestAllowed.contains(path);
     if (!authed && !guestOk && !_publicPaths.contains(path)) {
       final query = state.uri.query.isEmpty ? '' : '?${state.uri.query}';

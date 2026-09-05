@@ -482,6 +482,7 @@ class AppProvider extends ChangeNotifier {
           _lastSavedGame = toWrite;
         } catch (e) {
           debugPrint('saveGame failed: $e');
+          rethrow;
         }
       } while (_pendingLatestSave != null);
     } finally {
@@ -595,7 +596,6 @@ class AppProvider extends ChangeNotifier {
             liveGameToMap(projections.playerProjection(game, viewerId: '')),
         guest: liveGameToMap(projections.guestProjection(game)),
       );
-      await _repo.upsertGameCodes(game);
     } catch (e) {
       debugPrint('publishProjections failed: $e');
       rethrow;
@@ -2110,6 +2110,26 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  /// Transfers ownership of the current group to another member.
+  /// Only callable by the current owner. Safe no-op for non-owners.
+  Future<void> transferGroupOwnership(String newOwnerId) async {
+    final userId = _user?.id;
+    final gid = _currentGroup.id;
+    if (userId == null || userId != _currentGroup.ownerId) return;
+    if (newOwnerId == userId || newOwnerId.isEmpty) return;
+    final newOwner = _currentGroup.members
+        .where((m) => m.id == newOwnerId)
+        .firstOrNull;
+    if (newOwner == null) return;
+    if (_backendUp) {
+      await _repo
+          .transferGroupOwnership(gid, newOwnerId, newOwner.name)
+          .catchError(
+            (Object e) => debugPrint('transferOwnership failed: $e'),
+          );
+    }
+  }
+
   /// Non-owner members may leave a group voluntarily.
   void leaveGroup() {
     final userId = _user?.id;
@@ -2491,6 +2511,9 @@ class AppProvider extends ChangeNotifier {
     );
     _postGroupChat(card);
     _syncGroupGame();
+    if (_backendUp) {
+      unawaited(_repo.upsertGameCodes(_currentGame!));
+    }
     addAuditRecord(
       'publish',
       'Published ${game.settings.name} '
@@ -2985,7 +3008,7 @@ class AppProvider extends ChangeNotifier {
     _currentGame = _currentGame!.copyWith(
       timerRunning: false,
       status: LiveGameStatus.paused,
-      secondsRemaining: _currentGame!.currentSecondsRemaining(),
+      secondsRemaining: _currentGame!.currentSecondsRemaining(_serverTimeOffset ?? Duration.zero),
       levelEndTime: null,
       clearLevelEndTime: true,
     );

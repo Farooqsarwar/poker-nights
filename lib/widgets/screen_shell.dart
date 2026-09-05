@@ -53,11 +53,24 @@ class ScreenShell extends StatelessWidget {
       return _Gate(path: requiredPath);
     }
 
-    // Guests get a bare scaffold with no navigation chrome — every nav
-    // button in the sidebar / drawer / bottom-nav would be a dead end.
+    // Guests get a minimal scaffold: no full nav chrome (every nav button
+    // would be a dead end) but we DO show a top-bar with an exit/back button
+    // so guests are never stranded with no way to leave (audit finding P1).
     if (!signedIn && guestOk) {
       return Scaffold(
         backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: 'Exit',
+            onPressed: () {
+              GoRouter.of(context).go(RoutePaths.join);
+            },
+          ),
+        ),
         body: ThemedAppBackground(child: child),
       );
     }

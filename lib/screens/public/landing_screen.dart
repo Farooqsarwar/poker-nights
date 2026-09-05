@@ -288,7 +288,7 @@ class _LandingScreenState extends State<LandingScreen> {
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                        vertical: 6.0,
+                        vertical: 12.0,
                         horizontal: 8.0,
                       ),
                       child: Text(

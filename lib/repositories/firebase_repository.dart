@@ -642,6 +642,20 @@ class FirebaseRepository {
         'tableSettings': tableSettingsToMap(settings),
       });
 
+  /// Atomically transfers group ownership to [newOwnerId]: updates the group
+  /// doc's `ownerId` field and promotes the new owner's member row to `admin`.
+  Future<void> transferGroupOwnership(
+      String gid, String newOwnerId, String newOwnerName) async {
+    final batch = _db.batch();
+    batch.update(_db.collection('groups').doc(gid), {'ownerId': newOwnerId});
+    batch.set(
+      _db.collection('groups').doc(gid).collection('members').doc(newOwnerId),
+      {'name': newOwnerName, 'role': 'admin'},
+      SetOptions(merge: true),
+    );
+    await batch.commit();
+  }
+
   /// Looks up a registered user by exact (case-insensitive) email match, for
   /// the admin "add member directly" flow. Reads the public `emailIndex`
   /// (the `users` collection is private to each owner). Returns null when no

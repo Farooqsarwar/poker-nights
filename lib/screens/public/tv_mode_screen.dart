@@ -269,6 +269,7 @@ class _TVLayout extends StatelessWidget {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
+                final s = (constraints.maxWidth / 1536).clamp(0.5, 2.0).toDouble();
           if (constraints.maxWidth >= 900) {
             return Padding(
               padding: const EdgeInsets.all(16),
@@ -317,7 +318,10 @@ class _TVLayout extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  SizedBox(width: 340, child: _RotatingPanel(game: game)),
+                  Expanded(
+                    flex: 3,
+                    child: _RotatingPanel(game: game, scale: s),
+                  ),
                 ],
               ),
             );
@@ -480,9 +484,10 @@ class _PodiumStep extends StatelessWidget {
 }
 
 class _RotatingPanel extends StatefulWidget {
-  const _RotatingPanel({required this.game});
+  const _RotatingPanel({required this.game, this.scale = 1.0});
 
   final LiveGame game;
+  final double scale;
 
   @override
   State<_RotatingPanel> createState() => _RotatingPanelState();
@@ -527,7 +532,7 @@ class _RotatingPanelState extends State<_RotatingPanel> {
           Text(
             _titles[effectivePanel],
             style: AppTypography.mono(
-              size: 15,
+              size: 15 * widget.scale,
               weight: FontWeight.w700,
               letterSpacing: 2.5,
               color: AppColors.primary,
@@ -541,13 +546,15 @@ class _RotatingPanelState extends State<_RotatingPanel> {
                 0 => _LeaderboardPanel(
                   key: const ValueKey(0),
                   game: widget.game,
+                  scale: widget.scale,
                 ),
-                1 => _PayoutsPanel(key: const ValueKey(1), game: widget.game),
+                1 => _PayoutsPanel(key: const ValueKey(1), game: widget.game, scale: widget.scale),
                 2 => _AnnouncementsPanel(
                   key: const ValueKey(2),
                   game: widget.game,
+                  scale: widget.scale,
                 ),
-                _ => _UpcomingPanel(key: const ValueKey(3), game: widget.game),
+                _ => _UpcomingPanel(key: const ValueKey(3), game: widget.game, scale: widget.scale),
               },
             ),
           ),
@@ -558,9 +565,10 @@ class _RotatingPanelState extends State<_RotatingPanel> {
 }
 
 class _LeaderboardPanel extends StatelessWidget {
-  const _LeaderboardPanel({super.key, required this.game});
+  const _LeaderboardPanel({super.key, required this.game, this.scale = 1.0});
 
   final LiveGame game;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
@@ -598,7 +606,7 @@ class _LeaderboardPanel extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.mono(
-                      size: 12,
+                      size: 12 * scale,
                       color: p.active
                           ? AppColors.foreground
                           : AppColors.mutedForeground,
@@ -613,7 +621,7 @@ class _LeaderboardPanel extends StatelessWidget {
                           ? '${_ordinalPlace(p.eliminationPos!)} place'
                           : 'Out',
                   style: AppTypography.mono(
-                    size: 11,
+                    size: 11 * scale,
                     color: AppColors.mutedForeground,
                   ),
                 ),
@@ -626,9 +634,10 @@ class _LeaderboardPanel extends StatelessWidget {
 }
 
 class _PayoutsPanel extends StatelessWidget {
-  const _PayoutsPanel({super.key, required this.game});
+  const _PayoutsPanel({super.key, required this.game, this.scale = 1.0});
 
   final LiveGame game;
+  final double scale;
 
   static const _ords = ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH'];
 
@@ -645,7 +654,7 @@ class _PayoutsPanel extends StatelessWidget {
             Formatters.chips(game.structure.prizePool),
             textAlign: TextAlign.center,
             style: AppTypography.mono(
-              size: 42,
+              size: 42 * scale,
               weight: FontWeight.w300,
               color: AppColors.foreground,
             ),
@@ -654,7 +663,7 @@ class _PayoutsPanel extends StatelessWidget {
             game.prizePoolLabel.toUpperCase(),
             textAlign: TextAlign.center,
             style: AppTypography.mono(
-              size: 12,
+              size: 12 * scale,
               letterSpacing: 2,
               color: AppColors.mutedForeground,
             ),
@@ -671,7 +680,7 @@ class _PayoutsPanel extends StatelessWidget {
                     Text(
                       _ords[i],
                       style: AppTypography.mono(
-                        size: 12,
+                        size: 12 * scale,
                         weight: FontWeight.w700,
                         color: AppColors.primary,
                       ),
@@ -679,7 +688,7 @@ class _PayoutsPanel extends StatelessWidget {
                     const Spacer(),
                     Text(
                       _podiumName(i + 1),
-                      style: AppTypography.mono(size: 13, color: AppColors.foreground),
+                      style: AppTypography.mono(size: 13 * scale, color: AppColors.foreground),
                     ),
                   ],
                 ),
@@ -703,9 +712,10 @@ class _PayoutsPanel extends StatelessWidget {
 }
 
 class _UpcomingPanel extends StatelessWidget {
-  const _UpcomingPanel({super.key, required this.game});
+  const _UpcomingPanel({super.key, required this.game, this.scale = 1.0});
 
   final LiveGame game;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
@@ -720,7 +730,7 @@ class _UpcomingPanel extends StatelessWidget {
           game.status == LiveGameStatus.completed
               ? 'TOURNAMENT COMPLETE'
               : 'END',
-          style: AppTypography.mono(size: 14, color: AppColors.primary),
+          style: AppTypography.mono(size: 14 * scale, color: AppColors.primary),
         ),
       );
     }
@@ -736,7 +746,7 @@ class _UpcomingPanel extends StatelessWidget {
                   Text(
                     'L${l.level}',
                     style: AppTypography.mono(
-                      size: 13,
+                      size: 13 * scale,
                       weight: FontWeight.w700,
                       color: AppColors.primary,
                     ),
@@ -746,7 +756,7 @@ class _UpcomingPanel extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     child: Text(
                       'SB ${Formatters.chips(l.sb)} · BB ${Formatters.chips(l.bb)}',
-                      style: AppTypography.mono(size: 13, color: AppColors.foreground),
+                      style: AppTypography.mono(size: 13 * scale, color: AppColors.foreground),
                     ),
                   ),
                   if (l.ante != null) ...[
@@ -754,7 +764,7 @@ class _UpcomingPanel extends StatelessWidget {
                     Text(
                       'ANTE ${Formatters.chips(l.ante!)}',
                       style: AppTypography.mono(
-                        size: 11,
+                        size: 11 * scale,
                         color: AppColors.mutedForeground,
                       ),
                     ),
@@ -769,9 +779,10 @@ class _UpcomingPanel extends StatelessWidget {
 }
 
 class _AnnouncementsPanel extends StatelessWidget {
-  const _AnnouncementsPanel({super.key, required this.game});
+  const _AnnouncementsPanel({super.key, required this.game, this.scale = 1.0});
 
   final LiveGame game;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
@@ -780,7 +791,7 @@ class _AnnouncementsPanel extends StatelessWidget {
       return Center(
         child: Text(
           'No announcements',
-          style: AppTypography.mono(size: 14, color: AppColors.mutedForeground),
+          style: AppTypography.mono(size: 14 * scale, color: AppColors.mutedForeground),
         ),
       );
     }
@@ -792,7 +803,7 @@ class _AnnouncementsPanel extends StatelessWidget {
             child: Text(
               a.text,
               style: AppTypography.mono(
-                size: 12,
+                size: 12 * scale,
                 color: AppColors.foreground,
               ),
             ),

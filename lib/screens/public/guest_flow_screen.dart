@@ -507,11 +507,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                       baseline: TextBaseline.alphabetic,
                       child: InkWell(
                         onTap: () => _codeController.text = 'FP2608',
-                        child: Text(
-                          'FP2608',
-                          style: AppTypography.monoSm.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w700,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                          child: Text(
+                            'FP2608',
+                            style: AppTypography.monoSm.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
@@ -535,12 +538,15 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             ),
             InkWell(
               onTap: () => context.go(RoutePaths.login),
-              child: Text(
-                'Sign in',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.primary,
-                  decoration: TextDecoration.underline,
-                  decorationColor: AppColors.primary,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                child: Text(
+                  'Sign in',
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.primary,
+                    decoration: TextDecoration.underline,
+                    decorationColor: AppColors.primary,
+                  ),
                 ),
               ),
             ),

@@ -204,7 +204,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         : AppColors.primary;
 
     return AppPage(
-      maxWidth: 960,
+      maxWidth: 1280,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -214,12 +214,15 @@ class _JoinScreenState extends State<JoinScreen> {
                           ),
                           InkWell(
                             onTap: () => context.go(RoutePaths.login),
-                            child: Text(
-                              'Sign in',
-                              style: AppTypography.bodySm.copyWith(
-                                color: AppColors.primary,
-                                decoration: TextDecoration.underline,
-                                decorationColor: AppColors.primary,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                              child: Text(
+                                'Sign in',
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.primary,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: AppColors.primary,
+                                ),
                               ),
                             ),
                           ),
@@ -406,7 +409,7 @@ class _BackLink extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.sm),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

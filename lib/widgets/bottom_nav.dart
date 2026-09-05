@@ -32,8 +32,8 @@ class BottomNav extends StatelessWidget {
           icon: Icons.group_add_outlined,
           onTap: () => openCreateGroupDialog(context),
         ),
-        _BottomItem(path: RoutePaths.cashGame, label: 'Cash Game', icon: Icons.payments_outlined),
       ],
+      _BottomItem(path: RoutePaths.cashGame, label: 'Cash Game', icon: Icons.payments_outlined),
       _BottomItem(path: RoutePaths.history, label: 'History', icon: Icons.history),
     ];
 

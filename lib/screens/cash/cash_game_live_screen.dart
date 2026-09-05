@@ -739,6 +739,88 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                       ],
                     ),
                   ),
+                  // Settlement ledger — who pays whom
+                  Builder(builder: (context) {
+                    final settled = session.players
+                        .where((p) => p.hasCashedOut)
+                        .toList();
+                    if (settled.length < 2) return const SizedBox.shrink();
+                    // Build mutable net lists
+                    final creditors = <({String name, double amount})>[];
+                    final debtors = <({String name, double amount})>[];
+                    for (final p in settled) {
+                      if (p.net > 0.009) {
+                        creditors.add((name: p.name, amount: p.net));
+                      } else if (p.net < -0.009) {
+                        debtors.add((name: p.name, amount: -p.net));
+                      }
+                    }
+                    // Greedy settle
+                    final transfers = <String>[];
+                    final cAmts = creditors.map((c) => c.amount).toList();
+                    final dAmts = debtors.map((d) => d.amount).toList();
+                    var ci = 0;
+                    var di = 0;
+                    while (ci < creditors.length && di < debtors.length) {
+                      final pay = cAmts[ci] < dAmts[di] ? cAmts[ci] : dAmts[di];
+                      transfers.add(
+                        '${debtors[di].name} pays ${creditors[ci].name} '
+                        '${Formatters.money(currency, pay)}',
+                      );
+                      cAmts[ci] -= pay;
+                      dAmts[di] -= pay;
+                      if (cAmts[ci] < 0.01) ci++;
+                      if (dAmts[di] < 0.01) di++;
+                    }
+                    if (transfers.isEmpty) return const SizedBox.shrink();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          'Settlement',
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Container(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          decoration: BoxDecoration(
+                            color: AppColors.muted,
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final t in transfers)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                      bottom: AppSpacing.xs),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.arrow_forward,
+                                        size: 14,
+                                        color: AppColors.mutedForeground,
+                                      ),
+                                      const SizedBox(width: AppSpacing.xs),
+                                      Expanded(
+                                        child: Text(
+                                          t,
+                                          style: AppTypography.bodySm,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
                   const SizedBox(height: AppSpacing.md),
                   AppButton(
                     variant: AppButtonVariant.secondary,

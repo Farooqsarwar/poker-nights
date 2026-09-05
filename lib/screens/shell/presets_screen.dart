@@ -393,7 +393,7 @@ class _PresetFormState extends State<_PresetForm> {
     _reEntry = p?.reEntry ?? true;
     _addOn = p?.addOn ?? true;
     _duration = p?.durationHours ?? 3.5;
-    _anteEnabled = p?.anteEnabled ?? true;
+    _anteEnabled = p?.anteEnabled ?? false;
     _anteAfterLevel = p?.anteAfterLevel ?? 6;
     _orgPct = (p?.organizerPct ?? 10).toDouble();
     _chipSetName =

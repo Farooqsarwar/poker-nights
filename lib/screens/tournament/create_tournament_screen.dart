@@ -211,7 +211,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   final _addOnCost = TextEditingController();
   bool _koEnabled = false;
   final _koAmount = TextEditingController(text: '5');
-  AntePreference _antePreference = AntePreference.recommend;
+  AntePreference _antePreference = AntePreference.none;
   int _anteAfterLevel = 6;
 
   // Table-capacity/randomization — defaults to the group's setting; the host

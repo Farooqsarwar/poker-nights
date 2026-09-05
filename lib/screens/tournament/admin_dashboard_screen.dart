@@ -273,11 +273,78 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     child: AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
-                      onPressed: app.toggleVoice,
+                      onPressed: () {
+                        if (!app.isAdmin) {
+                          app.toggleVoice();
+                          return;
+                        }
+                        // Tech Spec §13.2: the admin manually selects which
+                        // device is the Audio Master.
+                        showAppModal(
+                          context: context,
+                          title: 'Audio announcements',
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                app.thisDeviceIsAudioMaster
+                                    ? 'This device is the Audio Master — it '
+                                        'speaks for the event. Clear it to let '
+                                        'every voice-enabled device announce.'
+                                    : 'No Audio Master is set — every '
+                                        'voice-enabled device may announce. '
+                                        'Claim the role to speak from this '
+                                        'device only.',
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                              if (!app.thisDeviceIsAudioMaster)
+                                AppButton(
+                                  onPressed: () {
+                                    app.setAudioMasterDevice();
+                                    Navigator.pop(context);
+                                  },
+                                  child: const Text(
+                                      'Make this device the Audio Master'),
+                                ),
+                              if (app.thisDeviceIsAudioMaster)
+                                AppButton(
+                                  variant: AppButtonVariant.secondary,
+                                  onPressed: () {
+                                    app.clearAudioMasterDevice();
+                                    Navigator.pop(context);
+                                  },
+                                  child:
+                                      const Text('Allow all devices to announce'),
+                                ),
+                              const SizedBox(height: AppSpacing.sm),
+                              AppButton(
+                                variant: AppButtonVariant.ghost,
+                                onPressed: () {
+                                  app.toggleVoice();
+                                  Navigator.pop(context);
+                                },
+                                child: Text(
+                                  app.voiceEnabled
+                                      ? 'Mute voice'
+                                      : 'Unmute voice',
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: AppIconLabel(
-                          label: app.voiceEnabled ? 'Audio Master' : 'Voice off',
+                          label: app.thisDeviceIsAudioMaster
+                              ? 'Audio Master · Me'
+                              : app.voiceEnabled
+                                  ? 'Audio Master'
+                                  : 'Voice off',
                           icon: app.voiceEnabled
                               ? Icons.volume_up_outlined
                               : Icons.volume_off_outlined,
@@ -1244,9 +1311,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   List<Widget> _playersTab(AppProvider app, LiveGame game) {
     final settings = game.settings;
-    final currentLevel = game.currentLevel;
-    final canRebuy =
-        settings.rebuys && currentLevel <= settings.rebuysCloseLevel;
+    // Rebuy is deliberately omitted from the active roster: it only applies to
+    // eliminated players (grantRebuy no-ops otherwise) and lives in the
+    // Eliminated tab. (User Flow §7.4 / Tech Spec §21 "rebuy requested for
+    // active player → Block".)
 
     return [
       if (app.isAdmin && app.lateRegistrationOpen)
@@ -1325,13 +1393,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         variant: AppButtonVariant.danger,
                         onPressed: () => _showEliminateModal(context, app, p),
                         child: const Text('Out'),
-                      ),
-                    if (canRebuy)
-                      AppButton(
-                        size: AppButtonSize.sm,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => _confirmRebuy(context, app, p),
-                        child: const Text('Rebuy'),
                       ),
                     if (settings.addOn &&
                         game.status == LiveGameStatus.rebuypause &&
@@ -1614,52 +1675,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               }
             },
             child: const Text('Add Player'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmRebuy(BuildContext context, AppProvider app, Player p) {
-    showAppModal(
-      context: context,
-      title: 'Grant rebuy',
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '${p.name} receives a fresh ${Formatters.chips(app.currentGame!.structure.rebuyStack)}-chip '
-            'rebuy stack and rejoins the game. The prize pool is recalculated.',
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Row(
-            children: [
-              Expanded(
-                child: AppButton(
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: AppButton(
-                  onPressed: () {
-                    app.grantRebuy(
-                      p.id,
-                      idempotencyKey:
-                          'rebuy-${DateTime.now().microsecondsSinceEpoch}',
-                    );
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Grant rebuy'),
-                ),
-              ),
-            ],
           ),
         ],
       ),

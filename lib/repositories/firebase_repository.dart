@@ -870,12 +870,15 @@ class FirebaseRepository {
       .set(pollToMap(poll));
 
   // ── Games ──────────────────────────────────────────────────────────────────
-  Future<void> saveGame(LiveGame game) async {
+  Future<void> saveGame(LiveGame game, {String? viewerId}) async {
     final fullDoc = liveGameToFirestoreDoc(game);
     
-    // Save private sidecar so admin can recover on a new device
+    // Save private sidecar so admin can recover on a new device. The full
+    // players array travels here because the public doc scrubs per-player
+    // financial fields below (User Flow §2.3/§5.6).
     final privateDoc = <String, dynamic>{
       'organizerPct': game.settings.organizerPct,
+      'players': game.players.map(playerToMap).toList(),
       if (game.structure != null) ...{
         'prizes': fullDoc['structure']['prizes'],
         'organizerAmount': fullDoc['structure']['organizerAmount'],
@@ -899,6 +902,27 @@ class FirebaseRepository {
       publicStructure.remove('prizes');
       publicStructure.remove('organizerAmount');
       publicDoc['structure'] = publicStructure;
+    }
+    
+    // Per-player financial fields are private (Tech §5.6): scrub rebuys /
+    // reEntries / hasAddOn / knockouts for every player except the viewer's
+    // own record, matching the projection rule enforced at the data boundary.
+    if (publicDoc['players'] is Map) {
+      final publicPlayers = Map<String, dynamic>.from(publicDoc['players'] as Map);
+      final scrubbed = <String, dynamic>{};
+      for (final e in publicPlayers.entries) {
+        final value = Map<String, dynamic>.from(e.value as Map);
+        if (e.key == viewerId) {
+          scrubbed[e.key] = value;
+          continue;
+        }
+        value['rebuys'] = 0;
+        value['reEntries'] = 0;
+        value['hasAddOn'] = false;
+        value['knockouts'] = 0;
+        scrubbed[e.key] = value;
+      }
+      publicDoc['players'] = scrubbed;
     }
     
     await _db

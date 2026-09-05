@@ -279,6 +279,19 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         : registeredPlayers.where((p) => p.id == _selectedInviter).firstOrNull;
     final availableSlots = inviter?.rsvp?.guestCount ?? 0;
     final level = game.currentLevelData;
+    // Private addresses are hidden from unconfirmed guests (User Flow §11.1):
+    // revealed only after the admin confirms this guest's seat, or when the
+    // event is public.
+    final session = app.guestSession;
+    final guestConfirmed = session != null &&
+        game.players.any(
+          (p) =>
+              p.isGuest &&
+              p.confirmed &&
+              p.inviterId == session.inviterId &&
+              p.guestSlot == session.slot,
+        );
+    final showAddress = !game.settings.locationPrivate || guestConfirmed;
 
     // While waiting, react to the admin's decision in real time: the guest is
     // confirmed once their player record is confirmed (07-027/07-028). A
@@ -334,7 +347,9 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               style: AppTypography.display(size: AppFontSizes.xl),
             ),
             Text(
-              '${game.settings.date} · ${game.settings.location}',
+              showAddress
+                  ? '${game.settings.date} · ${game.settings.location}'
+                  : game.settings.date,
               style: AppTypography.bodySm.copyWith(
                 color: AppColors.mutedForeground,
               ),
@@ -369,7 +384,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         const SizedBox(height: AppSpacing.xl),
 
         switch (view) {
-          _GuestStep.eventIntro => _buildEventIntro(game),
+          _GuestStep.eventIntro => _buildEventIntro(game, showAddress: showAddress),
           _GuestStep.chooseInviter => _buildChooseInviter(
             game,
             registeredPlayers,
@@ -552,7 +567,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   /// Friendly event-specific landing card shown right after the guest
   /// resolves the code (audit fix B12 — the spec sample shows date/time,
   /// location, buy-in, rebuys and KO before "Claim My Guest Place").
-  Widget _buildEventIntro(LiveGame game) {
+  Widget _buildEventIntro(LiveGame game, {required bool showAddress}) {
     final s = game.settings;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -584,7 +599,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                 icon: Icons.calendar_today_outlined,
                 text: '${s.date} · ${s.time}',
               ),
-              if (s.location.isNotEmpty)
+              if (s.location.isNotEmpty && showAddress)
                 _IntroLine(icon: Icons.location_on_outlined, text: s.location),
               _IntroLine(
                 icon: Icons.attach_money_outlined,

@@ -851,8 +851,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                             const SizedBox(height: AppSpacing.sm),
                             AppTextField(
                               controller: _unresolvedNote,
-                              placeholder: 'Reason for mismatch (optional)',
+                              placeholder: 'Reason for mismatch (required)',
                               autofocus: true,
+                              onChanged: (_) => setState(() {}),
                             ),
                           ],
                         ],
@@ -876,8 +877,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                       Expanded(
                         child: AppButton(
                           variant: AppButtonVariant.danger,
-                          disabled:
-                              session.difference.abs() > 0.01 && !_forceEnd,
+                          disabled: (session.difference.abs() > 0.01 && !_forceEnd) ||
+                              (_forceEnd &&
+                                  _unresolvedNote.text.trim().isEmpty),
                           onPressed: () => _endGame(app),
                           child: const Text('End game'),
                         ),

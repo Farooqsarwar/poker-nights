@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import '../app/route_paths.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'
     show DocumentSnapshot, FieldValue;
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -476,7 +477,7 @@ class AppProvider extends ChangeNotifier {
             ? freshest
             : freshest.copyWith(groupId: effectiveGid);
         try {
-          await _repo.saveGame(toWrite);
+          await _repo.saveGame(toWrite, viewerId: _user?.id);
           await _publishProjections(toWrite);
           _lastSavedGame = toWrite;
         } catch (e) {
@@ -748,6 +749,10 @@ class AppProvider extends ChangeNotifier {
         remote = remote.copyWith(
           settings: remote.settings.copyWith(
             organizerPct: _currentGame!.settings.organizerPct,
+          ),
+          players: _restorePrivatePlayerFinancials(
+            remote.players,
+            _currentGame!.players.map(playerToMap).toList(),
           ),
           structure: remote.structure?.copyWith(
             prizes: _currentGame!.structure!.prizes,
@@ -2220,6 +2225,10 @@ class AppProvider extends ChangeNotifier {
             settings: _currentGame!.settings.copyWith(
               organizerPct: (privateData['organizerPct'] as num?)?.toInt() ?? _currentGame!.settings.organizerPct,
             ),
+            players: _restorePrivatePlayerFinancials(
+              _currentGame!.players,
+              privateData['players'],
+            ),
             structure: _currentGame!.structure?.copyWith(
               prizes: privateData['prizes'] != null ? (privateData['prizes'] as List).map((e) => Prize(place: e['place'], amount: e['amount'])).toList() : _currentGame!.structure!.prizes,
               organizerAmount: (privateData['organizerAmount'] as num?)?.toInt() ?? _currentGame!.structure!.organizerAmount,
@@ -2243,6 +2252,34 @@ class AppProvider extends ChangeNotifier {
         });
       }
     }
+  }
+
+  /// Merges per-player financial fields (rebuys / reEntries / hasAddOn /
+  /// knockouts) back from the admin-only private sidecar, so an admin reload
+  /// keeps the true figures even though the public game doc carries them
+  /// scrubbed for non-authority readers (User Flow §2.3/§5.6).
+  List<Player> _restorePrivatePlayerFinancials(
+      List<Player> current, Object? raw) {
+    if (raw is! List) return current;
+    final saved = <String, Player>{};
+    for (final e in raw) {
+      if (e is! Map) continue;
+      try {
+        final p = playerFromMap(Map<String, dynamic>.from(e));
+        saved[p.id] = p;
+      } catch (_) {}
+    }
+    if (saved.isEmpty) return current;
+    return current.map((p) {
+      final r = saved[p.id];
+      if (r == null) return p;
+      return p.copyWith(
+        rebuys: r.rebuys,
+        reEntries: r.reEntries,
+        hasAddOn: r.hasAddOn,
+        knockouts: r.knockouts,
+      );
+    }).toList();
   }
 
   /// Resolves a game (live or past) by id from the group's synced list,
@@ -2413,6 +2450,9 @@ class AppProvider extends ChangeNotifier {
         ? 'Rebuys: until L${game.settings.rebuysCloseLevel}'
         : 'No rebuys';
     final addonText = game.settings.addOn ? 'Add-on: Yes' : 'No add-on';
+    final koText = game.settings.koEnabled && game.settings.koAmount > 0
+        ? 'KO Bounty: ${game.settings.koAmount}'
+        : null;
 
     final card = ChatMessage(
       id: 'pinned-${DateTime.now().millisecondsSinceEpoch}',
@@ -2421,7 +2461,8 @@ class AppProvider extends ChangeNotifier {
       body:
           '${game.settings.name} — ${game.settings.date} at ${game.settings.time}\n'
           'Buy-in: ${game.settings.buyIn} · Code: ${game.publicCode}\n'
-          '$anteText · $rebuyText · $addonText',
+          '$anteText · $rebuyText · $addonText'
+          '${koText == null ? "" : " · $koText"}',
       timestamp: DateTime.now(),
       deleted: false,
       pinned: true,
@@ -2619,6 +2660,9 @@ class AppProvider extends ChangeNotifier {
         ? 'Rebuys: until L${s.rebuysCloseLevel}'
         : 'No rebuys';
     final addonText = s.addOn ? 'Add-on: Yes' : 'No add-on';
+    final koText = s.koEnabled && s.koAmount > 0
+        ? 'KO Bounty: ${s.koAmount}'
+        : null;
     final card = ChatMessage(
       id: 'pinned-${DateTime.now().millisecondsSinceEpoch}',
       authorId: _user!.id,
@@ -2626,7 +2670,8 @@ class AppProvider extends ChangeNotifier {
       body:
           '${s.name} — ${s.date} at ${s.time}\n'
           'Buy-in: ${s.buyIn} · Code: ${game.publicCode}\n'
-          '$anteText · $rebuyText · $addonText\n'
+          '$anteText · $rebuyText · $addonText'
+          '${koText == null ? "" : " · $koText"}\n'
           'Updated: $newestChangeLogEntry',
       timestamp: DateTime.now(),
       deleted: false,
@@ -3149,11 +3194,12 @@ class AppProvider extends ChangeNotifier {
       return p;
     }).toList();
     final remaining = updated.where((p) => p.active).length;
-    final maxPerTable = effectiveTableSettings.maxPerTable;
     // Final table redraw only fires for multi-table events (spec §7 and BR-020: "If a
     // multi-table event hits <= 9 players, a complete random redraw occurs.
-    // Single table events do NOT trigger a redraw.").
-    final multiTableEvent = _currentGame!.confirmedCount > maxPerTable;
+    // Single table events do NOT trigger a redraw."). Seat-based single source of
+    // truth — matches admin_dashboard's hadMultipleTables, so the auto-trigger
+    // and the manual "Final Table Reached!" prompt can never disagree.
+    final multiTableEvent = _currentGame!.players.any((p) => p.table > 1);
     final redrawNotCompleted = !_currentGame!.finalTableRedrawCompleted;
     if (remaining <= 9 && multiTableEvent && redrawNotCompleted) {
       _currentGame = _currentGame!.copyWith(
@@ -3268,6 +3314,13 @@ class AppProvider extends ChangeNotifier {
     if (!game.settings.rebuys || game.rebuysClosed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
     if (player == null || !player.eliminated) return;
+    final rebuyLimit = game.settings.rebuyLimit;
+    if (rebuyLimit != null && player.rebuys >= rebuyLimit) {
+      lastRsvpError = '${player.name} has already used their $rebuyLimit '
+          'rebuy${rebuyLimit == 1 ? '' : 's'}.';
+      notifyListeners();
+      return;
+    }
 
     _pushUndo();
     final rebuyStack = game.structure.rebuyStack;
@@ -3840,6 +3893,16 @@ class AppProvider extends ChangeNotifier {
       return const GuestCheckInResult(
         GuestCheckInStatus.failed,
         message: 'No active game found.',
+      );
+    }
+
+    // Late registration closes permanently once the rebuy window shuts (User
+    // Flow §3.2/§10.3, Tech Spec §21/§12.5): reject the booking before the
+    // optimistic reserve so the guest never sees a phantom "booked" slot.
+    if (game.status.isActiveLive && game.rebuysClosed) {
+      return const GuestCheckInResult(
+        GuestCheckInStatus.failed,
+        message: 'Late registration has closed - no new players can be added.',
       );
     }
 
@@ -5448,6 +5511,32 @@ class AppProvider extends ChangeNotifier {
           timestamp: DateTime.now(),
         ),
       );
+      // Tech Spec §14.2: "Results may suggest a matching tournament preset."
+      // Surface a preset recommendation from the votes so an admin starting a
+      // tournament from a poll-driven flow sees the suggestion up front.
+      final signals = <num>[
+        for (final entry in poll.optionCounts().entries)
+          for (final m in RegExp(r'-?\d+(\.\d+)?').allMatches(entry.key))
+            num.tryParse(m.group(0) ?? '') ?? 0,
+      ];
+      final suggestions = suggestPresets(
+        expectedPlayers: poll.totalVotes,
+        pollSignals: signals,
+      );
+      if (suggestions.isNotEmpty) {
+        pushNotification(
+          AppNotification(
+            id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+            title: 'Preset suggestion',
+            body: '${poll.question} — consider preset '
+                '${suggestions.map((p) => p.name).join(' or ')}?',
+            type: NotificationType.admin,
+            link: RoutePaths.createTournament,
+            read: false,
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
     }
     notifyListeners();
   }
@@ -5464,7 +5553,19 @@ class AppProvider extends ChangeNotifier {
   void setRSVP(Rsvp? rsvp, {String? gameId}) {
     final userId = _user?.id;
     if (userId == null) return;
+    _applyRsvpFor(userId, rsvp, gameId: gameId);
+  }
 
+  /// Admin-only override: corrects or reopens another member's RSVP (User
+  /// Flow §3.1 "The admin may correct or reopen an RSVP when necessary").
+  /// Persists through the exact same write paths as [setRSVP].
+  void adminSetRSVP(String participantId, Rsvp? rsvp, {String? gameId}) {
+    if (!isAdmin || participantId.isEmpty) return;
+    _applyRsvpFor(participantId, rsvp, gameId: gameId, announce: false);
+  }
+
+  void _applyRsvpFor(String userId, Rsvp? rsvp,
+      {String? gameId, bool announce = true}) {
     final targetId = gameId ?? _currentGame?.id;
     if (targetId == null) return;
 
@@ -5480,25 +5581,11 @@ class AppProvider extends ChangeNotifier {
     final mine = target.players.where((p) => p.id == userId).firstOrNull;
     if (mine != null && mine.rsvp == rsvp) return;
 
-    // Guard against a destructive shrink: lowering the "Going +N" count below
-    // guests that have already claimed seats would silently delete their
-    // pending requests or orphan already-confirmed ones (checklist 07-015).
-    // Refuse and surface a visible conflict to the member so they can resolve
-    // those guests first, instead of quietly invalidating their bookings.
-    final newCount = rsvp?.guestCount ?? 0;
-    final excessClaimed = target.players.any(
-      (p) =>
-          p.isGuest &&
-          p.inviterId == userId &&
-          (p.guestSlot ?? 0) > newCount,
-    );
-    if (excessClaimed) {
-      lastRsvpError =
-          'Some of your guests are already booked on seats beyond this new '
-          'count. Remove or re-book them before lowering your guest count.';
-      notifyListeners();
-      return;
-    }
+    // Destructive-shrink handling lives inside applyRsvp →
+    // [_reconcileExcessGuestSlots]: unconfirmed excess guests are dropped
+    // silently, while confirmed ones are kept and surfaced to the admin as a
+    // conflict notification (checklist 07-015) — the member's change is never
+    // hard-blocked (§7.1).
 
     LiveGame applyRsvp(LiveGame g) {
       final onRoster = g.players.any((p) => p.id == userId);
@@ -5538,7 +5625,7 @@ class AppProvider extends ChangeNotifier {
     // save when notifyListeners fires below.)
 
     // Notify the admin of RSVP changes (spec §8 notification triggers).
-    if (_currentGroup.ownerId != userId) {
+    if (announce && _currentGroup.ownerId != userId) {
       final name = mine?.name ?? _user?.name ?? '';
       final playerName = name.isEmpty ? 'A member' : name;
       pushNotification(
@@ -6236,8 +6323,10 @@ class AppProvider extends ChangeNotifier {
   String? get audioMasterDeviceId => _audioMasterDeviceId;
 
   /// Whether announcements may play on this device (no master selected, or
-  /// this device is the master).
-  bool get thisDeviceIsAudioMaster => _audioMasterDeviceId == thisDeviceId;
+  /// this device is the master) — matches the documented fallback where every
+  /// voice-enabled device may announce while no master is chosen.
+  bool get thisDeviceIsAudioMaster =>
+      _audioMasterDeviceId == null || _audioMasterDeviceId == thisDeviceId;
 
   /// Selects this device as the Audio Master. Only this device will announce.
   void setAudioMasterDevice() {

@@ -986,7 +986,9 @@ class _GuestSlotBadge extends StatelessWidget {
 
 /// Admin "Review RSVPs" modal (audit fix E4 — the button used to navigate to
 /// Check-in). Shows the live attendance breakdown plus every member's answer.
-void _showRsvpListModal(BuildContext context, LiveGame game) {
+/// Admins can long-press a member row to correct or reopen that member's RSVP
+/// (User Flow §3.1).
+void _showRsvpListModal(BuildContext context, AppProvider app, LiveGame game) {
   final members = game.players.where((p) => !p.isGuest).toList();
   final going = members
       .where((p) => p.rsvp != null && p.rsvp!.isGoing)
@@ -1042,13 +1044,18 @@ void _showRsvpListModal(BuildContext context, LiveGame game) {
         for (final p in members)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-            child: Row(
-              children: [
-                AppAvatar(name: p.name, size: AppAvatarSize.sm),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: Text(p.name, style: AppTypography.bodySm)),
-                RSVPBadge(rsvp: p.rsvp),
-              ],
+            child: GestureDetector(
+              onLongPress: app.isAdmin
+                  ? () => _showAdminRsvpOverride(context, app, game, p)
+                  : null,
+              child: Row(
+                children: [
+                  AppAvatar(name: p.name, size: AppAvatarSize.sm),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: Text(p.name, style: AppTypography.bodySm)),
+                  RSVPBadge(rsvp: p.rsvp),
+                ],
+              ),
             ),
           ),
         const SizedBox(height: AppSpacing.xl),
@@ -1062,6 +1069,54 @@ void _showRsvpListModal(BuildContext context, LiveGame game) {
             context.go(RoutePaths.checkIn);
           },
           child: const Text('Open Check-in'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Admin correct-or-reopen for a single member's RSVP (User Flow §3.1).
+void _showAdminRsvpOverride(
+    BuildContext context, AppProvider app, LiveGame game, Player p) {
+  final choices = <String, Rsvp?>{
+    'Going': Rsvp.going,
+    'Going +1': Rsvp.goingPlus1,
+    'Going +2': Rsvp.goingPlus2,
+    'Going +3': Rsvp.goingPlus3,
+    'Going +4': Rsvp.goingPlus4,
+    'Maybe': Rsvp.maybe,
+    'Can’t come': Rsvp.cant,
+  };
+  showAppModal(
+    context: context,
+    title: 'Set RSVP for ${p.name}',
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final entry in choices.entries)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: AppButton(
+              variant: p.rsvp == entry.value
+                  ? AppButtonVariant.secondary
+                  : AppButtonVariant.ghost,
+              onPressed: () {
+                app.adminSetRSVP(p.id, entry.value, gameId: game.id);
+                Navigator.of(context).pop();
+              },
+              child: Text(entry.key),
+            ),
+          ),
+        AppButton(
+          variant: p.rsvp == null
+              ? AppButtonVariant.secondary
+              : AppButtonVariant.ghost,
+          onPressed: () {
+            app.adminSetRSVP(p.id, null, gameId: game.id);
+            Navigator.of(context).pop();
+          },
+          child: const Text('No response'),
         ),
       ],
     ),
@@ -1194,6 +1249,28 @@ class _EditEventFormState extends State<_EditEventForm> {
           child: const Text('Invalid date format (YYYY-MM-DD).'),
         );
         return;
+      }
+    }
+    // Spec §12.2: reject a past date AND a past time on today's date — the
+    // same rule the creation wizard enforces in its step-1 validation.
+    if (newDate != s.date || newTime != s.time) {
+      final parsed = DateTime.tryParse(newDate);
+      if (parsed != null) {
+        final parts = newTime.split(':');
+        final h = int.tryParse(parts.isNotEmpty ? parts[0] : '');
+        final m = int.tryParse(parts.length > 1 ? parts[1] : '');
+        if (h != null && m != null && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+          final scheduled =
+              DateTime(parsed.year, parsed.month, parsed.day, h, m);
+          if (scheduled.isBefore(DateTime.now())) {
+            showAppModal(
+              context: context,
+              title: 'Validation Error',
+              child: const Text('Start time must be in the future.'),
+            );
+            return;
+          }
+        }
       }
     }
     // Player count is intentionally not editable here — it is derived from
@@ -1866,7 +1943,7 @@ class _ContextualMainButton extends StatelessWidget {
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
-            onPressed: () => _showRsvpListModal(context, game),
+            onPressed: () => _showRsvpListModal(context, app, game),
             child: const Text('Review RSVPs'),
           );
         case LiveGameStatus.checkin:

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import '../app/route_paths.dart';
@@ -80,6 +81,94 @@ class SeatMoveRecommendation {
   final String reason;
 }
 
+/// Folds member-owned fields from the [remote] server game back into the
+/// admin's [local] game just before an authority whole-document `.set()`, so a
+/// member's RSVP / guest-slot write that landed while the admin's save was
+/// debouncing is not silently overwritten.
+///
+/// Rules:
+///  - the admin's own player row ([adminId]) keeps the local value (the admin
+///    owns their own RSVP through a separate write path);
+///  - every other member row adopts a differing server RSVP;
+///  - rows present on the server but not locally are appended (a member who
+///    joined after the game was created writes their whole row on first RSVP;
+///    a "+N" RSVP creates guest rows) — local rows are never dropped;
+///  - the server's guest-slot list wins whenever it differs (members rewrite
+///    it via their +N count / guest names; the admin never edits slots).
+///
+/// Pure and side-effect free so it can be unit tested.
+LiveGame mergeMemberOwnedFields(LiveGame local, LiveGame remote,
+    {String? adminId}) {
+  if (remote.id != local.id) return local;
+  final localById = {for (final p in local.players) p.id: p};
+  var changed = false;
+
+  final merged = <Player>[
+    for (final p in local.players)
+      if (p.isGuest || p.id == adminId)
+        p
+      else
+        () {
+          final r = remote.players.where((x) => x.id == p.id).firstOrNull;
+          if (r != null && r.rsvp != p.rsvp) {
+            changed = true;
+            return p.copyWith(rsvp: r.rsvp);
+          }
+          return p;
+        }(),
+  ];
+
+  for (final r in remote.players) {
+    if (!localById.containsKey(r.id)) {
+      merged.add(r);
+      changed = true;
+    }
+  }
+
+  String slotSig(List<GuestSlot> s) =>
+      s.map((x) => guestSlotToMap(x).toString()).join('|');
+  final slotsDiffer = slotSig(remote.guestSlots) != slotSig(local.guestSlots);
+
+  if (!changed && !slotsDiffer) return local;
+  return local.copyWith(
+    players: merged,
+    guestSlots: slotsDiffer ? remote.guestSlots : null,
+  );
+}
+
+/// Re-attaches the admin-only figures that `saveGame` scrubs out of the public
+/// game document (organizer cut, prize amounts, per-player financial counters)
+/// onto a [remote] copy, taking them from the [local] one already in memory.
+///
+/// Every path that rebuilds the admin's current game from a server document
+/// must apply this, so all of them produce structurally identical results for
+/// identical server state. Pure and side-effect free for testing.
+LiveGame restoreAdminPrivateFields(LiveGame remote, LiveGame local) {
+  if (local.id != remote.id) return remote;
+  final saved = {for (final p in local.players) p.id: p};
+  return remote.copyWith(
+    settings: remote.settings.copyWith(
+      organizerPct: local.settings.organizerPct,
+    ),
+    players: [
+      for (final p in remote.players)
+        if (saved[p.id] case final r?)
+          p.copyWith(
+            rebuys: r.rebuys,
+            reEntries: r.reEntries,
+            hasAddOn: r.hasAddOn,
+            knockouts: r.knockouts,
+          )
+        else
+          p,
+    ],
+    structure: remote.structure.copyWith(
+      prizes: local.structure.prizes,
+      organizerAmount: local.structure.organizerAmount,
+    ),
+  );
+}
+
 /// Application-level UI state (no business logic / backend).
 class AppProvider extends ChangeNotifier {
   AppProvider({String? initialColorTheme, String? initialThemePreference}) {
@@ -131,6 +220,13 @@ class AppProvider extends ChangeNotifier {
       _userBootstrap?.future ?? Future<void>.value();
   StreamSubscription? _gameDocSub;
 
+  /// Backoff re-subscription timers for the game-scoped streams. A Firestore
+  /// `.snapshots()` that hits `permission-denied` (the auth token has not yet
+  /// propagated into the SDK in the seconds after a web login) is dead for
+  /// good, so we rebuild it a few times until it sticks — no page reload.
+  Timer? _gameDocRetryTimer;
+  Timer? _gameChatRetryTimer;
+
   /// Per-game chat lives in `groups/{gid}/games/{gameId}/chat` — a subcollection
   /// both the host and members append to directly. This keeps a member's
   /// message from being rolled back by the game-doc rule that forbids member
@@ -153,6 +249,11 @@ class AppProvider extends ChangeNotifier {
   /// backend rejections are never invisible (vs silent optimistic state that
   /// vanishes on refresh). Debug aid for the persistence audit.
   String? lastRsvpError;
+
+  /// Last authority whole-document save failure. Non-null means the admin's
+  /// most recent change did NOT reach Firestore — screens can surface it so a
+  /// rejected write is never mistaken for a successful one.
+  String? lastSaveError;
 
   StreamSubscription<dynamic>? _lookupSub;
   StreamSubscription<List<TournamentPreset>>? _presetsSub;
@@ -200,6 +301,24 @@ class AppProvider extends ChangeNotifier {
   /// True while a debounced save is pending — remote adoptions wait until it
   /// flushes so newer local state is not overwritten by an older snapshot.
   bool _pendingGameSave = false;
+
+  /// Content signature of the last game state this device persisted (or
+  /// adopted). `_syncGameToCloud` compares against this instead of object
+  /// identity, so a bundle re-emit that hands back a fresh `LiveGame` instance
+  /// with unchanged content is NOT treated as a local edit — that false
+  /// "dirty" was starving the admin's `_adoptRemoteMap` and making the admin
+  /// side look frozen while members updated live.
+  String? _lastSavedSignature;
+  String _gameSignature(LiveGame g) => jsonEncode(liveGameToMap(g));
+
+  /// True the instant an authority makes a local edit to [_currentGame] that
+  /// has not yet been persisted — set synchronously when the debounce timer is
+  /// armed (not when it fires), so a remote snapshot that lands during the
+  /// debounce window can no longer overwrite the admin's optimistic change
+  /// (pause / resume / next level / accept check-in / confirm seating all
+  /// "undoing themselves" a beat after the tap). Cleared once the save queue
+  /// drains with nothing left to write.
+  bool _localGameDirty = false;
 
   /// True once the first Firebase auth snapshot has been resolved. The router
   /// holds navigation at splash until this flips so the persisted session is
@@ -284,10 +403,16 @@ class AppProvider extends ChangeNotifier {
     _lastSync = DateTime.now();
     _syncGameToCloud();
     _ensureRequestsSubscription();
-    if (_currentGame != null) {
-      RecoveryService.saveGame(_currentGame!);
-    } else {
+    final game = _currentGame;
+    if (game == null) {
       RecoveryService.clearGame();
+    } else if (isAdmin) {
+      // Crash-resume snapshots belong to the ADMIN only — they are the device
+      // that owns the live game document. Saving one on a member's device made
+      // their optimistic RSVP look "persisted" across a reload while the
+      // server never received it (and, worse, the restored copy then blocked
+      // all remote adoption — see [_dropRecoveryIfNotAuthority]).
+      RecoveryService.saveGame(game);
     }
     final session = _cashSession;
     if (session != null && !session.isCompleted) {
@@ -389,31 +514,27 @@ class AppProvider extends ChangeNotifier {
       _gameSyncPrimed = false;
       _gameDocSub?.cancel();
       _gameDocSub = null;
+      _gameDocRetryTimer?.cancel();
       _gameSaveDebounce?.cancel();
       _pendingGameSave = false;
+      _localGameDirty = false;
+      _lastSavedSignature = null;
       if (key != null && game != null && gid != null) {
-        if (_isGameAuthority) {
-          _gameDocSub = _repo.gameDocSnapshots(gid, game.id, isAdmin: true).listen(
-            _adoptRemoteGame,
-            onError: (Object e) => debugPrint('gameDoc stream error: $e'),
-          );
-        } else if (!isGuest) {
-          // Signed-in members follow the raw game doc (rules gate it to
-          // isMember; payout/organizer figures are already scrubbed server-side
-          // in saveGame). Reading their own writes straight back stops an RSVP
-          // from being reverted by a lagging projection snapshot.
-          _gameDocSub = _repo.gameDocSnapshots(gid, game.id).listen(
-            _adoptRemoteGame,
-            onError: (Object e) => debugPrint('gameDoc stream error (member): $e'),
-          );
-        } else {
+        if (isGuest) {
           // Guests have no read access to the game doc — they follow the
-          // sanitized publicGames projection.
+          // sanitized publicGames projection (world-readable, no token gap).
           _gameDocSub = _repo.publicGameStream(game.id).listen((doc) {
             final payload = doc['guest'] as Map<String, dynamic>?;
             if (payload == null) return;
             _adoptRemoteMap(payload);
           }, onError: (Object e) => debugPrint('publicGameStream error: $e'));
+        } else {
+          // Admin authority reads the doc as admin; plain members follow the
+          // raw doc too (rules gate it to isMember; figures are scrubbed in
+          // saveGame). Both are auth-gated, so retry through the post-login
+          // token-propagation gap instead of dying on the first denial.
+          final asAdmin = _isGameAuthority;
+          _subscribeGameDoc(key, gid, game.id, asAdmin: asAdmin);
         }
       }
     }
@@ -425,12 +546,10 @@ class AppProvider extends ChangeNotifier {
       _gameChatKey = key;
       _gameChatSub?.cancel();
       _gameChatSub = null;
+      _gameChatRetryTimer?.cancel();
       _gameChatMessages = const [];
       if (key != null && game != null && gid != null && !isGuest) {
-        _gameChatSub = _repo.gameChatStream(gid, game.id).listen((msgs) {
-          _gameChatMessages = msgs;
-          notifyListeners();
-        }, onError: (Object e) => debugPrint('gameChat stream error: $e'));
+        _subscribeGameChat(key, gid, game.id);
       }
     }
 
@@ -439,12 +558,24 @@ class AppProvider extends ChangeNotifier {
     // (locked architecture §writes). Members patch their own fields and
     // guests use the request queue instead.
     if (!_isGameAuthority) return;
-    // Identity check skips re-saving freshly adopted remote state (prevents
-    // A↔B write loops).
+    // Content (not identity) check: a bundle re-emit hands back a fresh
+    // LiveGame instance every time, so `identical` was perpetually false and
+    // the admin was perpetually "dirty" — which blocked `_adoptRemoteMap` and
+    // froze the admin's view. Only a real content change schedules a save.
     if (identical(_lastSavedGame, game)) return;
+    final sig = _gameSignature(game);
+    if (sig == _lastSavedSignature) return;
+    // Mark the local game dirty NOW (not when the timer fires) so any remote
+    // snapshot arriving during the debounce window is held off in
+    // [_adoptRemoteMap] / the group-bundle handler instead of clobbering this
+    // un-persisted edit.
+    _localGameDirty = true;
     _gameSaveDebounce?.cancel();
     final effectiveGid = game.groupId.isNotEmpty ? game.groupId : gid;
-    _gameSaveDebounce = Timer(const Duration(milliseconds: 1000), () {
+    // Short debounce: the save queue ([_drainGameSaveQueue]) already coalesces
+    // and serialises bursts, so a long wait only widens the window where a
+    // concurrent remote write is invisible. Keep it tight for real-time feel.
+    _gameSaveDebounce = Timer(const Duration(milliseconds: 250), () {
       final g = _currentGame;
       if (g == null || _user == null) return;
       _pendingLatestSave = g;
@@ -473,37 +604,124 @@ class AppProvider extends ChangeNotifier {
         // Prefer the very latest authoritative state for this game.
         final freshest = (g != null && g.id == target.id) ? g : target;
         if (identical(_lastSavedGame, freshest)) continue;
-        final toWrite = freshest.groupId.isNotEmpty
+        var toWrite = freshest.groupId.isNotEmpty
             ? freshest
             : freshest.copyWith(groupId: effectiveGid);
-        try {
-          await _repo.saveGame(toWrite, viewerId: _user?.id);
-          await _publishProjections(toWrite);
-          _lastSavedGame = toWrite;
-        } catch (e) {
-          debugPrint('saveGame failed: $e');
-          rethrow;
+        // A member RSVP / guest-slot patch may have committed to the server
+        // while this edit was debouncing (adoption was held off by
+        // [_localGameDirty]). The whole-doc `.set()` below would silently
+        // overwrite it, so fold those member-owned fields back in first.
+        toWrite = await _reconcileMemberOwnedFields(toWrite);
+        // Retry with backoff exactly like the member RSVP patch: right after a
+        // web login the admin's writes are rejected with permission-denied
+        // until the fresh auth token reaches the Firestore SDK. Previously the
+        // first failure was rethrown out of an `unawaited(...)` call, which
+        // both dropped the admin's edit and surfaced as an unhandled async
+        // error in the console.
+        const delaysMs = [0, 300, 800, 1800, 4000, 8000];
+        var saved = false;
+        Object? lastError;
+        for (var attempt = 0; attempt < delaysMs.length && !saved; attempt++) {
+          if (delaysMs[attempt] > 0) {
+            await Future<void>.delayed(
+                Duration(milliseconds: delaysMs[attempt]));
+          }
+          if (_user == null) break;
+          var step = 'saveGame';
+          try {
+            await _repo.saveGame(toWrite, viewerId: _user?.id);
+            step = 'publishProjections';
+            await _publishProjections(toWrite);
+            _lastSavedGame = toWrite;
+            _lastSavedSignature = _gameSignature(toWrite);
+            saved = true;
+            if (lastSaveError != null) {
+              lastSaveError = null;
+              notifyListeners();
+            }
+          } catch (e) {
+            lastError = e;
+            debugPrint('$step failed (attempt ${attempt + 1}) '
+                'gid=${toWrite.groupId} game=${toWrite.id} '
+                'uid=${_user?.id} isAdmin=$isAdmin '
+                'authority=$_isGameAuthority: $e');
+            if (_isRetriablePermissionError(e)) await _nudgeAuthToken();
+          }
+        }
+        if (!saved) {
+          // Never rethrow out of this fire-and-forget drain — surface it
+          // instead so the admin sees that their change did not persist.
+          lastSaveError = _isRetriablePermissionError(lastError ?? '')
+              ? 'Changes not saved — this account does not have admin write '
+                  'access to this game.'
+              : 'Changes could not be saved. Check your connection.';
+          notifyListeners();
+          break;
         }
       } while (_pendingLatestSave != null);
     } finally {
       _gameSaveInFlight = false;
-      if (_pendingLatestSave == null) _pendingGameSave = false;
+      if (_pendingLatestSave == null) {
+        _pendingGameSave = false;
+        // Nothing left to write — local state now matches (or has been
+        // superseded by) what is on the server, so remote snapshots may flow
+        // through again.
+        _localGameDirty = false;
+      }
+    }
+  }
+
+  /// Folds member-owned fields (per-player RSVP, guest slots, member-created
+  /// guest rows) from the current server document back into [game] before an
+  /// authority whole-doc save, so a member RSVP that committed during the
+  /// debounce window is not silently overwritten. Best-effort: any failure or
+  /// an in-progress admin RSVP change for this game leaves [game] untouched.
+  Future<LiveGame> _reconcileMemberOwnedFields(LiveGame game) async {
+    if (!_backendUp || game.groupId.isEmpty) return game;
+    try {
+      final raw = await _repo.gameDocOnce(game.groupId, game.id);
+      if (raw == null) return game;
+      final remote = liveGameFromFirestoreDoc(Map<String, dynamic>.from(raw));
+      if (remote.id != game.id) return game;
+      return mergeMemberOwnedFields(game, remote, adminId: _user?.id);
+    } catch (e) {
+      debugPrint('reconcileMemberOwnedFields failed: $e');
+      return game;
     }
   }
 
   LiveGame? _lastSavedGame;
 
-  /// True only for the single "active editor" admin device — the one that may
-  /// write the whole game document. Guests and plain members never qualify.
-  /// The editor role lives in [LiveGame.editorDeviceId]: the first admin
-  /// device to open a live game claims it, which prevents two admin sessions
-  /// from racing whole-document writes (the seating-confirm revert bug).
+  /// Last resolved admin verdict per group id. While a group's live bundle is
+  /// re-subscribing, [_currentGroup] is briefly the empty placeholder
+  /// (blank ownerId, no members). Without this cache [isAdmin] would flip to
+  /// false for those frames and the router / screen guards would bounce the
+  /// admin off `/admin-dashboard` (or `/check-in`) mid-flow, then land them
+  /// back a moment later. The cache holds the last real answer across that gap.
+  final Map<String, bool> _adminVerdictByGroup = {};
+
+  /// True when the signed-in user administers the current group (owner or a
+  /// member row flagged `isAdmin`). Resilient to the transient empty-group
+  /// window via [_adminVerdictByGroup].
   bool get isAdmin {
     final user = _user;
     if (user == null) return false;
-    if (_currentGroup.ownerId == user.id) return true;
-    return _currentGroup.members
-        .any((m) => m.id == user.id && m.isAdmin);
+    final group = _currentGroup;
+    final gid = _currentGroupId ?? group.id;
+    final resolvable =
+        group.id.isNotEmpty && (group.ownerId.isNotEmpty || group.members.isNotEmpty);
+    if (resolvable) {
+      final verdict = group.ownerId == user.id ||
+          group.members.any((m) => m.id == user.id && m.isAdmin);
+      if (gid.isNotEmpty) _adminVerdictByGroup[gid] = verdict;
+      return verdict;
+    }
+    // Placeholder group during a bundle re-subscription — reuse the last
+    // real verdict for this group if we have one.
+    if (gid.isNotEmpty && _adminVerdictByGroup.containsKey(gid)) {
+      return _adminVerdictByGroup[gid]!;
+    }
+    return false;
   }
 
   /// True when the signed-in user holds the elevated Co-Admin role in the
@@ -527,6 +745,11 @@ class AppProvider extends ChangeNotifier {
       ? GroupRole.admin
       : (member.isCoAdmin ? GroupRole.coAdmin : GroupRole.member);
 
+  /// True only for the single "active editor" admin device — the one that may
+  /// write the whole game document. Guests and plain members never qualify.
+  /// The editor role lives in [LiveGame.editorDeviceId]: the first admin
+  /// device to open a live game claims it, which prevents two admin sessions
+  /// from racing whole-document writes (the seating-confirm revert bug).
   bool get _isGameAuthority =>
       isAdmin &&
       _currentGame != null &&
@@ -551,18 +774,29 @@ class AppProvider extends ChangeNotifier {
     // Another live editor is actively writing — stay read-only.
     if (editor.isNotEmpty && !sameDevice && !stale) return;
     if (sameDevice) {
-      // Heartbeat: ours. Refresh the last-active stamp so a connected editor
-      // is never mistaken for a stale one. The refresh rides along with the
-      // whole-doc write that follows in [_syncGameToCloud].
-      _currentGame = game.copyWith(editorClaimedAt: now);
+      // Heartbeat: ours. Persist the last-active stamp so other admin devices
+      // don't judge us stale — but as a TARGETED, THROTTLED field patch, never
+      // by mutating `_currentGame` (that made every notifyListeners() schedule
+      // a full-document `.set()`, which continuously clobbered members' RSVP /
+      // guest-slot writes — the "RSVP not persistent" bug).
+      final due = _lastEditorHeartbeatAt == null ||
+          now.difference(_lastEditorHeartbeatAt!) > _editorHeartbeatInterval;
+      if (due) {
+        _lastEditorHeartbeatAt = now;
+        _patchActiveGame({'editorClaimedAt': now.toIso8601String()});
+      }
       return;
     }
     _currentGame = game.copyWith(
       editorDeviceId: _repo.deviceId,
       editorClaimedAt: now,
     );
+    _lastEditorHeartbeatAt = now;
     _syncGroupGame();
   }
+
+  DateTime? _lastEditorHeartbeatAt;
+  static const Duration _editorHeartbeatInterval = Duration(seconds: 25);
 
   /// Resolves `(gid, gameId)` for cloud operations on the active game, or
   /// null when there is nothing to target yet.
@@ -723,6 +957,55 @@ class AppProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Subscribes the raw game doc for a signed-in admin/member, re-subscribing
+  /// with backoff if the stream errors (the post-login token gap). [key] pins
+  /// the attempt to the current [_syncedGameKey] so a stale retry is dropped
+  /// once the active game changes.
+  void _subscribeGameDoc(String key, String gid, String gameId,
+      {required bool asAdmin}) {
+    var attempt = 0;
+    void go() {
+      if (_syncedGameKey != key) return;
+      _gameDocSub?.cancel();
+      _gameDocSub = _repo
+          .gameDocSnapshots(gid, gameId, isAdmin: asAdmin)
+          .listen(_adoptRemoteGame, onError: (Object e) {
+        debugPrint('gameDoc stream error${asAdmin ? '' : ' (member)'}: $e');
+        if (_syncedGameKey != key || attempt >= 8) return;
+        if (_isRetriablePermissionError(e)) unawaited(_nudgeAuthToken());
+        final delayMs = 400 * (1 << (attempt > 5 ? 5 : attempt));
+        attempt++;
+        _gameDocRetryTimer?.cancel();
+        _gameDocRetryTimer = Timer(Duration(milliseconds: delayMs), go);
+      });
+    }
+
+    go();
+  }
+
+  /// Per-game chat subscription with the same post-login backoff retry.
+  void _subscribeGameChat(String key, String gid, String gameId) {
+    var attempt = 0;
+    void go() {
+      if (_gameChatKey != key) return;
+      _gameChatSub?.cancel();
+      _gameChatSub = _repo.gameChatStream(gid, gameId).listen((msgs) {
+        _gameChatMessages = msgs;
+        notifyListeners();
+      }, onError: (Object e) {
+        debugPrint('gameChat stream error: $e');
+        if (_gameChatKey != key || attempt >= 8) return;
+        if (_isRetriablePermissionError(e)) unawaited(_nudgeAuthToken());
+        final delayMs = 400 * (1 << (attempt > 5 ? 5 : attempt));
+        attempt++;
+        _gameChatRetryTimer?.cancel();
+        _gameChatRetryTimer = Timer(Duration(milliseconds: delayMs), go);
+      });
+    }
+
+    go();
+  }
+
   /// Adopts a remote game document unless it is our own latency-compensated
   /// write or the ack of a write we just made (echo prevention, locked
   /// architecture §reads).
@@ -733,46 +1016,100 @@ class AppProvider extends ChangeNotifier {
     _adoptRemoteMap(data);
   }
 
+  /// Re-attaches the admin-only figures that `saveGame` scrubs out of the
+  /// public game document (organizer cut, prize amounts, per-player financial
+  /// counters) using the copy already held locally.
+  ///
+  /// EVERY path that rebuilds `_currentGame` from a server document must run
+  /// this — `_adoptRemoteMap` (game-doc stream) and the group-bundle handler
+  /// alike. When only one of them did, the two sources produced structurally
+  /// different games for the same server state, which flipped the content
+  /// signature on every bundle emit, left the admin permanently "dirty", and
+  /// blocked the game-doc snapshot carrying a member's new RSVP.
+  LiveGame _restoreAdminPrivateFields(LiveGame remote) {
+    final local = _currentGame;
+    if (!isAdmin || local == null) return remote;
+    return restoreAdminPrivateFields(remote, local);
+  }
+
   void _adoptRemoteMap(Map<String, dynamic> data) {
     if (!_gameSyncPrimed) {
       _gameSyncPrimed = true;
     } else if (data['writerId'] == _repo.deviceId) {
       return;
     }
-    if (_pendingGameSave || _restoredFromRecovery) return;
+    // A non-authority device must never let a local crash-resume snapshot win
+    // over the server, so retire it before the guard below consults the flag.
+    _dropRecoveryIfNotAuthority();
+    // Hold off adopting remote state only while this device has a REAL
+    // un-persisted authority edit (`_localGameDirty` is now content-based) or a
+    // save in flight — otherwise a snapshot would revert the optimistic change.
+    // The bare debounce-timer state is deliberately NOT checked: it is
+    // rescheduled on every notify and would permanently block adoption.
+    if (_pendingGameSave ||
+        _localGameDirty ||
+        _gameSaveInFlight ||
+        _restoredFromRecovery) {
+      return;
+    }
     try {
       var remote = liveGameFromFirestoreDoc(Map<String, dynamic>.from(data));
       if (_currentGame?.id != remote.id) return;
       
       // Preserve private fields that are scrubbed from the public remote stream
-      if (isAdmin && _currentGame != null) {
-        remote = remote.copyWith(
-          settings: remote.settings.copyWith(
-            organizerPct: _currentGame!.settings.organizerPct,
-          ),
-          players: _restorePrivatePlayerFinancials(
-            remote.players,
-            _currentGame!.players.map(playerToMap).toList(),
-          ),
-          structure: remote.structure?.copyWith(
-            prizes: _currentGame!.structure!.prizes,
-            organizerAmount: _currentGame!.structure!.organizerAmount,
-          ) ?? _currentGame!.structure,
-        );
-      }
-      
+      remote = _restoreAdminPrivateFields(remote);
+
       _currentGame = _withPendingCheckInOverlay(_withOwnRsvpOverlay(remote));
       _lastSavedGame = remote;
-      RecoveryService.saveGame(remote);
+      // Adopted state is, by definition, in sync with the server — record its
+      // signature so `_syncGameToCloud` doesn't immediately re-flag it dirty
+      // and re-save it (the admin-side feedback loop). If an overlay changed
+      // the content, the signature differs and the authority still saves it.
+      _lastSavedSignature = _gameSignature(remote);
+      // Crash-resume snapshots are the admin's (see [_dropRecoveryIfNotAuthority]).
+      if (isAdmin) RecoveryService.saveGame(remote);
+      // A foreign writer (e.g. the admin's whole-doc save) may have wiped this
+      // member's just-written RSVP — re-write it rather than only masking it
+      // with the overlay, so a page reload keeps the selection.
+      _maybeReassertOwnRsvp(remote, data['writerId'] as String?);
       // Another device may have settled the tournament — record my result.
       _maybeRecordOwnResult(remote);
       if (_isGameAuthority) {
-        _publishProjections(_currentGame!);
+        // Fire-and-forget, but explicitly swallowed: `_publishProjections`
+        // rethrows, and an un-caught rethrow out of a stream callback surfaced
+        // as an unhandled async error (the RethrownDartError stack dumps).
+        unawaited(_publishProjections(_currentGame!).catchError((Object _) {}));
       }
       notifyListeners();
     } catch (e) {
       debugPrint('remote game decode failed: $e');
     }
+  }
+
+  /// How many times this member has re-written their own RSVP for a game after
+  /// a foreign writer reverted it. Capped so a genuine rules rejection can't
+  /// loop forever.
+  final Map<String, int> _rsvpReassertCount = {};
+
+  /// When a snapshot NOT written by this device still doesn't reflect this
+  /// member's pending RSVP, re-issue the field patch (up to 3×). Purely
+  /// masking it with [_pendingOwnRsvp] would keep the selection visible this
+  /// session but lose it on reload.
+  void _maybeReassertOwnRsvp(LiveGame remote, String? writerId) {
+    final uid = _user?.id;
+    if (uid == null || _isGameAuthority) return;
+    if (!_pendingOwnRsvp.containsKey(remote.id)) return;
+    if (writerId != null && writerId == _repo.deviceId) return;
+    final want = _pendingOwnRsvp[remote.id];
+    final serverMine = remote.players.where((p) => p.id == uid).firstOrNull;
+    if (serverMine?.rsvp == want) return; // server already agrees
+    final n = _rsvpReassertCount[remote.id] ?? 0;
+    if (n >= 3) return;
+    _rsvpReassertCount[remote.id] = n + 1;
+    debugPrint('RSVP re-assert #${n + 1} for ${remote.id} '
+        '(server=${serverMine?.rsvp?.name}, want=${want?.name})');
+    final after = _withOwnRsvpOverlay(remote);
+    _persistOwnRsvpPatch(remote.id, _rsvpDotPatch(remote, after));
   }
 
   /// Re-applies the member's own pending RSVP (see [_pendingOwnRsvp]) on top of
@@ -788,6 +1125,7 @@ class AppProvider extends ChangeNotifier {
     if (mine?.rsvp == want) {
       // The remote has caught up with the member's own selection — done.
       _pendingOwnRsvp.remove(game.id);
+      _rsvpReassertCount.remove(game.id);
       return game;
     }
     final players = game.players.any((p) => p.id == uid)
@@ -1077,10 +1415,19 @@ class AppProvider extends ChangeNotifier {
     _bundleSub = null;
     _gameDocSub = null;
     _gameChatSub = null;
+    _gameDocRetryTimer?.cancel();
+    _gameChatRetryTimer?.cancel();
     _gameChatMessages = const [];
     _gameChatKey = null;
     _pendingOwnRsvp.clear();
+    _rsvpReassertCount.clear();
     _pendingCheckIn.clear();
+    _adminVerdictByGroup.clear();
+    _localGameDirty = false;
+    _lastSavedSignature = null;
+    _lastEditorHeartbeatAt = null;
+    lastSaveError = null;
+    lastRsvpError = null;
     _lookupSub = null;
     _presetsSub = null;
     _chipSetsSub = null;
@@ -1147,16 +1494,25 @@ class AppProvider extends ChangeNotifier {
                   .toList());
       _setGroup(hydrated);
       
+      // The bundle is the first place a member's role becomes known, so retire
+      // any stale local crash-resume snapshot here too.
+      _dropRecoveryIfNotAuthority();
       // F-001 Fix: Keep the currently viewed game screen in sync for members
       // (and admins receiving RSVPs/Check-ins) without clobbering the admin's local timer.
       if (_currentGame != null) {
-        if (isAdmin && (_pendingGameSave || _restoredFromRecovery)) {
+        if (isAdmin && (_pendingGameSave || _localGameDirty || _restoredFromRecovery)) {
           // Do not overwrite local edits with stale bundle data during debounce or recovery.
         } else {
           final updatedGame = hydrated.games.where((x) => x.id == _currentGame!.id).firstOrNull;
           if (updatedGame != null) {
             if (isAdmin) {
-              _currentGame = updatedGame.copyWith(
+              // Same restore the game-doc stream applies, so both sources
+              // produce an identical game for identical server state. Without
+              // it the bundle copy (scrubbed) and the doc copy (restored)
+              // alternated, the content signature flipped on every emit and
+              // the admin stayed permanently "dirty" — which is what stopped
+              // members' RSVPs from ever reaching the admin's screen.
+              _currentGame = _restoreAdminPrivateFields(updatedGame).copyWith(
                 secondsRemaining: _currentGame!.secondsRemaining,
                 timerRunning: _currentGame!.timerRunning,
                 levelEndTime: _currentGame!.levelEndTime,
@@ -1319,6 +1675,26 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  /// A recovery snapshot is the ADMIN's crash-resume copy. On any other device
+  /// it is stale local state that must never win over the server — and while
+  /// [_restoredFromRecovery] is set it also blocks every remote adoption, which
+  /// silently froze members on their own optimistic RSVP: the value survived a
+  /// reload locally, never reached Firestore, and the next tap short-circuited
+  /// on the "already selected" guard so nothing was ever written again.
+  ///
+  /// Called once the signed-in user's role is actually known.
+  void _dropRecoveryIfNotAuthority() {
+    if (!_restoredFromRecovery) return;
+    // Role not resolved yet — decide later rather than throwing away a real
+    // admin's in-progress tournament.
+    if (_user == null || _currentGroup.id.isEmpty) return;
+    if (isAdmin) return;
+    debugPrint('recovery: dropping local snapshot (not the game authority)');
+    _restoredFromRecovery = false;
+    _recoveryTime = null;
+    RecoveryService.clearGame();
+  }
+
   Future<void> _loadRecovery() async {
     final recovered = await RecoveryService.loadGame();
     if (recovered != null) {
@@ -1440,6 +1816,22 @@ class AppProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Forces a fresh ID token into the SDK. Called from stream/write retry
+  /// paths after a `permission-denied` — on web the token can lag the auth
+  /// state by a few seconds after login, and this pushes a live one through.
+  Future<void> _nudgeAuthToken() async {
+    try {
+      await _repo.currentUser?.getIdToken(true);
+    } catch (_) {}
+  }
+
+  /// True when [e] looks like the post-login token-propagation denial that a
+  /// retry (with a token nudge) can clear, vs a permanent rules rejection.
+  bool _isRetriablePermissionError(Object e) =>
+      e.toString().contains('permission-denied') ||
+      e.toString().contains('PERMISSION_DENIED') ||
+      e.toString().contains('unauthenticated');
+
   Future<void>? _hydrating;
 
   /// Loads (creating on first sign-in) the Firestore profile for [fbUser] and
@@ -1456,10 +1848,17 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> _doHydrateUser(fa.User fbUser) async {
     try {
-      // Nudge the Firestore SDK to pick up the just-issued auth token.
+      // Force a network token refresh so the Firestore SDK is handed a live
+      // credential before the first read. A plain getIdToken() can return a
+      // stale/empty token right after sign-in on web, which is what made every
+      // isMember-gated read fail with permission-denied until a page reload.
       try {
-        await fbUser.getIdToken();
-      } catch (_) {}
+        await fbUser.getIdToken(true);
+      } catch (_) {
+        try {
+          await fbUser.getIdToken();
+        } catch (_) {}
+      }
 
       await _retryRead(() => _repo.ensureUserDoc(
             uid: fbUser.uid,
@@ -2234,7 +2633,9 @@ class AppProvider extends ChangeNotifier {
 
   void setCurrentGame(LiveGame game) {
     _clearUndoStack();
-    _currentGame = game;
+    // Re-apply the member's not-yet-acked RSVP / check-in so navigating into a
+    // game never shows a stale bundle copy that drops a pending selection.
+    _currentGame = _withPendingCheckInOverlay(_withOwnRsvpOverlay(game));
     notifyListeners();
 
     // Asynchronously load private sidecar data and undo stack if admin
@@ -2835,7 +3236,15 @@ class AppProvider extends ChangeNotifier {
         return;
       }
       _announceLevelMark(remaining);
-      _currentGame = _currentGame!.copyWith(secondsRemaining: remaining);
+      // While the clock runs off [levelEndTime], every widget derives the
+      // countdown from that timestamp via `currentSecondsRemaining()` — the
+      // `secondsRemaining` field is not read. Mutating `_currentGame` each
+      // second would only churn the object and make the NEXT unrelated
+      // snapshot see a "changed" game and trigger a spurious whole-doc save.
+      // Only refresh the field when there is no end-time to derive from.
+      if (_currentGame!.levelEndTime == null) {
+        _currentGame = _currentGame!.copyWith(secondsRemaining: remaining);
+      }
       _isTickUpdate = true;
       notifyListeners();
       _isTickUpdate = false;
@@ -4796,7 +5205,17 @@ class AppProvider extends ChangeNotifier {
     final game = _currentGame;
     if (game == null) return;
     _pushUndo();
-    final count = confirmedCount;
+    // Check-in opens with nobody checked in yet, so `confirmedCount` is 0 at
+    // that moment. A 0-player structure is meaningless (and used to divide by
+    // zero inside the chip planner). Fall back to the expected head-count from
+    // RSVPs, then to the configured field size, and never below a two-handed
+    // game.
+    final expected = confirmedCount > 0
+        ? confirmedCount
+        : (game.goingWithGuestsCount > 0
+            ? game.goingWithGuestsCount
+            : game.settings.players);
+    final count = expected < 2 ? 2 : expected;
     final s = game.settings.copyWith(players: count);
     final structure = TournamentEngine.generate(
       TournamentParams(
@@ -5688,8 +6107,23 @@ class AppProvider extends ChangeNotifier {
 
     // No-op when the member already holds exactly this response — a tap on the
     // already-selected button must not churn a write or flicker the UI.
+    //
+    // But "already holds" must mean *the server* holds it, not just this
+    // device: if local state drifted ahead (a write that never landed, or a
+    // stale restored snapshot) this guard silently killed every retry tap and
+    // the admin never saw the RSVP at all. `_lastSavedGame` is the last state
+    // actually adopted from / written to Firestore, so it is the honest
+    // reference.
     final mine = target.players.where((p) => p.id == userId).firstOrNull;
-    if (mine != null && mine.rsvp == rsvp) return;
+    final serverGame = _lastSavedGame?.id == targetId ? _lastSavedGame : null;
+    final serverMine =
+        serverGame?.players.where((p) => p.id == userId).firstOrNull;
+    final serverAgrees = serverGame == null || serverMine?.rsvp == rsvp;
+    if (mine != null && mine.rsvp == rsvp) {
+      if (serverAgrees && !_pendingOwnRsvp.containsKey(targetId)) return;
+      debugPrint('RSVP re-tap for $userId: local=${mine.rsvp?.name} '
+          'server=${serverMine?.rsvp?.name} — forcing a write');
+    }
 
     // Destructive-shrink handling lives inside applyRsvp →
     // [_reconcileExcessGuestSlots]: unconfirmed excess guests are dropped
@@ -5723,13 +6157,18 @@ class AppProvider extends ChangeNotifier {
     // selection before the write round-trip completes (applies to admin too).
     _pendingOwnRsvp[targetId] = rsvp;
 
-    if (!_isGameAuthority) {
-      // Members write only their own fields via dot-path.
-      _persistOwnRsvpPatch(targetId, _rsvpDotPatch(before, after));
-    } else if (!isCurrent) {
-      // Authority RSVPing a group game that isn't open on screen: the
-      // on-screen game's whole-doc save won't cover it, so patch it directly.
-      _persistOwnRsvpPatch(targetId, _rsvpDotPatch(before, after));
+    if (!_isGameAuthority || !isCurrent) {
+      // Members write only their own fields via dot-path. (An authority
+      // RSVPing a game that isn't open on screen also patches directly — the
+      // on-screen game's whole-doc save wouldn't cover it.)
+      var patch = _rsvpDotPatch(before, after);
+      if (patch.isEmpty && !serverAgrees) {
+        // Local already displayed this answer, so the diff is empty, but the
+        // server never received it. Write the field explicitly instead of
+        // dropping the tap on the floor.
+        patch = {'players.$userId.rsvp': rsvp?.name};
+      }
+      _persistOwnRsvpPatch(targetId, patch);
     }
     // (authority + on-screen game: persisted by _syncGameToCloud's whole-doc
     // save when notifyListeners fires below.)
@@ -5763,68 +6202,87 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// Persists the member's own RSVP dot-path patch against a game doc (the one
-  /// open on screen or any game in the current group — chat invite card). On
-  /// rejection the optimistic overlay ([_pendingOwnRsvp]) is dropped so the
-  /// next remote snapshot shows the real state instead of a phantom RSVP.
+  /// open on screen or any game in the current group — chat invite card).
+  ///
+  /// The optimistic overlay ([_pendingOwnRsvp]) is held for the entire retry
+  /// window and only dropped once every attempt has failed — so a tap never
+  /// "un-selects itself" while the group id is still resolving or the auth
+  /// token is still propagating right after login.
   void _persistOwnRsvpPatch(String gameId, Map<String, dynamic> dotPaths) {
-    String? fail(String reason) {
-      debugPrint('RSVP patch SKIPPED: $reason (gameId=$gameId)');
-      lastRsvpError = 'RSVP not saved: $reason';
-      _pendingOwnRsvp.remove(gameId);
-      notifyListeners();
-      return reason;
+    if (dotPaths.isEmpty) {
+      // before == after at field level — nothing to write. Logged because a
+      // silent return here is indistinguishable from a successful save and
+      // previously hid a whole class of "the tap did nothing" bugs.
+      debugPrint('RSVP patch skipped for $gameId: diff produced no fields');
+      return;
     }
 
-    if (dotPaths.isEmpty) {
-      fail('empty dotPaths (rsvp diff produced no change)');
-      return;
-    }
-    if (!_backendUp || _user == null) {
-      fail('!_backendUp=${!_backendUp} / user=${_user?.id}');
-      return;
-    }
-    final g = _currentGame?.id == gameId
-        ? _currentGame
-        : _currentGroup.games.where((x) => x.id == gameId).firstOrNull;
-    final gid =
-        (g != null && g.groupId.isNotEmpty) ? g.groupId : _currentGroupId;
-    if (gid == null) {
-      fail('gid null (game on screen: ${_currentGame?.id}, group: $_currentGroupId)');
-      return;
-    }
-    unawaited(
-      _repo.patchGame(gid, gameId, dotPaths).then((_) {
-        if (lastRsvpError != null) {
-          lastRsvpError = null;
-          notifyListeners();
+    unawaited(() async {
+      // Longer, gentler backoff: covers both a slow group-bundle resolve and
+      // the post-login token gap without ever yanking the selection.
+      const delaysMs = [0, 250, 500, 1000, 2000, 3500, 5000, 8000, 12000];
+      var triedSelfJoin = false;
+      Object? lastError;
+      for (var attempt = 0; attempt < delaysMs.length; attempt++) {
+        if (delaysMs[attempt] > 0) {
+          await Future<void>.delayed(Duration(milliseconds: delaysMs[attempt]));
         }
-        if (g != null) {
-          _publishProjections(g);
+        // A newer RSVP for this game supersedes this write.
+        if (!_pendingOwnRsvp.containsKey(gameId)) return;
+        if (!_backendUp || _user == null) continue;
+
+        // Re-resolve the group id every attempt — it may still be settling
+        // immediately after login / navigation.
+        final g = _currentGame?.id == gameId
+            ? _currentGame
+            : _currentGroup.games.where((x) => x.id == gameId).firstOrNull;
+        final gid =
+            (g != null && g.groupId.isNotEmpty) ? g.groupId : _currentGroupId;
+        if (gid == null) {
+          debugPrint('RSVP patch waiting for group id (attempt ${attempt + 1})');
+          continue;
         }
-      }).catchError((Object e) {
-        debugPrint('RSVP patch failed (attempt 1): $e');
-        // A transient failure must not instantly undo the member's selection
-        // (the "not selecting / auto fares" symptom). Retry the same write once
-        // while keeping the optimistic overlay; only drop it after the retry
-        // also fails so the next snapshot shows the real state.
-        unawaited(
-          _repo.patchGame(gid, gameId, dotPaths).then((_) {
-            if (lastRsvpError != null) {
-              lastRsvpError = null;
-              notifyListeners();
-            }
-            if (g != null) {
-              _publishProjections(g);
-            }
-          }).catchError((Object e2) {
-            debugPrint('RSVP patch failed (attempt 2): $e2');
-            lastRsvpError = 'RSVP save failed. Tap again to retry.';
-            _pendingOwnRsvp.remove(gameId);
+
+        try {
+          await _repo.patchGame(gid, gameId, dotPaths);
+          if (lastRsvpError != null) {
+            lastRsvpError = null;
             notifyListeners();
-          }),
-        );
-      }),
-    );
+          }
+          if (g != null) {
+            unawaited(_publishProjections(g).catchError((Object _) {}));
+          }
+          return;
+        } catch (e) {
+          lastError = e;
+          debugPrint('RSVP patch failed (attempt ${attempt + 1}): $e');
+          if (_isRetriablePermissionError(e)) {
+            await _nudgeAuthToken();
+            // The game doc is member-gated. If this signed-in user reached the
+            // game via a shared game code / link they were never added to the
+            // group roster, so `isMember` is false and the write is denied.
+            // Self-join the roster (rules allow a user to create their own
+            // 'member' row) and try again.
+            if (!triedSelfJoin && !isGuest) {
+              triedSelfJoin = true;
+              try {
+                await _repo.joinGroup(gid, _user!);
+                debugPrint('RSVP patch: self-joined group $gid roster, retrying');
+              } catch (joinErr) {
+                debugPrint('RSVP patch: self-join failed: $joinErr');
+              }
+            }
+          }
+        }
+      }
+      lastRsvpError = _isRetriablePermissionError(lastError ?? '')
+          ? 'RSVP not saved — you may not have write access to this game. '
+              'Ask the host to add you to the group.'
+          : 'RSVP save failed. Tap again to retry.';
+      _pendingOwnRsvp.remove(gameId);
+      _rsvpReassertCount.remove(gameId);
+      notifyListeners();
+    }());
   }
 
   /// A roster [Player] for the signed-in member, from the group roster. Used
@@ -6122,7 +6580,8 @@ class AppProvider extends ChangeNotifier {
             _clearUndoStack();
             final remote =
                 liveGameFromFirestoreDoc(Map<String, dynamic>.from(data));
-            _currentGame = remote;
+            _currentGame =
+                _withPendingCheckInOverlay(_withOwnRsvpOverlay(remote));
             _lastSavedGame = remote;
             notifyListeners();
           } catch (e) {
@@ -6137,9 +6596,9 @@ class AppProvider extends ChangeNotifier {
           if (payload == null) return;
           try {
             _clearUndoStack();
-            _currentGame = liveGameFromMap(
-              Map<String, dynamic>.from(payload as Map),
-            );
+            _currentGame = _withPendingCheckInOverlay(_withOwnRsvpOverlay(
+              liveGameFromMap(Map<String, dynamic>.from(payload as Map)),
+            ));
             notifyListeners();
           } catch (e) {
             debugPrint('projection decode failed: $e');

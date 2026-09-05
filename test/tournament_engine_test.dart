@@ -464,4 +464,46 @@ void main() {
     // too many chips in play for the curve to stop there.
     expect(s.levels.last.bb, greaterThan(6000));
   });
+
+  group('degenerate inputs never throw', () {
+    // Regression: opening check-in generates a structure estimate before
+    // anyone has checked in, so `players` arrived as 0. `quantity / (0 * m)`
+    // is Infinity and `Infinity.floor()` throws `UnsupportedError: Infinity`,
+    // which killed the tap handler instead of producing a plan.
+    test('a zero player count does not divide by zero', () {
+      expect(() => TournamentEngine.generate(_params(players: 0)),
+          returnsNormally);
+      final s = TournamentEngine.generate(_params(players: 0));
+      expect(s.levels, isNotEmpty);
+    });
+
+    test('a one-player field still produces a structure', () {
+      expect(() => TournamentEngine.generate(_params(players: 1)),
+          returnsNormally);
+    });
+
+    test('a chip set containing a zero-value denomination is skipped, '
+        'not fatal', () {
+      final broken = [
+        const ChipColor(color: 'ghost', hex: 0xFF000000, value: 0, quantity: 50),
+        ...TournamentEngine.getPreset('Standard 300'),
+      ];
+      expect(() => TournamentEngine.generate(_params(chips: broken)),
+          returnsNormally);
+      final s = TournamentEngine.generate(_params(chips: broken));
+      expect(s.chipPlan.every((e) => e.value > 0), isTrue);
+    });
+
+    test('snapToPracticalBlind tolerates an empty / zero-value chip set', () {
+      expect(TournamentEngine.snapToPracticalBlind(37, const []),
+          greaterThan(0));
+      expect(
+        TournamentEngine.snapToPracticalBlind(
+          37,
+          const [ChipColor(color: 'x', hex: 0, value: 0, quantity: 10)],
+        ),
+        greaterThan(0),
+      );
+    });
+  });
 }

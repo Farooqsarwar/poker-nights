@@ -71,10 +71,16 @@ class _AppButtonState extends State<AppButton> {
       child: Semantics(
         button: true,
         enabled: _isEnabled,
-        child: GestureDetector(
-          onTapDown: _isEnabled ? (_) => setState(() => _pressing = true) : null,
-          onTapUp: _isEnabled ? (_) => setState(() => _pressing = false) : null,
-          onTapCancel: _isEnabled ? () => setState(() => _pressing = false) : null,
+        // Raw Listener (not GestureDetector) for the press-visual state: the
+        // only tap recognizer in this subtree is the InkWell below, so a quick
+        // tap can never be lost to a gesture-arena tie.
+        child: Listener(
+          onPointerDown:
+              _isEnabled ? (_) => setState(() => _pressing = true) : null,
+          onPointerUp:
+              _isEnabled ? (_) => setState(() => _pressing = false) : null,
+          onPointerCancel:
+              _isEnabled ? (_) => setState(() => _pressing = false) : null,
           child: InteractiveScale(
             enabled: _isEnabled,
             child: AnimatedOpacity(

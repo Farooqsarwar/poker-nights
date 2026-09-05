@@ -158,6 +158,7 @@ class _TabItemState extends State<_TabItem> {
         onExit: (_) => setState(() => _hovering = false),
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: widget.onTap,
           child: AnimatedContainer(
             duration: AppDurations.fast,

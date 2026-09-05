@@ -37,8 +37,14 @@ Future<void> main() async {
     'EMULATOR_HOST',
     defaultValue: 'localhost',
   );
-  const emulatorApiPort = int.fromEnvironment('EMULATOR_API_PORT', defaultValue: 8080);
-  const emulatorAuthPort = int.fromEnvironment('EMULATOR_AUTH_PORT', defaultValue: 9099);
+  const emulatorApiPort = int.fromEnvironment(
+    'EMULATOR_API_PORT',
+    defaultValue: 8080,
+  );
+  const emulatorAuthPort = int.fromEnvironment(
+    'EMULATOR_AUTH_PORT',
+    defaultValue: 9099,
+  );
 
   // Production error handling — show a friendly error overlay instead of a red screen.
   ErrorWidget.builder = (FlutterErrorDetails details) {
@@ -91,7 +97,10 @@ Future<void> main() async {
   if (useEmulator) {
     // ignore: avoid_print
     print('[Emulator] Firestore + Auth -> $emulatorHost');
-    FirebaseFirestore.instance.useFirestoreEmulator(emulatorHost, emulatorApiPort);
+    FirebaseFirestore.instance.useFirestoreEmulator(
+      emulatorHost,
+      emulatorApiPort,
+    );
     await FirebaseAuth.instance.useAuthEmulator(emulatorHost, emulatorAuthPort);
   }
   // -- Firebase App Check (tech spec section 22) --
@@ -104,6 +113,11 @@ Future<void> main() async {
 
   // Initialize Google Sign-In singleton (must happen before signInWithGoogle).
   await FirebaseRepository.initGoogleSignIn();
+
+  // Restore the persisted per-install device id before any Firestore write so
+  // echo-prevention and the single-active-editor claim stay stable across
+  // restarts.
+  await FirebaseRepository.instance.initDeviceId();
 
   // Read the locally cached theme preference before booting the app so the
   // splash screen doesn't jitter while waiting for Firebase.
@@ -206,11 +220,18 @@ class PokerNightApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
+    // Only rebuild the app shell when the theme actually changes — NOT on every
+    // AppProvider.notifyListeners() (clock tick + every Firestore snapshot),
+    // which otherwise rebuilds the entire widget tree once per second and can
+    // disrupt an in-progress button press.
+    final (colorTheme, themePreference) = context
+        .select<AppProvider, (String, String)>(
+          (a) => (a.colorTheme, a.themePreference),
+        );
 
     // Resolve the active palette from the stored color-theme id and push it
     // into AppColors so every static accessor returns the correct value.
-    final palette = ThemePalettes.forId(app.colorTheme);
+    final palette = ThemePalettes.forId(colorTheme);
     AppColors.currentPalette = palette;
 
     return MaterialApp.router(
@@ -218,7 +239,7 @@ class PokerNightApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.forPalette(palette, brightness: Brightness.light),
       darkTheme: AppTheme.forPalette(palette, brightness: Brightness.dark),
-      themeMode: switch (app.themePreference) {
+      themeMode: switch (themePreference) {
         'light' => ThemeMode.light,
         'system' => ThemeMode.system,
         _ => ThemeMode.dark,

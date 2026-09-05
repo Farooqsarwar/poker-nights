@@ -379,6 +379,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                       children: [
                         for (final g in pendingRequests)
                           _PendingGuestRow(
+                            key: ValueKey('pending-${g.id}'),
                             guest: g,
                             inviter: g.isGuest
                                 ? players
@@ -423,6 +424,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     children: [
                       for (final p in players.where((p) => !p.isGuest))
                         Container(
+                          key: ValueKey('player-${p.id}'),
                           padding: const EdgeInsets.symmetric(
                             vertical: AppSpacing.sm,
                             horizontal: AppSpacing.md,
@@ -941,6 +943,7 @@ class _InlineStat extends StatelessWidget {
 
 class _PendingGuestRow extends StatelessWidget {
   const _PendingGuestRow({
+    super.key,
     required this.guest,
     required this.inviter,
     required this.onConfirm,

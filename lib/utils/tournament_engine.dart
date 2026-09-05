@@ -121,8 +121,11 @@ class TournamentEngine {
   static const double targetHeadsUpAverageBB = 15;
 
   static int snapToPracticalBlind(double raw, List<ChipColor> chips) {
-    final values = chips.map((c) => c.value).toList()..sort();
-    final minChip = values.first;
+    final values = chips.map((c) => c.value).where((v) => v > 0).toList()
+      ..sort();
+    // An empty or all-zero chip set must not blow up (`values.first` throws,
+    // and dividing by a 0-value chip yields Infinity, which `.round()` rejects).
+    final minChip = values.isEmpty ? 1 : values.first;
     final rounded = (raw / minChip).round() * minChip;
     return math.max(rounded, minChip);
   }
@@ -198,10 +201,20 @@ class TournamentEngine {
     final plan = <ChipPlanEntry>[];
     var remaining = targetStack;
 
+    // Guard the divisor: a zero head-count (e.g. the structure estimate the
+    // admin triggers the instant check-in opens, before anyone has checked in)
+    // made `quantity / 0` evaluate to Infinity, and `Infinity.floor()` throws
+    // `UnsupportedError: Infinity` — crashing the tap instead of producing a
+    // plan. One seat is the smallest meaningful divisor.
+    final perPlayerDivisor =
+        math.max(1.0, playerCount * reserveMultiplier);
+
     final reversed = sorted.reversed.toList();
     for (final chip in reversed) {
-      final maxPerPlayer = (chip.quantity / (playerCount * reserveMultiplier))
-          .floor();
+      // A zero/negative denomination would make `remaining ~/ chip.value`
+      // throw; such a chip can never contribute to a stack anyway.
+      if (chip.value <= 0) continue;
+      final maxPerPlayer = (chip.quantity / perPlayerDivisor).floor();
       if (maxPerPlayer <= 0) continue;
       final need = remaining ~/ chip.value;
       final use = math.min(need, math.min(maxPerPlayer, maxChipsPerPlayer));
@@ -218,10 +231,10 @@ class TournamentEngine {
       }
     }
 
-    if (remaining > 0 && sorted.isNotEmpty) {
-      final small = sorted.first;
-      final smallMaxPerPlayer =
-          (small.quantity / (playerCount * reserveMultiplier)).floor();
+    final smallest = sorted.where((c) => c.value > 0).firstOrNull;
+    if (remaining > 0 && smallest != null) {
+      final small = smallest;
+      final smallMaxPerPlayer = (small.quantity / perPlayerDivisor).floor();
       final index = plan.indexWhere((p) => p.color == small.color);
       final existing = index >= 0 ? plan[index].count : 0;
       final extra = math.min(
@@ -739,6 +752,9 @@ class TournamentEngine {
       for (var i = 0; i < sortedChips.length - 1; i++) {
         final chip = sortedChips[i];
         final next = sortedChips[i + 1];
+        // A zero-valued denomination would make the exchange ratio below
+        // divide by zero (Infinity, which `.ceil()` rejects).
+        if (chip.value <= 0 || next.value <= 0) continue;
         // The chip is played out once the BB is at least 20x its value.
         final level = levels.indexWhere((l) => l.bb >= chip.value * 20);
         if (level < 0 || level == 0) continue;

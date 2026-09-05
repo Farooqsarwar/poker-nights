@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in_all_platforms/google_sign_in_all_platforms.dart';
+import 'package:localstore/localstore.dart' show Localstore;
 
 import '../models/app_notification.dart';
 import '../models/cash_game.dart';
@@ -171,9 +173,46 @@ class FirebaseRepository {
   fa.FirebaseAuth get _auth => fa.FirebaseAuth.instance;
 
   /// Stable per-install id stamped onto every write as `writerId`.
+  /// Persisted via [initDeviceId] so it survives app restarts — echo
+  /// prevention and the single-active-editor claim key off this, and a fresh
+  /// id on every launch defeated the editor-staleness window.
   String? _deviceId;
-  String get deviceId =>
-      _deviceId ??= 'dev-${DateTime.now().millisecondsSinceEpoch}';
+  String get deviceId => _deviceId ??= _freshDeviceId();
+
+  static String _freshDeviceId() {
+    final r = Random();
+    // Build the suffix from 4-bit chunks — `1 << 32` overflows to 0 on web,
+    // which made `Random().nextInt(1 << 32)` throw a RangeError.
+    final suffix =
+        List.generate(8, (_) => r.nextInt(16).toRadixString(16)).join();
+    return 'dev-${DateTime.now().millisecondsSinceEpoch}-$suffix';
+  }
+
+  /// Loads the persisted device id (or creates + stores one on first run).
+  /// Call once during startup, before any write.
+  Future<void> initDeviceId() async {
+    if (_deviceId != null) return;
+    try {
+      final doc = await Localstore.instance.collection('app').doc('device').get();
+      final saved = doc?['deviceId'] as String?;
+      if (saved != null && saved.isNotEmpty) {
+        _deviceId = saved;
+        return;
+      }
+    } catch (_) {
+      // Localstore unavailable (tests) — fall through to an in-memory id.
+    }
+    final fresh = _freshDeviceId();
+    _deviceId = fresh;
+    try {
+      await Localstore.instance
+          .collection('app')
+          .doc('device')
+          .set({'deviceId': fresh});
+    } catch (_) {
+      // Best-effort persistence; the in-memory id still works for this run.
+    }
+  }
 
   Map<String, dynamic> _stamp(Map<String, dynamic>? data) => {
         ...?data,
@@ -772,30 +811,68 @@ class FirebaseRepository {
     }
 
     final groupRef = _db.collection('groups').doc(gid);
+    final retryTimers = <String, Timer>{};
 
-    // A section that errors (e.g. a rule denies one subcollection, or a brief
-    // permission-propagation gap right after joining) must not wedge the whole
-    // bundle: mark it "loaded" with whatever data we have so [maybeEmit] can
-    // still deliver the rest of the group and the UI leaves its loading state.
-    void Function(Object, StackTrace) onSectionError(
-      String section,
+    // Each section subscribes independently. A section that errors (a rule
+    // denies one subcollection, or — the common case — the auth token has not
+    // yet propagated into the Firestore SDK in the seconds right after a web
+    // login/join) is marked "loaded" so [maybeEmit] can still deliver the rest
+    // of the group and the UI leaves its loading state. Crucially it then keeps
+    // RE-SUBSCRIBING with backoff: a permission-propagation gap clears within a
+    // few seconds and the section fills in on its own, so the user no longer
+    // has to reload the page to see their games.
+    void section<S>(
+      String name,
+      Stream<S> Function() open,
+      void Function(S snap) apply,
       void Function() markLoaded,
-    ) =>
-        (Object e, StackTrace _) {
-          debugPrint('groupBundle "$section" error: $e');
-          markLoaded();
-          maybeEmit();
-        };
+    ) {
+      var attempt = 0;
+      void subscribe() {
+        subs.add(open().listen(
+          (s) {
+            attempt = 0;
+            retryTimers.remove(name)?.cancel();
+            apply(s);
+            markLoaded();
+            maybeEmit();
+          },
+          onError: (Object e, StackTrace _) {
+            debugPrint('groupBundle "$name" error: $e');
+            markLoaded();
+            maybeEmit();
+            if (attempt < 8 && !controller.isClosed) {
+              // Post-login token lag is the common cause — nudge a fresh token
+              // into the SDK before re-subscribing.
+              if (e.toString().contains('permission-denied') ||
+                  e.toString().contains('unauthenticated')) {
+                _auth.currentUser?.getIdToken(true).catchError((Object _) => '');
+              }
+              final delayMs = 400 * (1 << (attempt > 5 ? 5 : attempt));
+              attempt++;
+              retryTimers[name]?.cancel();
+              retryTimers[name] =
+                  Timer(Duration(milliseconds: delayMs), subscribe);
+            }
+          },
+        ));
+      }
+
+      subscribe();
+    }
 
     controller = StreamController<Group>(
       onListen: () {
-        subs.add(groupRef.snapshots().listen((s) {
-          meta = s.data();
-          metaLoaded = true;
-          maybeEmit();
-        }, onError: onSectionError('meta', () => metaLoaded = true)));
-        subs.add(groupRef.collection('members').snapshots().listen((s) {
-          members = [
+        section<DocumentSnapshot<Map<String, dynamic>>>(
+          'meta',
+          () => groupRef.snapshots(),
+          (s) => meta = s.data(),
+          () => metaLoaded = true,
+        );
+        section<QuerySnapshot<Map<String, dynamic>>>(
+          'members',
+          () => groupRef.collection('members').snapshots(),
+          (s) => members = [
             for (final d in s.docs)
               AppUser(
                 id: d.id,
@@ -813,35 +890,40 @@ class FirebaseRepository {
                         avgFinish: 0,
                         knockouts: 0),
               ),
-          ];
-          membersLoaded = true;
-          maybeEmit();
-        }, onError: onSectionError('members', () => membersLoaded = true)));
-        subs.add(groupRef.collection('chat').snapshots().listen((s) {
-          chat = [for (final d in s.docs) chatMessageFromMap(d.data())];
-          chatLoaded = true;
-          maybeEmit();
-        }, onError: onSectionError('chat', () => chatLoaded = true)));
-        subs.add(groupRef.collection('polls').snapshots().listen((s) {
-          polls = [for (final d in s.docs) pollFromMap(d.data())];
-          pollsLoaded = true;
-          maybeEmit();
-        }, onError: onSectionError('polls', () => pollsLoaded = true)));
-        subs.add(groupRef
-            .collection('games')
-            .orderBy('settings.date', descending: true)
-            .limit(15)
-            .snapshots()
-            .listen((s) {
-          games = [
+          ],
+          () => membersLoaded = true,
+        );
+        section<QuerySnapshot<Map<String, dynamic>>>(
+          'chat',
+          () => groupRef.collection('chat').snapshots(),
+          (s) => chat = [for (final d in s.docs) chatMessageFromMap(d.data())],
+          () => chatLoaded = true,
+        );
+        section<QuerySnapshot<Map<String, dynamic>>>(
+          'polls',
+          () => groupRef.collection('polls').snapshots(),
+          (s) => polls = [for (final d in s.docs) pollFromMap(d.data())],
+          () => pollsLoaded = true,
+        );
+        section<QuerySnapshot<Map<String, dynamic>>>(
+          'games',
+          () => groupRef
+              .collection('games')
+              .orderBy('settings.date', descending: true)
+              .limit(15)
+              .snapshots(),
+          (s) => games = [
             for (final d in s.docs)
               liveGameFromFirestoreDoc(Map<String, dynamic>.from(d.data())),
-          ];
-          gamesLoaded = true;
-          maybeEmit();
-        }, onError: onSectionError('games', () => gamesLoaded = true)));
+          ],
+          () => gamesLoaded = true,
+        );
       },
       onCancel: () async {
+        for (final t in retryTimers.values) {
+          t.cancel();
+        }
+        retryTimers.clear();
         for (final s in subs) {
           await s.cancel();
         }
@@ -898,11 +980,22 @@ class FirebaseRepository {
         'organizerAmount': fullDoc['structure']['organizerAmount'],
       }
     };
-    await _db
-        .collection('groups').doc(game.groupId)
-        .collection('games').doc(game.id)
-        .collection('admin').doc('privateData')
-        .set(privateDoc, SetOptions(merge: true));
+    // The sidecar lives under `.../admin/**`, whose rule requires the strict
+    // `isGroupAdmin(gid)` (group owner, or a members/{uid} row with
+    // role == 'admin'). The public game document below only requires
+    // membership. Letting a sidecar rejection abort the whole call meant one
+    // permission mismatch silently discarded every game update — so it is
+    // logged and skipped instead. Losing the private figures is recoverable;
+    // losing the game state is not.
+    try {
+      await _db
+          .collection('groups').doc(game.groupId)
+          .collection('games').doc(game.id)
+          .collection('admin').doc('privateData')
+          .set(privateDoc, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('saveGame: private sidecar rejected (continuing): $e');
+    }
 
     // Scrub private fields from the public document
     final publicDoc = Map<String, dynamic>.from(fullDoc);
@@ -998,6 +1091,19 @@ class FirebaseRepository {
           .collection('games')
           .doc(gameId)
           .snapshots();
+
+  /// One-shot read of the raw game document — used right before a whole-doc
+  /// save to reconcile member-owned fields (RSVPs, guest slots) that may have
+  /// changed while the admin's edit was debouncing.
+  Future<Map<String, dynamic>?> gameDocOnce(String gid, String gameId) async {
+    final snap = await _db
+        .collection('groups')
+        .doc(gid)
+        .collection('games')
+        .doc(gameId)
+        .get();
+    return snap.data();
+  }
 
   /// Registers the game's public/tv codes for lookup flows.
   Future<void> upsertGameCodes(LiveGame game) async {

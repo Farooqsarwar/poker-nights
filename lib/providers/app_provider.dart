@@ -4601,38 +4601,125 @@ class AppProvider extends ChangeNotifier {
     if (recommendation == null) return;
     _pushUndo();
     final structure = game.structure;
-    final newDuration = recommendation == SpeedRecommendation.speedUp
+    final isSpeedUp = recommendation == SpeedRecommendation.speedUp;
+    final newDuration = isSpeedUp
         ? structure.levelDuration - 5
         : structure.levelDuration + 5;
     final clamped = newDuration < 10
         ? 10
         : (newDuration > 20 ? 20 : newDuration);
-    // Apply the new duration to future levels only (spec: active level never changes, starts next level).
-    final levels = structure.levels
-        .map(
-          (l) => l.level > game.currentLevel
-              ? BlindLevel(
-                  level: l.level,
-                  sb: l.sb,
-                  bb: l.bb,
-                  ante: l.ante,
-                  durationMins: clamped,
-                )
-              : l,
-        )
-        .toList();
+
+    final pastLevels = structure.levels.where((l) => l.level <= game.currentLevel).toList();
+    var futureLevels = structure.levels.where((l) => l.level > game.currentLevel).toList();
+
+    if (futureLevels.isNotEmpty) {
+      final chips = game.settings.chipSet;
+
+      if (isSpeedUp) {
+        // 1. Advance ante
+        int? firstAnteIdx;
+        for (var i = 0; i < futureLevels.length; i++) {
+          if (futureLevels[i].ante != null) {
+            firstAnteIdx = i;
+            break;
+          }
+        }
+        if (firstAnteIdx != null && firstAnteIdx > 0) {
+          final moveUp = firstAnteIdx > 1 ? 2 : 1;
+          final anteVal = futureLevels[firstAnteIdx].ante;
+          futureLevels[firstAnteIdx - moveUp] = BlindLevel(
+            level: futureLevels[firstAnteIdx - moveUp].level,
+            sb: futureLevels[firstAnteIdx - moveUp].sb,
+            bb: futureLevels[firstAnteIdx - moveUp].bb,
+            ante: anteVal,
+            durationMins: clamped,
+          );
+        }
+
+        // 2. Increase future blinds (steepen curve)
+        futureLevels = futureLevels.map((l) {
+          final newBB = TournamentEngine.snapToPracticalBlind(l.bb * 1.25, chips);
+          final newSB = TournamentEngine.snapToPracticalBlind(newBB / 2, chips);
+          return BlindLevel(
+            level: l.level,
+            sb: newSB,
+            bb: newBB,
+            ante: l.ante,
+            durationMins: clamped,
+          );
+        }).toList();
+      } else {
+        // Slow down
+        // 1. Delay ante
+        int? firstAnteIdx;
+        for (var i = 0; i < futureLevels.length; i++) {
+          if (futureLevels[i].ante != null) {
+            firstAnteIdx = i;
+            break;
+          }
+        }
+        if (firstAnteIdx != null && firstAnteIdx < futureLevels.length - 1) {
+          futureLevels[firstAnteIdx] = BlindLevel(
+            level: futureLevels[firstAnteIdx].level,
+            sb: futureLevels[firstAnteIdx].sb,
+            bb: futureLevels[firstAnteIdx].bb,
+            ante: null,
+            durationMins: clamped,
+          );
+        }
+
+        // 2. Insert intermediate level if steep jump exists
+        bool inserted = false;
+        final newFuture = <BlindLevel>[];
+        for (var i = 0; i < futureLevels.length; i++) {
+          final current = futureLevels[i];
+          newFuture.add(BlindLevel(
+            level: current.level,
+            sb: current.sb,
+            bb: current.bb,
+            ante: current.ante,
+            durationMins: clamped,
+          ));
+          if (!inserted && i < futureLevels.length - 1) {
+            final next = futureLevels[i + 1];
+            if (next.bb >= current.bb * 2) {
+              final midBB = TournamentEngine.snapToPracticalBlind(current.bb * 1.5, chips);
+              final midSB = TournamentEngine.snapToPracticalBlind(midBB / 2, chips);
+              newFuture.add(BlindLevel(
+                level: 0, // will re-index later
+                sb: midSB,
+                bb: midBB,
+                ante: current.ante,
+                durationMins: clamped,
+              ));
+              inserted = true;
+            }
+          }
+        }
+        futureLevels = newFuture;
+      }
+    }
+
+    // Re-index all levels sequentially to ensure no gaps
+    final allLevels = [...pastLevels, ...futureLevels];
+    for (var i = 0; i < allLevels.length; i++) {
+      final l = allLevels[i];
+      allLevels[i] = BlindLevel(
+        level: i + 1,
+        sb: l.sb,
+        bb: l.bb,
+        ante: l.ante,
+        durationMins: l.level > game.currentLevel ? clamped : l.durationMins,
+      );
+    }
+
     _currentGame = game.copyWith(
       speedRecommendation: null,
-      clearSpeedRecommendation: true,
-      structure: structure.copyWith(levels: levels, levelDuration: clamped),
+      structure: structure.copyWith(
+        levelDuration: clamped,
+        levels: allLevels,
+      ),
     );
-    addAnnouncement(
-      recommendation == SpeedRecommendation.speedUp
-          ? 'Future levels sped up to $clamped minutes.'
-          : 'Future levels slowed down to $clamped minutes.',
-      true,
-    );
-    _syncGroupGame();
     notifyListeners();
   }
 

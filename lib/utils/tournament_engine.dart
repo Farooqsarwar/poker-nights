@@ -120,7 +120,7 @@ class TournamentEngine {
   /// heads-up play should begin with the average stack around 15 big blinds.
   static const double targetHeadsUpAverageBB = 15;
 
-  static int _snapToPracticalBlind(double raw, List<ChipColor> chips) {
+  static int snapToPracticalBlind(double raw, List<ChipColor> chips) {
     final values = chips.map((c) => c.value).toList()..sort();
     final minChip = values.first;
     final rounded = (raw / minChip).round() * minChip;
@@ -699,7 +699,7 @@ class TournamentEngine {
           ? (params.anteStyle == AnteStyle.individual
                 ? math.max(
                     minChip,
-                    _snapToPracticalBlind(bb / defaultTableSize, sortedChips),
+                    snapToPracticalBlind(bb / defaultTableSize, sortedChips),
                   )
                 : bb)
           : null;

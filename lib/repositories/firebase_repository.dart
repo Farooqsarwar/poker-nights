@@ -813,7 +813,12 @@ class FirebaseRepository {
           pollsLoaded = true;
           maybeEmit();
         }, onError: onSectionError('polls', () => pollsLoaded = true)));
-        subs.add(groupRef.collection('games').snapshots().listen((s) {
+        subs.add(groupRef
+            .collection('games')
+            .orderBy('settings.date', descending: true)
+            .limit(15)
+            .snapshots()
+            .listen((s) {
           games = [
             for (final d in s.docs)
               liveGameFromFirestoreDoc(Map<String, dynamic>.from(d.data())),

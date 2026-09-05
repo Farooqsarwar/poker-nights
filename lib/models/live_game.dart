@@ -263,6 +263,7 @@ class LiveGame {
     this.revision = 0,
     this.lastIdempotencyKey,
     this.editorDeviceId = '',
+    this.editorClaimedAt,
   });
 
   final String id;
@@ -298,6 +299,11 @@ class LiveGame {
   /// persists it; other admin devices become read-only for game edits so two
   /// sessions can no longer clobber each other (last-write-wins save war).
   final String editorDeviceId;
+
+  /// The last moment the claiming device wrote to the game. Used to detect a
+  /// stale editor claim: if the holder has been silent longer than the claim
+  /// window, another admin device may take over the role.
+  final DateTime? editorClaimedAt;
 
   /// True once the admin closes door check-in. Further walk-ins are not added
   /// (spec §4.7).
@@ -470,10 +476,13 @@ class LiveGame {
     List<String>? rebuyRequests,
     List<String>? addOnRequests,
     DateTime? levelEndTime,
+    bool clearSpeedRecommendation = false,
+    bool clearLevelEndTime = false,
     List<String>? changeLog,
     int? revision,
     String? lastIdempotencyKey,
     String? editorDeviceId,
+    DateTime? editorClaimedAt,
   }) {
     return LiveGame(
       id: id ?? this.id,
@@ -493,7 +502,9 @@ class LiveGame {
       totalChipsInPlay: totalChipsInPlay ?? this.totalChipsInPlay,
       pendingGuests: pendingGuests ?? this.pendingGuests,
       finishOrder: finishOrder ?? this.finishOrder,
-      speedRecommendation: speedRecommendation ?? this.speedRecommendation,
+      speedRecommendation: clearSpeedRecommendation
+          ? null
+          : speedRecommendation ?? this.speedRecommendation,
       settlementConfirmed: settlementConfirmed ?? this.settlementConfirmed,
       seatingConfirmed: seatingConfirmed ?? this.seatingConfirmed,
       checkInClosed: checkInClosed ?? this.checkInClosed,
@@ -504,11 +515,14 @@ class LiveGame {
       originalLevels: originalLevels ?? this.originalLevels,
       rebuyRequests: rebuyRequests ?? this.rebuyRequests,
       addOnRequests: addOnRequests ?? this.addOnRequests,
-      levelEndTime: levelEndTime ?? this.levelEndTime,
+      levelEndTime: clearLevelEndTime
+          ? null
+          : levelEndTime ?? this.levelEndTime,
       changeLog: changeLog ?? this.changeLog,
       revision: revision ?? this.revision,
       lastIdempotencyKey: lastIdempotencyKey ?? this.lastIdempotencyKey,
       editorDeviceId: editorDeviceId ?? this.editorDeviceId,
+      editorClaimedAt: editorClaimedAt ?? this.editorClaimedAt,
     );
   }
 }

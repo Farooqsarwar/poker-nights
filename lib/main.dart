@@ -214,7 +214,6 @@ class PokerNightApp extends StatelessWidget {
     AppColors.currentPalette = palette;
 
     return MaterialApp.router(
-      key: ValueKey('app-${app.colorTheme}-${app.themePreference}'),
       title: 'Poker Night',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.forPalette(palette, brightness: Brightness.light),

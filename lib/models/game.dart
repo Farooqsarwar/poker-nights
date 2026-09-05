@@ -97,6 +97,7 @@ class Player {
     bool? confirmed,
     bool? eliminated,
     int? eliminationPos,
+    bool clearEliminationPos = false,
     int? rebuys,
     int? reEntries,
     bool? hasAddOn,
@@ -115,7 +116,8 @@ class Player {
       checkedIn: checkedIn ?? this.checkedIn,
       confirmed: confirmed ?? this.confirmed,
       eliminated: eliminated ?? this.eliminated,
-      eliminationPos: eliminationPos ?? this.eliminationPos,
+      eliminationPos:
+          clearEliminationPos ? null : eliminationPos ?? this.eliminationPos,
       rebuys: rebuys ?? this.rebuys,
       reEntries: reEntries ?? this.reEntries,
       hasAddOn: hasAddOn ?? this.hasAddOn,
@@ -219,12 +221,16 @@ class GuestSlot {
 
   bool get available => status == GuestSlotStatus.unclaimed;
 
-  GuestSlot copyWith({String? guestName, GuestSlotStatus? status}) {
+  GuestSlot copyWith({
+    String? guestName,
+    bool clearGuestName = false,
+    GuestSlotStatus? status,
+  }) {
     return GuestSlot(
       id: id,
       inviterId: inviterId,
       slot: slot,
-      guestName: guestName ?? this.guestName,
+      guestName: clearGuestName ? null : guestName ?? this.guestName,
       status: status ?? this.status,
     );
   }

@@ -3,12 +3,12 @@
 /// that group runs, and can be overridden per tournament on [GameSettings].
 class TableSettings {
   const TableSettings({
-    this.maxPerTable = 10,
+    this.maxPerTable = 9,
     this.randomizeByDefault = false,
   });
 
   /// Player count that triggers a split into another table once check-in
-  /// reaches it (spec: configurable 10–11, defaulting to 10).
+  /// reaches it (spec §12.1: table capacity defaults to 9).
   final int maxPerTable;
 
   /// Whether seating generation defaults to the fully-random mode rather

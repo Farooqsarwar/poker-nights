@@ -540,9 +540,25 @@ class AppProvider extends ChangeNotifier {
     final game = _currentGame;
     if (game == null || _user == null || !isAdmin || !_backendUp) return;
     final editor = game.editorDeviceId;
-    if (editor.isNotEmpty && editor != _repo.deviceId) return;
-    if (editor == _repo.deviceId) return;
-    _currentGame = game.copyWith(editorDeviceId: _repo.deviceId);
+    final now = DateTime.now();
+    final claimedAt = game.editorClaimedAt;
+    final sameDevice = editor == _repo.deviceId;
+    final stale = editor.isNotEmpty &&
+        claimedAt != null &&
+        now.difference(claimedAt) > _editorClaimStaleWindow;
+    // Another live editor is actively writing — stay read-only.
+    if (editor.isNotEmpty && !sameDevice && !stale) return;
+    if (sameDevice) {
+      // Heartbeat: ours. Refresh the last-active stamp so a connected editor
+      // is never mistaken for a stale one. The refresh rides along with the
+      // whole-doc write that follows in [_syncGameToCloud].
+      _currentGame = game.copyWith(editorClaimedAt: now);
+      return;
+    }
+    _currentGame = game.copyWith(
+      editorDeviceId: _repo.deviceId,
+      editorClaimedAt: now,
+    );
     _syncGroupGame();
   }
 
@@ -2128,6 +2144,10 @@ class AppProvider extends ChangeNotifier {
   static const int _maxUndoDepth = 30;
   final List<LiveGame?> _undoStack = [];
 
+  /// An editor claim older than this is considered stale: any admin device may
+  /// take over the single-writer role (90 seconds of silence).
+  static const Duration _editorClaimStaleWindow = Duration(seconds: 90);
+
   bool get canUndo => _undoStack.isNotEmpty;
 
   /// Human-readable description of the most recent reversible action, used
@@ -2156,12 +2176,22 @@ class AppProvider extends ChangeNotifier {
   ///
   /// Callers fold the returned revision (and the key) into their final
   /// [LiveGame.copyWith] so the guard survives save, restore and fan-out.
-  int? _claimIdempotency(String idempotencyKey) {
+  /// Claims the next revision for an admin mutation, rejecting a replayed
+  /// action: if [idempotencyKey] matches the key that produced the current
+  /// revision, the call is a duplicate and returns null. When the caller does
+  /// not supply a key, one is derived deterministically from the action's own
+  /// identity (`action-target-revision+1`) instead of bypassing replay
+  /// protection entirely. Returns the new revision and the persistence key
+  /// (the caller stores the latter as `lastIdempotencyKey`).
+  (int?, String) _claimIdempotency(String idempotencyKey,
+      {required String action, String target = ''}) {
     final g = _currentGame;
-    if (g == null) return null;
-    if (idempotencyKey.isEmpty) return g.revision + 1;
-    if (g.lastIdempotencyKey == idempotencyKey) return null; // replay
-    return g.revision + 1;
+    if (g == null) return (null, '');
+    final key = idempotencyKey.isNotEmpty
+        ? idempotencyKey
+        : '$action-${target.isEmpty ? g.id : target}-${g.revision + 1}';
+    if (g.lastIdempotencyKey == key) return (null, key); // replay
+    return (g.revision + 1, key);
   }
 
   void _clearUndoStack() {
@@ -2528,6 +2558,7 @@ class AppProvider extends ChangeNotifier {
           structure: structure,
           secondsRemaining: structure.levelDuration * 60,
           speedRecommendation: null,
+          clearSpeedRecommendation: true,
           players: clearRsvps
               ? game.players.map((p) => p.copyWithClearRsvp()).toList()
               : game.players,
@@ -2911,6 +2942,7 @@ class AppProvider extends ChangeNotifier {
       status: LiveGameStatus.paused,
       secondsRemaining: _currentGame!.currentSecondsRemaining(),
       levelEndTime: null,
+      clearLevelEndTime: true,
     );
     _syncGroupGame();
     notifyListeners();
@@ -2929,7 +2961,8 @@ class AppProvider extends ChangeNotifier {
   }
 
   void nextLevel({String? idempotencyKey}) {
-    final rev = _claimIdempotency(idempotencyKey ?? '');
+    final (rev, idemKey) =
+        _claimIdempotency(idempotencyKey ?? '', action: 'nextLevel');
     if (rev == null) return; // replayed action — already applied
     final next = _currentGame!.currentLevel + 1;
     _pushUndo();
@@ -2954,8 +2987,10 @@ class AppProvider extends ChangeNotifier {
         status: LiveGameStatus.rebuypause,
         speedRecommendation: null,
         levelEndTime: null,
+        clearSpeedRecommendation: true,
+        clearLevelEndTime: true,
         revision: rev,
-        lastIdempotencyKey: idempotencyKey ?? '',
+        lastIdempotencyKey: idemKey,
       );
       addAnnouncement(
         'Rebuys are now closed. Add-ons are available.',
@@ -3005,9 +3040,10 @@ class AppProvider extends ChangeNotifier {
         timerRunning: true,
         status: LiveGameStatus.running,
         speedRecommendation: null,
+        clearSpeedRecommendation: true,
         levelEndTime: _serverNow.add(Duration(minutes: extLevel.durationMins)),
         revision: rev,
-        lastIdempotencyKey: idempotencyKey ?? '',
+        lastIdempotencyKey: idemKey,
       );
       addAnnouncement(
         'Level $next. Blinds ${extLevel.sb} / ${extLevel.bb}'
@@ -3022,7 +3058,8 @@ class AppProvider extends ChangeNotifier {
   /// Rewinds to the previous level (spec §12 "Previous" control). The clock
   /// resets to the full previous-level duration and the game resumes running.
   void previousLevel({String? idempotencyKey}) {
-    final rev = _claimIdempotency(idempotencyKey ?? '');
+    final (rev, idemKey) =
+        _claimIdempotency(idempotencyKey ?? '', action: 'previousLevel');
     if (rev == null) return; // replayed action — already applied
     final prev = _currentGame!.currentLevel - 1;
     if (prev < 1) return;
@@ -3035,9 +3072,10 @@ class AppProvider extends ChangeNotifier {
       timerRunning: true,
       status: LiveGameStatus.running,
       speedRecommendation: null,
+      clearSpeedRecommendation: true,
       levelEndTime: _serverNow.add(Duration(minutes: level.durationMins)),
       revision: rev,
-      lastIdempotencyKey: idempotencyKey ?? '',
+      lastIdempotencyKey: idemKey,
     );
     addAnnouncement(
       'Level $prev. Blinds ${level.sb} and ${level.bb}'
@@ -3059,7 +3097,8 @@ class AppProvider extends ChangeNotifier {
         game.status != LiveGameStatus.rebuypause) {
       return;
     }
-    final rev = _claimIdempotency(idempotencyKey ?? '');
+    final (rev, idemKey) =
+        _claimIdempotency(idempotencyKey ?? '', action: 'restartLevel');
     if (rev == null) return; // replayed action — already applied
     _pushUndo();
     _levelAnnouncementMarks.clear();
@@ -3070,9 +3109,10 @@ class AppProvider extends ChangeNotifier {
       timerRunning: true,
       status: LiveGameStatus.running,
       speedRecommendation: null,
+      clearSpeedRecommendation: true,
       levelEndTime: _serverNow.add(Duration(minutes: durationMins)),
       revision: rev,
-      lastIdempotencyKey: idempotencyKey ?? '',
+      lastIdempotencyKey: idemKey,
     );
     _syncGroupGame();
     addAuditRecord(
@@ -3085,9 +3125,9 @@ class AppProvider extends ChangeNotifier {
 
   // ── Player management ──────────────────────────────────────────────────────
   void eliminatePlayer(String playerId, {String? koRecipientId, String? idempotencyKey}) {
-    final rev = _claimIdempotency(idempotencyKey ?? '');
+    final (rev, key) =
+        _claimIdempotency(idempotencyKey ?? '', action: 'eliminatePlayer', target: playerId);
     if (rev == null) return; // replayed action — already applied
-    final key = idempotencyKey ?? '';
     _pushUndo();
     final active = _currentGame!.players
         .where((p) => p.active && !p.eliminated)
@@ -3197,7 +3237,7 @@ class AppProvider extends ChangeNotifier {
       if (p.id == playerId) {
         return p.copyWith(
           eliminated: false,
-          eliminationPos: null,
+          clearEliminationPos: true,
           active: true,
         );
       }
@@ -3222,7 +3262,8 @@ class AppProvider extends ChangeNotifier {
   void grantRebuy(String playerId, {String? idempotencyKey}) {
     final game = _currentGame;
     if (game == null || !canGrantRebuys) return;
-    final rev = _claimIdempotency(idempotencyKey ?? '');
+    final (rev, idemKey) =
+        _claimIdempotency(idempotencyKey ?? '', action: 'grantRebuy', target: playerId);
     if (rev == null) return; // replayed action — already applied
     if (!game.settings.rebuys || game.rebuysClosed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
@@ -3243,7 +3284,7 @@ class AppProvider extends ChangeNotifier {
       totalChipsInPlay: game.totalChipsInPlay + rebuyStack,
       rebuyRequests: game.rebuyRequests.where((id) => id != playerId).toList(),
       revision: rev,
-      lastIdempotencyKey: idempotencyKey ?? '',
+      lastIdempotencyKey: idemKey,
     );
     // Recalculate prize pool/prizes after money enters the game.
     // This updates only prizePool, organizerAmount and prizes on the structure,
@@ -3289,7 +3330,8 @@ class AppProvider extends ChangeNotifier {
   void grantReEntry(String playerId, {String? idempotencyKey}) {
     final game = _currentGame;
     if (game == null || !canGrantRebuys) return;
-    final rev = _claimIdempotency(idempotencyKey ?? '');
+    final (rev, idemKey) =
+        _claimIdempotency(idempotencyKey ?? '', action: 'grantReEntry', target: playerId);
     if (rev == null) return; // replayed action — already applied
     if (!game.settings.reEntry || game.rebuysClosed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
@@ -3311,7 +3353,7 @@ class AppProvider extends ChangeNotifier {
           .toList(),
       totalChipsInPlay: game.totalChipsInPlay + entryStack,
       revision: rev,
-      lastIdempotencyKey: idempotencyKey ?? '',
+      lastIdempotencyKey: idemKey,
     );
     _updatePrizePool();
   }
@@ -3319,7 +3361,8 @@ class AppProvider extends ChangeNotifier {
   void grantAddOn(String playerId, {String? idempotencyKey}) {
     final game = _currentGame;
     if (game == null || !canGrantRebuys) return;
-    final rev = _claimIdempotency(idempotencyKey ?? '');
+    final (rev, idemKey) =
+        _claimIdempotency(idempotencyKey ?? '', action: 'grantAddOn', target: playerId);
     if (rev == null) return; // replayed action — already applied
     if (!game.settings.addOn || game.settlementConfirmed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
@@ -3339,7 +3382,7 @@ class AppProvider extends ChangeNotifier {
       totalChipsInPlay: game.totalChipsInPlay + addOnStack,
       addOnRequests: game.addOnRequests.where((id) => id != playerId).toList(),
       revision: rev,
-      lastIdempotencyKey: idempotencyKey ?? '',
+      lastIdempotencyKey: idemKey,
     );
     // Recalculate prize pool/prizes after money enters the game.
     _updatePrizePool();
@@ -3721,7 +3764,7 @@ class AppProvider extends ChangeNotifier {
                 .map(
                   (s) => s.inviterId == inviterId && s.slot == guestSlot
                       ? s.copyWith(
-                          guestName: null,
+                          clearGuestName: true,
                           status: GuestSlotStatus.unclaimed,
                         )
                       : s,
@@ -4494,6 +4537,7 @@ class AppProvider extends ChangeNotifier {
         .toList();
     _currentGame = game.copyWith(
       speedRecommendation: null,
+      clearSpeedRecommendation: true,
       structure: structure.copyWith(levels: levels, levelDuration: clamped),
     );
     addAnnouncement(
@@ -4678,6 +4722,7 @@ class AppProvider extends ChangeNotifier {
       currentLevel: newLevel,
       secondsRemaining: structure.levels[newLevel - 1].durationMins * 60,
       speedRecommendation: null,
+      clearSpeedRecommendation: true,
     );
     addAnnouncement(
       'Structure recalculated for $count confirmed player${count != 1 ? 's' : ''}.',
@@ -4689,9 +4734,25 @@ class AppProvider extends ChangeNotifier {
 
   /// Applies admin edits to future levels (the structure editor modal).
   /// The active and already-finished levels are left untouched.
+  /// Shared validation for blind-level durations (allowed: 10/15/20 min).
+  /// Returns null when valid, otherwise the rejection message.
+  String? _validateLevelDuration(int durationMins) {
+    if (durationMins != 10 && durationMins != 15 && durationMins != 20) {
+      return 'Level duration must be 10, 15 or 20 minutes.';
+    }
+    return null;
+  }
+
   void applyLevelEdits(List<LevelEdit> edits) {
     final game = _currentGame;
     if (game == null || edits.isEmpty) return;
+    for (final e in edits) {
+      if (_validateLevelDuration(e.durationMins) != null ||
+          e.sb <= 0 ||
+          e.bb <= e.sb) {
+        return;
+      }
+    }
     _pushUndo();
     final byLevel = {for (final e in edits) e.level: e};
     final levels = game.structure.levels.map((l) {
@@ -4718,6 +4779,13 @@ class AppProvider extends ChangeNotifier {
   void applyFutureLevels(List<BlindLevel> futureLevels) {
     final game = _currentGame;
     if (game == null || futureLevels.isEmpty) return;
+    for (final l in futureLevels) {
+      if (_validateLevelDuration(l.durationMins) != null ||
+          l.sb <= 0 ||
+          l.bb <= l.sb) {
+        return;
+      }
+    }
     _pushUndo();
     final startIdx = game.currentLevel - 1;
     final prefix = startIdx > 0
@@ -4772,9 +4840,8 @@ class AppProvider extends ChangeNotifier {
     if (afterLevel < game.currentLevel) {
       return 'Completed and active levels cannot be changed.';
     }
-    if (durationMins != 10 && durationMins != 15 && durationMins != 20) {
-      return 'Level duration must be 10, 15 or 20 minutes.';
-    }
+    final durationProblem = _validateLevelDuration(durationMins);
+    if (durationProblem != null) return durationProblem;
     if (sb <= 0 || bb <= sb) {
       return 'Blinds must increase — small blind first, then big blind.';
     }
@@ -6080,6 +6147,20 @@ class AppProvider extends ChangeNotifier {
   /// and fans it out to group members as a REAL push via OneSignal — all from
   /// this device, with no Cloud Function (free plan).
   void pushNotification(AppNotification notification) {
+    // Collision-safe ids: several call sites build ids from
+    // `DateTime.now().millisecondsSinceEpoch` alone, which can collide when
+    // notifications are created rapidly (e.g. in a loop). De-duplicate here
+    // so the inbox list never holds two identical ids.
+    var id = notification.id;
+    final existingIds = _notifications.map((n) => n.id).toSet();
+    if (existingIds.contains(id)) {
+      var n = 2;
+      while (existingIds.contains('$id-$n')) {
+        n++;
+      }
+      id = '$id-$n';
+      notification = notification.copyWith(id: id);
+    }
     _notifications = [notification, ..._notifications];
     // This device originated the event — never re-banner it on itself when
     // the mirrored inbox copy arrives.

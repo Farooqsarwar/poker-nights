@@ -453,6 +453,7 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'revision': game.revision,
     'lastIdempotencyKey': game.lastIdempotencyKey,
     'editorDeviceId': game.editorDeviceId,
+    'editorClaimedAt': _nullOrIso(game.editorClaimedAt),
   };
 }
 
@@ -512,6 +513,7 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       revision: (map['revision'] as num?)?.toInt() ?? 0,
       lastIdempotencyKey: map['lastIdempotencyKey'] as String?,
       editorDeviceId: (map['editorDeviceId'] as String?) ?? '',
+      editorClaimedAt: _isoOrNull(map['editorClaimedAt']),
     );
 
 /// Firestore representation: list-like collections that benefit from targeted

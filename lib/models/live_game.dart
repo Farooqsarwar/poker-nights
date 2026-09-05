@@ -262,6 +262,7 @@ class LiveGame {
     this.changeLog = const [],
     this.revision = 0,
     this.lastIdempotencyKey,
+    this.editorDeviceId = '',
   });
 
   final String id;
@@ -291,6 +292,12 @@ class LiveGame {
   /// True once the admin has confirmed the generated physical seating before
   /// play starts (checklist 13-013). Seating changes clear it again.
   final bool seatingConfirmed;
+
+  /// The single device that may write this whole game document while it is
+  /// live. The first admin device to open the game claims the role and
+  /// persists it; other admin devices become read-only for game edits so two
+  /// sessions can no longer clobber each other (last-write-wins save war).
+  final String editorDeviceId;
 
   /// True once the admin closes door check-in. Further walk-ins are not added
   /// (spec §4.7).
@@ -466,6 +473,7 @@ class LiveGame {
     List<String>? changeLog,
     int? revision,
     String? lastIdempotencyKey,
+    String? editorDeviceId,
   }) {
     return LiveGame(
       id: id ?? this.id,
@@ -500,6 +508,7 @@ class LiveGame {
       changeLog: changeLog ?? this.changeLog,
       revision: revision ?? this.revision,
       lastIdempotencyKey: lastIdempotencyKey ?? this.lastIdempotencyKey,
+      editorDeviceId: editorDeviceId ?? this.editorDeviceId,
     );
   }
 }

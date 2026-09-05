@@ -375,6 +375,7 @@ class AppProvider extends ChangeNotifier {
   /// awaited before further remote adoptions.
   void _syncGameToCloud() {
     if (!_backendUp) return;
+    _claimEditorIfNeeded();
     final game = _currentGame;
     final gid = game != null && game.groupId.isNotEmpty
         ? game.groupId
@@ -408,7 +409,7 @@ class AppProvider extends ChangeNotifier {
           // Guests have no read access to the game doc — they follow the
           // sanitized publicGames projection.
           _gameDocSub = _repo.publicGameStream(game.id).listen((doc) {
-            final payload = doc['player'] as Map<String, dynamic>?;
+            final payload = doc['guest'] as Map<String, dynamic>?;
             if (payload == null) return;
             _adoptRemoteMap(payload);
           }, onError: (Object e) => debugPrint('publicGameStream error: $e'));
@@ -442,7 +443,7 @@ class AppProvider extends ChangeNotifier {
     if (identical(_lastSavedGame, game)) return;
     _gameSaveDebounce?.cancel();
     final effectiveGid = game.groupId.isNotEmpty ? game.groupId : gid;
-    _gameSaveDebounce = Timer(const Duration(milliseconds: 400), () {
+    _gameSaveDebounce = Timer(const Duration(milliseconds: 1000), () {
       final g = _currentGame;
       if (g == null || _user == null) return;
       _pendingLatestSave = g;
@@ -490,8 +491,11 @@ class AppProvider extends ChangeNotifier {
 
   LiveGame? _lastSavedGame;
 
-  /// True when the signed-in user may write the whole game document (group
-  /// owner or admin member). Guests and plain members never qualify.
+  /// True only for the single "active editor" admin device — the one that may
+  /// write the whole game document. Guests and plain members never qualify.
+  /// The editor role lives in [LiveGame.editorDeviceId]: the first admin
+  /// device to open a live game claims it, which prevents two admin sessions
+  /// from racing whole-document writes (the seating-confirm revert bug).
   bool get isAdmin {
     final user = _user;
     if (user == null) return false;
@@ -521,7 +525,26 @@ class AppProvider extends ChangeNotifier {
       ? GroupRole.admin
       : (member.isCoAdmin ? GroupRole.coAdmin : GroupRole.member);
 
-  bool get _isGameAuthority => isAdmin;
+  bool get _isGameAuthority =>
+      isAdmin &&
+      _currentGame != null &&
+      (_currentGame!.editorDeviceId.isNotEmpty &&
+          _currentGame!.editorDeviceId == _repo.deviceId);
+
+  /// Single-active-editor claim (multi-device save fix). The first admin
+  /// device to touch a live game becomes the whole-document writer and
+  /// persists its device id; every other admin device stops writing the whole
+  /// doc so a stale session can't clobber a fresh state (e.g. a confirmed
+  /// seating plan). Never steals from an active editor.
+  void _claimEditorIfNeeded() {
+    final game = _currentGame;
+    if (game == null || _user == null || !isAdmin || !_backendUp) return;
+    final editor = game.editorDeviceId;
+    if (editor.isNotEmpty && editor != _repo.deviceId) return;
+    if (editor == _repo.deviceId) return;
+    _currentGame = game.copyWith(editorDeviceId: _repo.deviceId);
+    _syncGroupGame();
+  }
 
   /// Resolves `(gid, gameId)` for cloud operations on the active game, or
   /// null when there is nothing to target yet.
@@ -558,6 +581,7 @@ class AppProvider extends ChangeNotifier {
       await _repo.upsertGameCodes(game);
     } catch (e) {
       debugPrint('publishProjections failed: $e');
+      rethrow;
     }
   }
 
@@ -698,7 +722,7 @@ class AppProvider extends ChangeNotifier {
     } else if (data['writerId'] == _repo.deviceId) {
       return;
     }
-    if (_pendingGameSave) return;
+    if (_pendingGameSave || _restoredFromRecovery) return;
     try {
       var remote = liveGameFromFirestoreDoc(Map<String, dynamic>.from(data));
       if (_currentGame?.id != remote.id) return;
@@ -1105,16 +1129,20 @@ class AppProvider extends ChangeNotifier {
       // F-001 Fix: Keep the currently viewed game screen in sync for members
       // (and admins receiving RSVPs/Check-ins) without clobbering the admin's local timer.
       if (_currentGame != null) {
-        final updatedGame = hydrated.games.where((x) => x.id == _currentGame!.id).firstOrNull;
-        if (updatedGame != null) {
-          if (isAdmin) {
-            _currentGame = updatedGame.copyWith(
-              secondsRemaining: _currentGame!.secondsRemaining,
-              timerRunning: _currentGame!.timerRunning,
-              levelEndTime: _currentGame!.levelEndTime,
-            );
-          } else {
-            _currentGame = updatedGame;
+        if (isAdmin && (_pendingGameSave || _restoredFromRecovery)) {
+          // Do not overwrite local edits with stale bundle data during debounce or recovery.
+        } else {
+          final updatedGame = hydrated.games.where((x) => x.id == _currentGame!.id).firstOrNull;
+          if (updatedGame != null) {
+            if (isAdmin) {
+              _currentGame = updatedGame.copyWith(
+                secondsRemaining: _currentGame!.secondsRemaining,
+                timerRunning: _currentGame!.timerRunning,
+                levelEndTime: _currentGame!.levelEndTime,
+              );
+            } else {
+              _currentGame = updatedGame;
+            }
           }
         }
       }
@@ -1296,11 +1324,8 @@ class AppProvider extends ChangeNotifier {
         .where((g) => g.id == _currentGame!.id)
         .firstOrNull;
     if (cloudGame == null) return false;
-    return _currentGame!.auditHistory.length != cloudGame.auditHistory.length ||
-        _currentGame!.currentLevel != cloudGame.currentLevel ||
-        _currentGame!.secondsRemaining != cloudGame.secondsRemaining ||
-        _currentGame!.status != cloudGame.status ||
-        _currentGame!.finishOrder.length != cloudGame.finishOrder.length;
+    return _currentGame!.revision > cloudGame.revision ||
+        _currentGame!.auditHistory.length > cloudGame.auditHistory.length;
   }
 
   void resolveOfflineConflict({required bool keepLocal}) {
@@ -1313,6 +1338,8 @@ class AppProvider extends ChangeNotifier {
           games[idx] = _currentGame!;
           _setGroup(_currentGroup.copyWith(games: games));
         }
+        _lastSavedGame = null;
+        _syncGameToCloud();
       } else {
         // Revert local down to cloud
         final cloudGame = _currentGroup.games
@@ -2608,9 +2635,7 @@ class AppProvider extends ChangeNotifier {
         s.effectiveRebuyCost * rebuys +
         s.buyIn * reEntries +
         s.effectiveAddOnCost * addOns;
-    int roundingUnit = 10;
-    if (s.buyIn < 10) roundingUnit = 1;
-    else if (s.buyIn % 5 == 0) roundingUnit = 5;
+    final int roundingUnit = TournamentEngine.roundingUnitFor(s.buyIn);
 
     return TournamentEngine.recalculatePrizes(
       gross,
@@ -4050,6 +4075,14 @@ class AppProvider extends ChangeNotifier {
   void confirmSeating() {
     final game = _currentGame;
     if (game == null) return;
+    if (isAdmin && !_isGameAuthority) {
+      // Another admin device owns the edit role — don't silently no-op.
+      addAnnouncement(
+        'Another device is editing this game. Changes here are not saved.',
+        false,
+      );
+      return;
+    }
     _currentGame = game.copyWith(seatingConfirmed: true);
     addAnnouncement('Seating confirmed. Shuffle up and deal!', true);
     // Notify each seated participant of their table and seat (Tech §14.3).
@@ -4364,9 +4397,7 @@ class AppProvider extends ChangeNotifier {
 
     // Delegate the organizer-cut and prize-split maths to the shared helper in
     // TournamentEngine so the rules stay consistent everywhere.
-    int roundingUnit = 10;
-    if (s.buyIn < 10) roundingUnit = 1;
-    else if (s.buyIn % 5 == 0) roundingUnit = 5;
+    final int roundingUnit = TournamentEngine.roundingUnitFor(s.buyIn);
 
     final recalculated = TournamentEngine.recalculatePrizes(
       grossEligible,
@@ -5291,11 +5322,17 @@ class AppProvider extends ChangeNotifier {
               : selected.isNotEmpty
               ? [selected.first]
               : <String>[];
+          final newVotes = Map<String, List<String>>.from(p.votes);
+          if (kept.isEmpty) {
+            newVotes.remove(userId);
+          } else {
+            newVotes[userId] = kept;
+          }
           updated = Poll(
             id: p.id,
             question: p.question,
             options: p.options,
-            votes: {...p.votes, userId: kept},
+            votes: newVotes,
             closed: p.closed,
             createdAt: p.createdAt,
             multi: p.multi,
@@ -5942,7 +5979,7 @@ class AppProvider extends ChangeNotifier {
       players: session.players
           .map(
             (p) =>
-                p.id == playerId ? p.copyWith(cashedOut: amount, stack: 0) : p,
+                p.id == playerId ? p.copyWith(cashedOut: amount, stack: 0, hasCashedOut: true) : p,
           )
           .toList(),
     );
@@ -5958,6 +5995,7 @@ class AppProvider extends ChangeNotifier {
     double? totalBuyIns,
     int? buyInCount,
     double? cashedOut,
+    bool? hasCashedOut,
   }) {
     final session = _cashSession;
     if (session == null) return;
@@ -5972,6 +6010,7 @@ class AppProvider extends ChangeNotifier {
                     totalBuyIns: totalBuyIns ?? p.totalBuyIns,
                     buyInCount: buyInCount ?? p.buyInCount,
                     cashedOut: cashedOut ?? p.cashedOut,
+                    hasCashedOut: hasCashedOut ?? p.hasCashedOut,
                   )
                 : p,
           )

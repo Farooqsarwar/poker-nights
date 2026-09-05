@@ -116,9 +116,14 @@ class _GroupScreenState extends State<GroupScreen> {
     setState(() {
       _pollError = null;
       _pollQuestion.clear();
-      for (final c in _pollOptions) {
-        c.clear();
+      for (var i = 0; i < _pollOptions.length; i++) {
+        if (i >= 2) {
+          _pollOptions[i].dispose();
+        } else {
+          _pollOptions[i].clear();
+        }
       }
+      _pollOptions.removeRange(2, _pollOptions.length);
       _pollMulti = false;
       _showPollModal = false;
     });
@@ -742,8 +747,8 @@ class _GroupScreenState extends State<GroupScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Default for every tournament this group runs. A host can '
-              'still override it for a specific tournament.',
+              'Default for every tournament this group runs. An admin can '
+              'still override these during game creation.',
               style: AppTypography.bodyXs.copyWith(
                 color: AppColors.mutedForeground,
               ),
@@ -827,7 +832,7 @@ class _GroupScreenState extends State<GroupScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Add a registered user directly by their account email — no '
+              'Add a Registered Group Member directly by their account email — no '
               'invite link, QR, or join code needed.',
               style: AppTypography.bodyXs.copyWith(
                 color: AppColors.mutedForeground,
@@ -902,8 +907,8 @@ class _GroupScreenState extends State<GroupScreen> {
                             message: msg,
                             isMine: msg.authorId == userId,
                             // Audit fix E12: the admin can delete any inappropriate
-                            // message — including their own (Tech §14.1).
-                            canDelete: (app.isAdmin),
+                            // message, and authors can delete their own (Tech §14.1).
+                            canDelete: (app.isAdmin || msg.authorId == userId),
                             onDelete: () => app.deleteMessage(msg.id),
                             app: app,
                             userId: userId,
@@ -1429,6 +1434,30 @@ class _PollCardState extends State<_PollCard> {
   final Set<String> _multiSelection = {};
 
   @override
+  void didUpdateWidget(_PollCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldMine = oldWidget.userId != null
+        ? oldWidget.poll.votes[oldWidget.userId!]
+        : null;
+    final newMine = widget.userId != null
+        ? widget.poll.votes[widget.userId!]
+        : null;
+    bool changed = false;
+    if (oldMine == null && newMine != null) changed = true;
+    else if (oldMine != null && newMine == null) changed = true;
+    else if (oldMine != null && newMine != null && oldMine.length != newMine.length) changed = true;
+    else if (oldMine != null && newMine != null) {
+      for (var i = 0; i < oldMine.length; i++) {
+        if (oldMine[i] != newMine[i]) changed = true;
+      }
+    }
+    if (widget.poll.multi && changed) {
+      _multiSelection.clear();
+      if (newMine != null) _multiSelection.addAll(newMine);
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
     final mine = widget.userId != null
@@ -1500,7 +1529,7 @@ class _PollCardState extends State<_PollCard> {
                     : () => widget.onVote([opt]),
               ),
             ),
-          if (isMulti && !poll.closed && _multiSelection.isNotEmpty) ...[
+          if (isMulti && !poll.closed) ...[
             Align(
               alignment: Alignment.centerLeft,
               child: AppButton(

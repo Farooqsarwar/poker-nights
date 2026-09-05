@@ -159,12 +159,23 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 return const SizedBox.shrink();
               },
             ),
+            if (game.status == LiveGameStatus.paused)
+              const AppAlertBanner(
+                type: AppAlertType.warning,
+                message: 'Tournament is paused. Wait for the admin to resume.',
+              ),
             // Header
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 AppBackButton(
-                  onTap: () => context.go(RoutePaths.invitation),
+                  onTap: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(RoutePaths.home);
+                    }
+                  },
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -185,7 +196,13 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: AppColors.success,
+                              color: game.status == LiveGameStatus.paused || game.status == LiveGameStatus.rebuypause
+                                  ? AppColors.warning
+                                  : game.status == LiveGameStatus.cancelled
+                                      ? AppColors.destructive
+                                      : game.status == LiveGameStatus.completed
+                                          ? AppColors.mutedForeground
+                                          : AppColors.success,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -261,6 +278,35 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
+              if (game.status == LiveGameStatus.completed) ...[
+                AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.emoji_events,
+                        size: 48,
+                        color: AppColors.icon,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'Tournament Complete!',
+                        style: AppTypography.display(
+                          size: AppFontSizes.xl,
+                          weight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      AppButton(
+                        fullWidth: true,
+                        onPressed: () => context.go(RoutePaths.resultPodium),
+                        child: const Text('View Final Results'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
               // Next level
               if (next != null)
                 AppCard(
@@ -349,11 +395,26 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          Text(
-                            'Table ${myPlayer.table} · Seat ${myPlayer.seat}',
-                            style: AppTypography.monoXl.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                myPlayer.eliminated && myPlayer.eliminationPos != null
+                                    ? _ordinalPlace(myPlayer.eliminationPos!)
+                                    : 'Table ${myPlayer.table} · Seat ${myPlayer.seat}',
+                                style: AppTypography.monoXl.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if ((myPlayer.knockouts ?? 0) > 0)
+                                Text(
+                                  '${myPlayer.knockouts} knockout${myPlayer.knockouts! > 1 ? 's' : ''}',
+                                  style: AppTypography.bodySm.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                            ],
                           ),
                           const Spacer(),
                           Column(
@@ -373,6 +434,16 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                   padding: const EdgeInsets.only(top: 4),
                                   child: Text(
                                     '${myPlayer.rebuys} rebuy${myPlayer.rebuys > 1 ? 's' : ''}',
+                                    style: AppTypography.bodyXs.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                              if (myPlayer.hasAddOn)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    'Add-on taken',
                                     style: AppTypography.bodyXs.copyWith(
                                       color: AppColors.mutedForeground,
                                     ),
@@ -503,7 +574,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       itemCount: activePlayers.length,
                       itemBuilder: (context, i) {
                         final p = activePlayers[i];
-                        final isMe = p.id == app.user?.id;
+                        final isMe = p.id == myPlayer?.id;
                         return Container(
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
@@ -592,7 +663,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 const AppAlertBanner(
                   type: AppAlertType.info,
                   message:
-                      'Rebuy period has ended. Add-ons are available. Wait for the host to start the next level.',
+                      'Rebuy period has ended. Add-ons are available. Wait for the admin to start the next level.',
                 ),
               ],
               // Guest account prompt
@@ -766,17 +837,6 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
               ),
             ],
             if (_tab == 'payouts') ...[
-              if (!isAdmin)
-                const AppAlertBanner(
-                  type: AppAlertType.warning,
-                  message:
-                      'Payout amounts are private — only organisers can see them.',
-                )
-              else
-                const AppAlertBanner(
-                  type: AppAlertType.info,
-                  message: 'Admin view — payout amounts are shown.',
-                ),
               const SizedBox(height: AppSpacing.md),
               AppCard(
                 padding: const EdgeInsets.all(AppSpacing.lg),

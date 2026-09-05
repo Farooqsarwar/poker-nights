@@ -47,6 +47,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   final _editTotal = TextEditingController();
   final _editBuyInCount = TextEditingController();
   final _editCashedOut = TextEditingController();
+  bool _editHasCashedOut = false;
 
   @override
   void dispose() {
@@ -66,6 +67,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
       _editTotal.text = _num(p.totalBuyIns);
       _editBuyInCount.text = '${p.buyInCount}';
       _editCashedOut.text = _num(p.cashedOut);
+      _editHasCashedOut = p.hasCashedOut;
       _forceEnd = false;
     });
   }
@@ -86,6 +88,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
       totalBuyIns: total,
       buyInCount: count,
       cashedOut: cashedOut,
+      hasCashedOut: _editHasCashedOut,
     );
     setState(() => _editPlayerId = null);
   }
@@ -99,21 +102,36 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
 
   void _confirmAction(AppProvider app) {
     final amt = num.tryParse(_amount.text)?.toDouble();
-    if (amt == null || amt <= 0) return;
+    if (amt == null || amt < 0) return;
     final action = _action;
     if (action == null) return;
 
+    if (action.type == _CashActionType.buyIn && amt <= 0) return;
+
+    String? error;
     if (action.type == _CashActionType.buyIn) {
       final pid = action.playerId;
       if (pid != null) {
-        app.cashBuyIn(pid, amt);
+        error = app.cashBuyIn(pid, amt);
       } else if (_newPlayerName.text.trim().isNotEmpty) {
-        app.cashBuyIn(_newPlayerName.text.trim(), amt, isNew: true);
-        _newPlayerName.clear();
+        error = app.cashBuyIn(_newPlayerName.text.trim(), amt, isNew: true);
+        if (error == null) _newPlayerName.clear();
       }
     } else if (action.type == _CashActionType.cashOut &&
         action.playerId != null) {
       app.cashCashOut(action.playerId!, amt);
+    }
+
+    if (error != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error),
+            backgroundColor: AppColors.destructive,
+          ),
+        );
+      }
+      return;
     }
 
     setState(() {
@@ -605,6 +623,26 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      InkWell(
+                        onTap: () => setState(
+                          () => _editHasCashedOut = !_editHasCashedOut,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _editHasCashedOut
+                                  ? Icons.check_box
+                                  : Icons.check_box_outline_blank,
+                              color: _editHasCashedOut
+                                  ? AppColors.primary
+                                  : AppColors.mutedForeground,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            const Text('Player has cashed out'),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       Row(

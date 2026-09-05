@@ -135,11 +135,32 @@ class _CheckInScreenState extends State<CheckInScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Register someone who showed up without an RSVP. They are checked in immediately and seated with the next seating generation.',
+                'Register someone who showed up without an RSVP or a guest slot. '
+                'This is an admin override \u2014 the normal guest invite flow is bypassed. '
+                'They are checked in immediately and seated with the next seating generation.',
                 style: AppTypography.bodySm.copyWith(
                   color: AppColors.mutedForeground,
                 ),
               ),
+              const SizedBox(height: AppSpacing.sm),
+              // Spec \u00A712.5: late registration is only allowed before the
+              // rebuy period closes. The provider enforces the hard gate;
+              // this banner makes the timing visible to the admin.
+              Builder(builder: (ctx) {
+                final app = ctx.read<AppProvider>();
+                if (!app.lateRegistrationOpen) {
+                  return const AppAlertBanner(
+                    type: AppAlertType.error,
+                    message:
+                        'Late registration is closed. No new players can be added after the rebuy period ends.',
+                  );
+                }
+                return const AppAlertBanner(
+                  type: AppAlertType.warning,
+                  message:
+                      'Admin override: this skips the normal guest slot flow.',
+                );
+              }),
               const SizedBox(height: AppSpacing.lg),
               AppTextField(
                 controller: controller,
@@ -160,7 +181,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: AppButton(
-                      onPressed: name.isEmpty
+                      onPressed: name.isEmpty || !app.lateRegistrationOpen
                           ? null
                           : () {
                               app.addWalkInPlayer(name);

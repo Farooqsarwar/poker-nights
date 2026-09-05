@@ -77,6 +77,16 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
     return dups;
   }
 
+  Set<String> get _duplicateColors {
+    final seen = <String>{};
+    final dups = <String>{};
+    for (final c in _chips) {
+      final colorStr = c.color.trim().toLowerCase();
+      if (colorStr.isNotEmpty && !seen.add(colorStr)) dups.add(c.color.trim());
+    }
+    return dups;
+  }
+
   bool get _hasEmptyChipSet =>
       _chips.isEmpty || _chips.every((c) => c.quantity <= 0);
 
@@ -131,9 +141,17 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
     final app = context.read<AppProvider>();
     setState(() {
       _nameError = name.isEmpty ? 'Enter a chip set name.' : null;
-      _dupError = _duplicateValues.isNotEmpty
-          ? 'Two colours cannot share the same value (${_duplicateValues.join(', ')}).'
-          : null;
+      if (_duplicateValues.isNotEmpty) {
+        _dupError =
+            'Two colours cannot share the same value (${_duplicateValues.join(', ')}).';
+      } else if (_duplicateColors.isNotEmpty) {
+        _dupError =
+            'Two chips cannot share the same colour name (${_duplicateColors.join(', ')}).';
+      } else if (_chips.any((c) => c.value <= 0)) {
+        _dupError = 'All chips must have a value greater than zero.';
+      } else {
+        _dupError = null;
+      }
     });
     if (_nameError != null || _dupError != null) return;
     if (_hasEmptyChipSet) {

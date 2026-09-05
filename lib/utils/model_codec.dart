@@ -452,6 +452,7 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'changeLog': List<String>.from(game.changeLog),
     'revision': game.revision,
     'lastIdempotencyKey': game.lastIdempotencyKey,
+    'editorDeviceId': game.editorDeviceId,
   };
 }
 
@@ -510,6 +511,7 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
           List<String>.from(map['changeLog'] as List? ?? const []),
       revision: (map['revision'] as num?)?.toInt() ?? 0,
       lastIdempotencyKey: map['lastIdempotencyKey'] as String?,
+      editorDeviceId: (map['editorDeviceId'] as String?) ?? '',
     );
 
 /// Firestore representation: list-like collections that benefit from targeted
@@ -595,6 +597,7 @@ Map<String, dynamic> cashPlayerToMap(CashPlayer p) => {
       'totalBuyIns': p.totalBuyIns,
       'buyInCount': p.buyInCount,
       'cashedOut': p.cashedOut,
+      'hasCashedOut': p.hasCashedOut,
     };
 
 CashPlayer cashPlayerFromMap(Map<String, dynamic> m) => CashPlayer(
@@ -604,6 +607,9 @@ CashPlayer cashPlayerFromMap(Map<String, dynamic> m) => CashPlayer(
       totalBuyIns: (m['totalBuyIns'] as num?)?.toDouble() ?? 0,
       buyInCount: (m['buyInCount'] as num?)?.toInt() ?? 1,
       cashedOut: (m['cashedOut'] as num?)?.toDouble() ?? 0,
+      hasCashedOut: m.containsKey('hasCashedOut') 
+          ? m['hasCashedOut'] as bool
+          : ((m['cashedOut'] as num?)?.toDouble() ?? 0) > 0,
     );
 
 Map<String, dynamic> cashSessionToMap(CashSession session) => {

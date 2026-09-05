@@ -64,8 +64,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             : l.durationMins;
       }
     }
-    final finish = DateTime.now().add(Duration(minutes: (mins * 1.05).round()));
-    return '${finish.hour.toString().padLeft(2, '0')}:${finish.minute.toString().padLeft(2, '0')}';
+    String hhmm(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    
+    final early = DateTime.now().add(Duration(minutes: (mins * 1.05).round()));
+    final late = DateTime.now().add(Duration(minutes: (mins * 1.15).round()));
+    return '${hhmm(early)} – ${hhmm(late)}';
   }
 
   /// What a speed up/slow down would do to the level duration (the provider
@@ -99,7 +102,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     // Auth guarding is handled securely by GoRouter's redirect logic.
 
     // Final Table Auto-Trigger (Audit fix)
-    final isNinePlayers = game != null && game.activePlayers.length == 9;
+    // Spec §4.16 / Tech §12.3: the redraw only applies when the game started
+    // with multiple tables. Single-table games must NOT trigger the redraw.
+    final hadMultipleTables = game != null && game.players.any((p) => p.table > 1);
+    final isNinePlayers = game != null && hadMultipleTables && game.activePlayers.length == 9;
     if (isNinePlayers && game.status == LiveGameStatus.running && !_showStructureModal && !_showRestartModal && !_showCancelModal && !_showUndoModal && !_showedFinalTablePrompt) {
       _showedFinalTablePrompt = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -271,7 +277,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: AppIconLabel(
-                          label: 'Voice',
+                          label: app.voiceEnabled ? 'Audio Master' : 'Voice off',
                           icon: app.voiceEnabled
                               ? Icons.volume_up_outlined
                               : Icons.volume_off_outlined,
@@ -344,7 +350,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       variant: AppButtonVariant.ghost,
                       onPressed: app.toggleVoice,
                       child: AppIconLabel(
-                        label: 'Voice',
+                        label: app.voiceEnabled ? 'Audio Master' : 'Voice off',
                         icon: app.voiceEnabled
                             ? Icons.volume_up_outlined
                             : Icons.volume_off_outlined,
@@ -677,7 +683,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.lg,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => context.go(RoutePaths.checkIn),
+                          onPressed: () => setState(() => _tab = 'seating'),
                           child: const AppIconLabel(
                             label: 'Seats',
                             icon: Icons.people_outline,
@@ -1013,7 +1019,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.md,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => context.go(RoutePaths.checkIn),
+                          onPressed: () => setState(() => _tab = 'seating'),
                           child: const FittedBox(
                             fit: BoxFit.scaleDown,
                             child: AppIconLabel(
@@ -1120,9 +1126,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             if (_tab == 'audit') _AuditTab(auditHistory: game.auditHistory),
           ],
           const SizedBox(height: AppSpacing.xxl),
-          // Final table trigger for small tournaments (≤9 start, never auto-transition)
+          // Final table trigger — only for multi-table games (spec §4.16 /
+          // Tech §12.3). Single-table tournaments never need a redraw.
           // Host/Admin only — Co-Admin's scope stops at membership + rebuys.
           if (isAdmin &&
+              hadMultipleTables &&
               (status == LiveGameStatus.running ||
                   status == LiveGameStatus.paused))
             Padding(
@@ -1396,6 +1404,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final newDur = _previewedDuration(game, rec);
     final isUp = rec == SpeedRecommendation.speedUp;
     
+    final futureLevels = game.structure.levels.where((l) => l.level > game.currentLevel).length;
+    final hasAnte = game.structure.levels.any((l) => l.level > game.currentLevel && l.ante != null);
+    
     showAppModal(
       context: context,
       title: isUp ? 'Preview: speed up' : 'Preview: slow down',
@@ -1403,11 +1414,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const AppAlertBanner(
+          AppAlertBanner(
             type: AppAlertType.info,
             message:
-                'Future levels change only — the active level and all '
-                'completed levels stay exactly as they are.',
+                'Future levels change only ($futureLevels levels). The active level and all '
+                'completed levels stay exactly as they are.'
+                '${hasAnte ? ' Ante durations will also adjust.' : ''}',
           ),
           const SizedBox(height: AppSpacing.lg),
           Row(
@@ -1709,6 +1721,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (game == null) return;
     final koEnabled = game.settings.koEnabled;
     final options = game.activePlayers.where((p) => p.id != player.id).toList();
+    // Spec §4.12: before the rebuy deadline, ask "Leave Tournament or Rebuy?"
+    final canRebuyNow = game.settings.rebuys &&
+        game.currentLevel <= game.settings.rebuysCloseLevel;
 
     showAppModal(
       context: context,
@@ -1717,6 +1732,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         playerName: player.name,
         koEnabled: koEnabled,
         options: options,
+        canRebuy: canRebuyNow,
         onConfirm: (koRecipientId) {
           app.eliminatePlayer(
             player.id,
@@ -1726,6 +1742,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           );
           Navigator.of(context).pop();
         },
+        onEliminateAndRebuy: canRebuyNow
+            ? (koRecipientId) {
+                app.eliminatePlayer(
+                  player.id,
+                  koRecipientId: koRecipientId,
+                  idempotencyKey:
+                      'elim-${DateTime.now().microsecondsSinceEpoch}',
+                );
+                // Immediately grant rebuy after elimination
+                Future.microtask(() => app.grantRebuy(
+                      player.id,
+                      idempotencyKey:
+                          'rebuy-${DateTime.now().microsecondsSinceEpoch}',
+                    ));
+                Navigator.of(context).pop();
+              }
+            : null,
       ),
     );
   }
@@ -2071,29 +2104,65 @@ class _SeatingTab extends StatelessWidget {
         if (isAdmin && rec != null)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: AppAlertBanner(
-              type: AppAlertType.info,
-              message:
-                  'Table balance recommendation:\nMove ${rec.fromPlayerName} from Table ${rec.fromTable} to Table ${rec.toTable}, Seat ${rec.toSeat}.',
-              actionLabel: 'Confirm',
-              onAction: app.confirmSeatMove,
-              // We simulate a dismiss button by using a row inside message if we wanted,
-              // but AppAlertBanner only supports one action. So let's wrap it.
-            ),
-          ),
-        if (isAdmin && rec != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                AppButton(
-                  variant: AppButtonVariant.ghost,
-                  size: AppButtonSize.sm,
-                  onPressed: app.dismissSeatMove,
-                  child: const Text('Dismiss Recommendation'),
-                ),
-              ],
+            child: AppCard(
+              borderColor: AppColors.primary.withValues(alpha: 0.4),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Spec \u00A74.15: show from/to details, then three actions:
+                  // Confirm Move, Choose Another Move, Move Manually.
+                  Text(
+                    'Table balance recommendation',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Move ${rec.fromPlayerName} from Table ${rec.fromTable}, Seat ${rec.fromSeat} '
+                    'to Table ${rec.toTable}, Seat ${rec.toSeat}.',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          onPressed: app.confirmSeatMove,
+                          child: const Text('Confirm Move'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          variant: AppButtonVariant.secondary,
+                          // Re-run balance evaluation for a fresh suggestion.
+                          onPressed: () {
+                            app.dismissSeatMove();
+                            app.requestSeatingBalance();
+                          },
+                          child: const Text('Another Move'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          variant: AppButtonVariant.ghost,
+                          onPressed: app.dismissSeatMove,
+                          child: const Text('Move Manually'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         for (final table in allTables)
@@ -2290,7 +2359,7 @@ class _PrizeTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Prices are calculated at the end of Level ${settings.rebuysCloseLevel}, '
+                  'Payouts are calculated at the end of Level ${settings.rebuysCloseLevel}, '
                   'when the exact number of players, actual rebuys and selected add-ons are known.',
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
@@ -2613,12 +2682,16 @@ class _EliminateContent extends StatefulWidget {
     required this.koEnabled,
     required this.options,
     required this.onConfirm,
+    this.canRebuy = false,
+    this.onEliminateAndRebuy,
   });
 
   final String playerName;
   final bool koEnabled;
   final List<Player> options;
   final void Function(String? koRecipientId) onConfirm;
+  final bool canRebuy;
+  final void Function(String? koRecipientId)? onEliminateAndRebuy;
 
   @override
   State<_EliminateContent> createState() => _EliminateContentState();
@@ -2675,6 +2748,15 @@ class _EliminateContentState extends State<_EliminateContent> {
             ),
           ],
         ),
+        if (widget.canRebuy) ...[
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.secondary,
+            onPressed: () => widget.onEliminateAndRebuy?.call(_koRecipient),
+            child: const Text('Eliminate + Rebuy'),
+          ),
+        ],
       ],
     );
   }

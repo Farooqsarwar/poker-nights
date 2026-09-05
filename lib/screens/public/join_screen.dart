@@ -188,7 +188,7 @@ class _JoinScreenState extends State<JoinScreen> {
                     const SizedBox(height: AppSpacing.xs),
                     Text(
                       'Enter an invite code, paste an invite link, or scan a QR '
-                      'code from your host.',
+                      'code from your admin.',
                       textAlign: TextAlign.center,
                       style: AppTypography.bodySm.copyWith(
                         color: AppColors.mutedForeground,

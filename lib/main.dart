@@ -1,7 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 // Cache buster: 2026-09-02T16:59:49
+
+// Local-development switches. Enable the Firestore + Auth emulators with:
+//   flutter run --dart-define=USE_EMULATOR=true
+// For testing from a second device on the same Wi-Fi, also point emulator
+// traffic at this machine's LAN IP:
+//   flutter run --dart-define=USE_EMULATOR=true --dart-define=EMULATOR_HOST=192.168.x.x
+// Everything is OFF by default so production builds are unaffected.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -23,6 +31,14 @@ import 'theme/theme_palette.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  const useEmulator = bool.fromEnvironment('USE_EMULATOR');
+  const emulatorHost = String.fromEnvironment(
+    'EMULATOR_HOST',
+    defaultValue: 'localhost',
+  );
+  const emulatorApiPort = int.fromEnvironment('EMULATOR_API_PORT', defaultValue: 8080);
+  const emulatorAuthPort = int.fromEnvironment('EMULATOR_AUTH_PORT', defaultValue: 9099);
 
   // Production error handling — show a friendly error overlay instead of a red screen.
   ErrorWidget.builder = (FlutterErrorDetails details) {
@@ -68,8 +84,23 @@ Future<void> main() async {
 
   // Use clean URLs (no #) so deep links like /join-group?code=X work directly.
   if (kIsWeb) usePathUrlStrategy();
+
+  // Local development against the Firebase emulators (zero production quota).
+  // Enabled only via --dart-define=USE_EMULATOR=true. The Firestore + Auth
+  // emulators accept requests without App Check, so nothing else is needed.
+  if (useEmulator) {
+    // ignore: avoid_print
+    print('[Emulator] Firestore + Auth -> $emulatorHost');
+    FirebaseFirestore.instance.useFirestoreEmulator(emulatorHost, emulatorApiPort);
+    await FirebaseAuth.instance.useAuthEmulator(emulatorHost, emulatorAuthPort);
+  }
   // -- Firebase App Check (tech spec section 22) --
-  await _initAppCheck();
+  if (useEmulator) {
+    // ignore: avoid_print
+    print('[AppCheck] Skipped -- local emulator mode.');
+  } else {
+    await _initAppCheck();
+  }
 
   // Initialize Google Sign-In singleton (must happen before signInWithGoogle).
   await FirebaseRepository.initGoogleSignIn();

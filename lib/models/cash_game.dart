@@ -7,6 +7,7 @@ class CashPlayer {
     required this.totalBuyIns,
     required this.buyInCount,
     required this.cashedOut,
+    this.hasCashedOut = false,
   });
 
   final String id;
@@ -15,8 +16,9 @@ class CashPlayer {
   final double totalBuyIns;
   final int buyInCount;
   final double cashedOut;
+  final bool hasCashedOut;
 
-  bool get isCashedOut => cashedOut > 0;
+  bool get isCashedOut => hasCashedOut;
 
   double get net => cashedOut - totalBuyIns;
 
@@ -27,6 +29,7 @@ class CashPlayer {
     double? totalBuyIns,
     int? buyInCount,
     double? cashedOut,
+    bool? hasCashedOut,
   }) {
     return CashPlayer(
       id: id ?? this.id,
@@ -35,6 +38,7 @@ class CashPlayer {
       totalBuyIns: totalBuyIns ?? this.totalBuyIns,
       buyInCount: buyInCount ?? this.buyInCount,
       cashedOut: cashedOut ?? this.cashedOut,
+      hasCashedOut: hasCashedOut ?? this.hasCashedOut,
     );
   }
 }

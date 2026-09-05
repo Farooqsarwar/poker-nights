@@ -566,10 +566,24 @@ class _EditPrizesModalState extends State<_EditPrizesModal> {
         AppButton(
           onPressed: () {
             final newPrizes = <Prize>[];
+            int totalNew = 0;
             for (var i = 0; i < widget.initialPrizes.length; i++) {
               final amt = int.tryParse(_controllers[i].text.replaceAll(',', '')) ?? 0;
+              totalNew += amt;
               newPrizes.add(Prize(place: widget.initialPrizes[i].place, amount: amt));
             }
+            
+            final totalOriginal = widget.initialPrizes.fold<int>(0, (sum, p) => sum + p.amount);
+            if (totalNew != totalOriginal) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Payouts sum to \$$totalNew, but the prize pool is \$$totalOriginal.'),
+                  backgroundColor: AppColors.destructive,
+                ),
+              );
+              return;
+            }
+            
             widget.onSave(newPrizes);
             Navigator.of(context).pop();
           },

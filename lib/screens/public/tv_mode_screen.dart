@@ -126,7 +126,7 @@ class _CodeEntry extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
-                          'Enter the TV code shown by the host',
+                          'Enter the TV code shown by the admin',
                           style: AppTypography.bodySm.copyWith(
                             color: AppColors.mutedForeground,
                           ),
@@ -497,8 +497,8 @@ class _RotatingPanelState extends State<_RotatingPanel> {
   @override
   void initState() {
     super.initState();
-    final hasAnnouncements = widget.game.announcements.isNotEmpty;
     _timer = Timer.periodic(const Duration(seconds: 8), (_) {
+      final hasAnnouncements = widget.game.announcements.isNotEmpty;
       final maxPanels = hasAnnouncements ? 4 : 3;
       setState(() => _panel = (_panel + 1) % maxPanels);
     });
@@ -566,9 +566,24 @@ class _LeaderboardPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final players = [...game.players]
       ..sort((a, b) {
+        if (a.active && !b.active) return -1;
+        if (!a.active && b.active) return 1;
+        if (!a.active && !b.active) {
+          return (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0);
+        }
         final t = a.table.compareTo(b.table);
         return t != 0 ? t : a.seat.compareTo(b.seat);
       });
+
+    String _ordinalPlace(int n) {
+      if (n % 100 >= 11 && n % 100 <= 13) return '${n}th';
+      return switch (n % 10) {
+        1 => '${n}st',
+        2 => '${n}nd',
+        3 => '${n}rd',
+        _ => '${n}th',
+      };
+    }
 
     return ListView(
       children: [
@@ -592,7 +607,11 @@ class _LeaderboardPanel extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'T${p.table} · S${p.seat}',
+                  p.active
+                      ? 'T${p.table} · S${p.seat}'
+                      : p.eliminationPos != null
+                          ? '${_ordinalPlace(p.eliminationPos!)} place'
+                          : 'Out',
                   style: AppTypography.mono(
                     size: 11,
                     color: AppColors.mutedForeground,

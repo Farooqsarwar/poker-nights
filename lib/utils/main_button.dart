@@ -198,34 +198,34 @@ MainAction _memberAction(LiveGame game, Player? me) {
       route: RoutePaths.playerLive,
     );
   }
-  if (me == null || me.rsvp == null) {
-    return const MainAction(
-      MainActionId.respondToInvitation,
-      'Respond to Invitation',
-      route: RoutePaths.invitation,
-    );
-  }
   // Requested check-in, admin has not confirmed yet — blocking state (§9.1).
-  if (me.checkedIn && !me.confirmed) {
+  if (me != null && me.checkedIn && !me.confirmed) {
     return const MainAction(
       MainActionId.waitingForConfirmation,
       'Waiting for Confirmation',
       enabled: false,
     );
   }
-  if (me.checkedIn && me.confirmed) {
+  if (me != null && me.checkedIn && me.confirmed) {
     return const MainAction(
       MainActionId.viewMySeat,
       'View My Seat',
       route: RoutePaths.playerLive,
     );
   }
-  if (_checkInOpen(game) && me.rsvp != Rsvp.cant) {
+  if (_checkInOpen(game) && (me == null || me.rsvp != Rsvp.cant)) {
     return const MainAction(
       MainActionId.checkIn,
       'Check In',
       // Members self-check-in from the invitation screen (the admin-only
       // check-in page redirects them away). Routing here avoids the dead-end.
+      route: RoutePaths.invitation,
+    );
+  }
+  if (me == null || me.rsvp == null) {
+    return const MainAction(
+      MainActionId.respondToInvitation,
+      'Respond to Invitation',
       route: RoutePaths.invitation,
     );
   }

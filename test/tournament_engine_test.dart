@@ -325,6 +325,55 @@ void main() {
     expect(r.prizePool, 165);
   });
 
+  // ── §9.4 / §23.1 payout multiples: the unit is 10 for any real buy-in ─────
+  test('every payout is a multiple of 10 for decade and 5-ending buy-ins', () {
+    // A 15 buy-in is a common 5-ending value. With a 10% organizer cut the
+    // pool lands on a multiple of 10 and every payout must too. The engine
+    // must not slip into 5-rounded payouts that end in 5.
+    for (final buyIn in [10, 15, 20, 25, 50, 100]) {
+      for (final players in [4, 8, 12, 20]) {
+        final s = TournamentEngine.generate(
+          _params(
+            chips: richChips,
+            buyIn: buyIn,
+            players: players,
+            organizerPct: 10,
+          ),
+        );
+        expect(s.prizePool % 10, 0,
+            reason: 'buyIn=$buyIn p=$players pool=${s.prizePool}');
+        expect(s.prizes.fold<int>(0, (sum, p) => sum + p.amount), s.prizePool);
+        for (final prize in s.prizes) {
+          expect(prize.amount % 10, 0,
+              reason: 'buyIn=$buyIn p=$players: ${prize.amount}');
+        }
+      }
+    }
+  });
+
+  test('no payout ever ends in 5 even at the smallest 5-ending buy-in', () {
+    // 0% organizer on a 15 buy-in: the raw gross is a multiple of 5 but not
+    // necessarily of 10. Lower places must stay clean multiples of 10; only
+    // place 1 may carry the odd remainder (documented sum-exactness tradeoff).
+    for (final players in [6, 8, 10, 14]) {
+      final s = TournamentEngine.generate(
+        _params(
+          chips: richChips,
+          buyIn: 15,
+          players: players,
+          organizerPct: 0,
+        ),
+      );
+      expect(s.prizes.fold<int>(0, (sum, p) => sum + p.amount), s.prizePool);
+      for (var i = 0; i < s.prizes.length; i++) {
+        if (i > 0) {
+          expect(s.prizes[i].amount % 10, 0,
+              reason: 'p=$players: place ${i + 1} must not end in 5');
+        }
+      }
+    }
+  });
+
   // ── §23.1 simulation: finish estimate inside a calibrated window ───────────
   test('expected finish tracks the target duration for representative fields',
       () {

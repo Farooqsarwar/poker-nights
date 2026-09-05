@@ -10,6 +10,12 @@ class Sanitization {
   /// Maximum length for player/guest names.
   static const int maxNameLength = 50;
 
+  /// Maximum length for tournament names (spec §6.1).
+  static const int maxTournamentNameLength = 80;
+
+  /// Maximum length for tournament locations (spec §6.1).
+  static const int maxLocationLength = 160;
+
   /// Maximum length for poll question.
   static const int maxPollQuestionLength = 200;
 
@@ -57,6 +63,16 @@ class Sanitization {
   static String sanitizePollOption(String input) =>
       sanitize(input)
           .substring(0, _min(sanitize(input).length, maxPollOptionLength));
+
+  /// Sanitize and enforce max length for tournament name.
+  static String sanitizeTournamentName(String input) =>
+      sanitize(input)
+          .substring(0, _min(sanitize(input).length, maxTournamentNameLength));
+
+  /// Sanitize and enforce max length for tournament location.
+  static String sanitizeLocation(String input) =>
+      sanitize(input)
+          .substring(0, _min(sanitize(input).length, maxLocationLength));
 
   static int _min(int a, int b) => a < b ? a : b;
 }

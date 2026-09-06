@@ -37,10 +37,15 @@ class _InteractiveScaleState extends State<InteractiveScale> {
         _isHovered = false;
         _isPressed = false;
       }),
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _isPressed = true),
-        onTapUp: (_) => setState(() => _isPressed = false),
-        onTapCancel: () => setState(() => _isPressed = false),
+      // Raw pointer listener — NOT a GestureDetector — so this press animation
+      // never joins the gesture arena. A tap recognizer here would compete with
+      // the child's InkWell / GestureDetector: the arena picks a single winner
+      // and cancels the rest, which is why a tapped button would visibly press
+      // but its onPressed never fired ("tap 2-3 times then it works").
+      child: Listener(
+        onPointerDown: (_) => setState(() => _isPressed = true),
+        onPointerUp: (_) => setState(() => _isPressed = false),
+        onPointerCancel: (_) => setState(() => _isPressed = false),
         behavior: HitTestBehavior.deferToChild,
         child: AnimatedScale(
           scale: scale,

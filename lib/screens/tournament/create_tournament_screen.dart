@@ -13,6 +13,7 @@ import '../../models/table_settings.dart';
 import '../../models/tournament.dart';
 import '../../models/tournament_preset.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/sanitization.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -185,7 +186,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   final _location = TextEditingController();
   final _buyIn = TextEditingController();
   bool _locationPrivate = false;
-  double _duration = 4.0;
+  double _duration = 3.5; // Spec §4.3: default target duration is 3.5 hours.
   final Map<String, String> _errors = {};
 
   // Player count is derived from the group + RSVP signals, never asked as an
@@ -210,17 +211,20 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   final _addOnCost = TextEditingController();
   bool _koEnabled = false;
   final _koAmount = TextEditingController(text: '5');
-  AntePreference _antePreference = AntePreference.recommend;
+  AntePreference _antePreference = AntePreference.none;
   int _anteAfterLevel = 6;
 
   // Table-capacity/randomization — defaults to the group's setting; the host
   // may override it for just this tournament.
   bool _overrideTableSettings = false;
-  int _maxPerTable = 10;
+  int _maxPerTable = 9; // Spec §12.1: default table capacity is 9.
   bool _randomizeSeating = false;
+  // Spec §4.3 Step 2: 'none' means no ante at all; 'individual' means a
+  // fixed chip per player; 'recommend'/'bigBlind' means BB-ante style.
   AnteStyle get _anteStyle => switch (_antePreference) {
     AntePreference.recommend || AntePreference.bigBlind => AnteStyle.bigBlind,
-    AntePreference.none || AntePreference.individual => AnteStyle.individual,
+    AntePreference.individual => AnteStyle.individual,
+    AntePreference.none => AnteStyle.individual, // disabled by _anteEnabled=false
   };
   bool get _anteEnabled => _antePreference != AntePreference.none;
   final _orgPctController = TextEditingController(text: '0');
@@ -397,7 +401,16 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
   bool _validateStep1() {
     _errors.clear();
-    if (_name.text.trim().isEmpty) _errors['name'] = 'Required';
+    if (_name.text.trim().isEmpty) {
+      _errors['name'] = 'Required';
+    } else if (_name.text.trim().length > Sanitization.maxTournamentNameLength) {
+      _errors['name'] = 'Max ${Sanitization.maxTournamentNameLength} characters';
+    }
+
+    if (_location.text.trim().length > Sanitization.maxLocationLength) {
+      _errors['location'] = 'Max ${Sanitization.maxLocationLength} characters';
+    }
+
     if (_date.text.trim().isEmpty) {
       _errors['date'] = 'Required';
     } else {
@@ -423,17 +436,54 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         final m = int.tryParse(parts[1]);
         if (h == null || m == null || h < 0 || h > 23 || m < 0 || m > 59) {
           _errors['time'] = 'Invalid time (HH:MM)';
+        } else if (!_errors.containsKey('date')) {
+          // Spec §12.2: reject past date AND past time on today's date.
+          final parsed = DateTime.tryParse(_date.text.trim());
+          if (parsed != null) {
+            final scheduled = DateTime(
+                parsed.year, parsed.month, parsed.day, h, m);
+            if (scheduled.isBefore(DateTime.now())) {
+              _errors['time'] = 'Start time must be in the future';
+            }
+          }
         }
       }
     }
-    final b = num.tryParse(_buyIn.text) ?? 0;
-    if (b <= 0) _errors['buyIn'] = 'Must be positive';
+    final b = num.tryParse(_buyIn.text);
+    if (b == null || b <= 0) _errors['buyIn'] = 'Must be positive';
+    setState(() {});
+    return _errors.isEmpty;
+  }
+
+  bool _validateStep3() {
+    _errors.clear();
+
+    if (_rebuys && !_rebuyUnlimited) {
+      final rbLimit = num.tryParse(_rebuyLimit.text)?.toInt();
+      if (rbLimit == null || rbLimit < 0) {
+        _errors['rebuyLimit'] = 'Must be >= 0';
+      }
+    }
+
+    if (_koEnabled) {
+      final koAmount = num.tryParse(_koAmount.text)?.toInt();
+      if (koAmount == null || koAmount < 0) {
+        _errors['koAmount'] = 'Must be >= 0';
+      }
+    }
+
+    final orgPct = num.tryParse(_orgPctController.text)?.toInt();
+    if (orgPct == null || orgPct < 0 || orgPct > 100) {
+      _errors['orgPct'] = 'Must be 0-100';
+    }
+
     setState(() {});
     return _errors.isEmpty;
   }
 
   void _next() {
     if (_step == 1 && !_validateStep1()) return;
+    if (_step == 3 && !_validateStep3()) return;
     setState(() {
       _step++;
       if (_step >= _steps.length) {
@@ -608,15 +658,15 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     // by the Admin during check-in from confirmed actual attendance.
     final game = app.createGame(
       GameSettings(
-        name: _name.text.trim(),
+        name: Sanitization.sanitizeTournamentName(_name.text.trim()),
         date: _date.text.trim(),
         time: _time.text.trim(),
-        location: _location.text.trim(),
+        location: Sanitization.sanitizeLocation(_location.text.trim()),
         // Roster size — the real player count comes from RSVPs, never from an
         // input field (client rule).
         players: app.currentGroup.members.length,
         durationHours: _duration,
-        buyIn: num.tryParse(_buyIn.text)?.toInt() ?? 15,
+        buyIn: num.tryParse(_buyIn.text)?.toInt() ?? 0,
         koEnabled: _koEnabled,
         koAmount: num.tryParse(_koAmount.text)?.toInt() ?? 5,
         rebuys: _rebuys,
@@ -905,6 +955,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             controller: _location,
             label: 'Location (optional)',
             placeholder: "e.g. Daniel's place",
+            error: _errors['location'],
           ),
           if (_location.text.trim().isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -1547,6 +1598,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       child: AppTextField(
                         controller: _rebuyLimit,
                         keyboardType: TextInputType.number,
+                        error: _errors['rebuyLimit'],
                       ),
                     ),
                   ],
@@ -1745,6 +1797,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     child: AppTextField(
                       controller: _koAmount,
                       keyboardType: TextInputType.number,
+                      error: _errors['koAmount'],
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xs),
@@ -1942,6 +1995,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   controller: _orgPctController,
                   keyboardType: TextInputType.number,
                   label: 'Percentage (%)',
+                  error: _errors['orgPct'],
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),

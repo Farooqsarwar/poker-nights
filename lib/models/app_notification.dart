@@ -31,9 +31,9 @@ class AppNotification {
   bool isFor(String uid) =>
       audience == null || audience!.isEmpty || audience!.contains(uid);
 
-  AppNotification copyWith({bool? read, List<String>? audience}) {
+  AppNotification copyWith({String? id, bool? read, List<String>? audience}) {
     return AppNotification(
-      id: id,
+      id: id ?? this.id,
       title: title,
       body: body,
       type: type,

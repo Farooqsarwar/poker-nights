@@ -32,6 +32,7 @@ enum _GuestStep {
   rejected,
   notLive,
   wrongOwner,
+  completed,
 }
 
 /// Guest join flow mirroring the web `GuestFlowPage`.
@@ -76,6 +77,18 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   /// game is already live, or the "come back later" screen when it hasn't
   /// started yet.
   static _GuestStep _routeAfterBooking(LiveGame game, Player? guest) {
+    if (game.status == LiveGameStatus.completed) {
+      return _GuestStep.completed;
+    }
+    
+    if (guest != null && !guest.confirmed) {
+      // Check-in opens at LiveGameStatus.checkin. Once open, unconfirmed guests
+      // wait for admin approval instead of being told to come back later.
+      if (game.status.index >= LiveGameStatus.checkin.index &&
+          game.status.index <= LiveGameStatus.finaltable.index) {
+        return _GuestStep.waiting;
+      }
+    }
     return game.status.isActiveLive
         ? _GuestStep.confirmed
         : _GuestStep.notLive;
@@ -163,7 +176,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     } else {
       setState(
         () => _codeError =
-            'That code opens the TV display — ask the host for the player code.',
+            'That code opens the TV display — ask the admin for the player code.',
       );
     }
   }
@@ -271,6 +284,19 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         : registeredPlayers.where((p) => p.id == _selectedInviter).firstOrNull;
     final availableSlots = inviter?.rsvp?.guestCount ?? 0;
     final level = game.currentLevelData;
+    // Private addresses are hidden from unconfirmed guests (User Flow §11.1):
+    // revealed only after the admin confirms this guest's seat, or when the
+    // event is public.
+    final session = app.guestSession;
+    final guestConfirmed = session != null &&
+        game.players.any(
+          (p) =>
+              p.isGuest &&
+              p.confirmed &&
+              p.inviterId == session.inviterId &&
+              p.guestSlot == session.slot,
+        );
+    final showAddress = !game.settings.locationPrivate || guestConfirmed;
 
     // While waiting, react to the admin's decision in real time: the guest is
     // confirmed once their player record is confirmed (07-027/07-028). A
@@ -326,7 +352,9 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               style: AppTypography.display(size: AppFontSizes.xl),
             ),
             Text(
-              '${game.settings.date} · ${game.settings.location}',
+              showAddress
+                  ? '${game.settings.date} · ${game.settings.location}'
+                  : game.settings.date,
               style: AppTypography.bodySm.copyWith(
                 color: AppColors.mutedForeground,
               ),
@@ -361,7 +389,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         const SizedBox(height: AppSpacing.xl),
 
         switch (view) {
-          _GuestStep.eventIntro => _buildEventIntro(game),
+          _GuestStep.eventIntro => _buildEventIntro(game, showAddress: showAddress),
           _GuestStep.chooseInviter => _buildChooseInviter(
             game,
             registeredPlayers,
@@ -377,6 +405,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           _GuestStep.confirmed => _buildConfirmed(level),
           _GuestStep.rejected => _buildRejected(),
           _GuestStep.notLive => _buildNotLive(game),
+          _GuestStep.completed => _buildCompleted(),
           _GuestStep.wrongOwner => _buildWrongOwner(),
           _GuestStep.enterCode => const SizedBox.shrink(),
         },
@@ -398,7 +427,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Enter the code from the host or invitation link',
+          'Enter the code from the admin or invitation link',
           textAlign: TextAlign.center,
           style: AppTypography.bodySm.copyWith(
             color: AppColors.mutedForeground,
@@ -484,11 +513,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                       baseline: TextBaseline.alphabetic,
                       child: InkWell(
                         onTap: () => _codeController.text = 'FP2608',
-                        child: Text(
-                          'FP2608',
-                          style: AppTypography.monoSm.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w700,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                          child: Text(
+                            'FP2608',
+                            style: AppTypography.monoSm.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
@@ -512,12 +544,15 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             ),
             InkWell(
               onTap: () => context.go(RoutePaths.login),
-              child: Text(
-                'Sign in',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.primary,
-                  decoration: TextDecoration.underline,
-                  decorationColor: AppColors.primary,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                child: Text(
+                  'Sign in',
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.primary,
+                    decoration: TextDecoration.underline,
+                    decorationColor: AppColors.primary,
+                  ),
                 ),
               ),
             ),
@@ -544,7 +579,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   /// Friendly event-specific landing card shown right after the guest
   /// resolves the code (audit fix B12 — the spec sample shows date/time,
   /// location, buy-in, rebuys and KO before "Claim My Guest Place").
-  Widget _buildEventIntro(LiveGame game) {
+  Widget _buildEventIntro(LiveGame game, {required bool showAddress}) {
     final s = game.settings;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -576,7 +611,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                 icon: Icons.calendar_today_outlined,
                 text: '${s.date} · ${s.time}',
               ),
-              if (s.location.isNotEmpty)
+              if (s.location.isNotEmpty && showAddress)
                 _IntroLine(icon: Icons.location_on_outlined, text: s.location),
               _IntroLine(
                 icon: Icons.attach_money_outlined,
@@ -631,7 +666,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Select the registered member who brought you along.',
+            'Select the Registered Group Member who brought you along.',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),
@@ -641,7 +676,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
               child: Text(
-                'No one has RSVP\'d with guests. Please ask the host.',
+                'No one has RSVP\'d with guests. Please ask the admin.',
                 textAlign: TextAlign.center,
                 style: AppTypography.bodySm.copyWith(
                   color: AppColors.mutedForeground,
@@ -731,7 +766,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            '${inviter?.name ?? 'Your host'} is bringing $availableSlots guest${availableSlots > 1 ? 's' : ''}. Which slot are you?',
+            '${inviter?.name ?? 'The admin'} is bringing $availableSlots guest${availableSlots > 1 ? 's' : ''}. Which slot are you?',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),
@@ -836,7 +871,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'This is shown to the host and displayed on the seating plan.',
+            'This is shown to the admin and displayed on the seating plan.',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),
@@ -930,12 +965,12 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Waiting for host',
-            style: AppTypography.display(size: AppFontSizes.xl),
+            'Waiting for admin',
+            style: AppTypography.display(size: AppFontSizes.lg),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.xs),
           Text(
-            'Your check-in request has been sent. The host will confirm you shortly.',
+            'Your check-in request has been sent. The admin will confirm you shortly.',
             textAlign: TextAlign.center,
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
@@ -1018,6 +1053,42 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     );
   }
 
+  Widget _buildCompleted() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: Column(
+            children: [
+              Icon(
+                Icons.emoji_events,
+                size: AppFontSizes.displayLg,
+                color: AppColors.mutedForeground,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Game Completed',
+                style: AppTypography.display(
+                  size: AppFontSizes.xl,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'This tournament has already finished.',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildNotLive(LiveGame game) {
     final session = context.read<AppProvider>().guestSession;
     final reservedName = session?.name;
@@ -1049,7 +1120,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 confirmed
-                    ? 'The host has accepted your seat.'
+                    ? 'The admin has accepted your seat.'
                     : (reservedName == null || reservedName.isEmpty
                           ? 'You have a reserved seat.'
                           : 'Reserved for $reservedName.'),
@@ -1085,7 +1156,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                 ),
                 if (!(guest.table > 0 && guest.seat > 0))
                   Text(
-                    'Seats are assigned once the host generates the seating plan.',
+                    'Seats are assigned once the admin generates the seating plan.',
                     style: AppTypography.bodyXs.copyWith(
                       color: AppColors.mutedForeground,
                     ),
@@ -1106,7 +1177,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                'The tournament goes live once the host starts it. Come back then to watch your match live.',
+                'The tournament goes live once the admin starts it. Come back then to watch your match live.',
                 style: AppTypography.bodySm.copyWith(
                   color: AppColors.mutedForeground,
                 ),
@@ -1260,7 +1331,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               Text(
                 guest != null && guest.table > 0 && guest.seat > 0
                     ? 'Table ${guest.table} · Seat ${guest.seat}'
-                    : 'Table 1 · Seat ${_selectedSlot ?? 1}',
+                    : 'Pending seating',
                 style: AppTypography.mono(
                   size: AppFontSizes.xxl,
                   weight: FontWeight.w700,
@@ -1268,7 +1339,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               ),
               if (!(guest != null && guest.table > 0 && guest.seat > 0))
                 Text(
-                  'Seats are assigned once the host generates the seating plan.',
+                  'Seats are assigned once the admin generates the seating plan.',
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
                   ),
@@ -1450,3 +1521,4 @@ class _BackLink extends StatelessWidget {
     );
   }
 }
+

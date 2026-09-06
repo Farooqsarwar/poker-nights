@@ -350,10 +350,13 @@ class _AuthScreenState extends State<AuthScreen> {
                         alignment: Alignment.centerRight,
                         child: InkWell(
                           onTap: () => context.go(RoutePaths.forgotPassword),
-                          child: Text(
-                            'Forgot Password?',
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.primary,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            child: Text(
+                              'Forgot Password?',
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.primary,
+                              ),
                             ),
                           ),
                         ),
@@ -433,10 +436,13 @@ class _AuthScreenState extends State<AuthScreen> {
                       Center(
                         child: InkWell(
                           onTap: () => context.go(RoutePaths.login),
-                          child: Text(
-                            'Back to Sign In',
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.primary,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            child: Text(
+                              'Back to Sign In',
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.primary,
+                              ),
                             ),
                           ),
                         ),
@@ -471,11 +477,14 @@ class _AuthScreenState extends State<AuthScreen> {
               alignment: PlaceholderAlignment.middle,
               child: InkWell(
                 onTap: onTap,
-                child: Text(
-                  action,
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                  child: Text(
+                    action,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),

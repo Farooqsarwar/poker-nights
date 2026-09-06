@@ -36,6 +36,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
   }
 
   void _undo() {
+    if (_order.isEmpty) return;
     setState(() => _order.removeLast());
   }
 
@@ -137,23 +138,25 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Record Finish Order',
-                    style: AppTypography.display(
-                      size: AppFontSizes.xxxl,
-                      weight: FontWeight.w700,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Record Finish Order',
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxxl,
+                        weight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'Tap players in order of elimination (first-out first)',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
+                    Text(
+                      'Tap players in order of elimination (first-out first)',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -393,10 +396,12 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Prize distribution (admin only)',
-                          style: AppTypography.bodySm.copyWith(
-                            color: AppColors.mutedForeground,
+                        Expanded(
+                          child: Text(
+                            'Prize distribution (admin only)',
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
                           ),
                         ),
                         if (unranked.isEmpty)
@@ -476,12 +481,15 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
     );
   }
 
-  String _placeName(int place) => switch (place) {
-    1 => '1st place',
-    2 => '2nd place',
-    3 => '3rd place',
-    _ => '${place}th place',
-  };
+  String _placeName(int place) {
+    if (place % 100 >= 11 && place % 100 <= 13) return '${place}th place';
+    return switch (place % 10) {
+      1 => '${place}st place',
+      2 => '${place}nd place',
+      3 => '${place}rd place',
+      _ => '${place}th place',
+    };
+  }
 
   Prize? _prizeFor(List<Prize> prizes, int pos) {
     if (pos <= 0) return null;
@@ -566,10 +574,24 @@ class _EditPrizesModalState extends State<_EditPrizesModal> {
         AppButton(
           onPressed: () {
             final newPrizes = <Prize>[];
+            int totalNew = 0;
             for (var i = 0; i < widget.initialPrizes.length; i++) {
               final amt = int.tryParse(_controllers[i].text.replaceAll(',', '')) ?? 0;
+              totalNew += amt;
               newPrizes.add(Prize(place: widget.initialPrizes[i].place, amount: amt));
             }
+            
+            final totalOriginal = widget.initialPrizes.fold<int>(0, (sum, p) => sum + p.amount);
+            if (totalNew != totalOriginal) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Payouts sum to \$$totalNew, but the prize pool is \$$totalOriginal.'),
+                  backgroundColor: AppColors.destructive,
+                ),
+              );
+              return;
+            }
+            
             widget.onSave(newPrizes);
             Navigator.of(context).pop();
           },

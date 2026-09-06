@@ -47,6 +47,7 @@ void main() {
           totalBuyIns: 100,
           buyInCount: 1,
           cashedOut: 130,
+          hasCashedOut: true,
         ),
         CashPlayer(
           id: 'carol',
@@ -55,6 +56,7 @@ void main() {
           totalBuyIns: 100,
           buyInCount: 1,
           cashedOut: 70,
+          hasCashedOut: true,
         ),
       ],
     );
@@ -83,9 +85,9 @@ void main() {
     });
 
     test('cashed-out flags reflect who left', () {
-      expect(session.players[0].isCashedOut, isFalse);
-      expect(session.players[1].isCashedOut, isTrue);
-      expect(session.players[2].isCashedOut, isTrue);
+      expect(session.players[0].hasCashedOut, isFalse);
+      expect(session.players[1].hasCashedOut, isTrue);
+      expect(session.players[2].hasCashedOut, isTrue);
     });
   });
 

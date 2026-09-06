@@ -279,7 +279,17 @@ class _WideLayout extends StatelessWidget {
 
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: heroSide - side),
-                  child: _ProgressBar(value: data.progress, height: 14 * s),
+                  child: LiveTimerBuilder(
+                    game: game,
+                    builder: (context, remaining) {
+                      final duration = data.level?.durationMins ?? 1;
+                      final progress = (duration * 60) > 0 ? 1.0 - (remaining / (duration * 60)) : 0.0;
+                      return _ProgressBar(
+                        value: progress.clamp(0.0, 1.0),
+                        height: 14 * s,
+                      );
+                    },
+                  ),
                 ),
                 SizedBox(height: 40 * s),
                 const _HorizontalLine(),
@@ -870,7 +880,17 @@ class _CompactLayout extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 22),
-            _ProgressBar(value: data.progress, height: 5),
+            LiveTimerBuilder(
+              game: game,
+              builder: (context, remaining) {
+                final duration = data.level?.durationMins ?? 1;
+                final progress = (duration * 60) > 0 ? 1.0 - (remaining / (duration * 60)) : 0.0;
+                return _ProgressBar(
+                  value: progress.clamp(0.0, 1.0),
+                  height: 5,
+                );
+              },
+            ),
             const SizedBox(height: 18),
             const _HorizontalLine(),
             _CompactPair(

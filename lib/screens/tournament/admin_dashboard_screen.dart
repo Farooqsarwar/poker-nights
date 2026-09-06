@@ -58,14 +58,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (levels.isEmpty) return null;
     var mins = game.currentSecondsRemaining(clockOffset) ~/ 60;
     for (final l in levels) {
-      if (l.level >= game.currentLevel) {
+      if (l.level > game.currentLevel) {
         mins += l.level > game.currentLevel && futureDurationOverride != null
             ? futureDurationOverride
             : l.durationMins;
       }
     }
-    final finish = DateTime.now().add(Duration(minutes: (mins * 1.05).round()));
-    return '${finish.hour.toString().padLeft(2, '0')}:${finish.minute.toString().padLeft(2, '0')}';
+    String hhmm(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    
+    final early = DateTime.now().add(Duration(minutes: (mins * 1.05).round()));
+    final late = DateTime.now().add(Duration(minutes: (mins * 1.15).round()));
+    return '${hhmm(early)} – ${hhmm(late)}';
   }
 
   /// What a speed up/slow down would do to the level duration (the provider
@@ -99,7 +102,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     // Auth guarding is handled securely by GoRouter's redirect logic.
 
     // Final Table Auto-Trigger (Audit fix)
-    final isNinePlayers = game != null && game.activePlayers.length == 9;
+    // Spec §4.16 / Tech §12.3: the redraw only applies when the game started
+    // with multiple tables. Single-table games must NOT trigger the redraw.
+    final hadMultipleTables = game != null && game.players.any((p) => p.table > 1);
+    final isNinePlayers = game != null && hadMultipleTables && game.activePlayers.length == 9;
     if (isNinePlayers && game.status == LiveGameStatus.running && !_showStructureModal && !_showRestartModal && !_showCancelModal && !_showUndoModal && !_showedFinalTablePrompt) {
       _showedFinalTablePrompt = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -198,10 +204,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         : AppColors.primary;
 
     return AppPage(
-      maxWidth: 960,
+      maxWidth: 1280,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (app.showAppTour) ...[
+            _AdminAppTourCard(game: game, onDismiss: () => app.setAppTour(false)),
+            const SizedBox(height: AppSpacing.md),
+          ],
           // Top bar
           if (device.isMobile) ...[
             Column(
@@ -267,11 +277,78 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     child: AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
-                      onPressed: app.toggleVoice,
+                      onPressed: () {
+                        if (!app.isAdmin) {
+                          app.toggleVoice();
+                          return;
+                        }
+                        // Tech Spec §13.2: the admin manually selects which
+                        // device is the Audio Master.
+                        showAppModal(
+                          context: context,
+                          title: 'Audio announcements',
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                app.thisDeviceIsAudioMaster
+                                    ? 'This device is the Audio Master — it '
+                                        'speaks for the event. Clear it to let '
+                                        'every voice-enabled device announce.'
+                                    : 'No Audio Master is set — every '
+                                        'voice-enabled device may announce. '
+                                        'Claim the role to speak from this '
+                                        'device only.',
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                              if (!app.thisDeviceIsAudioMaster)
+                                AppButton(
+                                  onPressed: () {
+                                    app.setAudioMasterDevice();
+                                    Navigator.pop(context);
+                                  },
+                                  child: const Text(
+                                      'Make this device the Audio Master'),
+                                ),
+                              if (app.thisDeviceIsAudioMaster)
+                                AppButton(
+                                  variant: AppButtonVariant.secondary,
+                                  onPressed: () {
+                                    app.clearAudioMasterDevice();
+                                    Navigator.pop(context);
+                                  },
+                                  child:
+                                      const Text('Allow all devices to announce'),
+                                ),
+                              const SizedBox(height: AppSpacing.sm),
+                              AppButton(
+                                variant: AppButtonVariant.ghost,
+                                onPressed: () {
+                                  app.toggleVoice();
+                                  Navigator.pop(context);
+                                },
+                                child: Text(
+                                  app.voiceEnabled
+                                      ? 'Mute voice'
+                                      : 'Unmute voice',
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: AppIconLabel(
-                          label: 'Voice',
+                          label: app.thisDeviceIsAudioMaster
+                              ? 'Audio Master · Me'
+                              : app.voiceEnabled
+                                  ? 'Audio Master'
+                                  : 'Voice off',
                           icon: app.voiceEnabled
                               ? Icons.volume_up_outlined
                               : Icons.volume_off_outlined,
@@ -344,7 +421,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       variant: AppButtonVariant.ghost,
                       onPressed: app.toggleVoice,
                       child: AppIconLabel(
-                        label: 'Voice',
+                        label: app.voiceEnabled ? 'Audio Master' : 'Voice off',
                         icon: app.voiceEnabled
                             ? Icons.volume_up_outlined
                             : Icons.volume_off_outlined,
@@ -463,7 +540,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ),
                           );
                         } else {
-                          final canResume = status != LiveGameStatus.finaltable;
+                          final canResume = status != LiveGameStatus.finaltable && 
+                                            status != LiveGameStatus.completed &&
+                                            status != LiveGameStatus.cancelled;
                           return AppButton(
                             size: AppButtonSize.lg,
                             variant: AppButtonVariant.primary,
@@ -677,7 +756,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.lg,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => context.go(RoutePaths.checkIn),
+                          onPressed: () => setState(() => _tab = 'seating'),
                           child: const AppIconLabel(
                             label: 'Seats',
                             icon: Icons.people_outline,
@@ -1013,7 +1092,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.md,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => context.go(RoutePaths.checkIn),
+                          onPressed: () => setState(() => _tab = 'seating'),
                           child: const FittedBox(
                             fit: BoxFit.scaleDown,
                             child: AppIconLabel(
@@ -1120,9 +1199,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             if (_tab == 'audit') _AuditTab(auditHistory: game.auditHistory),
           ],
           const SizedBox(height: AppSpacing.xxl),
-          // Final table trigger for small tournaments (≤9 start, never auto-transition)
+          // Final table trigger — only for multi-table games (spec §4.16 /
+          // Tech §12.3). Single-table tournaments never need a redraw.
           // Host/Admin only — Co-Admin's scope stops at membership + rebuys.
           if (isAdmin &&
+              hadMultipleTables &&
               (status == LiveGameStatus.running ||
                   status == LiveGameStatus.paused))
             Padding(
@@ -1236,9 +1317,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   List<Widget> _playersTab(AppProvider app, LiveGame game) {
     final settings = game.settings;
-    final currentLevel = game.currentLevel;
-    final canRebuy =
-        settings.rebuys && currentLevel <= settings.rebuysCloseLevel;
+    // Rebuy is deliberately omitted from the active roster: it only applies to
+    // eliminated players (grantRebuy no-ops otherwise) and lives in the
+    // Eliminated tab. (User Flow §7.4 / Tech Spec §21 "rebuy requested for
+    // active player → Block".)
 
     return [
       if (app.isAdmin && app.lateRegistrationOpen)
@@ -1318,13 +1400,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         onPressed: () => _showEliminateModal(context, app, p),
                         child: const Text('Out'),
                       ),
-                    if (canRebuy)
-                      AppButton(
-                        size: AppButtonSize.sm,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => _confirmRebuy(context, app, p),
-                        child: const Text('Rebuy'),
-                      ),
                     if (settings.addOn &&
                         game.status == LiveGameStatus.rebuypause &&
                         !p.hasAddOn)
@@ -1396,6 +1471,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final newDur = _previewedDuration(game, rec);
     final isUp = rec == SpeedRecommendation.speedUp;
     
+    final futureLevels = game.structure.levels.where((l) => l.level > game.currentLevel).length;
+    final hasAnte = game.structure.levels.any((l) => l.level > game.currentLevel && l.ante != null);
+    
     showAppModal(
       context: context,
       title: isUp ? 'Preview: speed up' : 'Preview: slow down',
@@ -1403,11 +1481,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const AppAlertBanner(
+          AppAlertBanner(
             type: AppAlertType.info,
             message:
-                'Future levels change only — the active level and all '
-                'completed levels stay exactly as they are.',
+                'Future levels change only ($futureLevels levels). The active level and all '
+                'completed levels stay exactly as they are.'
+                '${hasAnte ? ' Ante durations will also adjust.' : ''}',
           ),
           const SizedBox(height: AppSpacing.lg),
           Row(
@@ -1608,52 +1687,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  void _confirmRebuy(BuildContext context, AppProvider app, Player p) {
-    showAppModal(
-      context: context,
-      title: 'Grant rebuy',
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '${p.name} receives a fresh ${Formatters.chips(app.currentGame!.structure.rebuyStack)}-chip '
-            'rebuy stack and rejoins the game. The prize pool is recalculated.',
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Row(
-            children: [
-              Expanded(
-                child: AppButton(
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: AppButton(
-                  onPressed: () {
-                    app.grantRebuy(
-                      p.id,
-                      idempotencyKey:
-                          'rebuy-${DateTime.now().microsecondsSinceEpoch}',
-                    );
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Grant rebuy'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   void _confirmAddOn(BuildContext context, AppProvider app, Player p) {
     showAppModal(
       context: context,
@@ -1709,6 +1742,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (game == null) return;
     final koEnabled = game.settings.koEnabled;
     final options = game.activePlayers.where((p) => p.id != player.id).toList();
+    // Spec §4.12: before the rebuy deadline, ask "Leave Tournament or Rebuy?"
+    final canRebuyNow = game.settings.rebuys &&
+        game.currentLevel <= game.settings.rebuysCloseLevel;
 
     showAppModal(
       context: context,
@@ -1717,6 +1753,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         playerName: player.name,
         koEnabled: koEnabled,
         options: options,
+        canRebuy: canRebuyNow,
         onConfirm: (koRecipientId) {
           app.eliminatePlayer(
             player.id,
@@ -1726,6 +1763,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           );
           Navigator.of(context).pop();
         },
+        onEliminateAndRebuy: canRebuyNow
+            ? (koRecipientId) {
+                app.eliminatePlayer(
+                  player.id,
+                  koRecipientId: koRecipientId,
+                  idempotencyKey:
+                      'elim-${DateTime.now().microsecondsSinceEpoch}',
+                );
+                // Immediately grant rebuy after elimination
+                Future.microtask(() => app.grantRebuy(
+                      player.id,
+                      idempotencyKey:
+                          'rebuy-${DateTime.now().microsecondsSinceEpoch}',
+                    ));
+                Navigator.of(context).pop();
+              }
+            : null,
       ),
     );
   }
@@ -2041,7 +2095,7 @@ class _SeatingTab extends StatelessWidget {
     final unseated = players.where((p) => p.table <= 0).toList();
     final tables = seated.map((p) => p.table).toSet().toList()..sort();
     final allTables = tables.isEmpty
-        ? const [1]
+        ? const <int>[]
         : [for (var t = tables.first; t <= tables.last; t++) t];
 
     final app = context.watch<AppProvider>();
@@ -2071,29 +2125,65 @@ class _SeatingTab extends StatelessWidget {
         if (isAdmin && rec != null)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: AppAlertBanner(
-              type: AppAlertType.info,
-              message:
-                  'Table balance recommendation:\nMove ${rec.fromPlayerName} from Table ${rec.fromTable} to Table ${rec.toTable}, Seat ${rec.toSeat}.',
-              actionLabel: 'Confirm',
-              onAction: app.confirmSeatMove,
-              // We simulate a dismiss button by using a row inside message if we wanted,
-              // but AppAlertBanner only supports one action. So let's wrap it.
-            ),
-          ),
-        if (isAdmin && rec != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                AppButton(
-                  variant: AppButtonVariant.ghost,
-                  size: AppButtonSize.sm,
-                  onPressed: app.dismissSeatMove,
-                  child: const Text('Dismiss Recommendation'),
-                ),
-              ],
+            child: AppCard(
+              borderColor: AppColors.primary.withValues(alpha: 0.4),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Spec \u00A74.15: show from/to details, then three actions:
+                  // Confirm Move, Choose Another Move, Move Manually.
+                  Text(
+                    'Table balance recommendation',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Move ${rec.fromPlayerName} from Table ${rec.fromTable}, Seat ${rec.fromSeat} '
+                    'to Table ${rec.toTable}, Seat ${rec.toSeat}.',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          onPressed: app.confirmSeatMove,
+                          child: const Text('Confirm Move'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          variant: AppButtonVariant.secondary,
+                          // Re-run balance evaluation for a fresh suggestion.
+                          onPressed: () {
+                            app.dismissSeatMove();
+                            app.requestSeatingBalance();
+                          },
+                          child: const Text('Another Move'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          variant: AppButtonVariant.ghost,
+                          onPressed: app.dismissSeatMove,
+                          child: const Text('Move Manually'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         for (final table in allTables)
@@ -2290,7 +2380,7 @@ class _PrizeTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Prices are calculated at the end of Level ${settings.rebuysCloseLevel}, '
+                  'Payouts are calculated at the end of Level ${settings.rebuysCloseLevel}, '
                   'when the exact number of players, actual rebuys and selected add-ons are known.',
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
@@ -2613,12 +2703,16 @@ class _EliminateContent extends StatefulWidget {
     required this.koEnabled,
     required this.options,
     required this.onConfirm,
+    this.canRebuy = false,
+    this.onEliminateAndRebuy,
   });
 
   final String playerName;
   final bool koEnabled;
   final List<Player> options;
   final void Function(String? koRecipientId) onConfirm;
+  final bool canRebuy;
+  final void Function(String? koRecipientId)? onEliminateAndRebuy;
 
   @override
   State<_EliminateContent> createState() => _EliminateContentState();
@@ -2675,6 +2769,15 @@ class _EliminateContentState extends State<_EliminateContent> {
             ),
           ],
         ),
+        if (widget.canRebuy) ...[
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.secondary,
+            onPressed: () => widget.onEliminateAndRebuy?.call(_koRecipient),
+            child: const Text('Eliminate + Rebuy'),
+          ),
+        ],
       ],
     );
   }
@@ -2810,3 +2913,98 @@ class _CancelTournamentFormState extends State<_CancelTournamentForm> {
 /// same action (technical spec §18.1) — identical on mobile and large screens.
 String _idemKey(String prefix) =>
     '$prefix-${DateTime.now().microsecondsSinceEpoch}';
+
+class _AdminAppTourCard extends StatelessWidget {
+  const _AdminAppTourCard({required this.game, required this.onDismiss});
+
+  final LiveGame game;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    String step = '';
+    String title = '';
+    String description = '';
+
+    if (game.status == LiveGameStatus.draft || game.status == LiveGameStatus.published || game.status == LiveGameStatus.checkin || game.status == LiveGameStatus.ready) {
+      if (game.players.any((p) => p.checkedIn && !p.confirmed) || game.pendingGuests.isNotEmpty) {
+        step = 'Step 1: Confirm Arrivals';
+        title = 'Seat Your Players';
+        description = 'Open the Check-in tab to approve requests. You must manually approve and seat players before the app can calculate the tournament math.';
+      } else if (!game.structureConfirmed) {
+        step = 'Step 2: Lock the Math';
+        title = 'Generate the Tournament';
+        description = 'Once everyone has checked in, tap "Generate Final Structure" to let Poker Night calculate the perfect starting stacks, blind levels, and prize pool.';
+      } else {
+        step = 'Step 3: Shuffle Up and Deal!';
+        title = 'Start the Clock';
+        description = 'Share the TV Mode link on your big screen, then tap "Start Tournament" to begin the game. All player screens will sync automatically.';
+      }
+    } else if (game.status == LiveGameStatus.rebuypause) {
+      step = 'Step 4: Settlement Break';
+      title = 'Lock the Prize Pool';
+      description = 'Rebuys are now closed. Tap "Complete Rebuy & Add-on Break" to record final add-ons, exchange small chips, and lock in the final Prize Pool.';
+    } else if ((game.status == LiveGameStatus.running || game.status == LiveGameStatus.finaltable) && game.activePlayers.length <= 1) {
+      step = 'Step 5: Finalize Results';
+      title = 'Publish the Winners';
+      description = 'Verify the final positions. Players will only see their rank, not the money. Tap "Finish Tournament" to save to History.';
+    } else if (game.status == LiveGameStatus.running || game.status == LiveGameStatus.finaltable) {
+      step = 'Now Playing';
+      title = 'Keep everyone in sync';
+      description = 'Mirror the tournament on your big screen with TV Mode (top bar) and post announcements in Chat — every player screen updates live.';
+    } else if (game.status == LiveGameStatus.paused) {
+      step = 'Paused';
+      title = 'Ready to resume?';
+      description = 'When the break ends, tap Resume Tournament in the top bar to restart the blinds clock where you left off.';
+    } else {
+      step = 'In the books';
+      title = 'Saved to History';
+      description = 'This tournament is complete. Open History (left menu) to replay the results, then start your next event from the Dashboard.';
+    }
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      color: AppColors.primarySoft,
+      borderColor: AppColors.primary,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lightbulb_outline, color: AppColors.primary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  step.toUpperCase(),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  description,
+                  style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 20),
+            color: AppColors.mutedForeground,
+            onPressed: onDismiss,
+            tooltip: 'Dismiss tour',
+          ),
+        ],
+      ),
+    );
+  }
+}
+

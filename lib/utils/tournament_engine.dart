@@ -15,7 +15,7 @@ class TournamentEngine {
 
   /// Semantic version of this engine implementation. Persisted with each
   /// generated structure so the UI can detect engine upgrades.
-  static const String engineVersion = '2.0.0';
+  static const String engineVersion = '2.1.0';
 
   static const Map<String, List<ChipColor>> chipPresets = {
     'Standard 300': [
@@ -120,13 +120,37 @@ class TournamentEngine {
   /// heads-up play should begin with the average stack around 15 big blinds.
   static const double targetHeadsUpAverageBB = 15;
 
-  static int _snapToPracticalBlind(double raw, List<ChipColor> chips) {
-    final values = chips.map((c) => c.value).toList()..sort();
-    final minChip = values.first;
-    final rounded = (raw / minChip).round() * minChip;
-    return math.max(rounded, minChip);
-  }
+  static int snapToPracticalBlind(double raw, List<ChipColor> chips) {
+    final values = chips.map((c) => c.value).where((v) => v > 0).toList()..sort();
+    final minChip = values.isEmpty ? 1 : values.first;
+    
+    if (raw <= minChip) return minChip;
 
+    int magnitude = 1;
+    while (raw / magnitude >= 10) {
+      magnitude *= 10;
+    }
+
+    // Standard practical blind prefixes used universally in poker.
+    final standardPrefixes = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0];
+    
+    int bestBlind = (raw / minChip).round() * minChip;
+    double minDiff = (bestBlind - raw).abs();
+
+    for (final prefix in standardPrefixes) {
+      final candidate = (prefix * magnitude).round();
+      if (candidate < minChip || candidate % minChip != 0) continue;
+      
+      final diff = (candidate - raw).abs();
+      // Heavily favor standard poker increments if the difference is reasonable.
+      if (diff <= minDiff * 1.5) {
+        minDiff = diff;
+        bestBlind = candidate;
+      }
+    }
+
+    return math.max(bestBlind, minChip);
+  }
 
   /// Maximum number of chips of a SINGLE COLOR allocated to one player
   /// in a starting stack, rebuy, or add-on.
@@ -199,15 +223,23 @@ class TournamentEngine {
     final plan = <ChipPlanEntry>[];
     var remaining = targetStack;
 
+    // Guard the divisor: a zero head-count (e.g. the structure estimate the
+    // admin triggers the instant check-in opens, before anyone has checked in)
+    // made `quantity / 0` evaluate to Infinity, and `Infinity.floor()` throws
+    // `UnsupportedError: Infinity` — crashing the tap instead of producing a
+    // plan. One seat is the smallest meaningful divisor.
+    final perPlayerDivisor =
+        math.max(1.0, playerCount * reserveMultiplier);
+
     final reversed = sorted.reversed.toList();
     for (final chip in reversed) {
-      final maxPerPlayer = (chip.quantity / (playerCount * reserveMultiplier))
-          .floor();
+      // A zero/negative denomination would make `remaining ~/ chip.value`
+      // throw; such a chip can never contribute to a stack anyway.
+      if (chip.value <= 0) continue;
+      final maxPerPlayer = (chip.quantity / perPlayerDivisor).floor();
+      if (maxPerPlayer <= 0) continue;
       final need = remaining ~/ chip.value;
-      final use = math.min(
-        need,
-        math.min(math.max(1, maxPerPlayer), maxChipsPerPlayer),
-      );
+      final use = math.min(need, math.min(maxPerPlayer, maxChipsPerPlayer));
       if (use > 0) {
         plan.add(
           ChipPlanEntry(
@@ -221,13 +253,15 @@ class TournamentEngine {
       }
     }
 
-    if (remaining > 0 && sorted.isNotEmpty) {
-      final small = sorted.first;
+    final smallest = sorted.where((c) => c.value > 0).firstOrNull;
+    if (remaining > 0 && smallest != null) {
+      final small = smallest;
+      final smallMaxPerPlayer = (small.quantity / perPlayerDivisor).floor();
       final index = plan.indexWhere((p) => p.color == small.color);
       final existing = index >= 0 ? plan[index].count : 0;
       final extra = math.min(
         (remaining / small.value).ceil(),
-        math.max(0, maxChipsPerPlayer - existing),
+        math.max(0, math.min(smallMaxPerPlayer, maxChipsPerPlayer) - existing),
       );
       if (extra > 0) {
         if (index >= 0) {
@@ -433,7 +467,8 @@ class TournamentEngine {
       // per-place minimum of 10 so no paid place is ever 0.
       var allocatedToLower = 0;
       for (var i = paidPlaces - 1; i >= 1; i--) {
-        var amt = ((weights[i] * prizePool) / roundingUnit).floor() * roundingUnit;
+        var amt =
+            ((weights[i] * prizePool) / roundingUnit).floor() * roundingUnit;
         if (amt < roundingUnit) amt = roundingUnit;
         amounts[i] = amt;
         allocatedToLower += amt;
@@ -456,8 +491,8 @@ class TournamentEngine {
       }
 
       // Validate all guarantees; drop a place and retry if any fails. When the
-      // pool is not round, place 1 is exempt from the multiple-of-10 check (the
-      // documented tradeoff — sum-exactness wins).
+      // pool is not round, place 1 is exempt from the multiple-of-unit check
+      // (the documented tradeoff — sum-exactness wins).
       var valid = amounts[0] >= amounts[1] && amounts[0] > 0;
       for (var i = 1; i < paidPlaces - 1 && valid; i++) {
         if (amounts[i] < amounts[i + 1]) valid = false;
@@ -466,6 +501,9 @@ class TournamentEngine {
         if (amounts[i] <= 0) valid = false;
         final mustBeRound = i != 0 || poolIsRound;
         if (mustBeRound && amounts[i] % roundingUnit != 0) valid = false;
+        // §9.4: no payout ends in 5. Only reachable at the smallest (5) unit;
+        // place 1 stays exempt so the exact-sum guarantee wins.
+        if (roundingUnit == 5 && i != 0 && amounts[i] % 10 == 5) valid = false;
       }
       if (!valid) {
         paidPlaces--;
@@ -491,6 +529,16 @@ class TournamentEngine {
 
   /// Recalculates the organizer amount, final prize pool, and prize distribution.
   /// This is used dynamically when late players join or rebuys/add-ons are taken.
+  /// The unit that payouts are rounded to for this buy-in.
+  ///
+  /// The MVP spec demands every displayed payout is a multiple of 10 and
+  /// never ends in 5 (§9.4, §23.1). With an organizer cut > 0 the pool is
+  /// always snapped to a multiple of 10 (§9.2), so any buy-in of 10+ can
+  /// safely round payouts on 10 and every place stays clean. Sub-10 buy-ins
+  /// (e.g. a 5 or 7 game) fall back to unit 1 so sums stay exact; a 5-unit
+  /// would let payouts end in 5, which §9.4 forbids.
+  static int roundingUnitFor(int buyIn) => buyIn < 10 ? 1 : 10;
+
   static ({int organizerAmount, int prizePool, List<Prize> prizes})
   recalculatePrizes(
     int grossEligible,
@@ -511,8 +559,8 @@ class TournamentEngine {
     if (organizerPct > 0) {
       // Two candidates that carry the correct units digit mod 10, bracketing
       // the target. Pick the closer one; ties broken toward the smaller value.
-      final baseUnits = (targetOrganizer - mod);
-      final floorCandidate = (baseUnits ~/ roundingUnit) * roundingUnit + mod;
+      final baseUnits = (targetOrganizer - mod).toDouble();
+      final floorCandidate = (baseUnits / roundingUnit).floor() * roundingUnit + mod;
       final ceilCandidate = floorCandidate + roundingUnit;
       for (final c in [floorCandidate, ceilCandidate]) {
         if (c < 0 || c > grossEligible) continue;
@@ -529,7 +577,12 @@ class TournamentEngine {
     var prizePool = grossEligible - organizerAmount;
     if (prizePool < 0) prizePool = 0;
 
-    final prizes = _calcPrizes(prizePool, players, forcePaidPlaces, roundingUnit);
+    final prizes = _calcPrizes(
+      prizePool,
+      players,
+      forcePaidPlaces,
+      roundingUnit,
+    );
     return (
       organizerAmount: organizerAmount,
       prizePool: prizePool,
@@ -575,7 +628,8 @@ class TournamentEngine {
     var stack = startingStack;
     List<ChipPlanEntry> chipPlan;
     while (true) {
-      final int bufferedPlayers = params.players + (params.players * 0.20).ceil();
+      final int bufferedPlayers =
+          params.players + (params.players * 0.20).ceil();
       chipPlan = _buildChipPlan(
         stack,
         params.chipSet,
@@ -607,9 +661,13 @@ class TournamentEngine {
 
     // ── Blind curve (tech spec §8.3 / §8.4) ─────────────────────────────────
     // The final big blind is derived from the total chips that will actually
-    // be in play: starting stacks plus expected rebuys, re-entries and
-    // add-ons. Heads-up should begin with the average stack around
-    // [targetHeadsUpAverageBB] big blinds, so:
+    // be in play: starting stacks plus expected rebuys and add-ons, per the
+    // spec formula. Re-entry stacks are deliberately NOT added here — the
+    // spec's expectedTotalChips (§8.3) only counts starting, rebuy and add-on
+    // stacks, and a re-entry stack simply replaces a busted stack already
+    // counted as in play. (Re-entries do still count toward the prize pool
+    // in §9.1, where behaviour matches the spec.) Heads-up should begin with
+    // the average stack around [targetHeadsUpAverageBB] big blinds, so:
     //   targetFinalBB = expectedTotalChips / (2 × targetHeadsUpAverageBB)
     //   rawBB(i)      = openingBB × growthFactor^i
     //   growthFactor  = (targetFinalBB / openingBB)^(1 / max(1, levels − 1))
@@ -620,14 +678,14 @@ class TournamentEngine {
     final expectedTotalChips =
         stack * params.players +
         stack * expectedRebuysTotal +
-        stack * expectedReEntriesTotal +
         addOnStack * expectedAddOnsTotal;
-    final targetFinalBB =
-        expectedTotalChips / (2 * targetHeadsUpAverageBB);
-    final growthFactor = math.pow(
-      math.max(targetFinalBB, openingBB.toDouble()) / openingBB,
-      1 / math.max(1, numLevels - 1),
-    ).toDouble();
+    final targetFinalBB = expectedTotalChips / (2 * targetHeadsUpAverageBB);
+    final growthFactor = math
+        .pow(
+          math.max(targetFinalBB, openingBB.toDouble()) / openingBB,
+          1 / math.max(1, numLevels - 1),
+        )
+        .toDouble();
 
     final ladder = [...validBlindLevels];
     final levels = <BlindLevel>[];
@@ -658,7 +716,8 @@ class TournamentEngine {
         // closer to the raw target than the current one.
         while (cursor < ladder.length - 1 &&
             ladder[cursor + 1][1] > prevBB &&
-            (ladder[cursor + 1][1] - raw).abs() < (raw - ladder[cursor][1]).abs()) {
+            (ladder[cursor + 1][1] - raw).abs() <
+                (raw - ladder[cursor][1]).abs()) {
           cursor++;
         }
         sb = ladder[cursor][0];
@@ -675,10 +734,7 @@ class TournamentEngine {
           ? (params.anteStyle == AnteStyle.individual
                 ? math.max(
                     minChip,
-                    _snapToPracticalBlind(
-                      bb / defaultTableSize,
-                      sortedChips,
-                    ),
+                    snapToPracticalBlind(bb / defaultTableSize, sortedChips),
                   )
                 : bb)
           : null;
@@ -718,6 +774,9 @@ class TournamentEngine {
       for (var i = 0; i < sortedChips.length - 1; i++) {
         final chip = sortedChips[i];
         final next = sortedChips[i + 1];
+        // A zero-valued denomination would make the exchange ratio below
+        // divide by zero (Infinity, which `.ceil()` rejects).
+        if (chip.value <= 0 || next.value <= 0) continue;
         // The chip is played out once the BB is at least 20x its value.
         final level = levels.indexWhere((l) => l.bb >= chip.value * 20);
         if (level < 0 || level == 0) continue;
@@ -743,9 +802,10 @@ class TournamentEngine {
         params.effectiveRebuyCost * expectedRebuysTotal +
         params.buyIn * expectedReEntriesTotal +
         params.effectiveAddOnCost * expectedAddOnsTotal;
-    int roundingUnit = 10;
-    if (params.buyIn < 10) roundingUnit = 1;
-    else if (params.buyIn % 5 == 0) roundingUnit = 5;
+    // Determines which multiples payouts must be rounded to. The reference
+    // schedule below (§4.1 — see §9.4/§23.1) is keyed on pools divisible by
+    // 10, so decade buy-ins stay on unit 10 even when the pool is odd.
+    final int roundingUnit = roundingUnitFor(params.buyIn);
 
     final recalculated = recalculatePrizes(
       grossEligible,

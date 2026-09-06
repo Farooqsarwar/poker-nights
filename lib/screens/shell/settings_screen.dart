@@ -67,6 +67,16 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   showDivider: true,
                 ),
+                _SettingRow(
+                  icon: Icons.lightbulb_outline,
+                  title: 'Admin app tour',
+                  subtitle: 'Show step-by-step guidance during tournaments',
+                  trailing: AppToggle(
+                    value: app.showAppTour,
+                    onChanged: (v) => app.setAppTour(v),
+                  ),
+                  showDivider: true,
+                ),
                 // Push notifications via OneSignal (free-plan fan-out — no
                 // Cloud Function). Toggling on shows the OS/browser prompt.
                 _SettingRow(
@@ -199,6 +209,7 @@ class SettingsScreen extends StatelessWidget {
                   );
                   return;
                 }
+                if (app.user == null) return;
                 OneSignalSender.instance.send(
                   title: 'Debug Push',
                   body: 'Hello! Your push notifications are working perfectly.',
@@ -342,10 +353,11 @@ class _ThemeGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = [
-      ThemePalettes.all.sublist(0, 3),
-      ThemePalettes.all.sublist(3, 5),
-    ];
+    final rows = <List<ThemePalette>>[];
+    for (var i = 0; i < ThemePalettes.all.length; i += 3) {
+      final end = (i + 3 < ThemePalettes.all.length) ? i + 3 : ThemePalettes.all.length;
+      rows.add(ThemePalettes.all.sublist(i, end));
+    }
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(

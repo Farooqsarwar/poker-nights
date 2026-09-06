@@ -80,7 +80,7 @@ class ProfileScreen extends StatelessWidget {
                         onTap: () => _chooseAvatarColor(context, app),
                         customBorder: const CircleBorder(),
                         child: Container(
-                          padding: const EdgeInsets.all(6),
+                          padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: AppColors.card,
                             shape: BoxShape.circle,

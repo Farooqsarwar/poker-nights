@@ -30,9 +30,12 @@ class AppToggle extends StatelessWidget {
       child: InkWell(
         onTap: () => onChanged(!value),
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             AnimatedContainer(
               duration: AppDurations.normal,
               curve: Curves.easeInOut,
@@ -56,6 +59,7 @@ class AppToggle extends StatelessWidget {
               Text(label!, style: AppTypography.bodySm),
             ],
           ],
+        ),
         ),
       ),
     );

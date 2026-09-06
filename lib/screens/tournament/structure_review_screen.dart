@@ -153,18 +153,18 @@ class StructureReviewScreen extends StatelessWidget {
                       showDialog(
                         context: context,
                         barrierDismissible: false,
-                        builder: (ctx) => const Dialog(
+                        builder: (ctx) => Dialog(
                           backgroundColor: Colors.transparent,
                           elevation: 0,
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              CoinShuffleAnimation(),
-                              SizedBox(height: 24),
+                              const CoinShuffleAnimation(),
+                              const SizedBox(height: 24),
                               Text(
                                 'AI is generating structure...',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.foreground,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -222,23 +222,25 @@ class StructureReviewScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Structure Review',
-                    style: AppTypography.display(
-                      size: AppFontSizes.xxxl,
-                      weight: FontWeight.w700,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Structure Review',
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxxl,
+                        weight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  Text(
-                    settings.name,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
+                    Text(
+                      settings.name,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -429,10 +431,12 @@ class StructureReviewScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Blind schedule — ${structure.levelDuration}-minute levels',
-                      style: AppTypography.bodySm.copyWith(
-                        fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Text(
+                        'Blind schedule — ${structure.levelDuration}-minute levels',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     AppButton(
@@ -1063,12 +1067,15 @@ class _PlayerCountCard extends StatelessWidget {
   }
 }
 
-String _placeLabel(int place) => switch (place) {
-  1 => '1st',
-  2 => '2nd',
-  3 => '3rd',
-  _ => '${place}th',
-};
+String _placeLabel(int place) {
+  if (place % 100 >= 11 && place % 100 <= 13) return '${place}th';
+  return switch (place % 10) {
+    1 => '${place}st',
+    2 => '${place}nd',
+    3 => '${place}rd',
+    _ => '${place}th',
+  };
+}
 
 /// Computes the total chips required for the plan (starting stacks for every
 /// expected player + expected rebuys + expected add-ons) and flags any
@@ -1106,12 +1113,15 @@ List<String> _chipShortages(
   return shortages;
 }
 
-String _placeName(int place) => switch (place) {
-  1 => '1st Place',
-  2 => '2nd Place',
-  3 => '3rd Place',
-  _ => '${place}th Place',
-};
+String _placeName(int place) {
+  if (place % 100 >= 11 && place % 100 <= 13) return '${place}th Place';
+  return switch (place % 10) {
+    1 => '${place}st Place',
+    2 => '${place}nd Place',
+    3 => '${place}rd Place',
+    _ => '${place}th Place',
+  };
+}
 
 class _LevelCell extends StatelessWidget {
   const _LevelCell({required this.label, required this.align});
@@ -1151,7 +1161,7 @@ class _ChipDot extends StatelessWidget {
         color: Color(hex),
         shape: BoxShape.circle,
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.3),
+          color: AppColors.border,
           width: 1.5,
         ),
       ),

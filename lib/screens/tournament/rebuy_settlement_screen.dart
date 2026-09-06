@@ -98,7 +98,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
     final addOnChips = totalAddOns * structure.addOnStack;
     final estPrizePool =
         structure.prizePool +
-        (settings.addOn ? totalAddOns * settings.buyIn : 0);
+        (settings.addOn ? totalAddOns * settings.effectiveAddOnCost : 0);
     final stepIndex = _SettlementStep.values.indexOf(_step);
 
     return AppPage(

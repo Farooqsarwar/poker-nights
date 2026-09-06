@@ -70,7 +70,7 @@ service cloud.firestore {
       let myNew = request.resource.data.get('players', {})[request.auth.uid];
       let myOld = resource.data.get('players', {})[request.auth.uid];
       return myOld == null || myNew == null
-          || myNew.diff(myOld).affectedKeys().hasOnly(['rsvp']);
+          || myNew.diff(myOld).affectedKeys().hasOnly(['rsvp', 'checkedIn', 'confirmed']);
     }
 
     // Guest slots are managed by the member whose +N RSVP created them, and a
@@ -115,7 +115,13 @@ service cloud.firestore {
     // their own rsvp, their own guest slots and their own id in the rebuy /
     // add-on request arrays. Everything else must stay byte-identical.
     function memberGameEdit() {
-      return true;
+      let topDiff = request.resource.data.diff(resource.data);
+      let allowedTop = ['players', 'guestSlots', 'rebuyRequests', 'addOnRequests', 'updatedAt', 'writerId'];
+      return topDiff.affectedKeys().hasOnly(allowedTop)
+          && memberPlayersSafe()
+          && memberGuestSlotsSafe()
+          && memberRequestArraySafe('rebuyRequests')
+          && memberRequestArraySafe('addOnRequests');
     }
 
     // ---------- users ----------
@@ -325,10 +331,15 @@ service cloud.firestore {
     // Lets a group admin resolve a registered user by their account email for
     // the "add member directly" flow, without exposing the users collection.
     // Each user writes only their own row (keyed by lower-cased email).
+    // Reads are split into GET vs LIST so the collection is never enumerable:
+    // any signed-in user may resolve ONE specific doc (the app only ever does
+    // targeted doc GETs on the exact lower-cased email), while LISTING is
+    // scoped to rows whose uid is the caller's own (practically never issued).
     match /emailIndex/{emailLower} {
-      allow read: if signedIn();
-      allow create, update: if signedIn()
-          && request.resource.data.uid == request.auth.uid;
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if signedIn() && request.resource.data.uid == request.auth.uid && resource.data.uid == request.auth.uid;
       allow delete: if false;
     }
 
@@ -357,7 +368,9 @@ service cloud.firestore {
     // contain no personal data beyond first names and seat assignments.
     match /publicGames/{gameId} {
       allow read: if true;
-      allow create, update: if signedIn() && (isGroupAdmin(request.resource.data.gid) || isMember(request.resource.data.gid));
+      allow create: if signedIn() && (isGroupAdmin(request.resource.data.gid) || isMember(request.resource.data.gid));
+      allow update: if signedIn() && (isGroupAdmin(resource.data.gid) || isMember(resource.data.gid))
+                    && request.resource.data.gid == resource.data.gid;
       allow delete: if signedIn() && isGroupAdmin(resource.data.gid);
     }
 

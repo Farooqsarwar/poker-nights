@@ -213,14 +213,14 @@ void main() {
           'Respond to Invitation');
     });
 
-    test('no RSVP yet -> Respond to Invitation', () {
+    test('no RSVP yet -> Check In', () {
       final a = mainActionFor(
         MainButtonRole.member,
         _game(LiveGameStatus.checkin),
         memberRow: _player(rsvp: null),
       );
-      _expectAction(a, MainActionId.respondToInvitation,
-          'Respond to Invitation');
+      _expectAction(a, MainActionId.checkIn,
+          'Check In');
     });
 
     test('checked in but unconfirmed -> Waiting for Confirmation', () {

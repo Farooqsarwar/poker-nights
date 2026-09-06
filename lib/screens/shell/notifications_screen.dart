@@ -39,7 +39,12 @@ class NotificationsScreen extends StatelessWidget {
 
   void _openLink(BuildContext context, String? link) {
     if (link == null) return;
-    final target = _routeFor(link);
+    
+    // Parse link to separate path and query parameters
+    final uri = Uri.tryParse(link.startsWith('/') ? link : '/$link');
+    final pathOnly = uri?.path ?? link;
+    
+    final target = _routeFor(pathOnly);
     if (target == null) return;
     // For game-specific screens, ensure the current game is set in the
     // provider so the destination screen has data to display.
@@ -55,10 +60,18 @@ class NotificationsScreen extends StatelessWidget {
     };
     if (gameScreens.contains(target)) {
       final app = context.read<AppProvider>();
-      final activeGame = app.currentGroup.games
+      final gameId = uri?.queryParameters['gameId'];
+      
+      LiveGame? gameToSet;
+      if (gameId != null) {
+        gameToSet = app.currentGroup.games.where((g) => g.id == gameId).firstOrNull;
+      }
+      // Fallback if gameId is not found or not in link
+      gameToSet ??= app.currentGroup.games
           .where((g) => g.status != LiveGameStatus.cancelled)
           .firstOrNull;
-      if (activeGame != null) app.setCurrentGame(activeGame);
+          
+      if (gameToSet != null) app.setCurrentGame(gameToSet);
     }
     context.go(target);
   }

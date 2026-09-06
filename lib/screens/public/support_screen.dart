@@ -32,7 +32,7 @@ class SupportScreen extends StatelessWidget {
       q: 'How are results kept private?',
       a:
           'Prize amounts and the full results table are only shown to the tournament '
-          'host. Players see their position without anyone else\'s payouts.',
+          'admin. Players see their position without anyone else\'s payouts.',
     ),
     (
       q: 'I found a bug. What do I do?',

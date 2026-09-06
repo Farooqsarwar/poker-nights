@@ -141,7 +141,7 @@ class _LandingScreenState extends State<LandingScreen> {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 500),
                 child: Text(
-                  'One host, one app. Tournament structure generated from your real chips. Timer, blinds, seating and prizes — handled.',
+                  'One admin, one app. Tournament structure generated from your real chips. Timer, blinds, seating and prizes — handled.',
                   textAlign: TextAlign.center,
                   style: AppTypography.bodyStyle.copyWith(
                     color: AppColors.mutedForeground,
@@ -288,7 +288,7 @@ class _LandingScreenState extends State<LandingScreen> {
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                        vertical: 6.0,
+                        vertical: 12.0,
                         horizontal: 8.0,
                       ),
                       child: Text(

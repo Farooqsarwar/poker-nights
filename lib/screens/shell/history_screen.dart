@@ -246,7 +246,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget _buildLeaderboard(List<LiveGame> pastGames, String? userId) {
     final statsMap = <String, _LbEntry>{};
     for (final game in pastGames) {
-      for (final p in game.players) {
+      for (final p in game.players.where((p) => !p.isGuest)) {
         final entry = statsMap.putIfAbsent(p.id, () => _LbEntry(name: p.name));
         entry.played++;
         entry.knockouts += p.knockouts;
@@ -569,6 +569,7 @@ class _HistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final myPos = game.finishOrder.indexOf(userId ?? '');
     final placement = myPos >= 0 ? game.finishOrder.length - myPos : null;
+    final me = game.players.where((p) => p.id == userId).firstOrNull;
     final winnerId = game.finishOrder.isNotEmpty ? game.finishOrder.last : null;
     final winner = game.players.where((p) => p.id == winnerId).firstOrNull;
     final playersCount = game.players.where((p) => !p.isGuest).length;
@@ -584,7 +585,10 @@ class _HistoryRow extends StatelessWidget {
               0;
     final net = placement == null
         ? null
-        : prizeForPlacement - game.settings.buyIn;
+        : prizeForPlacement -
+            game.settings.buyIn -
+            ((me?.rebuys ?? 0) * (game.settings.rebuyCost ?? game.settings.buyIn)) -
+            ((me?.hasAddOn ?? false) ? (game.settings.addOnCost ?? game.settings.buyIn) : 0);
 
     return AppCard(
       onTap: () {

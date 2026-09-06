@@ -27,6 +27,7 @@ import '../../widgets/app_toggle.dart';
 import '../../widgets/code_display.dart';
 import '../../widgets/rsvp_badge.dart';
 import '../../widgets/chat_sheet.dart';
+import '../../widgets/app_alert_banner.dart';
 
 /// Invitation / RSVP page mirroring the web `InvitationPage`.
 class InvitationScreen extends StatefulWidget {
@@ -190,6 +191,64 @@ class _InvitationScreenState extends State<InvitationScreen> {
                 cutoffPassed: app.rsvpCutoffPassed,
                 onRsvp: (rsvp) {
                   HapticFeedback.lightImpact();
+                  // Spec §7.1: warn if reducing guest count would remove
+                  // already-claimed or checked-in guest slots.
+                  final currentRsvp = myPlayer?.rsvp;
+                  final newGuestCount = rsvp?.guestCount ?? 0;
+                  final currentGuestCount = currentRsvp?.guestCount ?? 0;
+                  if (newGuestCount < currentGuestCount) {
+                    final claimedSlots = game.guestSlots
+                        .where((s) =>
+                            s.inviterId == (myPlayer?.id ?? '') &&
+                            s.slot > newGuestCount &&
+                            !s.available)
+                        .length;
+                    final slotsToRemove = currentGuestCount - newGuestCount;
+                    if (claimedSlots > 0 && slotsToRemove > 0) {
+                      showAppModal(
+                        context: context,
+                        title: 'Reduce guest count?',
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'You have $claimedSlots claimed guest slot${claimedSlots == 1 ? '' : 's'}. '
+                              'Reducing your response may remove a slot already reserved by a guest. '
+                              'The admin will need to resolve any conflict.',
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xl),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: AppButton(
+                                    variant: AppButtonVariant.secondary,
+                                    onPressed: () => Navigator.of(context).pop(),
+                                    child: const Text('Keep current RSVP'),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: AppButton(
+                                    variant: AppButtonVariant.danger,
+                                    onPressed: () {
+                                      app.setRSVP(rsvp);
+                                      Navigator.of(context).pop();
+                                    },
+                                    child: const Text('Change anyway'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                      return;
+                    }
+                  }
                   app.setRSVP(rsvp);
                 },
               ),
@@ -208,12 +267,42 @@ class _InvitationScreenState extends State<InvitationScreen> {
               game.status != LiveGameStatus.completed &&
               game.status != LiveGameStatus.cancelled) ...[
             const SizedBox(height: AppSpacing.sm),
-            AppButton(
-              fullWidth: true,
-              size: AppButtonSize.xl,
-              variant: AppButtonVariant.danger,
-              onPressed: () => _confirmCancelGame(context, app, game),
-              child: const Text('Cancel Game'),
+            // Danger zone — visually separated per spec §12.6 / §13.2.
+            AppCard(
+              borderColor: AppColors.destructive.withValues(alpha: 0.25),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Danger zone',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.destructive,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Cancel this game — requires a reason.',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    variant: AppButtonVariant.danger,
+                    onPressed: () => _confirmCancelGame(context, app, game),
+                    child: const Text('Cancel game'),
+                  ),
+                ],
+              ),
             ),
           ],
 
@@ -403,6 +492,65 @@ if (app.isAdmin &&
               ],
             ),
           ),
+          if (myPlayer != null && (myPlayer.rsvp?.guestCount ?? 0) > 0) ...[
+            const SizedBox(height: AppSpacing.md),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Your guest slots',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (var i = 1; i <= myPlayer.rsvp!.guestCount; i++) ...[
+                    Builder(
+                      builder: (context) {
+                        final guest = game.players.where((p) => p.isGuest && p.inviterId == myPlayer.id && p.guestSlot == i).firstOrNull;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: AppColors.secondary,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '$i',
+                                  style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground),
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  guest?.name.isNotEmpty == true ? guest!.name : 'Unclaimed',
+                                  style: AppTypography.bodySm.copyWith(
+                                    color: guest != null ? AppColors.foreground : AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ),
+                              if (guest != null)
+                                AppBadge(
+                                  label: guest.confirmed ? 'Confirmed' : 'Pending',
+                                  variant: guest.confirmed ? AppBadgeVariant.green : AppBadgeVariant.muted,
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           // Responses
           AppCard(
@@ -839,7 +987,9 @@ class _GuestSlotBadge extends StatelessWidget {
 
 /// Admin "Review RSVPs" modal (audit fix E4 — the button used to navigate to
 /// Check-in). Shows the live attendance breakdown plus every member's answer.
-void _showRsvpListModal(BuildContext context, LiveGame game) {
+/// Admins can long-press a member row to correct or reopen that member's RSVP
+/// (User Flow §3.1).
+void _showRsvpListModal(BuildContext context, AppProvider app, LiveGame game) {
   final members = game.players.where((p) => !p.isGuest).toList();
   final going = members
       .where((p) => p.rsvp != null && p.rsvp!.isGoing)
@@ -895,13 +1045,18 @@ void _showRsvpListModal(BuildContext context, LiveGame game) {
         for (final p in members)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-            child: Row(
-              children: [
-                AppAvatar(name: p.name, size: AppAvatarSize.sm),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: Text(p.name, style: AppTypography.bodySm)),
-                RSVPBadge(rsvp: p.rsvp),
-              ],
+            child: GestureDetector(
+              onLongPress: app.isAdmin
+                  ? () => _showAdminRsvpOverride(context, app, game, p)
+                  : null,
+              child: Row(
+                children: [
+                  AppAvatar(name: p.name, size: AppAvatarSize.sm),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: Text(p.name, style: AppTypography.bodySm)),
+                  RSVPBadge(rsvp: p.rsvp),
+                ],
+              ),
             ),
           ),
         const SizedBox(height: AppSpacing.xl),
@@ -915,6 +1070,54 @@ void _showRsvpListModal(BuildContext context, LiveGame game) {
             context.go(RoutePaths.checkIn);
           },
           child: const Text('Open Check-in'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Admin correct-or-reopen for a single member's RSVP (User Flow §3.1).
+void _showAdminRsvpOverride(
+    BuildContext context, AppProvider app, LiveGame game, Player p) {
+  final choices = <String, Rsvp?>{
+    'Going': Rsvp.going,
+    'Going +1': Rsvp.goingPlus1,
+    'Going +2': Rsvp.goingPlus2,
+    'Going +3': Rsvp.goingPlus3,
+    'Going +4': Rsvp.goingPlus4,
+    'Maybe': Rsvp.maybe,
+    'Can’t come': Rsvp.cant,
+  };
+  showAppModal(
+    context: context,
+    title: 'Set RSVP for ${p.name}',
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final entry in choices.entries)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: AppButton(
+              variant: p.rsvp == entry.value
+                  ? AppButtonVariant.secondary
+                  : AppButtonVariant.ghost,
+              onPressed: () {
+                app.adminSetRSVP(p.id, entry.value, gameId: game.id);
+                Navigator.of(context).pop();
+              },
+              child: Text(entry.key),
+            ),
+          ),
+        AppButton(
+          variant: p.rsvp == null
+              ? AppButtonVariant.secondary
+              : AppButtonVariant.ghost,
+          onPressed: () {
+            app.adminSetRSVP(p.id, null, gameId: game.id);
+            Navigator.of(context).pop();
+          },
+          child: const Text('No response'),
         ),
       ],
     ),
@@ -1047,6 +1250,28 @@ class _EditEventFormState extends State<_EditEventForm> {
           child: const Text('Invalid date format (YYYY-MM-DD).'),
         );
         return;
+      }
+    }
+    // Spec §12.2: reject a past date AND a past time on today's date — the
+    // same rule the creation wizard enforces in its step-1 validation.
+    if (newDate != s.date || newTime != s.time) {
+      final parsed = DateTime.tryParse(newDate);
+      if (parsed != null) {
+        final parts = newTime.split(':');
+        final h = int.tryParse(parts.isNotEmpty ? parts[0] : '');
+        final m = int.tryParse(parts.length > 1 ? parts[1] : '');
+        if (h != null && m != null && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+          final scheduled =
+              DateTime(parsed.year, parsed.month, parsed.day, h, m);
+          if (scheduled.isBefore(DateTime.now())) {
+            showAppModal(
+              context: context,
+              title: 'Validation Error',
+              child: const Text('Start time must be in the future.'),
+            );
+            return;
+          }
+        }
       }
     }
     // Player count is intentionally not editable here — it is derived from
@@ -1719,7 +1944,7 @@ class _ContextualMainButton extends StatelessWidget {
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
-            onPressed: () => _showRsvpListModal(context, game),
+            onPressed: () => _showRsvpListModal(context, app, game),
             child: const Text('Review RSVPs'),
           );
         case LiveGameStatus.checkin:
@@ -1752,7 +1977,7 @@ class _ContextualMainButton extends StatelessWidget {
                 app.updateEventSettings(
                   game.settings.copyWith(players: checkedInCount),
                 );
-                app.updateGameStatus(LiveGameStatus.running);
+                app.startTimer();
                 context.go(RoutePaths.adminDashboard);
               },
               child: const Text('Start Tournament'),
@@ -1932,30 +2157,6 @@ class _RsvpSection extends StatefulWidget {
 }
 
 class _RsvpSectionState extends State<_RsvpSection> {
-  /// The number of extra guests the user wants to bring (0–4).
-  int _guestCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    // Restore current guest count from the existing RSVP.
-    final rsvp = widget.myPlayer.rsvp;
-    if (rsvp != null && rsvp.isGoing) {
-      _guestCount = rsvp.guestCount;
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _RsvpSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final rsvp = widget.myPlayer.rsvp;
-    if (rsvp != null && rsvp.isGoing) {
-      if (_guestCount != rsvp.guestCount) {
-        _guestCount = rsvp.guestCount;
-      }
-    }
-  }
-
   Rsvp _rsvpForGuestCount(int guests) => switch (guests) {
         1 => Rsvp.goingPlus1,
         2 => Rsvp.goingPlus2,
@@ -1969,6 +2170,8 @@ class _RsvpSectionState extends State<_RsvpSection> {
     return r != null && r.isGoing;
   }
 
+  int get _currentGuestCount => widget.myPlayer.rsvp?.guestCount ?? 0;
+
   @override
   Widget build(BuildContext context) {
     final current = widget.myPlayer.rsvp;
@@ -1980,13 +2183,23 @@ class _RsvpSectionState extends State<_RsvpSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (widget.cutoffPassed)
+          const Padding(
+            padding: EdgeInsets.only(bottom: AppSpacing.md),
+            child: AppAlertBanner(
+              type: AppAlertType.warning,
+              message: 'RSVP is closed — responses can no longer be changed.',
+            ),
+          ),
         Text(
           'Your RSVP',
           style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: AppSpacing.md),
         // Primary status chips: Going / Maybe / Can't
-        Row(
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
             _RsvpChip(
               label: 'Going',
@@ -1994,17 +2207,15 @@ class _RsvpSectionState extends State<_RsvpSection> {
               enabled: enabled,
               onTap: () {
                 // Preserve current guest count when re-tapping "Going".
-                widget.onRsvp(_rsvpForGuestCount(_guestCount));
+                widget.onRsvp(_rsvpForGuestCount(_currentGuestCount));
               },
             ),
-            const SizedBox(width: AppSpacing.sm),
             _RsvpChip(
               label: 'Maybe',
               active: current == Rsvp.maybe,
               enabled: enabled,
               onTap: () => widget.onRsvp(Rsvp.maybe),
             ),
-            const SizedBox(width: AppSpacing.sm),
             _RsvpChip(
               label: "Can't come",
               active: current == Rsvp.cant,
@@ -2032,20 +2243,19 @@ class _RsvpSectionState extends State<_RsvpSection> {
               ),
               const Spacer(),
               _GuestCountStepper(
-                value: _guestCount,
+                value: _currentGuestCount,
                 max: 4,
                 onChanged: (n) {
-                  setState(() => _guestCount = n);
                   widget.onRsvp(_rsvpForGuestCount(n));
                 },
               ),
             ],
           ),
-          if (_guestCount > 0)
+          if (_currentGuestCount > 0)
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.xs),
               child: Text(
-                'You + $_guestCount guest${_guestCount > 1 ? 's' : ''} = ${_guestCount + 1} total seats',
+                'You + $_currentGuestCount guest${_currentGuestCount > 1 ? 's' : ''} = ${_currentGuestCount + 1} total seats',
                 style: AppTypography.bodyXs.copyWith(
                   color: AppColors.success,
                 ),
@@ -2100,7 +2310,7 @@ class _GuestCountStepper extends StatelessWidget {
           onTap: () => onChanged(value - 1),
         ),
         SizedBox(
-          width: 32,
+          width: 44,
           child: Center(
             child: Text(
               '$value',
@@ -2137,8 +2347,8 @@ class _StepButton extends StatelessWidget {
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: Container(
-        width: 32,
-        height: 32,
+        width: 44,
+        height: 44,
         decoration: BoxDecoration(
           color: enabled ? AppColors.primary : AppColors.muted,
           borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -2402,7 +2612,7 @@ class _PremiumEventHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'Hosted by $hostName',
+                    'Admin: $hostName',
                     style: AppTypography.bodyXs.copyWith(
                       color: AppColors.mutedForeground,
                     ),

@@ -73,13 +73,62 @@ const _guestAllowed = {RoutePaths.playerLive, RoutePaths.resultPodium};
 
 /// Builds the app router wired to [app] so the auth guard re-evaluates on
 /// every provider change (sign-in/out and the initial `authReady` flip).
+/// Adapts [AppProvider] into a [Listenable] that fires only when a field the
+/// router's `redirect` reads has actually changed. Collapses the provider's
+/// high-frequency notifications (clock tick, every Firestore snapshot) down to
+/// the handful of transitions that can change routing.
+class _RouterRefresh extends ChangeNotifier {
+  _RouterRefresh(this._app) {
+    _last = _snapshot();
+    _app.addListener(_onProviderChanged);
+  }
+
+  final AppProvider _app;
+  late List<Object?> _last;
+
+  List<Object?> _snapshot() => <Object?>[
+        _app.authReady,
+        _app.isAuthenticated,
+        _app.hasGuestSession,
+        _app.isAdmin,
+        _app.currentGame?.id,
+        _app.currentGame?.status,
+        _app.currentGroup.id,
+      ];
+
+  void _onProviderChanged() {
+    final next = _snapshot();
+    var changed = next.length != _last.length;
+    for (var i = 0; !changed && i < next.length; i++) {
+      changed = next[i] != _last[i];
+    }
+    if (changed) {
+      _last = next;
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _app.removeListener(_onProviderChanged);
+    super.dispose();
+  }
+}
+
 GoRouter buildAppRouter(AppProvider app) {
   // Preserve deep-link paths that arrive before Firebase resolves.
   String? pendingDeepLink;
 
   return GoRouter(
   initialLocation: RoutePaths.splash,
-  refreshListenable: app,
+  // Re-evaluate `redirect` only when something the guard actually reads
+  // changes — NOT on every AppProvider.notifyListeners(). The provider notifies
+  // once per second from the tournament clock and again on every one of ~15
+  // Firestore stream deliveries; feeding all of that straight into GoRouter
+  // re-ran the guard constantly and let a one-frame blip in `isAdmin` /
+  // `currentGame` (e.g. while a group bundle re-subscribes) bounce the user
+  // out of the screen they were mid-flow on.
+  refreshListenable: _RouterRefresh(app),
   redirect: (context, state) {
     final path = state.uri.path;
     final ready = app.authReady;
@@ -106,6 +155,26 @@ GoRouter buildAppRouter(AppProvider app) {
     // Admin-only routes: bounce non-admins away before the screen renders.
     if (_adminPaths.contains(path) && !app.isAdmin) {
       return app.currentGame != null ? RoutePaths.invitation : RoutePaths.home;
+    }
+
+    // Auto-redirect members from invitation to live game when game goes live.
+    // GoRouter re-evaluates redirect on every notifyListeners() call, so this
+    // fires automatically when the admin starts the tournament (P1 fix).
+    final game = app.currentGame;
+    if (authed &&
+        !app.isAdmin &&
+        path == RoutePaths.invitation &&
+        game != null &&
+        game.status.isActiveLive) {
+      return RoutePaths.playerLive;
+    }
+    // Guard: prevent admin from back-navigating to pre-game screens during live tournament.
+    if (authed &&
+        app.isAdmin &&
+        game != null &&
+        game.status.isActiveLive &&
+        (path == RoutePaths.structureReview)) {
+      return RoutePaths.adminDashboard;
     }
 
     final guestOk = app.hasGuestSession && _guestAllowed.contains(path);

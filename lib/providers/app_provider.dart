@@ -8,7 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart'
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:flutter/foundation.dart';
-import 'package:google_sign_in_all_platforms/google_sign_in_all_platforms.dart';
+
 import 'package:localstore/localstore.dart';
 
 import '../models/app_notification.dart';
@@ -253,7 +253,8 @@ class AppProvider extends ChangeNotifier {
   /// entry is dropped once a remote snapshot agrees, or if the write is
   /// rejected. `containsKey` distinguishes "no overlay" from "overlay = clear".
   final Map<String, Rsvp?> _pendingOwnRsvp = {};
-  final Set<String> _pendingCheckIn = {};
+  final Map<String, String> _pendingCheckIn = {};
+  final Map<String, bool> _checkInLanded = {};
 
   /// Last member-RSVP patch failure, surfaced on the invitation screen so
   /// backend rejections are never invisible (vs silent optimistic state that
@@ -880,13 +881,6 @@ class AppProvider extends ChangeNotifier {
         case 'guestCheckIn':
           error = _applyQueuedGuestCheckIn(req.payload);
           break;
-        case 'memberCheckIn':
-          final pid = req.payload['playerId'] as String?;
-          if (pid != null) {
-            checkInPlayer(pid); // Auto-confirms and updates state
-            changed = true;
-          }
-          break;
         case 'rebuyReq':
           requestRebuy((req.payload['playerId'] as String?) ?? '');
           break;
@@ -1096,6 +1090,7 @@ class AppProvider extends ChangeNotifier {
       // member's just-written RSVP — re-write it rather than only masking it
       // with the overlay, so a page reload keeps the selection.
       _maybeReassertOwnRsvp(remote, data['writerId'] as String?);
+      _maybeReassertOwnCheckIn(remote, data['writerId'] as String?);
       // Another device may have settled the tournament — record my result.
       _maybeRecordOwnResult(remote);
       if (_isGameAuthority) {
@@ -1169,19 +1164,20 @@ class AppProvider extends ChangeNotifier {
 
   LiveGame _withPendingCheckInOverlay(LiveGame game) {
     if (_pendingCheckIn.isEmpty) return game;
+    final pendingPlayerId = _pendingCheckIn[game.id];
+    if (pendingPlayerId == null) return game;
     var updated = game;
-    final toRemove = <String>{};
     final updatedPlayers = game.players.map((p) {
-      if (_pendingCheckIn.contains(p.id)) {
+      if (pendingPlayerId == p.id) {
         if (p.checkedIn && p.confirmed) {
-          toRemove.add(p.id);
+          _pendingCheckIn.remove(game.id);
+          _checkInLanded.remove(game.id);
           return p;
         }
         return p.copyWith(checkedIn: true, confirmed: false);
       }
       return p;
     }).toList();
-    _pendingCheckIn.removeAll(toRemove);
     return updated.copyWith(players: updatedPlayers);
   }
 
@@ -1451,6 +1447,7 @@ class AppProvider extends ChangeNotifier {
     _pendingOwnRsvp.clear();
     _rsvpReassertCount.clear();
     _pendingCheckIn.clear();
+    _checkInLanded.clear();
     _adminVerdictByGroup.clear();
     _localGameDirty = false;
     _lastSavedSignature = null;
@@ -1931,6 +1928,12 @@ class AppProvider extends ChangeNotifier {
       final prefs = await _repo.loadUserPrefs(uid);
       final voice = prefs['voiceEnabled'];
       if (voice is bool) _voiceEnabled = voice;
+      final showTour = prefs['showAppTour'];
+      if (showTour is bool) _showAppTour = showTour;
+      final savedPendingCheckIn = prefs['pendingCheckIn'];
+      if (savedPendingCheckIn is Map) {
+        _pendingCheckIn.addAll(savedPendingCheckIn.cast<String, String>());
+      }
       final notify = prefs['browserNotify'];
       if (notify is bool) {
         _notificationsEnabled = notify;
@@ -2680,10 +2683,10 @@ class AppProvider extends ChangeNotifier {
               _currentGame!.players,
               privateData['players'],
             ),
-            structure: _currentGame!.structure?.copyWith(
-              prizes: privateData['prizes'] != null ? (privateData['prizes'] as List).map((e) => Prize(place: e['place'], amount: e['amount'])).toList() : _currentGame!.structure!.prizes,
-              organizerAmount: (privateData['organizerAmount'] as num?)?.toInt() ?? _currentGame!.structure!.organizerAmount,
-            ) ?? _currentGame!.structure,
+            structure: _currentGame!.structure.copyWith(
+              prizes: privateData['prizes'] != null ? (privateData['prizes'] as List).map((e) => Prize(place: e['place'], amount: e['amount'])).toList() : _currentGame!.structure.prizes,
+              organizerAmount: (privateData['organizerAmount'] as num?)?.toInt() ?? _currentGame!.structure.organizerAmount,
+            ),
           );
           notifyListeners();
         }
@@ -3154,22 +3157,26 @@ class AppProvider extends ChangeNotifier {
       return (organizerAmount: 0, prizePool: 0, prizes: const []);
     }
     final s = game.settings;
-    final participants = game.players
-        .where((p) => p.confirmed || p.checkedIn)
+    final confirmedCount = game.players
+        .where((p) => p.confirmed)
         .length;
     final rebuys = game.players.fold<int>(0, (sum, p) => sum + p.rebuys);
     final reEntries = game.players.fold<int>(0, (sum, p) => sum + p.reEntries);
     final addOns = game.players.where((p) => p.hasAddOn).length + addOnCount;
+    
+    final koTotal = s.koEnabled ? (confirmedCount + reEntries) * s.koAmount : 0;
+    
     final gross =
-        s.buyIn * participants +
-        s.effectiveRebuyCost * rebuys +
-        s.buyIn * reEntries +
-        s.effectiveAddOnCost * addOns;
+        (confirmedCount * s.buyIn) +
+        (rebuys * s.effectiveRebuyCost) +
+        (reEntries * s.buyIn) +
+        (addOns * (s.addOn ? s.effectiveAddOnCost : 0)) -
+        koTotal;
     final int roundingUnit = TournamentEngine.roundingUnitFor(s.buyIn);
 
     return TournamentEngine.recalculatePrizes(
       gross,
-      participants,
+      confirmedCount,
       s.organizerPct.toDouble(),
       forcePaidPlaces: s.forcePaidPlaces,
       roundingUnit: roundingUnit,
@@ -3456,6 +3463,10 @@ class AppProvider extends ChangeNotifier {
   }
 
   void resumeTimer() {
+    if (_currentGame?.status == LiveGameStatus.completed || 
+        _currentGame?.status == LiveGameStatus.cancelled) {
+      return;
+    }
     _currentGame = _currentGame!.copyWith(
       timerRunning: true,
       status: LiveGameStatus.running,
@@ -3967,23 +3978,20 @@ class AppProvider extends ChangeNotifier {
           .toList(),
     );
 
-    // Store the pending check-in state so incoming Firebase snapshots cannot
-    // revert the "Waiting for confirmation" status before admin confirms.
-    _pendingCheckIn.add(playerId);
+    final gameId = _currentGame?.id;
+    if (gameId != null) {
+      _pendingCheckIn[gameId] = playerId;
+      _checkInLanded[gameId] = false;
+      _persistPref('pendingCheckIn', _pendingCheckIn);
+    }
 
     if (!_isGameAuthority) {
-      // Members write only their own checkedIn flag via dot-path (same pattern
-      // as RSVP). This actually persists to Firestore immediately.
-      final gid = _currentGame?.groupId.isNotEmpty == true 
-          ? _currentGame!.groupId 
-          : _currentGroupId;
       final gameId = _currentGame?.id;
-      if (gid != null && gameId != null && _backendUp) {
-        unawaited(_repo.pushRequest(
-          gameId: gameId,
-          kind: 'memberCheckIn',
-          payload: {'playerId': playerId, 'gid': gid},
-        ));
+      if (gameId != null && _backendUp) {
+        _persistOwnCheckInPatch(gameId, {
+          'players.$playerId.checkedIn': true,
+          'players.$playerId.confirmed': false,
+        });
       }
     }
     // Admin path: whole-doc save via _syncGameToCloud handles persistence.
@@ -4235,19 +4243,17 @@ class AppProvider extends ChangeNotifier {
     }
 
     addAnnouncement('Guest confirmed and seated.', false);
-    if (guest != null) {
-      pushNotification(
-        AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-          title: 'Guest confirmed',
-          body: '${guest.name} is confirmed for ${game.settings.name}.',
-          type: NotificationType.invite,
-          link: '/guest-flow',
-          read: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
+    pushNotification(
+      AppNotification(
+        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Guest confirmed',
+        body: '${guest.name} is confirmed for ${game.settings.name}.',
+        type: NotificationType.invite,
+        link: '/guest-flow',
+        read: false,
+        timestamp: DateTime.now(),
+      ),
+    );
   }
 
   /// Admin rejects a pending guest request — the guest is removed from the
@@ -4866,7 +4872,10 @@ class AppProvider extends ChangeNotifier {
 
     int chipsToRemove = game.structure.startingStack;
     if (p.rebuys > 0) {
-      chipsToRemove += p.rebuys * game.structure.startingStack;
+      chipsToRemove += p.rebuys * game.structure.rebuyStack;
+    }
+    if (p.reEntries > 0) {
+      chipsToRemove += p.reEntries * game.structure.startingStack;
     }
     if (p.hasAddOn) {
       chipsToRemove += game.structure.addOnStack;
@@ -6242,6 +6251,64 @@ class AppProvider extends ChangeNotifier {
   /// window and only dropped once every attempt has failed — so a tap never
   /// "un-selects itself" while the group id is still resolving or the auth
   /// token is still propagating right after login.
+  final Map<String, int> _checkInReassertCount = {};
+
+  void _maybeReassertOwnCheckIn(LiveGame remote, String? writerId) {
+    final uid = _user?.id;
+    if (uid == null || _isGameAuthority) return;
+    if (_pendingCheckIn[remote.id] != uid) return;
+    if (writerId != null && writerId == _repo.deviceId) return;
+    final serverMine = remote.players.where((p) => p.id == uid).firstOrNull;
+    if (serverMine?.checkedIn == true) {
+      _pendingCheckIn.remove(remote.id);
+      _checkInLanded.remove(remote.id);
+      _persistPref('pendingCheckIn', _pendingCheckIn);
+      return; // server already agrees
+    }
+    if (serverMine?.checkedIn == false &&
+        serverMine?.confirmed == false &&
+        writerId != null &&
+        _checkInLanded[remote.id] == true) {
+      _pendingCheckIn.remove(remote.id);
+      _checkInLanded.remove(remote.id);
+      _persistPref('pendingCheckIn', _pendingCheckIn);
+      if (_currentGame?.id == remote.id) {
+        _currentGame = _withPendingCheckInOverlay(_withOwnRsvpOverlay(remote));
+      }
+      return; // admin cancelled this member's check-in — do not resurrect
+    }
+    final n = _checkInReassertCount[remote.id] ?? 0;
+    if (n >= 3) return;
+    _checkInReassertCount[remote.id] = n + 1;
+    _persistOwnCheckInPatch(remote.id, {'players.$uid.checkedIn': true, 'players.$uid.confirmed': false});
+  }
+
+  void _persistOwnCheckInPatch(String gameId, Map<String, dynamic> dotPaths) {
+    if (dotPaths.isEmpty) return;
+    unawaited(() async {
+      const delaysMs = [0, 250, 500, 1000, 2000, 3500, 5000, 8000, 12000];
+      for (var attempt = 0; attempt < delaysMs.length; attempt++) {
+        if (delaysMs[attempt] > 0) {
+          await Future<void>.delayed(Duration(milliseconds: delaysMs[attempt]));
+        }
+        final uid = _user?.id;
+        if (uid == null || _pendingCheckIn[gameId] != uid) return;
+        
+        try {
+          final gid = _currentGame?.groupId.isNotEmpty == true ? _currentGame!.groupId : _currentGroupId;
+          if (gid != null) {
+            await _repo.patchGame(gid, gameId, dotPaths);
+            _checkInLanded[gameId] = true;
+          }
+          return;
+        } catch (e) {
+          debugPrint('CheckIn patch failed (attempt $attempt): $e');
+        }
+      }
+    }());
+  }
+
+
   void _persistOwnRsvpPatch(String gameId, Map<String, dynamic> dotPaths, Rsvp? targetRsvp) {
     if (dotPaths.isEmpty) {
       // before == after at field level — nothing to write. Logged because a
@@ -6904,9 +6971,19 @@ class AppProvider extends ChangeNotifier {
   bool _voiceEnabled = true;
   bool get voiceEnabled => _voiceEnabled;
 
+  bool _showAppTour = true;
+  bool get showAppTour => _showAppTour;
+
   void toggleVoice() {
     _voiceEnabled = !_voiceEnabled;
     _persistPref('voiceEnabled', _voiceEnabled);
+    notifyListeners();
+  }
+
+  void setAppTour(bool value) {
+    if (_showAppTour == value) return;
+    _showAppTour = value;
+    _persistPref('showAppTour', value);
     notifyListeners();
   }
 
@@ -7126,6 +7203,7 @@ class GuestCheckInResult {
   bool get ok =>
       status == GuestCheckInStatus.booked || status == GuestCheckInStatus.confirmed;
 }
+
 
 
 

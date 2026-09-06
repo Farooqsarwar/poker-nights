@@ -67,6 +67,16 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   showDivider: true,
                 ),
+                _SettingRow(
+                  icon: Icons.lightbulb_outline,
+                  title: 'Admin app tour',
+                  subtitle: 'Show step-by-step guidance during tournaments',
+                  trailing: AppToggle(
+                    value: app.showAppTour,
+                    onChanged: (v) => app.setAppTour(v),
+                  ),
+                  showDivider: true,
+                ),
                 // Push notifications via OneSignal (free-plan fan-out — no
                 // Cloud Function). Toggling on shows the OS/browser prompt.
                 _SettingRow(

@@ -208,6 +208,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (app.showAppTour) ...[
+            _AdminAppTourCard(game: game, onDismiss: () => app.setAppTour(false)),
+            const SizedBox(height: AppSpacing.md),
+          ],
           // Top bar
           if (device.isMobile) ...[
             Column(
@@ -536,7 +540,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ),
                           );
                         } else {
-                          final canResume = status != LiveGameStatus.finaltable;
+                          final canResume = status != LiveGameStatus.finaltable && 
+                                            status != LiveGameStatus.completed &&
+                                            status != LiveGameStatus.cancelled;
                           return AppButton(
                             size: AppButtonSize.lg,
                             variant: AppButtonVariant.primary,
@@ -2907,3 +2913,88 @@ class _CancelTournamentFormState extends State<_CancelTournamentForm> {
 /// same action (technical spec §18.1) — identical on mobile and large screens.
 String _idemKey(String prefix) =>
     '$prefix-${DateTime.now().microsecondsSinceEpoch}';
+
+class _AdminAppTourCard extends StatelessWidget {
+  const _AdminAppTourCard({required this.game, required this.onDismiss});
+
+  final LiveGame game;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    String step = '';
+    String title = '';
+    String description = '';
+
+    if (game.status == LiveGameStatus.draft || game.status == LiveGameStatus.published || game.status == LiveGameStatus.checkin || game.status == LiveGameStatus.ready) {
+      if (game.players.any((p) => p.checkedIn && !p.confirmed) || game.pendingGuests.isNotEmpty) {
+        step = 'Step 1: Confirm Arrivals';
+        title = 'Seat Your Players';
+        description = 'Open the Check-in tab to approve requests. You must manually approve and seat players before the app can calculate the tournament math.';
+      } else if (!game.structureConfirmed) {
+        step = 'Step 2: Lock the Math';
+        title = 'Generate the Tournament';
+        description = 'Once everyone has checked in, tap "Generate Final Structure" to let Poker Night calculate the perfect starting stacks, blind levels, and prize pool.';
+      } else {
+        step = 'Step 3: Shuffle Up and Deal!';
+        title = 'Start the Clock';
+        description = 'Share the TV Mode link on your big screen, then tap "Start Tournament" to begin the game. All player screens will sync automatically.';
+      }
+    } else if (game.status == LiveGameStatus.rebuypause) {
+      step = 'Step 4: Settlement Break';
+      title = 'Lock the Prize Pool';
+      description = 'Rebuys are now closed. Tap "Complete Rebuy & Add-on Break" to record final add-ons, exchange small chips, and lock in the final Prize Pool.';
+    } else if ((game.status == LiveGameStatus.running || game.status == LiveGameStatus.finaltable) && game.activePlayers.length <= 1) {
+      step = 'Step 5: Finalize Results';
+      title = 'Publish the Winners';
+      description = 'Verify the final positions. Players will only see their rank, not the money. Tap "Finish Tournament" to save to History.';
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      color: AppColors.primarySoft,
+      borderColor: AppColors.primary,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lightbulb_outline, color: AppColors.primary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  step.toUpperCase(),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  description,
+                  style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 20),
+            color: AppColors.mutedForeground,
+            onPressed: onDismiss,
+            tooltip: 'Dismiss tour',
+          ),
+        ],
+      ),
+    );
+  }
+}
+

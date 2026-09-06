@@ -1977,7 +1977,7 @@ class _ContextualMainButton extends StatelessWidget {
                 app.updateEventSettings(
                   game.settings.copyWith(players: checkedInCount),
                 );
-                app.updateGameStatus(LiveGameStatus.running);
+                app.startTimer();
                 context.go(RoutePaths.adminDashboard);
               },
               child: const Text('Start Tournament'),

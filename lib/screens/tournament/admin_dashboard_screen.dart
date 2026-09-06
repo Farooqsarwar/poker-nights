@@ -2948,8 +2948,18 @@ class _AdminAppTourCard extends StatelessWidget {
       step = 'Step 5: Finalize Results';
       title = 'Publish the Winners';
       description = 'Verify the final positions. Players will only see their rank, not the money. Tap "Finish Tournament" to save to History.';
+    } else if (game.status == LiveGameStatus.running || game.status == LiveGameStatus.finaltable) {
+      step = 'Now Playing';
+      title = 'Keep everyone in sync';
+      description = 'Mirror the tournament on your big screen with TV Mode (top bar) and post announcements in Chat — every player screen updates live.';
+    } else if (game.status == LiveGameStatus.paused) {
+      step = 'Paused';
+      title = 'Ready to resume?';
+      description = 'When the break ends, tap Resume Tournament in the top bar to restart the blinds clock where you left off.';
     } else {
-      return const SizedBox.shrink();
+      step = 'In the books';
+      title = 'Saved to History';
+      description = 'This tournament is complete. Open History (left menu) to replay the results, then start your next event from the Dashboard.';
     }
 
     return AppCard(

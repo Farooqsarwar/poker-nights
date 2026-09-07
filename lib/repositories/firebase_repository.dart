@@ -38,12 +38,12 @@ class GroupMembership {
   final String role;
 
   Map<String, dynamic> toMap() => {
-        'groupId': groupId,
-        'name': name,
-        'icon': icon,
-        'pinned': pinned,
-        'role': role,
-      };
+    'groupId': groupId,
+    'name': name,
+    'icon': icon,
+    'pinned': pinned,
+    'role': role,
+  };
 
   static GroupMembership fromMap(String gid, Map<String, dynamic> m) =>
       GroupMembership(
@@ -85,15 +85,15 @@ class OutboxNotification {
       audience == null || audience!.isEmpty || audience!.contains(uid);
 
   AppNotification toAppNotification({required bool read}) => AppNotification(
-        id: id,
-        title: title,
-        body: body,
-        type: type,
-        link: link,
-        read: read,
-        timestamp: timestamp,
-        audience: audience,
-      );
+    id: id,
+    title: title,
+    body: body,
+    type: type,
+    link: link,
+    read: read,
+    timestamp: timestamp,
+    audience: audience,
+  );
 }
 
 /// A queued request posted by a member/guest device for the admin device to
@@ -137,12 +137,12 @@ class GameResultRow {
   final DateTime? finishedAt;
 
   Map<String, dynamic> toMap() => {
-        'gameId': gameId,
-        'groupId': groupId,
-        'position': position,
-        'playerCount': playerCount,
-        'knockouts': knockouts,
-      };
+    'gameId': gameId,
+    'groupId': groupId,
+    'position': position,
+    'playerCount': playerCount,
+    'knockouts': knockouts,
+  };
 
   static GameResultRow fromMap(String id, Map<String, dynamic> m) =>
       GameResultRow(
@@ -183,8 +183,10 @@ class FirebaseRepository {
     final r = Random();
     // Build the suffix from 4-bit chunks — `1 << 32` overflows to 0 on web,
     // which made `Random().nextInt(1 << 32)` throw a RangeError.
-    final suffix =
-        List.generate(8, (_) => r.nextInt(16).toRadixString(16)).join();
+    final suffix = List.generate(
+      8,
+      (_) => r.nextInt(16).toRadixString(16),
+    ).join();
     return 'dev-${DateTime.now().millisecondsSinceEpoch}-$suffix';
   }
 
@@ -193,7 +195,10 @@ class FirebaseRepository {
   Future<void> initDeviceId() async {
     if (_deviceId != null) return;
     try {
-      final doc = await Localstore.instance.collection('app').doc('device').get();
+      final doc = await Localstore.instance
+          .collection('app')
+          .doc('device')
+          .get();
       final saved = doc?['deviceId'] as String?;
       if (saved != null && saved.isNotEmpty) {
         _deviceId = saved;
@@ -205,20 +210,19 @@ class FirebaseRepository {
     final fresh = _freshDeviceId();
     _deviceId = fresh;
     try {
-      await Localstore.instance
-          .collection('app')
-          .doc('device')
-          .set({'deviceId': fresh});
+      await Localstore.instance.collection('app').doc('device').set({
+        'deviceId': fresh,
+      });
     } catch (_) {
       // Best-effort persistence; the in-memory id still works for this run.
     }
   }
 
   Map<String, dynamic> _stamp(Map<String, dynamic>? data) => {
-        ...?data,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'writerId': deviceId,
-      };
+    ...?data,
+    'updatedAt': FieldValue.serverTimestamp(),
+    'writerId': deviceId,
+  };
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   Stream<fa.User?> authStateChanges() => _auth.authStateChanges();
@@ -270,13 +274,15 @@ class FirebaseRepository {
 
   static final GoogleSignIn googleSignIn = GoogleSignIn(
     params: const GoogleSignInParams(
-      clientId: 'YOUR_CLIENT_ID.apps.googleusercontent.com', // Replace with your Client ID
-      clientSecret: 'YOUR_CLIENT_SECRET', // Replace with your Client Secret for desktop
+      clientId:
+          'YOUR_CLIENT_ID.apps.googleusercontent.com', // Replace with your Client ID
+      clientSecret:
+          'YOUR_CLIENT_SECRET', // Replace with your Client Secret for desktop
       scopes: ['openid', 'profile', 'email'],
     ),
   );
 
-  /// Initialises the [GoogleSignIn] singleton. 
+  /// Initialises the [GoogleSignIn] singleton.
   /// The new package handles initialization automatically, so this can be a no-op or silentSignIn.
   static Future<void> initGoogleSignIn() async {
     try {
@@ -317,7 +323,9 @@ class FirebaseRepository {
   }
 
   /// Signs in to Firebase with existing credentials.
-  Future<fa.UserCredential?> signInWithGoogleCredentials(GoogleSignInCredentials credentials) async {
+  Future<fa.UserCredential?> signInWithGoogleCredentials(
+    GoogleSignInCredentials credentials,
+  ) async {
     try {
       final credential = await _googleCredential(credentials);
       return _auth.signInWithCredential(credential);
@@ -374,7 +382,8 @@ class FirebaseRepository {
     for (final m in memberships.docs) {
       batch.delete(m.reference);
       batch.delete(
-          _db.collection('groups').doc(m.id).collection('members').doc(uid));
+        _db.collection('groups').doc(m.id).collection('members').doc(uid),
+      );
     }
     for (final sub in const ['presets', 'chipSets', 'notifications']) {
       final docs = await userDoc.collection(sub).get();
@@ -403,30 +412,43 @@ class FirebaseRepository {
     final snap = await ref.get();
     if (!snap.exists) {
       final batch = _db.batch();
-      batch.set(ref, _stamp({
-        'name': name,
-        'email': email,
-        'emailLower': emailLower,
-        'stats': userStatsToMap(const UserStats(
-            played: 0, wins: 0, podium: 0, avgFinish: 0, knockouts: 0)),
-        'prefs': <String, dynamic>{},
-        'createdAt': FieldValue.serverTimestamp(),
-      }));
+      batch.set(
+        ref,
+        _stamp({
+          'name': name,
+          'email': email,
+          'emailLower': emailLower,
+          'stats': userStatsToMap(
+            const UserStats(
+              played: 0,
+              wins: 0,
+              podium: 0,
+              avgFinish: 0,
+              knockouts: 0,
+            ),
+          ),
+          'prefs': <String, dynamic>{},
+          'createdAt': FieldValue.serverTimestamp(),
+        }),
+      );
       if (emailLower.isNotEmpty) {
         // Public email→uid index for the admin "add member by email" flow.
-        batch.set(_db.collection('emailIndex').doc(emailLower),
-            {'uid': uid, 'name': name, 'emailLower': emailLower});
+        batch.set(_db.collection('emailIndex').doc(emailLower), {
+          'uid': uid,
+          'name': name,
+          'emailLower': emailLower,
+        });
       }
       for (final p in starterPresets) {
         batch.set(
-            ref.collection('presets').doc(p.id), tournamentPresetToMap(p));
+          ref.collection('presets').doc(p.id),
+          tournamentPresetToMap(p),
+        );
       }
       if (starterChipSet != null) {
         batch.set(ref.collection('chipSets').doc(starterChipSet.id), {
           'name': starterChipSet.name,
-          'chips': [
-            for (final c in starterChipSet.chips) chipColorToMap(c),
-          ],
+          'chips': [for (final c in starterChipSet.chips) chipColorToMap(c)],
         });
       }
       await batch.commit();
@@ -437,16 +459,19 @@ class FirebaseRepository {
       // in sync, and only when they actually changed.
       final data = Map<String, dynamic>.from(snap.data() ?? const {});
       final storedName = (data['name'] as String?) ?? name;
-      if ((data['emailLower'] as String?) != emailLower && emailLower.isNotEmpty) {
+      if ((data['emailLower'] as String?) != emailLower &&
+          emailLower.isNotEmpty) {
         await ref.set(
-            _stamp({'email': email, 'emailLower': emailLower}),
-            SetOptions(merge: true));
-      }
-      if (emailLower.isNotEmpty) {
-        await _db.collection('emailIndex').doc(emailLower).set(
-          {'uid': uid, 'name': storedName, 'emailLower': emailLower},
+          _stamp({'email': email, 'emailLower': emailLower}),
           SetOptions(merge: true),
         );
+      }
+      if (emailLower.isNotEmpty) {
+        await _db.collection('emailIndex').doc(emailLower).set({
+          'uid': uid,
+          'name': storedName,
+          'emailLower': emailLower,
+        }, SetOptions(merge: true));
       }
     }
   }
@@ -462,24 +487,38 @@ class FirebaseRepository {
       isAdmin: false,
       stats: data['stats'] == null
           ? const UserStats(
-              played: 0, wins: 0, podium: 0, avgFinish: 0, knockouts: 0)
+              played: 0,
+              wins: 0,
+              podium: 0,
+              avgFinish: 0,
+              knockouts: 0,
+            )
           : userStatsFromMap(Map<String, dynamic>.from(data['stats'] as Map)),
     );
   }
 
   Future<void> updateUserProfile(String uid, {String? name, String? email}) =>
-      _db.collection('users').doc(uid).set(
+      _db
+          .collection('users')
+          .doc(uid)
+          .set(
             _stamp({
-              'name': ?name,
-              'email': ?email,
+              if (name != null) 'name': name,
+              if (email != null) 'email': email,
               if (email != null) 'emailLower': email.trim().toLowerCase(),
             }),
             SetOptions(merge: true),
           );
 
   Future<void> saveUserPref(String uid, String key, Object? value) => _db
-      .collection('users').doc(uid)
-      .set(_stamp({'prefs': {key: value}}), SetOptions(merge: true));
+      .collection('users')
+      .doc(uid)
+      .set(
+        _stamp({
+          'prefs': {key: value},
+        }),
+        SetOptions(merge: true),
+      );
 
   /// Reads the stored per-user preferences map (`users/{uid}.prefs`).
   Future<Map<String, dynamic>> loadUserPrefs(String uid) async {
@@ -491,33 +530,42 @@ class FirebaseRepository {
 
   /// Persists the signed-in player's own result for a settled tournament.
   /// Doc id is the gameId so re-writes are idempotent.
-  Future<void> saveGameResult(
-    String uid,
-    String gameId,
-    GameResultRow row,
-  ) =>
-      _db.collection('users').doc(uid).collection('results').doc(gameId).set(
-            _stamp({...row.toMap(), 'finishedAt': FieldValue.serverTimestamp()}),
+  Future<void> saveGameResult(String uid, String gameId, GameResultRow row) =>
+      _db
+          .collection('users')
+          .doc(uid)
+          .collection('results')
+          .doc(gameId)
+          .set(
+            _stamp({
+              ...row.toMap(),
+              'finishedAt': FieldValue.serverTimestamp(),
+            }),
           );
 
   /// Live stream of every result this player has recorded — the source of
   /// truth for lifetime stats.
   Stream<List<GameResultRow>> resultsStream(String uid) => _db
-      .collection('users').doc(uid).collection('results')
+      .collection('users')
+      .doc(uid)
+      .collection('results')
       .snapshots()
-      .map((s) => [
-            for (final d in s.docs)
-              GameResultRow.fromMap(d.id, Map<String, dynamic>.from(d.data())),
-          ]);
+      .map(
+        (s) => [
+          for (final d in s.docs)
+            GameResultRow.fromMap(d.id, Map<String, dynamic>.from(d.data())),
+        ],
+      );
 
   /// Mirrors a compact stats summary onto the caller's own roster row
   /// (`groups/{gid}/members/{uid}`) so other members' devices can display it
   /// without reading private profile data.
-  Future<void> saveMemberStats(String gid, String uid, UserStats stats) =>
-      _db.collection('groups').doc(gid).collection('members').doc(uid).set(
-            {'stats': userStatsToMap(stats)},
-            SetOptions(merge: true),
-          );
+  Future<void> saveMemberStats(String gid, String uid, UserStats stats) => _db
+      .collection('groups')
+      .doc(gid)
+      .collection('members')
+      .doc(uid)
+      .set({'stats': userStatsToMap(stats)}, SetOptions(merge: true));
 
   // ── Groups ─────────────────────────────────────────────────────────────────
   DocumentReference userGroupIndexRef(String uid, String gid) =>
@@ -530,14 +578,17 @@ class FirebaseRepository {
     final batch = _db.batch();
 
     final groupRef = _db.collection('groups').doc(gid);
-    batch.set(groupRef, _stamp({
-      'name': group.name,
-      'joinCode': group.joinCode,
-      'ownerId': group.ownerId,
-      'icon': group.icon,
-      'tableSettings': tableSettingsToMap(group.tableSettings),
-      'createdAt': FieldValue.serverTimestamp(),
-    }));
+    batch.set(
+      groupRef,
+      _stamp({
+        'name': group.name,
+        'joinCode': group.joinCode,
+        'ownerId': group.ownerId,
+        'icon': group.icon,
+        'tableSettings': tableSettingsToMap(group.tableSettings),
+        'createdAt': FieldValue.serverTimestamp(),
+      }),
+    );
 
     batch.set(groupRef.collection('members').doc(owner.id), {
       'name': owner.name,
@@ -546,19 +597,24 @@ class FirebaseRepository {
     });
 
     batch.set(
-        userGroupIndexRef(owner.id, gid),
-        GroupMembership(
-                groupId: gid,
-                name: group.name,
-                icon: group.icon,
-                pinned: false,
-                role: 'admin')
-            .toMap());
+      userGroupIndexRef(owner.id, gid),
+      GroupMembership(
+        groupId: gid,
+        name: group.name,
+        icon: group.icon,
+        pinned: false,
+        role: 'admin',
+      ).toMap(),
+    );
 
     // Store name + icon so joinByCode can populate the membership index
     // without reading groups/{gid} (which is member-only).
-    batch.set(_db.collection('joinCodes').doc(group.joinCode.toUpperCase()),
-        {'gid': gid, 'kind': 'group', 'name': group.name, 'icon': group.icon});
+    batch.set(_db.collection('joinCodes').doc(group.joinCode.toUpperCase()), {
+      'gid': gid,
+      'kind': 'group',
+      'name': group.name,
+      'icon': group.icon,
+    });
 
     await batch.commit();
   }
@@ -595,87 +651,112 @@ class FirebaseRepository {
   /// Idempotent join: safe to call when already a member.
   /// [groupName] and [groupIcon] are used to populate the user's mirror index;
   /// they come from the joinCodes doc so this method never reads groups/{gid}.
-  Future<String?> joinGroup(String gid, AppUser user,
-      {String groupName = '', String groupIcon = '??'}) async {
-    final memberRef = _db.collection('groups').doc(gid).collection('members').doc(user.id);
+  Future<String?> joinGroup(
+    String gid,
+    AppUser user, {
+    String groupName = '',
+    String groupIcon = '??',
+  }) async {
+    final memberRef = _db
+        .collection('groups')
+        .doc(gid)
+        .collection('members')
+        .doc(user.id);
     final snap = await memberRef.get();
-    
+
     final batch = _db.batch();
     if (snap.exists) {
       batch.set(memberRef, {'name': user.name}, SetOptions(merge: true));
     } else {
-      batch.set(
-          memberRef,
-          {
-            'name': user.name,
-            'role': 'member',
-            'joinedAt': FieldValue.serverTimestamp(),
-          });
+      batch.set(memberRef, {
+        'name': user.name,
+        'role': 'member',
+        'joinedAt': FieldValue.serverTimestamp(),
+      });
     }
     batch.set(
-        userGroupIndexRef(user.id, gid),
-        GroupMembership(
-                groupId: gid,
-                name: groupName,
-                icon: groupIcon,
-                pinned: false,
-                role: 'member')
-            .toMap(),
-        SetOptions(merge: true));
+      userGroupIndexRef(user.id, gid),
+      GroupMembership(
+        groupId: gid,
+        name: groupName,
+        icon: groupIcon,
+        pinned: false,
+        role: 'member',
+      ).toMap(),
+      SetOptions(merge: true),
+    );
     await batch.commit();
     return gid;
   }
 
   Stream<List<GroupMembership>> groupsIndexStream(String uid) => _db
-      .collection('users').doc(uid).collection('groups')
+      .collection('users')
+      .doc(uid)
+      .collection('groups')
       .snapshots()
-      .map((s) => s.docs.map((d) => GroupMembership.fromMap(d.id, d.data())).toList());
+      .map(
+        (s) =>
+            s.docs.map((d) => GroupMembership.fromMap(d.id, d.data())).toList(),
+      );
 
   /// Live member roster for a group (name/role only — the index-based group
   /// list on home/sidebar has no live member data, so we maintain it here to
   /// keep member counts real-time on the free plan).
   Stream<List<AppUser>> groupMembersStream(String gid) => _db
-      .collection('groups').doc(gid).collection('members')
+      .collection('groups')
+      .doc(gid)
+      .collection('members')
       .snapshots()
-      .map((s) => [
-            for (final d in s.docs)
-              AppUser(
-                id: d.id,
-                name: (d.data()['name'] as String?) ?? '',
-                email: '',
-                isAdmin: (d.data()['role'] as String?) == 'admin',
-                isCoAdmin: (d.data()['role'] as String?) == 'coadmin',
-                stats: d.data()['stats'] is Map
-                    ? userStatsFromMap(
-                        Map<String, dynamic>.from(d.data()['stats'] as Map))
-                    : const UserStats(
-                        played: 0,
-                        wins: 0,
-                        podium: 0,
-                        avgFinish: 0,
-                        knockouts: 0),
-              ),
-          ]);
-
-  Future<void> updateGroupIndex(String uid, String gid,
-      {String? name, String? icon, bool? pinned, String? role}) =>
-      userGroupIndexRef(uid, gid).set(
-        {
-          'name': ?name,
-          'icon': ?icon,
-          'pinned': ?pinned,
-          'role': ?role,
-        },
-        SetOptions(merge: true),
+      .map(
+        (s) => [
+          for (final d in s.docs)
+            AppUser(
+              id: d.id,
+              name: (d.data()['name'] as String?) ?? '',
+              email: '',
+              isAdmin: (d.data()['role'] as String?) == 'admin',
+              isCoAdmin: (d.data()['role'] as String?) == 'coadmin',
+              stats: d.data()['stats'] is Map
+                  ? userStatsFromMap(
+                      Map<String, dynamic>.from(d.data()['stats'] as Map),
+                    )
+                  : const UserStats(
+                      played: 0,
+                      wins: 0,
+                      podium: 0,
+                      avgFinish: 0,
+                      knockouts: 0,
+                    ),
+            ),
+        ],
       );
 
+  Future<void> updateGroupIndex(
+    String uid,
+    String gid, {
+    String? name,
+    String? icon,
+    bool? pinned,
+    String? role,
+  }) => userGroupIndexRef(uid, gid).set({
+    if (name != null) 'name': name,
+    if (icon != null) 'icon': icon,
+    if (pinned != null) 'pinned': pinned,
+    if (role != null) 'role': role,
+  }, SetOptions(merge: true));
+
   Future<void> setMemberRole(String gid, String targetUid, String role) => _db
-      .collection('groups').doc(gid).collection('members').doc(targetUid)
+      .collection('groups')
+      .doc(gid)
+      .collection('members')
+      .doc(targetUid)
       .set({'role': role}, SetOptions(merge: true));
 
   Future<void> deleteMember(String gid, String targetUid) async {
     final batch = _db.batch();
-    batch.delete(_db.collection('groups').doc(gid).collection('members').doc(targetUid));
+    batch.delete(
+      _db.collection('groups').doc(gid).collection('members').doc(targetUid),
+    );
     batch.delete(userGroupIndexRef(targetUid, gid));
     await batch.commit();
   }
@@ -690,7 +771,11 @@ class FirebaseRepository {
   /// Atomically transfers group ownership to [newOwnerId]: updates the group
   /// doc's `ownerId` field and promotes the new owner's member row to `admin`.
   Future<void> transferGroupOwnership(
-      String gid, String oldOwnerId, String newOwnerId, String newOwnerName) async {
+    String gid,
+    String oldOwnerId,
+    String newOwnerId,
+    String newOwnerName,
+  ) async {
     final batch = _db.batch();
     batch.update(_db.collection('groups').doc(gid), {'ownerId': newOwnerId});
     batch.set(
@@ -722,7 +807,12 @@ class FirebaseRepository {
       email: email.trim(),
       isAdmin: false,
       stats: const UserStats(
-          played: 0, wins: 0, podium: 0, avgFinish: 0, knockouts: 0),
+        played: 0,
+        wins: 0,
+        podium: 0,
+        avgFinish: 0,
+        knockouts: 0,
+      ),
     );
   }
 
@@ -730,8 +820,12 @@ class FirebaseRepository {
   /// `pendingInvites` doc (free plan — no Cloud Function, so `onMemberWrite`
   /// cannot mirror into the target user's /users tree; the added user instead
   /// reads their own pending invite on next open and self-writes their index).
-  Future<void> addMemberToGroup(String gid, AppUser user,
-      {String groupName = '', String groupIcon = '♠️'}) async {
+  Future<void> addMemberToGroup(
+    String gid,
+    AppUser user, {
+    String groupName = '',
+    String groupIcon = '♠️',
+  }) async {
     final batch = _db.batch();
     batch.set(
       _db.collection('groups').doc(gid).collection('members').doc(user.id),
@@ -742,17 +836,14 @@ class FirebaseRepository {
       },
       SetOptions(merge: true),
     );
-    batch.set(
-      _db.collection('pendingInvites').doc('$gid:${user.id}'),
-      {
-        'uid': user.id,
-        'gid': gid,
-        'name': groupName,
-        'icon': groupIcon,
-        'role': 'member',
-        'createdAt': FieldValue.serverTimestamp(),
-      },
-    );
+    batch.set(_db.collection('pendingInvites').doc('$gid:${user.id}'), {
+      'uid': user.id,
+      'gid': gid,
+      'name': groupName,
+      'icon': groupIcon,
+      'role': 'member',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
     await batch.commit();
   }
 
@@ -763,13 +854,15 @@ class FirebaseRepository {
       .collection('pendingInvites')
       .where('uid', isEqualTo: uid)
       .snapshots()
-      .map((s) => [
-            for (final d in s.docs) {...d.data(), '__inviteId': d.id},
-          ]);
+      .map(
+        (s) => [
+          for (final d in s.docs) {...d.data(), '__inviteId': d.id},
+        ],
+      );
 
   /// Removes a pending invite once the user has accepted (self-mirrored) it.
-  Future<void> removePendingInvite(String inviteId) => _db
-      .collection('pendingInvites').doc(inviteId).delete();
+  Future<void> removePendingInvite(String inviteId) =>
+      _db.collection('pendingInvites').doc(inviteId).delete();
 
   DocumentReference<Map<String, dynamic>> get serverTimeRef =>
       _db.collection('_meta').doc('serverTime');
@@ -802,22 +895,25 @@ class FirebaseRepository {
         return;
       }
       if (!controller.isClosed) {
-        controller.add(Group(
-          id: gid,
-          name: (meta?['name'] as String?) ?? '',
-          joinCode: (meta?['joinCode'] as String?) ?? '',
-          ownerId: (meta?['ownerId'] as String?) ?? '',
-          icon: (meta?['icon'] as String?) ?? '♠️',
-          members: members,
-          chat: chat,
-          polls: polls,
-          games: games,
-          notifications: const [],
-          tableSettings: meta?['tableSettings'] == null
-              ? TableSettings.fallback
-              : tableSettingsFromMap(
-                  Map<String, dynamic>.from(meta!['tableSettings'] as Map)),
-        ));
+        controller.add(
+          Group(
+            id: gid,
+            name: (meta?['name'] as String?) ?? '',
+            joinCode: (meta?['joinCode'] as String?) ?? '',
+            ownerId: (meta?['ownerId'] as String?) ?? '',
+            icon: (meta?['icon'] as String?) ?? '♠️',
+            members: members,
+            chat: chat,
+            polls: polls,
+            games: games,
+            notifications: const [],
+            tableSettings: meta?['tableSettings'] == null
+                ? TableSettings.fallback
+                : tableSettingsFromMap(
+                    Map<String, dynamic>.from(meta!['tableSettings'] as Map),
+                  ),
+          ),
+        );
       }
     }
 
@@ -840,33 +936,39 @@ class FirebaseRepository {
     ) {
       var attempt = 0;
       void subscribe() {
-        subs.add(open().listen(
-          (s) {
-            attempt = 0;
-            retryTimers.remove(name)?.cancel();
-            apply(s);
-            markLoaded();
-            maybeEmit();
-          },
-          onError: (Object e, StackTrace _) {
-            debugPrint('groupBundle "$name" error: $e');
-            markLoaded();
-            maybeEmit();
-            if (attempt < 8 && !controller.isClosed) {
-              // Post-login token lag is the common cause — nudge a fresh token
-              // into the SDK before re-subscribing.
-              if (e.toString().contains('permission-denied') ||
-                  e.toString().contains('unauthenticated')) {
-                _auth.currentUser?.getIdToken(true).catchError((Object _) => '');
+        subs.add(
+          open().listen(
+            (s) {
+              attempt = 0;
+              retryTimers.remove(name)?.cancel();
+              apply(s);
+              markLoaded();
+              maybeEmit();
+            },
+            onError: (Object e, StackTrace _) {
+              debugPrint('groupBundle "$name" error: $e');
+              markLoaded();
+              maybeEmit();
+              if (attempt < 8 && !controller.isClosed) {
+                // Post-login token lag is the common cause — nudge a fresh token
+                // into the SDK before re-subscribing.
+                if (e.toString().contains('permission-denied') ||
+                    e.toString().contains('unauthenticated')) {
+                  _auth.currentUser
+                      ?.getIdToken(true)
+                      .catchError((Object _) => '');
+                }
+                final delayMs = 400 * (1 << (attempt > 5 ? 5 : attempt));
+                attempt++;
+                retryTimers[name]?.cancel();
+                retryTimers[name] = Timer(
+                  Duration(milliseconds: delayMs),
+                  subscribe,
+                );
               }
-              final delayMs = 400 * (1 << (attempt > 5 ? 5 : attempt));
-              attempt++;
-              retryTimers[name]?.cancel();
-              retryTimers[name] =
-                  Timer(Duration(milliseconds: delayMs), subscribe);
-            }
-          },
-        ));
+            },
+          ),
+        );
       }
 
       subscribe();
@@ -893,13 +995,15 @@ class FirebaseRepository {
                 isCoAdmin: (d.data()['role'] as String?) == 'coadmin',
                 stats: d.data()['stats'] is Map
                     ? userStatsFromMap(
-                        Map<String, dynamic>.from(d.data()['stats'] as Map))
+                        Map<String, dynamic>.from(d.data()['stats'] as Map),
+                      )
                     : const UserStats(
                         played: 0,
                         wins: 0,
                         podium: 0,
                         avgFinish: 0,
-                        knockouts: 0),
+                        knockouts: 0,
+                      ),
               ),
           ],
           () => membersLoaded = true,
@@ -923,10 +1027,7 @@ class FirebaseRepository {
               .orderBy('settings.date', descending: true)
               .limit(15)
               .snapshots(),
-          (s) => games = [
-            for (final d in s.docs)
-              liveGameFromFirestoreDoc(Map<String, dynamic>.from(d.data())),
-          ],
+          (s) => games = [for (final d in s.docs) ?tryParseGameDoc(d)],
           () => gamesLoaded = true,
         );
       },
@@ -943,21 +1044,35 @@ class FirebaseRepository {
     return controller.stream;
   }
 
+  /// Parses a group game document defensively: a single malformed doc used to
+  /// blank the whole games list (hub + chat card lookups). Returns null and
+  /// logs so the rest of the bundle keeps loading.
+  LiveGame? tryParseGameDoc(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+    try {
+      return liveGameFromFirestoreDoc(Map<String, dynamic>.from(d.data()));
+    } catch (e) {
+      debugPrint('groupBundle: skipping malformed game doc ${d.id}: $e');
+      return null;
+    }
+  }
+
   Future<void> sendGroupChatMessage(String gid, ChatMessage msg) async {
     final batch = _db.batch();
     batch.set(
       _db.collection('groups').doc(gid).collection('chat').doc(msg.id),
       chatMessageToMap(msg),
     );
-    batch.set(
-      _db.collection('rate_limits').doc('chat-${msg.authorId}'),
-      {'time': FieldValue.serverTimestamp()},
-    );
+    batch.set(_db.collection('rate_limits').doc('chat-${msg.authorId}'), {
+      'time': FieldValue.serverTimestamp(),
+    });
     await batch.commit();
   }
 
   Future<void> markChatMessageDeleted(String gid, String msgId) => _db
-      .collection('groups').doc(gid).collection('chat').doc(msgId)
+      .collection('groups')
+      .doc(gid)
+      .collection('chat')
+      .doc(msgId)
       .set({'deleted': true}, SetOptions(merge: true));
 
   // ── Per-game chat (groups/{gid}/games/{gameId}/chat) ───────────────────────
@@ -965,34 +1080,47 @@ class FirebaseRepository {
   // member's message is not rolled back by the game-doc rules and does not
   // wait on a projection round-trip.
   CollectionReference<Map<String, dynamic>> _gameChatCol(
-          String gid, String gameId) =>
-      _db.collection('groups').doc(gid).collection('games').doc(gameId)
-          .collection('chat');
+    String gid,
+    String gameId,
+  ) => _db
+      .collection('groups')
+      .doc(gid)
+      .collection('games')
+      .doc(gameId)
+      .collection('chat');
 
   Stream<List<ChatMessage>> gameChatStream(String gid, String gameId) =>
-      _gameChatCol(gid, gameId).snapshots().map((s) =>
-          [for (final d in s.docs) chatMessageFromMap(d.data())]);
+      _gameChatCol(gid, gameId).snapshots().map(
+        (s) => [for (final d in s.docs) chatMessageFromMap(d.data())],
+      );
 
-  Future<void> sendGameChatMessage(String gid, String gameId, ChatMessage msg) async {
+  Future<void> sendGameChatMessage(
+    String gid,
+    String gameId,
+    ChatMessage msg,
+  ) async {
     final batch = _db.batch();
-    batch.set(
-      _gameChatCol(gid, gameId).doc(msg.id),
-      chatMessageToMap(msg),
-    );
-    batch.set(
-      _db.collection('rate_limits').doc('chat-${msg.authorId}'),
-      {'time': FieldValue.serverTimestamp()},
-    );
+    batch.set(_gameChatCol(gid, gameId).doc(msg.id), chatMessageToMap(msg));
+    batch.set(_db.collection('rate_limits').doc('chat-${msg.authorId}'), {
+      'time': FieldValue.serverTimestamp(),
+    });
     await batch.commit();
   }
 
   Future<void> markGameChatMessageDeleted(
-          String gid, String gameId, String msgId) =>
-      _gameChatCol(gid, gameId).doc(msgId)
-          .set({'deleted': true}, SetOptions(merge: true));
+    String gid,
+    String gameId,
+    String msgId,
+  ) => _gameChatCol(
+    gid,
+    gameId,
+  ).doc(msgId).set({'deleted': true}, SetOptions(merge: true));
 
   Future<void> savePoll(String gid, Poll poll) => _db
-      .collection('groups').doc(gid).collection('polls').doc(poll.id)
+      .collection('groups')
+      .doc(gid)
+      .collection('polls')
+      .doc(poll.id)
       .set(pollToMap(poll));
 
   // ── Games ──────────────────────────────────────────────────────────────────
@@ -1005,10 +1133,12 @@ class FirebaseRepository {
   /// Returns true when this device won the claim. (The claim timestamp is
   /// persisted as an ISO string to match `liveGameToFirestoreDoc`'s
   /// `editorClaimedAt` encoding.)
-  Future<bool> claimGameEditor(String groupId, String gameId) {
+  Future<bool> claimGameEditor(String groupId, String gameId, {bool force = false}) {
     final ref = _db
-        .collection('groups').doc(groupId)
-        .collection('games').doc(gameId);
+        .collection('groups')
+        .doc(groupId)
+        .collection('games')
+        .doc(gameId);
     return _db.runTransaction((tx) async {
       final snap = await tx.get(ref);
       if (snap.exists) {
@@ -1017,34 +1147,61 @@ class FirebaseRepository {
         final serverClaimed = data['editorClaimedAt'] as String?;
         if (serverEditor != null && serverEditor.isNotEmpty) {
           final sameDevice = serverEditor == deviceId;
-          final stale = serverClaimed != null &&
-              DateTime.now().difference(DateTime.tryParse(serverClaimed) ?? DateTime.now())
-                  > const Duration(seconds: 90);
+          final stale =
+              serverClaimed != null &&
+              DateTime.now().difference(
+                    DateTime.tryParse(serverClaimed) ?? DateTime.now(),
+                  ) >
+                  const Duration(seconds: 90);
           // Held by an active editor (or this device already owns it) — no claim.
-          if (sameDevice || !stale) throw Exception('aborted');
+          if (!force && (sameDevice || !stale)) throw Exception('aborted');
         }
       }
-      tx.update(ref, {
+      // Newly created games have no document yet; `tx.update` on a missing
+      // doc fails the transaction, so the editor role was never claimed and the
+      // authority gate then blocked every first save — the game never reached
+      // Firestore. A merge-set creates the claim stub when missing and behaves
+      // like a plain field update when the doc already exists.
+      tx.set(ref, {
         'editorDeviceId': deviceId,
         'editorClaimedAt': DateTime.now().toIso8601String(),
-      });
+      }, SetOptions(merge: true));
       return true;
     });
   }
 
-  Future<void> saveGame(LiveGame game, {String? viewerId, int? expectedRevision}) async {
+  Future<void> saveGame(
+    LiveGame game, {
+    String? viewerId,
+    bool isUpdate = true,
+    int? expectedRevision,
+    bool force = false,
+  }) async {
     final fullDoc = liveGameToFirestoreDoc(game);
-    
+
     // Save private sidecar so admin can recover on a new device. The full
     // players array travels here because the public doc scrubs per-player
     // financial fields below (User Flow §2.3/§5.6).
     final privateDoc = <String, dynamic>{
       'organizerPct': game.settings.organizerPct,
       'players': game.players.map(playerToMap).toList(),
+      // The audit timeline is admin-only (User Flow §11: "Admin controls/audit
+      // log — Admin Yes, Registered Member No"). It rides in the sidecar so
+      // the host keeps it across devices while it stays out of the
+      // member-readable game document below.
+      'auditHistory': fullDoc['auditHistory'],
+      // Pending rebuy / add-on requests name the members who asked. User Flow
+      // section 5.6 keeps "other players' private actions" off a member's
+      // view and section 22 forbids exposing contribution identities, so the
+      // queue is admin-side state. Members no longer write these arrays
+      // either — they post to `requests/{gameId}/items`, which only a group
+      // admin can list.
+      'rebuyRequests': fullDoc['rebuyRequests'],
+      'addOnRequests': fullDoc['addOnRequests'],
       if (game.structure != null) ...{
         'prizes': fullDoc['structure']['prizes'],
         'organizerAmount': fullDoc['structure']['organizerAmount'],
-      }
+      },
     };
     // The sidecar lives under `.../admin/**`, whose rule requires the strict
     // `isGroupAdmin(gid)` (group owner, or a members/{uid} row with
@@ -1055,9 +1212,12 @@ class FirebaseRepository {
     // losing the game state is not.
     try {
       await _db
-          .collection('groups').doc(game.groupId)
-          .collection('games').doc(game.id)
-          .collection('admin').doc('privateData')
+          .collection('groups')
+          .doc(game.groupId)
+          .collection('games')
+          .doc(game.id)
+          .collection('admin')
+          .doc('privateData')
           .set(privateDoc, SetOptions(merge: true));
     } catch (e) {
       debugPrint('saveGame: private sidecar rejected (continuing): $e');
@@ -1065,23 +1225,37 @@ class FirebaseRepository {
 
     // Scrub private fields from the public document
     final publicDoc = Map<String, dynamic>.from(fullDoc);
-    
-    final publicSettings = Map<String, dynamic>.from(publicDoc['settings'] as Map? ?? {});
+
+    // Members read this document directly (see `gameDocSnapshots`), so the
+    // admin-only audit timeline must not travel in it — projecting it away on
+    // the client is not a boundary (User Flow §2.3). It is preserved in the
+    // sidecar above and re-attached locally by `restoreAdminPrivateFields`.
+    publicDoc['auditHistory'] = const <Map<String, dynamic>>[];
+    publicDoc['rebuyRequests'] = const <String>[];
+    publicDoc['addOnRequests'] = const <String>[];
+
+    final publicSettings = Map<String, dynamic>.from(
+      publicDoc['settings'] as Map? ?? {},
+    );
     publicSettings.remove('organizerPct');
     publicDoc['settings'] = publicSettings;
-    
+
     if (publicDoc['structure'] != null) {
-      final publicStructure = Map<String, dynamic>.from(publicDoc['structure'] as Map);
+      final publicStructure = Map<String, dynamic>.from(
+        publicDoc['structure'] as Map,
+      );
       publicStructure.remove('prizes');
       publicStructure.remove('organizerAmount');
       publicDoc['structure'] = publicStructure;
     }
-    
+
     // Per-player financial fields are private (Tech §5.6): scrub rebuys /
     // reEntries / hasAddOn / knockouts for every player except the viewer's
     // own record, matching the projection rule enforced at the data boundary.
     if (publicDoc['players'] is Map) {
-      final publicPlayers = Map<String, dynamic>.from(publicDoc['players'] as Map);
+      final publicPlayers = Map<String, dynamic>.from(
+        publicDoc['players'] as Map,
+      );
       final scrubbed = <String, dynamic>{};
       for (final e in publicPlayers.entries) {
         final value = Map<String, dynamic>.from(e.value as Map);
@@ -1099,11 +1273,17 @@ class FirebaseRepository {
     }
 
     final gameRef = _db
-        .collection('groups').doc(game.groupId)
-        .collection('games').doc(game.id);
+        .collection('groups')
+        .doc(game.groupId)
+        .collection('games')
+        .doc(game.id);
 
     await _db.runTransaction((tx) async {
-      if (expectedRevision != null) {
+      // `force` is the blocking-action override (currently: cancelling a
+      // tournament). It means "this device is taking over" — so it bypasses
+      // BOTH concurrency guards below, not just the editor claim. A cancel
+      // that loses a revision race must still land: the event is over.
+      if (expectedRevision != null && !force) {
         final snap = await tx.get(gameRef);
         if (snap.exists) {
           final data = snap.data()!;
@@ -1112,14 +1292,23 @@ class FirebaseRepository {
             throw fa.FirebaseException(
               plugin: 'cloud_firestore',
               code: 'aborted',
-              message: 'Game revision mismatch. Expected $expectedRevision, got $currentRevision.',
+              message:
+                  'Game revision mismatch. Expected $expectedRevision, got $currentRevision.',
             );
           }
           final serverEditor = data['editorDeviceId'] as String?;
-          final serverClaimed = data['editorClaimedAt'] as Timestamp?;
-          if (serverEditor != null && serverEditor.isNotEmpty && serverEditor != deviceId) {
+          if (serverEditor != null &&
+              serverEditor.isNotEmpty &&
+              serverEditor != deviceId) {
+            final serverClaimed = parseEditorClaimedAt(
+              data['editorClaimedAt'],
+            );
             final now = DateTime.now();
-            final isStale = serverClaimed != null && now.difference(serverClaimed.toDate()) > const Duration(seconds: 90);
+            // Unparseable / missing stamp counts as stale: never let a claim
+            // we cannot date block the authority device forever.
+            final isStale =
+                serverClaimed == null ||
+                now.difference(serverClaimed) > const Duration(seconds: 90);
             if (!isStale) {
               throw fa.FirebaseException(
                 plugin: 'cloud_firestore',
@@ -1134,45 +1323,124 @@ class FirebaseRepository {
     });
   }
 
+  /// Decodes an `editorClaimedAt` value from a game document.
+  ///
+  /// Every writer stores it as an ISO-8601 STRING (`claimGameEditor`, the
+  /// heartbeat dot-patch in `_claimEditorIfNeeded`, and
+  /// `liveGameToFirestoreDoc`'s `_nullOrIso`). Reading it back as a
+  /// `Timestamp` therefore threw a `TypeError` inside the save transaction on
+  /// every admin write after the first one — surfaced to the host as
+  /// "Changes could not be saved. Check your connection." and silently
+  /// reverting the edit (most visibly: cancelling a tournament). Accept the
+  /// legacy `Timestamp` shape too so documents written by older builds still
+  /// decode.
+  @visibleForTesting
+  static DateTime? parseEditorClaimedAt(Object? raw) {
+    if (raw is Timestamp) return raw.toDate();
+    if (raw is DateTime) return raw;
+    if (raw is String) return DateTime.tryParse(raw);
+    return null;
+  }
+
   /// Saves the admin's undo history to a sidecar subcollection so it travels
   /// with the account across devices, without forcing players to download it.
-  Future<void> saveUndoStack(String groupId, String gameId, List<LiveGame> stack) => _db
-      .collection('groups').doc(groupId).collection('games').doc(gameId)
-      .collection('admin').doc('undoStack')
-      .set({
-        'snapshots': stack.map(liveGameToFirestoreDoc).toList(),
-      });
+  Future<void> saveUndoStack(
+    String groupId,
+    String gameId,
+    List<LiveGame> stack,
+  ) => _db
+      .collection('groups')
+      .doc(groupId)
+      .collection('games')
+      .doc(gameId)
+      .collection('admin')
+      .doc('undoStack')
+      .set({'snapshots': stack.map(liveGameToFirestoreDoc).toList()});
 
   /// Loads the admin's undo history sidecar document.
   Future<List<LiveGame>> loadUndoStack(String groupId, String gameId) async {
     final doc = await _db
-        .collection('groups').doc(groupId).collection('games').doc(gameId)
-        .collection('admin').doc('undoStack').get();
+        .collection('groups')
+        .doc(groupId)
+        .collection('games')
+        .doc(gameId)
+        .collection('admin')
+        .doc('undoStack')
+        .get();
     if (!doc.exists) return [];
-    
+
     final snapshots = doc.data()?['snapshots'] as List?;
     if (snapshots == null) return [];
-    
+
     return snapshots
         .map((s) => liveGameFromFirestoreDoc(s as Map<String, dynamic>))
         .toList();
   }
 
-  Future<Map<String, dynamic>?> loadPrivateGameData(String groupId, String gameId) async {
+  Future<Map<String, dynamic>?> loadPrivateGameData(
+    String groupId,
+    String gameId,
+  ) async {
     final snap = await _db
-        .collection('groups').doc(groupId)
-        .collection('games').doc(gameId)
-        .collection('admin').doc('privateData')
+        .collection('groups')
+        .doc(groupId)
+        .collection('games')
+        .doc(gameId)
+        .collection('admin')
+        .doc('privateData')
         .get();
     return snap.data();
   }
 
+  Map<String, dynamic> _unflatten(Map<String, dynamic> flat) {
+    final unflattened = <String, dynamic>{};
+    for (final entry in flat.entries) {
+      final parts = entry.key.split('.');
+      Map<String, dynamic> current = unflattened;
+      for (var i = 0; i < parts.length - 1; i++) {
+        final part = parts[i];
+        current[part] ??= <String, dynamic>{};
+        current = current[part] as Map<String, dynamic>;
+      }
+      current[parts.last] = entry.value;
+    }
+    return unflattened;
+  }
+
   /// Targeted per-player / field patches using Firestore dot-paths — avoids
   /// clobbering unrelated concurrent edits (e.g. RSVPs while admin edits).
+  ///
+  /// MUST use `update()` (not `set(merge:true)`): a merge-set only merges at
+  /// the TOP level, so `{players: {uid: ...}}` would REPLACE the whole
+  /// `players` id-keyed map and wipe every other player's row — and the rules'
+  /// `memberPlayersSafe` then rejects the write (permission-denied) because
+  /// the diff touches every key. `update()` with dot-path keys deep-merges,
+  /// touching only the member's own fields.
   Future<void> patchGame(
-      String gid, String gameId, Map<String, dynamic> dotPaths) => _db
-      .collection('groups').doc(gid).collection('games').doc(gameId)
-      .update(_stamp(dotPaths));
+    String gid,
+    String gameId,
+    Map<String, dynamic> dotPaths,
+  ) async {
+    final ref = _db
+        .collection('groups')
+        .doc(gid)
+        .collection('games')
+        .doc(gameId);
+    final patch = _stamp(dotPaths);
+    try {
+      await ref.update(patch);
+    } on FirebaseException catch (e) {
+      // A missing game doc (e.g. a legacy game never persisted) makes
+      // update() fail with not-found. Fall back to a create carrying only the
+      // member's own slice — the rules allow a member to create a game doc
+      // when it contains exclusively their own rows (memberGameCreate).
+      if (e.code == 'not-found') {
+        await ref.set(_stamp(_unflatten(dotPaths)), SetOptions(merge: true));
+      } else {
+        rethrow;
+      }
+    }
+  }
 
   /// Live game document. Both admins and members follow the raw doc — members
   /// are gated to `isMember(gid)` by rules and the app sanitizes payout /
@@ -1180,13 +1448,15 @@ class FirebaseRepository {
   /// per-member `memberViews` projection needed a Cloud Function to maintain
   /// it; this build runs without functions.)
   Stream<DocumentSnapshot<Map<String, dynamic>>> gameDocSnapshots(
-          String gid, String gameId, {bool isAdmin = false}) =>
-      _db
-          .collection('groups')
-          .doc(gid)
-          .collection('games')
-          .doc(gameId)
-          .snapshots();
+    String gid,
+    String gameId, {
+    bool isAdmin = false,
+  }) => _db
+      .collection('groups')
+      .doc(gid)
+      .collection('games')
+      .doc(gameId)
+      .snapshots();
 
   /// One-shot read of the raw game document — used right before a whole-doc
   /// save to reconcile member-owned fields (RSVPs, guest slots) that may have
@@ -1204,10 +1474,16 @@ class FirebaseRepository {
   /// Registers the game's public/tv codes for lookup flows.
   Future<void> upsertGameCodes(LiveGame game) async {
     final batch = _db.batch();
-    batch.set(_db.collection('joinCodes').doc(game.publicCode.toUpperCase()),
-        {'gid': game.groupId, 'gameId': game.id, 'kind': 'game'});
-    batch.set(_db.collection('joinCodes').doc(game.tvCode.toUpperCase()),
-        {'gid': game.groupId, 'gameId': game.id, 'kind': 'tv'});
+    batch.set(_db.collection('joinCodes').doc(game.publicCode.toUpperCase()), {
+      'gid': game.groupId,
+      'gameId': game.id,
+      'kind': 'game',
+    });
+    batch.set(_db.collection('joinCodes').doc(game.tvCode.toUpperCase()), {
+      'gid': game.groupId,
+      'gameId': game.id,
+      'kind': 'tv',
+    });
     await batch.commit();
   }
 
@@ -1218,25 +1494,31 @@ class FirebaseRepository {
     required Map<String, dynamic> tv,
     required Map<String, dynamic> player,
     required Map<String, dynamic> guest,
-  }) =>
-      _db.collection('publicGames').doc(game.id).set(_stamp({
-        'gid': game.groupId,
-        'publicCode': game.publicCode,
-        'tvCode': game.tvCode,
-        'status': game.status.name,
-        'tv': tv,
-        'player': player,
-        'guest': guest,
-      }));
+  }) => _db
+      .collection('publicGames')
+      .doc(game.id)
+      .set(
+        _stamp({
+          'gid': game.groupId,
+          'publicCode': game.publicCode,
+          'tvCode': game.tvCode,
+          'status': game.status.name,
+          'tv': tv,
+          'player': player,
+          'guest': guest,
+        }),
+      );
 
   Stream<Map<String, dynamic>> publicGameStream(String gameId) => _db
-      .collection('publicGames').doc(gameId)
+      .collection('publicGames')
+      .doc(gameId)
       .snapshots()
       .map((s) => s.data() ?? const {});
 
   /// Resolves a public/tv code to `(gid, gameId, kind)` or null.
   Future<({String gid, String gameId, String kind})?> findGameByCode(
-      String code) async {
+    String code,
+  ) async {
     final key = code.trim().toUpperCase();
     final snap = await _db.collection('joinCodes').doc(key).get();
     if (!snap.exists) return null;
@@ -1316,75 +1598,101 @@ class FirebaseRepository {
   Future<void> releaseSlotClaim(String gameId, String inviterId, int slot) =>
       _requestsCol(gameId).doc('guestCheckIn-$inviterId-$slot').delete();
 
-  Stream<List<GameRequest>> requestsStream(String gameId, String groupId) => _requestsCol(gameId)
-      .where('gid', isEqualTo: groupId)
-      .where('consumed', isEqualTo: false)
-      .snapshots()
-      .map((s) => [
-            for (final d in s.docs)
-              GameRequest(
-                id: d.id,
-                kind: (d.data()['kind'] as String?) ?? '',
-                payload: Map<String, dynamic>.from(d.data()),
-                createdAt:
-                    (d.data()['createdAt'] as Timestamp?)?.toDate() ??
-                        DateTime.now(),
-              ),
-          ]);
-
-  Future<void> consumeRequest(String gameId, String requestId) =>
+  Stream<List<GameRequest>> requestsStream(String gameId, String groupId) =>
       _requestsCol(gameId)
-          .doc(requestId)
-          .set({'consumed': true}, SetOptions(merge: true));
+          .where('gid', isEqualTo: groupId)
+          .where('consumed', isEqualTo: false)
+          .snapshots()
+          .map(
+            (s) => [
+              for (final d in s.docs)
+                GameRequest(
+                  id: d.id,
+                  kind: (d.data()['kind'] as String?) ?? '',
+                  payload: Map<String, dynamic>.from(d.data()),
+                  createdAt:
+                      (d.data()['createdAt'] as Timestamp?)?.toDate() ??
+                      DateTime.now(),
+                ),
+            ],
+          );
+
+  Future<void> consumeRequest(String gameId, String requestId) => _requestsCol(
+    gameId,
+  ).doc(requestId).set({'consumed': true}, SetOptions(merge: true));
 
   // ── Cash sessions ──────────────────────────────────────────────────────────
   Future<void> saveCashSession(String gid, CashSession session) => _db
-      .collection('groups').doc(gid).collection('cashSessions').doc(session.id)
+      .collection('groups')
+      .doc(gid)
+      .collection('cashSessions')
+      .doc(session.id)
       .set(_stamp(cashSessionToMap(session)));
 
   Stream<List<CashSession>> completedCashSessionsStream(String gid) => _db
-      .collection('groups').doc(gid).collection('cashSessions')
+      .collection('groups')
+      .doc(gid)
+      .collection('cashSessions')
       .where('isCompleted', isEqualTo: true)
       .snapshots()
       .map((s) => [for (final d in s.docs) cashSessionFromMap(d.data())]);
 
   // ── Presets / chip sets ────────────────────────────────────────────────────
   Future<void> savePreset(String uid, TournamentPreset preset) => _db
-      .collection('users').doc(uid).collection('presets').doc(preset.id)
+      .collection('users')
+      .doc(uid)
+      .collection('presets')
+      .doc(preset.id)
       .set(tournamentPresetToMap(preset));
 
   Future<void> deletePreset(String uid, String presetId) => _db
-      .collection('users').doc(uid).collection('presets').doc(presetId).delete();
+      .collection('users')
+      .doc(uid)
+      .collection('presets')
+      .doc(presetId)
+      .delete();
 
   Stream<List<TournamentPreset>> presetsStream(String uid) => _db
-      .collection('users').doc(uid).collection('presets')
+      .collection('users')
+      .doc(uid)
+      .collection('presets')
       .snapshots()
       .map((s) => [for (final d in s.docs) tournamentPresetFromMap(d.data())]);
 
   Future<void> saveChipSet(
-          String uid, String id, String name, List<ChipColor> chips) =>
-      _db.collection('users').doc(uid).collection('chipSets').doc(id).set({
-        'name': name,
-        'chips': chips.map(chipColorToMap).toList(),
-      });
+    String uid,
+    String id,
+    String name,
+    List<ChipColor> chips,
+  ) => _db.collection('users').doc(uid).collection('chipSets').doc(id).set({
+    'name': name,
+    'chips': chips.map(chipColorToMap).toList(),
+  });
 
-  Future<void> deleteChipSet(String uid, String id) => _db
-      .collection('users').doc(uid).collection('chipSets').doc(id).delete();
+  Future<void> deleteChipSet(String uid, String id) =>
+      _db.collection('users').doc(uid).collection('chipSets').doc(id).delete();
 
   Stream<List<({String id, String name, List<ChipColor> chips})>>
-      chipSetsStream(String uid) => _db
-          .collection('users').doc(uid).collection('chipSets')
-          .snapshots()
-          .map((s) => [
-                for (final d in s.docs)
-                  (
-                    id: d.id,
-                    name: (d.data()['name'] as String?) ?? '',
-                    chips: (d.data()['chips'] as List? ?? const [])
-                        .map((e) => chipColorFromMap(Map<String, dynamic>.from(e as Map)))
-                        .toList(),
-                  ),
-              ]);
+  chipSetsStream(String uid) => _db
+      .collection('users')
+      .doc(uid)
+      .collection('chipSets')
+      .snapshots()
+      .map(
+        (s) => [
+          for (final d in s.docs)
+            (
+              id: d.id,
+              name: (d.data()['name'] as String?) ?? '',
+              chips: (d.data()['chips'] as List? ?? const [])
+                  .map(
+                    (e) =>
+                        chipColorFromMap(Map<String, dynamic>.from(e as Map)),
+                  )
+                  .toList(),
+            ),
+        ],
+      );
 
   // ── Notification fan-out ───────────────────────────────────────────────────
   // FREE-PLAN fan-out (no Cloud Function, no Blaze plan):
@@ -1394,77 +1702,98 @@ class FirebaseRepository {
   //  3. The originating device also fans the event out as a REAL push
   //     (OneSignal REST API, include_aliases = member uids).
   Future<void> stageGroupNotification(
-      String gid, AppNotification notification) =>
-      _db
-          .collection('groups').doc(gid).collection('notifications')
-          .doc(notification.id)
-          .set(_stamp({
-            'title': notification.title,
-            'body': notification.body,
-            'type': notification.type.name,
-            'link': notification.link,
-            'read': false,
-            'timestamp': FieldValue.serverTimestamp(),
-            if (notification.audience != null &&
-                notification.audience!.isNotEmpty)
-              'audience': notification.audience,
-          }));
+    String gid,
+    AppNotification notification,
+  ) => _db
+      .collection('groups')
+      .doc(gid)
+      .collection('notifications')
+      .doc(notification.id)
+      .set(
+        _stamp({
+          'title': notification.title,
+          'body': notification.body,
+          'type': notification.type.name,
+          'link': notification.link,
+          'read': false,
+          'timestamp': FieldValue.serverTimestamp(),
+          if (notification.audience != null &&
+              notification.audience!.isNotEmpty)
+            'audience': notification.audience,
+        }),
+      );
 
   /// Live stream of a group's staged-notification outbox.
   Stream<List<OutboxNotification>> groupOutboxStream(String gid) => _db
-      .collection('groups').doc(gid).collection('notifications')
+      .collection('groups')
+      .doc(gid)
+      .collection('notifications')
       .snapshots()
-      .map((s) => [
-            for (final d in s.docs)
-              OutboxNotification(
-                id: d.id,
-                title: (d.data()['title'] as String?) ?? '',
-                body: (d.data()['body'] as String?) ?? '',
-                type: notificationTypeByName(d.data()['type']),
-                link: d.data()['link'] as String?,
-                audience: (d.data()['audience'] as List?)
-                    ?.map((e) => e.toString())
-                    .toList(),
-                timestamp: (d.data()['timestamp'] as Timestamp?)?.toDate() ??
-                    DateTime.now(),
-                updatedAtMillis: (d.data()['updatedAt'] as Timestamp?)
-                        ?.millisecondsSinceEpoch ??
-                    0,
-              ),
-          ]);
+      .map(
+        (s) => [
+          for (final d in s.docs)
+            OutboxNotification(
+              id: d.id,
+              title: (d.data()['title'] as String?) ?? '',
+              body: (d.data()['body'] as String?) ?? '',
+              type: notificationTypeByName(d.data()['type']),
+              link: d.data()['link'] as String?,
+              audience: (d.data()['audience'] as List?)
+                  ?.map((e) => e.toString())
+                  .toList(),
+              timestamp:
+                  (d.data()['timestamp'] as Timestamp?)?.toDate() ??
+                  DateTime.now(),
+              updatedAtMillis:
+                  (d.data()['updatedAt'] as Timestamp?)
+                      ?.millisecondsSinceEpoch ??
+                  0,
+            ),
+        ],
+      );
 
   /// Mirrors a staged outbox notification into the signed-in user's OWN inbox.
   Future<void> mirrorInboxNotification(
     String uid,
     AppNotification notification, {
     bool read = false,
-  }) =>
-      _db.collection('users').doc(uid).collection('notifications')
-          .doc(notification.id)
-          .set({
-            'id': notification.id,
-            'title': notification.title,
-            'body': notification.body,
-            'type': notification.type.name,
-            'link': notification.link,
-            'read': read,
-            'timestamp': notification.timestamp.toIso8601String(),
-          });
+  }) => _db
+      .collection('users')
+      .doc(uid)
+      .collection('notifications')
+      .doc(notification.id)
+      .set({
+        'id': notification.id,
+        'title': notification.title,
+        'body': notification.body,
+        'type': notification.type.name,
+        'link': notification.link,
+        'read': read,
+        'timestamp': notification.timestamp.toIso8601String(),
+      });
 
   Stream<List<AppNotification>> notificationsStream(String uid) => _db
-      .collection('users').doc(uid).collection('notifications')
+      .collection('users')
+      .doc(uid)
+      .collection('notifications')
       .orderBy('timestamp', descending: true)
       .limit(100)
       .snapshots()
       .map((s) => [for (final d in s.docs) appNotificationFromMap(d.data())]);
 
   Future<void> markNotificationRead(String uid, String notificationId) => _db
-      .collection('users').doc(uid).collection('notifications').doc(notificationId)
+      .collection('users')
+      .doc(uid)
+      .collection('notifications')
+      .doc(notificationId)
       .set({'read': true}, SetOptions(merge: true));
 
   Future<void> markAllNotificationsRead(String uid) async {
-    final docs =
-        await _db.collection('users').doc(uid).collection('notifications').get();
+    final docs = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('notifications')
+        .get();
     final unread = docs.docs.where((d) => d.data()['read'] == false);
     final batch = _db.batch();
     for (final d in unread) {

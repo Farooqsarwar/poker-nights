@@ -76,8 +76,11 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   /// the confirmed seat view (from where they enter the live match) when the
   /// game is already live, or the "come back later" screen when it hasn't
   /// started yet.
-  static _GuestStep _routeAfterBooking(LiveGame game, Player? guest,
-      {bool sessionPending = false}) {
+  static _GuestStep _routeAfterBooking(
+    LiveGame game,
+    Player? guest, {
+    bool sessionPending = false,
+  }) {
     if (game.status == LiveGameStatus.completed) {
       return _GuestStep.completed;
     }
@@ -87,7 +90,8 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     // cannot be claimed either way — keep them waiting rather than bounce them
     // to "confirmed" or the entry screen. A session with no row on a proposal
     // that is genuinely over still falls through to confirmed/notLive below.
-    final preStart = game.status.index >= LiveGameStatus.checkin.index &&
+    final preStart =
+        game.status.index >= LiveGameStatus.checkin.index &&
         game.status.index <= LiveGameStatus.finaltable.index;
     if (guest != null && !guest.confirmed) {
       // Check-in opens at LiveGameStatus.checkin. Once open, unconfirmed guests
@@ -98,9 +102,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     } else if (guest == null && sessionPending && preStart) {
       return _GuestStep.waiting;
     }
-    return game.status.isActiveLive
-        ? _GuestStep.confirmed
-        : _GuestStep.notLive;
+    return game.status.isActiveLive ? _GuestStep.confirmed : _GuestStep.notLive;
   }
 
   /// Renders the schedule date/time, uppercasing the time suffix so e.g.
@@ -166,8 +168,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       );
     } else if (result == CodeLookupResult.rateLimited) {
       setState(
-        () => _codeError =
-            'Too many attempts. Wait a minute and try again.',
+        () => _codeError = 'Too many attempts. Wait a minute and try again.',
       );
     } else if (result == CodeLookupResult.game) {
       final app = context.read<AppProvider>();
@@ -228,8 +229,9 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     }
     if (!result.ok) {
       // Transient / validation failure — keep them at the name step.
-      setState(() =>
-          _nameError = result.message ?? 'Could not reserve that slot.');
+      setState(
+        () => _nameError = result.message ?? 'Could not reserve that slot.',
+      );
       return;
     }
 
@@ -281,6 +283,13 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   }
 
   Widget _buildBody(AppProvider app, LiveGame? game) {
+    if (game != null && game.status == LiveGameStatus.cancelled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startOver();
+      });
+      return _buildCodeEntry();
+    }
+
     if (game == null) {
       if (_step == _GuestStep.enterCode) return _buildCodeEntry();
       return const SizedBox.shrink();
@@ -307,7 +316,8 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     // revealed only after the admin confirms this guest's seat, or when the
     // event is public.
     final session = app.guestSession;
-    final guestConfirmed = session != null &&
+    final guestConfirmed =
+        session != null &&
         game.players.any(
           (p) =>
               p.isGuest &&
@@ -342,8 +352,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
                 child: AppAlertBanner(
                   type: AppAlertType.warning,
-                  message:
-                      'Connection interrupted — showing last known state.',
+                  message: 'Connection interrupted — showing last known state.',
                 ),
               );
             }
@@ -408,7 +417,10 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         const SizedBox(height: AppSpacing.xl),
 
         switch (view) {
-          _GuestStep.eventIntro => _buildEventIntro(game, showAddress: showAddress),
+          _GuestStep.eventIntro => _buildEventIntro(
+            game,
+            showAddress: showAddress,
+          ),
           _GuestStep.chooseInviter => _buildChooseInviter(
             game,
             registeredPlayers,
@@ -533,7 +545,10 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                       child: InkWell(
                         onTap: () => _codeController.text = 'FP2608',
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 8,
+                          ),
                           child: Text(
                             'FP2608',
                             style: AppTypography.monoSm.copyWith(
@@ -564,7 +579,10 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             InkWell(
               onTap: () => context.go(RoutePaths.login),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 8,
+                ),
                 child: Text(
                   'Sign in',
                   style: AppTypography.bodySm.copyWith(
@@ -800,24 +818,29 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                       p.inviterId == inviter?.id &&
                       p.guestSlot == slot,
                 );
-                
+
                 final slotRecord = game.guestSlots
                     .where((s) => s.inviterId == inviter?.id && s.slot == slot)
                     .firstOrNull;
                 final reservedName = slotRecord?.guestName;
-                final isReserved = slotRecord?.status == GuestSlotStatus.reserved && reservedName != null && reservedName.isNotEmpty;
+                final isReserved =
+                    slotRecord?.status == GuestSlotStatus.reserved &&
+                    reservedName != null &&
+                    reservedName.isNotEmpty;
 
                 return InkWell(
-                  onTap: taken ? null : () => setState(() => _selectedSlot = slot),
+                  onTap: taken
+                      ? null
+                      : () => setState(() => _selectedSlot = slot),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Container(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: taken 
+                      color: taken
                           ? AppColors.muted
                           : (_selectedSlot == slot
-                              ? AppColors.primarySoft
-                              : Colors.transparent),
+                                ? AppColors.primarySoft
+                                : Colors.transparent),
                       borderRadius: BorderRadius.circular(AppRadius.md),
                       border: Border.all(
                         color: _selectedSlot == slot
@@ -828,7 +851,9 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                     child: Row(
                       children: [
                         Text(
-                          isReserved ? "Reserved for $reservedName" : "${inviter?.name ?? ''}'s Guest $slot",
+                          isReserved
+                              ? "Reserved for $reservedName"
+                              : "${inviter?.name ?? ''}'s Guest $slot",
                           style: AppTypography.bodySm.copyWith(
                             fontWeight: FontWeight.w500,
                             color: taken ? AppColors.mutedForeground : null,
@@ -944,8 +969,8 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           AppButton(
             variant: AppButtonVariant.primary,
             fullWidth: true,
-            onPressed: (_nameController.text.trim().isEmpty ||
-                    _submittingCheckIn)
+            onPressed:
+                (_nameController.text.trim().isEmpty || _submittingCheckIn)
                 ? null
                 : _requestCheckIn,
             child: const Text('Confirm'),
@@ -965,10 +990,15 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
 
   Widget _buildWaiting(LiveGame game, Player? inviter) {
     final slotRecord = game.guestSlots
-        .where((s) => s.inviterId == inviter?.id && s.slot == (_selectedSlot ?? 1))
+        .where(
+          (s) => s.inviterId == inviter?.id && s.slot == (_selectedSlot ?? 1),
+        )
         .firstOrNull;
     final reservedName = slotRecord?.guestName;
-    final isReserved = slotRecord?.status == GuestSlotStatus.reserved && reservedName != null && reservedName.isNotEmpty;
+    final isReserved =
+        slotRecord?.status == GuestSlotStatus.reserved &&
+        reservedName != null &&
+        reservedName.isNotEmpty;
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xxxl),
@@ -1013,7 +1043,9 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                   ),
                 ),
                 Text(
-                  isReserved ? "Reserved for $reservedName" : "${inviter?.name ?? ''}'s Guest ${_selectedSlot ?? 1}",
+                  isReserved
+                      ? "Reserved for $reservedName"
+                      : "${inviter?.name ?? ''}'s Guest ${_selectedSlot ?? 1}",
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -1540,4 +1572,3 @@ class _BackLink extends StatelessWidget {
     );
   }
 }
-

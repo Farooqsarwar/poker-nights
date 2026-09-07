@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -17,6 +18,8 @@ import '../../widgets/app_divider.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
 import '../../widgets/app_toggle.dart';
+import '../../widgets/group_switcher.dart';
+import '../../app/icons.dart';
 
 /// Settings mirroring the account area of the web app.
 class SettingsScreen extends StatelessWidget {
@@ -32,21 +35,27 @@ class SettingsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Settings',
-            style: AppTypography.display(
-              size: AppFontSizes.xxxl,
-              weight: FontWeight.w700,
-            ),
-          ),
+          const GroupContextHeader(title: 'Settings'),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Preferences for your account',
+            'Account and group preferences',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
+          // ── Group settings ───────────────────────────────────────────────
+          // Group settings live in one place so the user never wonders
+          // whether a setting changes them or the group (IA §4).
+          if (app.hasCurrentGroup) ...[
+            Text(
+              'Your group',
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _GroupSettingsCard(app: app),
+            const SizedBox(height: AppSpacing.xl),
+          ],
           // Notifications
           Text(
             'Gameplay',
@@ -526,6 +535,232 @@ class _SettingRow extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             trailing,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Group settings section — group name, members, game defaults, invite code,
+/// and the danger zone (leave / transfer). Keeps group concerns clearly
+/// separate from account/app preferences (IA §4).
+class _GroupSettingsCard extends StatelessWidget {
+  const _GroupSettingsCard({required this.app});
+
+  final AppProvider app;
+
+  @override
+  Widget build(BuildContext context) {
+    final group = app.currentGroup;
+    final chip = Icons.chevron_right;
+    final chevron = Icon(chip, color: AppColors.mutedForeground, size: 20);
+
+    void copyCode() {
+      Clipboard.setData(ClipboardData(text: group.joinCode));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Group code copied to clipboard')),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              _SettingRow(
+                icon: groupIconMap[group.icon] ?? Icons.shield_outlined,
+                title: group.name,
+                subtitle: '${group.members.length} members ○ ${group.ownerId == app.user?.id ? 'You own this group' : 'Group details'}',
+                trailing: chevron,
+                showDivider: true,
+                onTap: () => context.go(RoutePaths.group),
+              ),
+              _SettingRow(
+                icon: Icons.groups_outlined,
+                title: 'Manage members',
+                subtitle: 'Admins, co-admins, remove members',
+                trailing: chevron,
+                showDivider: true,
+                onTap: () =>
+                    context.go(RoutePaths.members),
+              ),
+              _SettingRow(
+                icon: Icons.style_outlined,
+                title: 'Game defaults',
+                subtitle: 'Chip sets and tournament presets',
+                trailing: chevron,
+                showDivider: true,
+                onTap: () => context.push(RoutePaths.presets),
+              ),
+              _SettingRow(
+                icon: Icons.qr_code_2_outlined,
+                title: 'Invite members',
+                subtitle: 'Group code: ${group.joinCode} · tap to copy',
+                trailing: chevron,
+                showDivider: false,
+                onTap: copyCode,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          padding: EdgeInsets.zero,
+          borderColor: AppColors.destructive.withValues(alpha: 0.3),
+          child: Column(
+            children: [
+              if (app.isAdmin)
+                _SettingRow(
+                  icon: Icons.admin_panel_settings_outlined,
+                  title: 'Transfer ownership',
+                  subtitle: 'Hand the group to another member',
+                  trailing: chevron,
+                  showDivider: true,
+                  onTap: () => _showTransferOwnershipDialog(context),
+                ),
+              InkWell(
+                onTap: () => _confirmLeaveGroup(context),
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.exit_to_app_outlined,
+                        size: 20,
+                        color: AppColors.destructive,
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Leave group',
+                              style: AppTypography.bodySm.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.destructive,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'You can rejoin with the group code',
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: AppColors.destructive.withValues(alpha: 0.6),
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _confirmLeaveGroup(BuildContext context) {
+    final app = this.app;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Leave Group'),
+        content: const Text(
+          'Leave this group? You can rejoin with the group code.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              app.leaveGroup();
+              context.go(RoutePaths.home);
+            },
+            child: Text(
+              'Leave',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.destructive,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTransferOwnershipDialog(BuildContext context) {
+    final app = this.app;
+    final members = app.currentGroup.members
+        .where((m) => m.id != app.user?.id)
+        .toList();
+    if (members.isEmpty) return;
+    String? selectedId;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          backgroundColor: AppColors.card,
+          title: const Text('Transfer Ownership'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Select a member to become the new group owner. This cannot be undone.',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              ...members.map(
+                (m) => RadioListTile<String>(
+                  value: m.id,
+                  groupValue: selectedId,
+                  onChanged: (v) => setState(() => selectedId = v),
+                  title: Text(m.name, style: AppTypography.bodySm),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(
+                'Cancel',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: selectedId == null
+                  ? null
+                  : () async {
+                      Navigator.of(ctx).pop();
+                      await app.transferGroupOwnership(selectedId!);
+                    },
+              child: const Text('Transfer'),
+            ),
           ],
         ),
       ),

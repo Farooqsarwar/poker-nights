@@ -15,11 +15,14 @@ import '../screens/public/privacy_screen.dart';
 import '../screens/public/terms_screen.dart';
 import '../screens/public/support_screen.dart';
 import '../screens/public/join_screen.dart';
+import '../screens/shell/chat_screen.dart';
 import '../screens/shell/group_screen.dart';
 import '../screens/shell/history_screen.dart';
 import '../screens/shell/home_screen.dart';
 import '../screens/shell/join_group_screen.dart';
+import '../screens/shell/members_screen.dart';
 import '../screens/shell/notifications_screen.dart';
+import '../screens/shell/polls_screen.dart';
 import '../screens/shell/profile_screen.dart';
 import '../screens/shell/settings_screen.dart';
 import '../screens/shell/stats_screen.dart';
@@ -139,6 +142,21 @@ GoRouter buildAppRouter(AppProvider app) {
     if (path.startsWith('/game/')) {
       final code = path.substring('/game/'.length);
       return '${RoutePaths.join}?code=${Uri.encodeComponent(code)}';
+    }
+
+    // Single navigation layer: the old hub tabs are now top-level screens.
+    // Rewrite legacy `/group?tab=X` links to their dedicated route.
+    if (path == RoutePaths.group) {
+      switch (state.uri.queryParameters['tab']) {
+        case 'chat':
+          return RoutePaths.chat;
+        case 'members':
+          return RoutePaths.members;
+        case 'polls':
+          return RoutePaths.polls;
+        case 'history':
+          return RoutePaths.history;
+      }
     }
 
     // Hold every navigation at splash until Firebase resolves the persisted
@@ -299,13 +317,22 @@ GoRouter buildAppRouter(AppProvider app) {
     ),
     GoRoute(
       path: RoutePaths.group,
-      pageBuilder: (context, state) {
-        final tab = state.uri.queryParameters['tab'];
-        return NoTransitionPage(
-          key: ValueKey(state.uri.path),
-          child: shell(GroupScreen(initialTab: tab), path: RoutePaths.group),
-        );
-      },
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(const GroupScreen(), path: RoutePaths.group),
+      ),
+    ),
+    GoRoute(
+      path: RoutePaths.chat,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ChatScreen(), path: RoutePaths.chat)),
+    ),
+    GoRoute(
+      path: RoutePaths.members,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const MembersScreen(), path: RoutePaths.members)),
+    ),
+    GoRoute(
+      path: RoutePaths.polls,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const PollsScreen(), path: RoutePaths.polls)),
     ),
     GoRoute(
       path: RoutePaths.joinGroup,

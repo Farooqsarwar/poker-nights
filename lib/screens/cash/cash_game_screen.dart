@@ -12,6 +12,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/group_switcher.dart';
 
 enum _CashStep { setup, players }
 
@@ -128,6 +129,8 @@ class _CashGameScreenState extends State<CashGameScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const GroupContextHeader(),
+          const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
               InkWell(

@@ -43,7 +43,9 @@ class _InvitationScreenState extends State<InvitationScreen> {
 
   Future<void> _copyLink(LiveGame game) async {
     await Clipboard.setData(
-      ClipboardData(text: 'https://poker-night-tools.web.app/game/${game.publicCode}'),
+      ClipboardData(
+        text: 'https://poker-night-tools.web.app/game/${game.publicCode}',
+      ),
     );
     if (!mounted) return;
     setState(() => _copied = true);
@@ -51,7 +53,6 @@ class _InvitationScreenState extends State<InvitationScreen> {
       if (mounted) setState(() => _copied = false);
     });
   }
-
 
   void _showAdminTutorialDialog(BuildContext context) {
     showAppModal(
@@ -68,7 +69,9 @@ class _InvitationScreenState extends State<InvitationScreen> {
           const SizedBox(height: AppSpacing.md),
           const Text('1. Group members have been notified and can RSVP.'),
           const Text('2. Share the 4-digit code below with any guests.'),
-          const Text('3. When you are ready to start seating players, tap "Open Check-in".'),
+          const Text(
+            '3. When you are ready to start seating players, tap "Open Check-in".',
+          ),
           const SizedBox(height: AppSpacing.xl),
           AppButton(
             fullWidth: true,
@@ -180,6 +183,14 @@ class _InvitationScreenState extends State<InvitationScreen> {
                 ? () => _openEditModal(context, app, game)
                 : null,
           ),
+          if (app.isAdmin && app.lastSaveError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              child: AppAlertBanner(
+                type: AppAlertType.error,
+                message: app.lastSaveError!,
+              ),
+            ),
           // §10.4: prominent display of recent event changes so members see
           // updated values without digging through chat or audit history.
           if (game.changeLog.isNotEmpty) ...[
@@ -214,31 +225,34 @@ class _InvitationScreenState extends State<InvitationScreen> {
           ],
           _ContextualMainButton(game: game, user: user, myPlayer: myPlayer),
 
-          if (user != null && 
+          if (user != null &&
               !app.isGuest &&
               game.status != LiveGameStatus.completed &&
-              game.status != LiveGameStatus.cancelled && 
-              (myPlayer == null || (!myPlayer.checkedIn && !myPlayer.isGuest))) ...[
+              game.status != LiveGameStatus.cancelled &&
+              (myPlayer == null ||
+                  (!myPlayer.checkedIn && !myPlayer.isGuest))) ...[
             const SizedBox(height: AppSpacing.sm),
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.xl),
               glow: true,
               child: _RsvpSection(
-                myPlayer: myPlayer ?? Player(
-                  id: user.id,
-                  name: user.name,
-                  isGuest: false,
-                  rsvp: null,
-                  checkedIn: false,
-                  confirmed: false,
-                  eliminated: false,
-                  rebuys: 0,
-                  hasAddOn: false,
-                  knockouts: 0,
-                  table: 0,
-                  seat: 0,
-                  active: true,
-                ),
+                myPlayer:
+                    myPlayer ??
+                    Player(
+                      id: user.id,
+                      name: user.name,
+                      isGuest: false,
+                      rsvp: null,
+                      checkedIn: false,
+                      confirmed: false,
+                      eliminated: false,
+                      rebuys: 0,
+                      hasAddOn: false,
+                      knockouts: 0,
+                      table: 0,
+                      seat: 0,
+                      active: true,
+                    ),
                 cutoffPassed: app.rsvpCutoffPassed,
                 onRsvp: (rsvp) {
                   HapticFeedback.lightImpact();
@@ -249,10 +263,12 @@ class _InvitationScreenState extends State<InvitationScreen> {
                   final currentGuestCount = currentRsvp?.guestCount ?? 0;
                   if (newGuestCount < currentGuestCount) {
                     final claimedSlots = game.guestSlots
-                        .where((s) =>
-                            s.inviterId == (myPlayer?.id ?? '') &&
-                            s.slot > newGuestCount &&
-                            !s.available)
+                        .where(
+                          (s) =>
+                              s.inviterId == (myPlayer?.id ?? '') &&
+                              s.slot > newGuestCount &&
+                              !s.available,
+                        )
                         .length;
                     final slotsToRemove = currentGuestCount - newGuestCount;
                     if (claimedSlots > 0 && slotsToRemove > 0) {
@@ -277,7 +293,8 @@ class _InvitationScreenState extends State<InvitationScreen> {
                                 Expanded(
                                   child: AppButton(
                                     variant: AppButtonVariant.secondary,
-                                    onPressed: () => Navigator.of(context).pop(),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
                                     child: const Text('Keep current RSVP'),
                                   ),
                                 ),
@@ -428,12 +445,12 @@ class _InvitationScreenState extends State<InvitationScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           // Event-day preparation checklist (spec §4.6) — admin only, pre-live.
-if (app.isAdmin &&
-            game.status != LiveGameStatus.running &&
-            game.status != LiveGameStatus.paused &&
-            game.status != LiveGameStatus.finaltable &&
-            game.status != LiveGameStatus.completed &&
-            game.status != LiveGameStatus.cancelled) ...[
+          if (app.isAdmin &&
+              game.status != LiveGameStatus.running &&
+              game.status != LiveGameStatus.paused &&
+              game.status != LiveGameStatus.finaltable &&
+              game.status != LiveGameStatus.completed &&
+              game.status != LiveGameStatus.cancelled) ...[
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.lg),
               borderColor: AppColors.primary.withValues(alpha: 0.2),
@@ -462,7 +479,13 @@ if (app.isAdmin &&
                             game.status == LiveGameStatus.ready) ||
                         game.players.any((p) => p.checkedIn),
                     actionLabel: 'Open',
-                    onAction: () => context.go(RoutePaths.checkIn),
+                    onAction: () {
+                      if (game.status == LiveGameStatus.draft ||
+                          game.status == LiveGameStatus.published) {
+                        app.updateGameStatus(LiveGameStatus.checkin);
+                      }
+                      context.go(RoutePaths.checkIn);
+                    },
                   ),
                   _ChecklistRow(
                     label: 'Generate structure estimate',
@@ -496,111 +519,130 @@ if (app.isAdmin &&
           // My RSVP
 
           // Share codes
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Share with guests',
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                CodeDisplay(code: game.publicCode, label: 'Game code'),
-                const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  children: [
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.secondary,
-                      onPressed: () => _copyLink(game),
-                      child: _copied
-                          ? AppIconLabel(
-                              label: 'Link copied',
-                              icon: Icons.check_circle,
-                              color: AppColors.success,
-                            )
-                          : const Text('Copy link'),
-                    ),
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.secondary,
-                      onPressed: () => showAppLinkModal(context, game),
-                      child: const Text('Show QR code'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'Guests open the link, choose who invited them, select their guest slot and request check-in. No account needed.',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (myPlayer != null && (myPlayer.rsvp?.guestCount ?? 0) > 0) ...[
-            const SizedBox(height: AppSpacing.md),
+          if (game.status != LiveGameStatus.cancelled) ...[
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Your guest slots',
+                    'Share with guests',
                     style: AppTypography.bodySm.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.md),
+                  CodeDisplay(code: game.publicCode, label: 'Game code'),
                   const SizedBox(height: AppSpacing.sm),
-                  for (var i = 1; i <= myPlayer.rsvp!.guestCount; i++) ...[
-                    Builder(
-                      builder: (context) {
-                        final guest = game.players.where((p) => p.isGuest && p.inviterId == myPlayer.id && p.guestSlot == i).firstOrNull;
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  color: AppColors.secondary,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  '$i',
-                                  style: AppTypography.monoXs.copyWith(color: AppColors.mutedForeground),
-                                ),
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(
-                                child: Text(
-                                  guest?.name.isNotEmpty == true ? guest!.name : 'Unclaimed',
-                                  style: AppTypography.bodySm.copyWith(
-                                    color: guest != null ? AppColors.foreground : AppColors.mutedForeground,
-                                  ),
-                                ),
-                              ),
-                              if (guest != null)
-                                AppBadge(
-                                  label: guest.confirmed ? 'Confirmed' : 'Pending',
-                                  variant: guest.confirmed ? AppBadgeVariant.green : AppBadgeVariant.muted,
-                                ),
-                            ],
-                          ),
-                        );
-                      },
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    children: [
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => _copyLink(game),
+                        child: _copied
+                            ? AppIconLabel(
+                                label: 'Link copied',
+                                icon: Icons.check_circle,
+                                color: AppColors.success,
+                              )
+                            : const Text('Copy link'),
+                      ),
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => showAppLinkModal(context, game),
+                        child: const Text('Show QR code'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Guests open the link, choose who invited them, select their guest slot and request check-in. No account needed.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
+            if (myPlayer != null && (myPlayer.rsvp?.guestCount ?? 0) > 0) ...[
+              const SizedBox(height: AppSpacing.md),
+              AppCard(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Your guest slots',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    for (var i = 1; i <= myPlayer.rsvp!.guestCount; i++) ...[
+                      Builder(
+                        builder: (context) {
+                          final guest = game.players
+                              .where(
+                                (p) =>
+                                    p.isGuest &&
+                                    p.inviterId == myPlayer.id &&
+                                    p.guestSlot == i,
+                              )
+                              .firstOrNull;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.secondary,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    '$i',
+                                    style: AppTypography.monoXs.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    guest?.name.isNotEmpty == true
+                                        ? guest!.name
+                                        : 'Unclaimed',
+                                    style: AppTypography.bodySm.copyWith(
+                                      color: guest != null
+                                          ? AppColors.foreground
+                                          : AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                                if (guest != null)
+                                  AppBadge(
+                                    label: guest.confirmed
+                                        ? 'Confirmed'
+                                        : 'Pending',
+                                    variant: guest.confirmed
+                                        ? AppBadgeVariant.green
+                                        : AppBadgeVariant.muted,
+                                  ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ],
           const SizedBox(height: AppSpacing.lg),
           // Responses
@@ -662,86 +704,91 @@ if (app.isAdmin &&
           // Accept / Decline. The event cannot move forward to check-in while
           // any guest is still pending (see [_ContextualMainButton]).
           if (app.isAdmin) ...[
-            Builder(builder: (context) {
-              final pendingGuests = game.players
-                  .where((p) =>
-                      p.isGuest && !p.confirmed && p.name.trim().isNotEmpty)
-                  .toList();
-              return AppCard(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                borderColor: pendingGuests.isNotEmpty
-                    ? AppColors.primary.withValues(alpha: 0.5)
-                    : null,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
+            Builder(
+              builder: (context) {
+                final pendingGuests = game.players
+                    .where(
+                      (p) =>
+                          p.isGuest && !p.confirmed && p.name.trim().isNotEmpty,
+                    )
+                    .toList();
+                return AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  borderColor: pendingGuests.isNotEmpty
+                      ? AppColors.primary.withValues(alpha: 0.5)
+                      : null,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Guest requests',
+                            style: AppTypography.bodySm.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (pendingGuests.isNotEmpty)
+                            AppBadge(
+                              label: '${pendingGuests.length} to review',
+                              variant: AppBadgeVariant.red,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      if (pendingGuests.isEmpty)
                         Text(
-                          'Guest requests',
-                          style: AppTypography.bodySm
-                              .copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const Spacer(),
-                        if (pendingGuests.isNotEmpty)
-                          AppBadge(
-                            label: '${pendingGuests.length} to review',
-                            variant: AppBadgeVariant.red,
+                          'No guests waiting. Everyone who requested a seat has been reviewed.',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
                           ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    if (pendingGuests.isEmpty)
-                      Text(
-                        'No guests waiting. Everyone who requested a seat has been reviewed.',
-                        style: AppTypography.bodyXs
-                            .copyWith(color: AppColors.mutedForeground),
-                      )
-                    else
-                      for (final g in pendingGuests)
-                        Padding(
-                          padding:
-                              const EdgeInsets.only(bottom: AppSpacing.sm),
-                          child: Row(
-                            children: [
-                              AppAvatar(
-                                  name: g.name, size: AppAvatarSize.sm),
-                              const SizedBox(width: AppSpacing.md),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(g.name,
-                                        style: AppTypography.bodySm),
-                                    Text(
-                                      'Guest of ${_memberName(game, g.inviterId ?? '')}',
-                                      style: AppTypography.bodyXs.copyWith(
-                                        color: AppColors.mutedForeground,
+                        )
+                      else
+                        for (final g in pendingGuests)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: Row(
+                              children: [
+                                AppAvatar(name: g.name, size: AppAvatarSize.sm),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(g.name, style: AppTypography.bodySm),
+                                      Text(
+                                        'Guest of ${_memberName(game, g.inviterId ?? '')}',
+                                        style: AppTypography.bodyXs.copyWith(
+                                          color: AppColors.mutedForeground,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              AppButton(
-                                size: AppButtonSize.sm,
-                                onPressed: () => app.confirmGuest(g.id),
-                                child: const Text('Accept'),
-                              ),
-                              const SizedBox(width: AppSpacing.xs),
-                              AppButton(
-                                size: AppButtonSize.sm,
-                                variant: AppButtonVariant.danger,
-                                onPressed: () => app.rejectGuest(g.id),
-                                child: const Text('Decline'),
-                              ),
-                            ],
+                                AppButton(
+                                  size: AppButtonSize.sm,
+                                  onPressed: () => app.confirmGuest(g.id),
+                                  child: const Text('Accept'),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                AppButton(
+                                  size: AppButtonSize.sm,
+                                  variant: AppButtonVariant.danger,
+                                  onPressed: () => app.rejectGuest(g.id),
+                                  child: const Text('Decline'),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                  ],
-                ),
-              );
-            }),
+                    ],
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: AppSpacing.lg),
           ],
           // Guest slots (07-014) — the persisted named seats for "Going +N"
@@ -805,7 +852,11 @@ if (app.isAdmin &&
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.chat_bubble_outline, size: 16, color: AppColors.icon),
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        size: 16,
+                        color: AppColors.icon,
+                      ),
                       const SizedBox(width: AppSpacing.sm),
                       Text(
                         'Chat',
@@ -814,17 +865,19 @@ if (app.isAdmin &&
                         ),
                       ),
                       const Spacer(),
-                      Builder(builder: (_) {
-                        final count = app
-                            .gameChatMessages(game.id)
-                            .where((m) => !m.deleted)
-                            .length;
-                        if (count == 0) return const SizedBox.shrink();
-                        return AppBadge(
-                          label: '$count',
-                          variant: AppBadgeVariant.green,
-                        );
-                      }),
+                      Builder(
+                        builder: (_) {
+                          final count = app
+                              .gameChatMessages(game.id)
+                              .where((m) => !m.deleted)
+                              .length;
+                          if (count == 0) return const SizedBox.shrink();
+                          return AppBadge(
+                            label: '$count',
+                            variant: AppBadgeVariant.green,
+                          );
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -1129,7 +1182,11 @@ void _showRsvpListModal(BuildContext context, AppProvider app, LiveGame game) {
 
 /// Admin correct-or-reopen for a single member's RSVP (User Flow §3.1).
 void _showAdminRsvpOverride(
-    BuildContext context, AppProvider app, LiveGame game, Player p) {
+  BuildContext context,
+  AppProvider app,
+  LiveGame game,
+  Player p,
+) {
   final choices = <String, Rsvp?>{
     'Going': Rsvp.going,
     'Going +1': Rsvp.goingPlus1,
@@ -1312,8 +1369,13 @@ class _EditEventFormState extends State<_EditEventForm> {
         final h = int.tryParse(parts.isNotEmpty ? parts[0] : '');
         final m = int.tryParse(parts.length > 1 ? parts[1] : '');
         if (h != null && m != null && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-          final scheduled =
-              DateTime(parsed.year, parsed.month, parsed.day, h, m);
+          final scheduled = DateTime(
+            parsed.year,
+            parsed.month,
+            parsed.day,
+            h,
+            m,
+          );
           if (scheduled.isBefore(DateTime.now())) {
             showAppModal(
               context: context,
@@ -1837,7 +1899,8 @@ void showAppLinkModal(BuildContext context, LiveGame game) {
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               child: QrImageView(
-                data: 'https://poker-night-tools.web.app/game/${game.publicCode}',
+                data:
+                    'https://poker-night-tools.web.app/game/${game.publicCode}',
                 version: QrVersions.auto,
                 size: 200,
                 gapless: false,
@@ -2005,8 +2068,9 @@ class _ContextualMainButton extends StatelessWidget {
               .length;
           final seatingConfirmed = game.seatingConfirmed;
           final pendingGuestCount = game.players
-              .where((p) =>
-                  p.isGuest && !p.confirmed && p.name.trim().isNotEmpty)
+              .where(
+                (p) => p.isGuest && !p.confirmed && p.name.trim().isNotEmpty,
+              )
               .length;
           if (pendingGuestCount > 0) {
             // Spec: the admin reviews every attendee — accept/decline each
@@ -2074,6 +2138,18 @@ class _ContextualMainButton extends StatelessWidget {
       }
     } else {
       // Member flow
+      // Blocking states take priority (spec §12 / §9.1) — mirrors the
+      // canonical `_memberAction` in main_button.dart. Without this the member
+      // kept seeing "Check In" / "Your Seat Assignment" on a tournament the
+      // host had already cancelled.
+      if (game.status == LiveGameStatus.cancelled) {
+        return const AppButton(
+          fullWidth: true,
+          size: AppButtonSize.xl,
+          onPressed: null,
+          child: Text('Event Cancelled'),
+        );
+      }
       if (game.status == LiveGameStatus.completed) {
         return AppButton(
           fullWidth: true,
@@ -2098,6 +2174,27 @@ class _ContextualMainButton extends StatelessWidget {
       }
 
       final p = myPlayer;
+      // A member who joined the group after this game's roster was seeded
+      // (or who never answered the invite) has no row in game.players yet —
+      // p is null. They must still be able to check in once check-in is
+      // open (main_button.dart's canonical logic treats me == null as
+      // eligible too); falling through to SizedBox.shrink() here previously
+      // hid the Check In action entirely for them.
+      if (p == null &&
+          !game.checkInClosed &&
+          (game.status == LiveGameStatus.checkin ||
+              game.status == LiveGameStatus.ready)) {
+        return AppButton(
+          fullWidth: true,
+          size: AppButtonSize.xl,
+          // requestCheckIn creates the roster row (Going + checked in) as a
+          // single atomic write when none exists yet — do not also call
+          // setRSVP here, which would race a second, independent write
+          // against the same players.{uid} map (see requestCheckIn).
+          onPressed: () => app.requestCheckIn(user!.id),
+          child: const Text('Check In'),
+        );
+      }
       if (p != null) {
         if (p.checkedIn && p.confirmed) {
           final seated =
@@ -2174,8 +2271,9 @@ class _ContextualMainButton extends StatelessWidget {
             onPressed: null,
             child: const Text('Waiting for Confirmation'),
           );
-        } else if ((game.status == LiveGameStatus.checkin ||
-            game.status == LiveGameStatus.ready)) {
+        } else if (!game.checkInClosed &&
+            (game.status == LiveGameStatus.checkin ||
+                game.status == LiveGameStatus.ready)) {
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
@@ -2209,12 +2307,12 @@ class _RsvpSection extends StatefulWidget {
 
 class _RsvpSectionState extends State<_RsvpSection> {
   Rsvp _rsvpForGuestCount(int guests) => switch (guests) {
-        1 => Rsvp.goingPlus1,
-        2 => Rsvp.goingPlus2,
-        3 => Rsvp.goingPlus3,
-        4 => Rsvp.goingPlus4,
-        _ => Rsvp.going,
-      };
+    1 => Rsvp.goingPlus1,
+    2 => Rsvp.goingPlus2,
+    3 => Rsvp.goingPlus3,
+    4 => Rsvp.goingPlus4,
+    _ => Rsvp.going,
+  };
 
   bool get _isGoing {
     final r = widget.myPlayer.rsvp;
@@ -2307,9 +2405,7 @@ class _RsvpSectionState extends State<_RsvpSection> {
               padding: const EdgeInsets.only(top: AppSpacing.xs),
               child: Text(
                 'You + $_currentGuestCount guest${_currentGuestCount > 1 ? 's' : ''} = ${_currentGuestCount + 1} total seats',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.success,
-                ),
+                style: AppTypography.bodyXs.copyWith(color: AppColors.success),
               ),
             ),
         ],

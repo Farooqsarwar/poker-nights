@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -7,7 +7,6 @@ import '../app/icons.dart';
 import '../app/route_paths.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
-import '../models/group.dart';
 import '../providers/app_provider.dart';
 import 'app_avatar.dart';
 import 'app_button.dart';
@@ -16,6 +15,7 @@ import 'brand_lockup.dart';
 import 'create_group_dialog.dart';
 import 'glass_styles.dart';
 import 'glass_surface.dart';
+import 'group_switcher.dart';
 
 /// Desktop left sidebar mirroring the web `Nav` component.
 class Sidebar extends StatelessWidget {
@@ -27,13 +27,20 @@ class Sidebar extends StatelessWidget {
     final app = context.watch<AppProvider>();
     final user = app.user;
     final location = GoRouterState.of(context).uri.toString();
+    final group = app.currentGroup;
 
-    final navItems = [
+    final primaryNavItems = [
       _NavSpec(RoutePaths.home, 'Home', Icons.home_outlined, 0, null),
-      _NavSpec('${RoutePaths.group}?tab=chat', 'Chat', Icons.chat_bubble_outline, 0, null),
-      _NavSpec('${RoutePaths.group}?tab=games', 'Events', Icons.sports_esports_outlined, 0, null),
-      _NavSpec('${RoutePaths.group}?tab=polls', 'Polls', Icons.poll_outlined, 0, null),
+      if (app.hasCurrentGroup) ...[
+        _NavSpec(RoutePaths.group, 'Games', Icons.sports_esports_outlined, 0, null),
+        _NavSpec(RoutePaths.chat, 'Chat', Icons.chat_bubble_outline, 0, app.unreadGroupChatCount(group.id)),
+        _NavSpec(RoutePaths.members, 'Members', Icons.groups_outlined, 0, group.members.length),
+      ],
+    ];
+    final secondaryNavItems = [
+      _NavSpec(RoutePaths.polls, 'Polls', Icons.poll_outlined, 0, null),
       _NavSpec(RoutePaths.history, 'History', Icons.history, 0, null),
+      _NavSpec(RoutePaths.cashGame, 'Cash Game', Icons.payments_outlined, 0, null),
       _NavSpec(
         RoutePaths.settings,
         'Settings',
@@ -97,7 +104,75 @@ class Sidebar extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 children: [
-                  for (final item in navItems)
+                  // Current group â€” the single group selector (IA Â§10).
+                  InkWell(
+                    onTap: () => showGroupSwitcher(context),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Container(
+                      margin: const EdgeInsets.only(
+                        bottom: AppSpacing.sm,
+                        top: AppSpacing.xs,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: app.hasCurrentGroup
+                            ? AppColors.primarySoft
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(
+                          color: app.hasCurrentGroup
+                              ? AppColors.primary.withValues(alpha: 0.5)
+                              : AppColors.border,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            groupIconMap[app.currentGroup.icon] ??
+                                Icons.shield_outlined,
+                            size: 18,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  app.hasCurrentGroup
+                                      ? app.currentGroup.name
+                                      : 'No group',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.bodySm.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  app.hasCurrentGroup
+                                      ? '${app.currentGroup.members.length} members'
+                                      : 'Join or create a group',
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Icon(
+                            Icons.arrow_drop_down,
+                            size: 20,
+                            color: AppColors.mutedForeground,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  for (final item in primaryNavItems)
                     _NavTile(item: item, location: location),
                   Divider(color: AppColors.border, height: 24),
                   Padding(
@@ -106,7 +181,7 @@ class Sidebar extends StatelessWidget {
                       vertical: AppSpacing.xs,
                     ),
                     child: Text(
-                      'MY GROUPS',
+                      'MORE',
                       style: AppTypography.bodyXs.copyWith(
                         color: AppColors.mutedForeground,
                         fontWeight: FontWeight.w600,
@@ -114,18 +189,8 @@ class Sidebar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Every group the user belongs to — pinnable, with an icon
-                  // (client feedback: groups, not a single slot).
-                  for (final group in app.orderedGroups)
-                    _GroupRow(
-                      group: group,
-                      selected: group.id == app.currentGroupId,
-                      onTap: () {
-                        app.setCurrentGroup(group);
-                        context.go('${RoutePaths.group}?tab=games');
-                      },
-                      onPin: () => app.togglePinGroup(group),
-                    ),
+                  for (final item in secondaryNavItems)
+                    _NavTile(item: item, location: location),
                 ],
               ),
             ),
@@ -213,7 +278,7 @@ class Sidebar extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  user?.name ?? '—',
+                                  user?.name ?? 'â€”',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTypography.bodySm.copyWith(
@@ -369,114 +434,3 @@ class _NavTile extends StatelessWidget {
   }
 }
 
-class _GroupRow extends StatelessWidget {
-  const _GroupRow({
-    required this.group,
-    required this.selected,
-    required this.onTap,
-    required this.onPin,
-  });
-
-  final Group group;
-  final bool selected;
-  final VoidCallback onTap;
-  final VoidCallback onPin;
-
-  @override
-  Widget build(BuildContext context) {
-    Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      hoverColor: AppColors.surfaceHover,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: 8,
-        ),
-        decoration: Glass.glassGroupRow(selected: selected),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Client review: the group SYMBOL is the primary identifier in
-            // the multi-group list (the name drops to a smaller label).
-            //
-            // Fixed-size box + FittedBox: whatever `group.icon` contains
-            // (single emoji, multi-char initials, etc.) is scaled down to
-            // fit on one line inside the 26x26 box instead of wrapping or
-            // overflowing into the name/member-count text next to it.
-            Container(
-              width: 26,
-              height: 26,
-              margin: const EdgeInsets.only(top: 1),
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: selected ? AppColors.primarySoft : AppColors.secondary,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border.all(
-                  color: selected ? AppColors.primary : AppColors.border,
-                ),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                groupIconMap[group.icon] ?? Icons.shield_outlined,
-                size: 16,
-                color: selected ? AppColors.primary : AppColors.mutedForeground,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    group.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodyXs.copyWith(
-                      color: selected
-                          ? AppColors.primary
-                          : AppColors.foreground,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                      height: 1.2,
-                    ),
-                  ),
-                  if (group.members.isNotEmpty)
-                    Text(
-                      '${group.members.length} member'
-                      '${group.members.length == 1 ? '' : 's'}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                        fontSize: 10,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 1),
-              child: InkWell(
-                onTap: onPin,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: Padding(
-                  padding: const EdgeInsets.all(2),
-                  child: Icon(
-                    group.pinned ? Icons.push_pin : Icons.push_pin_outlined,
-                    size: 14,
-                    color: group.pinned
-                        ? AppColors.primary
-                        : AppColors.mutedForeground,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

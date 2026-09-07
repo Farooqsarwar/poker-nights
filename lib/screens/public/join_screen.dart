@@ -108,7 +108,7 @@ class _JoinScreenState extends State<JoinScreen> {
           final ok = await app.joinGroup(res.code);
           if (!mounted) return;
           if (ok) {
-            context.go('${RoutePaths.group}?tab=members');
+            context.go(RoutePaths.members);
           } else {
             _fail("Couldn't join that group — the code may have changed.");
           }

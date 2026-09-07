@@ -15,6 +15,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_tabs.dart';
 import '../../widgets/medal_icon.dart';
+import '../../widgets/group_switcher.dart';
 import '../../responsive/responsive.dart';
 
 /// History + leaderboard mirroring the web `HistoryPage`.
@@ -48,16 +49,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'History',
-            style: AppTypography.display(
-              size: AppFontSizes.xxxl,
-              weight: FontWeight.w700,
-            ),
-          ),
+          const GroupContextHeader(title: 'History'),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            '${group.name} · all past tournaments',
+            group.name.isNotEmpty
+                ? '${group.name} · all past games'
+                : 'All past games',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),

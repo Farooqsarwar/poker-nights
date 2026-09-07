@@ -29,7 +29,14 @@ extension AppProviderAuth on AppProvider {
     // field / login button and it logs me in" bug).
     await _hydrateUser(fbUser);
     _authReady = true;
+    // Technical §4.3: "Every client corrects local display drift from the
+    // latest authoritative server timestamp." Recalibration used to start
+    // only inside `startTimer()`, which nobody but the host runs — so a
+    // member, guest or TV calibrated once at sign-in and then drifted for the
+    // rest of the night with no way back. Every device now re-syncs on the
+    // same 10-minute cadence.
     _calibrateServerTime();
+    _startServerTimeRecalibration();
     // Re-run the router guard now that both `ready` and `authed` are settled.
     if (!_disposed) notifyListeners();
   }

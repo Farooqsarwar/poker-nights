@@ -36,6 +36,19 @@ extension AppProviderTimer on AppProvider {
         remaining = _currentGame!.secondsRemaining - 1;
       }
       if (remaining <= 0) {
+        // Only the authority (admin editor) device OPERATES the clock
+        // (User Flow §7 step 7, Technical §11.4). A member/guest/TV device
+        // used to run this same branch, which meant every viewer locally
+        // advanced the level and fired host-only side effects with it:
+        // spoken announcements, a staged group notification (members are
+        // allowed to create those, so one duplicate per open device), and an
+        // undo-stack write that the rules reject. Viewers still roll the
+        // level over so the clock never freezes at 00:00 — but silently, as
+        // display state only, and the host's next snapshot remains the truth.
+        if (!_isGameAuthority) {
+          _rollOverLevelForViewer();
+          return;
+        }
         final isLastLevel = _currentGame!.currentLevel >= _currentGame!.structure.levels.length;
         if (isLastLevel) {
           _currentGame = _currentGame!.copyWith(
@@ -65,6 +78,37 @@ extension AppProviderTimer on AppProvider {
       if (!_disposed) notifyListeners();
       _isTickUpdate = false;
     });
+  }
+
+  /// Display-only level rollover for a NON-authority device (member, guest,
+  /// TV) whose current level has run out before the host's update arrives.
+  ///
+  /// Deliberately does none of what [nextLevel] does: no announcement (so it
+  /// cannot speak), no notification (so it cannot write to Firestore), no
+  /// `_pushUndo` (so it cannot hit the admin-only undo sidecar), no revision
+  /// bump and no idempotency claim. It only moves the displayed level and
+  /// end-time forward so the countdown keeps running; when the host's real
+  /// transition lands, `_adoptRemoteMap` overwrites all of it.
+  void _rollOverLevelForViewer() {
+    final game = _currentGame;
+    if (game == null) return;
+    final next = game.currentLevel + 1;
+    if (next > game.structure.levels.length) {
+      // Past the generated end — hold at zero and wait for the host rather
+      // than inventing an extension level the host has not created.
+      if (game.timerRunning) {
+        _currentGame = game.copyWith(secondsRemaining: 0, timerRunning: false);
+        if (!_disposed) notifyListeners();
+      }
+      return;
+    }
+    final level = game.structure.levels[next - 1];
+    _currentGame = game.copyWith(
+      currentLevel: next,
+      secondsRemaining: level.durationMins * 60,
+      levelEndTime: _serverNow.add(Duration(minutes: level.durationMins)),
+    );
+    if (!_disposed) notifyListeners();
   }
 
   /// Estimated minutes still to play from now, minus the minutes the target

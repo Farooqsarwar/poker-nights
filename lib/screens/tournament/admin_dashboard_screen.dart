@@ -48,7 +48,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // Pending speed change shown in the preview modal (audit fix B4: the admin
   // must see old vs. proposed structure + both finish estimates BEFORE
   // anything is applied).
-  SpeedRecommendation? _pendingSpeed;
 
   /// Estimated finish time: remaining clock + the durations of the levels
   /// still to play (+5% buffer). [futureDurationOverride] previews a
@@ -1532,8 +1531,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               Expanded(
                 child: AppButton(
                   onPressed: () {
-                    app.acceptSpeedRecommendation(rec: rec);
+                    // Always report the outcome. A speed change only touches
+                    // FUTURE levels, so the timer and current blinds on screen
+                    // do not move — without this the press looked like a no-op.
+                    final result = app.acceptSpeedRecommendation(rec: rec);
                     Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(result),
+                        duration: const Duration(seconds: 6),
+                      ),
+                    );
                   },
                   child: const Text('Apply change'),
                 ),

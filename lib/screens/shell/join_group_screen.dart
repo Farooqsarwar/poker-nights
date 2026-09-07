@@ -40,7 +40,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     setState(() => _state = ok ? _JoinState.success : _JoinState.failure);
     if (ok) {
       Future.delayed(AppDurations.slow, () {
-        if (mounted) context.go('${RoutePaths.group}?tab=members');
+        if (mounted) context.go(RoutePaths.members);
       });
     }
   }

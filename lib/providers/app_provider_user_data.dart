@@ -441,7 +441,20 @@ extension AppProviderUserData on AppProvider {
       _mirrorCursors[gid] ??= -1;
       _groupOutboxSubs[gid] = _repo.groupOutboxStream(gid).listen(
         (docs) => _mirrorOutbox(gid, docs),
-        onError: (Object e) => debugPrint('outbox stream error: $e'),
+        onError: (Object e) {
+          debugPrint('outbox stream error: $e');
+          // A brand-new listener can reach the server just ahead of a
+          // just-committed joinGroup batch (the index doc that triggered
+          // this subscription arrives via local-cache optimism before the
+          // server has the matching membership row), so isMember(gid) is
+          // transiently false. Retry once the write has had time to land.
+          if (_isRetriablePermissionError(e)) {
+            _groupOutboxSubs.remove(gid)?.cancel();
+            Future.delayed(const Duration(milliseconds: 800), () {
+              if (!_disposed) _syncGroupOutboxSubs();
+            });
+          }
+        },
       );
     }
   }
@@ -501,13 +514,24 @@ extension AppProviderUserData on AppProvider {
     }
     for (final g in _groups) {
       if (_groupMembersSubs.containsKey(g.id)) continue;
-      _groupMembersSubs[g.id] =
-          _repo.groupMembersStream(g.id).listen((members) {
-        final i = _groups.indexWhere((x) => x.id == g.id);
+      final gid = g.id;
+      _groupMembersSubs[gid] =
+          _repo.groupMembersStream(gid).listen((members) {
+        final i = _groups.indexWhere((x) => x.id == gid);
         if (i == -1) return;
         _groups = [..._groups]..[i] = _groups[i].copyWith(members: members);
         if (!_disposed) notifyListeners();
-      }, onError: (Object e) => debugPrint('group members stream error: $e'));
+      }, onError: (Object e) {
+        debugPrint('group members stream error: $e');
+        // See _syncGroupOutboxSubs: a fresh listener can lose the race
+        // against the server-side commit of a just-created membership row.
+        if (_isRetriablePermissionError(e)) {
+          _groupMembersSubs.remove(gid)?.cancel();
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (!_disposed) _syncGroupMembersSubs();
+          });
+        }
+      });
     }
   }
 

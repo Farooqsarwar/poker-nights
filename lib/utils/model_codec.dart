@@ -71,7 +71,7 @@ Map<String, dynamic> appUserToMap(AppUser u) => {
     };
 
 AppUser appUserFromMap(Map<String, dynamic> m) => AppUser(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       name: (m['name'] as String?) ?? '',
       email: (m['email'] as String?) ?? '',
       isAdmin: (m['isAdmin'] as bool?) ?? false,
@@ -291,7 +291,7 @@ Map<String, dynamic> playerToMap(Player p) => {
     };
 
 Player playerFromMap(Map<String, dynamic> m) => Player(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       name: (m['name'] as String?) ?? '',
       isGuest: (m['isGuest'] as bool?) ?? false,
       inviterId: m['inviterId'] as String?,
@@ -324,7 +324,7 @@ Map<String, dynamic> chatMessageToMap(ChatMessage msg) => {
     };
 
 ChatMessage chatMessageFromMap(Map<String, dynamic> m) => ChatMessage(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       authorId: (m['authorId'] as String?) ?? '',
       authorName: (m['authorName'] as String?) ?? '',
       body: (m['body'] as String?) ?? '',
@@ -343,7 +343,7 @@ Map<String, dynamic> guestSlotToMap(GuestSlot s) => {
     };
 
 GuestSlot guestSlotFromMap(Map<String, dynamic> m) => GuestSlot(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       inviterId: (m['inviterId'] as String?) ?? '',
       slot: (m['slot'] as num?)?.toInt() ?? 1,
       guestName: m['guestName'] as String?,
@@ -358,7 +358,7 @@ Map<String, dynamic> announcementToMap(Announcement a) => {
     };
 
 Announcement announcementFromMap(Map<String, dynamic> m) => Announcement(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       text: (m['text'] as String?) ?? '',
       timestamp: _isoOrNull(m['timestamp']) ?? DateTime.now(),
     );
@@ -372,7 +372,7 @@ Map<String, dynamic> auditRecordToMap(AuditRecord r) => {
     };
 
 AuditRecord auditRecordFromMap(Map<String, dynamic> m) => AuditRecord(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       timestamp: _isoOrNull(m['timestamp']) ?? DateTime.now(),
       type: (m['type'] as String?) ?? '',
       actor: (m['actor'] as String?) ?? '',
@@ -392,7 +392,7 @@ Map<String, dynamic> pollToMap(Poll p) => {
     };
 
 Poll pollFromMap(Map<String, dynamic> m) => Poll(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       question: (m['question'] as String?) ?? '',
       options: List<String>.from(m['options'] as List? ?? const []),
       votes: (m['votes'] as Map? ?? const {}).map(
@@ -454,11 +454,12 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'lastIdempotencyKey': game.lastIdempotencyKey,
     'editorDeviceId': game.editorDeviceId,
     'editorClaimedAt': _nullOrIso(game.editorClaimedAt),
+    'audioMasterDeviceId': game.audioMasterDeviceId,
   };
 }
 
 LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
-      id: map['id'] as String,
+      id: (map['id'] as String?) ?? '',
       groupId: (map['groupId'] as String?) ?? '',
       settings:
           gameSettingsFromMap(Map<String, dynamic>.from(map['settings'] as Map)),
@@ -514,6 +515,7 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       lastIdempotencyKey: map['lastIdempotencyKey'] as String?,
       editorDeviceId: (map['editorDeviceId'] as String?) ?? '',
       editorClaimedAt: _isoOrNull(map['editorClaimedAt']),
+      audioMasterDeviceId: (map['audioMasterDeviceId'] as String?) ?? '',
     );
 
 /// Firestore representation: list-like collections that benefit from targeted
@@ -525,7 +527,9 @@ Map<String, dynamic> liveGameToFirestoreDoc(LiveGame game) {
     final items = List<Map<String, dynamic>>.from(base[key] as List);
     return {
       for (var i = 0; i < items.length; i++)
-        items[i]['id'] as String: {...items[i], 'orderIndex': i},
+        ((items[i]['id'] as String?)?.isNotEmpty ?? false)
+            ? items[i]['id'] as String
+            : 'row-$i': {...items[i], 'orderIndex': i},
     };
   }
 
@@ -603,7 +607,7 @@ Map<String, dynamic> cashPlayerToMap(CashPlayer p) => {
     };
 
 CashPlayer cashPlayerFromMap(Map<String, dynamic> m) => CashPlayer(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       name: (m['name'] as String?) ?? '',
       stack: (m['stack'] as num?)?.toDouble() ?? 0,
       totalBuyIns: (m['totalBuyIns'] as num?)?.toDouble() ?? 0,
@@ -624,7 +628,7 @@ Map<String, dynamic> cashSessionToMap(CashSession session) => {
     };
 
 CashSession cashSessionFromMap(Map<String, dynamic> m) => CashSession(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       settings: cashSessionSettingsFromMap(
           Map<String, dynamic>.from(m['settings'] as Map)),
       isCompleted: (m['isCompleted'] as bool?) ?? false,
@@ -663,7 +667,7 @@ Map<String, dynamic> tournamentPresetToMap(TournamentPreset p) => {
 
 TournamentPreset tournamentPresetFromMap(Map<String, dynamic> m) =>
     TournamentPreset(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       name: (m['name'] as String?) ?? '',
       buyIn: (m['buyIn'] as num?)?.toInt() ?? 0,
       koEnabled: (m['koEnabled'] as bool?) ?? false,
@@ -704,7 +708,7 @@ Map<String, dynamic> appNotificationToMap(AppNotification n) => {
 
 AppNotification appNotificationFromMap(Map<String, dynamic> m) =>
     AppNotification(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       title: (m['title'] as String?) ?? '',
       body: (m['body'] as String?) ?? '',
       type: _enumByName(
@@ -731,7 +735,7 @@ Map<String, dynamic> groupToMap(Group g) => {
     };
 
 Group groupFromMap(Map<String, dynamic> m) => Group(
-      id: m['id'] as String,
+      id: (m['id'] as String?) ?? '',
       name: (m['name'] as String?) ?? '',
       joinCode: (m['joinCode'] as String?) ?? '',
       ownerId: (m['ownerId'] as String?) ?? '',

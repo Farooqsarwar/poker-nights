@@ -86,30 +86,34 @@ extension AppProviderSocial on AppProvider {
         // append to directly — no game-doc write (members are forbidden the
         // `chat` field) and no projection round-trip, so the message stays put.
         _gameChatMessages = [..._gameChatMessages, msg];
-        unawaited(_repo
-            .sendGameChatMessage(ctx.$1, ctx.$2, msg)
-            .catchError((Object e) => debugPrint('sendGameChat failed: $e')));
+        unawaited(
+          _repo
+              .sendGameChatMessage(ctx.$1, ctx.$2, msg)
+              .catchError((Object e) => debugPrint('sendGameChat failed: $e')),
+        );
       } else {
         // Offline / mock mode — keep it on the local game model.
-        _currentGame = _currentGame!.copyWith(chat: [..._currentGame!.chat, msg]);
+        _currentGame = _currentGame!.copyWith(
+          chat: [..._currentGame!.chat, msg],
+        );
       }
     } else {
       _setGroup(_currentGroup.copyWith(chat: [..._currentGroup.chat, msg]));
       _postGroupChat(msg);
     }
-    
+
     // Fan out a push notification for this chat message (UAT 12-108/13-059).
     // The sender is excluded inside _fanOutPush so they don't banner themselves.
     pushNotification(
       AppNotification(
         id: 'chat-${msg.id}',
-        title: isGameChat 
-            ? 'Game Chat: ${_currentGame?.settings.name ?? 'Live Game'}' 
+        title: isGameChat
+            ? 'Game Chat: ${_currentGame?.settings.name ?? 'Live Game'}'
             : 'Group Chat: ${_currentGroup.name}',
         body: '${_user!.name}: $sanitized',
         timestamp: DateTime.now(),
         type: NotificationType.chat,
-        link: isGameChat ? '/game/$gameId' : '/group?tab=chat',
+        link: isGameChat ? '/game/$gameId' : '/chat',
         read: false,
       ),
     );
@@ -140,17 +144,21 @@ extension AppProviderSocial on AppProvider {
   /// Persists a group-chat message to `groups/{gid}/chat` (fire-and-forget).
   void _postGroupChat(ChatMessage msg) {
     if (!_backendUp || _currentGroupId == null) return;
-    unawaited(_repo
-        .sendGroupChatMessage(_currentGroupId!, msg)
-        .catchError((Object e) => debugPrint('sendGroupChat failed: $e')));
+    unawaited(
+      _repo
+          .sendGroupChatMessage(_currentGroupId!, msg)
+          .catchError((Object e) => debugPrint('sendGroupChat failed: $e')),
+    );
   }
 
   /// Persists a poll create/update to `groups/{gid}/polls` (fire-and-forget).
   void _persistPoll(Poll poll) {
     if (!_backendUp || _currentGroupId == null) return;
-    unawaited(_repo
-        .savePoll(_currentGroupId!, poll)
-        .catchError((Object e) => debugPrint('savePoll failed: $e')));
+    unawaited(
+      _repo
+          .savePoll(_currentGroupId!, poll)
+          .catchError((Object e) => debugPrint('savePoll failed: $e')),
+    );
   }
 
   void deleteMessage(String msgId) {
@@ -179,15 +187,19 @@ extension AppProviderSocial on AppProvider {
     if (!_backendUp) return;
     final ctx = _cloudGameContext;
     if (inGameChat && ctx != null) {
-      unawaited(_repo
-          .markGameChatMessageDeleted(ctx.$1, ctx.$2, msgId)
-          .catchError((Object e) => debugPrint('deleteGameChat failed: $e')));
+      unawaited(
+        _repo
+            .markGameChatMessageDeleted(ctx.$1, ctx.$2, msgId)
+            .catchError((Object e) => debugPrint('deleteGameChat failed: $e')),
+      );
       return;
     }
     if (_currentGroupId != null) {
-      unawaited(_repo
-          .markChatMessageDeleted(_currentGroupId!, msgId)
-          .catchError((Object e) => debugPrint('deleteMessage failed: $e')));
+      unawaited(
+        _repo
+            .markChatMessageDeleted(_currentGroupId!, msgId)
+            .catchError((Object e) => debugPrint('deleteMessage failed: $e')),
+      );
     }
   }
 
@@ -331,7 +343,8 @@ extension AppProviderSocial on AppProvider {
           AppNotification(
             id: 'n-${DateTime.now().millisecondsSinceEpoch}',
             title: 'Preset suggestion',
-            body: '${poll.question} — consider preset '
+            body:
+                '${poll.question} — consider preset '
                 '${suggestions.map((p) => p.name).join(' or ')}?',
             type: NotificationType.admin,
             link: RoutePaths.createTournament,
@@ -367,8 +380,12 @@ extension AppProviderSocial on AppProvider {
     _applyRsvpFor(participantId, rsvp, gameId: gameId, announce: false);
   }
 
-  void _applyRsvpFor(String userId, Rsvp? rsvp,
-      {String? gameId, bool announce = true}) {
+  void _applyRsvpFor(
+    String userId,
+    Rsvp? rsvp, {
+    String? gameId,
+    bool announce = true,
+  }) {
     final targetId = gameId ?? _currentGame?.id;
     if (targetId == null) return;
 
@@ -377,6 +394,14 @@ extension AppProviderSocial on AppProvider {
         ? _currentGame
         : _currentGroup.games.where((g) => g.id == targetId).firstOrNull;
     if (target == null) return;
+    // Terminal states are blocking (spec §12): a cancelled or finished event
+    // takes no further RSVPs — not even from the admin. Without this a member
+    // whose screen predates the cancellation could still answer the invite,
+    // and the write would resurrect activity on a dead game.
+    if (target.status == LiveGameStatus.cancelled ||
+        target.status == LiveGameStatus.completed) {
+      return;
+    }
     if (target.settings.rsvpCutoffPassed && !isAdmin) return;
 
     // No-op when the member already holds exactly this response — a tap on the
@@ -390,13 +415,16 @@ extension AppProviderSocial on AppProvider {
     // reference.
     final mine = target.players.where((p) => p.id == userId).firstOrNull;
     final serverGame = _lastSavedGame?.id == targetId ? _lastSavedGame : null;
-    final serverMine =
-        serverGame?.players.where((p) => p.id == userId).firstOrNull;
+    final serverMine = serverGame?.players
+        .where((p) => p.id == userId)
+        .firstOrNull;
     final serverAgrees = serverGame == null || serverMine?.rsvp == rsvp;
     if (mine != null && mine.rsvp == rsvp) {
       if (serverAgrees && !_pendingOwnRsvp.containsKey(targetId)) return;
-      debugPrint('RSVP re-tap for $userId: local=${mine.rsvp?.name} '
-          'server=${serverMine?.rsvp?.name} — forcing a write');
+      debugPrint(
+        'RSVP re-tap for $userId: local=${mine.rsvp?.name} '
+        'server=${serverMine?.rsvp?.name} — forcing a write',
+      );
     }
 
     // Destructive-shrink handling lives inside applyRsvp →
@@ -411,12 +439,16 @@ extension AppProviderSocial on AppProvider {
       // the seeded roster yet — add them when they answer the invite.
       final players = onRoster
           ? g.players
-              .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
-              .toList()
+                .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
+                .toList()
           : [...g.players, _memberAsPlayer(userId, rsvp)];
       var updated = g.copyWith(players: players);
       updated = _syncGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
-      updated = _reconcileExcessGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
+      updated = _reconcileExcessGuestSlots(
+        updated,
+        userId,
+        rsvp?.guestCount ?? 0,
+      );
       return updated;
     }
 
@@ -502,7 +534,25 @@ extension AppProviderSocial on AppProvider {
     final n = _checkInReassertCount[remote.id] ?? 0;
     if (n >= 3) return;
     _checkInReassertCount[remote.id] = n + 1;
-    _persistOwnCheckInPatch(remote.id, {'players.$uid.checkedIn': true, 'players.$uid.confirmed': false});
+    // If the server still has no row at all for this member, a narrow
+    // `.checkedIn`/`.confirmed` dot-patch would create one missing every
+    // other required field (name/id/rsvp/...), corrupting decode for every
+    // client. Persist the full row in that case instead.
+    if (serverMine == null) {
+      final mine = _currentGame?.id == remote.id
+          ? _currentGame!.players.where((p) => p.id == uid).firstOrNull
+          : null;
+      final full =
+          mine ?? _memberAsPlayer(uid, Rsvp.going).copyWith(checkedIn: true);
+      _persistOwnCheckInPatch(remote.id, {
+        'players.$uid': playerToMap(full.copyWith(checkedIn: true, confirmed: false)),
+      });
+    } else {
+      _persistOwnCheckInPatch(remote.id, {
+        'players.$uid.checkedIn': true,
+        'players.$uid.confirmed': false,
+      });
+    }
   }
 
   void _persistOwnCheckInPatch(String gameId, Map<String, dynamic> dotPaths) {
@@ -515,9 +565,11 @@ extension AppProviderSocial on AppProvider {
         }
         final uid = _user?.id;
         if (uid == null || _pendingCheckIn[gameId] != uid) return;
-        
+
         try {
-          final gid = _currentGame?.groupId.isNotEmpty == true ? _currentGame!.groupId : _currentGroupId;
+          final gid = _currentGame?.groupId.isNotEmpty == true
+              ? _currentGame!.groupId
+              : _currentGroupId;
           if (gid != null) {
             await _repo.patchGame(gid, gameId, dotPaths);
             _checkInLanded[gameId] = true;
@@ -530,7 +582,11 @@ extension AppProviderSocial on AppProvider {
     }());
   }
 
-  void _persistOwnRsvpPatch(String gameId, Map<String, dynamic> dotPaths, Rsvp? targetRsvp) {
+  void _persistOwnRsvpPatch(
+    String gameId,
+    Map<String, dynamic> dotPaths,
+    Rsvp? targetRsvp,
+  ) {
     if (dotPaths.isEmpty) {
       // before == after at field level — nothing to write. Logged because a
       // silent return here is indistinguishable from a successful save and
@@ -558,10 +614,13 @@ extension AppProviderSocial on AppProvider {
         final g = _currentGame?.id == gameId
             ? _currentGame
             : _currentGroup.games.where((x) => x.id == gameId).firstOrNull;
-        final gid =
-            (g != null && g.groupId.isNotEmpty) ? g.groupId : _currentGroupId;
+        final gid = (g != null && g.groupId.isNotEmpty)
+            ? g.groupId
+            : _currentGroupId;
         if (gid == null) {
-          debugPrint('RSVP patch waiting for group id (attempt ${attempt + 1})');
+          debugPrint(
+            'RSVP patch waiting for group id (attempt ${attempt + 1})',
+          );
           continue;
         }
 
@@ -589,7 +648,9 @@ extension AppProviderSocial on AppProvider {
               triedSelfJoin = true;
               try {
                 await _repo.joinGroup(gid, _user!);
-                debugPrint('RSVP patch: self-joined group $gid roster, retrying');
+                debugPrint(
+                  'RSVP patch: self-joined group $gid roster, retrying',
+                );
               } catch (joinErr) {
                 debugPrint('RSVP patch: self-join failed: $joinErr');
               }
@@ -599,9 +660,18 @@ extension AppProviderSocial on AppProvider {
       }
       final errorStr = (lastError ?? '').toString().toLowerCase();
       if (_isRetriablePermissionError(lastError ?? '')) {
-        lastRsvpError = 'RSVP not saved — you may not have write access to this game. Ask the host to add you to the group.';
-      } else if (errorStr.contains('quota-exceeded') || errorStr.contains('resource-exhausted') || errorStr.contains('quota')) {
-        lastRsvpError = 'RSVP not saved — database quota exceeded (free tier limit reached).';
+        lastRsvpError =
+            'RSVP not saved — you may not have write access to this game. Ask the host to add you to the group.';
+      } else if (errorStr.contains('not-found') ||
+          errorStr.contains('not found') ||
+          errorStr.contains('conflict')) {
+        lastRsvpError =
+            'RSVP not saved — game document missing from server. Ask the host to open the game again.';
+      } else if (errorStr.contains('quota-exceeded') ||
+          errorStr.contains('resource-exhausted') ||
+          errorStr.contains('quota')) {
+        lastRsvpError =
+            'RSVP not saved — database quota exceeded (free tier limit reached).';
       } else {
         lastRsvpError = 'RSVP save failed. Tap again to retry.';
       }
@@ -655,17 +725,11 @@ extension AppProviderSocial on AppProvider {
       final s = after.guestSlots[i];
       final old = beforeSlots[s.id];
       if (old == null) {
-        patch['guestSlots.${s.id}'] = {
-          ...guestSlotToMap(s),
-          'orderIndex': i,
-        };
+        patch['guestSlots.${s.id}'] = {...guestSlotToMap(s), 'orderIndex': i};
       } else if (old.guestName != s.guestName ||
           old.status != s.status ||
           old.slot != s.slot) {
-        patch['guestSlots.${s.id}'] = {
-          ...guestSlotToMap(s),
-          'orderIndex': i,
-        };
+        patch['guestSlots.${s.id}'] = {...guestSlotToMap(s), 'orderIndex': i};
       }
     }
     for (final s in before.guestSlots) {
@@ -744,17 +808,28 @@ extension AppProviderSocial on AppProvider {
     if (excess.isEmpty) return game;
     final confirmed = excess.where((p) => p.confirmed).toList();
     // Spec B3/L-20: Only remove UNCLAIMED (unconfirmed) excess guests.
-    final unconfirmedExcessIds = excess.where((p) => !p.confirmed).map((p) => p.id).toSet();
+    final unconfirmedExcessIds = excess
+        .where((p) => !p.confirmed)
+        .map((p) => p.id)
+        .toSet();
     final unconfirmedExcessSlots = excess
         .where((p) => !p.confirmed)
         .map((p) => p.guestSlot)
         .toSet();
     final updated = game.copyWith(
-      players: game.players.where((p) => !unconfirmedExcessIds.contains(p.id)).toList(),
-      pendingGuests: game.pendingGuests.where((p) => !unconfirmedExcessIds.contains(p.id)).toList(),
-      guestSlots: game.guestSlots.where((s) => 
-        !(s.inviterId == userId && unconfirmedExcessSlots.contains(s.slot))
-      ).toList(),
+      players: game.players
+          .where((p) => !unconfirmedExcessIds.contains(p.id))
+          .toList(),
+      pendingGuests: game.pendingGuests
+          .where((p) => !unconfirmedExcessIds.contains(p.id))
+          .toList(),
+      guestSlots: game.guestSlots
+          .where(
+            (s) =>
+                !(s.inviterId == userId &&
+                    unconfirmedExcessSlots.contains(s.slot)),
+          )
+          .toList(),
     );
     if (confirmed.isNotEmpty) {
       pushNotification(
@@ -815,5 +890,4 @@ extension AppProviderSocial on AppProvider {
     );
     if (!_disposed) notifyListeners();
   }
-
 }

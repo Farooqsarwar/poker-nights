@@ -43,11 +43,23 @@ class ResultPodiumScreen extends StatelessWidget {
     final app = context.watch<AppProvider>();
     final game = gameId != null ? app.gameById(gameId!) : app.currentGame;
 
-    if (game == null || game.status != LiveGameStatus.completed) {
-      // Guard: only show the podium once the game is fully completed.
-      // A null game means it was deleted; a non-completed game means the user
-      // navigated here manually while the tournament is still running.
-      // Use the standardized AppEmptyState for UI consistency (checklist 20-008).
+    // Guard: Allow viewing results only when game is completed, or cancelled (admin only).
+    // A null game means it was deleted; a non-terminal game means the user navigated here
+    // manually while the tournament is still running. Spec §9.1: admin can view results
+    // for both completed and cancelled tournaments to understand what happened.
+    if (game == null) {
+      return const AppEmptyState(
+        icon: Icons.emoji_events_outlined,
+        title: 'Result unavailable',
+        description: 'This game may have been deleted or is not finished.',
+      );
+    }
+
+    final isAdminViewingCancelled =
+        app.isAdmin && game.status == LiveGameStatus.cancelled;
+    final isCompletedGame = game.status == LiveGameStatus.completed;
+
+    if (!isCompletedGame && !isAdminViewingCancelled) {
       return const AppEmptyState(
         icon: Icons.emoji_events_outlined,
         title: 'Result unavailable',

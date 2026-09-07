@@ -242,13 +242,34 @@ extension AppProviderTournament on AppProvider {
     return result;
   }
 
-  void acceptSpeedRecommendation({SpeedRecommendation? rec}) {
+  /// Applies a speed-up / slow-down to FUTURE levels only (spec §4.14, §8.6).
+  ///
+  /// Returns a human-readable summary of what changed, or an explanation of
+  /// why nothing changed. Never returns silently: "I pressed it and nothing
+  /// happened" was indistinguishable between "not the authority device",
+  /// "already at the duration limit" and "applied, but only future levels
+  /// moved so the visible timer and current blinds stayed put" — which is the
+  /// correct behaviour and the most common case.
+  String acceptSpeedRecommendation({SpeedRecommendation? rec}) {
     _forceClaimEditor();
-    if (!_isGameAuthority) return;
+    if (!_isGameAuthority) {
+      final why =
+          'Speed change ignored — this device is not the active editor '
+          '(isAdmin=$isAdmin, editorDeviceId=${_currentGame?.editorDeviceId}, '
+          'thisDevice=${_repo.deviceId}).';
+      debugPrint('acceptSpeedRecommendation: $why');
+      return why;
+    }
     final game = _currentGame;
-    if (game == null) return;
+    if (game == null) {
+      debugPrint('acceptSpeedRecommendation: no current game.');
+      return 'No active game.';
+    }
     final recommendation = rec ?? game.speedRecommendation;
-    if (recommendation == null) return;
+    if (recommendation == null) {
+      debugPrint('acceptSpeedRecommendation: no recommendation to apply.');
+      return 'No speed recommendation to apply.';
+    }
     _pushUndo();
     final structure = game.structure;
     final isSpeedUp = recommendation == SpeedRecommendation.speedUp;
@@ -363,15 +384,83 @@ extension AppProviderTournament on AppProvider {
       );
     }
 
+    // Diagnostics: exactly what the press did to the structure.
+    final oldFuture = structure.levels
+        .where((l) => l.level > game.currentLevel)
+        .toList();
+    final newFuture =
+        allLevels.where((l) => l.level > game.currentLevel).toList();
+    final durationChanged = clamped != structure.levelDuration;
+    final blindsChanged = oldFuture.length != newFuture.length ||
+        [
+          for (var i = 0; i < oldFuture.length && i < newFuture.length; i++)
+            if (oldFuture[i].bb != newFuture[i].bb ||
+                oldFuture[i].sb != newFuture[i].sb ||
+                oldFuture[i].ante != newFuture[i].ante)
+              i,
+        ].isNotEmpty;
+    final levelsAdded = newFuture.length - oldFuture.length;
+    debugPrint(
+      'acceptSpeedRecommendation(${recommendation.name}): '
+      'currentLevel=${game.currentLevel} '
+      'levelDuration ${structure.levelDuration}->$clamped '
+      '(changed=$durationChanged) '
+      'futureLevels ${oldFuture.length}->${newFuture.length} '
+      'blindsChanged=$blindsChanged '
+      'firstFutureBB ${oldFuture.isEmpty ? "-" : oldFuture.first.bb}'
+      '->${newFuture.isEmpty ? "-" : newFuture.first.bb}',
+    );
+
+    if (oldFuture.isEmpty) {
+      debugPrint('acceptSpeedRecommendation: no future levels to change.');
+      return 'No future levels left to change — this is the last level.';
+    }
+    if (!durationChanged && !blindsChanged) {
+      // Both ends of the allowed 10/15/20 range hit this: speeding up at 10
+      // minutes or slowing down at 20 clamps back to the same value, and the
+      // blind snap can land on the same practical amount.
+      final atLimit = recommendation == SpeedRecommendation.speedUp ? 10 : 20;
+      debugPrint(
+        'acceptSpeedRecommendation: no-op — already at the '
+        '$atLimit-minute limit and blinds snapped unchanged.',
+      );
+      return 'No change — future levels are already at the '
+          '$atLimit-minute limit and the blinds could not move further '
+          'with these chips.';
+    }
+
     _currentGame = game.copyWith(
       speedRecommendation: null,
+      clearSpeedRecommendation: true,
       structure: structure.copyWith(
         levelDuration: clamped,
         levels: allLevels,
       ),
     );
+
+    final parts = <String>[
+      if (durationChanged)
+        'future levels ${structure.levelDuration} -> $clamped min',
+      if (blindsChanged) 'future blinds adjusted',
+      if (levelsAdded > 0)
+        '$levelsAdded intermediate level${levelsAdded == 1 ? '' : 's'} inserted',
+    ];
+    final summary = parts.join(', ');
+    addAuditRecord(
+      recommendation == SpeedRecommendation.speedUp ? 'speed_up' : 'slow_down',
+      '${recommendation == SpeedRecommendation.speedUp ? "Sped up" : "Slowed down"}: '
+      '$summary. Level ${game.currentLevel} and all completed levels unchanged.',
+    );
+    addAnnouncement(
+      recommendation == SpeedRecommendation.speedUp
+          ? 'Structure sped up from the next level.'
+          : 'Structure slowed down from the next level.',
+      false,
+    );
     _syncGroupGame();
     if (!_disposed) notifyListeners();
+    return 'Applied: $summary. The current level is unchanged — '
+        'the new pace starts at level ${game.currentLevel + 1}.';
   }
 
   TournamentStructure _structureWithLevels(

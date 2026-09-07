@@ -15,6 +15,7 @@ import 'brand_lockup.dart';
 import 'create_group_dialog.dart';
 import 'glass_styles.dart';
 import 'glass_surface.dart';
+import 'group_switcher.dart';
 
 /// Mobile slide-in drawer controlled by [AppProvider.isDrawerOpen].
 class NavDrawer extends StatelessWidget {
@@ -27,19 +28,21 @@ class NavDrawer extends StatelessWidget {
     final user = app.user;
     final location = GoRouterState.of(context).uri.toString();
 
-    final items = [
-      _DrawerItem(RoutePaths.home, 'Dashboard', Icons.home_outlined, null),
+    final group = app.currentGroup;
+    final groupSection = <_DrawerItem>[
+      _DrawerItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
       if (app.hasCurrentGroup) ...[
-        _DrawerItem('${RoutePaths.group}?tab=chat', 'Chat', Icons.chat_bubble_outline, null),
-        _DrawerItem('${RoutePaths.group}?tab=games', 'Events', Icons.sports_esports_outlined, null),
-        _DrawerItem('${RoutePaths.group}?tab=polls', 'Polls', Icons.poll_outlined, null),
+        _DrawerItem(RoutePaths.group, 'Games', Icons.sports_esports_outlined, null),
+        _DrawerItem(RoutePaths.chat, 'Chat', Icons.chat_bubble_outline, app.unreadGroupChatCount(group.id)),
+        _DrawerItem(RoutePaths.members, 'Members', Icons.groups_outlined, group.members.length),
       ],
-      _DrawerItem(RoutePaths.cashGame, 'Cash Game', Icons.payments_outlined, null),
+    ];
+    final moreSection = <_DrawerItem>[
+      _DrawerItem(RoutePaths.polls, 'Polls', Icons.poll_outlined, null),
       _DrawerItem(RoutePaths.history, 'History', Icons.history, null),
+      _DrawerItem(RoutePaths.cashGame, 'Cash Game', Icons.payments_outlined, null),
       _DrawerItem(RoutePaths.settings, 'Settings', Icons.settings_outlined, null),
     ];
-
-    final groups = app.orderedGroups;
 
     final panel = GlassSurface(
       blur: Glass.blurHeavy,
@@ -139,133 +142,111 @@ class NavDrawer extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.sm),
               children: [
-                for (final item in items)
-                  InkWell(
-                    onTap: () {
-                      app.closeDrawer();
-                      context.go(item.path);
-                    },
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: 11,
-                      ),
-                      decoration: BoxDecoration(
-                        color: location == item.path
-                            ? AppColors.primarySoft
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(item.icon, size: 20, color: AppColors.icon),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Text(
-                              item.label,
-                              style: AppTypography.bodySm.copyWith(
-                                fontWeight: FontWeight.w500,
-                                color: location == item.path
-                                    ? AppColors.primary
-                                    : AppColors.mutedForeground,
-                              ),
-                            ),
-                          ),
-                          if (item.badge != null && item.badge! > 0)
-                            Container(
-                              width: 20,
-                              height: 20,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                item.badge! > 9 ? '9+' : '${item.badge}',
-                                style: AppTypography.monoXs.copyWith(
-                                  color: AppColors.primaryForeground,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+                // Current group — the single group selector (IA §10).
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.xs,
+                    AppSpacing.xs,
+                    AppSpacing.xs,
+                    AppSpacing.sm,
+                  ),
+                  child: Text(
+                    app.hasCurrentGroup ? 'CURRENT GROUP' : 'GROUP',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.0,
                     ),
                   ),
-                Divider(color: AppColors.border, height: 24),
-                if (groups.isNotEmpty) ...[
-                  Padding(
+                ),
+                InkWell(
+                  onTap: () {
+                    app.closeDrawer();
+                    if (app.hasCurrentGroup) {
+                      showGroupSwitcher(context);
+                    } else {
+                      openCreateGroupDialog(context);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: AppSpacing.xs,
+                      horizontal: AppSpacing.md,
+                      vertical: 10,
                     ),
-                    child: Text(
-                      'MY GROUPS',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.0,
+                    decoration: BoxDecoration(
+                      color: app.hasCurrentGroup
+                          ? AppColors.primarySoft
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(
+                        color: app.hasCurrentGroup
+                            ? AppColors.primary.withValues(alpha: 0.5)
+                            : AppColors.border,
                       ),
                     ),
-                  ),
-                  for (final group in groups)
-                    InkWell(
-                      onTap: () {
-                        app.setCurrentGroup(group);
-                        app.closeDrawer();
-                        context.go('${RoutePaths.group}?tab=games');
-                      },
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md,
-                          vertical: 10,
+                    child: Row(
+                      children: [
+                        Icon(
+                          groupIconMap[group.icon] ?? Icons.shield_outlined,
+                          size: 18,
+                          color: AppColors.primary,
                         ),
-                        decoration: BoxDecoration(
-                          color: group.id == app.currentGroupId
-                              ? AppColors.primarySoft
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                          border: Border.all(
-                            color: group.id == app.currentGroupId
-                                ? AppColors.primary
-                                : Colors.transparent,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              groupIconMap[group.icon] ?? Icons.shield_outlined,
-                              size: 18,
-                              color: group.id == app.currentGroupId
-                                  ? AppColors.primary
-                                  : AppColors.mutedForeground,
-                            ),
-                            const SizedBox(width: AppSpacing.md),
-                            Expanded(
-                              child: Text(
-                                group.name,
-                                maxLines: 2,
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                app.hasCurrentGroup ? group.name : 'No group',
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTypography.bodySm.copyWith(
-                                  color: group.id == app.currentGroupId
-                                      ? AppColors.primary
-                                      : AppColors.foreground,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ),
-                            if (group.pinned)
-                              Icon(
-                                Icons.push_pin,
-                                size: 14,
-                                color: AppColors.primary,
-                              ),
-                          ],
+                              if (app.hasCurrentGroup)
+                                Text(
+                                  '${group.members.length} members · Tap to switch',
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Icon(
+                          Icons.arrow_drop_down,
+                          size: 20,
+                          color: AppColors.mutedForeground,
+                        ),
+                      ],
                     ),
-                ],
+                  ),
+                ),
+                // Primary navigation.
+                for (final item in groupSection)
+                  _DrawerTile(item: item, location: location, app: app),
+                Divider(color: AppColors.border, height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  ),
+                  child: Text(
+                    'MORE',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ),
+                for (final item in moreSection)
+                  _DrawerTile(item: item, location: location, app: app),
+                Divider(color: AppColors.border, height: 24),
                 InkWell(
                   onTap: () {
                     app.closeDrawer();
@@ -377,4 +358,69 @@ class _DrawerItem {
   final String label;
   final IconData icon;
   final int? badge;
+}
+
+class _DrawerTile extends StatelessWidget {
+  const _DrawerTile({
+    required this.item,
+    required this.location,
+    required this.app,
+  });
+
+  final _DrawerItem item;
+  final String location;
+  final AppProvider app;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = location == item.path;
+    return InkWell(
+      onTap: () {
+        app.closeDrawer();
+        context.go(item.path);
+      },
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: 11,
+        ),
+        decoration: BoxDecoration(
+          color: active ? AppColors.primarySoft : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Row(
+          children: [
+            Icon(item.icon, size: 20, color: AppColors.icon),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                item.label,
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: active ? AppColors.primary : AppColors.mutedForeground,
+                ),
+              ),
+            ),
+            if (item.badge != null && item.badge! > 0)
+              Container(
+                width: 20,
+                height: 20,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  item.badge! > 9 ? '9+' : '${item.badge}',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.primaryForeground,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }

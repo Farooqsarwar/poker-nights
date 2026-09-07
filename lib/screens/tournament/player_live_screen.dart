@@ -59,7 +59,13 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
         ? null
         : (isAdmin ? baseGame : app.viewerProjection);
 
-    if (game == null) {
+    if (game == null ||
+        (!app.isAdmin && game.status == LiveGameStatus.cancelled)) {
+      if (game != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.go(RoutePaths.home);
+        });
+      }
       return AppPage(
         maxWidth: 480,
         child: Column(
@@ -198,13 +204,15 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: game.status == LiveGameStatus.paused || game.status == LiveGameStatus.rebuypause
+                              color:
+                                  game.status == LiveGameStatus.paused ||
+                                      game.status == LiveGameStatus.rebuypause
                                   ? AppColors.warning
                                   : game.status == LiveGameStatus.cancelled
-                                      ? AppColors.destructive
-                                      : game.status == LiveGameStatus.completed
-                                          ? AppColors.mutedForeground
-                                          : AppColors.success,
+                                  ? AppColors.destructive
+                                  : game.status == LiveGameStatus.completed
+                                  ? AppColors.mutedForeground
+                                  : AppColors.success,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -285,11 +293,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   child: Column(
                     children: [
-                      Icon(
-                        Icons.emoji_events,
-                        size: 48,
-                        color: AppColors.icon,
-                      ),
+                      Icon(Icons.emoji_events, size: 48, color: AppColors.icon),
                       const SizedBox(height: AppSpacing.md),
                       Text(
                         'Tournament Complete!',
@@ -401,7 +405,8 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                myPlayer.eliminated && myPlayer.eliminationPos != null
+                                myPlayer.eliminated &&
+                                        myPlayer.eliminationPos != null
                                     ? _ordinalPlace(myPlayer.eliminationPos!)
                                     : 'Table ${myPlayer.table} · Seat ${myPlayer.seat}',
                                 style: AppTypography.monoXl.copyWith(
@@ -566,13 +571,12 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: device.isMobile ? 2 : 4,
-                            mainAxisSpacing: AppSpacing.xs,
-                            crossAxisSpacing: AppSpacing.xs,
-                            childAspectRatio: 3,
-                          ),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: device.isMobile ? 2 : 4,
+                        mainAxisSpacing: AppSpacing.xs,
+                        crossAxisSpacing: AppSpacing.xs,
+                        childAspectRatio: 3,
+                      ),
                       itemCount: activePlayers.length,
                       itemBuilder: (context, i) {
                         final p = activePlayers[i];
@@ -694,8 +698,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       ),
                       const SizedBox(height: AppSpacing.md),
                       AppButton(
-                        onPressed: () =>
-                            _showCreateAccountDialog(context, app),
+                        onPressed: () => _showCreateAccountDialog(context, app),
                         child: const Text('Create Account'),
                       ),
                     ],
@@ -717,12 +720,15 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         2: FlexColumnWidth(1.5),
                         3: FlexColumnWidth(1.5),
                       },
-                      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                      defaultVerticalAlignment:
+                          TableCellVerticalAlignment.middle,
                       children: [
                         TableRow(
                           children: [
                             Padding(
-                              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
                               child: Text(
                                 'Lv',
                                 style: AppTypography.bodyXs.copyWith(
@@ -731,7 +737,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                               ),
                             ),
                             Padding(
-                              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
                               child: Text(
                                 'Blinds',
                                 style: AppTypography.bodyXs.copyWith(
@@ -740,7 +748,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                               ),
                             ),
                             Padding(
-                              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
                               child: Text(
                                 'Ante',
                                 textAlign: TextAlign.right,
@@ -750,7 +760,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                               ),
                             ),
                             Padding(
-                              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
                               child: Text(
                                 'Time',
                                 textAlign: TextAlign.right,
@@ -773,7 +785,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                             ),
                             children: [
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.md,
+                                ),
                                 child: Text(
                                   '${l.level}',
                                   style: AppTypography.monoSm.copyWith(
@@ -782,7 +796,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.md,
+                                ),
                                 child: Text(
                                   '${Formatters.chips(l.sb)} / ${Formatters.chips(l.bb)}',
                                   style: AppTypography.monoSm.copyWith(
@@ -791,9 +807,13 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.md,
+                                ),
                                 child: Text(
-                                  l.ante == null ? '—' : Formatters.chips(l.ante!),
+                                  l.ante == null
+                                      ? '—'
+                                      : Formatters.chips(l.ante!),
                                   textAlign: TextAlign.right,
                                   style: AppTypography.monoXs.copyWith(
                                     color: l.ante == null
@@ -803,7 +823,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.md,
+                                ),
                                 child: Text(
                                   '${l.durationMins}m',
                                   textAlign: TextAlign.right,
@@ -980,9 +1002,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
               );
               if (!ctx.mounted) return;
               if (err != null) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  SnackBar(content: Text(err)),
-                );
+                ScaffoldMessenger.of(
+                  ctx,
+                ).showSnackBar(SnackBar(content: Text(err)));
                 return;
               }
               Navigator.of(ctx).pop();

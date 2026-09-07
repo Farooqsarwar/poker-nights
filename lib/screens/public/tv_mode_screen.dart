@@ -43,9 +43,7 @@ class _TVModeScreenState extends State<TVModeScreen> {
     if (result == CodeLookupResult.notFound) {
       setState(() => _codeError = 'Code not found — try again');
     } else if (result == CodeLookupResult.rateLimited) {
-      setState(
-        () => _codeError = 'Too many attempts — wait a minute',
-      );
+      setState(() => _codeError = 'Too many attempts — wait a minute');
     } else {
       setState(() => _codeError = null);
     }
@@ -56,7 +54,7 @@ class _TVModeScreenState extends State<TVModeScreen> {
     final app = context.watch<AppProvider>();
     final game = app.tvGame;
 
-    if (game == null) {
+    if (game == null || game.status == LiveGameStatus.cancelled) {
       return _CodeEntry(
         controller: _codeController,
         error: _codeError,
@@ -94,11 +92,7 @@ class _CodeEntry extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.style,
-                        size: 60,
-                        color: AppColors.primary,
-                      ),
+                      Icon(Icons.style, size: 60, color: AppColors.primary),
                       const SizedBox(width: AppSpacing.md),
                       Text(
                         'POKER NIGHT',
@@ -157,15 +151,11 @@ class _CodeEntry extends StatelessWidget {
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(AppRadius.sm),
-                              borderSide: BorderSide(
-                                color: AppColors.border,
-                              ),
+                              borderSide: BorderSide(color: AppColors.border),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(AppRadius.sm),
-                              borderSide: BorderSide(
-                                color: AppColors.ring,
-                              ),
+                              borderSide: BorderSide(color: AppColors.ring),
                             ),
                           ),
                         ),
@@ -269,93 +259,106 @@ class _TVLayout extends StatelessWidget {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final s = (constraints.maxWidth / 1536).clamp(0.5, 2.0).toDouble();
-          if (constraints.maxWidth >= 900) {
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Column(
+                final s = (constraints.maxWidth / 1536)
+                    .clamp(0.5, 2.0)
+                    .toDouble();
+                if (constraints.maxWidth >= 900) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
-                          child: SingleChildScrollView(
-                            child: TournamentDisplayBlock(
-                              game: game,
-                              showPayoutAmounts: false,
-                            ),
+                          flex: 3,
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  child: TournamentDisplayBlock(
+                                    game: game,
+                                    showPayoutAmounts: false,
+                                  ),
+                                ),
+                              ),
+                              Consumer<AppProvider>(
+                                builder: (_, app, x) {
+                                  final lastSync = app.lastGameUpdate;
+                                  if (lastSync == null)
+                                    return const SizedBox.shrink();
+                                  final stale =
+                                      DateTime.now()
+                                          .difference(lastSync)
+                                          .inSeconds >
+                                      10;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: stale
+                                          ? AppAlertBanner(
+                                              type: AppAlertType.warning,
+                                              message:
+                                                  'Connection interrupted — feed may be stale.',
+                                            )
+                                          : Text(
+                                              'Synced ${_formatLastSync(lastSync)}',
+                                              style: AppTypography.mono(
+                                                size: 10,
+                                                color:
+                                                    AppColors.mutedForeground,
+                                              ),
+                                            ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                         ),
-                        Consumer<AppProvider>(
-                          builder: (_, app, x) {
-                            final lastSync = app.lastGameUpdate;
-                            if (lastSync == null) return const SizedBox.shrink();
-                            final stale = DateTime.now().difference(lastSync).inSeconds > 10;
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: stale
-                                    ? AppAlertBanner(
-                                        type: AppAlertType.warning,
-                                        message:
-                                            'Connection interrupted — feed may be stale.',
-                                      )
-                                    : Text(
-                                        'Synced ${_formatLastSync(lastSync)}',
-                                        style: AppTypography.mono(
-                                          size: 10,
-                                          color: AppColors.mutedForeground,
-                                        ),
-                                      ),
-                              ),
-                            );
-                          },
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 3,
+                          child: _RotatingPanel(game: game, scale: s),
                         ),
                       ],
                     ),
+                  );
+                }
+                return SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      TournamentDisplayBlock(
+                        game: game,
+                        showPayoutAmounts: false,
+                      ),
+                      const SizedBox(height: 12),
+                      Consumer<AppProvider>(
+                        builder: (_, app, x) {
+                          final lastSync = app.lastGameUpdate;
+                          if (lastSync == null) return const SizedBox.shrink();
+                          final stale =
+                              DateTime.now().difference(lastSync).inSeconds >
+                              10;
+                          return stale
+                              ? AppAlertBanner(
+                                  type: AppAlertType.warning,
+                                  message:
+                                      'Connection interrupted — feed may be stale.',
+                                )
+                              : Text(
+                                  'Synced ${_formatLastSync(lastSync)}',
+                                  style: AppTypography.mono(
+                                    size: 10,
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                );
+                        },
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    flex: 3,
-                    child: _RotatingPanel(game: game, scale: s),
-                  ),
-                ],
-              ),
-            );
-          }
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                TournamentDisplayBlock(game: game, showPayoutAmounts: false),
-                const SizedBox(height: 12),
-                Consumer<AppProvider>(
-                  builder: (_, app, x) {
-                    final lastSync = app.lastGameUpdate;
-                    if (lastSync == null) return const SizedBox.shrink();
-                    final stale = DateTime.now().difference(lastSync).inSeconds > 10;
-                    return stale
-                        ? AppAlertBanner(
-                            type: AppAlertType.warning,
-                            message:
-                                'Connection interrupted — feed may be stale.',
-                          )
-                        : Text(
-                            'Synced ${_formatLastSync(lastSync)}',
-                            style: AppTypography.mono(
-                              size: 10,
-                              color: AppColors.mutedForeground,
-                            ),
-                          );
-                  },
-                ),
-              ],
+                );
+              },
             ),
-          );
-        },
-      ),
           ),
         ],
       ),
@@ -494,7 +497,12 @@ class _RotatingPanel extends StatefulWidget {
 }
 
 class _RotatingPanelState extends State<_RotatingPanel> {
-  static const _titles = ['LEADERBOARD', 'PRIZE POOL', 'ANNOUNCEMENTS', 'UPCOMING'];
+  static const _titles = [
+    'LEADERBOARD',
+    'PRIZE POOL',
+    'ANNOUNCEMENTS',
+    'UPCOMING',
+  ];
 
   int _panel = 0;
   Timer? _timer;
@@ -548,13 +556,21 @@ class _RotatingPanelState extends State<_RotatingPanel> {
                   game: widget.game,
                   scale: widget.scale,
                 ),
-                1 => _PayoutsPanel(key: const ValueKey(1), game: widget.game, scale: widget.scale),
+                1 => _PayoutsPanel(
+                  key: const ValueKey(1),
+                  game: widget.game,
+                  scale: widget.scale,
+                ),
                 2 => _AnnouncementsPanel(
                   key: const ValueKey(2),
                   game: widget.game,
                   scale: widget.scale,
                 ),
-                _ => _UpcomingPanel(key: const ValueKey(3), game: widget.game, scale: widget.scale),
+                _ => _UpcomingPanel(
+                  key: const ValueKey(3),
+                  game: widget.game,
+                  scale: widget.scale,
+                ),
               },
             ),
           ),
@@ -618,8 +634,8 @@ class _LeaderboardPanel extends StatelessWidget {
                   p.active
                       ? 'T${p.table} · S${p.seat}'
                       : p.eliminationPos != null
-                          ? '${_ordinalPlace(p.eliminationPos!)} place'
-                          : 'Out',
+                      ? '${_ordinalPlace(p.eliminationPos!)} place'
+                      : 'Out',
                   style: AppTypography.mono(
                     size: 11 * scale,
                     color: AppColors.mutedForeground,
@@ -688,7 +704,10 @@ class _PayoutsPanel extends StatelessWidget {
                     const Spacer(),
                     Text(
                       _podiumName(i + 1),
-                      style: AppTypography.mono(size: 13 * scale, color: AppColors.foreground),
+                      style: AppTypography.mono(
+                        size: 13 * scale,
+                        color: AppColors.foreground,
+                      ),
                     ),
                   ],
                 ),
@@ -756,7 +775,10 @@ class _UpcomingPanel extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     child: Text(
                       'SB ${Formatters.chips(l.sb)} · BB ${Formatters.chips(l.bb)}',
-                      style: AppTypography.mono(size: 13 * scale, color: AppColors.foreground),
+                      style: AppTypography.mono(
+                        size: 13 * scale,
+                        color: AppColors.foreground,
+                      ),
                     ),
                   ),
                   if (l.ante != null) ...[
@@ -791,7 +813,10 @@ class _AnnouncementsPanel extends StatelessWidget {
       return Center(
         child: Text(
           'No announcements',
-          style: AppTypography.mono(size: 14 * scale, color: AppColors.mutedForeground),
+          style: AppTypography.mono(
+            size: 14 * scale,
+            color: AppColors.mutedForeground,
+          ),
         ),
       );
     }

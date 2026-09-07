@@ -264,6 +264,7 @@ class LiveGame {
     this.lastIdempotencyKey,
     this.editorDeviceId = '',
     this.editorClaimedAt,
+    this.audioMasterDeviceId = '',
   });
 
   final String id;
@@ -304,6 +305,15 @@ class LiveGame {
   /// stale editor claim: if the holder has been silent longer than the claim
   /// window, another admin device may take over the role.
   final DateTime? editorClaimedAt;
+
+  /// The single device that speaks voice announcements — the "Audio Master"
+  /// (User Flow §7.4, Technical §13.2: "other devices remain silent").
+  ///
+  /// It lives on the GAME, not in per-device memory, because silence has to be
+  /// agreed between devices: a phone cannot know the TV was chosen unless the
+  /// choice is shared. Empty means nobody has chosen yet, in which case only
+  /// the authority (admin editor) device speaks — never every open tab.
+  final String audioMasterDeviceId;
 
   /// True once the admin closes door check-in. Further walk-ins are not added
   /// (spec §4.7).
@@ -482,6 +492,7 @@ class LiveGame {
     String? lastIdempotencyKey,
     String? editorDeviceId,
     DateTime? editorClaimedAt,
+    String? audioMasterDeviceId,
   }) {
     return LiveGame(
       id: id ?? this.id,
@@ -522,6 +533,7 @@ class LiveGame {
       lastIdempotencyKey: lastIdempotencyKey ?? this.lastIdempotencyKey,
       editorDeviceId: editorDeviceId ?? this.editorDeviceId,
       editorClaimedAt: editorClaimedAt ?? this.editorClaimedAt,
+      audioMasterDeviceId: audioMasterDeviceId ?? this.audioMasterDeviceId,
     );
   }
 }

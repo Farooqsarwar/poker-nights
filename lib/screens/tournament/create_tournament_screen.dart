@@ -742,7 +742,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
     if (!isAdmin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.go('${RoutePaths.group}?tab=games');
+        if (mounted) context.go(RoutePaths.group);
       });
       return const SizedBox.shrink();
     }
@@ -757,7 +757,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             children: [
               InkWell(
                 onTap: () => _step == 1
-                    ? context.go('${RoutePaths.group}?tab=games')
+                    ? context.go(RoutePaths.group)
                     : setState(() => _step--),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: Padding(
@@ -830,7 +830,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               AppButton(
                 variant: AppButtonVariant.secondary,
                 onPressed: () => _step == 1
-                    ? context.go('${RoutePaths.group}?tab=games')
+                    ? context.go(RoutePaths.group)
                     : setState(() => _step--),
                 child: _step == 1
                     ? const Text('Cancel')

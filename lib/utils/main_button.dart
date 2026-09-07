@@ -64,6 +64,7 @@ bool _isLive(LiveGameStatus s) =>
 
 /// True once door check-in has opened (status moved past RSVP-only phases).
 bool _checkInOpen(LiveGame game) {
+  if (game.checkInClosed) return false;
   switch (game.status) {
     case LiveGameStatus.checkin:
     case LiveGameStatus.ready:
@@ -100,7 +101,11 @@ MainAction mainActionFor(
     case MainButtonRole.member:
       return _memberAction(game, memberRow);
     case MainButtonRole.guest:
-      return _guestAction(game, requested: guestRequested, confirmed: guestConfirmed);
+      return _guestAction(
+        game,
+        requested: guestRequested,
+        confirmed: guestConfirmed,
+      );
   }
 }
 
@@ -161,6 +166,11 @@ MainAction _adminAction(LiveGame game) {
         route: RoutePaths.rebuySettlement,
       );
     case LiveGameStatus.completed:
+      return const MainAction(
+        MainActionId.viewResults,
+        'View Results',
+        route: RoutePaths.resultPodium,
+      );
     case LiveGameStatus.cancelled:
       return const MainAction(
         MainActionId.viewResults,

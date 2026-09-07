@@ -23,6 +23,9 @@ abstract final class RoutePaths {
   // ── App shell ──────────────────────────────────────────────────────────────
   static const String home = '/home';
   static const String group = '/group';
+  static const String chat = '/chat';
+  static const String members = '/members';
+  static const String polls = '/polls';
   static const String notifications = '/notifications';
   static const String history = '/history';
 

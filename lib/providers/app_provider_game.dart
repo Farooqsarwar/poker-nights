@@ -52,37 +52,69 @@ extension AppProviderGame on AppProvider {
 
     // Asynchronously load private sidecar data and undo stack if admin
     if (isAdmin) {
-      _repo.loadPrivateGameData(game.groupId, game.id).then((privateData) {
-        if (_currentGame?.id == game.id && privateData != null) {
-          _currentGame = _currentGame!.copyWith(
-            settings: _currentGame!.settings.copyWith(
-              organizerPct: (privateData['organizerPct'] as num?)?.toInt() ?? _currentGame!.settings.organizerPct,
-            ),
-            players: _restorePrivatePlayerFinancials(
-              _currentGame!.players,
-              privateData['players'],
-            ),
-            structure: _currentGame!.structure.copyWith(
-              prizes: privateData['prizes'] != null ? (privateData['prizes'] as List).map((e) => Prize(place: e['place'], amount: e['amount'])).toList() : _currentGame!.structure.prizes,
-              organizerAmount: (privateData['organizerAmount'] as num?)?.toInt() ?? _currentGame!.structure.organizerAmount,
-            ),
-          );
-          if (!_disposed) notifyListeners();
-        }
-      }).catchError((Object e) {
-        debugPrint('Failed to load private sidecar: $e');
-      });
+      _repo
+          .loadPrivateGameData(game.groupId, game.id)
+          .then((privateData) {
+            if (_currentGame?.id == game.id && privateData != null) {
+              _currentGame = _currentGame!.copyWith(
+                settings: _currentGame!.settings.copyWith(
+                  organizerPct:
+                      (privateData['organizerPct'] as num?)?.toInt() ??
+                      _currentGame!.settings.organizerPct,
+                ),
+                players: _restorePrivatePlayerFinancials(
+                  _currentGame!.players,
+                  privateData['players'],
+                ),
+                // Admin-only audit timeline (User Flow §11) — it no longer
+                // travels in the game document, so a host opening the game on
+                // a new device restores it from the sidecar.
+                auditHistory: privateData['auditHistory'] is List
+                    ? [
+                        for (final e in privateData['auditHistory'] as List)
+                          auditRecordFromMap(Map<String, dynamic>.from(e as Map)),
+                      ]
+                    : _currentGame!.auditHistory,
+                rebuyRequests: privateData['rebuyRequests'] is List
+                    ? List<String>.from(privateData['rebuyRequests'] as List)
+                    : _currentGame!.rebuyRequests,
+                addOnRequests: privateData['addOnRequests'] is List
+                    ? List<String>.from(privateData['addOnRequests'] as List)
+                    : _currentGame!.addOnRequests,
+                structure: _currentGame!.structure.copyWith(
+                  prizes: privateData['prizes'] != null
+                      ? (privateData['prizes'] as List)
+                            .map(
+                              (e) =>
+                                  Prize(place: e['place'], amount: e['amount']),
+                            )
+                            .toList()
+                      : _currentGame!.structure.prizes,
+                  organizerAmount:
+                      (privateData['organizerAmount'] as num?)?.toInt() ??
+                      _currentGame!.structure.organizerAmount,
+                ),
+              );
+              if (!_disposed) notifyListeners();
+            }
+          })
+          .catchError((Object e) {
+            debugPrint('Failed to load private sidecar: $e');
+          });
 
       if (game.status.isActiveLive) {
-        _repo.loadUndoStack(game.groupId, game.id).then((stack) {
-          if (_currentGame?.id == game.id) {
-            _undoStack.clear();
-            _undoStack.addAll(stack);
-            if (!_disposed) notifyListeners();
-          }
-        }).catchError((Object e) {
-          debugPrint('Failed to load undo stack: $e');
-        });
+        _repo
+            .loadUndoStack(game.groupId, game.id)
+            .then((stack) {
+              if (_currentGame?.id == game.id) {
+                _undoStack.clear();
+                _undoStack.addAll(stack);
+                if (!_disposed) notifyListeners();
+              }
+            })
+            .catchError((Object e) {
+              debugPrint('Failed to load undo stack: $e');
+            });
       }
     }
   }
@@ -92,7 +124,9 @@ extension AppProviderGame on AppProvider {
   /// keeps the true figures even though the public game doc carries them
   /// scrubbed for non-authority readers (User Flow §2.3/§5.6).
   List<Player> _restorePrivatePlayerFinancials(
-      List<Player> current, Object? raw) {
+    List<Player> current,
+    Object? raw,
+  ) {
     if (raw is! List) return current;
     final saved = <String, Player>{};
     for (final e in raw) {
@@ -214,7 +248,8 @@ extension AppProviderGame on AppProvider {
     _currentGame = _currentGame!.copyWith(status: status);
     // Client feedback (07-018): inside the 30-minute window before start the
     // AI refreshes the stacks/blinds/levels estimate from the expected count.
-    if (status == LiveGameStatus.checkin) generateFinalStructure(currentGame!.confirmedCount);
+    if (status == LiveGameStatus.checkin)
+      generateFinalStructure(currentGame!.confirmedCount);
     if (status == LiveGameStatus.checkin && wasPublished) {
       pushNotification(
         AppNotification(
@@ -238,6 +273,7 @@ extension AppProviderGame on AppProvider {
   /// once cancelled the game cannot be started again.
   void cancelGame(String reason) {
     if (!isAdmin) return;
+    forceEditorClaim = true;
     _forceClaimEditor();
     final game = _currentGame;
     if (game == null || _user == null) return;
@@ -251,7 +287,12 @@ extension AppProviderGame on AppProvider {
       status: LiveGameStatus.cancelled,
       timerRunning: false,
     );
-    _syncGroupGame();
+    final pinnedCard = _currentGroup.chat
+        .where((c) => c.pinned && c.gameId == game.id && !c.deleted)
+        .firstOrNull;
+    if (pinnedCard != null) {
+      deleteMessage(pinnedCard.id);
+    }
     addAuditRecord(
       'cancel',
       'Cancelled ${game.settings.name}. Reason: ${reason.trim().isEmpty ? 'Not provided' : reason.trim()}',
@@ -268,6 +309,10 @@ extension AppProviderGame on AppProvider {
       ),
     );
     addAnnouncement('${game.settings.name} has been cancelled.', true);
+    // Mirror into the group LAST: the audit record and the announcement above
+    // mutate `_currentGame`, so syncing before them left the group's copy (the
+    // one the hub's upcoming list renders) on a pre-cancel snapshot.
+    _syncGroupGame();
     if (!_disposed) notifyListeners();
   }
 
@@ -393,7 +438,8 @@ extension AppProviderGame on AppProvider {
     }
 
     if (affectsStructure) {
-      if (game.structure.levels.isEmpty && !(game.status == LiveGameStatus.ready)) {
+      if (game.structure.levels.isEmpty &&
+          !(game.status == LiveGameStatus.ready)) {
         _currentGame = game.copyWith(
           settings: s,
           players: clearRsvps
@@ -492,9 +538,7 @@ extension AppProviderGame on AppProvider {
   void _postUpdatedEventCard(String newestChangeLogEntry, GameSettings s) {
     final game = _currentGame;
     if (game == null || _user == null) return;
-    final anteText = s.anteEnabled
-        ? 'Ante: L${s.anteAfterLevel}+'
-        : 'No ante';
+    final anteText = s.anteEnabled ? 'Ante: L${s.anteAfterLevel}+' : 'No ante';
     final rebuyText = s.rebuysCloseLevel > 0
         ? 'Rebuys: until L${s.rebuysCloseLevel}'
         : 'No rebuys';
@@ -518,9 +562,7 @@ extension AppProviderGame on AppProvider {
       gameId: game.id,
     );
     _currentGame = game.copyWith(chat: [...game.chat, card]);
-    _setGroup(
-      _currentGroup.copyWith(chat: [..._currentGroup.chat, card]),
-    );
+    _setGroup(_currentGroup.copyWith(chat: [..._currentGroup.chat, card]));
     _postGroupChat(card);
   }
 
@@ -539,13 +581,11 @@ extension AppProviderGame on AppProvider {
       return (organizerAmount: 0, prizePool: 0, prizes: const []);
     }
     final s = game.settings;
-    final confirmedCount = game.players
-        .where((p) => p.confirmed)
-        .length;
+    final confirmedCount = game.players.where((p) => p.confirmed).length;
     final rebuys = game.players.fold<int>(0, (sum, p) => sum + p.rebuys);
     final reEntries = game.players.fold<int>(0, (sum, p) => sum + p.reEntries);
     final addOns = game.players.where((p) => p.hasAddOn).length + addOnCount;
-    
+
     final gross = TournamentEngine.grossEligibleFor(
       confirmedCount: confirmedCount,
       buyIn: s.buyIn,

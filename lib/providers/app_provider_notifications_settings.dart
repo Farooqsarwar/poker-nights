@@ -119,7 +119,13 @@ extension AppProviderNotificationsSettings on AppProvider {
       id = '$id-$n';
       notification = notification.copyWith(id: id);
     }
-    _notifications = [notification, ..._notifications];
+    // An addressed notification (non-empty `audience`) skips this device's own
+    // inbox when this user is not one of the recipients — otherwise a member
+    // requesting check-in files "… is waiting to be checked in" against
+    // themselves. Broadcasts (null / empty audience) are unaffected.
+    final me = _user?.id;
+    final forMe = me == null || notification.isFor(me);
+    if (forMe) _notifications = [notification, ..._notifications];
     // This device originated the event — never re-banner it on itself when
     // the mirrored inbox copy arrives.
     _seenNotificationIds.add(notification.id);
@@ -183,29 +189,53 @@ extension AppProviderNotificationsSettings on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
-  String get thisDeviceId =>
-      _thisDeviceId ??= 'dev-${DateTime.now().millisecondsSinceEpoch}';
+  /// This device's stable identity. Uses the repository's PERSISTED device id
+  /// (the same one the editor claim uses) — the old `dev-<timestamp>` value
+  /// was regenerated on every reload, so an Audio Master choice never survived
+  /// a refresh and could not be compared across devices at all.
+  String get thisDeviceId => _repo.deviceId;
 
-  String? get audioMasterDeviceId => _audioMasterDeviceId;
+  /// The device chosen to speak, shared through the game document so every
+  /// device agrees on who is talking. Empty/null = nobody chosen yet.
+  String? get audioMasterDeviceId {
+    final fromGame = _currentGame?.audioMasterDeviceId ?? '';
+    return fromGame.isEmpty ? null : fromGame;
+  }
 
-  /// Whether announcements may play on this device (no master selected, or
-  /// this device is the master) — matches the documented fallback where every
-  /// voice-enabled device may announce while no master is chosen.
-  bool get thisDeviceIsAudioMaster =>
-      _audioMasterDeviceId == null || _audioMasterDeviceId == thisDeviceId;
+  /// Whether announcements may play on THIS device.
+  ///
+  /// Spec (User Flow §7.4, Technical §13.2): the admin picks one Audio Master
+  /// and "other devices remain silent". The previous rule treated "nobody
+  /// chosen" as "everybody may speak", so a TV, a phone and a laptop all
+  /// announced the same level change in chorus. With no explicit choice the
+  /// authority (admin editor) device speaks alone — still exactly one voice.
+  bool get thisDeviceIsAudioMaster {
+    final chosen = audioMasterDeviceId;
+    if (chosen != null) return chosen == thisDeviceId;
+    return _isGameAuthority;
+  }
 
   /// Selects this device as the Audio Master. Only this device will announce.
+  /// Admin-only: the choice is written to the shared game document.
   void setAudioMasterDevice() {
-    if (_audioMasterDeviceId == thisDeviceId) return;
-    _audioMasterDeviceId = thisDeviceId;
+    final game = _currentGame;
+    if (game == null || !isAdmin) return;
+    if (game.audioMasterDeviceId == thisDeviceId) return;
+    _forceClaimEditor();
+    _currentGame = game.copyWith(audioMasterDeviceId: thisDeviceId);
+    _syncGroupGame();
     if (!_disposed) notifyListeners();
   }
 
-  /// Clears the Audio Master selection — every device with voice enabled may
-  /// announce again.
+  /// Clears the Audio Master selection — announcements fall back to the single
+  /// authority device (never to "all devices at once").
   void clearAudioMasterDevice() {
-    if (_audioMasterDeviceId == null) return;
-    _audioMasterDeviceId = null;
+    final game = _currentGame;
+    if (game == null || !isAdmin) return;
+    if (game.audioMasterDeviceId.isEmpty) return;
+    _forceClaimEditor();
+    _currentGame = game.copyWith(audioMasterDeviceId: '');
+    _syncGroupGame();
     if (!_disposed) notifyListeners();
   }
 

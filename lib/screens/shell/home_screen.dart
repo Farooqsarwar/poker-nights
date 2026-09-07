@@ -24,6 +24,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/group_switcher.dart';
 
 /// Dashboard mirroring the web `HomePage`.
 class HomeScreen extends StatefulWidget {
@@ -93,6 +94,10 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppSpacing.sm),
+              // Persistent group context — the user always knows which group
+              // they are looking at, and can switch without leaving (IA §1).
+              const GroupContextHeader(),
+              const SizedBox(height: AppSpacing.lg),
               // Header
               Row(
                     children: [
@@ -101,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Dashboard',
+                              'Home',
                               style:
                                   AppTypography.display(
                                     size: AppFontSizes.display,
@@ -146,6 +151,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xl),
+              // Group activity snapshot — answers "how is the group doing?"
+              // at a glance (IA §7).
+              if (app.hasCurrentGroup) ...[
+                _GroupStats(group: group, app: app),
+                const SizedBox(height: AppSpacing.xl),
+              ],
               // Offline Conflict Banner
               if (app.hasOfflineConflict) ...[
                 AppAlertBanner(
@@ -188,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: () =>
                             context.go(RoutePaths.createTournament),
                         child: const AppIconLabel(
-                          label: 'Create Event',
+                          label: 'New Game',
                           icon: Icons.add,
                         ),
                       ),
@@ -312,7 +323,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     return;
                   }
                   setState(() => _showCreate = false);
-                  context.go('${RoutePaths.group}?tab=games');
+                  context.go(RoutePaths.group);
                 },
                 child: const Text('Create Group'),
               ),
@@ -360,6 +371,106 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Group activity snapshot shown on Home — answers "how is the group doing?"
+/// with counts that already exist in the provider (IA §7).
+class _GroupStats extends StatelessWidget {
+  const _GroupStats({required this.group, required this.app});
+
+  final Group group;
+  final AppProvider app;
+
+  @override
+  Widget build(BuildContext context) {
+    final past = group.pastGames.length;
+    final members = group.members.length;
+    final cash = app.cashHistory.length;
+    final prizeVolume = group.pastGames
+        .fold<int>(0, (s, g) => s + g.structure.prizePool);
+    final cashVolume = app.cashHistory
+        .fold<double>(0, (s, c) => s + c.totalBuyIns);
+
+    final stats = [
+      ('Games', '$past', Icons.style_outlined),
+      ('Members', '$members', Icons.groups_outlined),
+      ('Cash games', '$cash', Icons.payments_outlined),
+      ('Volume', Formatters.chips(prizeVolume + cashVolume), Icons.account_balance_wallet_outlined),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final twoCol = c.maxWidth < 560;
+        final w = twoCol ? (c.maxWidth - AppSpacing.sm) / 2 : null;
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final s in stats)
+              SizedBox(
+                width: w,
+                child: _HomeStat(icon: s.$3, label: s.$1, value: s.$2),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _HomeStat extends StatelessWidget {
+  const _HomeStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.primary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    style: AppTypography.mono(
+                      size: AppFontSizes.md,
+                      weight: FontWeight.w700,
+                      color: AppColors.foreground,
+                    ),
+                  ),
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -867,7 +978,7 @@ class _GroupCard extends StatelessWidget {
           )
         else if (g != null) ...[
           AppCard(
-            onTap: () => context.go('${RoutePaths.group}?tab=games'),
+            onTap: () => context.go(RoutePaths.group),
             glow: true,
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(

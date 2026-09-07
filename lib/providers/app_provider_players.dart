@@ -198,13 +198,34 @@ extension AppProviderPlayers on AppProvider {
     _currentGame = _currentGame!.copyWith(
       rebuyRequests: [..._currentGame!.rebuyRequests, playerId],
     );
+    _queueOrPatchRequest('rebuyReq', playerId);
     if (!_disposed) notifyListeners();
-    if (!_isGameAuthority) {
-      _patchActiveGame({
-        'rebuyRequests': FieldValue.arrayUnion([playerId]),
-      });
-    }
   }
+
+  /// Delivers a member's rebuy / add-on request to the admin device.
+  ///
+  /// A non-authority device posts it to `requests/{gameId}/items`, which only
+  /// a group admin may list, instead of array-unioning its own id into the
+  /// game document. The arrays used to live there, and every member could read
+  /// them — i.e. see who had asked for a rebuy (User Flow section 5.6 /
+  /// section 22). The admin's `_consumeRequests` loop applies the queued item
+  /// to the authoritative game, so the end state is unchanged.
+  void _queueOrPatchRequest(String kind, String playerId) {
+    if (_isGameAuthority) return; // already applied locally by the authority
+    final game = _currentGame;
+    if (game == null || !_backendUp || game.groupId.isEmpty) return;
+    unawaited(
+      _repo
+          .pushRequest(
+            gameId: game.id,
+            kind: kind,
+            payload: {'gid': game.groupId, 'playerId': playerId},
+            idempotencyKey: '$kind-$playerId',
+          )
+          .catchError((Object e) => debugPrint('pushRequest($kind) failed: $e')),
+    );
+  }
+
 
   void cancelRebuyRequest(String playerId) {
     _currentGame = _currentGame!.copyWith(
@@ -212,12 +233,8 @@ extension AppProviderPlayers on AppProvider {
           .where((id) => id != playerId)
           .toList(),
     );
+    _queueOrPatchRequest('rebuyCancelReq', playerId);
     if (!_disposed) notifyListeners();
-    if (!_isGameAuthority) {
-      _patchActiveGame({
-        'rebuyRequests': FieldValue.arrayRemove([playerId]),
-      });
-    }
   }
 
   /// Records a re-entry (checklist §12.5): a separate, secondary option that
@@ -293,12 +310,8 @@ extension AppProviderPlayers on AppProvider {
     _currentGame = _currentGame!.copyWith(
       addOnRequests: [..._currentGame!.addOnRequests, playerId],
     );
+    _queueOrPatchRequest('addOnReq', playerId);
     if (!_disposed) notifyListeners();
-    if (!_isGameAuthority) {
-      _patchActiveGame({
-        'addOnRequests': FieldValue.arrayUnion([playerId]),
-      });
-    }
   }
 
   void cancelAddOnRequest(String playerId) {
@@ -307,12 +320,8 @@ extension AppProviderPlayers on AppProvider {
           .where((id) => id != playerId)
           .toList(),
     );
+    _queueOrPatchRequest('addOnCancelReq', playerId);
     if (!_disposed) notifyListeners();
-    if (!_isGameAuthority) {
-      _patchActiveGame({
-        'addOnRequests': FieldValue.arrayRemove([playerId]),
-      });
-    }
   }
 
   void undoLast() {
@@ -332,18 +341,45 @@ extension AppProviderPlayers on AppProvider {
     final requester = _currentGame!.players
         .where((p) => p.id == playerId)
         .firstOrNull;
+    // Blocking terminal states (spec §12) — the door is shut for good. A
+    // member (or an admin) whose screen predates the cancellation could
+    // otherwise still check in and resurrect activity on a dead game.
+    if (_currentGame!.status == LiveGameStatus.cancelled) {
+      addAnnouncement('This tournament has been cancelled.', false);
+      return;
+    }
+    if (_currentGame!.status == LiveGameStatus.completed) {
+      addAnnouncement('This tournament has finished.', false);
+      return;
+    }
     if (_currentGame!.status.isActiveLive && _currentGame!.rebuysClosed) {
       addAnnouncement('Late registration has closed.', false);
       return;
     }
-    _currentGame = _currentGame!.copyWith(
-      players: _currentGame!.players
-          .map(
-            (p) => p.id == playerId
-                ? p.copyWith(checkedIn: true, confirmed: false)
-                : p,
+    // A member with no roster row yet (joined the group after this game was
+    // seeded, or never answered the invite) gets one created here, implicitly
+    // "Going" + checked in. This MUST persist as a single whole-row write
+    // below — a narrow `players.{id}.checkedIn` dot-patch against a row that
+    // doesn't exist server-side yet creates a map with ONLY that field,
+    // missing `name`/`id`/etc., which then throws a null-cast when any
+    // client decodes the game doc (corrupting reads for everyone).
+    final isNewRow = requester == null;
+    final newPlayer = isNewRow
+        ? _memberAsPlayer(playerId, Rsvp.going).copyWith(
+            checkedIn: true,
+            confirmed: false,
           )
-          .toList(),
+        : null;
+    _currentGame = _currentGame!.copyWith(
+      players: isNewRow
+          ? [..._currentGame!.players, newPlayer!]
+          : _currentGame!.players
+                .map(
+                  (p) => p.id == playerId
+                      ? p.copyWith(checkedIn: true, confirmed: false)
+                      : p,
+                )
+                .toList(),
     );
 
     final gameId = _currentGame?.id;
@@ -356,24 +392,51 @@ extension AppProviderPlayers on AppProvider {
     if (!_isGameAuthority) {
       final gameId = _currentGame?.id;
       if (gameId != null && _backendUp) {
-        _persistOwnCheckInPatch(gameId, {
-          'players.$playerId.checkedIn': true,
-          'players.$playerId.confirmed': false,
-        });
+        _persistOwnCheckInPatch(
+          gameId,
+          isNewRow
+              ? {'players.$playerId': playerToMap(newPlayer!)}
+              : {
+                  'players.$playerId.checkedIn': true,
+                  'players.$playerId.confirmed': false,
+                },
+        );
       }
     }
     // Admin path: whole-doc save via _syncGameToCloud handles persistence.
 
-    if (requester != null && _user?.id != playerId) {
+    // Tell the host somebody is at the door.
+    //
+    // This used to be gated on `_user?.id != playerId`, but BOTH call sites
+    // are the member checking THEMSELVES in — so the condition was never true
+    // and the host was never notified at all. They only found out by happening
+    // to have the check-in screen open. Address it to the group's admins so
+    // the requester's own inbox stays clean.
+    final requesterName =
+        requester?.name ??
+        (playerId == _user?.id
+            ? (_user?.name ?? 'A member')
+            : _currentGroup.members
+                      .where((m) => m.id == playerId)
+                      .firstOrNull
+                      ?.name ??
+                  'A member');
+    final hostIds = <String>{
+      if (_currentGroup.ownerId.isNotEmpty) _currentGroup.ownerId,
+      for (final m in _currentGroup.members)
+        if (m.isAdmin) m.id,
+    }..remove(playerId);
+    if (hostIds.isNotEmpty) {
       pushNotification(
         AppNotification(
           id: 'n-${DateTime.now().millisecondsSinceEpoch}',
           title: 'Check-in request',
-          body: '${requester.name} is waiting to be checked in.',
+          body: '$requesterName is waiting to be checked in.',
           type: NotificationType.game,
           link: '/check-in',
           read: false,
           timestamp: DateTime.now(),
+          audience: hostIds.toList(),
         ),
       );
     }
@@ -382,6 +445,18 @@ extension AppProviderPlayers on AppProvider {
   }
 
   void checkInPlayer(String playerId) {
+    _forceClaimEditor();
+    // Blocking terminal states (spec §12) — the door is shut for good. A
+    // member (or an admin) whose screen predates the cancellation could
+    // otherwise still check in and resurrect activity on a dead game.
+    if (_currentGame!.status == LiveGameStatus.cancelled) {
+      addAnnouncement('This tournament has been cancelled.', false);
+      return;
+    }
+    if (_currentGame!.status == LiveGameStatus.completed) {
+      addAnnouncement('This tournament has finished.', false);
+      return;
+    }
     if (_currentGame!.status.isActiveLive && _currentGame!.rebuysClosed) {
       addAnnouncement('Late registration has closed.', false);
       return;
@@ -401,6 +476,7 @@ extension AppProviderPlayers on AppProvider {
   }
 
   void cancelCheckIn(String playerId) {
+    _forceClaimEditor();
     _currentGame = _currentGame!.copyWith(
       players: _currentGame!.players
           .map(
@@ -456,6 +532,7 @@ extension AppProviderPlayers on AppProvider {
   /// Returns a validation message when the addition is illegal, or null on
   /// success. Callers may ignore the result safely.
   String? addWalkInPlayer(String name) {
+    _forceClaimEditor();
     final game = _currentGame;
     if (game == null) return 'No active game.';
     final trimmed = Sanitization.sanitizeName(name);

@@ -19,6 +19,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_toggle.dart';
 import '../../widgets/chip_token.dart';
 
 enum _SettlementStep { confirmPlayers, addOns, colorUp, confirm }
@@ -207,6 +208,9 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
               instructions: structure.colorUpInstructions,
               anteEnabled: settings.anteEnabled,
               anteStyle: settings.anteStyle,
+              onAnteChanged: (v) => app.updateEventSettings(
+                settings.copyWith(anteEnabled: v),
+              ),
               onNext: () => setState(() => _step = _SettlementStep.confirm),
             ),
           // Step 3: Confirm
@@ -554,12 +558,18 @@ class _ColorUpStep extends StatelessWidget {
     required this.instructions,
     required this.anteEnabled,
     required this.anteStyle,
+    required this.onAnteChanged,
     required this.onNext,
   });
 
   final List<String> instructions;
   final bool anteEnabled;
   final AnteStyle anteStyle;
+
+  /// Spec §4.13 / Technical §11.2 step 4: the settlement break must end with
+  /// the admin CONFIRMING ante activation or keeping antes off. This step
+  /// previously only announced the decision, leaving no way to change it here.
+  final ValueChanged<bool> onAnteChanged;
   final VoidCallback onNext;
 
   String get _anteName =>
@@ -626,40 +636,58 @@ class _ColorUpStep extends StatelessWidget {
                   ),
                 ),
               ),
-          if (anteEnabled) ...[
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Ante starts next level',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    anteStyle == AnteStyle.individual
-                        ? 'Every player posts an individual ante (half the big blind). Confirm with all players before starting.'
-                        : 'Big blind ante equal to the big blind value. Confirm with all players before starting.',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: anteEnabled ? AppColors.primarySoft : AppColors.secondary,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(
+                color: anteEnabled
+                    ? AppColors.primary.withValues(alpha: 0.3)
+                    : AppColors.border,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        anteEnabled
+                            ? 'Ante starts next level'
+                            : 'Antes stay off',
+                        style: AppTypography.bodySm.copyWith(
+                          color: anteEnabled
+                              ? AppColors.primary
+                              : AppColors.foreground,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    AppToggle(
+                      value: anteEnabled,
+                      onChanged: onAnteChanged,
+                      label: 'Activate ante next level',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  anteEnabled
+                      ? (anteStyle == AnteStyle.individual
+                            ? 'Every player posts an individual ante (half the big blind). Confirm with all players before starting.'
+                            : 'Big blind ante equal to the big blind value. Confirm with all players before starting.')
+                      : 'No ante will be posted. Switch this on to activate the ante from the next level.',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
           AppButton(
             fullWidth: true,
             onPressed: onNext,

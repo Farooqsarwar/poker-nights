@@ -22,15 +22,16 @@ extension AppProviderCloudSync on AppProvider {
     addAnnouncement('You have taken control of this live game.', false);
   }
 
-  void _syncGameToCloud() {
+  void _syncGameToCloud() async {
     if (!_backendUp) return;
-    _claimEditorIfNeeded();
+    await _claimEditorIfNeeded();
     final game = _currentGame;
     final gid = game != null && game.groupId.isNotEmpty
         ? game.groupId
         : _currentGroupId;
-    final key =
-        (game == null || gid == null || _user == null) ? null : '$gid|${game.id}';
+    final key = (game == null || gid == null || _user == null)
+        ? null
+        : '$gid|${game.id}';
 
     if (key != _syncedGameKey) {
       _syncedGameKey = key;
@@ -39,12 +40,15 @@ extension AppProviderCloudSync on AppProvider {
       _requestsSub = null;
       _gameSaveInFlight = false;
       _pendingLatestSave = null;
+      _pendingSaveForce = false;
+      _reconcileAdoptedLocally = false;
+      _droppedRemoteWhileBusy = false;
       _lastSavedGame = null;
       _gameDocSub?.cancel();
       _gameDocSub = null;
       _gameDocRetryTimer?.cancel();
       _gameSaveDebounce?.cancel();
-    _projectionDebounce?.cancel();
+      _projectionDebounce?.cancel();
       _pendingGameSave = false;
       _localGameDirty = false;
       _lastSavedSignature = null;
@@ -86,7 +90,7 @@ extension AppProviderCloudSync on AppProvider {
     // Whole-document writes are reserved for the admin/authority device
     // (locked architecture §writes). Members patch their own fields and
     // guests use the request queue instead.
-    if (!_isGameAuthority) return;
+    if (!isAdmin) return;
     // Content (not identity) check: a bundle re-emit hands back a fresh
     // LiveGame instance every time, so `identical` was perpetually false and
     // the admin was perpetually "dirty" — which blocked `_adoptRemoteMap` and
@@ -110,6 +114,10 @@ extension AppProviderCloudSync on AppProvider {
       if (g == null || _user == null) return;
       _pendingLatestSave = g;
       _pendingGameSave = true;
+      // Latch (never clear) the override: a drain already in flight will pick
+      // it up when it loops round to this queued state.
+      _pendingSaveForce = _pendingSaveForce || forceEditorClaim;
+      forceEditorClaim = false;
       unawaited(_drainGameSaveQueue(effectiveGid));
     });
   }
@@ -122,11 +130,16 @@ extension AppProviderCloudSync on AppProvider {
   Future<void> _drainGameSaveQueue(String effectiveGid) async {
     if (_gameSaveInFlight) return;
     _gameSaveInFlight = true;
+    var saveFailed = false;
     try {
       do {
         final target = _pendingLatestSave;
         _pendingLatestSave = null;
         if (target == null || _user == null) break;
+        // Consume the blocking-action override with the state it was raised
+        // for, so a later ordinary edit does not inherit it.
+        final force = _pendingSaveForce;
+        _pendingSaveForce = false;
         final g = _currentGame;
         // Prefer the very latest authoritative state for this game.
         final freshest = (g != null && g.id == target.id) ? g : target;
@@ -151,12 +164,18 @@ extension AppProviderCloudSync on AppProvider {
         for (var attempt = 0; attempt < delaysMs.length && !saved; attempt++) {
           if (delaysMs[attempt] > 0) {
             await Future<void>.delayed(
-                Duration(milliseconds: delaysMs[attempt]));
+              Duration(milliseconds: delaysMs[attempt]),
+            );
           }
           if (_user == null) break;
           var step = 'saveGame';
           try {
-            await _repo.saveGame(toWrite, viewerId: _user?.id, expectedRevision: _lastSavedGame?.revision);
+            await _repo.saveGame(
+              toWrite,
+              viewerId: _user?.id,
+              expectedRevision: _lastSavedGame?.revision,
+              force: force,
+            );
             step = 'publishProjections';
             await _publishProjections(toWrite);
             _lastSavedGame = toWrite;
@@ -168,23 +187,37 @@ extension AppProviderCloudSync on AppProvider {
             }
           } catch (e) {
             lastError = e;
-            debugPrint('$step failed (attempt ${attempt + 1}) '
-                'gid=${toWrite.groupId} game=${toWrite.id} '
-                'uid=${_user?.id} isAdmin=$isAdmin '
-                'authority=$_isGameAuthority: $e');
+            debugPrint(
+              '$step failed (attempt ${attempt + 1}) '
+              'gid=${toWrite.groupId} game=${toWrite.id} '
+              'uid=${_user?.id} isAdmin=$isAdmin '
+              'authority=$_isGameAuthority: $e',
+            );
             if (_isRetriablePermissionError(e)) await _nudgeAuthToken();
           }
         }
         if (!saved) {
           // Never rethrow out of this fire-and-forget drain — surface it
           // instead so the admin sees that their change did not persist.
+          saveFailed = true;
           final errorStr = (lastError ?? '').toString().toLowerCase();
           if (_isRetriablePermissionError(lastError ?? '')) {
-            lastSaveError = 'Changes not saved — this account does not have admin write access to this game.';
-          } else if (errorStr.contains('quota-exceeded') || errorStr.contains('resource-exhausted') || errorStr.contains('quota')) {
-            lastSaveError = 'Changes not saved — database quota exceeded (free tier limit reached).';
+            lastSaveError =
+                'Changes not saved — this account does not have admin write access to this game.';
+          } else if (errorStr.contains('quota-exceeded') ||
+              errorStr.contains('resource-exhausted') ||
+              errorStr.contains('quota')) {
+            lastSaveError =
+                'Changes not saved — database quota exceeded (free tier limit reached).';
+          } else if (errorStr.contains('another admin is actively editing')) {
+            lastSaveError =
+                'Changes not saved — another admin device is currently editing this game.';
+          } else if (errorStr.contains('revision mismatch')) {
+            lastSaveError =
+                'Changes not saved — this game was updated on another device. Reopen it and try again.';
           } else {
-            lastSaveError = 'Changes could not be saved. Check your connection.';
+            lastSaveError =
+                'Changes could not be saved. Check your connection.';
           }
           if (!_disposed) notifyListeners();
           break;
@@ -192,13 +225,56 @@ extension AppProviderCloudSync on AppProvider {
       } while (_pendingLatestSave != null);
     } finally {
       _gameSaveInFlight = false;
-      if (_pendingLatestSave == null) {
+      final settled = _pendingLatestSave == null;
+      if (settled) {
         _pendingGameSave = false;
         // Nothing left to write — local state now matches (or has been
         // superseded by) what is on the server, so remote snapshots may flow
         // through again.
-        _localGameDirty = false;
+        //
+        // Except after a FAILED save: the edit only lives on this device, so
+        // opening the gate let the next (stale) snapshot resurrect the state
+        // the admin just changed — a cancelled tournament reappearing as
+        // upcoming next to the "could not be saved" banner. Staying dirty
+        // holds the optimistic state, and because `_lastSavedSignature` was
+        // not advanced the next notifyListeners() re-arms the save.
+        _localGameDirty = saveFailed;
       }
+      if (settled && !_localGameDirty) {
+        // The gate is open again — publish whatever the pre-save reconcile
+        // folded in, then pick up anything the gate turned away.
+        if (_reconcileAdoptedLocally) {
+          _reconcileAdoptedLocally = false;
+          if (!_disposed) notifyListeners();
+        }
+        if (_droppedRemoteWhileBusy) {
+          _droppedRemoteWhileBusy = false;
+          unawaited(_refreshAfterDroppedSnapshot(effectiveGid));
+        }
+      }
+    }
+  }
+
+  /// Re-reads the game document after the save gate turned a snapshot away.
+  ///
+  /// Deliberately a fresh read rather than a replay of the buffered payload:
+  /// the dropped snapshot predates the save that dropped it, so replaying it
+  /// would roll the admin back over their own write. The server copy is
+  /// authoritative for exactly the fields at issue.
+  Future<void> _refreshAfterDroppedSnapshot(String gid) async {
+    final game = _currentGame;
+    if (!_backendUp || game == null || !isAdmin) return;
+    final effectiveGid = game.groupId.isNotEmpty ? game.groupId : gid;
+    if (effectiveGid.isEmpty) return;
+    try {
+      final raw = await _repo.gameDocOnce(effectiveGid, game.id);
+      if (raw == null) return;
+      // Route through the normal adoption path so the echo guard, the private
+      // field restore and the overlays all still apply. A `writerId` of ours
+      // is skipped there, which is correct — that state is already local.
+      _adoptRemoteMap(Map<String, dynamic>.from(raw));
+    } catch (e) {
+      debugPrint('refreshAfterDroppedSnapshot failed: $e');
     }
   }
 
@@ -214,7 +290,38 @@ extension AppProviderCloudSync on AppProvider {
       if (raw == null) return game;
       final remote = liveGameFromFirestoreDoc(Map<String, dynamic>.from(raw));
       if (remote.id != game.id) return game;
-      return mergeMemberOwnedFields(game, remote, adminId: _user?.id);
+      final merged = mergeMemberOwnedFields(game, remote, adminId: _user?.id);
+
+      // The merge is not just for the wire. Whatever the members changed while
+      // this edit was debouncing has to reach the ADMIN'S SCREEN too.
+      //
+      // Folding it only into the outgoing document left `_currentGame`
+      // permanently behind `_lastSavedSignature` (which is computed from the
+      // MERGED copy) — so the very next notifyListeners() saw a signature
+      // mismatch, re-flagged the game dirty and re-saved it, forever. Every
+      // snapshot that loop produced carried this device's own `writerId` and
+      // was dropped by the echo guard in [_adoptRemoteMap], so the admin never
+      // saw the member's check-in (or RSVP) again — while the server, and the
+      // member's own screen, had it all along.
+      //
+      // Merge against the LIVE game rather than [game]: the read above is
+      // asynchronous, so the admin may have edited something else meanwhile.
+      // `mergeMemberOwnedFields` only ever takes member-owned fields, so the
+      // admin's concurrent edit is preserved.
+      final live = _currentGame;
+      if (live != null && live.id == game.id) {
+        final mergedLive = mergeMemberOwnedFields(
+          live,
+          remote,
+          adminId: _user?.id,
+        );
+        if (!identical(mergedLive, live)) {
+          _currentGame = mergedLive;
+          _syncGroupGame();
+          _reconcileAdoptedLocally = true;
+        }
+      }
+      return merged;
     } catch (e) {
       debugPrint('reconcileMemberOwnedFields failed: $e');
       return game;
@@ -222,7 +329,7 @@ extension AppProviderCloudSync on AppProvider {
   }
 
   /// True when the signed-in user holds the elevated Co-Admin role in the
-  /// current group. Currently a cosmetic badge (permissions are restricted to 
+  /// current group. Currently a cosmetic badge (permissions are restricted to
   /// admin-only until multi-admin support is fully implemented).
   bool get isCoAdmin {
     final user = _user;
@@ -258,26 +365,29 @@ extension AppProviderCloudSync on AppProvider {
   /// persists its device id; every other admin device stops writing the whole
   /// doc so a stale session can't clobber a fresh state (e.g. a confirmed
   /// seating plan). Never steals from an active editor.
-  void _claimEditorIfNeeded() {
+  Future<void> _claimEditorIfNeeded() async {
     final game = _currentGame;
     if (game == null || _user == null || !isAdmin || !_backendUp) return;
     final editor = game.editorDeviceId;
     final now = DateTime.now();
     final claimedAt = game.editorClaimedAt;
     final sameDevice = editor == _repo.deviceId;
-    final stale = editor.isNotEmpty &&
+    final stale =
+        editor.isNotEmpty &&
         claimedAt != null &&
         now.difference(claimedAt) > AppProvider._editorClaimStaleWindow;
     // Another live editor is actively writing — stay read-only.
-    if (editor.isNotEmpty && !sameDevice && !stale) return;
-    if (sameDevice) {
+    if (editor.isNotEmpty && !sameDevice && !stale && !forceEditorClaim) return;
+    if (sameDevice && !forceEditorClaim) {
       // Heartbeat: ours. Persist the last-active stamp so other admin devices
       // don't judge us stale — but as a TARGETED, THROTTLED field patch, never
       // by mutating `_currentGame` (that made every notifyListeners() schedule
       // a full-document `.set()`, which continuously clobbered members' RSVP /
       // guest-slot writes — the "RSVP not persistent" bug).
-      final due = _lastEditorHeartbeatAt == null ||
-          now.difference(_lastEditorHeartbeatAt!) > AppProvider._editorHeartbeatInterval;
+      final due =
+          _lastEditorHeartbeatAt == null ||
+          now.difference(_lastEditorHeartbeatAt!) >
+              AppProvider._editorHeartbeatInterval;
       if (due) {
         _lastEditorHeartbeatAt = now;
         _patchActiveGame({'editorClaimedAt': now.toIso8601String()});
@@ -290,11 +400,10 @@ extension AppProviderCloudSync on AppProvider {
     // states) while a transactional claim is pending.
     if (_editorClaimInFlight) return;
     _editorClaimInFlight = true;
-    unawaited(_repo.claimGameEditor(gid, game.id).then((won) {
+    try {
+      final won = await _repo.claimGameEditor(gid, game.id, force: forceEditorClaim);
       _editorClaimInFlight = false;
       if (!won) {
-        // Another admin won the race — stay read-only; the remote snapshot
-        // already carries the winning editor device id.
         debugPrint('claimGameEditor: another admin owns the editor role.');
         return;
       }
@@ -306,10 +415,10 @@ extension AppProviderCloudSync on AppProvider {
       );
       _lastEditorHeartbeatAt = now;
       _syncGroupGame();
-    }).catchError((Object e) {
+    } catch (e) {
       _editorClaimInFlight = false;
       debugPrint('claimGameEditor failed: $e');
-    }));
+    }
   }
 
   /// Member/guest-safe field patch: writes dot-paths without touching the
@@ -317,9 +426,11 @@ extension AppProviderCloudSync on AppProvider {
   void _patchActiveGame(Map<String, dynamic> dotPaths) {
     final ctx = _cloudGameContext;
     if (ctx == null || dotPaths.isEmpty) return;
-    unawaited(_repo
-        .patchGame(ctx.$1, ctx.$2, dotPaths)
-        .catchError((Object e) => debugPrint('patchGame failed: $e')));
+    unawaited(
+      _repo
+          .patchGame(ctx.$1, ctx.$2, dotPaths)
+          .catchError((Object e) => debugPrint('patchGame failed: $e')),
+    );
   }
 
   /// Publishes sanitized public/TV/player/guest projections after a
@@ -330,8 +441,7 @@ extension AppProviderCloudSync on AppProvider {
       await _repo.publishPublicProjections(
         game: game,
         tv: liveGameToMap(projections.tvProjection(game)),
-        player:
-            liveGameToMap(projections.playerProjection(game, viewerId: '')),
+        player: liveGameToMap(projections.playerProjection(game, viewerId: '')),
         guest: liveGameToMap(projections.guestProjection(game)),
       );
     } catch (e) {
@@ -347,10 +457,12 @@ extension AppProviderCloudSync on AppProvider {
     if (!_backendUp || _currentGame == null || !_isGameAuthority) return;
     if (_requestsSub != null) return;
     final gameId = _currentGame!.id;
-    _requestsSub = _repo.requestsStream(gameId, _currentGame!.groupId).listen(
-      _consumeRequests,
-      onError: (Object e) => debugPrint('requests stream error: $e'),
-    );
+    _requestsSub = _repo
+        .requestsStream(gameId, _currentGame!.groupId)
+        .listen(
+          _consumeRequests,
+          onError: (Object e) => debugPrint('requests stream error: $e'),
+        );
   }
 
   /// Applies queued member/guest requests to the authoritative local game,
@@ -373,6 +485,12 @@ extension AppProviderCloudSync on AppProvider {
         case 'addOnReq':
           requestAddOn((req.payload['playerId'] as String?) ?? '');
           break;
+        case 'rebuyCancelReq':
+          cancelRebuyRequest((req.payload['playerId'] as String?) ?? '');
+          break;
+        case 'addOnCancelReq':
+          cancelAddOnRequest((req.payload['playerId'] as String?) ?? '');
+          break;
         default:
           error = 'unknown kind';
       }
@@ -393,11 +511,14 @@ extension AppProviderCloudSync on AppProvider {
   String? _applyQueuedGuestCheckIn(Map<String, dynamic> payload) {
     final game = _currentGame;
     if (game == null) return 'no active game';
-    final name = Sanitization.sanitizeName((payload['name'] as String?) ?? 'Guest');
+    final name = Sanitization.sanitizeName(
+      (payload['name'] as String?) ?? 'Guest',
+    );
     final inviterId = (payload['inviterId'] as String?) ?? '';
     final slotNo = (payload['slot'] as num?)?.toInt() ?? 0;
     final guestId =
-        (payload['guestId'] as String?) ?? 'g-${DateTime.now().millisecondsSinceEpoch}';
+        (payload['guestId'] as String?) ??
+        'g-${DateTime.now().millisecondsSinceEpoch}';
 
     final existingSlot = game.guestSlots
         .where((s) => s.inviterId == inviterId && s.slot == slotNo)
@@ -444,7 +565,7 @@ extension AppProviderCloudSync on AppProvider {
         requested: true,
       ),
     );
-    
+
     // Alert the admin that a guest is waiting
     pushNotification(
       AppNotification(
@@ -457,7 +578,7 @@ extension AppProviderCloudSync on AppProvider {
         timestamp: DateTime.now(),
       ),
     );
-    
+
     return null;
   }
 
@@ -465,23 +586,32 @@ extension AppProviderCloudSync on AppProvider {
   /// with backoff if the stream errors (the post-login token gap). [key] pins
   /// the attempt to the current [_syncedGameKey] so a stale retry is dropped
   /// once the active game changes.
-  void _subscribeGameDoc(String key, String gid, String gameId,
-      {required bool asAdmin}) {
+  void _subscribeGameDoc(
+    String key,
+    String gid,
+    String gameId, {
+    required bool asAdmin,
+  }) {
     var attempt = 0;
     void go() {
       if (_syncedGameKey != key) return;
       _gameDocSub?.cancel();
       _gameDocSub = _repo
           .gameDocSnapshots(gid, gameId, isAdmin: asAdmin)
-          .listen(_adoptRemoteGame, onError: (Object e) {
-        debugPrint('gameDoc stream error${asAdmin ? '' : ' (member)'}: $e');
-        if (_syncedGameKey != key || attempt >= 8) return;
-        if (_isRetriablePermissionError(e)) unawaited(_nudgeAuthToken());
-        final delayMs = 400 * (1 << (attempt > 5 ? 5 : attempt));
-        attempt++;
-        _gameDocRetryTimer?.cancel();
-        _gameDocRetryTimer = Timer(Duration(milliseconds: delayMs), go);
-      });
+          .listen(
+            _adoptRemoteGame,
+            onError: (Object e) {
+              debugPrint(
+                'gameDoc stream error${asAdmin ? '' : ' (member)'}: $e',
+              );
+              if (_syncedGameKey != key || attempt >= 8) return;
+              if (_isRetriablePermissionError(e)) unawaited(_nudgeAuthToken());
+              final delayMs = 400 * (1 << (attempt > 5 ? 5 : attempt));
+              attempt++;
+              _gameDocRetryTimer?.cancel();
+              _gameDocRetryTimer = Timer(Duration(milliseconds: delayMs), go);
+            },
+          );
     }
 
     go();
@@ -493,18 +623,23 @@ extension AppProviderCloudSync on AppProvider {
     void go() {
       if (_gameChatKey != key) return;
       _gameChatSub?.cancel();
-      _gameChatSub = _repo.gameChatStream(gid, gameId).listen((msgs) {
-        _gameChatMessages = msgs;
-        if (!_disposed) notifyListeners();
-      }, onError: (Object e) {
-        debugPrint('gameChat stream error: $e');
-        if (_gameChatKey != key || attempt >= 8) return;
-        if (_isRetriablePermissionError(e)) unawaited(_nudgeAuthToken());
-        final delayMs = 400 * (1 << (attempt > 5 ? 5 : attempt));
-        attempt++;
-        _gameChatRetryTimer?.cancel();
-        _gameChatRetryTimer = Timer(Duration(milliseconds: delayMs), go);
-      });
+      _gameChatSub = _repo
+          .gameChatStream(gid, gameId)
+          .listen(
+            (msgs) {
+              _gameChatMessages = msgs;
+              if (!_disposed) notifyListeners();
+            },
+            onError: (Object e) {
+              debugPrint('gameChat stream error: $e');
+              if (_gameChatKey != key || attempt >= 8) return;
+              if (_isRetriablePermissionError(e)) unawaited(_nudgeAuthToken());
+              final delayMs = 400 * (1 << (attempt > 5 ? 5 : attempt));
+              attempt++;
+              _gameChatRetryTimer?.cancel();
+              _gameChatRetryTimer = Timer(Duration(milliseconds: delayMs), go);
+            },
+          );
     }
 
     go();
@@ -554,12 +689,19 @@ extension AppProviderCloudSync on AppProvider {
         _localGameDirty ||
         _gameSaveInFlight ||
         _restoredFromRecovery) {
+      // Remember that a snapshot went unread. Dropping it silently meant a
+      // member write landing inside an authority save window was invisible to
+      // the host until some later, unrelated write happened to re-emit the
+      // document — and the admin's own saves do not count, because the echo
+      // guard above skips them. [_refreshAfterDroppedSnapshot] re-reads once
+      // the save settles.
+      if (!_restoredFromRecovery) _droppedRemoteWhileBusy = true;
       return;
     }
     try {
       var remote = liveGameFromFirestoreDoc(Map<String, dynamic>.from(data));
       if (_currentGame?.id != remote.id) return;
-      
+
       // Preserve private fields that are scrubbed from the public remote stream
       remote = _restoreAdminPrivateFields(remote);
 
@@ -586,7 +728,9 @@ extension AppProviderCloudSync on AppProvider {
         _projectionDebounce?.cancel();
         _projectionDebounce = Timer(const Duration(milliseconds: 1500), () {
           if (_currentGame != null) {
-            unawaited(_publishProjections(_currentGame!).catchError((Object _) {}));
+            unawaited(
+              _publishProjections(_currentGame!).catchError((Object _) {}),
+            );
           }
         });
       }
@@ -611,8 +755,10 @@ extension AppProviderCloudSync on AppProvider {
     final n = _rsvpReassertCount[remote.id] ?? 0;
     if (n >= 3) return;
     _rsvpReassertCount[remote.id] = n + 1;
-    debugPrint('RSVP re-assert #${n + 1} for ${remote.id} '
-        '(server=${serverMine?.rsvp?.name}, want=${want?.name})');
+    debugPrint(
+      'RSVP re-assert #${n + 1} for ${remote.id} '
+      '(server=${serverMine?.rsvp?.name}, want=${want?.name})',
+    );
     final after = _withOwnRsvpOverlay(remote);
     _persistOwnRsvpPatch(remote.id, _rsvpDotPatch(remote, after), want);
   }
@@ -635,8 +781,8 @@ extension AppProviderCloudSync on AppProvider {
     }
     final players = game.players.any((p) => p.id == uid)
         ? game.players
-            .map((p) => p.id == uid ? p.copyWith(rsvp: want) : p)
-            .toList()
+              .map((p) => p.id == uid ? p.copyWith(rsvp: want) : p)
+              .toList()
         : [...game.players, _memberAsPlayer(uid, want)];
     var updated = game.copyWith(players: players);
     updated = _syncGuestSlots(updated, uid, want?.guestCount ?? 0);

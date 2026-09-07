@@ -167,6 +167,7 @@ class _MobileShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ThemedAppBackground(
@@ -175,7 +176,15 @@ class _MobileShell extends StatelessWidget {
             Column(
               children: [
                 _MobileTopBar(onMenu: app.toggleDrawer),
-                Expanded(child: child),
+                Expanded(
+                  // The bottom nav floats over the content, so give every
+                  // screen clearance equal to the nav's height (64 + inset)
+                  // and nothing — like a chat composer — hides behind it.
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 64 + bottomInset),
+                    child: child,
+                  ),
+                ),
               ],
             ),
             const Positioned(left: 0, right: 0, bottom: 0, child: BottomNav()),

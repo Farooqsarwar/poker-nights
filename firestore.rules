@@ -17,9 +17,10 @@ rules_version = '2';
 //    writer is the group owner creating their own row in the same batch as
 //    the group (so no user can ever self-grant 'admin').
 //  - Regular MEMBERS may write ONLY their own private slice of a game doc:
-//    their own `players.{uid}.rsvp`, their own guest slots, and their own id
-//    in the rebuy/add-on request arrays. They cannot assign seats, confirm
-//    check-ins, record rebuys/add-ons, or alter any other player.
+//    their own `players.{uid}.rsvp` and their own guest slots. Rebuy/add-on
+//    requests go to requests/{gameId}/items, which only an admin may list, so
+//    one member can never see who else asked. They cannot assign seats,
+//    confirm check-ins, record rebuys/add-ons, or alter any other player.
 //  - GUESTS are anonymous. They never touch game documents: they read
 //    sanitized projections in publicGames/{gameId} and post their guest
 //    check-in claim to requests/{gameId}/items (which does NOT require
@@ -80,18 +81,22 @@ service cloud.firestore {
       // Self-registration: the member's RSVP row is serialised whole via
       // playerToMap, so keep the key set open but reject any non-default
       // money/control value (self-confirm / fake rebuys / fake eliminations).
+      // `checkedIn` IS allowed at true here — the member's own "Check In"
+      // request is self-service by design (spec: member requests, admin
+      // confirms); `confirmed` staying false is what keeps the actual seat
+      // assignment/confirmation an admin-only action.
       let safeCreate = myNew == null || (
           myNew.get('confirmed', false) == false
-          && myNew.get('checkedIn', false) == false
           && myNew.get('eliminated', false) == false
           && myNew.get('hasAddOn', false) == false
           && myNew.get('rebuys', 0) == 0
           && myNew.get('reEntries', 0) == 0
           && myNew.get('knockouts', 0) == 0);
-      // Existing row: members may only change their own RSVP state. check-in
-      // and confirmation are host/admin actions (checkInReq -> admin approve).
+      // Existing row: members may request their own check-in (`checkedIn`)
+      // alongside RSVP changes, but confirmation and every other field stay
+      // host/admin actions (checkInReq -> admin approve).
       let ownUpdateSafe = myOld == null
-          || myNew.diff(myOld).affectedKeys().hasOnly(['rsvp']);
+          || myNew.diff(myOld).affectedKeys().hasOnly(['rsvp', 'checkedIn']);
       return ownRowOnly && ownDeleteOk && safeCreate && ownUpdateSafe;
     }
 
@@ -102,25 +107,14 @@ service cloud.firestore {
     // (unsupported in the rules language), so we bound the blast radius
     // instead: a single member patch may alter at most 8 guest slots (a real
     // member RSVP touches only their own handful of slots). Combined with the
-    // C1 admin-escalation fix and the players / top-level-key / request-array
-    // locks below, cross-inviter slot tampering is contained to a low-severity,
+    // C1 admin-escalation fix and the players / top-level-key locks below,
+    // cross-inviter slot tampering is contained to a low-severity,
     // admin-correctable residual.
     function memberGuestSlotsSafe() {
       return request.resource.data.get('guestSlots', {})
           .diff(resource.data.get('guestSlots', {}))
           .affectedKeys()
           .size() <= 8;
-    }
-
-    // Validate rebuy/add-on request arrays change only by adding/removing the
-    // caller's own uid (set difference, then subset check).
-    function memberRequestArraySafe(key) {
-      let reqArr = request.resource.data.get(key, []);
-      let oldArr = resource.data.get(key, []);
-      let added = reqArr.removeAll(oldArr);
-        let removed = oldArr.removeAll(reqArr);
-        return (added.size() == 0 || (added.size() == 1 && added[0] == request.auth.uid))
-            && (removed.size() == 0 || (removed.size() == 1 && removed[0] == request.auth.uid));
     }
 
     // A member may update a poll ONLY by writing their own vote
@@ -136,16 +130,22 @@ service cloud.firestore {
 
     // A member update on a game doc may only vary the member-owned subtrees.
     // Admin writes the whole document (authority); members are restricted to
-    // their own rsvp, their own guest slots and their own id in the rebuy /
-    // add-on request arrays. Everything else must stay byte-identical.
+    // their own rsvp and their own guest slots. Everything else must stay
+    // byte-identical.
     function memberGameEdit() {
       let topDiff = request.resource.data.diff(resource.data);
-      let allowedTop = ['players', 'guestSlots', 'rebuyRequests', 'addOnRequests', 'updatedAt'];
+      // `writerId` rides along on the stamp that `patchGame` applies to every
+      // member dot-patch (RSVP / check-in / rebuy / guest slots); omitting it
+      // here made every member self-write a permission-denied, because the
+      // merge-set adds the top-level key next to the allowed ones.
+      // `rebuyRequests` / `addOnRequests` were removed from this list: the
+      // request queue moved to `requests/{gameId}/items` so the identities of
+      // who asked never reach other members. A member patching the arrays on
+      // the shared game document is now rejected outright.
+      let allowedTop = ['players', 'guestSlots', 'updatedAt', 'writerId'];
       return topDiff.affectedKeys().hasOnly(allowedTop)
           && memberPlayersSafe()
-          && memberGuestSlotsSafe()
-          && memberRequestArraySafe('rebuyRequests')
-          && memberRequestArraySafe('addOnRequests');
+          && memberGuestSlotsSafe();
     }
 
     function publicGameDocSafe() {
@@ -153,6 +153,23 @@ service cloud.firestore {
       let settingsSafe = !data.keys().hasAll(['settings']) || !data.settings.keys().hasAny(['organizerPct']);
       let structureSafe = !data.keys().hasAll(['structure']) || !data.structure.keys().hasAny(['prizes', 'organizerAmount']);
       return settingsSafe && structureSafe;
+    }
+
+    // Member CREATE: a member RSVPing on a game doc that does not exist yet
+    // (e.g. a legacy game whose document was never persisted) falls back to a
+    // merge-set create carrying ONLY their own slice. Gate it so the created
+    // doc can contain nothing but the caller's own player row, their own guest
+    // slots and the stamp fields — a member can never plant settings, other
+    // players, structure or any authority data.
+    function memberGameCreate() {
+      let data = request.resource.data;
+      let players = data.get('players', {});
+      let slots = data.get('guestSlots', {});
+      return signedIn()
+          && data.keys().hasOnly(
+            ['players', 'guestSlots', 'updatedAt', 'writerId'])
+          && players.keys().hasOnly([request.auth.uid])
+          && slots.keys().size() <= 8;
     }
 
     // ---------- users ----------
@@ -186,12 +203,11 @@ service cloud.firestore {
       // Membership index mirror (one doc per joined group). The user manages
       // their own rows; a group's admin may also write the mirror row for a
       // member of THAT group (the "add member by email" flow — no Cloud
-      // Function). Scoped tightly: an admin can only touch mirror docs whose
-      // {gid} is a group they administer.
+      // Function). Scoped tightly: users write only their own index entries,
+      // and admins can write entries for members of groups they administer.
       match /groups/{gid} {
         allow read: if signedIn() && request.auth.uid == uid;
-        allow write: if signedIn()
-            && (request.auth.uid == uid || isGroupAdmin(gid));
+        allow write: if signedIn() && request.auth.uid == uid;
       }
 
       // Personal tournament results (one doc per settled game; spec §5.1
@@ -228,7 +244,12 @@ service cloud.firestore {
       // Role changes/removals are admin+owner ops. A member may fix their own
       // display name.
       match /members/{memberUid} {
-        allow read: if isMember(gid);
+        // A user must always be able to read their OWN membership row, even
+        // before it exists (joinGroup calls memberRef.get() to check
+        // existence first) — isMember(gid) alone is circular for a
+        // first-time joiner since it checks for that same row's existence.
+        allow read: if isMember(gid)
+            || (signedIn() && request.auth.uid == memberUid);
         // C1-hardened create: a user adds themselves as role 'member' (join
         // code / invite link), OR the group owner creates their own row in the
         // same batch as the group, OR a genuine group ADMIN adds a registered
@@ -258,7 +279,8 @@ service cloud.firestore {
         // Because private financial data is split into the admin sidecar,
         // all members can safely read the main public game document.
         allow read: if isMember(gid);
-        allow create: if isGroupAdmin(gid) && publicGameDocSafe();
+        allow create: if (isGroupAdmin(gid) && publicGameDocSafe())
+            || (isMember(gid) && memberGameCreate());
         allow delete: if isGroupAdmin(gid);
         // Members may update only their own slice of the game doc (their rsvp,
         // their guest slots, their own id in the rebuy/add-on request arrays);
@@ -426,8 +448,13 @@ service cloud.firestore {
            || resource.data.get('kind', '') == 'guestCheckIn'
            || isMember(resource.data.get('gid', '__none__'))
         );
+        // Only a group admin may ENUMERATE the queue — the items name the
+        // members who requested a rebuy / add-on / check-in, which User Flow
+        // section 5.6 and section 22 keep off a member's view. The admin
+        // device is the only lister (`_ensureRequestsSubscription` requires
+        // game authority), so this costs members nothing.
         allow list: if signedIn()
-            && isMember(resource.data.get('gid', '__none__'));
+            && isGroupAdmin(resource.data.get('gid', '__none__'));
         allow create: if signedIn()
             && request.resource.data.keys().hasAll(['kind', 'gid'])
             && request.resource.data.gid is string

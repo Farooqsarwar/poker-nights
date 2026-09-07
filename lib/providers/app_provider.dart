@@ -188,6 +188,19 @@ LiveGame restoreAdminPrivateFields(LiveGame remote, LiveGame local) {
       prizes: local.structure.prizes,
       organizerAmount: local.structure.organizerAmount,
     ),
+    // `saveGame` blanks the audit timeline out of the member-readable game
+    // document and keeps it in the admin sidecar, so the copy that comes back
+    // over the wire is always empty. Re-attach the one already in memory —
+    // otherwise every remote snapshot would wipe the host's audit history and
+    // flip the content signature on every emit.
+    auditHistory:
+        remote.auditHistory.isEmpty ? local.auditHistory : remote.auditHistory,
+    // Same story for the pending request queue: scrubbed on the wire, held
+    // in memory and in the admin sidecar.
+    rebuyRequests:
+        remote.rebuyRequests.isEmpty ? local.rebuyRequests : remote.rebuyRequests,
+    addOnRequests:
+        remote.addOnRequests.isEmpty ? local.addOnRequests : remote.addOnRequests,
   );
 }
 
@@ -268,6 +281,8 @@ class AppProvider extends ChangeNotifier {
   /// most recent change did NOT reach Firestore — screens can surface it so a
   /// rejected write is never mistaken for a successful one.
   String? lastSaveError;
+
+  bool forceEditorClaim = false;
 
   StreamSubscription<dynamic>? _lookupSub;
   StreamSubscription<List<TournamentPreset>>? _presetsSub;
@@ -371,6 +386,27 @@ class AppProvider extends ChangeNotifier {
 
   // ── Cloud sync plumbing ────────────────────────────────────────────────────
   bool _gameSaveInFlight = false;
+
+  /// Sticky "this device is taking over" flag for the NEXT whole-document
+  /// save. [forceEditorClaim] is consumed the moment the debounce timer fires,
+  /// but the drain it kicks off may be a no-op (an earlier drain is still in
+  /// flight) — in which case the blocking write it was raised for (cancelling
+  /// a tournament) would have been retried WITHOUT the override. Latching it
+  /// here keeps the override attached to the queued state until the save that
+  /// carries it actually runs.
+  bool _pendingSaveForce = false;
+
+  /// Set by [_reconcileMemberOwnedFields] when the pre-save server read folded
+  /// a member's change (RSVP / check-in / a whole new roster row) into the
+  /// admin's live game. The save drain notifies listeners once it settles so
+  /// the host's screen actually redraws with it.
+  bool _reconcileAdoptedLocally = false;
+
+  /// Set by [_adoptRemoteMap] when a game-doc snapshot had to be dropped
+  /// because an authority save was in flight. The drain re-reads the document
+  /// once it settles, so a member write that landed inside that window is not
+  /// lost until the next unrelated write happens to wake the stream.
+  bool _droppedRemoteWhileBusy = false;
   bool _editorClaimInFlight = false;
   LiveGame? _pendingLatestSave;
 
@@ -630,18 +666,12 @@ class AppProvider extends ChangeNotifier {
 
   bool _showAppTour = true;
 
-  /// Audio Master (checklist 15-041/15-042/15-043): the administrator manually
-  /// selects which connected device plays announcements. When no master is
-  /// chosen (`null`) every device with voice enabled may announce — the
-  /// backwards-compatible default.
-  ///
-  /// `_audioMasterDeviceId` is `null` when no master is selected; otherwise it
-  /// holds the device id of the chosen Audio Master. `thisDeviceIsAudioMaster`
-  /// is true when this device may speak.
-  String? _audioMasterDeviceId;
-
-  /// Stable per-session id for the current browser/device.
-  String? _thisDeviceId;
+  // Audio Master (checklist 15-041/15-042/15-043, User Flow §7.4): the chosen
+  // speaking device now lives on the GAME (`LiveGame.audioMasterDeviceId`) and
+  // this device's identity comes from the repository's persisted device id.
+  // Both used to be per-session provider fields, which meant the choice was
+  // invisible to other devices and lost on every reload — so every open tab
+  // announced at once. See `thisDeviceIsAudioMaster`.
 
   // ── Account preferences (settings screen) ─────────────────────────────────
   bool _soundsEnabled = true;

@@ -5,6 +5,7 @@ part of 'app_provider.dart';
 
 extension AppProviderPlayers on AppProvider {
   void eliminatePlayer(String playerId, {String? koRecipientId, String? idempotencyKey}) {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     final (rev, key) =
         _claimIdempotency(idempotencyKey ?? '', action: 'eliminatePlayer', target: playerId);
@@ -83,6 +84,7 @@ extension AppProviderPlayers on AppProvider {
   /// Manual trigger for final table state (small tournaments that never
   /// auto-transition because they started with ≤9 players).
   void triggerFinalTable() {
+    _forceClaimEditor();
     if (_currentGame == null) return;
     if (_currentGame!.status == LiveGameStatus.finaltable) return;
     _currentGame = _currentGame!.copyWith(
@@ -105,17 +107,21 @@ extension AppProviderPlayers on AppProvider {
       ),
     );
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Explicitly corrects a past elimination without using Undo (which is unsafe
   /// if dependent actions occurred). Adds a compensating audit action.
   void correctElimination(String playerId) {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     if (_currentGame == null) return;
 
     // We intentionally bypass `_pushUndo()` for audit preservation,
     // but the spec says "never delete audit history", so we just append.
+    final (rev, key) = _claimIdempotency('', action: 'correct-elim-$playerId');
+    if (rev == null) return;
+    
     final players = _currentGame!.players.map((p) {
       if (p.id == playerId) {
         return p.copyWith(
@@ -127,7 +133,7 @@ extension AppProviderPlayers on AppProvider {
       return p;
     }).toList();
 
-    _currentGame = _currentGame!.copyWith(players: players);
+    _currentGame = _currentGame!.copyWith(players: players, revision: rev, lastIdempotencyKey: key);
     final correctedPlayer = players.firstWhere((p) => p.id == playerId);
 
     addAuditRecord(
@@ -155,7 +161,7 @@ extension AppProviderPlayers on AppProvider {
     if (rebuyLimit != null && player.rebuys >= rebuyLimit) {
       lastRsvpError = '${player.name} has already used their $rebuyLimit '
           'rebuy${rebuyLimit == 1 ? '' : 's'}.';
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       return;
     }
 
@@ -192,7 +198,7 @@ extension AppProviderPlayers on AppProvider {
     _currentGame = _currentGame!.copyWith(
       rebuyRequests: [..._currentGame!.rebuyRequests, playerId],
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     if (!_isGameAuthority) {
       _patchActiveGame({
         'rebuyRequests': FieldValue.arrayUnion([playerId]),
@@ -206,7 +212,7 @@ extension AppProviderPlayers on AppProvider {
           .where((id) => id != playerId)
           .toList(),
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     if (!_isGameAuthority) {
       _patchActiveGame({
         'rebuyRequests': FieldValue.arrayRemove([playerId]),
@@ -287,7 +293,7 @@ extension AppProviderPlayers on AppProvider {
     _currentGame = _currentGame!.copyWith(
       addOnRequests: [..._currentGame!.addOnRequests, playerId],
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     if (!_isGameAuthority) {
       _patchActiveGame({
         'addOnRequests': FieldValue.arrayUnion([playerId]),
@@ -301,7 +307,7 @@ extension AppProviderPlayers on AppProvider {
           .where((id) => id != playerId)
           .toList(),
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     if (!_isGameAuthority) {
       _patchActiveGame({
         'addOnRequests': FieldValue.arrayRemove([playerId]),
@@ -318,7 +324,7 @@ extension AppProviderPlayers on AppProvider {
     if (previous == null) return;
     _currentGame = previous;
     _saveUndoStack(); // <-- newly added sidecar persistence
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     addAnnouncement('Last action undone.', false);
   }
 
@@ -372,7 +378,7 @@ extension AppProviderPlayers on AppProvider {
       );
     }
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void checkInPlayer(String playerId) {
@@ -391,7 +397,7 @@ extension AppProviderPlayers on AppProvider {
           .toList(),
     );
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void cancelCheckIn(String playerId) {
@@ -405,12 +411,13 @@ extension AppProviderPlayers on AppProvider {
           .toList(),
     );
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Closes door check-in (spec §4.7). Once closed, the host is prompted to
   /// start the tournament and no further walk-ins are accepted.
   void closeCheckIn() {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     _currentGame = _currentGame!.copyWith(
       checkInClosed: true,
@@ -421,10 +428,11 @@ extension AppProviderPlayers on AppProvider {
       'Check-in is now closed. No more players may join unless re-opened.',
       false,
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void reopenCheckIn() {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     _currentGame = _currentGame!.copyWith(
       checkInClosed: false,
@@ -432,7 +440,7 @@ extension AppProviderPlayers on AppProvider {
     );
     _syncGroupGame();
     addAnnouncement('Check-in re-opened.', false);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Registers an un-invited walk-in player at the door (spec §4.7). They are
@@ -533,11 +541,12 @@ extension AppProviderPlayers on AppProvider {
 
     _syncGroupGame();
     addAnnouncement('${player.name} walked in and is checked in.', true);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     return null;
   }
 
   void confirmGuest(String guestId) {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     _pushUndo();
     final game = _currentGame!;
@@ -559,10 +568,23 @@ extension AppProviderPlayers on AppProvider {
       return;
     }
 
+    // Auto-seat late arrivals so a confirmed guest is never stranded under
+    // "Unseated" (late-join black hole): pick the least-loaded table that
+    // still has a free seat and place them instantly. Null when seating has
+    // not been generated yet or every table is at capacity — the guest stays
+    // at table 0 for the admin to place via the Seating tab.
+    final autoSeat = guest.table <= 0 ? _findFreeSeat(game) : null;
+
     final updated = game.players
         .map(
           (p) => p.id == guestId
-              ? p.copyWith(confirmed: true, checkedIn: true, active: true)
+              ? p.copyWith(
+                  confirmed: true,
+                  checkedIn: true,
+                  active: true,
+                  table: autoSeat?.table ?? p.table,
+                  seat: autoSeat?.seat ?? p.seat,
+                )
               : p,
         )
         .toList();
@@ -576,6 +598,10 @@ extension AppProviderPlayers on AppProvider {
       players: updated,
       pendingGuests: game.pendingGuests.where((p) => p.id != guestId).toList(),
       totalChipsInPlay: game.totalChipsInPlay + extraChips,
+      // A late-arrival auto-seat changes the physical layout, so the seating
+      // confirmation no longer holds (the admin re-confirms once settled).
+      seatingConfirmed:
+          autoSeat == null ? game.seatingConfirmed : false,
       guestSlots: canTagSlot
           ? game.guestSlots.map((s) {
               if (s.inviterId == inviterId && s.slot == guestSlot) {
@@ -604,7 +630,13 @@ extension AppProviderPlayers on AppProvider {
           .catchError((_) {});
     }
 
-    addAnnouncement('Guest confirmed and seated.', false);
+    final seatLabel = autoSeat == null
+        ? ''
+        : ' (Table ${autoSeat.table}, Seat ${autoSeat.seat})';
+    addAnnouncement(
+      'Guest confirmed and seated$seatLabel.',
+      false,
+    );
     pushNotification(
       AppNotification(
         id: 'n-${DateTime.now().millisecondsSinceEpoch}',
@@ -622,6 +654,7 @@ extension AppProviderPlayers on AppProvider {
   /// players list and no longer sits at the table (07-026). Their slot is
   /// freed so another guest can claim it.
   void rejectGuest(String guestId) {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     _pushUndo();
     final guest = _currentGame!.players
@@ -656,6 +689,48 @@ extension AppProviderPlayers on AppProvider {
           .releaseSlotClaim(_currentGame!.id, inviterId, guestSlot)
           .catchError((_) {});
     }
+  }
+
+  /// Picks a seat for a late arrival once seating exists: the least-loaded
+  /// table that still has a free seat (seats are 1-based, capacity comes from
+  /// [AppProvider.effectiveTableSettings]). Returns null when no table is set
+  /// up yet or every table is at capacity so late guests with nowhere legal
+  /// to sit stay at table 0 for a manual placement instead of overflowing a
+  /// table silently.
+  ({int table, int seat})? _findFreeSeat(LiveGame game) {
+    final maxPerTable = effectiveTableSettings.maxPerTable.clamp(2, 999);
+    final seated = game.players
+        .where((p) => p.active && p.table > 0 && !p.eliminated)
+        .toList();
+    if (seated.isEmpty) return null;
+    final tableIds = seated.map((p) => p.table).toSet().toList()..sort();
+
+    int playerCount(int table) =>
+        seated.where((p) => p.table == table).length;
+
+    // Prefer tables below capacity; only overflow the least-loaded table when
+    // every existing table is full.
+    final withCapacity = tableIds.where((t) => playerCount(t) < maxPerTable).toList();
+    final pool = withCapacity.isEmpty ? tableIds : withCapacity;
+
+    var bestTable = pool.first;
+    var bestCount = 1 << 30;
+    for (final t in pool) {
+      final count = playerCount(t);
+      if (count < bestCount) {
+        bestCount = count;
+        bestTable = t;
+      }
+    }
+    final taken = seated
+        .where((p) => p.table == bestTable)
+        .map((p) => p.seat)
+        .toSet();
+    var seat = 1;
+    while (taken.contains(seat)) {
+      seat++;
+    }
+    return (table: bestTable, seat: seat);
   }
 
   /// Marks the matching guest slot as claimed so the free-slot count
@@ -807,6 +882,9 @@ extension AppProviderPlayers on AppProvider {
             'slot': slot,
             // Lets security rules verify only group admins consume requests.
             'gid': game.groupId,
+            // Binds this claim to the anonymous caller's own auth uid so the
+            // rules can reject claims that spoof another guest or device.
+            'ownerUid': _repo.currentUid,
           },
         );
         if (err != null) {
@@ -859,7 +937,7 @@ extension AppProviderPlayers on AppProvider {
         requested: true,
       ),
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     return const GuestCheckInResult(GuestCheckInStatus.booked);
   }
 
@@ -906,7 +984,7 @@ extension AppProviderPlayers on AppProvider {
   void clearGuestSession() {
     _guestSession = null;
     RecoveryService.clearGuestSession();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Assign table + seat numbers to every checked-in player (spec §12.1).
@@ -915,6 +993,7 @@ extension AppProviderPlayers on AppProvider {
   /// count exceeds that, multiple balanced tables are created automatically.
   /// Every player gets exactly one unique (table, seat) — no duplicates.
   void generateSeating(TableSeatingMode mode) {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     final game = _currentGame;
     if (game == null) return;
@@ -993,7 +1072,7 @@ extension AppProviderPlayers on AppProvider {
     if (dealer != null) {
       addAnnouncement('Seating drawn. ${dealer.name} deals first.', true);
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Marks the generated physical seating as confirmed before play starts
@@ -1001,6 +1080,7 @@ extension AppProviderPlayers on AppProvider {
   void confirmSeating() {
     final game = _currentGame;
     if (game == null) return;
+    _forceClaimEditor();
     if (!_isGameAuthority) {
       if (isAdmin) {
         // Another admin device owns the edit role — don't silently no-op.
@@ -1054,7 +1134,7 @@ extension AppProviderPlayers on AppProvider {
           .toList(),
       seatingConfirmed: false,
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     return null;
   }
 
@@ -1117,19 +1197,20 @@ extension AppProviderPlayers on AppProvider {
   /// applied — the admin must review and confirm (13-018).
   void requestSeatingBalance() {
     _pendingSeatMove = _buildSeatMoveRecommendation();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Clears the pending recommendation without changing any seats (13-020).
   void dismissSeatMove() {
     if (_pendingSeatMove == null) return;
     _pendingSeatMove = null;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Applies the confirmed recommendation: the player moves, source and
   /// destination seats update consistently (13-018/13-019).
   void confirmSeatMove() {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     final rec = _pendingSeatMove;
     if (rec == null) return;
@@ -1144,7 +1225,7 @@ extension AppProviderPlayers on AppProvider {
     );
     if (occupied) {
       _pendingSeatMove = null;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       return;
     }
     _pushUndo();
@@ -1163,6 +1244,6 @@ extension AppProviderPlayers on AppProvider {
       '${rec.fromPlayerName} moved to Table ${rec.toTable} seat ${rec.toSeat}.',
       true,
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }

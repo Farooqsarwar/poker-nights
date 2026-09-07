@@ -5,6 +5,15 @@ import 'package:flutter/foundation.dart';
 import '../models/chip_color.dart';
 import '../models/tournament.dart';
 
+/// Thrown when a chip set contains two colours with the same value
+/// (spec User Flow §12.4 — duplicates are rejected, not warned).
+class DuplicateChipValueException implements Exception {
+  const DuplicateChipValueException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
 /// Tournament structure engine — a faithful Dart port of the web app's
 /// `src/engine/tournament.ts`. Used to generate mock structures for the UI.
 ///
@@ -539,6 +548,24 @@ class TournamentEngine {
   /// would let payouts end in 5, which §9.4 forbids.
   static int roundingUnitFor(int buyIn) => buyIn < 10 ? 1 : 10;
 
+  /// Gross eligible for the prize pool. KO bounty is EXCLUDED (it is a
+  /// separate field, never part of `buyIn`, spec §9.1/§23.1).
+  static int grossEligibleFor({
+    required int confirmedCount,
+    required int buyIn,
+    required int totalRebuys,
+    required int effectiveRebuyCost,
+    required int totalReEntries,
+    required bool addOnEnabled,
+    required int totalAddOns,
+    required int effectiveAddOnCost,
+  }) {
+    return (confirmedCount * buyIn) +
+        (totalRebuys * effectiveRebuyCost) +
+        (totalReEntries * buyIn) +
+        (totalAddOns * (addOnEnabled ? effectiveAddOnCost : 0));
+  }
+
   static ({int organizerAmount, int prizePool, List<Prize> prizes})
   recalculatePrizes(
     int grossEligible,
@@ -591,6 +618,13 @@ class TournamentEngine {
   }
 
   static TournamentStructure generate(TournamentParams params) {
+    final dupValues = params.chipSet.map((c) => c.value).toList();
+    if (dupValues.toSet().length != dupValues.length) {
+      throw const DuplicateChipValueException(
+        'Two chip colours cannot share the same value.',
+      );
+    }
+
     final warnings = <String>[];
     final levelDuration = _levelDurationFor(params.durationHours);
     final playingMinutes = params.durationHours * 60 * 0.9;
@@ -818,13 +852,6 @@ class TournamentEngine {
     final prizes = recalculated.prizes;
 
     final expectedFinishMins = (numLevels * levelDuration * 1.05).round();
-
-    final values = params.chipSet.map((c) => c.value).toList();
-    if (values.toSet().length != values.length) {
-      warnings.add(
-        'Duplicate chip values detected. Two colours should not share the same value.',
-      );
-    }
 
     if (params.players < 4) {
       warnings.add('Very small field — consider a shorter structure.');

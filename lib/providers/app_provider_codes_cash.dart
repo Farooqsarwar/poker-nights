@@ -96,7 +96,7 @@ extension AppProviderCodesCash on AppProvider {
             _currentGame =
                 _withPendingCheckInOverlay(_withOwnRsvpOverlay(remote));
             _lastSavedGame = remote;
-            notifyListeners();
+            if (!_disposed) notifyListeners();
           } catch (e) {
             debugPrint('code-lookup game decode failed: $e');
           }
@@ -112,7 +112,7 @@ extension AppProviderCodesCash on AppProvider {
             _currentGame = _withPendingCheckInOverlay(_withOwnRsvpOverlay(
               liveGameFromMap(Map<String, dynamic>.from(payload as Map)),
             ));
-            notifyListeners();
+            if (!_disposed) notifyListeners();
           } catch (e) {
             debugPrint('projection decode failed: $e');
           }
@@ -149,7 +149,7 @@ extension AppProviderCodesCash on AppProvider {
         ),
       ),
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Records a cash buy-in / rebuy for a player (or adds a brand-new player).
@@ -198,7 +198,7 @@ extension AppProviderCodesCash on AppProvider {
             .toList(),
       );
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     return null;
   }
 
@@ -213,7 +213,7 @@ extension AppProviderCodesCash on AppProvider {
           )
           .toList(),
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Corrects an incorrectly entered buy-in, top-up or cash-out (checklist
@@ -246,18 +246,24 @@ extension AppProviderCodesCash on AppProvider {
           )
           .toList(),
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
-  void endCashGame({String? unresolvedNote}) {
+  String? endCashGame({String? unresolvedNote}) {
     final session = _cashSession;
-    if (session == null) return;
+    if (session == null) return 'No active cash session.';
+    if (session.difference.abs() > 0.01 &&
+        (unresolvedNote == null || unresolvedNote.trim().isEmpty)) {
+      return 'Buy-ins and cash-outs do not match. Correct the records or add a note explaining the difference before completing.';
+    }
     _cashSession = session.copyWith(
       isCompleted: true,
-      unresolvedNote: unresolvedNote,
+      unresolvedNote: (unresolvedNote == null || unresolvedNote.trim().isEmpty)
+          ? null
+          : unresolvedNote.trim(),
     );
     _cashHistory = [_cashSession!, ..._cashHistory];
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     final gid = _currentGroupId ?? _currentGame?.groupId;
     final uid = _repo.currentUid;
     if (_backendUp && gid != null && uid != null) {
@@ -267,12 +273,13 @@ extension AppProviderCodesCash on AppProvider {
               (Object e) => debugPrint('saveCashSession failed: $e')));
     }
     clearCashSession();
+    return null;
   }
 
   /// Discards the current cash session so a fresh game can be started.
   void clearCashSession() {
     _cashSession = null;
     RecoveryService.clearCashSession();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }

@@ -596,16 +596,22 @@ class FirebaseRepository {
   /// [groupName] and [groupIcon] are used to populate the user's mirror index;
   /// they come from the joinCodes doc so this method never reads groups/{gid}.
   Future<String?> joinGroup(String gid, AppUser user,
-      {String groupName = '', String groupIcon = '♠️'}) async {
+      {String groupName = '', String groupIcon = '??'}) async {
+    final memberRef = _db.collection('groups').doc(gid).collection('members').doc(user.id);
+    final snap = await memberRef.get();
+    
     final batch = _db.batch();
-    batch.set(
-        _db.collection('groups').doc(gid).collection('members').doc(user.id),
-        {
-          'name': user.name,
-          'role': 'member',
-          'joinedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true));
+    if (snap.exists) {
+      batch.set(memberRef, {'name': user.name}, SetOptions(merge: true));
+    } else {
+      batch.set(
+          memberRef,
+          {
+            'name': user.name,
+            'role': 'member',
+            'joinedAt': FieldValue.serverTimestamp(),
+          });
+    }
     batch.set(
         userGroupIndexRef(user.id, gid),
         GroupMembership(
@@ -937,9 +943,18 @@ class FirebaseRepository {
     return controller.stream;
   }
 
-  Future<void> sendGroupChatMessage(String gid, ChatMessage msg) => _db
-      .collection('groups').doc(gid).collection('chat').doc(msg.id)
-      .set(chatMessageToMap(msg));
+  Future<void> sendGroupChatMessage(String gid, ChatMessage msg) async {
+    final batch = _db.batch();
+    batch.set(
+      _db.collection('groups').doc(gid).collection('chat').doc(msg.id),
+      chatMessageToMap(msg),
+    );
+    batch.set(
+      _db.collection('rate_limits').doc('chat-${msg.authorId}'),
+      {'time': FieldValue.serverTimestamp()},
+    );
+    await batch.commit();
+  }
 
   Future<void> markChatMessageDeleted(String gid, String msgId) => _db
       .collection('groups').doc(gid).collection('chat').doc(msgId)
@@ -958,8 +973,18 @@ class FirebaseRepository {
       _gameChatCol(gid, gameId).snapshots().map((s) =>
           [for (final d in s.docs) chatMessageFromMap(d.data())]);
 
-  Future<void> sendGameChatMessage(String gid, String gameId, ChatMessage msg) =>
-      _gameChatCol(gid, gameId).doc(msg.id).set(chatMessageToMap(msg));
+  Future<void> sendGameChatMessage(String gid, String gameId, ChatMessage msg) async {
+    final batch = _db.batch();
+    batch.set(
+      _gameChatCol(gid, gameId).doc(msg.id),
+      chatMessageToMap(msg),
+    );
+    batch.set(
+      _db.collection('rate_limits').doc('chat-${msg.authorId}'),
+      {'time': FieldValue.serverTimestamp()},
+    );
+    await batch.commit();
+  }
 
   Future<void> markGameChatMessageDeleted(
           String gid, String gameId, String msgId) =>
@@ -971,7 +996,43 @@ class FirebaseRepository {
       .set(pollToMap(poll));
 
   // ── Games ──────────────────────────────────────────────────────────────────
-  Future<void> saveGame(LiveGame game, {String? viewerId}) async {
+  /// Atomically declares this device the single active editor for [gameId].
+  ///
+  /// Closes the editor-claim race: two admins opening a fresh game in the same
+  /// millisecond cannot both become the whole-document writer, because only one
+  /// transaction can observe `editorDeviceId` empty/stale and set it. The
+  /// loser reads the freshly-claimed device id and gets an aborted error.
+  /// Returns true when this device won the claim. (The claim timestamp is
+  /// persisted as an ISO string to match `liveGameToFirestoreDoc`'s
+  /// `editorClaimedAt` encoding.)
+  Future<bool> claimGameEditor(String groupId, String gameId) {
+    final ref = _db
+        .collection('groups').doc(groupId)
+        .collection('games').doc(gameId);
+    return _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (snap.exists) {
+        final data = snap.data()!;
+        final serverEditor = data['editorDeviceId'] as String?;
+        final serverClaimed = data['editorClaimedAt'] as String?;
+        if (serverEditor != null && serverEditor.isNotEmpty) {
+          final sameDevice = serverEditor == deviceId;
+          final stale = serverClaimed != null &&
+              DateTime.now().difference(DateTime.tryParse(serverClaimed) ?? DateTime.now())
+                  > const Duration(seconds: 90);
+          // Held by an active editor (or this device already owns it) — no claim.
+          if (sameDevice || !stale) throw Exception('aborted');
+        }
+      }
+      tx.update(ref, {
+        'editorDeviceId': deviceId,
+        'editorClaimedAt': DateTime.now().toIso8601String(),
+      });
+      return true;
+    });
+  }
+
+  Future<void> saveGame(LiveGame game, {String? viewerId, int? expectedRevision}) async {
     final fullDoc = liveGameToFirestoreDoc(game);
     
     // Save private sidecar so admin can recover on a new device. The full
@@ -1036,11 +1097,41 @@ class FirebaseRepository {
       }
       publicDoc['players'] = scrubbed;
     }
-    
-    await _db
+
+    final gameRef = _db
         .collection('groups').doc(game.groupId)
-        .collection('games').doc(game.id)
-        .set(_stamp(publicDoc));
+        .collection('games').doc(game.id);
+
+    await _db.runTransaction((tx) async {
+      if (expectedRevision != null) {
+        final snap = await tx.get(gameRef);
+        if (snap.exists) {
+          final data = snap.data()!;
+          final currentRevision = (data['revision'] as num?)?.toInt() ?? 0;
+          if (currentRevision != expectedRevision) {
+            throw fa.FirebaseException(
+              plugin: 'cloud_firestore',
+              code: 'aborted',
+              message: 'Game revision mismatch. Expected $expectedRevision, got $currentRevision.',
+            );
+          }
+          final serverEditor = data['editorDeviceId'] as String?;
+          final serverClaimed = data['editorClaimedAt'] as Timestamp?;
+          if (serverEditor != null && serverEditor.isNotEmpty && serverEditor != deviceId) {
+            final now = DateTime.now();
+            final isStale = serverClaimed != null && now.difference(serverClaimed.toDate()) > const Duration(seconds: 90);
+            if (!isStale) {
+              throw fa.FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'aborted',
+                message: 'Another admin is actively editing this game.',
+              );
+            }
+          }
+        }
+      }
+      tx.set(gameRef, _stamp(publicDoc));
+    });
   }
 
   /// Saves the admin's undo history to a sidecar subcollection so it travels

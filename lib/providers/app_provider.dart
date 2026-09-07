@@ -205,6 +205,7 @@ class AppProvider extends ChangeNotifier {
   /// False when Firebase never came up (widget tests) — every cloud sync
   /// entry point checks this before touching the repository.
   bool _backendUp = true;
+  bool _disposed = false;
 
   /// Firebase auth session subscription — cancelled on dispose.
   StreamSubscription<fa.User?>? _authSub;
@@ -370,6 +371,7 @@ class AppProvider extends ChangeNotifier {
 
   // ── Cloud sync plumbing ────────────────────────────────────────────────────
   bool _gameSaveInFlight = false;
+  bool _editorClaimInFlight = false;
   LiveGame? _pendingLatestSave;
 
   LiveGame? _lastSavedGame;
@@ -582,9 +584,12 @@ class AppProvider extends ChangeNotifier {
 
   // ── Chat & polls ───────────────────────────────────────────────────────────
   /// Basic spam rate limit (tech spec §14.1): at most
-  /// [_chatBurstLimit] messages per sliding [_chatBurstWindow].
+  /// [_chatBurstLimit] messages per sliding [_chatBurstWindow], and no more
+  /// than one message per [_chatMinSendGap] (aligns the client with the
+  /// server-side ~3750ms `rate_limits` throttle so bursts aren't dropped).
   static const int _chatBurstLimit = 8;
   static const Duration _chatBurstWindow = Duration(seconds: 30);
+  static const Duration _chatMinSendGap = Duration(milliseconds: 4000);
   final Map<String, List<DateTime>> _chatSendTimes = <String, List<DateTime>>{};
 
   // ── Chat unread tracking (Tech Spec §14.1) ────────────────────────────────
@@ -734,7 +739,7 @@ class AppProvider extends ChangeNotifier {
         if (wasOffline && !_isOffline) {
           _hasReconnected = true;
         }
-        notifyListeners();
+        if (!_disposed) notifyListeners();
       });
     } catch (_) {
       // connectivity_plus unavailable (tests) — stay with manual toggle
@@ -744,7 +749,7 @@ class AppProvider extends ChangeNotifier {
   /// Clears the reconnection banner after the user acknowledges it.
   void clearReconnectedBanner() {
     _hasReconnected = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Demo-only toggle: flips the connectivity indicator. While offline every
@@ -753,7 +758,7 @@ class AppProvider extends ChangeNotifier {
   void toggleOffline() {
     _isOffline = !_isOffline;
     if (!_isOffline) _hasReconnected = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   @override
@@ -784,6 +789,8 @@ class AppProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _requestsSub?.cancel();
     _ticker?.cancel();
     _serverTimeRecalibration?.cancel();
     _authSub?.cancel();

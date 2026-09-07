@@ -88,15 +88,17 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
         .firstOrNull;
     if (myPlayer == null && app.guestSession != null) {
       final s = app.guestSession!;
-      myPlayer = game.players
-          .where(
-            (p) =>
-                p.isGuest &&
-                p.name == s.name &&
-                p.inviterId == s.inviterId &&
-                p.guestSlot == s.slot,
-          )
-          .firstOrNull;
+      if (s.gameId == game.id) {
+        myPlayer = game.players
+            .where(
+              (p) =>
+                  p.isGuest &&
+                  p.name == s.name &&
+                  p.inviterId == s.inviterId &&
+                  p.guestSlot == s.slot,
+            )
+            .firstOrNull;
+      }
     }
 
     // Everyone seated at my table, so I know exactly where to sit (07-016).

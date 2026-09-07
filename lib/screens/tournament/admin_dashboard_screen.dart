@@ -212,6 +212,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             _AdminAppTourCard(game: game, onDismiss: () => app.setAppTour(false)),
             const SizedBox(height: AppSpacing.md),
           ],
+          // Persistent guest review entry point: pending/check-in requests stay
+          // actionable at every stage — including while the clock is running —
+          // so a late-join guest who missed the notification is never stranded.
+          if (isAdmin) ...[
+            _PendingReviewBanner(
+              game: game,
+              onReview: () => context.go(RoutePaths.checkIn),
+            ),
+          ],
           // Top bar
           if (device.isMobile) ...[
             Column(
@@ -1438,7 +1447,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         children: [
           Text(
             'Are you sure you want to completely remove ${p.name} from this tournament?\n\n'
-            'This will delete their seat assignment and deduct their starting stack (${app.currentGame!.structure.startingStack} chips) and any rebuys/add-ons from the total chips in play.',
+            'This will delete their seat assignment and deduct their starting stack (${app.currentGame?.structure.startingStack ?? 0} chips) and any rebuys/add-ons from the total chips in play.',
             style: AppTypography.bodySm,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -1696,7 +1705,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '${p.name} purchases the add-on stack (${Formatters.chips(app.currentGame!.structure.addOnStack)} chips). '
+            '${p.name} purchases the add-on stack (${Formatters.chips(app.currentGame?.structure.addOnStack ?? 0)} chips). '
             'The prize pool is recalculated.',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
@@ -2230,6 +2239,38 @@ class _SeatingTab extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _PendingReviewBanner extends StatelessWidget {
+  const _PendingReviewBanner({
+    required this.game,
+    required this.onReview,
+  });
+
+  final LiveGame game;
+  final VoidCallback onReview;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = game.pendingGuests
+        .where((p) => p.name.trim().isNotEmpty)
+        .toList();
+    final unconfirmed =
+        game.players.where((p) => p.checkedIn && !p.confirmed).toList();
+    final total = pending.length + unconfirmed.length;
+    if (total == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: AppAlertBanner(
+        type: AppAlertType.warning,
+        message: total == 1
+            ? 'One guest is waiting for check-in review.'
+            : '$total guests are waiting for check-in review.',
+        actionLabel: 'Review',
+        onAction: onReview,
+      ),
     );
   }
 }

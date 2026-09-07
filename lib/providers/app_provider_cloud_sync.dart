@@ -9,6 +9,19 @@ extension AppProviderCloudSync on AppProvider {
   /// Tracks which active-game document this device mirrors. When the key
   /// changes the old doc subscription is replaced and a fresh baseline is
   /// awaited before further remote adoptions.
+
+  void _forceClaimEditor() {
+    final game = _currentGame;
+    if (game == null || _user == null || !isAdmin) return;
+    if (game.editorDeviceId == _repo.deviceId) return; // already authoritative
+    _currentGame = game.copyWith(
+      editorDeviceId: _repo.deviceId,
+      editorClaimedAt: DateTime.now(),
+    );
+    _lastEditorHeartbeatAt = DateTime.now();
+    addAnnouncement('You have taken control of this live game.', false);
+  }
+
   void _syncGameToCloud() {
     if (!_backendUp) return;
     _claimEditorIfNeeded();
@@ -22,6 +35,11 @@ extension AppProviderCloudSync on AppProvider {
     if (key != _syncedGameKey) {
       _syncedGameKey = key;
       _gameSyncPrimed = false;
+      _requestsSub?.cancel();
+      _requestsSub = null;
+      _gameSaveInFlight = false;
+      _pendingLatestSave = null;
+      _lastSavedGame = null;
       _gameDocSub?.cancel();
       _gameDocSub = null;
       _gameDocRetryTimer?.cancel();
@@ -138,7 +156,7 @@ extension AppProviderCloudSync on AppProvider {
           if (_user == null) break;
           var step = 'saveGame';
           try {
-            await _repo.saveGame(toWrite, viewerId: _user?.id);
+            await _repo.saveGame(toWrite, viewerId: _user?.id, expectedRevision: _lastSavedGame?.revision);
             step = 'publishProjections';
             await _publishProjections(toWrite);
             _lastSavedGame = toWrite;
@@ -146,7 +164,7 @@ extension AppProviderCloudSync on AppProvider {
             saved = true;
             if (lastSaveError != null) {
               lastSaveError = null;
-              notifyListeners();
+              if (!_disposed) notifyListeners();
             }
           } catch (e) {
             lastError = e;
@@ -168,7 +186,7 @@ extension AppProviderCloudSync on AppProvider {
           } else {
             lastSaveError = 'Changes could not be saved. Check your connection.';
           }
-          notifyListeners();
+          if (!_disposed) notifyListeners();
           break;
         }
       } while (_pendingLatestSave != null);
@@ -266,12 +284,32 @@ extension AppProviderCloudSync on AppProvider {
       }
       return;
     }
-    _currentGame = game.copyWith(
-      editorDeviceId: _repo.deviceId,
-      editorClaimedAt: now,
-    );
-    _lastEditorHeartbeatAt = now;
-    _syncGroupGame();
+    final gid = game.groupId.isNotEmpty ? game.groupId : _currentGroupId;
+    if (gid == null) return;
+    // Guard against re-entrant races (two claim calls for overlapping game
+    // states) while a transactional claim is pending.
+    if (_editorClaimInFlight) return;
+    _editorClaimInFlight = true;
+    unawaited(_repo.claimGameEditor(gid, game.id).then((won) {
+      _editorClaimInFlight = false;
+      if (!won) {
+        // Another admin won the race — stay read-only; the remote snapshot
+        // already carries the winning editor device id.
+        debugPrint('claimGameEditor: another admin owns the editor role.');
+        return;
+      }
+      final g = _currentGame;
+      if (g == null || g.id != game.id) return;
+      _currentGame = g.copyWith(
+        editorDeviceId: _repo.deviceId,
+        editorClaimedAt: now,
+      );
+      _lastEditorHeartbeatAt = now;
+      _syncGroupGame();
+    }).catchError((Object e) {
+      _editorClaimInFlight = false;
+      debugPrint('claimGameEditor failed: $e');
+    }));
   }
 
   /// Member/guest-safe field patch: writes dot-paths without touching the
@@ -346,7 +384,7 @@ extension AppProviderCloudSync on AppProvider {
       }
       changed = true;
     }
-    if (changed && !hadError) notifyListeners();
+    if (changed && !hadError) if (!_disposed) notifyListeners();
   }
 
   /// Attaches a queued guest check-in to the authoritative game. Returns an
@@ -457,7 +495,7 @@ extension AppProviderCloudSync on AppProvider {
       _gameChatSub?.cancel();
       _gameChatSub = _repo.gameChatStream(gid, gameId).listen((msgs) {
         _gameChatMessages = msgs;
-        notifyListeners();
+        if (!_disposed) notifyListeners();
       }, onError: (Object e) {
         debugPrint('gameChat stream error: $e');
         if (_gameChatKey != key || attempt >= 8) return;
@@ -552,7 +590,7 @@ extension AppProviderCloudSync on AppProvider {
           }
         });
       }
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     } catch (e) {
       debugPrint('remote game decode failed: $e');
     }

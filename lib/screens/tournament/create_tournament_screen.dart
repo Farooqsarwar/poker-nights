@@ -709,8 +709,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.xxxl,
-            vertical: AppSpacing.xxxl,
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.xxl,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -728,7 +728,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ),
       ),
     );
-    await Future.delayed(const Duration(seconds: 3));
+    await Future.delayed(const Duration(seconds: 6));
     if (!mounted) return;
     Navigator.of(context).pop();
 

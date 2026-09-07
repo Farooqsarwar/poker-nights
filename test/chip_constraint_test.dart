@@ -169,19 +169,28 @@ void main() {
     expect(() => TournamentEngine.validateMaxChipsPerPlayerForTest(25), returnsNormally);
   });
 
-  // ── Depleted inventory still respects cap ─────────────────────────────────
-  test('depleted inventory respects per-color cap', () {
-    final tiny = [
-      _chip('White', 25, 60),  // only 60 chips; floor for 10 players = 6
-      _chip('Red', 100, 30),
+  // ── Duplicate chip values are rejected (spec §12.4) ────────────────────────
+  test('generate() throws DuplicateChipValueException on duplicate values', () {
+    final dup = [
+      _chip('White', 25, 100),
+      _chip('Red', 25, 100),
+      _chip('Blue', 100, 50),
     ];
-    final s = TournamentEngine.generate(_params(players: 8, chips: tiny));
-    for (final entry in s.chipPlan) {
-      expect(
-        entry.count,
-        lessThanOrEqualTo(TournamentEngine.maxChipsPerPlayer),
-        reason: '${entry.color}: count ${entry.count} exceeds cap',
-      );
-    }
+    expect(
+      () => TournamentEngine.generate(_params(players: 10, chips: dup)),
+      throwsA(isA<DuplicateChipValueException>()),
+    );
+  });
+
+  test('generate() succeeds with distinct chip values', () {
+    final distinct = [
+      _chip('White', 25, 4000),
+      _chip('Red', 100, 2000),
+      _chip('Blue', 500, 800),
+    ];
+    expect(
+      () => TournamentEngine.generate(_params(players: 10, chips: distinct)),
+      returnsNormally,
+    );
   });
 }

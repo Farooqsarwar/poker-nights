@@ -50,13 +50,14 @@ extension AppProviderTournament on AppProvider {
     _updatePrizePool();
     _syncGroupGame();
     addAnnouncement('${player.name} has joined the tournament.', true);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Completely removes a player from the active tournament.
   /// Deducts starting stack, rebuys, and add-ons from total chips.
   /// Recalculates prize pool and distribution.
   void removePlayer(String playerId) {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     if (_currentGame == null) return;
     _pushUndo();
@@ -95,7 +96,7 @@ extension AppProviderTournament on AppProvider {
           .catchError((_) {});
     }
     addAnnouncement('${p.name} has been removed from the tournament.', true);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Finds the table with the fewest active players and its first free seat.
@@ -158,14 +159,16 @@ extension AppProviderTournament on AppProvider {
     );
     final totalAddOns = game.players.where((p) => p.hasAddOn).length;
 
-    final koTotal = s.koEnabled ? (confirmedCount + totalReEntries) * s.koAmount : 0;
-    
-    final grossEligible =
-        (confirmedCount * s.buyIn) +
-        (totalRebuys * s.effectiveRebuyCost) +
-        (totalReEntries * s.buyIn) +
-        (totalAddOns * (s.addOn ? s.effectiveAddOnCost : 0)) -
-        koTotal;
+    final grossEligible = TournamentEngine.grossEligibleFor(
+      confirmedCount: confirmedCount,
+      buyIn: s.buyIn,
+      totalRebuys: totalRebuys,
+      effectiveRebuyCost: s.effectiveRebuyCost,
+      totalReEntries: totalReEntries,
+      addOnEnabled: s.addOn,
+      totalAddOns: totalAddOns,
+      effectiveAddOnCost: s.effectiveAddOnCost,
+    );
 
     // Delegate the organizer-cut and prize-split maths to the shared helper in
     // TournamentEngine so the rules stay consistent everywhere.
@@ -192,6 +195,7 @@ extension AppProviderTournament on AppProvider {
 
   /// Manually overrides the number of paid places and recalculates prizes.
   void overridePaidPlaces(int? count) {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     if (_currentGame == null) return;
     _pushUndo();
@@ -203,7 +207,7 @@ extension AppProviderTournament on AppProvider {
       'structure_edit',
       'Paid places overridden to ${count ?? 'auto'}',
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Orders players so guests are placed immediately after (together) or far
@@ -239,6 +243,7 @@ extension AppProviderTournament on AppProvider {
   }
 
   void acceptSpeedRecommendation({SpeedRecommendation? rec}) {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     final game = _currentGame;
     if (game == null) return;
@@ -366,7 +371,7 @@ extension AppProviderTournament on AppProvider {
       ),
     );
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   TournamentStructure _structureWithLevels(
@@ -409,6 +414,7 @@ extension AppProviderTournament on AppProvider {
 
   /// Admin has reviewed the generated structure (30-minute estimate).
   void confirmStructure() {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     final game = _currentGame;
     if (game == null) return;
@@ -430,7 +436,7 @@ extension AppProviderTournament on AppProvider {
       ),
     );
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Generates (or regenerates) the structure estimate from the inputs the
@@ -442,6 +448,7 @@ extension AppProviderTournament on AppProvider {
   void generateFinalStructure(int confirmedCount, {bool force = false}) {
     final game = _currentGame;
     if (game == null) return;
+    _forceClaimEditor();
     _pushUndo();
     // Check-in opens with nobody checked in yet, so `confirmedCount` is 0 at
     // that moment. A 0-player structure is meaningless (and used to divide by
@@ -488,7 +495,7 @@ extension AppProviderTournament on AppProvider {
       'structure_estimate',
       'AI generated the structure estimate for $count expected players.',
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void recalculateStructure() {
@@ -853,6 +860,7 @@ extension AppProviderTournament on AppProvider {
 
   /// Updates the payout prizes (for custom deals/chops before finalizing results).
   void updatePrizes(List<Prize> customPrizes) {
+    _forceClaimEditor();
     if (!_isGameAuthority) return;
     if (_currentGame == null) return;
     _pushUndo();
@@ -862,10 +870,11 @@ extension AppProviderTournament on AppProvider {
       ),
     );
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   bool recordFinishOrder(List<String> order) {
+    _forceClaimEditor();
     final game = _currentGame;
     if (game == null) return false;
     final error = _validateCompletionState(game, order);
@@ -883,7 +892,7 @@ extension AppProviderTournament on AppProvider {
           timestamp: DateTime.now(),
         ),
       );
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       return false;
     }
     _completionError = null;
@@ -932,7 +941,7 @@ extension AppProviderTournament on AppProvider {
     if (speakOutLoud && _voiceEnabled && thisDeviceIsAudioMaster) {
       VoiceService.instance.speak(text);
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Appends a new audit record to the history. This history is never deleted.
@@ -948,6 +957,6 @@ extension AppProviderTournament on AppProvider {
     _currentGame = _currentGame!.copyWith(
       auditHistory: [..._currentGame!.auditHistory, record],
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }

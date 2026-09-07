@@ -44,7 +44,7 @@ extension AppProviderTimer on AppProvider {
           );
           addAnnouncement('Tournament has reached the end of the structure.', true);
           _syncGroupGame();
-          notifyListeners();
+          if (!_disposed) notifyListeners();
         } else {
           nextLevel();
         }
@@ -62,7 +62,7 @@ extension AppProviderTimer on AppProvider {
         _currentGame = _currentGame!.copyWith(secondsRemaining: remaining);
       }
       _isTickUpdate = true;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       _isTickUpdate = false;
     });
   }
@@ -130,7 +130,7 @@ extension AppProviderTimer on AppProvider {
     }
     if (rec == game.speedRecommendation) return;
     _currentGame = game.copyWith(speedRecommendation: rec);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Manually forces recalculation of finish time/speed recommendations.
@@ -180,6 +180,7 @@ extension AppProviderTimer on AppProvider {
   }
 
   void startTimer() {
+    _forceClaimEditor();
     // Client rule: no guessed player count at setup — the AI finalises the
     // stacks/blinds/levels right now, from the actual final headcount
     // (checked-in players if any confirmed, otherwise final RSVPs), the
@@ -227,6 +228,7 @@ extension AppProviderTimer on AppProvider {
   }
 
   void pauseTimer() {
+    _forceClaimEditor();
     _currentGame = _currentGame!.copyWith(
       timerRunning: false,
       status: LiveGameStatus.paused,
@@ -235,10 +237,11 @@ extension AppProviderTimer on AppProvider {
       clearLevelEndTime: true,
     );
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void resumeTimer() {
+    _forceClaimEditor();
     if (_currentGame?.status == LiveGameStatus.completed || 
         _currentGame?.status == LiveGameStatus.cancelled) {
       return;
@@ -251,7 +254,7 @@ extension AppProviderTimer on AppProvider {
       ),
     );
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void nextLevel({String? idempotencyKey}) {
@@ -346,7 +349,7 @@ extension AppProviderTimer on AppProvider {
       );
     }
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Rewinds to the previous level (spec §12 "Previous" control). The clock
@@ -377,7 +380,7 @@ extension AppProviderTimer on AppProvider {
       true,
     );
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Restarts the clock for the current level (spec §12: requires
@@ -414,6 +417,6 @@ extension AppProviderTimer on AppProvider {
       'Restarted level ${game.currentLevel} (blinds ${level?.sb ?? 0}/${level?.bb ?? 0}).',
     );
     addAnnouncement('Level ${game.currentLevel} restarted.', true);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }

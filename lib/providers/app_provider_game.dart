@@ -6,7 +6,13 @@ part of 'app_provider.dart';
 extension AppProviderGame on AppProvider {
   LiveGame? get currentGame => _currentGame;
 
-  bool get canUndo => _undoStack.isNotEmpty;
+  bool get canUndo {
+    if (_undoStack.isEmpty || _currentGame == null) return false;
+    final lastState = _undoStack.last;
+    if (lastState == null) return false;
+    // Undo is unsafe if a subsequent action modified the game state outside the stack
+    return _currentGame!.revision == lastState.revision + 1;
+  }
 
   /// Human-readable description of the most recent reversible action, used
   /// by the Undo confirmation ("Undo shows the action that will be reversed"
@@ -42,7 +48,7 @@ extension AppProviderGame on AppProvider {
     // Re-apply the member's not-yet-acked RSVP / check-in so navigating into a
     // game never shows a stale bundle copy that drops a pending selection.
     _currentGame = _withPendingCheckInOverlay(_withOwnRsvpOverlay(game));
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     // Asynchronously load private sidecar data and undo stack if admin
     if (isAdmin) {
@@ -61,7 +67,7 @@ extension AppProviderGame on AppProvider {
               organizerAmount: (privateData['organizerAmount'] as num?)?.toInt() ?? _currentGame!.structure.organizerAmount,
             ),
           );
-          notifyListeners();
+          if (!_disposed) notifyListeners();
         }
       }).catchError((Object e) {
         debugPrint('Failed to load private sidecar: $e');
@@ -72,7 +78,7 @@ extension AppProviderGame on AppProvider {
           if (_currentGame?.id == game.id) {
             _undoStack.clear();
             _undoStack.addAll(stack);
-            notifyListeners();
+            if (!_disposed) notifyListeners();
           }
         }).catchError((Object e) {
           debugPrint('Failed to load undo stack: $e');
@@ -182,7 +188,7 @@ extension AppProviderGame on AppProvider {
     _clearUndoStack();
     _currentGame = game;
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     return game;
   }
 
@@ -203,6 +209,7 @@ extension AppProviderGame on AppProvider {
   }
 
   void updateGameStatus(LiveGameStatus status) {
+    _forceClaimEditor();
     final wasPublished = _currentGame?.status == LiveGameStatus.published;
     _currentGame = _currentGame!.copyWith(status: status);
     // Client feedback (07-018): inside the 30-minute window before start the
@@ -223,13 +230,15 @@ extension AppProviderGame on AppProvider {
       );
     }
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Cancels the tournament. Requires a reason: it is recorded in the audit
   /// log and members are notified (spec §12, checklist 10-042). Blocking —
   /// once cancelled the game cannot be started again.
   void cancelGame(String reason) {
+    if (!isAdmin) return;
+    _forceClaimEditor();
     final game = _currentGame;
     if (game == null || _user == null) return;
     if (game.status == LiveGameStatus.completed ||
@@ -259,7 +268,7 @@ extension AppProviderGame on AppProvider {
       ),
     );
     addAnnouncement('${game.settings.name} has been cancelled.', true);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Publishes the tournament (checklist §4.3): the game opens for RSVP, a
@@ -340,7 +349,7 @@ extension AppProviderGame on AppProvider {
       ),
     );
     addAnnouncement('${game.settings.name} is now open for RSVP.', true);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Admin edits an already-created event's details. Records an audit entry,
@@ -471,7 +480,7 @@ extension AppProviderGame on AppProvider {
       );
     }
     addAnnouncement('Event details updated.', false);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Reposts the pinned event card after a published-event edit (User Flow
@@ -537,14 +546,16 @@ extension AppProviderGame on AppProvider {
     final reEntries = game.players.fold<int>(0, (sum, p) => sum + p.reEntries);
     final addOns = game.players.where((p) => p.hasAddOn).length + addOnCount;
     
-    final koTotal = s.koEnabled ? (confirmedCount + reEntries) * s.koAmount : 0;
-    
-    final gross =
-        (confirmedCount * s.buyIn) +
-        (rebuys * s.effectiveRebuyCost) +
-        (reEntries * s.buyIn) +
-        (addOns * (s.addOn ? s.effectiveAddOnCost : 0)) -
-        koTotal;
+    final gross = TournamentEngine.grossEligibleFor(
+      confirmedCount: confirmedCount,
+      buyIn: s.buyIn,
+      totalRebuys: rebuys,
+      effectiveRebuyCost: s.effectiveRebuyCost,
+      totalReEntries: reEntries,
+      addOnEnabled: s.addOn,
+      totalAddOns: addOns,
+      effectiveAddOnCost: s.effectiveAddOnCost,
+    );
     final int roundingUnit = TournamentEngine.roundingUnitFor(s.buyIn);
 
     return TournamentEngine.recalculatePrizes(
@@ -587,6 +598,6 @@ extension AppProviderGame on AppProvider {
         timestamp: DateTime.now(),
       ),
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }

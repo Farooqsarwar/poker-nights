@@ -28,7 +28,7 @@ class OneSignalSender {
   // server. Must be provided at build time with:
   //   --dart-define=ONESIGNAL_REST_API_KEY=...
   // Never hardcode the key in source so it cannot be committed.
-  static const String _apiKey = ''; // Stripped for security
+  static const String _apiKey = String.fromEnvironment('ONESIGNAL_REST_API_KEY', defaultValue: '');
 
   /// OneSignal's newer keys (the `os_v2_app_` prefix) authenticate with the
   /// `Key` scheme; legacy hex keys use `Basic`.

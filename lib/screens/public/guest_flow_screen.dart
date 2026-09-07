@@ -65,7 +65,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       _selectedSlot = session.slot;
       _nameController.text = session.name;
       final guest = _matchGuest(game, session);
-      _step = _routeAfterBooking(game, guest);
+      _step = _routeAfterBooking(game, guest, sessionPending: true);
     } else {
       // No saved session: show the event details first, then claim.
       _step = game == null ? _GuestStep.enterCode : _GuestStep.eventIntro;
@@ -76,18 +76,27 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   /// the confirmed seat view (from where they enter the live match) when the
   /// game is already live, or the "come back later" screen when it hasn't
   /// started yet.
-  static _GuestStep _routeAfterBooking(LiveGame game, Player? guest) {
+  static _GuestStep _routeAfterBooking(LiveGame game, Player? guest,
+      {bool sessionPending = false}) {
     if (game.status == LiveGameStatus.completed) {
       return _GuestStep.completed;
     }
-    
+    // sessionPending: this device holds a persisted booking for this game, but
+    // the row is not in the projection yet (the request is still travelling to
+    // the host, or the game doc predates the host consuming it). The guest
+    // cannot be claimed either way — keep them waiting rather than bounce them
+    // to "confirmed" or the entry screen. A session with no row on a proposal
+    // that is genuinely over still falls through to confirmed/notLive below.
+    final preStart = game.status.index >= LiveGameStatus.checkin.index &&
+        game.status.index <= LiveGameStatus.finaltable.index;
     if (guest != null && !guest.confirmed) {
       // Check-in opens at LiveGameStatus.checkin. Once open, unconfirmed guests
       // wait for admin approval instead of being told to come back later.
-      if (game.status.index >= LiveGameStatus.checkin.index &&
-          game.status.index <= LiveGameStatus.finaltable.index) {
+      if (preStart) {
         return _GuestStep.waiting;
       }
+    } else if (guest == null && sessionPending && preStart) {
+      return _GuestStep.waiting;
     }
     return game.status.isActiveLive
         ? _GuestStep.confirmed
@@ -107,6 +116,16 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   /// Finds the guest in [game]'s player list that matches the stored session.
   static Player? _matchGuest(LiveGame game, GuestSession session) {
     for (final p in game.players) {
+      if (p.isGuest &&
+          p.inviterId == session.inviterId &&
+          p.guestSlot == session.slot &&
+          p.name.trim() == session.name.trim()) {
+        return p;
+      }
+    }
+    // A pending booking may live in pendingGuests before the host has consumed
+    // it (and the guest projection now carries it), so re-identify there too.
+    for (final p in game.pendingGuests) {
       if (p.isGuest &&
           p.inviterId == session.inviterId &&
           p.guestSlot == session.slot &&
@@ -165,7 +184,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         final guest = _matchGuest(game, session);
         setState(() {
           _codeError = null;
-          _step = _routeAfterBooking(game, guest);
+          _step = _routeAfterBooking(game, guest, sessionPending: true);
         });
       } else {
         setState(() {

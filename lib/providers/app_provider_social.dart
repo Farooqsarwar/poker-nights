@@ -4,12 +4,18 @@
 part of 'app_provider.dart';
 
 extension AppProviderSocial on AppProvider {
-  /// True when [userId] has exceeded the chat burst limit right now.
+  /// True when [userId] has exceeded the chat burst limit right now. The
+  /// client matches the server-side throttle: at least
+  /// [_chatMinSendGap] between messages (server enforces ~3750ms on the
+  /// `rate_limits/chat-$uid` doc), so a compliant client never submits a burst
+  /// the server would reject and silently drop.
   bool _chatRateLimited(String userId) {
     final now = DateTime.now();
     final times = _chatSendTimes.putIfAbsent(userId, () => <DateTime>[]);
     times.removeWhere((t) => now.difference(t) > AppProvider._chatBurstWindow);
-    return times.length >= AppProvider._chatBurstLimit;
+    if (times.isEmpty) return false;
+    if (times.length >= AppProvider._chatBurstLimit) return true;
+    return now.difference(times.last) < AppProvider._chatMinSendGap;
   }
 
   void _recordChatSend(String userId) {
@@ -21,7 +27,7 @@ extension AppProviderSocial on AppProvider {
   /// conversation becomes visible.
   void markChatRead(String scopeKey) {
     _chatLastRead[scopeKey] = DateTime.now();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Unread count over one chat list: non-deleted messages authored by
@@ -108,7 +114,7 @@ extension AppProviderSocial on AppProvider {
       ),
     );
 
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     return null;
   }
 
@@ -169,7 +175,7 @@ extension AppProviderSocial on AppProvider {
           .map((m) => m.id == msgId ? m.copyWith(deleted: true) : m)
           .toList();
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     if (!_backendUp) return;
     final ctx = _cloudGameContext;
     if (inGameChat && ctx != null) {
@@ -230,7 +236,7 @@ extension AppProviderSocial on AppProvider {
         timestamp: DateTime.now(),
       ),
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     return null;
   }
 
@@ -269,7 +275,7 @@ extension AppProviderSocial on AppProvider {
       ),
     );
     if (updated != null) _persistPoll(updated!);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Admin closes a poll so it no longer accepts votes (checklist 08-022/08-023).
@@ -335,7 +341,7 @@ extension AppProviderSocial on AppProvider {
         );
       }
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Whether the RSVP change deadline (1 hour before scheduled start,
@@ -466,7 +472,7 @@ extension AppProviderSocial on AppProvider {
             .toList(),
       ),
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void _maybeReassertOwnCheckIn(LiveGame remote, String? writerId) {
@@ -563,7 +569,7 @@ extension AppProviderSocial on AppProvider {
           await _repo.patchGame(gid, gameId, dotPaths);
           if (lastRsvpError != null) {
             lastRsvpError = null;
-            notifyListeners();
+            if (!_disposed) notifyListeners();
           }
           if (g != null) {
             unawaited(_publishProjections(g).catchError((Object _) {}));
@@ -601,7 +607,7 @@ extension AppProviderSocial on AppProvider {
       }
       _pendingOwnRsvp.remove(gameId);
       _rsvpReassertCount.remove(gameId);
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }());
   }
 
@@ -807,7 +813,7 @@ extension AppProviderSocial on AppProvider {
       '${pending.length == 1 ? '' : 's'} without an RSVP.',
       false,
     );
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
 }

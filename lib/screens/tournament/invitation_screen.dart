@@ -39,6 +39,7 @@ class InvitationScreen extends StatefulWidget {
 
 class _InvitationScreenState extends State<InvitationScreen> {
   bool _copied = false;
+  bool _tourShown = false;
 
   Future<void> _copyLink(LiveGame game) async {
     await Clipboard.setData(
@@ -49,6 +50,42 @@ class _InvitationScreenState extends State<InvitationScreen> {
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) setState(() => _copied = false);
     });
+  }
+
+
+  void _showAdminTutorialDialog(BuildContext context) {
+    showAppModal(
+      context: context,
+      title: 'Next Steps',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Your tournament is created! Here is what to do next.',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Text('1. Group members have been notified and can RSVP.'),
+          const Text('2. Share the 4-digit code below with any guests.'),
+          const Text('3. When you are ready to start seating players, tap "Open Check-in".'),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(
+            fullWidth: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextButton(
+            onPressed: () {
+              context.read<AppProvider>().setAppTour(false);
+              Navigator.of(context).pop();
+            },
+            child: const Text('Don\'t show this again'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _confirmCancelGame(
@@ -74,6 +111,20 @@ class _InvitationScreenState extends State<InvitationScreen> {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
     final user = app.user;
+
+    if (app.isAdmin &&
+        app.showAppTour &&
+        game != null &&
+        (game.status == LiveGameStatus.draft ||
+            game.status == LiveGameStatus.published ||
+            game.status == LiveGameStatus.checkin ||
+            game.status == LiveGameStatus.ready) &&
+        !_tourShown) {
+      _tourShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showAdminTutorialDialog(context);
+      });
+    }
 
     if (game == null) {
       return Center(

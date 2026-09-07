@@ -332,10 +332,18 @@ void main() {
       expect(guest.structure.prizePool, 150);
     });
 
-    test('drops chat, audit history and pending guests', () {
+    test('drops chat and audit history but keeps pending guests for re-identification', () {
       expect(guest.chat, isEmpty);
       expect(guest.auditHistory, isEmpty);
-      expect(guest.pendingGuests, isEmpty);
+      // The guest role keeps pendingGuests so a guest who refreshes while
+      // waiting for admin approval can re-identify their own booking.
+      expect(guest.pendingGuests.length, 1);
+      expect(guest.pendingGuests.first.id, 'pending-g1');
+      expect(guest.pendingGuests.first.name, 'Walk-in Guest');
+      // Private counters stay scrubbed in pendingGuests too.
+      expect(guest.pendingGuests.first.rebuys, 0);
+      expect(guest.pendingGuests.first.knockouts, 0);
+      expect(guest.pendingGuests.first.hasAddOn, isFalse);
     });
 
     test('zeroes every player\u2019s private counters (no viewer exemption)', () {

@@ -45,12 +45,12 @@ extension AppProviderGroups on AppProvider {
       if (gid == null) return false;
       _subscribeUserData(); // refresh the index with the new row promptly
       _selectGroup(gid);
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       // Wait for the group's live bundle (members, games, chat, polls,
       // settings) so the caller navigates into a fully-populated hub that then
       // keeps updating in real time — not an empty shell.
       await groupReady.timeout(const Duration(seconds: 10), onTimeout: () {});
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       return true;
     } catch (e) {
       debugPrint('joinGroup failed: $e');
@@ -83,14 +83,14 @@ extension AppProviderGroups on AppProvider {
     }
     _subscribeUserData();
     _selectGroup(group.id);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     return group;
   }
 
   /// Pins/unpins a group so it floats to the top of the sidebar's group list.
   void togglePinGroup(Group group) {
     _setGroup(group.copyWith(pinned: !group.pinned));
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
       unawaited(_repo
@@ -106,20 +106,44 @@ extension AppProviderGroups on AppProvider {
   void setGroupRole(String userId, GroupRole role) {
     if (_user?.id != _currentGroup.ownerId) return; // Only owner can do this
     if (userId == _currentGroup.ownerId) return; // Cannot change owner's role
+    final demoted = <String>[];
     final members = _currentGroup.members.map((m) {
-      if (m.id != userId) return m;
-      return m.copyWith(
-        isAdmin: role == GroupRole.admin,
-        isCoAdmin: role == GroupRole.coAdmin,
-      );
+      if (m.id == userId) {
+        return m.copyWith(
+          isAdmin: role == GroupRole.admin,
+          isCoAdmin: role == GroupRole.coAdmin,
+        );
+      }
+      if (role == GroupRole.admin &&
+          m.isAdmin &&
+          m.id != _currentGroup.ownerId) {
+        demoted.add(m.id);
+        return m.copyWith(isAdmin: false, isCoAdmin: true);
+      }
+      return m;
     }).toList();
     _setGroup(_currentGroup.copyWith(members: members));
-    notifyListeners();
+    if (demoted.isNotEmpty) {
+      final promoted = _currentGroup.members.firstWhere((m) => m.id == userId);
+      final former = _currentGroup.members.firstWhere(
+          (m) => m.id == demoted.first);
+      addAnnouncement(
+        '${former.name} is no longer an admin — ${promoted.name} is now the group admin.',
+        true,
+      );
+    }
+    if (!_disposed) notifyListeners();
     if (_backendUp) {
       unawaited(_repo
           .setMemberRole(_currentGroup.id, userId, role.storageValue)
           .catchError(
               (Object e) => debugPrint('setMemberRole failed: $e')));
+      for (final id in demoted) {
+        unawaited(_repo
+            .setMemberRole(_currentGroup.id, id, GroupRole.coAdmin.storageValue)
+            .catchError(
+                (Object e) => debugPrint('setMemberRole (demote) failed: $e')));
+      }
     }
   }
 
@@ -168,7 +192,7 @@ extension AppProviderGroups on AppProvider {
   void updateGroupTableSettings(TableSettings settings) {
     if (_user?.id != _currentGroup.ownerId) return;
     _setGroup(_currentGroup.copyWith(tableSettings: settings));
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     if (_backendUp) {
       unawaited(_repo
           .updateGroupTableSettings(_currentGroup.id, settings)
@@ -189,7 +213,7 @@ extension AppProviderGroups on AppProvider {
       ),
     );
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Owner-only: removes a member from the current group.
@@ -199,7 +223,7 @@ extension AppProviderGroups on AppProvider {
     final members =
         _currentGroup.members.where((m) => m.id != userId).toList();
     _setGroup(_currentGroup.copyWith(members: members));
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     if (_backendUp) {
       unawaited(_repo
           .deleteMember(_currentGroup.id, userId)
@@ -255,6 +279,6 @@ extension AppProviderGroups on AppProvider {
     } else {
       _currentGroup = AppProvider._kEmptyGroup;
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }

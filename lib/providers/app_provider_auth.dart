@@ -18,7 +18,7 @@ extension AppProviderAuth on AppProvider {
       _teardownUserData();
       if (_user != null) {
         _user = null;
-        notifyListeners();
+        if (!_disposed) notifyListeners();
       }
       return;
     }
@@ -31,7 +31,7 @@ extension AppProviderAuth on AppProvider {
     _authReady = true;
     _calibrateServerTime();
     // Re-run the router guard now that both `ready` and `authed` are settled.
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Runs [op], retrying on any failure with a short back-off. Right after
@@ -118,7 +118,7 @@ extension AppProviderAuth on AppProvider {
               knockouts: 0,
             ),
           );
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       await _loadUserPrefs(fbUser.uid);
       // Subscribe only now — after the retried reads confirm the token works —
       // so the .snapshots() streams don't immediately error out (a Firestore
@@ -137,7 +137,12 @@ extension AppProviderAuth on AppProvider {
       final voice = prefs['voiceEnabled'];
       if (voice is bool) _voiceEnabled = voice;
       final showTour = prefs['showAppTour'];
-      if (showTour is bool) _showAppTour = showTour;
+      if (showTour is bool) {
+        _showAppTour = showTour;
+      } else {
+        _showAppTour = true;
+        _persistPref('showAppTour', true);
+      }
       final savedPendingCheckIn = prefs['pendingCheckIn'];
       if (savedPendingCheckIn is Map) {
         _pendingCheckIn.addAll(savedPendingCheckIn.cast<String, String>());
@@ -169,7 +174,7 @@ extension AppProviderAuth on AppProvider {
           if (v is bool) _outboxPrimed[gid] = v;
         }
       }
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     } catch (e) {
       debugPrint('loadUserPrefs failed: $e');
     }
@@ -215,7 +220,7 @@ extension AppProviderAuth on AppProvider {
           await _retryRead(
               () => _repo.updateUserProfile(cred.user!.uid, name: name));
           _user = _user!.copyWith(name: name);
-          notifyListeners();
+          if (!_disposed) notifyListeners();
         }
       }
       await userDataReady.timeout(const Duration(seconds: 8), onTimeout: () {});
@@ -341,6 +346,8 @@ extension AppProviderAuth on AppProvider {
     // OneSignal external-id detach happens automatically via the auth-state
     // listener in PushService — no stale subscriptions linger on the account.
     await _repo.signOut();
+    RecoveryService.clearGuestSession();
+    _guestSession = null;
   }
 
   /// Deletes the signed-in account (profile doc, membership mirrors, auth
@@ -366,7 +373,7 @@ extension AppProviderAuth on AppProvider {
     RecoveryService.clearGame();
     RecoveryService.clearCashSession();
     RecoveryService.clearGuestSession();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     return null;
   }
 
@@ -374,6 +381,6 @@ extension AppProviderAuth on AppProvider {
 
   void setGuestCode(String code) {
     _guestCode = code;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }

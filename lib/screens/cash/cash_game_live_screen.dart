@@ -142,9 +142,15 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   }
 
   void _endGame(AppProvider app) {
-    app.endCashGame(
+    final error = app.endCashGame(
       unresolvedNote: _forceEnd ? _unresolvedNote.text.trim() : null,
     );
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: AppColors.destructive),
+      );
+      return;
+    }
     setState(() => _showEndModal = false);
     context.go(RoutePaths.history);
   }

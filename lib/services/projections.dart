@@ -76,6 +76,18 @@ LiveGame projectionFor(
       ? game.addOnRequests.where((id) => id == viewerId).toList()
       : const <String>[];
 
+  // 15: Pending guest requests are kept for the guest role so a guest who
+  // refreshes while waiting for admin approval can re-identify their own
+  // (still pending) booking instead of being bounced to the entry screen.
+  // Members see the pending row through players; TV needs it never. Private
+  // counters are scrubbed exactly like the main players list.
+  final publicPendingGuests = role == GameProjectionRole.guest
+      ? [
+          for (final p in game.pendingGuests)
+            p.copyWith(rebuys: 0, reEntries: 0, hasAddOn: false, knockouts: 0),
+        ]
+      : const <Player>[];
+
   return game.copyWith(
     settings: publicSettings,
     structure: game.structure.copyWith(
@@ -88,7 +100,7 @@ LiveGame projectionFor(
     players: publicPlayers,
     chat: viewerCanSeeChat ? game.chat : const <ChatMessage>[],
     auditHistory: const <AuditRecord>[], // 14
-    pendingGuests: const <Player>[], // 15
+    pendingGuests: publicPendingGuests,
     rebuyRequests: publicRebuyRequests,
     addOnRequests: publicAddOnRequests,
   );

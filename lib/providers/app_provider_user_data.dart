@@ -58,7 +58,7 @@ extension AppProviderUserData on AppProvider {
       } else {
         bootstrapDone();
       }
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }, onError: (Object e) {
       debugPrint('groupsIndex stream error: $e');
       bootstrapDone();
@@ -69,7 +69,7 @@ extension AppProviderUserData on AppProvider {
       _presets
         ..clear()
         ..addAll(list);
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     },
         onError: (Object e) => debugPrint('presets stream error: $e'));
 
@@ -78,7 +78,7 @@ extension AppProviderUserData on AppProvider {
       _savedChipSets
         ..clear()
         ..addAll(list);
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     },
         onError: (Object e) => debugPrint('chipSets stream error: $e'));
 
@@ -86,7 +86,7 @@ extension AppProviderUserData on AppProvider {
     _notificationsSub = _repo.notificationsStream(uid).listen((list) {
       _deliverBrowserNotifications(list);
       _notifications = list;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     },
         onError: (Object e) => debugPrint('notifications stream error: $e'));
 
@@ -100,7 +100,7 @@ extension AppProviderUserData on AppProvider {
         _user = user.copyWith(stats: _statsFromResults(rows));
         _pushStatsSummaries();
       }
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     },
         onError: (Object e) => debugPrint('results stream error: $e'));
 
@@ -127,7 +127,7 @@ extension AppProviderUserData on AppProvider {
               (Object e) => debugPrint('remove invite failed: $e')));
         }
       }
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     },
         onError: (Object e) => debugPrint('pendingInvites stream error: $e'));
   }
@@ -194,7 +194,7 @@ extension AppProviderUserData on AppProvider {
       ),
     ];
     _user = _user?.copyWith(stats: _statsFromResults(_myResults));
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// When [game] has settled, records this signed-in player's own result
@@ -304,6 +304,13 @@ extension AppProviderUserData on AppProvider {
     _lastPushedStatsKey = null;
     _seenNotificationIds.clear();
     _notificationsPrimed = false;
+    // Tear down the guest identity on ANY sign-out path (auth-state listener,
+    // session expiry, explicit logout) so the next account — or anonymous
+    // guest — that uses this device never inherits the previous guest's name
+    // (guest-session bleeding). The explicit `logout()` also clears these, but
+    // this covers every other way a session can end.
+    _guestSession = null;
+    RecoveryService.clearGuestSession();
   }
 
   /// Selects a group by id and (re)subscribes its live bundle.
@@ -380,7 +387,7 @@ extension AppProviderUserData on AppProvider {
       for (final finished in g.pastGames) {
         _maybeRecordOwnResult(finished);
       }
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }, onError: (Object e) {
       debugPrint('groupBundle stream error: $e');
       markReady();
@@ -388,7 +395,7 @@ extension AppProviderUserData on AppProvider {
     if (row?.ownerId == _user?.id) {
       _cashSub = _repo.completedCashSessionsStream(gid).listen((list) {
         _cashHistory = list;
-        notifyListeners();
+        if (!_disposed) notifyListeners();
       }, onError: (Object e) => debugPrint('cashSessions stream error: $e'));
     }
   }
@@ -499,7 +506,7 @@ extension AppProviderUserData on AppProvider {
         final i = _groups.indexWhere((x) => x.id == g.id);
         if (i == -1) return;
         _groups = [..._groups]..[i] = _groups[i].copyWith(members: members);
-        notifyListeners();
+        if (!_disposed) notifyListeners();
       }, onError: (Object e) => debugPrint('group members stream error: $e'));
     }
   }
@@ -539,7 +546,7 @@ extension AppProviderUserData on AppProvider {
     if (guest != null) {
       _guestSession = guest;
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// True if the locally recovered game state differs from the "cloud" state.
@@ -578,7 +585,7 @@ extension AppProviderUserData on AppProvider {
       }
     }
     _restoredFromRecovery = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Exposes the snapshot timestamp so the restore prompt can show
@@ -591,20 +598,26 @@ extension AppProviderUserData on AppProvider {
     _restoredFromRecovery = false;
     RecoveryService.clearGame();
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   List<({String id, String name, List<ChipColor> chips})> get savedChipSets =>
       _savedChipSets;
 
   void saveChipSet(String id, String name, List<ChipColor> chips) {
+    final dupValues = chips.map((c) => c.value).toList();
+    if (dupValues.toSet().length != dupValues.length) {
+      throw const DuplicateChipValueException(
+        'Two chip colours cannot share the same value.',
+      );
+    }
     final idx = _savedChipSets.indexWhere((c) => c.id == id);
     if (idx >= 0) {
       _savedChipSets[idx] = (id: id, name: name, chips: chips);
     } else {
       _savedChipSets.add((id: id, name: name, chips: chips));
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null && id != AppProvider.seedChipSet.id) {
       unawaited(_repo.saveChipSet(uid, id, name, chips)
@@ -615,7 +628,7 @@ extension AppProviderUserData on AppProvider {
   void deleteChipSet(String id) {
     if (id == 'cs-default') return; // protect default
     _savedChipSets.removeWhere((c) => c.id == id);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
       unawaited(_repo.deleteChipSet(uid, id)
@@ -633,7 +646,7 @@ extension AppProviderUserData on AppProvider {
     final nextEmail =
         email?.trim().isNotEmpty == true ? email!.trim() : current.email;
     _user = current.copyWith(name: nextName, email: nextEmail);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
       unawaited(_repo.updateUserProfile(uid, name: nextName, email: nextEmail)
@@ -658,7 +671,7 @@ extension AppProviderUserData on AppProvider {
     } else {
       _presets.add(preset);
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
       unawaited(_repo.savePreset(uid, preset)
@@ -668,7 +681,7 @@ extension AppProviderUserData on AppProvider {
 
   void deletePreset(String id) {
     _presets.removeWhere((p) => p.id == id);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
       unawaited(_repo.deletePreset(uid, id)

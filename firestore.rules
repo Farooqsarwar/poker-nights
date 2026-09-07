@@ -67,10 +67,32 @@ service cloud.firestore {
     // around this by diffing the individual player row instead (a flat map
     // of primitives where diff() is reliable).
     function memberPlayersSafe() {
-      let myNew = request.resource.data.get('players', {})[request.auth.uid];
-      let myOld = resource.data.get('players', {})[request.auth.uid];
-      return myOld == null || myNew == null
-          || myNew.diff(myOld).affectedKeys().hasOnly(['rsvp', 'checkedIn', 'confirmed']);
+      let playersNew = request.resource.data.get('players', {});
+      let playersOld = resource.data.get('players', {});
+      let myNew = playersNew.get(request.auth.uid, null);
+      let myOld = playersOld.get(request.auth.uid, null);
+      // Only the caller's own row may change — no other player may be altered,
+      // added or removed by a member (C2 cross-player forgery).
+      let ownRowOnly = playersNew.diff(playersOld)
+          .affectedKeys().hasOnly([request.auth.uid]);
+      // May remove their own row only if it already existed.
+      let ownDeleteOk = myNew != null || myOld == null;
+      // Self-registration: the member's RSVP row is serialised whole via
+      // playerToMap, so keep the key set open but reject any non-default
+      // money/control value (self-confirm / fake rebuys / fake eliminations).
+      let safeCreate = myNew == null || (
+          myNew.get('confirmed', false) == false
+          && myNew.get('checkedIn', false) == false
+          && myNew.get('eliminated', false) == false
+          && myNew.get('hasAddOn', false) == false
+          && myNew.get('rebuys', 0) == 0
+          && myNew.get('reEntries', 0) == 0
+          && myNew.get('knockouts', 0) == 0);
+      // Existing row: members may only change their own RSVP state. check-in
+      // and confirmation are host/admin actions (checkInReq -> admin approve).
+      let ownUpdateSafe = myOld == null
+          || myNew.diff(myOld).affectedKeys().hasOnly(['rsvp']);
+      return ownRowOnly && ownDeleteOk && safeCreate && ownUpdateSafe;
     }
 
     // Guest slots are managed by the member whose +N RSVP created them, and a
@@ -95,8 +117,10 @@ service cloud.firestore {
     function memberRequestArraySafe(key) {
       let reqArr = request.resource.data.get(key, []);
       let oldArr = resource.data.get(key, []);
-      return reqArr.difference(oldArr).hasOnly([request.auth.uid])
-          && oldArr.difference(reqArr).hasOnly([request.auth.uid]);
+      let added = reqArr.removeAll(oldArr);
+        let removed = oldArr.removeAll(reqArr);
+        return (added.size() == 0 || (added.size() == 1 && added[0] == request.auth.uid))
+            && (removed.size() == 0 || (removed.size() == 1 && removed[0] == request.auth.uid));
     }
 
     // A member may update a poll ONLY by writing their own vote
@@ -116,12 +140,19 @@ service cloud.firestore {
     // add-on request arrays. Everything else must stay byte-identical.
     function memberGameEdit() {
       let topDiff = request.resource.data.diff(resource.data);
-      let allowedTop = ['players', 'guestSlots', 'rebuyRequests', 'addOnRequests', 'updatedAt', 'writerId'];
+      let allowedTop = ['players', 'guestSlots', 'rebuyRequests', 'addOnRequests', 'updatedAt'];
       return topDiff.affectedKeys().hasOnly(allowedTop)
           && memberPlayersSafe()
           && memberGuestSlotsSafe()
           && memberRequestArraySafe('rebuyRequests')
           && memberRequestArraySafe('addOnRequests');
+    }
+
+    function publicGameDocSafe() {
+      let data = request.resource.data;
+      let settingsSafe = !data.keys().hasAll(['settings']) || !data.settings.keys().hasAny(['organizerPct']);
+      let structureSafe = !data.keys().hasAll(['structure']) || !data.structure.keys().hasAny(['prizes', 'organizerAmount']);
+      return settingsSafe && structureSafe;
     }
 
     // ---------- users ----------
@@ -227,11 +258,12 @@ service cloud.firestore {
         // Because private financial data is split into the admin sidecar,
         // all members can safely read the main public game document.
         allow read: if isMember(gid);
-        allow create, delete: if isGroupAdmin(gid);
+        allow create: if isGroupAdmin(gid) && publicGameDocSafe();
+        allow delete: if isGroupAdmin(gid);
         // Members may update only their own slice of the game doc (their rsvp,
         // their guest slots, their own id in the rebuy/add-on request arrays);
         // anything else requires admin/owner authority (memberGameEdit).
-        allow update: if isGroupAdmin(gid) || (isMember(gid) && memberGameEdit());
+        allow update: if (isGroupAdmin(gid) && publicGameDocSafe()) || (isMember(gid) && memberGameEdit());
 
         // Sanitized per-member projection maintained by Cloud Functions
         match /memberViews/{userId} {
@@ -251,7 +283,9 @@ service cloud.firestore {
         match /chat/{msgId} {
           allow read: if isMember(gid);
           allow create: if isMember(gid)
-              && request.auth.uid == request.resource.data.authorId;
+              && request.auth.uid == request.resource.data.authorId
+              && existsAfter(path('/databases/' + database + '/documents/rate_limits/chat-' + request.auth.uid))
+              && getAfter(path('/databases/' + database + '/documents/rate_limits/chat-' + request.auth.uid)).data.time == request.time;
           allow update: if isMember(gid)
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleted'])
               && (
@@ -263,13 +297,12 @@ service cloud.firestore {
       }
 
       // Group chat.
-      // Rate limiting: enforced atomically by the sendChatMessage Cloud Function.
-      // This rule only validates ownership; the CF ensures ≤30 messages/minute
-      // and sanitizes server-side (H2).
       match /chat/{msgId} {
         allow read: if isMember(gid);
         allow create: if isMember(gid)
-            && request.auth.uid == request.resource.data.authorId;
+            && request.auth.uid == request.resource.data.authorId
+            && existsAfter(path('/databases/' + database + '/documents/rate_limits/chat-' + request.auth.uid))
+            && getAfter(path('/databases/' + database + '/documents/rate_limits/chat-' + request.auth.uid)).data.time == request.time;
         // Soft-delete ("deleted": true) by author or an admin; no hard deletes.
         allow update: if isMember(gid)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleted'])
@@ -368,8 +401,8 @@ service cloud.firestore {
     // contain no personal data beyond first names and seat assignments.
     match /publicGames/{gameId} {
       allow read: if true;
-      allow create: if signedIn() && (isGroupAdmin(request.resource.data.gid) || isMember(request.resource.data.gid));
-      allow update: if signedIn() && (isGroupAdmin(resource.data.gid) || isMember(resource.data.gid))
+      allow create: if signedIn() && isGroupAdmin(request.resource.data.gid);
+      allow update: if signedIn() && isGroupAdmin(resource.data.gid)
                     && request.resource.data.gid == resource.data.gid;
       allow delete: if signedIn() && isGroupAdmin(resource.data.gid);
     }
@@ -399,11 +432,17 @@ service cloud.firestore {
             && request.resource.data.keys().hasAll(['kind', 'gid'])
             && request.resource.data.gid is string
             && (
-              // Anonymous guest check-in claim — no membership required.
-              request.resource.data.kind == 'guestCheckIn'
-              // Member-driven requests (rebuy/add-on/check-in).
-              || request.resource.data.kind != 'guestCheckIn'
-                 && isMember(request.resource.data.gid)
+              // Anonymous guest check-in claim — no membership required. Doc id
+              // must match the deterministic claim pattern used by
+              // reserveGuestSlotTx and declare the claimant's own uid so the
+              // claim never spoofs another guest or device.
+              (request.resource.data.kind == 'guestCheckIn'
+               && reqId.matches('^guestCheckIn-')
+               && request.resource.data.ownerUid == request.auth.uid)
+              // Member-driven requests (rebuy/add-on/check-in) may use arbitrary
+              // doc ids (.add() or an idempotency key).
+              || (request.resource.data.kind != 'guestCheckIn'
+                 && isMember(request.resource.data.gid))
             );
         allow update: if signedIn()
             && isGroupAdmin(resource.data.gid);
@@ -414,10 +453,19 @@ service cloud.firestore {
 
     // ---------- rate limits ----------
     // Tracks per-user, per-action timestamps for server-side rate limiting.
-    // ONLY Cloud Functions may read or write these documents. Clients must
-    // never be able to reset or spoof their own rate-limit records.
+    // The gap is enforced by requiring the new timestamp to be at least 3750ms
+    // after the old one. Delete is forbidden: allowing `delete` would let a
+    // caller reset its own clock (delete + recreate) and bypass the throttle.
     match /rate_limits/{limitId} {
-      allow read, write: if false; // Cloud Functions only (Admin SDK bypasses rules)
+      // Allow user to write to their own rate limit docs. We enforce that
+      // limitId ends with their uid.
+      allow read: if signedIn() && limitId.matches('.*-' + request.auth.uid);
+      allow create: if signedIn() && limitId.matches('.*-' + request.auth.uid)
+          && request.resource.data.time == request.time;
+      allow update: if signedIn() && limitId.matches('.*-' + request.auth.uid)
+          && request.time.toMillis() >= resource.data.time.toMillis() + 3750
+          && request.resource.data.time == request.time;
+      allow delete: if false;
     }
 
     // ---------- server time calibration (H5) ----------
@@ -425,7 +473,13 @@ service cloud.firestore {
     // timestamp so the timer is derived from an authoritative server clock
     // (Tech §4.3) instead of silently falling back to the device clock.
     match /_meta/{doc} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      // The app calibrates against the shared `serverTime` doc by writing only
+      // the `t` server-timestamp field (non-merge set — first write is a
+      // create). Constrain the write to that single field so a signed-in
+      // client cannot inject arbitrary data into _meta.
+      allow write: if signedIn()
+          && request.resource.data.keys().hasOnly(['t']);
     }
 
     // Deny everything not explicitly matched above.

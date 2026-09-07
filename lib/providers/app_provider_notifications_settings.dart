@@ -17,7 +17,7 @@ extension AppProviderNotificationsSettings on AppProvider {
       if (!granted) {
         _notificationsEnabled = false;
         _persistPref('browserNotify', false);
-        notifyListeners();
+        if (!_disposed) notifyListeners();
         if (kIsWeb) return 'Permission denied in this browser.';
         return 'Permission denied. Enable notifications for Poker Night '
             'in your device settings.';
@@ -28,7 +28,7 @@ extension AppProviderNotificationsSettings on AppProvider {
       if (!granted) {
         _notificationsEnabled = false;
         _persistPref('browserNotify', false);
-        notifyListeners();
+        if (!_disposed) notifyListeners();
         return 'Permission denied in this browser.';
       }
     }
@@ -39,7 +39,7 @@ extension AppProviderNotificationsSettings on AppProvider {
     }
     _notificationsEnabled = value;
     _persistPref('browserNotify', value);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     return null;
   }
 
@@ -48,7 +48,7 @@ extension AppProviderNotificationsSettings on AppProvider {
     if (!granted && _notificationsEnabled) {
       _notificationsEnabled = false;
       _persistPref('browserNotify', false);
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -81,7 +81,7 @@ extension AppProviderNotificationsSettings on AppProvider {
 
   void markAllRead() {
     _notifications = _notifications.map((n) => n.copyWith(read: true)).toList();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
       unawaited(_repo.markAllNotificationsRead(uid)
@@ -93,7 +93,7 @@ extension AppProviderNotificationsSettings on AppProvider {
     _notifications = _notifications
         .map((n) => n.id == id ? n.copyWith(read: true) : n)
         .toList();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
       unawaited(_repo.markNotificationRead(uid, id)
@@ -123,7 +123,7 @@ extension AppProviderNotificationsSettings on AppProvider {
     // This device originated the event — never re-banner it on itself when
     // the mirrored inbox copy arrives.
     _seenNotificationIds.add(notification.id);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     if (_backendUp) {
       final gid = _currentGroup.id;
       if (gid.isNotEmpty) {
@@ -166,21 +166,21 @@ extension AppProviderNotificationsSettings on AppProvider {
   void toggleVoice() {
     _voiceEnabled = !_voiceEnabled;
     _persistPref('voiceEnabled', _voiceEnabled);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void setAppTour(bool value) {
     if (_showAppTour == value) return;
     _showAppTour = value;
     _persistPref('showAppTour', value);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void setVoiceEnabled(bool value) {
     if (_voiceEnabled == value) return;
     _voiceEnabled = value;
     _persistPref('voiceEnabled', _voiceEnabled);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   String get thisDeviceId =>
@@ -198,7 +198,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setAudioMasterDevice() {
     if (_audioMasterDeviceId == thisDeviceId) return;
     _audioMasterDeviceId = thisDeviceId;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Clears the Audio Master selection — every device with voice enabled may
@@ -206,7 +206,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void clearAudioMasterDevice() {
     if (_audioMasterDeviceId == null) return;
     _audioMasterDeviceId = null;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Whether eliminated-player names are announced (checklist 15-053) —
@@ -221,7 +221,7 @@ extension AppProviderNotificationsSettings on AppProvider {
       settings: game.settings.copyWith(announceEliminations: value),
     );
     _syncGroupGame();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   bool get soundsEnabled => _soundsEnabled;
@@ -229,7 +229,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setSoundsEnabled(bool value) {
     if (_soundsEnabled == value) return;
     _soundsEnabled = value;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   bool get compactSummary => _compactSummary;
@@ -237,7 +237,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setCompactSummary(bool value) {
     if (_compactSummary == value) return;
     _compactSummary = value;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   bool get smsEnabled => _smsEnabled;
@@ -245,7 +245,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setSmsEnabled(bool value) {
     if (_smsEnabled == value) return;
     _smsEnabled = value;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   String get themePreference => _themePreference;
@@ -254,7 +254,7 @@ extension AppProviderNotificationsSettings on AppProvider {
     if (_themePreference == value) return;
     _themePreference = value;
     _persistPref('themePreference', value);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   String get colorTheme => _colorTheme;
@@ -263,7 +263,7 @@ extension AppProviderNotificationsSettings on AppProvider {
     if (_colorTheme == value) return;
     _colorTheme = value;
     _persistPref('colorTheme', value);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   String? get defaultChipSetId => _defaultChipSetId;
@@ -271,7 +271,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setDefaultChipSet(String? id) {
     if (_defaultChipSetId == id) return;
     _defaultChipSetId = id;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   int get avatarColorIndex => _avatarColorIndex;
@@ -279,7 +279,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setAvatarColor(int index) {
     if (_avatarColorIndex == index) return;
     _avatarColorIndex = index;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   bool get isDrawerOpen => _isDrawerOpen;
@@ -287,17 +287,17 @@ extension AppProviderNotificationsSettings on AppProvider {
   void openDrawer() {
     if (_isDrawerOpen) return;
     _isDrawerOpen = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void closeDrawer() {
     if (!_isDrawerOpen) return;
     _isDrawerOpen = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void toggleDrawer() {
     _isDrawerOpen = !_isDrawerOpen;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }

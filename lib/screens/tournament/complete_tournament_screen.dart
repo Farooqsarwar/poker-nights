@@ -365,7 +365,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                 const SizedBox(width: AppSpacing.sm),
                                 Expanded(
                                   child: Text(
-                                    r.player!.name,
+                                    r.player?.name ?? 'Unknown',
                                     style: AppTypography.bodySm.copyWith(
                                       fontWeight: FontWeight.w500,
                                     ),

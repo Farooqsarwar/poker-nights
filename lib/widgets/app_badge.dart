@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import '../app/colors.dart';
 import '../constants/app_constants.dart';
 import '../app/typography.dart';
+import 'glass_styles.dart';
 
 enum AppBadgeVariant { default_, gold, green, red, muted, accent }
 
-/// Badge mirroring the web `Badge` component.
+/// Badge mirroring the web `Badge` component — upgraded with glassmorphism.
+///
+/// Each variant uses a frosted background (existing palette color at low
+/// opacity), a hairline border at the accent color, and a soft glow shadow.
 class AppBadge extends StatelessWidget {
   const AppBadge({
     super.key,
@@ -21,58 +25,67 @@ class AppBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (background, foreground, edge) = switch (variant) {
+    Theme.of(context);
+    final (background, foreground, tint) = switch (variant) {
       AppBadgeVariant.default_ => (
-        AppColors.secondary,
+        Glass.solidTint(AppColors.secondary),
         AppColors.secondaryForeground,
-        _borderFor(AppColors.primarySoftBorder, border),
+        AppColors.primary,
       ),
       AppBadgeVariant.gold => (
-        AppColors.primarySoft,
+        AppColors.primary.withValues(alpha: Glass.badgeOpacity),
         AppColors.primary,
-        _borderFor(AppColors.primarySoftBorder, border),
+        AppColors.primary,
       ),
       AppBadgeVariant.green => (
-        AppColors.successSoft,
+        AppColors.success.withValues(alpha: Glass.badgeOpacity),
         AppColors.success,
-        _borderFor(AppColors.successSoftBorder, border),
+        AppColors.success,
       ),
       AppBadgeVariant.red => (
-        AppColors.destructiveSoft,
+        AppColors.destructive.withValues(alpha: Glass.badgeOpacity),
         AppColors.destructive,
-        _borderFor(AppColors.destructive.withValues(alpha: 0.3), border),
+        AppColors.destructive,
       ),
       AppBadgeVariant.muted => (
-        AppColors.muted,
+        Glass.solidTint(AppColors.muted),
         AppColors.mutedForeground,
-        _borderFor(AppColors.border, border),
+        AppColors.border,
       ),
       AppBadgeVariant.accent => (
-        AppColors.primarySoft,
-        AppColors.primary,
-        _borderFor(AppColors.primarySoftBorder, border),
+        AppColors.accent.withValues(alpha: Glass.badgeOpacity),
+        AppColors.accentForeground,
+        AppColors.accent,
       ),
     };
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppRadius.xs),
-        border: edge,
-      ),
-      child: Text(
-        label,
-        style: AppTypography.bodyXs.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w500,
+    return Semantics(
+      label: label,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(AppRadius.xs),
+          border: Border.all(
+            color: tint.withValues(
+              alpha: border ? Glass.borderActiveOpacity : Glass.borderOpacity,
+            ),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: tint.withValues(alpha: 0.08),
+              blurRadius: 6,
+            ),
+          ],
+        ),
+        child: Text(
+          label,
+          style: AppTypography.bodyXs.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );
-  }
-
-  Border? _borderFor(Color color, bool show) {
-    if (!show) return null;
-    return Border.all(color: color, width: 1);
   }
 }

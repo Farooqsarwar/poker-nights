@@ -96,6 +96,14 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+
+    // Spec §3.3: Only admin can run final table.
+    if (!app.isAdmin) {
+      return const Scaffold(
+        body: Center(child: Text('Admin access required.')),
+      );
+    }
+
     final game = app.currentGame;
 
     if (game == null) {
@@ -119,7 +127,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
               InkWell(
                 onTap: () => context.go(RoutePaths.adminDashboard),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
                   child: Icon(
                     Icons.arrow_back,
@@ -170,7 +178,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
               padding: const EdgeInsets.all(AppSpacing.xxxl),
               child: Column(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.casino,
                     color: AppColors.primary,
                     size: AppFontSizes.displayLg,
@@ -288,7 +296,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 if (_dealerId == s.id) ...[
-                                  const Icon(
+                                  Icon(
                                     Icons.style,
                                     size: 14,
                                     color: AppColors.primary,

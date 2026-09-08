@@ -1,0 +1,681 @@
+rules_version = '2';
+
+// Poker Night — Cloud Firestore security rules.
+// (v2026-09-02 — member RSVP dot-patches must succeed against this live file)
+//
+// Security architecture — two-layer rate limiting (client throttling in
+// Flutter plus rate_limits gating; noted here for context — this project runs
+// on the Spark free plan with NO Cloud Functions, so rate-limited writes are
+// enforced client-side and by field-validation rules below):
+//
+// MODEL & PRIVILEGE BOUNDARY (Role-Flows §1.2 / Tech §22)
+//  - Permissions are enforced HERE in the rules, not by hiding buttons.
+//  - Group OWNER (groups/{gid}.ownerId) and group ADMINS (role == 'admin')
+//    are the "authority": they may write whole game documents, manage
+//    membership roles, cash sessions, polls and consume the request queue.
+//  - A membership row may ONLY be created with role 'member' — unless the
+//    writer is the group owner creating their own row in the same batch as
+//    the group (so no user can ever self-grant 'admin').
+//  - Regular MEMBERS may write ONLY their own private slice of a game doc:
+//    their own `players.{uid}.rsvp` and their own guest slots. Rebuy/add-on
+//    requests go to requests/{gameId}/items, which only an admin may list, so
+//    one member can never see who else asked. They cannot assign seats,
+//    confirm check-ins, record rebuys/add-ons, or alter any other player.
+//  - GUESTS are anonymous. They never touch game documents: they read
+//    sanitized projections in publicGames/{gameId} and post their guest
+//    check-in claim to requests/{gameId}/items (which does NOT require
+//    membership). Guests cannot create polls/chat/notifications.
+//  - Notifications are created by MEMBER devices (free-plan fan-out; there is
+//    no Cloud Function). The spoofing vector is closed by validating the
+//    payload shape and throttling the writer, not by restricting the caller.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(gid) {
+      return signedIn()
+          && exists(/databases/$(database)/documents/groups/$(gid)/members/$(request.auth.uid));
+    }
+
+    function isGroupAdmin(gid) {
+      return signedIn()
+          && exists(/databases/$(database)/documents/groups/$(gid))
+          && (
+            get(/databases/$(database)/documents/groups/$(gid)).data.ownerId
+                == request.auth.uid
+            || get(/databases/$(database)/documents/groups/$(gid)/members/$(request.auth.uid)).data.role
+                == 'admin'
+          );
+    }
+
+    // Validate that the caller only touched their OWN player rsvp field and
+    // not any other player's state (C2 — prevents self check-in / seat /
+    // rebuy / add-on / elimination forgery).  diff() on the full players
+    // map (a map of maps) produces false positives during set(merge:true)
+    // because the merge re-serialises the entire nested structure.  Work
+    // around this by diffing the individual player row instead (a flat map
+    // of primitives where diff() is reliable).
+    function memberPlayersSafe() {
+      let playersNew = request.resource.data.get('players', {});
+      let playersOld = resource.data.get('players', {});
+      let myNew = playersNew.get(request.auth.uid, null);
+      let myOld = playersOld.get(request.auth.uid, null);
+      // Only the caller's own row may change — no other player may be altered,
+      // added or removed by a member (C2 cross-player forgery).
+      let ownRowOnly = playersNew.diff(playersOld)
+          .affectedKeys().hasOnly([request.auth.uid]);
+      // May remove their own row only if it already existed.
+      let ownDeleteOk = myNew != null || myOld == null;
+      // Self-registration: the member's RSVP row is serialised whole via
+      // playerToMap, so keep the key set open but reject any non-default
+      // money/control value (self-confirm / fake rebuys / fake eliminations).
+      // `checkedIn` IS allowed at true here — the member's own "Check In"
+      // request is self-service by design (spec: member requests, admin
+      // confirms); `confirmed` staying false is what keeps the actual seat
+      // assignment/confirmation an admin-only action.
+      let safeCreate = myNew == null || (
+          myNew.get('confirmed', false) == false
+          && myNew.get('eliminated', false) == false
+          && myNew.get('hasAddOn', false) == false
+          && myNew.get('rebuys', 0) == 0
+          && myNew.get('reEntries', 0) == 0
+          && myNew.get('knockouts', 0) == 0);
+      // Existing row: members may request their own check-in (`checkedIn`)
+      // alongside RSVP changes, but confirmation and every other field stay
+      // host/admin actions (checkInReq -> admin approve).
+      let ownUpdateSafe = myOld == null
+          || myNew.diff(myOld).affectedKeys().hasOnly(['rsvp', 'checkedIn']);
+      return ownRowOnly && ownDeleteOk && safeCreate && ownUpdateSafe;
+    }
+
+    // Guest slots are managed by the member whose +N RSVP created them, and a
+    // member legitimately CREATES and DELETES their own slots when they lower
+    // their guest count (see _syncGuestSlots / _rsvpDotPatch). Firestore rules
+    // cannot iterate map values to check each slot's `inviterId` without loops
+    // (unsupported in the rules language), so we bound the blast radius
+    // instead: a single member patch may alter at most 8 guest slots (a real
+    // member RSVP touches only their own handful of slots). Combined with the
+    // C1 admin-escalation fix and the players / top-level-key locks below,
+    // cross-inviter slot tampering is contained to a low-severity,
+    // admin-correctable residual.
+    function memberGuestSlotsSafe() {
+      return request.resource.data.get('guestSlots', {})
+          .diff(resource.data.get('guestSlots', {}))
+          .affectedKeys()
+          .size() <= 8;
+    }
+
+    // A member may update a poll ONLY by writing their own vote
+    // (`votes.{uid}`). They can never add/change options, close it, delete it,
+    // or touch any other member's vote (C5).
+    function memberVoteSafe() {
+      // 19-010: votes were the one member-write with no throttle at all.
+
+      let topDiff = request.resource.data.diff(resource.data);
+      let votesDiff = request.resource.data.get('votes', {})
+          .diff(resource.data.get('votes', {}));
+      // 08-023: a closed poll accepts no further votes. The UI blocks it, but
+      // the rule did not — a crafted request could still vote after closing.
+      // The stored flag is `closed` (see `pollToMap`), not a `status` string.
+      return resource.data.get('closed', false) == false
+          && topDiff.affectedKeys().hasOnly(['votes'])
+          && votesDiff.affectedKeys().hasOnly([request.auth.uid])
+          && existsAfter(path('/databases/' + database + '/documents/rate_limits/vote-' + request.auth.uid))
+          && getAfter(path('/databases/' + database + '/documents/rate_limits/vote-' + request.auth.uid)).data.time == request.time;
+    }
+
+    // A member update on a game doc may only vary the member-owned subtrees.
+    // Admin writes the whole document (authority); members are restricted to
+    // their own rsvp and their own guest slots. Everything else must stay
+    // byte-identical.
+    function memberGameEdit() {
+      let topDiff = request.resource.data.diff(resource.data);
+      // `writerId` rides along on the stamp that `patchGame` applies to every
+      // member dot-patch (RSVP / check-in / rebuy / guest slots); omitting it
+      // here made every member self-write a permission-denied, because the
+      // merge-set adds the top-level key next to the allowed ones.
+      // `rebuyRequests` / `addOnRequests` were removed from this list: the
+      // request queue moved to `requests/{gameId}/items` so the identities of
+      // who asked never reach other members. A member patching the arrays on
+      // the shared game document is now rejected outright.
+      let allowedTop = ['players', 'guestSlots', 'updatedAt', 'writerId'];
+      return topDiff.affectedKeys().hasOnly(allowedTop)
+          && memberPlayersSafe()
+          && memberGuestSlotsSafe();
+    }
+
+    // Guards what an AUTHORITY write may put in the member-readable game
+    // document. The client scrubs these fields already, but a client-side
+    // scrub is not a boundary (19-019, User Flow section 2.3) — a regression
+    // there would silently publish private data to the whole group, so the
+    // same omissions are required here.
+    function publicGameDocSafe() {
+      let data = request.resource.data;
+      let settingsSafe = !data.keys().hasAll(['settings']) || !data.settings.keys().hasAny(['organizerPct']);
+      let structureSafe = !data.keys().hasAll(['structure']) || !data.structure.keys().hasAny(['prizes', 'organizerAmount']);
+      // Admin-only working state: the audit timeline (section 11) and the
+      // request queue, whose entries name who asked (19-021). Both live in the
+      // admin sidecar; an empty list is what a scrubbed document carries.
+      let auditSafe = data.get('auditHistory', []).size() == 0;
+      let requestsSafe = data.get('rebuyRequests', []).size() == 0
+          && data.get('addOnRequests', []).size() == 0;
+      return settingsSafe && structureSafe && auditSafe && requestsSafe;
+    }
+
+    // Member CREATE: a member RSVPing on a game doc that does not exist yet
+    // (e.g. a legacy game whose document was never persisted) falls back to a
+    // merge-set create carrying ONLY their own slice. Gate it so the created
+    // doc can contain nothing but the caller's own player row, their own guest
+    // slots and the stamp fields — a member can never plant settings, other
+    // players, structure or any authority data.
+    function memberGameCreate() {
+      let data = request.resource.data;
+      let players = data.get('players', {});
+      let slots = data.get('guestSlots', {});
+      return signedIn()
+          && data.keys().hasOnly(
+            ['players', 'guestSlots', 'updatedAt', 'writerId'])
+          && players.keys().hasOnly([request.auth.uid])
+          && slots.keys().size() <= 8;
+    }
+
+    // ---------- users ----------
+    // Private profiles. Stats live here too; only the owner device may write
+    // profile data.
+    //
+    // NOTE: with no Cloud Functions on this plan, lifetime stats are written
+    // by the PLAYER'S OWN device from the completed game, and are not
+    // cross-checked against the admin's authoritative finishing order. Wins,
+    // podium finishes and knockouts are therefore self-reported. See the
+    // sign-off exception recorded for PN-027.
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn() && request.auth.uid == uid;
+
+      // Tournament presets / chip sets — personal library.
+      match /presets/{presetId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+      match /chipSets/{setId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+
+      // Notification inbox: the OWNER mirrors staged group-outbox items into
+      // their OWN inbox (free-plan fan-out — no Cloud Function). A client can
+      // still only ever write its own inbox, never another user's.
+      match /notifications/{notifId} {
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow create: if signedIn() && request.auth.uid == uid;
+        allow update: if signedIn()
+            && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow delete: if false;
+      }
+
+      // Membership index mirror (one doc per joined group). The user manages
+      // their own rows; a group's admin may also write the mirror row for a
+      // member of THAT group (the "add member by email" flow — no Cloud
+      // Function). Scoped tightly: users write only their own index entries,
+      // and admins can write entries for members of groups they administer.
+      match /groups/{gid} {
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow write: if signedIn() && request.auth.uid == uid;
+      }
+
+      // Personal tournament results (one doc per settled game; spec §5.1
+      // "game_results"). FREE-PLAN variant (no Cloud Function): each signed-in
+      // player writes ONLY their own per-game result row, read by the owner
+      // alone ("paid places privately"). The doc id must equal the game's id
+      // (one immutable row per game) and the row must declare the same gameId,
+      // so a player can only ever record their own finish for that specific
+      // game. The authoritative finish order / knockouts themselves remain
+      // admin-gated on the game document — this row is the player's private
+      // mirror derived from it. Deletes are forbidden (history is immutable).
+      match /results/{resultId} {
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow create, update: if signedIn()
+            && request.auth.uid == uid
+            && resultId == request.resource.data.get('gameId', '');
+        allow delete: if false;
+      }
+    }
+
+    // ---------- groups ----------
+    match /groups/{gid} {
+      // Meta doc: name/icon/joinCode/ownerId. Readable by members so the
+      // bundle stream can resolve it.
+      allow read: if isMember(gid);
+      allow create: if signedIn()
+          && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isGroupAdmin(gid);
+
+      // Member roster rows carry name + role. Members read each other's rows.
+      // C1: a membership row may only be created as role 'member' — unless
+      // the writer is the group owner creating their own admin row in the
+      // same batch as the group. This makes it impossible to self-grant admin.
+      // Role changes/removals are admin+owner ops. A member may fix their own
+      // display name.
+      match /members/{memberUid} {
+        // A user must always be able to read their OWN membership row, even
+        // before it exists (joinGroup calls memberRef.get() to check
+        // existence first) — isMember(gid) alone is circular for a
+        // first-time joiner since it checks for that same row's existence.
+        allow read: if isMember(gid)
+            || (signedIn() && request.auth.uid == memberUid);
+        // C1-hardened create: a user adds themselves as role 'member' (join
+        // code / invite link), OR the group owner creates their own row in the
+        // same batch as the group, OR a genuine group ADMIN adds a registered
+        // member directly by email. A plain member can never self-grant 'admin'
+        // (they may only create their own row with role 'member').
+        // A self-join must PROVE possession of the group's join code. The code
+        // was previously checked only in the client (`joinGroup` ->
+        // `findGroupByCode`), so any signed-in user — anonymous guest sessions
+        // included — could join any group knowing only its id, which chained
+        // with the id-guessing and joinCodes-list holes into read access to
+        // every group, chat, poll and game (19-003, User Flow section 2.3).
+        // A self-join must prove possession of THE GROUP'S OWN join code,
+        // verified here against `groups/{gid}.joinCode`.
+        //
+        // Do NOT widen this to "any code that resolves to this group".
+        // `upsertGameCodes` writes the game's publicCode (kind 'game') and
+        // tvCode (kind 'tv') into the same `joinCodes` collection, and both
+        // are things a GUEST legitimately holds — the TV code is on a screen
+        // in front of the room. Accepting them let an anonymous guest make
+        // themselves a full member and walk into group chat, polls, history
+        // and every game document, which is precisely the boundary User Flow
+        // section 2.2 / section 6.4 and 05-038 / 08-004 / 19-005 draw.
+        //
+        // A person who arrived on a game link is a GUEST. If they should be a
+        // member, hand them the group code or have the admin add them.
+        allow create: if signedIn() && (
+            (request.auth.uid == memberUid
+             && request.resource.data.get('role', 'member') == 'member'
+             && request.resource.data.get('viaCode', '') != ''
+             && exists(/databases/$(database)/documents/groups/$(gid))
+             && request.resource.data.viaCode
+                  == get(/databases/$(database)/documents/groups/$(gid)).data.joinCode) ||
+            (request.auth.uid == memberUid && existsAfter(/databases/$(database)/documents/groups/$(gid)) && getAfter(/databases/$(database)/documents/groups/$(gid)).data.ownerId == request.auth.uid) ||
+            isGroupAdmin(gid)
+        );
+        allow update: if isGroupAdmin(gid)
+            || (signedIn() && request.auth.uid == memberUid
+                && request.resource.data.diff(resource.data).affectedKeys()
+                    .hasOnly(['name', 'stats']));
+        allow delete: if isGroupAdmin(gid)
+            || (signedIn() && request.auth.uid == memberUid);
+      }
+
+      // Games: the AUTHORITY writes whole documents; every member READS this
+      // document directly (`gameDocSnapshots` returns the raw doc for all
+      // roles). It is safe to do so because everything private is removed
+      // BEFORE the write: the organizer percentage, prize amounts and
+      // organizer amount live in the admin sidecar, per-player financial
+      // counters are zeroed, and the audit timeline and request queue are
+      // emptied — all enforced by `publicGameDocSafe()` below, not merely by
+      // the client. Guests never touch this document; they read the sanitized
+      // publicGames projections.
+      //
+      // NOTE: this deployment runs on the Spark plan with NO Cloud Functions,
+      // so the `memberViews` projection below is declared but never written.
+      // Do not rely on it as a boundary.
+      match /games/{gameId} {
+        // Because private financial data is split into the admin sidecar,
+        // all members can safely read the main public game document.
+        allow read: if isMember(gid);
+        allow create: if (isGroupAdmin(gid) && publicGameDocSafe())
+            || (isMember(gid) && memberGameCreate());
+        allow delete: if isGroupAdmin(gid);
+        // Members may update only their own slice of the game doc (their rsvp,
+        // their guest slots, their own id in the rebuy/add-on request arrays);
+        // anything else requires admin/owner authority (memberGameEdit).
+        allow update: if (isGroupAdmin(gid) && publicGameDocSafe()) || (isMember(gid) && memberGameEdit());
+
+        // Reserved for a per-member server-side projection. NOT IN USE: it
+        // would need a Cloud Function to maintain, and this deployment has
+        // none. It is left closed (`write: if false`) so nothing can populate
+        // it with stale or unvalidated data in the meantime.
+        match /memberViews/{userId} {
+          allow read: if signedIn() && request.auth.uid == userId;
+          allow write: if false;
+        }
+
+        // Private sidecar documents (e.g. undoStack, privateData)
+        match /admin/{document=**} {
+          allow read, write: if isGroupAdmin(gid);
+        }
+
+        // Per-game chat. Kept in its own subcollection (not the game doc's
+        // `chat` field, which members may not write) so the host and every
+        // member append messages directly. Same ownership / soft-delete model
+        // as group chat.
+        match /chat/{msgId} {
+          allow read: if isMember(gid);
+          allow create: if isMember(gid)
+              && request.auth.uid == request.resource.data.authorId
+              && existsAfter(path('/databases/' + database + '/documents/rate_limits/chat-' + request.auth.uid))
+              && getAfter(path('/databases/' + database + '/documents/rate_limits/chat-' + request.auth.uid)).data.time == request.time;
+          allow update: if isMember(gid)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleted'])
+              && (
+                resource.data.authorId == request.auth.uid
+                || isGroupAdmin(gid)
+              );
+          allow delete: if false;
+        }
+      }
+
+      // Group chat.
+      match /chat/{msgId} {
+        allow read: if isMember(gid);
+        allow create: if isMember(gid)
+            && request.auth.uid == request.resource.data.authorId
+            && existsAfter(path('/databases/' + database + '/documents/rate_limits/chat-' + request.auth.uid))
+            && getAfter(path('/databases/' + database + '/documents/rate_limits/chat-' + request.auth.uid)).data.time == request.time;
+        // Soft-delete ("deleted": true) by author or an admin; no hard deletes.
+        allow update: if isMember(gid)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleted'])
+            && (
+              resource.data.authorId == request.auth.uid
+              || isGroupAdmin(gid)
+            );
+        allow delete: if false;
+      }
+
+      // Polls (C5): CREATION and CLOSING are admin-only. A member may only
+      // update their OWN vote key (`votes.{uid}`); they can never create,
+      // close, delete or alter the tally of a poll.
+      match /polls/{pollId} {
+        allow read: if isMember(gid);
+        allow create, delete: if isGroupAdmin(gid);
+        allow update: if isGroupAdmin(gid)
+            || (isMember(gid) && memberVoteSafe());
+      }
+
+      // Completed cash-game sessions (C4): ADMIN-ONLY. Sessions contain
+      // per-player buy-ins, top-ups and cash-outs; members must not be able
+      // to read or modify private financial data.
+      match /cashSessions/{sessionId} {
+        allow read, create, update, delete: if isGroupAdmin(gid);
+      }
+
+      // Group notification OUTBOX (free-plan fan-out, no Cloud Function): a
+      // member stages ONE notification here; every member device mirrors
+      // unseen items into its OWN inbox (users/{uid}/notifications). Clients
+      // can create their own group's outbox item but cannot delete; deletes
+      // are admin-only.
+      // Group notification outbox. Every member device mirrors items from here
+      // into its own inbox, so an unvalidated, unthrottled create let ONE
+      // member push arbitrary titles and bodies to the whole group, on repeat
+      // (08-036, 19-003, 19-008, 19-010). The payload shape is now pinned and
+      // the same `rate_limits` gate chat uses applies here too.
+      match /notifications/{notifId} {
+        allow create: if isMember(gid)
+            && request.resource.data.keys().hasOnly(
+                 ['title', 'body', 'type', 'link', 'read', 'timestamp',
+                  'audience', 'updatedAt', 'writerId'])
+            && request.resource.data.title is string
+            && request.resource.data.title.size() <= 120
+            && request.resource.data.body is string
+            && request.resource.data.body.size() <= 500
+            && existsAfter(path('/databases/' + database + '/documents/rate_limits/notify-' + request.auth.uid))
+            && getAfter(path('/databases/' + database + '/documents/rate_limits/notify-' + request.auth.uid)).data.time == request.time;
+        allow read: if isMember(gid);
+        allow update, delete: if isGroupAdmin(gid);
+      }
+    }
+
+    // ---------- join codes ----------
+    // Codes are public by design — they are printed on QR codes and shared as
+    // invite links — so RESOLVING a code is world-readable, letting guests
+    // enter the join flow without first creating an account. CREATION is
+    // H6-guarded: only the admin/owner of the referenced group may mint a code
+    // (a random signed-in user must not create a code pointing at an arbitrary
+    // group). Later updates (game tv/public codes upserted on publish) require
+    // group admin rights.
+    match /joinCodes/{code} {
+      // GET of a KNOWN code is public by design (QR / invite links resolve
+      // before sign-in). LIST is not: `allow read` covered both, so a single
+      // unauthenticated query returned every group join code, game code and TV
+      // code in the database together with their gids (19-005, 19-007).
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn() && (
+            isGroupAdmin(request.resource.data.gid) ||
+            (existsAfter(/databases/$(database)/documents/groups/$(request.resource.data.gid)) &&
+             getAfter(/databases/$(database)/documents/groups/$(request.resource.data.gid)).data.ownerId == request.auth.uid)
+          );
+      allow update, delete: if signedIn() && isGroupAdmin(resource.data.gid);
+    }
+
+    // ---------- email → uid index ----------
+    // Lets a group admin resolve a registered user by their account email for
+    // the "add member directly" flow, without exposing the users collection.
+    // Each user writes only their own row (keyed by lower-cased email).
+    // Reads are split into GET vs LIST so the collection is never enumerable:
+    // any signed-in user may resolve ONE specific doc (the app only ever does
+    // targeted doc GETs on the exact lower-cased email), while LISTING is
+    // scoped to rows whose uid is the caller's own (practically never issued).
+    // Account-existence lookup, mitigated by HASHING rather than by narrowing
+    // the reader.
+    //
+    // Be precise about what this does and does not do. `get` is still open to
+    // any signed-in caller, anonymous guest sessions included — a rule on
+    // `emailIndex/{hash}` has no group context, so "only group admins may
+    // read" is not expressible here. What changed is that the key is
+    // sha256(lowercased address) and no plaintext address is stored, so a
+    // caller must ALREADY KNOW the exact address to resolve one, enumeration
+    // is closed (`list: if false`), and a row never reveals the address it
+    // belongs to. Confirming "this address I already know has an account, and
+    // its uid is X" remains possible. See 19-005 / 19-023.
+    match /emailIndex/{emailHash} {
+      // The key is now sha256(lowercased address) and no plaintext address is
+      // stored, so a caller must already know the exact address to resolve
+      // one. Enumeration stays closed, and a row never reveals the address it
+      // belongs to.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'name']);
+      allow update: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'name']);
+      allow delete: if false;
+    }
+
+    // ---------- pending member invites (free-plan replacement) ----------
+    // Cloud-function-free replacement for the `onMemberWrite` mirror. When a
+    // group ADMIN adds a registered user by email, the client writes BOTH the
+    // member row (allowed above) AND a pendingInvites doc here — because the
+    // admin cannot write into another user's /users tree. The invited user may
+    // read/delete ONLY their own pending invites (uid match, no cross-user
+    // reads) and self-writes their own membership index on next app open, then
+    // removes the invite. Admin-create is verified by looking up the writer's
+    // own admin membership row, so a plain member can never forge an invite.
+    match /pendingInvites/{inviteId} {
+      allow read: if signedIn()
+          && resource.data.uid == request.auth.uid;
+      allow delete: if signedIn()
+          && resource.data.uid == request.auth.uid;
+      allow create, update: if signedIn()
+          && request.resource.data.uid != request.auth.uid
+          && get(/databases/$(database)/documents/groups/$(request.resource.data.gid)/members/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ---------- public game projections ----------
+    // Sanitized TV / guest feeds keyed by public/tv join code. TVs are often
+    // unauthenticated browsers, hence world-readable by design — projections
+    // contain no personal data beyond first names and seat assignments.
+    // World-readable sanitized projections for guests and TVs. Because ANYONE
+    // can read this document, the omissions cannot live only in
+    // `projections.dart` on the admin's device (19-018 / 19-019, Technical
+    // section 5.2) — each payload is checked here too.
+    // The projection codec writes a FIXED key set, so "omitted" here means the
+    // value is zeroed / emptied rather than the key being absent. Checking for
+    // key absence would reject every legitimate publish.
+    function projectionSafe(key) {
+      let payload = request.resource.data.get(key, {});
+      return payload.get('auditHistory', []).size() == 0
+          && payload.get('rebuyRequests', []).size() == 0
+          && payload.get('addOnRequests', []).size() == 0
+          && payload.get('settings', {}).get('organizerPct', 0) == 0
+          && payload.get('structure', {}).get('organizerAmount', 0) == 0
+          // Individual payout amounts must not travel at all. The projection
+          // used to send `Prize` rows with the amounts zeroed, which this
+          // language cannot verify — it cannot iterate a list to confirm every
+          // element is 0, so the omission rested on the client (19-019). The
+          // list is now EMPTY and the paid-place count rides alongside as a
+          // scalar, which is checkable.
+          && payload.get('structure', {}).get('prizes', []).size() == 0;
+    }
+
+    function publicProjectionsSafe() {
+      return projectionSafe('tv')
+          && projectionSafe('player')
+          && projectionSafe('guest');
+    }
+
+    match /publicGames/{gameId} {
+      allow read: if true;
+      allow create: if signedIn()
+                    && isGroupAdmin(request.resource.data.gid)
+                    && publicProjectionsSafe();
+      allow update: if signedIn() && isGroupAdmin(resource.data.gid)
+                    && request.resource.data.gid == resource.data.gid
+                    && publicProjectionsSafe();
+      allow delete: if signedIn() && isGroupAdmin(resource.data.gid);
+    }
+
+    // ---------- guest/member request queue ----------
+    // requests/{gameId}/items/{reqId}: guests push their check-in claim,
+    // members push rebuy/add-on/check-in requests. GUEST claims may be
+    // created WITHOUT membership (C3 — this was previously blocked and is the
+    // flagship guest feature). Only group admins may read / consume
+    // (flip consumed:true) request items.
+    match /requests/{gameId} {
+      allow read: if false; // parent placeholder doc is never read directly
+
+      match /items/{reqId} {
+        // A guest (signed-in anonymously, not a group member) must be able to
+        // GET their own deterministic slot-claim doc — reserveGuestSlotTx reads
+        // it inside a transaction before writing. Non-existent docs read as
+        // null; a member may read any item; enumeration (list) stays members-only.
+        // A guest claim doc is readable by ITS CLAIMANT (reserveGuestSlotTx
+        // reads it inside a transaction) and by group members — not by every
+        // signed-in caller. Ids are deterministic
+        // (`guestCheckIn-{inviterId}-{slot}`), so the old blanket allowance
+        // let anyone holding a game id and an inviter uid read guest names
+        // (19-006, 20-028). `resource == null` stays: a non-existent doc must
+        // read as null for the claim transaction to work.
+        allow get: if signedIn() && (
+              resource == null
+           || resource.data.get('ownerUid', '') == request.auth.uid
+           || isMember(resource.data.get('gid', '__none__'))
+        );
+        // Only a group admin may ENUMERATE the queue — the items name the
+        // members who requested a rebuy / add-on / check-in, which User Flow
+        // section 5.6 and section 22 keep off a member's view. The admin
+        // device is the only lister (`_ensureRequestsSubscription` requires
+        // game authority), so this costs members nothing.
+        allow list: if signedIn()
+            && isGroupAdmin(resource.data.get('gid', '__none__'));
+        allow create: if signedIn()
+            && request.resource.data.keys().hasAll(['kind', 'gid'])
+            && request.resource.data.gid is string
+            && (
+              // Anonymous guest check-in claim — no membership required. Doc id
+              // must match the deterministic claim pattern used by
+              // reserveGuestSlotTx and declare the claimant's own uid so the
+              // claim never spoofs another guest or device.
+              (request.resource.data.kind == 'guestCheckIn'
+               && reqId.matches('^guestCheckIn-')
+               && request.resource.data.ownerUid == request.auth.uid
+               // 19-010: throttle anonymous claims so one caller cannot squat
+               // every slot in a game.
+               && existsAfter(path('/databases/' + database + '/documents/rate_limits/guestclaim-' + request.auth.uid))
+               && getAfter(path('/databases/' + database + '/documents/rate_limits/guestclaim-' + request.auth.uid)).data.time == request.time)
+              // Member-driven requests (rebuy/add-on/check-in) may use arbitrary
+              // doc ids (.add() or an idempotency key).
+              || (request.resource.data.kind != 'guestCheckIn'
+                 && isMember(request.resource.data.gid))
+            );
+        allow update: if signedIn()
+            && isGroupAdmin(resource.data.gid);
+        allow delete: if signedIn()
+            && isGroupAdmin(resource.data.gid);
+      }
+    }
+
+    // ---------- rate limits ----------
+    // Tracks per-user, per-action timestamps for server-side rate limiting.
+    // The gap is enforced by requiring the new timestamp to be at least 3750ms
+    // after the old one. Delete is forbidden: allowing `delete` would let a
+    // caller reset its own clock (delete + recreate) and bypass the throttle.
+    // Notifications and guest claims get their own, shorter gap. The 3.75s
+    // chat gap is tuned for typing; a tournament legitimately emits several
+    // notifications close together (level change, rebuys closed, final table),
+    // and blocking those would lose real messages. 1.5s still stops a spam
+    // loop, and the payload validation on the notification itself bounds what
+    // any single write can say.
+    match /rate_limits/{limitId} {
+      allow read: if signedIn() && limitId.matches('.*-' + request.auth.uid);
+      allow create: if signedIn()
+          && (limitId.matches('^notify-.*') || limitId.matches('^guestclaim-.*') || limitId.matches('^vote-.*'))
+          && limitId.matches('.*-' + request.auth.uid)
+          && request.resource.data.time == request.time;
+      allow update: if signedIn()
+          && (limitId.matches('^notify-.*') || limitId.matches('^guestclaim-.*') || limitId.matches('^vote-.*'))
+          && limitId.matches('.*-' + request.auth.uid)
+          && request.time.toMillis() >= resource.data.time.toMillis() + 1500
+          && request.resource.data.time == request.time;
+      allow delete: if false;
+    }
+
+    match /rate_limits/{limitId} {
+      // Allow user to write to their own rate limit docs. We enforce that
+      // limitId ends with their uid.
+      allow read: if signedIn() && limitId.matches('.*-' + request.auth.uid);
+      allow create: if signedIn() && limitId.matches('.*-' + request.auth.uid)
+          && request.resource.data.time == request.time;
+      allow update: if signedIn() && limitId.matches('.*-' + request.auth.uid)
+          && request.time.toMillis() >= resource.data.time.toMillis() + 3750
+          && request.resource.data.time == request.time;
+      allow delete: if false;
+    }
+
+    // ---------- server time calibration (H5) ----------
+    // Allows signed-in clients to write/read their own Firestore server
+    // timestamp so the timer is derived from an authoritative server clock
+    // (Tech §4.3) instead of silently falling back to the device clock.
+    // Clock calibration is PER CALLER and the value is pinned to the server's
+    // own clock. The old shared `_meta/serverTime` document constrained only
+    // the key set, so any signed-in client (anonymous guests included) could
+    // write an arbitrary timestamp and poison every other device's offset —
+    // including the admin's, which drives `levelEndTime` for the whole
+    // tournament (Technical section 4.3, 12-013, 19-008).
+    match /_meta/clock/users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['t'])
+          && request.resource.data.t == request.time;
+    }
+
+    match /_meta/{doc} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // Deny everything not explicitly matched above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+// touched 1788311317619

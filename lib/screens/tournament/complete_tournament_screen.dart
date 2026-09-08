@@ -10,10 +10,12 @@ import '../../models/game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/medal_icon.dart';
+import '../../widgets/glass_styles.dart';
 
 /// Record finish order mirroring the web `CompleteTournamentPage`.
 class CompleteTournamentScreen extends StatefulWidget {
@@ -35,6 +37,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
   }
 
   void _undo() {
+    if (_order.isEmpty) return;
     setState(() => _order.removeLast());
   }
 
@@ -46,7 +49,20 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
       ..sort(
         (a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0),
       );
-    app.recordFinishOrder([...eliminated.map((p) => p.id), ..._order]);
+    final ok = app.recordFinishOrder(
+      [...eliminated.map((p) => p.id), ..._order],
+    );
+    if (!ok) {
+      // Surface why finishing failed instead of falsely showing "complete".
+      final msg = app.completionError ?? 'Could not finish the tournament.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
     setState(() => _confirmed = true);
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) context.go(RoutePaths.resultPodium);
@@ -56,6 +72,14 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+
+    // Spec §3.3: Only admin can complete a tournament.
+    if (!app.isAdmin) {
+      return const Scaffold(
+        body: Center(child: Text('Admin access required.')),
+      );
+    }
+
     final game = app.currentGame;
 
     if (game == null) {
@@ -105,7 +129,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
               InkWell(
                 onTap: () => context.go(RoutePaths.adminDashboard),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
                   child: Icon(
                     Icons.arrow_back,
@@ -115,23 +139,25 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Record Finish Order',
-                    style: AppTypography.display(
-                      size: AppFontSizes.xxxl,
-                      weight: FontWeight.w700,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Record Finish Order',
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxxl,
+                        weight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'Tap players in order of elimination (first-out first)',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
+                    Text(
+                      'Tap players in order of elimination (first-out first)',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -142,7 +168,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
               padding: const EdgeInsets.all(AppSpacing.xxxl),
               child: Column(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.emoji_events,
                     size: AppFontSizes.displayLg,
                     color: AppColors.icon,
@@ -210,7 +236,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                         ? '?'
                                         : p.name.trim()[0].toUpperCase(),
                                     style: AppTypography.bodyXs.copyWith(
-                                      color: Colors.white,
+                                      color: AppColors.foreground,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -234,7 +260,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 4),
-                                    const Icon(
+                                    Icon(
                                       Icons.arrow_forward,
                                       size: 12,
                                       color: AppColors.icon,
@@ -285,7 +311,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.undo,
                                 size: 14,
                                 color: AppColors.destructive,
@@ -314,7 +340,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                               vertical: AppSpacing.sm,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.muted.withValues(alpha: 0.3),
+                              color: Glass.solidTint(AppColors.muted),
                               borderRadius: BorderRadius.circular(AppRadius.md),
                               border: Border.all(color: AppColors.border),
                             ),
@@ -340,7 +366,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                 const SizedBox(width: AppSpacing.sm),
                                 Expanded(
                                   child: Text(
-                                    r.player!.name,
+                                    r.player?.name ?? 'Unknown',
                                     style: AppTypography.bodySm.copyWith(
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -368,11 +394,38 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Prize distribution (admin only)',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Prize distribution (admin only)',
+                            style: AppTypography.bodySm.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                        ),
+                        if (unranked.isEmpty)
+                          InkWell(
+                            onTap: () {
+                              showAppModal(
+                                context: context,
+                                title: 'Edit Deal / Chop',
+                                child: _EditPrizesModal(
+                                  initialPrizes: prizes,
+                                  onSave: (newPrizes) => app.updatePrizes(newPrizes),
+                                ),
+                              );
+                            },
+                            child: Text(
+                              'Edit Deal/Chop',
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.primary,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     for (var i = 0; i < prizes.length; i++)
@@ -408,7 +461,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.emoji_events,
                     size: 16,
                     color: AppColors.icon,
@@ -429,12 +482,15 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
     );
   }
 
-  String _placeName(int place) => switch (place) {
-    1 => '1st place',
-    2 => '2nd place',
-    3 => '3rd place',
-    _ => '${place}th place',
-  };
+  String _placeName(int place) {
+    if (place % 100 >= 11 && place % 100 <= 13) return '${place}th place';
+    return switch (place % 10) {
+      1 => '${place}st place',
+      2 => '${place}nd place',
+      3 => '${place}rd place',
+      _ => '${place}th place',
+    };
+  }
 
   Prize? _prizeFor(List<Prize> prizes, int pos) {
     if (pos <= 0) return null;
@@ -452,4 +508,102 @@ class _RankedPlayer {
   final Player? player;
   final int pos;
   final Prize? prize;
+}
+
+
+class _EditPrizesModal extends StatefulWidget {
+  const _EditPrizesModal({required this.initialPrizes, required this.onSave});
+
+  final List<Prize> initialPrizes;
+  final void Function(List<Prize>) onSave;
+
+  @override
+  State<_EditPrizesModal> createState() => _EditPrizesModalState();
+}
+
+class _EditPrizesModalState extends State<_EditPrizesModal> {
+  late final List<TextEditingController> _controllers;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = widget.initialPrizes
+        .map((p) => TextEditingController(text: p.amount.toString()))
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < widget.initialPrizes.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Place ${widget.initialPrizes[i].place}',
+                    style: AppTypography.bodySm,
+                  ),
+                ),
+                SizedBox(
+                  width: 120,
+                  child: TextFormField(
+                    controller: _controllers[i],
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      // 04-013 / User Flow 3.4: money is shown WITHOUT a
+                      // currency symbol anywhere in the app.
+                      isCollapsed: false,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          onPressed: () {
+            final newPrizes = <Prize>[];
+            int totalNew = 0;
+            for (var i = 0; i < widget.initialPrizes.length; i++) {
+              final amt = int.tryParse(_controllers[i].text.replaceAll(',', '')) ?? 0;
+              totalNew += amt;
+              newPrizes.add(Prize(place: widget.initialPrizes[i].place, amount: amt));
+            }
+            
+            final totalOriginal = widget.initialPrizes.fold<int>(0, (sum, p) => sum + p.amount);
+            if (totalNew != totalOriginal) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Payouts sum to $totalNew, but the prize pool is '
+                    '$totalOriginal.',
+                  ),
+                  backgroundColor: AppColors.destructive,
+                ),
+              );
+              return;
+            }
+            
+            widget.onSave(newPrizes);
+            Navigator.of(context).pop();
+          },
+          child: const Text('Save Custom Deal'),
+        ),
+      ],
+    );
+  }
 }

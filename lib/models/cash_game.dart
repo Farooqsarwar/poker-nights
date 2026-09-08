@@ -7,6 +7,7 @@ class CashPlayer {
     required this.totalBuyIns,
     required this.buyInCount,
     required this.cashedOut,
+    this.hasCashedOut = false,
   });
 
   final String id;
@@ -15,24 +16,29 @@ class CashPlayer {
   final double totalBuyIns;
   final int buyInCount;
   final double cashedOut;
+  final bool hasCashedOut;
 
-  bool get isCashedOut => cashedOut > 0;
+  bool get isCashedOut => hasCashedOut;
 
   double get net => cashedOut - totalBuyIns;
 
   CashPlayer copyWith({
+    String? id,
+    String? name,
     double? stack,
     double? totalBuyIns,
     int? buyInCount,
     double? cashedOut,
+    bool? hasCashedOut,
   }) {
     return CashPlayer(
-      id: id,
-      name: name,
+      id: id ?? this.id,
+      name: name ?? this.name,
       stack: stack ?? this.stack,
       totalBuyIns: totalBuyIns ?? this.totalBuyIns,
       buyInCount: buyInCount ?? this.buyInCount,
       cashedOut: cashedOut ?? this.cashedOut,
+      hasCashedOut: hasCashedOut ?? this.hasCashedOut,
     );
   }
 }

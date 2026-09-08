@@ -1,50 +1,250 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+// Cache buster: 2026-09-02T16:59:49
+
+// Local-development switches. Enable the Firestore + Auth emulators with:
+//   flutter run --dart-define=USE_EMULATOR=true
+// For testing from a second device on the same Wi-Fi, also point emulator
+// traffic at this machine's LAN IP:
+//   flutter run --dart-define=USE_EMULATOR=true --dart-define=EMULATOR_HOST=192.168.x.x
+// Everything is OFF by default so production builds are unaffected.
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:localstore/localstore.dart';
 
+import 'app/colors.dart';
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'firebase_options.dart';
 import 'providers/app_provider.dart';
+import 'repositories/firebase_repository.dart';
 import 'responsive/responsive.dart';
+import 'services/push_service.dart';
+import 'theme/theme_palette.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  const useEmulator = bool.fromEnvironment('USE_EMULATOR');
+  const emulatorHost = String.fromEnvironment(
+    'EMULATOR_HOST',
+    defaultValue: 'localhost',
+  );
+  const emulatorApiPort = int.fromEnvironment(
+    'EMULATOR_API_PORT',
+    defaultValue: 8080,
+  );
+  const emulatorAuthPort = int.fromEnvironment(
+    'EMULATOR_AUTH_PORT',
+    defaultValue: 9099,
+  );
+
+  // Production error handling — show a friendly error overlay instead of a red screen.
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      color: const Color(0xFF131315),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFFACC15),
+                size: 48,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                kDebugMode
+                    ? details.exception.toString()
+                    : 'Something went wrong. Please restart the app.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xB3FFFFFF)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
+
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Enable Firestore offline persistence (tech spec §4.1 — local recovery).
+  try {
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+    );
+  } catch (_) {
+    // Settings may already be set or Firestore unavailable in tests.
+  }
+
+  // Use clean URLs (no #) so deep links like /join-group?code=X work directly.
+  if (kIsWeb) usePathUrlStrategy();
+
+  // Local development against the Firebase emulators (zero production quota).
+  // Enabled only via --dart-define=USE_EMULATOR=true. The Firestore + Auth
+  // emulators accept requests without App Check, so nothing else is needed.
+  if (useEmulator) {
+    // ignore: avoid_print
+    print('[Emulator] Firestore + Auth -> $emulatorHost');
+    FirebaseFirestore.instance.useFirestoreEmulator(
+      emulatorHost,
+      emulatorApiPort,
+    );
+    await FirebaseAuth.instance.useAuthEmulator(emulatorHost, emulatorAuthPort);
+  }
+  // -- Firebase App Check (tech spec section 22) --
+  if (useEmulator) {
+    // ignore: avoid_print
+    print('[AppCheck] Skipped -- local emulator mode.');
+  } else {
+    await _initAppCheck();
+  }
+
+  // Initialize Google Sign-In singleton (must happen before signInWithGoogle).
+  await FirebaseRepository.initGoogleSignIn();
+
+  // Restore the persisted per-install device id before any Firestore write so
+  // echo-prevention and the single-active-editor claim stay stable across
+  // restarts.
+  await FirebaseRepository.instance.initDeviceId();
+
+  // Read the locally cached theme preference before booting the app so the
+  // splash screen doesn't jitter while waiting for Firebase.
+  String? cachedColorTheme;
+  String? cachedThemePref;
+  try {
+    final db = Localstore.instance;
+    final prefs = await db.collection('app').doc('prefs').get();
+    if (prefs != null) {
+      cachedColorTheme = prefs['colorTheme'] as String?;
+      cachedThemePref = prefs['themePreference'] as String?;
+    }
+  } catch (e) {
+    debugPrint('Failed to load local theme cache: $e');
+  }
+
+  final appProvider = AppProvider(
+    initialColorTheme: cachedColorTheme,
+    initialThemePreference: cachedThemePref,
+  );
+  final router = buildAppRouter(appProvider);
+
+  // Initialize OneSignal push notifications (Android / iOS / Web). Free-plan
+  // replacement for a Cloud Function fan-out — see services/push_service.dart
+  // and services/onesignal_sender.dart.
+  try {
+    await PushService.instance.initialize(appProvider, router);
+  } catch (e) {
+    debugPrint('Push init failed: $e');
+  }
+
   runApp(
-    // Initializes flutter_screenutil before any widget reads scaled sizes, so
-    // AppScale/AppTypography can adapt fonts to mobile, tablet and laptop.
     ScreenUtilInit(
       designSize: const Size(390, 844),
       splitScreenMode: true,
       minTextAdapt: true,
-      builder: (context, child) => ChangeNotifierProvider(
-        create: (_) => AppProvider(),
-        child: const PokerNightApp(),
+      builder: (context, child) => ChangeNotifierProvider.value(
+        value: appProvider,
+        child: PokerNightApp(router: router),
       ),
     ),
   );
 }
 
-/// Root widget — wires the dark casino theme, the app provider, and the router.
+/// Initialises Firebase App Check with the appropriate provider for the
+/// current platform and build mode.
+Future<void> _initAppCheck() async {
+  const isDebugMode = bool.fromEnvironment('APP_CHECK_DEBUG');
+  const siteKey = String.fromEnvironment('APP_CHECK_RECAPTCHA_SITE_KEY');
+
+  // On Flutter WEB the ReCaptchaV3Provider requires a REAL reCAPTCHA
+  // Enterprise site key — there is no "debug" web provider (unlike
+  // Android/iOS, where AndroidProvider.debug / AppleProvider.debug emit debug
+  // tokens without a site key). Passing a fake/absent key makes the browser
+  // try to load ReCAPTCHA and fail with appCheck/recaptcha-error, which blocks
+  // google sign-in and Firestore locally.
+  //
+  // So on web we skip activating App Check in DEBUG builds AND whenever no real
+  // site key is supplied. This project does not enforce App Check, so skipping
+  // is non-blocking; web keeps App Check only when a genuine reCAPTCHA
+  // Enterprise site key is provided via --dart-define.
+  if (kIsWeb && (kDebugMode || siteKey.isEmpty)) {
+    // ignore: avoid_print
+    print('[AppCheck] Skipped on web (debug or no site key) -- not enforced.');
+    return;
+  }
+
+  try {
+    await FirebaseAppCheck.instance.activate(
+      webProvider: siteKey.isNotEmpty
+          ? ReCaptchaV3Provider(siteKey)
+          : ReCaptchaV3Provider('MISSING_SITE_KEY'),
+      androidProvider: isDebugMode
+          ? AndroidProvider.debug
+          : AndroidProvider.playIntegrity,
+      appleProvider: isDebugMode
+          ? AppleProvider.debug
+          : AppleProvider.appAttestWithDeviceCheckFallback,
+    );
+    FirebaseAppCheck.instance.setTokenAutoRefreshEnabled(true);
+
+    if (isDebugMode) {
+      // ignore: avoid_print
+      print('[AppCheck] Activated with DEBUG provider -- NOT for production.');
+    }
+  } catch (e) {
+    // ignore: avoid_print
+    print(
+      '[AppCheck] Activation failed: $e. '
+      'Firestore requests will be rejected in enforced mode.',
+    );
+  }
+}
+
+/// Root widget -- wires the casino theme, the app provider, and the router.
 class PokerNightApp extends StatelessWidget {
-  const PokerNightApp({super.key});
+  const PokerNightApp({super.key, required this.router});
+
+  final GoRouter router;
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
+    // Only rebuild the app shell when the theme actually changes — NOT on every
+    // AppProvider.notifyListeners() (clock tick + every Firestore snapshot),
+    // which otherwise rebuilds the entire widget tree once per second and can
+    // disrupt an in-progress button press.
+    final (colorTheme, themePreference) = context
+        .select<AppProvider, (String, String)>(
+          (a) => (a.colorTheme, a.themePreference),
+        );
+
+    // Resolve the active palette from the stored color-theme id and push it
+    // into AppColors so every static accessor returns the correct value.
+    final palette = ThemePalettes.forId(colorTheme);
+    AppColors.currentPalette = palette;
+
     return MaterialApp.router(
       title: 'Poker Night',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: switch (app.themePreference) {
+      theme: AppTheme.forPalette(palette, brightness: Brightness.light),
+      darkTheme: AppTheme.forPalette(palette, brightness: Brightness.dark),
+      themeMode: switch (themePreference) {
         'light' => ThemeMode.light,
         'system' => ThemeMode.system,
         _ => ThemeMode.dark,
       },
-      routerConfig: appRouter,
-      // Exposes responsive_framework breakpoints to every screen via
-      // ResponsiveBreakpoints.of(context), matching the app's AppBreakpoints.
+      routerConfig: router,
       builder: (context, child) => ResponsiveBreakpoints.builder(
         child: Builder(
           builder: (innerContext) => ResponsiveScaledBox(

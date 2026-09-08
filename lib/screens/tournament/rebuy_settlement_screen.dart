@@ -19,6 +19,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_toggle.dart';
 import '../../widgets/chip_token.dart';
 
 enum _SettlementStep { confirmPlayers, addOns, colorUp, confirm }
@@ -71,7 +72,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
 
     if (!isAdmin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -98,7 +99,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
     final addOnChips = totalAddOns * structure.addOnStack;
     final estPrizePool =
         structure.prizePool +
-        (settings.addOn ? totalAddOns * settings.buyIn : 0);
+        (settings.addOn ? totalAddOns * settings.effectiveAddOnCost : 0);
     final stepIndex = _SettlementStep.values.indexOf(_step);
 
     return AppPage(
@@ -164,14 +165,24 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
           if (_step == _SettlementStep.confirmPlayers)
             _ConfirmPlayersStep(
               game: game,
+              onGrantRebuy: settings.rebuys
+                  ? (id) => app.grantRebuy(
+                      id,
+                      idempotencyKey:
+                          'final-rebuy-$id-${DateTime.now().microsecondsSinceEpoch}',
+                    )
+                  : null,
               onConfirm: () => setState(() => _step = _SettlementStep.addOns),
             ),
           // Step 1: Add-ons
           if (_step == _SettlementStep.addOns)
             _AddOnsStep(
               activePlayers: activePlayers,
-              addOnStack: structure.addOnStack,
-              addOnChipPlan: structure.addOnChipPlan,
+              // 09-032 / 10-043: the engine recommends the CHIP AMOUNT from
+              // the live table, and the composition is rebuilt for the level
+              // actually being played rather than reused from setup.
+              addOnStack: app.recommendedAddOnStack,
+              addOnChipPlan: app.liveAddOnChipPlan,
               selections: _addOnSelections,
               onToggle: (id) => setState(() {
                 if (!_addOnSelections.remove(id)) _addOnSelections.add(id);
@@ -195,9 +206,13 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                         activePlayers.length)
                   : structure.startingStack,
               onApplySuggestion: () {
+                // Price stays the admin's input (09-033, defaulting to the
+                // buy-in); applying the suggestion also pins the recommended
+                // chip amount so grantAddOn hands out that many chips.
                 app.updateEventSettings(
                   settings.copyWith(addOnCost: suggestedPrice),
                 );
+                app.applyRecommendedAddOnStack();
               },
               onConfirm: () => setState(() => _step = _SettlementStep.colorUp),
             ),
@@ -207,6 +222,9 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
               instructions: structure.colorUpInstructions,
               anteEnabled: settings.anteEnabled,
               anteStyle: settings.anteStyle,
+              onAnteChanged: (v) => app.updateEventSettings(
+                settings.copyWith(anteEnabled: v),
+              ),
               onNext: () => setState(() => _step = _SettlementStep.confirm),
             ),
           // Step 3: Confirm
@@ -231,11 +249,15 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                   organizerAmount: finalPrizes.organizerAmount,
                   onStart: () {
                     for (final id in _addOnSelections) {
-                      app.grantAddOn(id);
+                      app.grantAddOn(
+                        id,
+                        idempotencyKey:
+                            'addon-$id-${DateTime.now().microsecondsSinceEpoch}',
+                      );
                     }
                     app.confirmSettlement();
-                    app.updateGameStatus(LiveGameStatus.running);
-                    app.resumeTimer();
+                    // Spec §3.2: timer must NOT auto-resume — admin manually
+                    // starts the next level from the dashboard.
                     context.go(RoutePaths.adminDashboard);
                   },
                 );
@@ -319,7 +341,7 @@ class _AddOnsStep extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.auto_awesome,
                       size: 16,
                       color: AppColors.primary,
@@ -454,7 +476,7 @@ class _AddOnsStep extends StatelessWidget {
                                 ),
                               ),
                               child: selections.contains(p.id)
-                                  ? const Icon(
+                                  ? Icon(
                                       Icons.check,
                                       size: 14,
                                       color: AppColors.primaryForeground,
@@ -550,12 +572,18 @@ class _ColorUpStep extends StatelessWidget {
     required this.instructions,
     required this.anteEnabled,
     required this.anteStyle,
+    required this.onAnteChanged,
     required this.onNext,
   });
 
   final List<String> instructions;
   final bool anteEnabled;
   final AnteStyle anteStyle;
+
+  /// Spec §4.13 / Technical §11.2 step 4: the settlement break must end with
+  /// the admin CONFIRMING ante activation or keeping antes off. This step
+  /// previously only announced the decision, leaving no way to change it here.
+  final ValueChanged<bool> onAnteChanged;
   final VoidCallback onNext;
 
   String get _anteName =>
@@ -569,12 +597,12 @@ class _ColorUpStep extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Color-up instructions',
+            'Color-up recommendations (Global)',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Exchange small chips before continuing. The $_anteName will begin next level.',
+            'The system does not track individual stacks. Execute these global recommendations physically at the table. The $_anteName will begin next level.',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),
@@ -622,40 +650,58 @@ class _ColorUpStep extends StatelessWidget {
                   ),
                 ),
               ),
-          if (anteEnabled) ...[
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Ante starts next level',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    anteStyle == AnteStyle.individual
-                        ? 'Every player posts an individual ante (half the big blind). Confirm with all players before starting.'
-                        : 'Big blind ante equal to the big blind value. Confirm with all players before starting.',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: anteEnabled ? AppColors.primarySoft : AppColors.secondary,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(
+                color: anteEnabled
+                    ? AppColors.primary.withValues(alpha: 0.3)
+                    : AppColors.border,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        anteEnabled
+                            ? 'Ante starts next level'
+                            : 'Antes stay off',
+                        style: AppTypography.bodySm.copyWith(
+                          color: anteEnabled
+                              ? AppColors.primary
+                              : AppColors.foreground,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    AppToggle(
+                      value: anteEnabled,
+                      onChanged: onAnteChanged,
+                      label: 'Activate ante next level',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  anteEnabled
+                      ? (anteStyle == AnteStyle.individual
+                            ? 'Every player posts an individual ante (half the big blind). Confirm with all players before starting.'
+                            : 'Big blind ante equal to the big blind value. Confirm with all players before starting.')
+                      : 'No ante will be posted. Switch this on to activate the ante from the next level.',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
           AppButton(
             fullWidth: true,
             onPressed: onNext,
@@ -724,7 +770,7 @@ class _ConfirmStep extends StatelessWidget {
                   label: 'Ante',
                   value: anteEnabled ? 'Active from next level' : 'Not enabled',
                 ),
-                const Divider(color: AppColors.border, height: AppSpacing.lg),
+                Divider(color: AppColors.border, height: AppSpacing.lg),
                 Row(
                   children: [
                     Text(
@@ -748,7 +794,7 @@ class _ConfirmStep extends StatelessWidget {
                   value: Formatters.chips(organizerAmount),
                 ),
                 if (prizes.isNotEmpty) ...[
-                  const Divider(color: AppColors.border, height: AppSpacing.lg),
+                  Divider(color: AppColors.border, height: AppSpacing.lg),
                   Text(
                     'Final distribution (calculated now)',
                     style: AppTypography.bodyXs.copyWith(
@@ -840,10 +886,18 @@ class _ConfirmRow extends StatelessWidget {
 /// Records any final eliminations and rebuys that happened during the
 /// last hand before the deadline (spec §4.13).
 class _ConfirmPlayersStep extends StatelessWidget {
-  const _ConfirmPlayersStep({required this.game, required this.onConfirm});
+  const _ConfirmPlayersStep({
+    required this.game,
+    required this.onConfirm,
+    this.onGrantRebuy,
+  });
 
   final LiveGame game;
   final VoidCallback onConfirm;
+
+  /// Records a final eligible rebuy during the settlement break. Null when
+  /// rebuys were never enabled for this tournament.
+  final void Function(String playerId)? onGrantRebuy;
 
   @override
   Widget build(BuildContext context) {
@@ -863,8 +917,9 @@ class _ConfirmPlayersStep extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Check the eliminations and rebuys from the last hand before the '
-            'deadline. The app already tracks each one — this confirms the exact '
-            'field before the add-on price is calculated.',
+            'deadline. A hand that began before the deadline can still be '
+            'settled here — tap "Final rebuy" to record one. This confirms the '
+            'exact field before the add-on price is calculated.',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),
@@ -914,6 +969,20 @@ class _ConfirmPlayersStep extends StatelessWidget {
                             label: 'Out',
                             variant: AppBadgeVariant.red,
                           ),
+                    // User Flow section 4.13 / 12-056: "the administrator
+                    // records any final valid rebuy from a hand that began
+                    // before the deadline". That happens HERE, during the
+                    // break — there was previously no way to do it, because
+                    // `rebuysClosed` flipped the moment settlement began.
+                    if (onGrantRebuy != null && p.rebuys == 0) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => onGrantRebuy!(p.id),
+                        child: const Text('Final rebuy'),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -940,7 +1009,7 @@ class _ConfirmPlayersStep extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.people_outline,
                   size: 16,
                   color: AppColors.primary,

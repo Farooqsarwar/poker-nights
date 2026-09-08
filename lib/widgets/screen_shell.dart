@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -8,12 +10,15 @@ import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 import '../responsive/responsive.dart';
+import 'glass_styles.dart';
 import 'app_avatar.dart';
 import 'app_button.dart';
 import 'bottom_nav.dart';
 import 'brand_lockup.dart';
 import 'nav_drawer.dart';
+import 'shell_insets.dart';
 import 'sidebar.dart';
+import 'backgrounds.dart';
 
 /// App shell that renders the persistent navigation for the four main tabs.
 ///
@@ -49,10 +54,26 @@ class ScreenShell extends StatelessWidget {
       return _Gate(path: requiredPath);
     }
 
-    // Guests get a bare scaffold with no navigation chrome — every nav
-    // button in the sidebar / drawer / bottom-nav would be a dead end.
+    // Guests get a minimal scaffold: no full nav chrome (every nav button
+    // would be a dead end) but we DO show a top-bar with an exit/back button
+    // so guests are never stranded with no way to leave (audit finding P1).
     if (!signedIn && guestOk) {
-      return Scaffold(backgroundColor: AppColors.background, body: child);
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: 'Exit',
+            onPressed: () {
+              GoRouter.of(context).go(RoutePaths.join);
+            },
+          ),
+        ),
+        body: ThemedAppBackground(child: child),
+      );
     }
 
     return ResponsiveBuilder(
@@ -61,12 +82,23 @@ class ScreenShell extends StatelessWidget {
           return _MobileShell(child: child);
         }
         return Scaffold(
-          body: Row(
-            children: [
-              const Sidebar(),
-              const VerticalDivider(width: 1, color: AppColors.border),
-              Expanded(child: child),
-            ],
+          backgroundColor: Colors.transparent, // Background provided by ThemedAppBackground
+          body: ThemedAppBackground(
+            child: Row(
+              children: [
+                const Sidebar(),
+                VerticalDivider(width: 1, color: AppColors.border),
+                // Tell dialogs how much chrome sits to their left, so they
+                // centre over the CONTENT rather than over the window — see
+                // ShellInsets.
+                Expanded(
+                  child: ShellInsets(
+                    left: kSidebarWidth + 1,
+                    child: child,
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -84,48 +116,50 @@ class _Gate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(
-                  Icons.lock_outline,
-                  size: 40,
-                  color: AppColors.mutedForeground,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Signed out',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.display(size: AppFontSizes.xl),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'This page needs a signed-in account. Guests can only watch the live game.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodySm.copyWith(
+      backgroundColor: Colors.transparent,
+      body: ThemedAppBackground(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Icon(
+                    Icons.lock_outline,
+                    size: 40,
                     color: AppColors.mutedForeground,
                   ),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                AppButton(
-                  fullWidth: true,
-                  onPressed: () => context.go('${RoutePaths.login}?next=$path'),
-                  child: const Text('Sign in'),
-                ),
-                AppButton(
-                  fullWidth: true,
-                  variant: AppButtonVariant.ghost,
-                  onPressed: () => context.go(RoutePaths.landing),
-                  child: const Text('Back to start'),
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Signed out',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.display(size: AppFontSizes.xl),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'This page needs a signed-in account. Guests can only watch the live game.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  AppButton(
+                    fullWidth: true,
+                    onPressed: () => context.go('${RoutePaths.login}?next=$path'),
+                    child: const Text('Sign in'),
+                  ),
+                  AppButton(
+                    fullWidth: true,
+                    variant: AppButtonVariant.ghost,
+                    onPressed: () => context.go(RoutePaths.landing),
+                    child: const Text('Back to start'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -142,19 +176,30 @@ class _MobileShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              _MobileTopBar(onMenu: app.toggleDrawer),
-              Expanded(child: child),
-            ],
-          ),
-          const Positioned(left: 0, right: 0, bottom: 0, child: BottomNav()),
-          const NavDrawer(),
-        ],
+      backgroundColor: Colors.transparent,
+      body: ThemedAppBackground(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                _MobileTopBar(onMenu: app.toggleDrawer),
+                Expanded(
+                  // The bottom nav floats over the content, so give every
+                  // screen clearance equal to the nav's height (64 + inset)
+                  // and nothing — like a chat composer — hides behind it.
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 64 + bottomInset),
+                    child: child,
+                  ),
+                ),
+              ],
+            ),
+            const Positioned(left: 0, right: 0, bottom: 0, child: BottomNav()),
+            const NavDrawer(),
+          ],
+        ),
       ),
     );
   }
@@ -168,85 +213,63 @@ class _MobileTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final unread = app.unreadCount;
     final user = app.user;
 
-    return Container(
-      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
-      color: AppColors.card,
-      child: Container(
-        height: 60,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.border)),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: Glass.blurMedium,
+          sigmaY: Glass.blurMedium,
         ),
-        child: Row(
-          children: [
-            InkWell(
-              onTap: onMenu,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xs,
-                  vertical: AppSpacing.xs,
-                ),
-                child: Icon(Icons.menu, color: AppColors.foreground, size: 22),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            const PokerNightLogo(size: AppFontSizes.xxl),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              'Poker Night',
-              style: AppTypography.crimsonShimmer(
-                size: AppFontSizes.md,
-                weight: FontWeight.w700,
-              ),
-            ),
-            const Spacer(),
-            InkWell(
-              onTap: () => context.go(RoutePaths.notifications),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                child: Stack(
-                  children: [
-                    const Icon(
-                      Icons.notifications_none,
-                      color: AppColors.mutedForeground,
-                      size: 24,
-                    ),
-                    if (unread > 0)
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
+        child: Container(
+          padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
+          decoration: Glass.glassTopBar(),
+          child: SizedBox(
+            height: 60,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: Row(
+                children: [
+                  InkWell(
+                    onTap: onMenu,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xs,
+                        vertical: AppSpacing.xs,
                       ),
-                  ],
-                ),
+                      child: Icon(Icons.menu, color: AppColors.foreground, size: 22),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  const PokerNightLogo(size: AppFontSizes.xxl),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(
+                    'Poker Night',
+                    style: AppTypography.crimsonShimmer(
+                      size: AppFontSizes.md,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  const SizedBox(width: AppSpacing.sm),
+                  if (user != null)
+                    InkWell(
+                      onTap: () => context.go(RoutePaths.profile),
+                      borderRadius: BorderRadius.circular(28),
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: AppAvatar(name: user.name),
+                      ),
+                    ),
+                ],
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
-            if (user != null)
-              InkWell(
-                onTap: () => context.go(RoutePaths.profile),
-                borderRadius: BorderRadius.circular(28),
-                child: SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: AppAvatar(name: user.name),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
+
   }
 }

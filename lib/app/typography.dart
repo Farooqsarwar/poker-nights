@@ -21,17 +21,18 @@ class AppTypography {
 
   static TextStyle display({
     double size = AppFontSizes.lg,
-    FontWeight weight = FontWeight.w600,
-    Color color = AppColors.foreground,
-    double? height,
+    FontWeight weight = FontWeight.w700,
+    Color? color,
+    double? height = 1.1,
     double? letterSpacing,
   }) {
     return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
-      color: color,
+      color: color ?? AppColors.foreground,
       height: height,
-      letterSpacing: letterSpacing,
+      // Space Grotesk display headers look premium with tighter tracking
+      letterSpacing: letterSpacing ?? (size >= AppFontSizes.xl ? -0.8 : -0.3),
     ).copyWith(
       fontFamilyFallback: const [
         'Noto Color Emoji',
@@ -44,16 +45,17 @@ class AppTypography {
   static TextStyle body({
     double size = AppFontSizes.md,
     FontWeight weight = FontWeight.w400,
-    Color color = AppColors.foreground,
-    double? height,
+    Color? color,
+    double? height = 1.5,
     double? letterSpacing,
   }) {
     return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
-      color: color,
+      color: color ?? AppColors.foreground,
       height: height,
-      letterSpacing: letterSpacing,
+      // Slight positive tracking for body text improves legibility
+      letterSpacing: letterSpacing ?? 0.2,
     ).copyWith(
       fontFamilyFallback: const [
         'Noto Color Emoji',
@@ -66,14 +68,14 @@ class AppTypography {
   static TextStyle mono({
     double size = AppFontSizes.md,
     FontWeight weight = FontWeight.w500,
-    Color color = AppColors.foreground,
+    Color? color,
     double? height,
     double? letterSpacing,
   }) {
     return GoogleFonts.spaceMono(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
-      color: color,
+      color: color ?? AppColors.foreground,
       height: height,
       letterSpacing: letterSpacing,
     ).copyWith(
@@ -142,7 +144,10 @@ class AppTypography {
       titleSmall: body(size: AppFontSizes.sm, weight: FontWeight.w500),
       bodyLarge: body(size: AppFontSizes.md),
       bodyMedium: body(size: AppFontSizes.sm),
-      bodySmall: body(size: AppFontSizes.xs, color: AppColors.mutedForeground),
+      bodySmall: body(
+        size: AppFontSizes.xs,
+        color: AppColors.mutedForeground,
+      ),
       labelLarge: body(size: AppFontSizes.sm, weight: FontWeight.w600),
       labelMedium: body(size: AppFontSizes.xs, weight: FontWeight.w500),
       labelSmall: body(size: AppFontSizes.xs),

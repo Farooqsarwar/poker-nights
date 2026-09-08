@@ -5,42 +5,94 @@ import 'package:provider/provider.dart';
 import '../app/colors.dart';
 import '../app/route_paths.dart';
 import '../app/typography.dart';
+import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
+import 'create_group_dialog.dart';
+import 'glass_styles.dart';
+import 'glass_surface.dart';
 
-/// Mobile bottom navigation mirroring the web `Nav` bottom bar.
+/// Mobile bottom navigation — the single primary navigation model.
+///
+/// Items: Home · Games · Chat · Members · More. Secondary destinations
+/// (Polls, History, Cash Game, Settings) live in the More sheet's grid so
+/// every option stays one tap away (IA §2).
 class BottomNav extends StatelessWidget {
   const BottomNav({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    final location = GoRouterState.of(context).uri.path;
-    final unread = app.unreadCount;
+    final location = GoRouterState.of(context).uri.toString();
 
-    final items = [
-      _BottomItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
-      _BottomItem(RoutePaths.group, 'Group', Icons.groups_outlined, null),
+    final app = context.watch<AppProvider>();
+    final group = app.currentGroup;
+    final items = <_BottomItem>[
       _BottomItem(
-        RoutePaths.notifications,
-        'Alerts',
-        Icons.notifications_none,
-        unread,
+        path: RoutePaths.home,
+        label: 'Home',
+        icon: Icons.home_outlined,
+        activeColor: AppColors.primary,
       ),
-      _BottomItem(RoutePaths.history, 'History', Icons.history, null),
+      if (app.hasCurrentGroup) ...[
+        _BottomItem(
+          path: RoutePaths.group,
+          label: 'Games',
+          icon: Icons.sports_esports_outlined,
+          activeColor: AppColors.primary,
+        ),
+        _BottomItem(
+          path: RoutePaths.chat,
+          label: 'Chat',
+          icon: Icons.chat_bubble_outline,
+          activeColor: AppColors.primary,
+          badge: app.unreadGroupChatCount(group.id),
+        ),
+        _BottomItem(
+          path: RoutePaths.members,
+          label: 'Members',
+          icon: Icons.groups_outlined,
+          activeColor: AppColors.primary,
+          badge: group.members.length,
+        ),
+        _BottomItem(
+          path: '#more',
+          label: 'More',
+          icon: Icons.more_horiz,
+          activeColor: AppColors.primary,
+          activePaths: const [
+            RoutePaths.polls,
+            RoutePaths.history,
+            RoutePaths.cashGame,
+            RoutePaths.settings,
+          ],
+          onTap: () => _openMore(context),
+        ),
+      ] else ...[
+        _BottomItem(
+          path: '#new-group',
+          label: 'New Group',
+          icon: Icons.group_add_outlined,
+          activeColor: AppColors.primary,
+          onTap: () => openCreateGroupDialog(context),
+        ),
+        _BottomItem(
+          path: '#more',
+          label: 'More',
+          icon: Icons.more_horiz,
+          activeColor: AppColors.primary,
+          activePaths: const [
+            RoutePaths.history,
+            RoutePaths.cashGame,
+            RoutePaths.settings,
+          ],
+          onTap: () => _openMore(context),
+        ),
+      ],
     ];
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: const Border(top: BorderSide(color: AppColors.border)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+    return GlassSurface(
+      blur: Glass.blurMedium,
+      borderRadius: BorderRadius.zero,
+      decoration: Glass.glassBottomNav(),
       child: SafeArea(
         top: false,
         child: Row(
@@ -48,7 +100,7 @@ class BottomNav extends StatelessWidget {
             for (final item in items)
               Expanded(
                 child: InkWell(
-                  onTap: () => context.go(item.path),
+                  onTap: item.onTap ?? () => context.go(item.path),
                   child: SizedBox(
                     height: 64,
                     child: Stack(
@@ -57,14 +109,22 @@ class BottomNav extends StatelessWidget {
                         Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            if (location == item.path)
+                            if (_isActive(item, location))
                               Container(
                                 width: 24,
                                 height: 2,
                                 margin: const EdgeInsets.only(bottom: 4),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary,
+                                  color: item.activeColor,
                                   borderRadius: BorderRadius.circular(2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: item.activeColor.withValues(
+                                        alpha: 0.50,
+                                      ),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
                                 ),
                               )
                             else
@@ -72,8 +132,8 @@ class BottomNav extends StatelessWidget {
                             Icon(
                               item.icon,
                               size: 24,
-                              color: location == item.path
-                                  ? AppColors.primary
+                              color: _isActive(item, location)
+                                  ? item.activeColor
                                   : AppColors.mutedForeground,
                             ),
                             const SizedBox(height: 2),
@@ -82,8 +142,8 @@ class BottomNav extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTypography.bodyXs.copyWith(
-                                color: location == item.path
-                                    ? AppColors.primary
+                                color: _isActive(item, location)
+                                    ? item.activeColor
                                     : AppColors.mutedForeground,
                               ),
                             ),
@@ -91,24 +151,9 @@ class BottomNav extends StatelessWidget {
                         ),
                         if (item.badge != null && item.badge! > 0)
                           Positioned(
-                            top: 6,
+                            top: 4,
                             right: 24,
-                            child: Container(
-                              width: 16,
-                              height: 16,
-                              alignment: Alignment.center,
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                item.badge! > 9 ? '9+' : '${item.badge}',
-                                style: AppTypography.monoXs.copyWith(
-                                  color: AppColors.primaryForeground,
-                                  fontSize: 9,
-                                ),
-                              ),
-                            ),
+                            child: _BadgeCount(count: item.badge!),
                           ),
                       ],
                     ),
@@ -120,13 +165,277 @@ class BottomNav extends StatelessWidget {
       ),
     );
   }
+
+  bool _isActive(_BottomItem item, String location) {
+    if (location == item.path) return true;
+    return item.activePaths?.contains(location) ?? false;
+  }
+
+  void _openMore(BuildContext context) {
+    final app = context.read<AppProvider>();
+    final hasGroup = app.hasCurrentGroup;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Glass.solid(AppColors.card, 0.98),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            0,
+            AppSpacing.md,
+            AppSpacing.lg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Explore',
+                style: AppTypography.display(
+                  size: AppFontSizes.lg,
+                  weight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Everything else, one tap away',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              // A LIST, not a grid.
+              //
+              // `GridView.count` defaults to square tiles, so on a narrow
+              // phone each one became half the screen wide and just as tall —
+              // an icon at the top, a label at the bottom and a large empty
+              // gap between them, with the whole sheet pushed down the screen.
+              // A row per destination is the ordinary pattern for a "more"
+              // menu: nothing empty, a bigger tap target, and the sheet only
+              // as tall as it needs to be.
+              _MoreRow(
+                icon: Icons.poll_outlined,
+                label: 'Polls',
+                subtitle: 'Vote & plan',
+                count: hasGroup ? app.currentGroup.polls.length : 0,
+                onTap: hasGroup
+                    ? () {
+                        Navigator.of(sheetContext).pop();
+                        context.go(RoutePaths.polls);
+                      }
+                    : null,
+              ),
+              _MoreRow(
+                icon: Icons.history,
+                label: 'History',
+                subtitle: 'Past games',
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  context.go(RoutePaths.history);
+                },
+              ),
+              _MoreRow(
+                icon: Icons.payments_outlined,
+                label: 'Cash Game',
+                subtitle: 'Live cash play',
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  context.go(RoutePaths.cashGame);
+                },
+              ),
+              _MoreRow(
+                icon: Icons.settings_outlined,
+                label: 'Settings',
+                subtitle: 'Account & group',
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  context.go(RoutePaths.settings);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MoreRow extends StatelessWidget {
+  const _MoreRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.subtitle,
+    this.count,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? subtitle;
+  final VoidCallback? onTap;
+  final int? count;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.md,
+            ),
+            decoration: BoxDecoration(
+              color: Glass.solidTint(AppColors.muted),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 20,
+                    color: enabled
+                        ? AppColors.primary
+                        : AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: enabled
+                              ? AppColors.foreground
+                              : AppColors.mutedForeground,
+                        ),
+                      ),
+                      if (subtitle != null)
+                        Text(
+                          subtitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (count != null && count! > 0) ...[
+                  _CountChip(count: count!),
+                  const SizedBox(width: AppSpacing.sm),
+                ],
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: AppColors.mutedForeground,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BadgeCount extends StatelessWidget {
+  const _BadgeCount({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.50),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: Text(
+        count > 9 ? '9+' : '$count',
+        style: AppTypography.monoXs.copyWith(
+          color: AppColors.primaryForeground,
+          fontSize: 9,
+        ),
+      ),
+    );
+  }
+}
+
+/// Neutral secondary chip showing a count (e.g. members on the More sheet).
+class _CountChip extends StatelessWidget {
+  const _CountChip({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.muted,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(
+        '$count',
+        style: AppTypography.monoSm.copyWith(
+          color: AppColors.mutedForeground,
+        ),
+      ),
+    );
+  }
 }
 
 class _BottomItem {
-  const _BottomItem(this.path, this.label, this.icon, this.badge);
+  const _BottomItem({
+    required this.path,
+    required this.label,
+    required this.icon,
+    required this.activeColor,
+    this.badge,
+    this.onTap,
+    this.activePaths,
+  });
 
   final String path;
   final String label;
   final IconData icon;
+  final Color activeColor;
   final int? badge;
+  final VoidCallback? onTap;
+
+  /// Additional locations that should light this item up as active.
+  final List<String>? activePaths;
 }

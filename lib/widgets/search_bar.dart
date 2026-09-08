@@ -30,7 +30,7 @@ class SearchBar extends StatelessWidget {
         hintStyle: AppTypography.bodySm.copyWith(
           color: AppColors.onSurfaceHint,
         ),
-        prefixIcon: const Icon(
+        prefixIcon: Icon(
           Icons.search,
           color: AppColors.mutedForeground,
           size: 20,
@@ -38,7 +38,7 @@ class SearchBar extends StatelessWidget {
         suffixIcon: controller.text.isEmpty
             ? null
             : IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.close,
                   color: AppColors.mutedForeground,
                   size: 18,
@@ -58,11 +58,11 @@ class SearchBar extends StatelessWidget {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: AppColors.ring),
+          borderSide: BorderSide(color: AppColors.ring),
         ),
       ),
     );

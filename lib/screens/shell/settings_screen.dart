@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -7,6 +8,9 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
+import '../../services/push_service.dart';
+import '../../services/onesignal_sender.dart';
+import '../../theme/theme_palette.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -14,6 +18,8 @@ import '../../widgets/app_divider.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
 import '../../widgets/app_toggle.dart';
+import '../../widgets/group_switcher.dart';
+import '../../app/icons.dart';
 
 /// Settings mirroring the account area of the web app.
 class SettingsScreen extends StatelessWidget {
@@ -29,21 +35,27 @@ class SettingsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Settings',
-            style: AppTypography.display(
-              size: AppFontSizes.xxxl,
-              weight: FontWeight.w700,
-            ),
-          ),
+          const GroupContextHeader(title: 'Settings'),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Preferences for your account',
+            'Account and group preferences',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
+          // ── Group settings ───────────────────────────────────────────────
+          // Group settings live in one place so the user never wonders
+          // whether a setting changes them or the group (IA §4).
+          if (app.hasCurrentGroup) ...[
+            Text(
+              'Your group',
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _GroupSettingsCard(app: app),
+            const SizedBox(height: AppSpacing.xl),
+          ],
           // Notifications
           Text(
             'Gameplay',
@@ -64,16 +76,33 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   showDivider: true,
                 ),
-                // Audit fix C6: SMS alerts ("Email and SMS are not required",
-                // Tech §14.3) and chip-sound effects (not in the voice spec,
-                // §13.2) were out of MVP scope and were removed.
+                _SettingRow(
+                  icon: Icons.lightbulb_outline,
+                  title: 'Admin app tour',
+                  subtitle: 'Show step-by-step guidance during tournaments',
+                  trailing: AppToggle(
+                    value: app.showAppTour,
+                    onChanged: (v) => app.setAppTour(v),
+                  ),
+                  showDivider: true,
+                ),
+                // Push notifications via OneSignal (free-plan fan-out — no
+                // Cloud Function). Toggling on shows the OS/browser prompt.
                 _SettingRow(
                   icon: Icons.notifications_outlined,
                   title: 'Push notifications',
-                  subtitle: 'Get alerts for RSVPs and game events',
+                  subtitle:
+                      'Tournament, RSVP and result alerts on every device',
                   trailing: AppToggle(
                     value: app.notificationsEnabled,
-                    onChanged: (v) => app.setNotificationsEnabled(v),
+                    onChanged: (v) async {
+                      final error = await app.setNotificationsEnabled(v);
+                      if (error != null && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(error)),
+                        );
+                      }
+                    },
                   ),
                   showDivider: false,
                 ),
@@ -105,7 +134,7 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.casino_outlined,
                   title: 'Chip sets',
                   subtitle: 'Manage saved chip denominations and colours',
-                  trailing: const Icon(
+                  trailing: Icon(
                     Icons.chevron_right,
                     color: AppColors.mutedForeground,
                   ),
@@ -149,28 +178,75 @@ class SettingsScreen extends StatelessWidget {
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.sm),
+          // Color theme selector
+          Text(
+            'Color theme',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _ThemeGrid(
+            activeId: app.colorTheme,
+            onSelect: (id) => app.setColorTheme(id),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          // Developer / Debug
+          Text(
+            'Developer',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                _ThemeChip(
-                  label: 'Dark',
-                  active: app.themePreference == 'dark',
-                  onTap: () => app.setThemePreference('dark'),
+            padding: EdgeInsets.zero,
+            child: InkWell(
+              onTap: () {
+                final push = PushService.instance;
+                if (!push.permissionGranted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Push permission not granted!')),
+                  );
+                  return;
+                }
+                if (!OneSignalSender.instance.configured) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Push not configured — missing ONESIGNAL_REST_API_KEY.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                if (app.user == null) return;
+                OneSignalSender.instance.send(
+                  title: 'Debug Push',
+                  body: 'Hello! Your push notifications are working perfectly.',
+                  externalIds: [app.user!.id],
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Test push sent! It should arrive shortly.')),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Row(
+                  children: [
+                    Icon(Icons.bug_report, size: 20, color: AppColors.icon),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Send Test Push (Debug)', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 2),
+                          Text('Fires a real push to this device.', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                _ThemeChip(
-                  label: 'Light',
-                  active: app.themePreference == 'light',
-                  onTap: () => app.setThemePreference('light'),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                _ThemeChip(
-                  label: 'System',
-                  active: app.themePreference == 'system',
-                  onTap: () => app.setThemePreference('system'),
-                ),
-              ],
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -184,7 +260,7 @@ class SettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.person_outline,
                   size: 22,
                   color: AppColors.icon,
@@ -210,14 +286,14 @@ class SettingsScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (user?.isAdmin == true)
+                if (app.isAdmin)
                   const AppBadge(label: 'Admin', variant: AppBadgeVariant.gold),
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
           AppButton(
-            variant: AppButtonVariant.danger,
+            variant: AppButtonVariant.secondary,
             onPressed: () => _confirmSignOut(context, app),
             child: const Text('Sign out'),
           ),
@@ -277,40 +353,127 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-class _ThemeChip extends StatelessWidget {
-  const _ThemeChip({
-    required this.label,
-    required this.active,
+/// 3×2 grid of theme cards showing each palette's colours.
+class _ThemeGrid extends StatelessWidget {
+  const _ThemeGrid({required this.activeId, required this.onSelect});
+
+  final String activeId;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <List<ThemePalette>>[];
+    for (var i = 0; i < ThemePalettes.all.length; i += 3) {
+      final end = (i + 3 < ThemePalettes.all.length) ? i + 3 : ThemePalettes.all.length;
+      rows.add(ThemePalettes.all.sublist(i, end));
+    }
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        children: [
+          for (final entry in rows.asMap().entries) ...[
+            Row(
+              children: [
+                for (final p in entry.value) ...[
+                  Expanded(
+                    child: _ThemeCard(
+                      palette: p,
+                      selected: p.id == activeId,
+                      onTap: () => onSelect(p.id),
+                    ),
+                  ),
+                  if (p != entry.value.last)
+                    const SizedBox(width: AppSpacing.sm),
+                ],
+              ],
+            ),
+            if (entry.key < rows.length - 1)
+              const SizedBox(height: AppSpacing.sm),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A single theme card showing the palette name, a colour swatch preview,
+/// and a small sample of the UI colours.
+class _ThemeCard extends StatelessWidget {
+  const _ThemeCard({
+    required this.palette,
+    required this.selected,
     required this.onTap,
   });
 
-  final String label;
-  final bool active;
+  final ThemePalette palette;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    Theme.of(context);
+    return InkWell
+      (
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
+      child: AnimatedContainer(
+        duration: AppDurations.fast,
+        padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
-          color: active ? AppColors.primarySoft : AppColors.card,
+          color: palette.card,
           borderRadius: BorderRadius.circular(AppRadius.sm),
           border: Border.all(
-            color: active ? AppColors.primary : AppColors.border,
+            color: selected ? palette.primary : palette.border,
+            width: selected ? 1.6 : 1,
           ),
         ),
-        child: Text(
-          label,
-          style: AppTypography.bodySm.copyWith(
-            color: active ? AppColors.primary : AppColors.mutedForeground,
-            fontWeight: FontWeight.w600,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Colour swatch row: primary, background, card, border
+            Row(
+              children: [
+                _swatch(palette.primary),
+                const SizedBox(width: 4),
+                _swatch(palette.background),
+                const SizedBox(width: 4),
+                _swatch(palette.card),
+                const SizedBox(width: 4),
+                _swatch(palette.border),
+                if (selected) ...[
+                  const Spacer(),
+                  Icon(Icons.check_circle, size: 16, color: palette.primary),
+                ],
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              palette.name,
+              style: AppTypography.bodyXs.copyWith(
+                color: palette.foreground,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _swatch(Color c) {
+    return Container(
+      width: 16,
+      height: 16,
+      decoration: BoxDecoration(
+        color: c,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: c.computeLuminance() > 0.5
+              ? Colors.black.withValues(alpha: 0.15)
+              : Colors.white.withValues(alpha: 0.15),
         ),
       ),
     );
@@ -336,13 +499,14 @@ class _SettingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     return InkWell(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           border: showDivider
-              ? const Border(bottom: BorderSide(color: AppColors.border))
+              ? Border(bottom: BorderSide(color: AppColors.border))
               : null,
         ),
         child: Row(
@@ -371,6 +535,232 @@ class _SettingRow extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             trailing,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Group settings section — group name, members, game defaults, invite code,
+/// and the danger zone (leave / transfer). Keeps group concerns clearly
+/// separate from account/app preferences (IA §4).
+class _GroupSettingsCard extends StatelessWidget {
+  const _GroupSettingsCard({required this.app});
+
+  final AppProvider app;
+
+  @override
+  Widget build(BuildContext context) {
+    final group = app.currentGroup;
+    final chip = Icons.chevron_right;
+    final chevron = Icon(chip, color: AppColors.mutedForeground, size: 20);
+
+    void copyCode() {
+      Clipboard.setData(ClipboardData(text: group.joinCode));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Group code copied to clipboard')),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              _SettingRow(
+                icon: groupIconMap[group.icon] ?? Icons.shield_outlined,
+                title: group.name,
+                subtitle: '${group.members.length} members ○ ${group.ownerId == app.user?.id ? 'You own this group' : 'Group details'}',
+                trailing: chevron,
+                showDivider: true,
+                onTap: () => context.go(RoutePaths.group),
+              ),
+              _SettingRow(
+                icon: Icons.groups_outlined,
+                title: 'Manage members',
+                subtitle: 'Admins, co-admins, remove members',
+                trailing: chevron,
+                showDivider: true,
+                onTap: () =>
+                    context.go(RoutePaths.members),
+              ),
+              _SettingRow(
+                icon: Icons.style_outlined,
+                title: 'Game defaults',
+                subtitle: 'Chip sets and tournament presets',
+                trailing: chevron,
+                showDivider: true,
+                onTap: () => context.push(RoutePaths.presets),
+              ),
+              _SettingRow(
+                icon: Icons.qr_code_2_outlined,
+                title: 'Invite members',
+                subtitle: 'Group code: ${group.joinCode} · tap to copy',
+                trailing: chevron,
+                showDivider: false,
+                onTap: copyCode,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          padding: EdgeInsets.zero,
+          borderColor: AppColors.destructive.withValues(alpha: 0.3),
+          child: Column(
+            children: [
+              if (app.isAdmin)
+                _SettingRow(
+                  icon: Icons.admin_panel_settings_outlined,
+                  title: 'Transfer ownership',
+                  subtitle: 'Hand the group to another member',
+                  trailing: chevron,
+                  showDivider: true,
+                  onTap: () => _showTransferOwnershipDialog(context),
+                ),
+              InkWell(
+                onTap: () => _confirmLeaveGroup(context),
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.exit_to_app_outlined,
+                        size: 20,
+                        color: AppColors.destructive,
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Leave group',
+                              style: AppTypography.bodySm.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.destructive,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'You can rejoin with the group code',
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: AppColors.destructive.withValues(alpha: 0.6),
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _confirmLeaveGroup(BuildContext context) {
+    final app = this.app;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Leave Group'),
+        content: const Text(
+          'Leave this group? You can rejoin with the group code.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              app.leaveGroup();
+              context.go(RoutePaths.home);
+            },
+            child: Text(
+              'Leave',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.destructive,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTransferOwnershipDialog(BuildContext context) {
+    final app = this.app;
+    final members = app.currentGroup.members
+        .where((m) => m.id != app.user?.id)
+        .toList();
+    if (members.isEmpty) return;
+    String? selectedId;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          backgroundColor: AppColors.card,
+          title: const Text('Transfer Ownership'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Select a member to become the new group owner. This cannot be undone.',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              ...members.map(
+                (m) => RadioListTile<String>(
+                  value: m.id,
+                  groupValue: selectedId,
+                  onChanged: (v) => setState(() => selectedId = v),
+                  title: Text(m.name, style: AppTypography.bodySm),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(
+                'Cancel',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: selectedId == null
+                  ? null
+                  : () async {
+                      Navigator.of(ctx).pop();
+                      await app.transferGroupOwnership(selectedId!);
+                    },
+              child: const Text('Transfer'),
+            ),
           ],
         ),
       ),

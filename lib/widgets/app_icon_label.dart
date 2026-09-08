@@ -11,7 +11,7 @@ class AppIconLabel extends StatelessWidget {
     this.icon,
     this.trailing,
     this.iconSize = 14,
-    this.color = AppColors.icon,
+    this.color,
     this.textStyle,
   });
 
@@ -19,17 +19,18 @@ class AppIconLabel extends StatelessWidget {
   final IconData? icon;
   final IconData? trailing;
   final double iconSize;
-  final Color color;
+  final Color? color;
   final TextStyle? textStyle;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = color ?? AppColors.icon;
     return Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (icon != null) ...[
-          Icon(icon, size: iconSize, color: color),
+          Icon(icon, size: iconSize, color: effectiveColor),
           const SizedBox(width: 5),
         ],
         Flexible(
@@ -42,7 +43,7 @@ class AppIconLabel extends StatelessWidget {
         ),
         if (trailing != null) ...[
           const SizedBox(width: 5),
-          Icon(trailing, size: iconSize, color: color),
+          Icon(trailing, size: iconSize, color: effectiveColor),
         ],
       ],
     );

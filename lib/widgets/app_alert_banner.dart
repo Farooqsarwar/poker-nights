@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 
@@ -26,24 +27,24 @@ class AppAlertBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final (background, border, foreground) = switch (type) {
       AppAlertType.info => (
-        const Color(0x4D262626),
-        const Color(0x4D525252),
-        const Color(0xFFE4E4E7),
+        AppColors.muted,
+        AppColors.border,
+        AppColors.foreground,
       ),
       AppAlertType.warning => (
-        const Color(0x4D7F1D1D),
-        const Color(0x4D7F1D1D),
-        const Color(0xFFFECACA),
+        AppColors.warningSoft,
+        AppColors.warning,
+        AppColors.warningForeground,
       ),
       AppAlertType.success => (
-        const Color(0x4D262626),
-        const Color(0x4D525252),
-        const Color(0xFFE4E4E7),
+        AppColors.muted,
+        AppColors.border,
+        AppColors.foreground,
       ),
       AppAlertType.error => (
-        const Color(0x4D450A0A),
-        const Color(0x4D991B1B),
-        const Color(0xFFFECACA),
+        AppColors.destructiveSoft,
+        AppColors.destructive,
+        AppColors.destructiveForeground,
       ),
     };
 

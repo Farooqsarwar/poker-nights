@@ -1,100 +1,77 @@
 import 'package:flutter/material.dart';
 
-/// Centralized color palette for the Poker Night app.
+import '../theme/theme_palette.dart';
+
+/// Centralized colour accessors for the Poker Night app.
 ///
-/// Mirrors the `@theme` block in the original web UI's `index.css`.
-/// Do not hardcode colors inside widgets — reference these instead.
+/// All colours are derived from the active [ThemePalette]. The palette is
+/// swapped by [AppProvider] on theme change; every widget that reads
+/// `AppColors.xxx` gets the correct themed value automatically after the
+/// framework rebuilds the tree.
 class AppColors {
   AppColors._();
 
-  // ── Base tokens ────────────────────────────────────────────────────────────
-  static const Color background = Color(0xFF000000); // Pure black
-  static const Color foreground = Color(0xFFFFFFFF); // Pure white
-  static const Color card = Color(0xFF111111);
-  static const Color cardForeground = Color(0xFFFFFFFF);
-  static const Color primary = Color(0xFFB71C1C); // Dark red
-  static const Color primaryForeground = Color(0xFFFFFFFF);
-  static const Color primaryHover = Color(0xFFD32F2F);
-  static const Color secondary = Color(0xFF222222);
-  static const Color secondaryForeground = Color(0xFFE4E4E7);
-  static const Color muted = Color(0xFF1A1A1A);
-  static const Color mutedForeground = Color(0xFFA1A1AA);
-  static const Color accent = Color(0xFFB71C1C);
-  static const Color accentForeground = Color(0xFFFFFFFF);
-  static const Color border = Color(0xFF333333);
-  static const Color ring = Color(0xFFB71C1C);
-  static const Color destructive = Color(0xFFE53935);
-  static const Color destructiveForeground = Color(0xFFFFFFFF);
-  static const Color success = Color(0xFF2E7D32);
-  static const Color successForeground = Color(0xFFFFFFFF);
-  static const Color warning = Color(0xFFE65100);
-  static const Color warningForeground = Color(0xFFFFFFFF);
+  /// Replaces the active palette.  Called by [PokerNightApp] before building
+  /// the [MaterialApp] so the new values are in place before any descendant
+  /// reads them.
+  static ThemePalette currentPalette = ThemePalettes.red;
 
-  // ── Derived decorative colors used by specific components ─────────────────
-  static const Color black = Color(0xFF000000);
-  static const Color onSurfaceHint = Color(0xFF71717A);
-  static const Color surfaceHover = Color(0xFF27272A);
-  static const Color primarySoft = Color(0x26B71C1C);
-  static const Color primarySoftBorder = Color(0x4DB71C1C);
-  static const Color primarySoftStrong = Color(0x80B71C1C);
-  static const Color destructiveSoft = Color(0x26E53935);
-  static const Color successSoft = Color(0x262E7D32);
-  static const Color successSoftBorder = Color(0x4D2E7D32);
-  static const Color warningSoft = Color(0x26E65100);
-  static const Color warningSoftBorder = Color(0x4DE65100);
-  static const Color gold = Color(0xFFFFC107);
-  static const Color feltGlow = Color(0xFF220505);
-  static const Color glassOverlay = Color(0x99000000);
+  // ── Base tokens ────────────────────────────────────────────────────────────
+  static Color get background => currentPalette.background;
+  static Color get foreground => currentPalette.foreground;
+  static Color get card => currentPalette.card;
+  static Color get cardForeground => currentPalette.cardForeground;
+  static Color get primary => currentPalette.primary;
+  static Color get primaryForeground => currentPalette.onPrimary;
+  static Color get primaryHover => currentPalette.primaryHover;
+  static Color get secondary => currentPalette.secondary;
+  static Color get secondaryForeground => currentPalette.secondaryForeground;
+  static Color get muted => currentPalette.muted;
+  static Color get mutedForeground => currentPalette.mutedForeground;
+  static Color get accent => currentPalette.accent;
+  static Color get accentForeground => currentPalette.accentForeground;
+  static Color get border => currentPalette.border;
+  static Color get ring => currentPalette.ring;
+  static Color get destructive => currentPalette.destructive;
+  static Color get destructiveForeground => currentPalette.destructiveForeground;
+  static Color get success => currentPalette.success;
+  static Color get successForeground => currentPalette.successForeground;
+  static Color get warning => currentPalette.warning;
+  static Color get warningForeground => currentPalette.warningForeground;
+
+  // ── Derived decorative colours ─────────────────────────────────────────────
+  static Color get black => Colors.black;
+  static Color get onSurfaceHint => currentPalette.onSurfaceHint;
+  static Color get surfaceHover => currentPalette.surfaceHover;
+  static Color get primarySoft => currentPalette.primarySoft;
+  static Color get primarySoftBorder => currentPalette.primarySoftBorder;
+  static Color get primarySoftStrong => currentPalette.primarySoftStrong;
+  static Color get destructiveSoft => currentPalette.destructiveSoft;
+  static Color get successSoft => currentPalette.successSoft;
+  static Color get successSoftBorder => currentPalette.successSoftBorder;
+  static Color get warningSoft => currentPalette.warningSoft;
+  static Color get warningSoftBorder => currentPalette.warningSoftBorder;
+  static Color get gold => currentPalette.gold;
+  static Color get feltGlow => currentPalette.feltGlow;
+  static Color get glassOverlay => currentPalette.glassOverlay;
+  static Color get hairlineWhite => currentPalette.hairlineWhite;
+  static Color get hairlineBorder => currentPalette.hairlineBorder;
+  static Color get blackGlow => currentPalette.blackGlow;
+  static Color get feltGlowStrong => currentPalette.feltGlowStrong;
+  static Color get shadowDark => currentPalette.shadowDark;
+  static Color get shadowDeep => currentPalette.shadowDeep;
+  static Color get shadowSoft => currentPalette.shadowSoft;
 
   // ── Icons ──────────────────────────────────────────────────────────────────
-  /// Solid icons rendered across the app use this light red so they stay
-  /// legible on the near-black surfaces while keeping the casino theme.
-  static const Color icon = Color(0xFFE57373); // Light red (Material Red 300)
-  static const Color iconMuted = Color(0xFFEF9A9A); // Softer light red
+  static Color get icon => currentPalette.icon;
+  static Color get iconMuted => currentPalette.iconMuted;
 
-  // ── Low-level alpha variants ──
-  static const Color hairlineWhite = Color(0x33FFFFFF);
-  static const Color hairlineBorder = Color(0x4D333333);
-  static const Color blackGlow = Color(0x99000000);
-  static const Color feltGlowStrong = Color(0xCC220505);
-  static const Color shadowDark = Color(0x99000000);
-  static const Color shadowDeep = Color(0xFF000000);
-  static const Color shadowSoft = Color(0x40000000);
-
-  static const List<Color> avatarPalette = [
-    Color(0xFFB71C1C),
-    Color(0xFF212121),
-    Color(0xFF37474F),
-    Color(0xFFC62828),
-    Color(0xFF424242),
-    Color(0xFF455A64),
-  ];
-
-  static Color avatarColorFor(String name) {
-    if (name.isEmpty) return avatarPalette.first;
-    return avatarPalette[name.codeUnitAt(0) % avatarPalette.length];
-  }
+  // ── Avatar ─────────────────────────────────────────────────────────────────
+  static List<Color> get avatarPalette => currentPalette.avatarPalette;
+  static Color avatarColorFor(String name) => currentPalette.avatarColorFor(name);
 
   // ── Gradient helpers ───────────────────────────────────────────────────────
-  static const LinearGradient crimsonShimmer = LinearGradient(
-    colors: [
-      Color(0xFFB71C1C),
-      Color(0xFFE53935),
-      Color(0xFFB71C1C),
-      Color(0xFFB71C1C),
-    ],
-    stops: [0.0, 0.4, 0.6, 1.0],
-  );
-
-  static const RadialGradient luxuryGradient = RadialGradient(
-    center: Alignment.topRight,
-    radius: 1.6,
-    colors: [Color(0x33B71C1C), Color(0x00000000)],
-  );
-
-  static const RadialGradient feltBackground = RadialGradient(
-    center: Alignment(0, 0.7),
-    radius: 1.4,
-    colors: [Color(0x4D4A0B0B), Color(0xFF000000)],
-  );
+  static LinearGradient get crimsonShimmer => currentPalette.shimmerGradient;
+  static RadialGradient get luxuryGradient => currentPalette.luxuryGradient;
+  static RadialGradient get feltBackground => currentPalette.feltBackground;
 }

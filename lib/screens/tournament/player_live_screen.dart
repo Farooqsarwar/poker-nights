@@ -7,6 +7,7 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
+import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 
 import '../../utils/formatters.dart';
@@ -18,6 +19,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_tabs.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/tournament_display_block.dart';
@@ -48,7 +50,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final isAdmin = app.user?.isAdmin == true;
+    final isAdmin = app.isAdmin;
     // Guests get the LIMITED live view: timer, blinds, next level, players
     // remaining, average stack, their seat and announcements — no chat,
     // polls, payouts or full structure (Tech §6.6/§17, audit fix C1).
@@ -58,7 +60,13 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
         ? null
         : (isAdmin ? baseGame : app.viewerProjection);
 
-    if (game == null) {
+    if (game == null ||
+        (!app.isAdmin && game.status == LiveGameStatus.cancelled)) {
+      if (game != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.go(RoutePaths.home);
+        });
+      }
       return AppPage(
         maxWidth: 480,
         child: Column(
@@ -87,15 +95,17 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
         .firstOrNull;
     if (myPlayer == null && app.guestSession != null) {
       final s = app.guestSession!;
-      myPlayer = game.players
-          .where(
-            (p) =>
-                p.isGuest &&
-                p.name == s.name &&
-                p.inviterId == s.inviterId &&
-                p.guestSlot == s.slot,
-          )
-          .firstOrNull;
+      if (s.gameId == game.id) {
+        myPlayer = game.players
+            .where(
+              (p) =>
+                  p.isGuest &&
+                  p.name == s.name &&
+                  p.inviterId == s.inviterId &&
+                  p.guestSlot == s.slot,
+            )
+            .firstOrNull;
+      }
     }
 
     // Everyone seated at my table, so I know exactly where to sit (07-016).
@@ -123,11 +133,11 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
       maxWidth: 1200,
       child: Container(
         decoration: isFinalTable
-            ? const BoxDecoration(
+            ? BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFF2A0A10), Color(0xFF000000)],
+                  colors: [AppColors.destructive, AppColors.background],
                 ),
               )
             : null,
@@ -135,11 +145,48 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (isFinalTable)
-              Container(height: 4, color: const Color(0xFFFF2A2A)),
+              Container(height: 4, color: AppColors.destructive),
+            // Connection status banner (tech spec §4.2 — stale-state).
+            Consumer<AppProvider>(
+              builder: (_, app, x) {
+                if (app.isOffline) {
+                  return AppAlertBanner(
+                    type: AppAlertType.warning,
+                    message:
+                        'Connection interrupted — showing last known state.',
+                    onDismiss: null,
+                  );
+                }
+                if (app.hasReconnected) {
+                  return AppAlertBanner(
+                    type: AppAlertType.success,
+                    message: 'Back online — data is live.',
+                    actionLabel: 'Dismiss',
+                    onAction: () => app.clearReconnectedBanner(),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+            if (game.status == LiveGameStatus.paused)
+              const AppAlertBanner(
+                type: AppAlertType.warning,
+                message: 'Tournament is paused. Wait for the admin to resume.',
+              ),
             // Header
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                AppBackButton(
+                  onTap: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(RoutePaths.home);
+                    }
+                  },
+                ),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,8 +204,16 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                           Container(
                             width: 8,
                             height: 8,
-                            decoration: const BoxDecoration(
-                              color: AppColors.success,
+                            decoration: BoxDecoration(
+                              color:
+                                  game.status == LiveGameStatus.paused ||
+                                      game.status == LiveGameStatus.rebuypause
+                                  ? AppColors.warning
+                                  : game.status == LiveGameStatus.cancelled
+                                  ? AppColors.destructive
+                                  : game.status == LiveGameStatus.completed
+                                  ? AppColors.mutedForeground
+                                  : AppColors.success,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -192,9 +247,20 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.ghost,
                         onPressed: () => ChatSheet.show(context, game.id),
-                        child: const AppIconLabel(
-                          label: 'Chat',
-                          icon: Icons.chat_bubble_outline,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const AppIconLabel(
+                              label: 'Chat',
+                              icon: Icons.chat_bubble_outline,
+                            ),
+                            if (app.unreadGameChatCount(game.id) > 0) ...[
+                              const SizedBox(width: 4),
+                              ChatUnreadBadge(
+                                count: app.unreadGameChatCount(game.id),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                   ],
@@ -223,6 +289,31 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
+              if (game.status == LiveGameStatus.completed) ...[
+                AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    children: [
+                      Icon(Icons.emoji_events, size: 48, color: AppColors.icon),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'Tournament Complete!',
+                        style: AppTypography.display(
+                          size: AppFontSizes.xl,
+                          weight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      AppButton(
+                        fullWidth: true,
+                        onPressed: () => context.go(RoutePaths.resultPodium),
+                        child: const Text('View Final Results'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
               // Next level
               if (next != null)
                 AppCard(
@@ -288,7 +379,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                   Expanded(
                     child: _StatCard(
                       label: game.prizePoolLabel,
-                      value: Formatters.chips(game.structure.prizePool),
+                      value: Formatters.prize(game.structure.prizePool),
                       valueColor: AppColors.primary,
                     ),
                   ),
@@ -311,11 +402,27 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          Text(
-                            'Table ${myPlayer.table} · Seat ${myPlayer.seat}',
-                            style: AppTypography.monoXl.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                myPlayer.eliminated &&
+                                        myPlayer.eliminationPos != null
+                                    ? _ordinalPlace(myPlayer.eliminationPos!)
+                                    : 'Table ${myPlayer.table} · Seat ${myPlayer.seat}',
+                                style: AppTypography.monoXl.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if ((myPlayer.knockouts ?? 0) > 0)
+                                Text(
+                                  '${myPlayer.knockouts} knockout${myPlayer.knockouts! > 1 ? 's' : ''}',
+                                  style: AppTypography.bodySm.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                            ],
                           ),
                           const Spacer(),
                           Column(
@@ -335,6 +442,16 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                   padding: const EdgeInsets.only(top: 4),
                                   child: Text(
                                     '${myPlayer.rebuys} rebuy${myPlayer.rebuys > 1 ? 's' : ''}',
+                                    style: AppTypography.bodyXs.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                              if (myPlayer.hasAddOn)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    'Add-on taken',
                                     style: AppTypography.bodyXs.copyWith(
                                       color: AppColors.mutedForeground,
                                     ),
@@ -455,17 +572,16 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: device.isMobile ? 2 : 4,
-                            mainAxisSpacing: AppSpacing.xs,
-                            crossAxisSpacing: AppSpacing.xs,
-                            childAspectRatio: 3,
-                          ),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: device.isMobile ? 2 : 4,
+                        mainAxisSpacing: AppSpacing.xs,
+                        crossAxisSpacing: AppSpacing.xs,
+                        childAspectRatio: 3,
+                      ),
                       itemCount: activePlayers.length,
                       itemBuilder: (context, i) {
                         final p = activePlayers[i];
-                        final isMe = p.id == app.user?.id;
+                        final isMe = p.id == myPlayer?.id;
                         return Container(
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
@@ -554,7 +670,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 const AppAlertBanner(
                   type: AppAlertType.info,
                   message:
-                      'Rebuy period has ended. Add-ons are available. Wait for the host to start the next level.',
+                      'Rebuy period has ended. Add-ons are available. Wait for the admin to start the next level.',
                 ),
               ],
               // Guest account prompt
@@ -583,10 +699,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       ),
                       const SizedBox(height: AppSpacing.md),
                       AppButton(
-                        onPressed: () {
-                          app.logout();
-                          context.go(RoutePaths.landing);
-                        },
+                        onPressed: () => _showCreateAccountDialog(context, app),
                         child: const Text('Create Account'),
                       ),
                     ],
@@ -601,107 +714,131 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
+                    Table(
+                      columnWidths: const {
+                        0: FlexColumnWidth(1),
+                        1: FlexColumnWidth(2.5),
+                        2: FlexColumnWidth(1.5),
+                        3: FlexColumnWidth(1.5),
+                      },
+                      defaultVerticalAlignment:
+                          TableCellVerticalAlignment.middle,
                       children: [
-                        SizedBox(
-                          width: 56,
-                          child: Text(
-                            'Level',
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            'Blinds',
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 40,
-                          child: Text(
-                            'Ante',
-                            textAlign: TextAlign.right,
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 64,
-                          child: Text(
-                            'Duration',
-                            textAlign: TextAlign.right,
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    for (final l in game.structure.levels)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm,
-                        ),
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: AppColors.border,
-                              width: 0.5,
-                            ),
-                          ),
-                        ),
-                        child: Row(
+                        TableRow(
                           children: [
-                            SizedBox(
-                              width: 56,
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
                               child: Text(
-                                'Level ${l.level}',
-                                style: AppTypography.monoSm.copyWith(
-                                  fontWeight: FontWeight.w600,
+                                'Lv',
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
                                 ),
                               ),
                             ),
-                            Expanded(
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
                               child: Text(
-                                '${Formatters.chips(l.sb)} / ${Formatters.chips(l.bb)}',
-                                style: AppTypography.monoSm.copyWith(
-                                  color: AppColors.foreground,
+                                'Blinds',
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
                                 ),
                               ),
                             ),
-                            SizedBox(
-                              width: 40,
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
                               child: Text(
-                                l.ante == null
-                                    ? '—'
-                                    : Formatters.chips(l.ante!),
+                                'Ante',
                                 textAlign: TextAlign.right,
-                                style: AppTypography.monoXs.copyWith(
-                                  color: l.ante == null
-                                      ? AppColors.mutedForeground
-                                      : AppColors.accent,
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
                                 ),
                               ),
                             ),
-                            SizedBox(
-                              width: 64,
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
                               child: Text(
-                                '${l.durationMins}m',
+                                'Time',
                                 textAlign: TextAlign.right,
-                                style: AppTypography.monoXs.copyWith(
+                                style: AppTypography.bodyXs.copyWith(
                                   color: AppColors.mutedForeground,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      ),
+                        for (final l in game.structure.levels)
+                          TableRow(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: AppColors.border,
+                                  width: 0.5,
+                                ),
+                              ),
+                            ),
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.md,
+                                ),
+                                child: Text(
+                                  '${l.level}',
+                                  style: AppTypography.monoSm.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.md,
+                                ),
+                                child: Text(
+                                  '${Formatters.chips(l.sb)} / ${Formatters.chips(l.bb)}',
+                                  style: AppTypography.monoSm.copyWith(
+                                    color: AppColors.foreground,
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.md,
+                                ),
+                                child: Text(
+                                  l.ante == null
+                                      ? '—'
+                                      : Formatters.chips(l.ante!),
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: l.ante == null
+                                        ? AppColors.mutedForeground
+                                        : AppColors.accent,
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.md,
+                                ),
+                                child: Text(
+                                  '${l.durationMins}m',
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
                     if (game.settings.rebuys) ...[
                       const SizedBox(height: AppSpacing.md),
                       Container(
@@ -725,17 +862,6 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
               ),
             ],
             if (_tab == 'payouts') ...[
-              if (!isAdmin)
-                const AppAlertBanner(
-                  type: AppAlertType.warning,
-                  message:
-                      'Payout amounts are private — only organisers can see them.',
-                )
-              else
-                const AppAlertBanner(
-                  type: AppAlertType.info,
-                  message: 'Admin view — payout amounts are shown.',
-                ),
               const SizedBox(height: AppSpacing.md),
               AppCard(
                 padding: const EdgeInsets.all(AppSpacing.lg),
@@ -749,7 +875,11 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    if (game.structure.prizes.isEmpty)
+                    // Non-admin copies carry an empty `prizes` list and only
+                    // a paid-place COUNT — the amounts never leave the host's
+                    // device. Build the rows from that count so a member still
+                    // sees which positions pay, with '—' where money would be.
+                    if (game.structure.paidPlacesForDisplay == 0)
                       Text(
                         'No prizes set yet.',
                         style: AppTypography.bodySm.copyWith(
@@ -757,12 +887,19 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         ),
                       )
                     else
-                      for (final p in game.structure.prizes)
+                      for (final p in (game.structure.prizes.isNotEmpty
+                          ? game.structure.prizes
+                          : [
+                              for (var i = 1;
+                                  i <= game.structure.paidPlacesForDisplay;
+                                  i++)
+                                Prize(place: i, amount: 0),
+                            ]))
                         Container(
                           padding: const EdgeInsets.symmetric(
                             vertical: AppSpacing.sm,
                           ),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             border: Border(
                               bottom: BorderSide(
                                 color: AppColors.border,
@@ -791,7 +928,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                 ),
                               ),
                               Text(
-                                isAdmin ? Formatters.chips(p.amount) : '—',
+                                isAdmin ? Formatters.prize(p.amount) : '—',
                                 style: AppTypography.monoSm.copyWith(
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.primary,
@@ -812,7 +949,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         const Spacer(),
                         Text(
                           isAdmin
-                              ? Formatters.chips(game.structure.prizePool)
+                              ? Formatters.prize(game.structure.prizePool)
                               : '—',
                           style: AppTypography.monoXs.copyWith(
                             color: AppColors.foreground,
@@ -828,6 +965,65 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
             const SizedBox(height: AppSpacing.xxl),
           ],
         ),
+      ),
+    );
+  }
+
+  /// §6.7 guest conversion: links credentials onto the anonymous uid so the
+  /// recorded result and stats carry over to the new account.
+  void _showCreateAccountDialog(BuildContext context, AppProvider app) {
+    final name = TextEditingController();
+    final email = TextEditingController();
+    final password = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Create Account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: name,
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: password,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Password'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final err = await app.convertGuestAccount(
+                name.text.trim(),
+                email.text.trim(),
+                password.text,
+              );
+              if (!ctx.mounted) return;
+              if (err != null) {
+                ScaffoldMessenger.of(
+                  ctx,
+                ).showSnackBar(SnackBar(content: Text(err)));
+                return;
+              }
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Create Account'),
+          ),
+        ],
       ),
     );
   }

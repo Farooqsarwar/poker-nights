@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
+import '../providers/app_provider.dart';
+
 import '../screens/cash/cash_game_live_screen.dart';
 import '../screens/cash/cash_game_screen.dart';
 import '../screens/public/auth_screen.dart';
@@ -13,10 +15,14 @@ import '../screens/public/privacy_screen.dart';
 import '../screens/public/terms_screen.dart';
 import '../screens/public/support_screen.dart';
 import '../screens/public/join_screen.dart';
+import '../screens/shell/chat_screen.dart';
 import '../screens/shell/group_screen.dart';
 import '../screens/shell/history_screen.dart';
 import '../screens/shell/home_screen.dart';
+import '../screens/shell/join_group_screen.dart';
+import '../screens/shell/members_screen.dart';
 import '../screens/shell/notifications_screen.dart';
+import '../screens/shell/polls_screen.dart';
 import '../screens/shell/profile_screen.dart';
 import '../screens/shell/settings_screen.dart';
 import '../screens/shell/stats_screen.dart';
@@ -34,26 +40,208 @@ import '../screens/tournament/rebuy_settlement_screen.dart';
 import '../screens/tournament/result_podium_screen.dart';
 import '../screens/tournament/structure_review_screen.dart';
 import '../widgets/screen_shell.dart';
+import '../app/colors.dart';
 import 'route_paths.dart';
 
-/// App-wide route table. Screens mirror the web `AppContext` screen ids:
-/// public and TV/guest screens are full-screen; everything else sits inside
-/// the persistent app shell (sidebar on desktop, drawer + bottom nav on mobile).
-final GoRouter appRouter = GoRouter(
+/// Routes reachable without a signed-in account.
+const _publicPaths = {
+  RoutePaths.splash,
+  RoutePaths.landing,
+  RoutePaths.login,
+  RoutePaths.register,
+  RoutePaths.forgotPassword,
+  RoutePaths.tvMode,
+  RoutePaths.guestFlow,
+  RoutePaths.privacy,
+  RoutePaths.terms,
+  RoutePaths.support,
+  RoutePaths.join,
+};
+
+/// Admin-only routes — non-admins are bounced to invitation (if a game exists)
+/// or home.
+const _adminPaths = {
+  RoutePaths.createTournament,
+  RoutePaths.checkIn,
+  RoutePaths.adminDashboard,
+  RoutePaths.finalTable,
+  RoutePaths.rebuySettlement,
+  RoutePaths.completeTournament,
+  RoutePaths.structureReview,
+};
+
+/// Shell routes a guest session (no account) may enter — mirrors
+/// `ScreenShell._guestAllowed`.
+const _guestAllowed = {RoutePaths.playerLive, RoutePaths.resultPodium};
+
+/// Builds the app router wired to [app] so the auth guard re-evaluates on
+/// every provider change (sign-in/out and the initial `authReady` flip).
+/// Adapts [AppProvider] into a [Listenable] that fires only when a field the
+/// router's `redirect` reads has actually changed. Collapses the provider's
+/// high-frequency notifications (clock tick, every Firestore snapshot) down to
+/// the handful of transitions that can change routing.
+class _RouterRefresh extends ChangeNotifier {
+  _RouterRefresh(this._app) {
+    _last = _snapshot();
+    _app.addListener(_onProviderChanged);
+  }
+
+  final AppProvider _app;
+  late List<Object?> _last;
+
+  List<Object?> _snapshot() => <Object?>[
+        _app.authReady,
+        _app.isAuthenticated,
+        _app.hasGuestSession,
+        _app.isAdmin,
+        _app.currentGame?.id,
+        _app.currentGame?.status,
+        _app.currentGroup.id,
+      ];
+
+  void _onProviderChanged() {
+    final next = _snapshot();
+    var changed = next.length != _last.length;
+    for (var i = 0; !changed && i < next.length; i++) {
+      changed = next[i] != _last[i];
+    }
+    if (changed) {
+      _last = next;
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _app.removeListener(_onProviderChanged);
+    super.dispose();
+  }
+}
+
+GoRouter buildAppRouter(AppProvider app) {
+  // Preserve deep-link paths that arrive before Firebase resolves.
+  String? pendingDeepLink;
+
+  return GoRouter(
   initialLocation: RoutePaths.splash,
+  // Re-evaluate `redirect` only when something the guard actually reads
+  // changes — NOT on every AppProvider.notifyListeners(). The provider notifies
+  // once per second from the tournament clock and again on every one of ~15
+  // Firestore stream deliveries; feeding all of that straight into GoRouter
+  // re-ran the guard constantly and let a one-frame blip in `isAdmin` /
+  // `currentGame` (e.g. while a group bundle re-subscribes) bounce the user
+  // out of the screen they were mid-flow on.
+  refreshListenable: _RouterRefresh(app),
+  redirect: (context, state) {
+    final path = state.uri.path;
+    final ready = app.authReady;
+    final authed = app.isAuthenticated;
+
+    // Legacy shared game links (`/game/FP2608`) resolve through the public
+    // unified join screen — rewrite before the auth guard can bounce a guest.
+    if (path.startsWith('/game/')) {
+      final code = path.substring('/game/'.length);
+      return '${RoutePaths.join}?code=${Uri.encodeComponent(code)}';
+    }
+
+    // Single navigation layer: the old hub tabs are now top-level screens.
+    // Rewrite legacy `/group?tab=X` links to their dedicated route.
+    if (path == RoutePaths.group) {
+      switch (state.uri.queryParameters['tab']) {
+        case 'chat':
+          return RoutePaths.chat;
+        case 'members':
+          return RoutePaths.members;
+        case 'polls':
+          return RoutePaths.polls;
+        case 'history':
+          return RoutePaths.history;
+      }
+    }
+
+    // Hold every navigation at splash until Firebase resolves the persisted
+    // session, so guards never run against a half-initialised auth state.
+    if (!ready) {
+      // Save the original deep-link only once (the splash screen may navigate
+      // to / before Firebase resolves, which must not overwrite it).
+      if (path != RoutePaths.splash && pendingDeepLink == null) {
+        pendingDeepLink = state.uri.toString();
+      }
+      return path == RoutePaths.splash ? null : RoutePaths.splash;
+    }
+
+    // Admin-only routes: bounce non-admins away before the screen renders.
+    if (_adminPaths.contains(path) && !app.isAdmin) {
+      return app.currentGame != null ? RoutePaths.invitation : RoutePaths.home;
+    }
+
+    // Auto-redirect members from invitation to live game when game goes live.
+    // GoRouter re-evaluates redirect on every notifyListeners() call, so this
+    // fires automatically when the admin starts the tournament (P1 fix).
+    final game = app.currentGame;
+    if (authed &&
+        !app.isAdmin &&
+        path == RoutePaths.invitation &&
+        game != null &&
+        game.status.isActiveLive) {
+      return RoutePaths.playerLive;
+    }
+    // Guard: prevent admin from back-navigating to pre-game screens during live tournament.
+    if (authed &&
+        app.isAdmin &&
+        game != null &&
+        game.status.isActiveLive &&
+        (path == RoutePaths.structureReview)) {
+      return RoutePaths.adminDashboard;
+    }
+
+    final guestOk = app.hasGuestSession && _guestAllowed.contains(path);
+    if (!authed && !guestOk && !_publicPaths.contains(path)) {
+      final query = state.uri.query.isEmpty ? '' : '?${state.uri.query}';
+      return '${RoutePaths.login}?next=${Uri.encodeComponent('$path$query')}';
+    }
+
+    // Consume a saved deep link as soon as auth resolves — the splash screen
+    // may have already navigated to landing (/) before we could redirect.
+    if (pendingDeepLink != null) {
+      final deepLink = pendingDeepLink!;
+      pendingDeepLink = null;
+      // Public deep links (guest join, game links, TV) resolve for everyone;
+      // only protected targets route through sign-in first.
+      final deepPath = Uri.tryParse(deepLink)?.path ?? deepLink;
+      if (authed ||
+          _publicPaths.contains(deepPath) ||
+          deepPath.startsWith('/game/')) {
+        return deepLink;
+      }
+      return '${RoutePaths.login}?next=${Uri.encodeComponent(deepLink)}';
+    }
+    if (authed &&
+        (path == RoutePaths.splash ||
+            path == RoutePaths.login ||
+            path == RoutePaths.register ||
+            path == RoutePaths.forgotPassword)) {
+      // If the auth screen captured a ?next= deep link, honour it so that
+      // join-via-link and other protected-route flows survive the sign-in.
+      final next = state.uri.queryParameters['next'];
+      if (next != null && next.startsWith('/')) return next;
+      return RoutePaths.home;
+    }
+    return null;
+  },
   // Catch bad/unknown routes and show a friendly page instead of a red crash.
   errorBuilder: (context, state) => Scaffold(
-    backgroundColor: const Color(0xFF0D0D0D),
+    backgroundColor: AppColors.background,
     body: Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline, color: Color(0xFF666666), size: 48),
+          Icon(Icons.error_outline, color: AppColors.mutedForeground, size: 48),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Page not found',
             style: TextStyle(
-              color: Color(0xFFE5E5E5),
+              color: AppColors.foreground,
               fontSize: 20,
               fontWeight: FontWeight.w600,
             ),
@@ -61,7 +249,7 @@ final GoRouter appRouter = GoRouter(
           const SizedBox(height: 8),
           Text(
             state.uri.toString(),
-            style: const TextStyle(color: Color(0xFF666666), fontSize: 12),
+            style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
           ),
           const SizedBox(height: 24),
           TextButton(
@@ -118,62 +306,77 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: RoutePaths.join,
-      builder: (context, state) => const JoinScreen(),
+      builder: (context, state) =>
+          JoinScreen(initialCode: state.uri.queryParameters['code']),
     ),
 
     // ── App shell ────────────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.home,
-      builder: (context, state) =>
-          shell(const HomeScreen(), path: RoutePaths.home),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const HomeScreen(), path: RoutePaths.home)),
     ),
     GoRoute(
       path: RoutePaths.group,
-      builder: (context, state) =>
-          shell(const GroupScreen(), path: RoutePaths.group),
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(const GroupScreen(), path: RoutePaths.group),
+      ),
+    ),
+    GoRoute(
+      path: RoutePaths.chat,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ChatScreen(), path: RoutePaths.chat)),
+    ),
+    GoRoute(
+      path: RoutePaths.members,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const MembersScreen(), path: RoutePaths.members)),
+    ),
+    GoRoute(
+      path: RoutePaths.polls,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const PollsScreen(), path: RoutePaths.polls)),
+    ),
+    GoRoute(
+      path: RoutePaths.joinGroup,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        JoinGroupScreen(code: state.uri.queryParameters['code'] ?? ''), path: RoutePaths.joinGroup,
+      )),
     ),
     GoRoute(
       path: RoutePaths.notifications,
-      builder: (context, state) =>
-          shell(const NotificationsScreen(), path: RoutePaths.notifications),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const NotificationsScreen(), path: RoutePaths.notifications)),
     ),
     GoRoute(
       path: RoutePaths.history,
-      builder: (context, state) =>
-          shell(const HistoryScreen(), path: RoutePaths.history),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const HistoryScreen(), path: RoutePaths.history)),
     ),
     GoRoute(
       path: RoutePaths.profile,
-      builder: (context, state) =>
-          shell(const ProfileScreen(), path: RoutePaths.profile),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ProfileScreen(), path: RoutePaths.profile)),
     ),
     GoRoute(
       path: RoutePaths.settings,
-      builder: (context, state) =>
-          shell(const SettingsScreen(), path: RoutePaths.settings),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const SettingsScreen(), path: RoutePaths.settings)),
     ),
     GoRoute(
       path: RoutePaths.stats,
-      builder: (context, state) =>
-          shell(const StatsScreen(), path: RoutePaths.stats),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const StatsScreen(), path: RoutePaths.stats)),
     ),
     GoRoute(
       path: RoutePaths.chipSets,
-      builder: (context, state) =>
-          shell(const ChipSetsScreen(), path: RoutePaths.chipSets),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ChipSetsScreen(), path: RoutePaths.chipSets)),
     ),
     GoRoute(
       path: RoutePaths.presets,
-      builder: (context, state) =>
-          shell(const PresetsScreen(), path: RoutePaths.presets),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const PresetsScreen(), path: RoutePaths.presets)),
     ),
     GoRoute(
       path: RoutePaths.editChipSet,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final id = state.extra as String?;
-        return shell(
-          EditChipSetScreen(chipSetId: id),
-          path: RoutePaths.editChipSet,
+        return NoTransitionPage(
+          key: ValueKey(state.uri.path),
+          child: shell(
+          EditChipSetScreen(chipSetId: id), path: RoutePaths.editChipSet,
+        ),
         );
       },
     ),
@@ -181,76 +384,65 @@ final GoRouter appRouter = GoRouter(
     // ── Tournament flow ──────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.createTournament,
-      builder: (context, state) => shell(
-        CreateTournamentScreen(presetId: state.uri.queryParameters['preset']),
-        path: RoutePaths.createTournament,
-      ),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        CreateTournamentScreen(presetId: state.uri.queryParameters['preset']), path: RoutePaths.createTournament,
+      )),
     ),
     GoRoute(
       path: RoutePaths.structureReview,
-      builder: (context, state) => shell(
-        const StructureReviewScreen(),
-        path: RoutePaths.structureReview,
-      ),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        const StructureReviewScreen(), path: RoutePaths.structureReview,
+      )),
     ),
     GoRoute(
       path: RoutePaths.invitation,
-      builder: (context, state) =>
-          shell(const InvitationScreen(), path: RoutePaths.invitation),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const InvitationScreen(), path: RoutePaths.invitation)),
     ),
     GoRoute(
       path: RoutePaths.checkIn,
-      builder: (context, state) =>
-          shell(const CheckInScreen(), path: RoutePaths.checkIn),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const CheckInScreen(), path: RoutePaths.checkIn)),
     ),
     GoRoute(
       path: RoutePaths.adminDashboard,
-      builder: (context, state) =>
-          shell(const AdminDashboardScreen(), path: RoutePaths.adminDashboard),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const AdminDashboardScreen(), path: RoutePaths.adminDashboard)),
     ),
     GoRoute(
       path: RoutePaths.playerLive,
-      builder: (context, state) =>
-          shell(const PlayerLiveScreen(), path: RoutePaths.playerLive),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const PlayerLiveScreen(), path: RoutePaths.playerLive)),
     ),
     GoRoute(
       path: RoutePaths.rebuySettlement,
-      builder: (context, state) => shell(
-        const RebuySettlementScreen(),
-        path: RoutePaths.rebuySettlement,
-      ),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        const RebuySettlementScreen(), path: RoutePaths.rebuySettlement,
+      )),
     ),
     GoRoute(
       path: RoutePaths.finalTable,
-      builder: (context, state) =>
-          shell(const FinalTableScreen(), path: RoutePaths.finalTable),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const FinalTableScreen(), path: RoutePaths.finalTable)),
     ),
     GoRoute(
       path: RoutePaths.completeTournament,
-      builder: (context, state) => shell(
-        const CompleteTournamentScreen(),
-        path: RoutePaths.completeTournament,
-      ),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        const CompleteTournamentScreen(), path: RoutePaths.completeTournament,
+      )),
     ),
     GoRoute(
       path: RoutePaths.resultPodium,
-      builder: (context, state) =>
-          shell(const ResultPodiumScreen(), path: RoutePaths.resultPodium),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ResultPodiumScreen(), path: RoutePaths.resultPodium)),
     ),
 
     // ── Cash game ────────────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.cashGame,
-      builder: (context, state) =>
-          shell(const CashGameScreen(), path: RoutePaths.cashGame),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const CashGameScreen(), path: RoutePaths.cashGame)),
     ),
     GoRoute(
       path: RoutePaths.cashGameLive,
-      builder: (context, state) =>
-          shell(const CashGameLiveScreen(), path: RoutePaths.cashGameLive),
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const CashGameLiveScreen(), path: RoutePaths.cashGameLive)),
     ),
   ],
 );
+}
 
 /// Wraps a content page in the persistent app shell with a smooth entrance
 /// animation and records the route path for the shell's access guard.

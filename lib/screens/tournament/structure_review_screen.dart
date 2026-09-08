@@ -11,6 +11,7 @@ import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
+import '../../utils/tournament_engine.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -19,7 +20,9 @@ import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
+import '../../widgets/glass_styles.dart';
 import '../../widgets/medal_icon.dart';
+import '../../widgets/screen_shell.dart';
 import '../../widgets/structure_editor.dart';
 
 /// Structure review mirroring the web `StructureReviewPage`.
@@ -30,7 +33,7 @@ class StructureReviewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
 
     if (!isAdmin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -52,10 +55,21 @@ class StructureReviewScreen extends StatelessWidget {
 
     final structure = game.structure;
     final settings = game.settings;
-    final totalMins = structure.levels.fold<int>(
-      0,
-      (s, l) => s + l.durationMins,
-    );
+    // Playing time the structure is PLANNED to take, not the length of every
+    // level it contains. The generator appends a spare tail so a slow field
+    // cannot run off the end (11-014), and those levels are meant to go
+    // unused — folding them in made a 3.5 h event predict a finish an hour
+    // late on the very screen where the host approves the structure (11-030,
+    // User Flow section 4.8 / Appendix A.3). `expectedFinishMins` is the
+    // engine's own answer and already includes the settlement pause (11-031);
+    // fall back to the planned levels for a structure generated before that
+    // field existed.
+    final plannedMins = structure.levels
+        .take(structure.effectivePlannedLevels)
+        .fold<int>(0, (s, l) => s + l.durationMins);
+    final totalMins = structure.expectedFinishMins > 0
+        ? structure.expectedFinishMins
+        : plannedMins + TournamentEngine.settlementBreakMins;
     final anteStartLevel =
         structure.levels.indexWhere((l) => l.ante != null) + 1;
     final expectedRebuys = settings.rebuys
@@ -73,12 +87,8 @@ class StructureReviewScreen extends StatelessWidget {
     String hhmm(DateTime dt) =>
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
-    // ── Client rule: the structure is only generated/seen 30 minutes before
-    // start, when the AI can use the total attendance from RSVPs. ──────────
     if (!hasStructure) {
-      final start = settings.scheduledStart;
-      final unlockAt = start?.subtract(const Duration(minutes: 30));
-      final reviewOpen = game.structureReviewOpen;
+      final checkedInCount = game.confirmedCount;
       return AppPage(
         maxWidth: 640,
         child: Column(
@@ -89,7 +99,7 @@ class StructureReviewScreen extends StatelessWidget {
                 InkWell(
                   onTap: () => context.go(RoutePaths.invitation),
                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.all(AppSpacing.xs),
                     child: Icon(
                       Icons.arrow_back,
@@ -117,67 +127,56 @@ class StructureReviewScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.xl),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.timer_outlined,
+                  Icon(
+                    Icons.settings_suggest,
                     size: 32,
                     color: AppColors.primary,
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    reviewOpen
-                        ? 'Ready to generate the estimate'
-                        : 'Structure unlocks 30 minutes before start',
+                    'Ready to generate final structure',
                     style: AppTypography.bodyLg.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    reviewOpen
-                        ? 'The AI can now calculate stacks, blinds and levels from the total '
-                              'attendance (everyone who answered Going or Going +N) and the inputs '
-                              'you provided.'
-                        : 'While the group is still deciding whether to attend, there is nothing '
-                              'to calculate yet. Once the window opens, the AI estimates stacks, '
-                              'blinds and levels from the total number of players. '
-                              '${unlockAt != null ? 'Unlocks at ${hhmm(unlockAt)}.' : ''}',
+                    'The AI will calculate starting stacks, blinds, and levels based on '
+                    'the $checkedInCount checked-in players, target duration, and available chips.',
                     style: AppTypography.bodySm.copyWith(
                       color: AppColors.mutedForeground,
                     ),
                   ),
-                  if (reviewOpen) ...[
-                    const SizedBox(height: AppSpacing.xl),
-                    AppButton(
-                      fullWidth: true,
-                      size: AppButtonSize.lg,
-                      onPressed: () => context
-                          .read<AppProvider>()
-                          .generateStructureFromRsvps(),
-                      child: const AppIconLabel(
-                        label: 'Generate structure estimate',
-                        trailing: Icons.auto_awesome,
-                      ),
+                  const SizedBox(height: AppSpacing.xl),
+                  AppButton(
+                    fullWidth: true,
+                    size: AppButtonSize.lg,
+                    onPressed: () async {
+                      // Show the splash animation while "generating"
+                      showGeneratingModal(
+                        context: context,
+                        message: 'AI is generating structure...',
+                      );
+                      // Fake delay to show off the animation
+                      await Future.delayed(const Duration(seconds: 3));
+                      if (!context.mounted) return;
+                      // Generate and close dialog
+                      context.read<AppProvider>().generateFinalStructure(checkedInCount);
+                      Navigator.of(context).pop();
+                    },
+                    child: const AppIconLabel(
+                      label: 'Generate Final Structure',
+                      trailing: Icons.auto_awesome,
                     ),
-                  ] else if (kDebugMode) ...[
-                    const SizedBox(height: AppSpacing.xl),
-                    AppButton(
-                      fullWidth: true,
-                      size: AppButtonSize.md,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: () => context
-                          .read<AppProvider>()
-                          .generateStructureFromRsvps(force: true),
-                      child: const Text('Bypass wait (testing)'),
-                    ),
-                  ],
+                  ),
                 ],
               ),
             ),
@@ -205,8 +204,8 @@ class StructureReviewScreen extends StatelessWidget {
               InkWell(
                 onTap: () => context.go(RoutePaths.invitation),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: const Padding(
-                  padding: EdgeInsets.all(AppSpacing.xs),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xs),
                   child: Icon(
                     Icons.arrow_back,
                     size: AppFontSizes.xl,
@@ -215,23 +214,25 @@ class StructureReviewScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Structure Review',
-                    style: AppTypography.display(
-                      size: AppFontSizes.xxxl,
-                      weight: FontWeight.w700,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Structure Review',
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxxl,
+                        weight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  Text(
-                    settings.name,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
+                    Text(
+                      settings.name,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -257,55 +258,63 @@ class StructureReviewScreen extends StatelessWidget {
               child: AppAlertBanner(type: AppAlertType.error, message: s),
             ),
           ),
-          // Summary cards
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
+          // Summary cards — use responsive widths so they don't overflow
+          // on screens narrower than 360px.
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth < 400
+                  ? constraints.maxWidth
+                  : (constraints.maxWidth / 3).floorToDouble().clamp(100.0, 180.0);
+              return Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: _PlayerCountCard(
+                      players: settings.players,
+                      isAdmin: isAdmin,
+                      onChanged: (v) => app.updateStructurePlayerCount(v),
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: _SummaryCard(
+                      label: 'Starting stack',
+                      value: Formatters.chips(structure.startingStack),
+                    ),
+                  ),
               SizedBox(
-                width: 150,
-                child: _PlayerCountCard(
-                  players: settings.players,
-                  isAdmin: isAdmin,
-                  onChanged: (v) => app.updateStructurePlayerCount(v),
-                ),
-              ),
-              SizedBox(
-                width: 150,
-                child: _SummaryCard(
-                  label: 'Starting stack',
-                  value: Formatters.chips(structure.startingStack),
-                ),
-              ),
-              SizedBox(
-                width: 150,
+                width: cardWidth,
                 child: _SummaryCard(
                   label: 'Total chips',
                   value: Formatters.chips(totalChips),
                 ),
               ),
               SizedBox(
-                width: 150,
+                width: cardWidth,
                 child: _SummaryCard(
                   label: 'Level duration',
                   value: '${structure.levelDuration}m',
                 ),
               ),
               SizedBox(
-                width: 150,
+                width: cardWidth,
                 child: _SummaryCard(
                   label: 'Levels',
                   value: '${structure.levels.length}',
                 ),
               ),
               SizedBox(
-                width: 150,
+                width: cardWidth,
                 child: _SummaryCard(
                   label: 'Est. finish',
                   value: finishWindow ?? Formatters.duration(totalMins),
                 ),
               ),
             ],
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.lg),
           // Starting chip plan
@@ -354,7 +363,7 @@ class StructureReviewScreen extends StatelessWidget {
                 if (settings.rebuys) ...[
                   Container(
                     padding: const EdgeInsets.only(top: AppSpacing.md),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       border: Border(top: BorderSide(color: AppColors.border)),
                     ),
                     child: Column(
@@ -414,10 +423,12 @@ class StructureReviewScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Blind schedule — ${structure.levelDuration}-minute levels',
-                      style: AppTypography.bodySm.copyWith(
-                        fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Text(
+                        'Blind schedule — ${structure.levelDuration}-minute levels',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     AppButton(
@@ -445,8 +456,9 @@ class StructureReviewScreen extends StatelessWidget {
                               Navigator.of(context).pop();
                             },
                             onApply: (levels) {
-                              if (levels.isNotEmpty)
+                              if (levels.isNotEmpty) {
                                 app.applyFutureLevels(levels);
+                              }
                               Navigator.of(context).pop();
                             },
                           ),
@@ -492,7 +504,7 @@ class StructureReviewScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Divider(color: AppColors.border, height: 1),
+                Divider(color: AppColors.border, height: 1),
                 for (var i = 0; i < structure.levels.length; i++)
                   Builder(
                     builder: (context) {
@@ -511,13 +523,13 @@ class StructureReviewScreen extends StatelessWidget {
                               ? AppColors.primarySoft.withValues(alpha: 0.15)
                               : null,
                           border: isRebuyClose
-                              ? const Border(
+                              ? Border(
                                   bottom: BorderSide(
                                     color: AppColors.primary,
                                     width: 2,
                                   ),
                                 )
-                              : const Border(
+                              : Border(
                                   bottom: BorderSide(
                                     color: AppColors.hairlineBorder,
                                   ),
@@ -633,7 +645,7 @@ class StructureReviewScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 if (!game.settlementConfirmed) ...[
                   const SizedBox(height: AppSpacing.md),
-                  const Icon(
+                  Icon(
                     Icons.lock_outline,
                     size: 28,
                     color: AppColors.mutedForeground,
@@ -705,7 +717,7 @@ class StructureReviewScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                  const Divider(color: AppColors.border),
+                  Divider(color: AppColors.border),
                 ],
                 Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -750,6 +762,30 @@ class StructureReviewScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                // 14-010 / 14-011: the residue is a ROUNDING REMAINDER, never
+                // an organizer cut. Rendered only when it exists so a 0% game
+                // does not grow a mysterious retained line.
+                if (structure.roundingRemainder > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Rounding remainder',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${structure.roundingRemainder}',
+                          style: AppTypography.monoXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -803,14 +839,14 @@ class StructureReviewScreen extends StatelessWidget {
                 child: AppButton(
                   variant: AppButtonVariant.secondary,
                   onPressed: () => context.go(RoutePaths.invitation),
-                  child: const FittedBox(
+                  child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
                         SizedBox(width: 6),
-                        Text('Event details'),
+                        Text('Edit settings'),
                       ],
                     ),
                   ),
@@ -863,7 +899,7 @@ class StructureReviewScreen extends StatelessWidget {
                       ),
                     );
                   },
-                  child: const FittedBox(
+                  child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -879,16 +915,26 @@ class StructureReviewScreen extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: AppButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    // Show the splash animation while "generating/publishing"
+                    showGeneratingModal(
+                      context: context,
+                      message: 'AI is generating structure...',
+                    );
+                    // Fake delay to show off the animation
+                    await Future.delayed(const Duration(seconds: 3));
+                    if (!context.mounted) return;
+                    
                     app.confirmStructure();
+                    Navigator.of(context).pop();
                     context.go(RoutePaths.invitation);
                   },
-                  child: const FittedBox(
+                  child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Confirm structure'),
+                        Text('Confirm & Publish'),
                         SizedBox(width: 6),
                         Icon(
                           Icons.check_circle,
@@ -998,8 +1044,8 @@ class _PlayerCountCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               InkWell(
                 onTap: () => onChanged(players + 1),
-                child: const Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4.0),
                   child: Icon(Icons.add, size: 20, color: AppColors.primary),
                 ),
               ),
@@ -1011,12 +1057,15 @@ class _PlayerCountCard extends StatelessWidget {
   }
 }
 
-String _placeLabel(int place) => switch (place) {
-  1 => '1st',
-  2 => '2nd',
-  3 => '3rd',
-  _ => '${place}th',
-};
+String _placeLabel(int place) {
+  if (place % 100 >= 11 && place % 100 <= 13) return '${place}th';
+  return switch (place % 10) {
+    1 => '${place}st',
+    2 => '${place}nd',
+    3 => '${place}rd',
+    _ => '${place}th',
+  };
+}
 
 /// Computes the total chips required for the plan (starting stacks for every
 /// expected player + expected rebuys + expected add-ons) and flags any
@@ -1054,12 +1103,15 @@ List<String> _chipShortages(
   return shortages;
 }
 
-String _placeName(int place) => switch (place) {
-  1 => '1st Place',
-  2 => '2nd Place',
-  3 => '3rd Place',
-  _ => '${place}th Place',
-};
+String _placeName(int place) {
+  if (place % 100 >= 11 && place % 100 <= 13) return '${place}th Place';
+  return switch (place % 10) {
+    1 => '${place}st Place',
+    2 => '${place}nd Place',
+    3 => '${place}rd Place',
+    _ => '${place}th Place',
+  };
+}
 
 class _LevelCell extends StatelessWidget {
   const _LevelCell({required this.label, required this.align});
@@ -1099,7 +1151,7 @@ class _ChipDot extends StatelessWidget {
         color: Color(hex),
         shape: BoxShape.circle,
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.3),
+          color: AppColors.border,
           width: 1.5,
         ),
       ),
@@ -1109,9 +1161,9 @@ class _ChipDot extends StatelessWidget {
             AppTypography.mono(
               size: 8,
               weight: FontWeight.w700,
-              color: Colors.white,
+              color: AppColors.foreground,
             ).copyWith(
-              shadows: const [
+              shadows: [
                 Shadow(color: AppColors.shadowDeep, blurRadius: 2),
               ],
             ),

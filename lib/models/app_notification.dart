@@ -10,6 +10,7 @@ class AppNotification {
     required this.link,
     required this.read,
     required this.timestamp,
+    this.audience,
   });
 
   final String id;
@@ -20,15 +21,26 @@ class AppNotification {
   final bool read;
   final DateTime timestamp;
 
-  AppNotification copyWith({bool? read}) {
+  /// Uids this notification is meant for. `null`/empty = broadcast to every
+  /// group member. Used both by the inbox mirror (only matching devices copy
+  /// the notification into their inbox) and by the OneSignal fan-out (only
+  /// matching users receive the push).
+  final List<String>? audience;
+
+  /// Whether [uid] is an intended recipient of this notification.
+  bool isFor(String uid) =>
+      audience == null || audience!.isEmpty || audience!.contains(uid);
+
+  AppNotification copyWith({String? id, bool? read, List<String>? audience}) {
     return AppNotification(
-      id: id,
+      id: id ?? this.id,
       title: title,
       body: body,
       type: type,
       link: link,
       read: read ?? this.read,
       timestamp: timestamp,
+      audience: audience ?? this.audience,
     );
   }
 }

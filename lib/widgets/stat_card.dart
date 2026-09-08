@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/colors.dart';
 import '../constants/app_constants.dart';
 import '../app/typography.dart';
+import 'app_card.dart';
 
 /// Stat card mirroring the web `StatCard` component.
 class StatCard extends StatelessWidget {
@@ -19,13 +20,10 @@ class StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.secondary,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
-      ),
+      color: AppColors.secondary,
+      radius: AppRadius.md,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

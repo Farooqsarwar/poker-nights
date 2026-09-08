@@ -12,6 +12,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/group_switcher.dart';
 
 enum _CashStep { setup, players }
 
@@ -68,6 +69,24 @@ class _CashGameScreenState extends State<CashGameScreen> {
         .where((n) => n.isNotEmpty)
         .toList();
     if (validNames.length < 2) return;
+
+    final sb = num.tryParse(_smallBlind.text)?.toDouble() ?? 1;
+    final bb = num.tryParse(_bigBlind.text)?.toDouble() ?? 2;
+    final minBuy = num.tryParse(_minBuyIn.text)?.toDouble() ?? 20;
+    final maxBuy = num.tryParse(_maxBuyIn.text)?.toDouble() ?? 200;
+
+    if (bb <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Big blind must be greater than 0.')));
+      return;
+    }
+    if (sb >= bb) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Small blind must be less than big blind.')));
+      return;
+    }
+    if (minBuy > maxBuy) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Min buy-in must be <= max buy-in.')));
+      return;
+    }
     app.startCashGame(
       CashSessionSettings(
         name: _name.text.trim().isEmpty
@@ -77,10 +96,10 @@ class _CashGameScreenState extends State<CashGameScreen> {
         location: _location.text.trim().isEmpty
             ? 'Location'
             : _location.text.trim(),
-        smallBlind: num.tryParse(_smallBlind.text)?.toDouble() ?? 1,
-        bigBlind: num.tryParse(_bigBlind.text)?.toDouble() ?? 2,
-        minBuyIn: num.tryParse(_minBuyIn.text)?.toDouble() ?? 20,
-        maxBuyIn: num.tryParse(_maxBuyIn.text)?.toDouble() ?? 200,
+        smallBlind: sb,
+        bigBlind: bb,
+        minBuyIn: minBuy,
+        maxBuyIn: maxBuy,
         // No currency selector (no symbols in the primary interface,
         // User Flow §3.4) and no rake (not in the minimal cash spec, §16.1).
         maxPlayers: num.tryParse(_maxPlayers.text)?.toInt() ?? 10,
@@ -93,6 +112,14 @@ class _CashGameScreenState extends State<CashGameScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+
+    // Spec §3.3: Cash game module is admin-only.
+    if (!app.isAdmin) {
+      return const Scaffold(
+        body: Center(child: Text('Admin access required.')),
+      );
+    }
+
     final validCount = _playerControllers
         .where((c) => c.text.trim().isNotEmpty)
         .length;
@@ -102,12 +129,14 @@ class _CashGameScreenState extends State<CashGameScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const GroupContextHeader(),
+          const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
               InkWell(
                 onTap: () => context.go(RoutePaths.home),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
                   child: Icon(
                     Icons.arrow_back,
@@ -289,7 +318,7 @@ class _SetupForm extends StatelessWidget {
               ),
             ],
           ),
-          const Divider(color: AppColors.border, height: AppSpacing.xxl),
+          Divider(color: AppColors.border, height: AppSpacing.xxl),
           Text(
             'Blinds',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
@@ -322,7 +351,7 @@ class _SetupForm extends StatelessWidget {
               ),
             ],
           ),
-          const Divider(color: AppColors.border, height: AppSpacing.xxl),
+          Divider(color: AppColors.border, height: AppSpacing.xxl),
           Text(
             'Buy-in limits',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
@@ -363,7 +392,7 @@ class _SetupForm extends StatelessWidget {
           AppButton(
             fullWidth: true,
             onPressed: onContinue,
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text('Continue to Players'),
@@ -452,7 +481,7 @@ class _PlayersForm extends StatelessWidget {
             onPressed: onAdd,
             child: const Text('+ Add player'),
           ),
-          const Divider(color: AppColors.border, height: AppSpacing.xxl),
+          Divider(color: AppColors.border, height: AppSpacing.xxl),
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
@@ -478,7 +507,7 @@ class _PlayersForm extends StatelessWidget {
             size: AppButtonSize.lg,
             fullWidth: true,
             onPressed: validCount >= 2 ? onStart : null,
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.play_arrow, size: 16, color: AppColors.icon),

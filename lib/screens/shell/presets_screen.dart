@@ -40,6 +40,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
       child: _PresetForm(
         preset: preset,
         chipSetNames: _chipSetNames(app),
+        existingNames: app.presets.map((p) => p.name).toList(),
         onSave: (data) {
           final p = _buildPreset(app, preset, data);
           app.savePreset(p);
@@ -75,6 +76,9 @@ class _PresetsScreenState extends State<PresetsScreen> {
       organizerPct: data.organizerPct,
       chipSetName: data.chipSetName,
       chipSet: _chipsFor(app, data.chipSetName),
+      rebuyLimit: data.rebuyLimit,
+      rebuyCost: data.rebuyCost,
+      addOnCost: data.addOnCost,
     );
   }
 
@@ -197,7 +201,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                               visualDensity: VisualDensity.compact,
                               tooltip: 'Edit',
                               onPressed: () => _editPreset(app, p),
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.edit_outlined,
                                 size: 18,
                                 color: AppColors.mutedForeground,
@@ -207,7 +211,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                               visualDensity: VisualDensity.compact,
                               tooltip: 'Delete',
                               onPressed: () => _confirmDelete(p, app),
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.delete_outline,
                                 size: 18,
                                 color: AppColors.mutedForeground,
@@ -319,6 +323,9 @@ class _PresetDraft {
     required this.anteAfterLevel,
     required this.organizerPct,
     required this.chipSetName,
+    this.rebuyLimit,
+    this.rebuyCost,
+    this.addOnCost,
   });
 
   final String name;
@@ -334,17 +341,22 @@ class _PresetDraft {
   final int anteAfterLevel;
   final int organizerPct;
   final String chipSetName;
+  final int? rebuyLimit;
+  final int? rebuyCost;
+  final int? addOnCost;
 }
 
 class _PresetForm extends StatefulWidget {
   const _PresetForm({
     required this.preset,
     required this.chipSetNames,
+    required this.existingNames,
     required this.onSave,
   });
 
   final TournamentPreset? preset;
   final List<String> chipSetNames;
+  final List<String> existingNames;
   final ValueChanged<_PresetDraft> onSave;
 
   @override
@@ -355,6 +367,9 @@ class _PresetFormState extends State<_PresetForm> {
   late final TextEditingController _name;
   late final TextEditingController _buyIn;
   late final TextEditingController _koAmount;
+  late final TextEditingController _rebuyCost;
+  late final TextEditingController _rebuyLimit;
+  late final TextEditingController _addOnCost;
   late bool _koEnabled;
   late bool _rebuys;
   late int _rebuysCloseLevel;
@@ -367,20 +382,30 @@ class _PresetFormState extends State<_PresetForm> {
   late String _chipSetName;
   String? _error;
 
+  /// Set of existing preset names (lowercased) for uniqueness check
+  late final Set<String> _existingPresetNames;
+
   @override
   void initState() {
     super.initState();
     final p = widget.preset;
+    _existingPresetNames = widget.existingNames
+        .where((n) => n.toLowerCase() != p?.name.toLowerCase())
+        .map((n) => n.toLowerCase())
+        .toSet();
     _name = TextEditingController(text: p?.name ?? '');
     _buyIn = TextEditingController(text: p?.buyIn.toString() ?? '15');
     _koAmount = TextEditingController(text: p?.koAmount.toString() ?? '5');
+    _rebuyCost = TextEditingController(text: p?.rebuyCost?.toString() ?? '');
+    _rebuyLimit = TextEditingController(text: p?.rebuyLimit?.toString() ?? '0');
+    _addOnCost = TextEditingController(text: p?.addOnCost?.toString() ?? '');
     _koEnabled = p?.koEnabled ?? false;
     _rebuys = p?.rebuys ?? true;
     _rebuysCloseLevel = p?.rebuysCloseLevel ?? 6;
     _reEntry = p?.reEntry ?? true;
     _addOn = p?.addOn ?? true;
     _duration = p?.durationHours ?? 3.5;
-    _anteEnabled = p?.anteEnabled ?? true;
+    _anteEnabled = p?.anteEnabled ?? false;
     _anteAfterLevel = p?.anteAfterLevel ?? 6;
     _orgPct = (p?.organizerPct ?? 10).toDouble();
     _chipSetName =
@@ -395,6 +420,9 @@ class _PresetFormState extends State<_PresetForm> {
     _name.dispose();
     _buyIn.dispose();
     _koAmount.dispose();
+    _rebuyCost.dispose();
+    _rebuyLimit.dispose();
+    _addOnCost.dispose();
     super.dispose();
   }
 
@@ -402,6 +430,10 @@ class _PresetFormState extends State<_PresetForm> {
     final name = _name.text.trim();
     final buyIn = num.tryParse(_buyIn.text.trim());
     final ko = num.tryParse(_koAmount.text.trim());
+    final rCost = int.tryParse(_rebuyCost.text.trim());
+    final rLimit = int.tryParse(_rebuyLimit.text.trim());
+    final aCost = int.tryParse(_addOnCost.text.trim());
+
     if (name.length < 2) {
       setState(() => _error = 'Preset name must be at least 2 characters.');
       return;
@@ -412,6 +444,11 @@ class _PresetFormState extends State<_PresetForm> {
     }
     if (ko == null || ko <= 0) {
       setState(() => _error = 'KO bounty must be a positive number.');
+      return;
+    }
+    // Check name uniqueness
+    if (_existingPresetNames.contains(name.toLowerCase())) {
+      setState(() => _error = 'A preset with this name already exists.');
       return;
     }
     widget.onSave(
@@ -429,6 +466,9 @@ class _PresetFormState extends State<_PresetForm> {
         anteAfterLevel: _anteAfterLevel,
         organizerPct: _orgPct.round(),
         chipSetName: _chipSetName,
+        rebuyCost: rCost,
+        rebuyLimit: (rLimit != null && rLimit > 0) ? rLimit : null,
+        addOnCost: aCost,
       ),
     );
   }
@@ -481,11 +521,11 @@ class _PresetFormState extends State<_PresetForm> {
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(AppRadius.sm),
-                        borderSide: const BorderSide(color: AppColors.border),
+                        borderSide: BorderSide(color: AppColors.border),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(AppRadius.sm),
-                        borderSide: const BorderSide(color: AppColors.ring),
+                        borderSide: BorderSide(color: AppColors.ring),
                       ),
                     ),
                     items: [
@@ -524,7 +564,7 @@ class _PresetFormState extends State<_PresetForm> {
             ),
           ),
         ],
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         _FieldToggle(
           title: 'Rebuys',
           subtitle: 'Players can re-enter after elimination',
@@ -532,6 +572,26 @@ class _PresetFormState extends State<_PresetForm> {
           onChanged: (v) => setState(() => _rebuys = v),
         ),
         if (_rebuys) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: AppTextField(
+                  controller: _rebuyCost,
+                  label: 'Rebuy cost (empty = buy-in)',
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppTextField(
+                  controller: _rebuyLimit,
+                  label: 'Limit (0 = unl)',
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.sm),
           AppSelect(
             label: 'Close rebuys',
@@ -544,21 +604,32 @@ class _PresetFormState extends State<_PresetForm> {
             ],
           ),
         ],
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         _FieldToggle(
           title: 'Re-entry',
           subtitle: 'Buy a new entry stack after elimination',
           value: _reEntry,
           onChanged: (v) => setState(() => _reEntry = v),
         ),
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         _FieldToggle(
           title: 'Add-on',
           subtitle: 'One per active player at rebuy close',
           value: _addOn,
           onChanged: (v) => setState(() => _addOn = v),
         ),
-        const Divider(color: AppColors.border),
+        if (_addOn) ...[
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            width: 160,
+            child: AppTextField(
+              controller: _addOnCost,
+              label: 'Add-on cost (empty = buy-in)',
+              keyboardType: TextInputType.number,
+            ),
+          ),
+        ],
+        Divider(color: AppColors.border),
         _FieldToggle(
           title: 'Ante',
           subtitle: 'Big blind ante',
@@ -578,7 +649,7 @@ class _PresetFormState extends State<_PresetForm> {
             ],
           ),
         ],
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         AppSelect(
           label: 'Chip set',
           value: _chipSetName,

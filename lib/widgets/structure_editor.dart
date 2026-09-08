@@ -158,7 +158,7 @@ class _StructureEditorState extends State<StructureEditor> {
     final l = _levels[index];
     return Container(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
       ),
       child: Column(
@@ -213,7 +213,7 @@ class _StructureEditorState extends State<StructureEditor> {
               ),
               IconButton(
                 tooltip: 'Insert level',
-                icon: const Icon(
+                icon: Icon(
                   Icons.add_circle_outline,
                   size: 18,
                   color: AppColors.primary,

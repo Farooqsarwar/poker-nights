@@ -44,27 +44,36 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _showRestartModal = false;
   bool _showCancelModal = false;
   bool _showUndoModal = false;
+  bool _showedFinalTablePrompt = false;
   // Pending speed change shown in the preview modal (audit fix B4: the admin
   // must see old vs. proposed structure + both finish estimates BEFORE
   // anything is applied).
-  SpeedRecommendation? _pendingSpeed;
 
   /// Estimated finish time: remaining clock + the durations of the levels
   /// still to play (+5% buffer). [futureDurationOverride] previews a
   /// speed-up/slow-down of all future levels.
-  String? _estimateFinish(LiveGame game, {int? futureDurationOverride}) {
+  String? _estimateFinish(LiveGame game, Duration clockOffset, {int? futureDurationOverride}) {
     final levels = game.structure.levels;
     if (levels.isEmpty) return null;
-    var mins = game.currentSecondsRemaining ~/ 60;
+    // Only the PLANNED levels count. The generator appends a spare tail as
+    // overtime insurance (11-014); folding it in here added an hour to the
+    // headline estimate from level one of every tournament, and disagreed
+    // with the drift model, which already bounds itself the same way
+    // (11-030, Technical section 11.4).
+    final planned = game.structure.effectivePlannedLevels;
+    var mins = game.currentSecondsRemaining(clockOffset) ~/ 60;
     for (final l in levels) {
-      if (l.level >= game.currentLevel) {
-        mins += l.level > game.currentLevel && futureDurationOverride != null
-            ? futureDurationOverride
-            : l.durationMins;
+      if (l.level > game.currentLevel && l.level <= planned) {
+        // The enclosing condition already established the level is in the
+        // future; the old inner ternary re-tested it for no reason.
+        mins += futureDurationOverride ?? l.durationMins;
       }
     }
-    final finish = DateTime.now().add(Duration(minutes: (mins * 1.05).round()));
-    return '${finish.hour.toString().padLeft(2, '0')}:${finish.minute.toString().padLeft(2, '0')}';
+    String hhmm(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    
+    final early = DateTime.now().add(Duration(minutes: (mins * 1.05).round()));
+    final late = DateTime.now().add(Duration(minutes: (mins * 1.15).round()));
+    return '${hhmm(early)} – ${hhmm(late)}';
   }
 
   /// What a speed up/slow down would do to the level duration (the provider
@@ -93,13 +102,64 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
+    // MVP spec §3.1: exactly one administrator per event.
+    // Auth guarding is handled securely by GoRouter's redirect logic.
 
-    if (!isAdmin) {
+    // Final Table Auto-Trigger (Audit fix)
+    // Spec §4.16 / Tech §12.3: the redraw only applies when the game started
+    // with multiple tables. Single-table games must NOT trigger the redraw.
+    final hadMultipleTables = game != null && game.players.any((p) => p.table > 1);
+    final isNinePlayers = game != null && hadMultipleTables && game.activePlayers.length == 9;
+    if (isNinePlayers && game.status == LiveGameStatus.running && !_showStructureModal && !_showRestartModal && !_showCancelModal && !_showUndoModal && !_showedFinalTablePrompt) {
+      _showedFinalTablePrompt = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.go(RoutePaths.invitation);
+        if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+          final dialogInsets = appDialogInsets(context);
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AppModal(
+              insetPadding: dialogInsets,
+              open: true,
+              onClose: () => Navigator.pop(ctx),
+              title: 'Final Table Reached!',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.xl),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Exactly 9 players remain. It is time for the final table redraw.'),
+                    const SizedBox(height: AppSpacing.xl),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        AppButton(
+                          variant: AppButtonVariant.secondary,
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Not Yet'),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        AppButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            context.push(RoutePaths.finalTable);
+                          },
+                          child: const Text('Start Redraw'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ).then((_) {
+            if (mounted) {
+               // Let them re-trigger it if they want by some other means, but don't auto-show again.
+            }
+          });
+        }
       });
-      return const SizedBox.shrink();
     }
 
     if (game == null) {
@@ -128,7 +188,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final settings = game.settings;
     final status = game.status;
     final currentLevel = game.currentLevel;
-    final secondsRemaining = game.currentSecondsRemaining;
+    final secondsRemaining = game.currentSecondsRemaining(app.serverTimeOffset);
     final level = game.currentLevelData;
     final activePlayers = game.activePlayers;
     final eliminatedPlayers = game.eliminatedPlayers;
@@ -151,10 +211,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         : AppColors.primary;
 
     return AppPage(
-      maxWidth: 960,
+      maxWidth: 1280,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (app.showAppTour) ...[
+            _AdminAppTourCard(game: game, onDismiss: () => app.setAppTour(false)),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          // Persistent guest review entry point: pending/check-in requests stay
+          // actionable at every stage — including while the clock is running —
+          // so a late-join guest who missed the notification is never stranded.
+          if (isAdmin) ...[
+            _PendingReviewBanner(
+              game: game,
+              onReview: () => context.go(RoutePaths.checkIn),
+            ),
+          ],
           // Top bar
           if (device.isMobile) ...[
             Column(
@@ -196,11 +269,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
                       onPressed: () => ChatSheet.show(context, game.id),
-                      child: const FittedBox(
+                      child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: AppIconLabel(
-                          label: 'Chat',
-                          icon: Icons.chat_bubble_outline,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const AppIconLabel(
+                              label: 'Chat',
+                              icon: Icons.chat_bubble_outline,
+                            ),
+                            if (app.unreadGameChatCount(game.id) > 0) ...[
+                              const SizedBox(width: 4),
+                              ChatUnreadBadge(
+                                count: app.unreadGameChatCount(game.id),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),
@@ -209,11 +293,78 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     child: AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
-                      onPressed: app.toggleVoice,
+                      onPressed: () {
+                        if (!app.isAdmin) {
+                          app.toggleVoice();
+                          return;
+                        }
+                        // Tech Spec §13.2: the admin manually selects which
+                        // device is the Audio Master.
+                        showAppModal(
+                          context: context,
+                          title: 'Audio announcements',
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                app.thisDeviceIsAudioMaster
+                                    ? 'This device is the Audio Master — it '
+                                        'speaks for the event. Clear it to let '
+                                        'every voice-enabled device announce.'
+                                    : 'No Audio Master is set — every '
+                                        'voice-enabled device may announce. '
+                                        'Claim the role to speak from this '
+                                        'device only.',
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                              if (!app.thisDeviceIsAudioMaster)
+                                AppButton(
+                                  onPressed: () {
+                                    app.setAudioMasterDevice();
+                                    Navigator.pop(context);
+                                  },
+                                  child: const Text(
+                                      'Make this device the Audio Master'),
+                                ),
+                              if (app.thisDeviceIsAudioMaster)
+                                AppButton(
+                                  variant: AppButtonVariant.secondary,
+                                  onPressed: () {
+                                    app.clearAudioMasterDevice();
+                                    Navigator.pop(context);
+                                  },
+                                  child:
+                                      const Text('Allow all devices to announce'),
+                                ),
+                              const SizedBox(height: AppSpacing.sm),
+                              AppButton(
+                                variant: AppButtonVariant.ghost,
+                                onPressed: () {
+                                  app.toggleVoice();
+                                  Navigator.pop(context);
+                                },
+                                child: Text(
+                                  app.voiceEnabled
+                                      ? 'Mute voice'
+                                      : 'Unmute voice',
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: AppIconLabel(
-                          label: 'Voice',
+                          label: app.thisDeviceIsAudioMaster
+                              ? 'Audio Master · Me'
+                              : app.voiceEnabled
+                                  ? 'Audio Master'
+                                  : 'Voice off',
                           icon: app.voiceEnabled
                               ? Icons.volume_up_outlined
                               : Icons.volume_off_outlined,
@@ -226,7 +377,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
                       onPressed: app.canUndo
-                          ? () => setState(() => _showUndoModal = true)
+                          ? () => _showUndoPreview(app)
                           : null,
                       child: const FittedBox(
                         fit: BoxFit.scaleDown,
@@ -265,9 +416,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
                       onPressed: () => ChatSheet.show(context, game.id),
-                      child: const AppIconLabel(
-                        label: 'Chat',
-                        icon: Icons.chat_bubble_outline,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const AppIconLabel(
+                            label: 'Chat',
+                            icon: Icons.chat_bubble_outline,
+                          ),
+                          if (app.unreadGameChatCount(game.id) > 0) ...[
+                            const SizedBox(width: 4),
+                            ChatUnreadBadge(
+                              count: app.unreadGameChatCount(game.id),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     AppButton(
@@ -275,7 +437,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       variant: AppButtonVariant.ghost,
                       onPressed: app.toggleVoice,
                       child: AppIconLabel(
-                        label: 'Voice',
+                        label: app.voiceEnabled ? 'Audio Master' : 'Voice off',
                         icon: app.voiceEnabled
                             ? Icons.volume_up_outlined
                             : Icons.volume_off_outlined,
@@ -285,7 +447,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.secondary,
                       onPressed: app.canUndo
-                          ? () => setState(() => _showUndoModal = true)
+                          ? () => _showUndoPreview(app)
                           : null,
                       child: const AppIconLabel(
                         label: 'Undo',
@@ -298,6 +460,59 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           ],
           const SizedBox(height: AppSpacing.xxl),
+          // Play ran past the generated structure. 12-082 requires the admin to
+          // confirm every pace change, so the clock is held until they decide
+          // instead of the app inventing a blind level on its own.
+          if (app.pendingLevelExtension != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: AppCard(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                borderColor: AppColors.primary.withValues(alpha: 0.5),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Structure complete — approve the next level?',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'The clock is paused. Proposed level '
+                      '${app.pendingLevelExtension!.level}: blinds '
+                      '${app.pendingLevelExtension!.sb} / '
+                      '${app.pendingLevelExtension!.bb} for '
+                      '${app.pendingLevelExtension!.durationMins} minutes. '
+                      'Both blinds are payable with the chips in play.',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppButton(
+                            variant: AppButtonVariant.secondary,
+                            onPressed: app.declineLevelExtension,
+                            child: const Text('Not now'),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: AppButton(
+                            onPressed: app.acceptLevelExtension,
+                            child: const Text('Add level & continue'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // Blocking cancelled state — blocking states take priority (spec §12).
           if (status == LiveGameStatus.cancelled)
             Padding(
@@ -319,8 +534,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ? 'Tournament is running late — shorter future levels suggested'
                     : 'Tournament finishing early — longer future levels suggested',
                 actionLabel: 'Preview change',
-                onAction: () =>
-                    setState(() => _pendingSpeed = game.speedRecommendation),
+                onAction: () => _showSpeedPreview(app, game, game.speedRecommendation!),
               ),
             ),
           // Estimated finish — required on the admin control screen
@@ -330,14 +544,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.schedule_outlined,
                     size: 16,
                     color: AppColors.primary,
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
-                    'Estimated finish ≈ ${_estimateFinish(game) ?? '—'}',
+                    'Estimated finish ≈ ${_estimateFinish(game, app.serverTimeOffset) ?? '—'}',
                     style: AppTypography.bodySm.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -356,6 +570,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: AppSpacing.md),
             const SizedBox(height: AppSpacing.lg),
 
+            // ── CONTROLS — Row 1 & 2 are Host/Admin only (advancing the
+            // tournament and touching blinds/seating is out of Co-Admin's
+            // scope) ─────────────────────────────────────────────────────
+            if (isAdmin) ...[
             // ── CONTROLS — Row 1: Timer ──────────────────────────────────
             AppCard(
               padding: const EdgeInsets.symmetric(
@@ -391,11 +609,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ),
                           );
                         } else {
+                          final canResume = status != LiveGameStatus.finaltable && 
+                                            status != LiveGameStatus.completed &&
+                                            status != LiveGameStatus.cancelled;
                           return AppButton(
                             size: AppButtonSize.lg,
                             variant: AppButtonVariant.primary,
-                            onPressed: app.resumeTimer,
-                            child: const AppIconLabel(
+                            onPressed: canResume ? app.resumeTimer : null,
+                            child: AppIconLabel(
                               label: 'Resume Timer',
                               icon: Icons.play_arrow,
                             ),
@@ -408,6 +629,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   if (status == LiveGameStatus.running ||
                       status == LiveGameStatus.paused) ...[
                     const SizedBox(width: AppSpacing.sm),
+                    // Previous Level (spec §12 controls) — disabled at level 1.
+                    Expanded(
+                      flex: 2,
+                      child: AppButton(
+                        size: AppButtonSize.lg,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: currentLevel <= 1
+                            ? null
+                            : () => app.previousLevel(
+                                idempotencyKey: _idemKey('prev'),
+                              ),
+                        child: const AppIconLabel(
+                          label: 'Previous',
+                          icon: Icons.skip_previous,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
                     // Next Level
                     Expanded(
                       flex: 2,
@@ -416,7 +655,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         variant: AppButtonVariant.secondary,
                         onPressed: currentLevel >= structure.levels.length
                             ? null
-                            : app.nextLevel,
+                            : () =>
+                                app.nextLevel(idempotencyKey: _idemKey('next')),
                         child: const AppIconLabel(
                           label: 'Next Level',
                           trailing: Icons.skip_next,
@@ -460,6 +700,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
 
+            // ── FINISH CTA — the structure clock has run out with players still
+            // in; surface finishing prominently so the game never looks stuck.
+            if ((status == LiveGameStatus.running ||
+                    status == LiveGameStatus.paused ||
+                    status == LiveGameStatus.finaltable ||
+                    status == LiveGameStatus.rebuypause) &&
+                !game.timerRunning &&
+                game.secondsRemaining == 0) ...[
+              AppCard(
+                borderColor: AppColors.warning.withValues(alpha: 0.5),
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Structure complete — record final positions',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.warning,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppButton(
+                      size: AppButtonSize.lg,
+                      variant: AppButtonVariant.primary,
+                      onPressed: () =>
+                          context.go(RoutePaths.completeTournament),
+                      child: const AppIconLabel(
+                        label: 'Record finish order',
+                        trailing: Icons.arrow_forward,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+
             // ── CONTROLS — Row 2: Structure / Nav (secondary actions) ───
             // Restart Level lives here (secondary + confirmation), not next
             // to Pause/Next Level (audit fixes E6/E1).
@@ -476,9 +755,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.lg,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => setState(
-                            () => _pendingSpeed = SpeedRecommendation.speedUp,
-                          ),
+                          onPressed: () => _showSpeedPreview(app, game, SpeedRecommendation.speedUp),
                           child: const AppIconLabel(
                             label: 'Speed Up',
                             icon: Icons.bolt,
@@ -490,9 +767,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.lg,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => setState(
-                            () => _pendingSpeed = SpeedRecommendation.slowDown,
-                          ),
+                          onPressed: () => _showSpeedPreview(app, game, SpeedRecommendation.slowDown),
                           child: const AppIconLabel(
                             label: 'Slow Down',
                             icon: Icons.trending_down,
@@ -521,7 +796,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           size: AppButtonSize.lg,
                           variant: AppButtonVariant.secondary,
                           onPressed: () =>
-                              setState(() => _showStructureModal = true),
+                              _showStructureEditor(app, game, structure, currentLevel, settings),
                           child: const AppIconLabel(
                             label: 'Edit Levels',
                             icon: Icons.edit_outlined,
@@ -535,8 +810,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           variant: AppButtonVariant.secondary,
                           onPressed:
                               status == LiveGameStatus.running ||
-                                  status == LiveGameStatus.paused
-                              ? () => setState(() => _showRestartModal = true)
+                                  status == LiveGameStatus.paused ||
+                                  status == LiveGameStatus.rebuypause
+                              ? () => _showRestartPreview(app, game, level)
                               : null,
                           child: const AppIconLabel(
                             label: 'Restart',
@@ -549,7 +825,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.lg,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => context.go(RoutePaths.checkIn),
+                          onPressed: () => setState(() => _tab = 'seating'),
                           child: const AppIconLabel(
                             label: 'Seats',
                             icon: Icons.people_outline,
@@ -561,6 +837,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ],
               ),
             ),
+            ],
             const SizedBox(height: AppSpacing.xl),
 
             // Row 3: "Other things"
@@ -617,8 +894,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   players: eliminatedPlayers,
                                   settings: settings,
                                   currentLevel: currentLevel,
-                                  onGrantRebuy: app.grantRebuy,
-                                  onGrantReEntry: app.grantReEntry,
+                                  onGrantRebuy:
+                                      (id, key) => app.grantRebuy(id, idempotencyKey: key),
+                                  onGrantReEntry:
+                                      (id, key) => app.grantReEntry(id, idempotencyKey: key),
+                                  isAdmin: isAdmin,
                                 ),
                               if (_tab == 'seating')
                                 _SeatingTab(players: activePlayers),
@@ -628,6 +908,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   settings: settings,
                                   remainingPlayers: activePlayers.length,
                                   settled: game.settlementConfirmed,
+                                  structureEnded:
+                                      (status == LiveGameStatus.running ||
+                                          status == LiveGameStatus.paused ||
+                                          status == LiveGameStatus.finaltable ||
+                                          status == LiveGameStatus.rebuypause) &&
+                                      !game.timerRunning &&
+                                      game.secondsRemaining == 0,
                                 ),
                               if (_tab == 'audit')
                                 _AuditTab(auditHistory: game.auditHistory),
@@ -696,6 +983,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
+            // Timer controls + speed/structure quick actions — Host/Admin
+            // only, same reasoning as the desktop layout above.
+            if (isAdmin) ...[
             // Timer controls
             Wrap(
               spacing: AppSpacing.sm,
@@ -733,18 +1023,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                   ),
                 if (status == LiveGameStatus.running ||
-                    status == LiveGameStatus.paused)
+                    status == LiveGameStatus.paused) ...[
+                  AppButton(
+                    size: AppButtonSize.md,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: currentLevel <= 1
+                        ? null
+                        : () =>
+                            app.previousLevel(idempotencyKey: _idemKey('prev')),
+                    child: const AppIconLabel(
+                      label: 'Previous',
+                      icon: Icons.skip_previous,
+                    ),
+                  ),
                   AppButton(
                     size: AppButtonSize.md,
                     variant: AppButtonVariant.secondary,
                     onPressed: currentLevel >= (structure.levels.length)
                         ? null
-                        : app.nextLevel,
+                        : () =>
+                            app.nextLevel(idempotencyKey: _idemKey('next')),
                     child: const AppIconLabel(
                       label: 'Next level',
                       trailing: Icons.arrow_forward,
                     ),
                   ),
+                ],
                 if (status == LiveGameStatus.rebuypause)
                   AppButton(
                     size: AppButtonSize.md,
@@ -778,9 +1082,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.md,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => setState(
-                            () => _pendingSpeed = SpeedRecommendation.speedUp,
-                          ),
+                          onPressed: () => _showSpeedPreview(app, game, SpeedRecommendation.speedUp),
                           child: const AppIconLabel(
                             label: 'Speed Up',
                             icon: Icons.bolt,
@@ -792,9 +1094,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.md,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => setState(
-                            () => _pendingSpeed = SpeedRecommendation.slowDown,
-                          ),
+                          onPressed: () => _showSpeedPreview(app, game, SpeedRecommendation.slowDown),
                           child: const AppIconLabel(
                             label: 'Slow Down',
                             icon: Icons.trending_down,
@@ -808,8 +1108,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           variant: AppButtonVariant.secondary,
                           onPressed:
                               status == LiveGameStatus.running ||
-                                  status == LiveGameStatus.paused
-                              ? () => setState(() => _showRestartModal = true)
+                                  status == LiveGameStatus.paused ||
+                                  status == LiveGameStatus.rebuypause
+                              ? () => _showRestartPreview(app, game, level)
                               : null,
                           child: const FittedBox(
                             fit: BoxFit.scaleDown,
@@ -845,7 +1146,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           size: AppButtonSize.md,
                           variant: AppButtonVariant.secondary,
                           onPressed: () =>
-                              setState(() => _showStructureModal = true),
+                              _showStructureEditor(app, game, structure, currentLevel, settings),
                           child: const FittedBox(
                             fit: BoxFit.scaleDown,
                             child: AppIconLabel(
@@ -860,7 +1161,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.md,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => context.go(RoutePaths.checkIn),
+                          onPressed: () => setState(() => _tab = 'seating'),
                           child: const FittedBox(
                             fit: BoxFit.scaleDown,
                             child: AppIconLabel(
@@ -875,6 +1176,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ],
               ),
             ),
+            ],
             const SizedBox(height: AppSpacing.lg),
             // TV code + announcement
             Column(
@@ -940,8 +1242,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 players: eliminatedPlayers,
                 settings: settings,
                 currentLevel: currentLevel,
-                onGrantRebuy: app.grantRebuy,
-                onGrantReEntry: app.grantReEntry,
+                onGrantRebuy:
+                    (id, key) => app.grantRebuy(id, idempotencyKey: key),
+                onGrantReEntry:
+                    (id, key) => app.grantReEntry(id, idempotencyKey: key),
+                isAdmin: isAdmin,
               ),
             // Seating tab
             if (_tab == 'seating') _SeatingTab(players: activePlayers),
@@ -952,12 +1257,60 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 settings: settings,
                 remainingPlayers: activePlayers.length,
                 settled: game.settlementConfirmed,
+                structureEnded:
+                    (status == LiveGameStatus.running ||
+                        status == LiveGameStatus.paused ||
+                        status == LiveGameStatus.finaltable ||
+                        status == LiveGameStatus.rebuypause) &&
+                        !game.timerRunning &&
+                        game.secondsRemaining == 0,
               ),
             if (_tab == 'audit') _AuditTab(auditHistory: game.auditHistory),
           ],
           const SizedBox(height: AppSpacing.xxl),
-          // Danger zone: cancel tournament (spec §12 — confirmation + reason)
-          if (status != LiveGameStatus.completed &&
+          // Final table trigger — only for multi-table games (spec §4.16 /
+          // Tech §12.3). Single-table tournaments never need a redraw.
+          // Host/Admin only — Co-Admin's scope stops at membership + rebuys.
+          if (isAdmin &&
+              hadMultipleTables &&
+              (status == LiveGameStatus.running ||
+                  status == LiveGameStatus.paused))
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: AppButton(
+                size: AppButtonSize.md,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => app.triggerFinalTable(),
+                child: const AppIconLabel(
+                  label: 'Final Table',
+                  icon: Icons.table_chart_outlined,
+                ),
+              ),
+            ),
+          // Record finish order — shown once heads-up (≤3 players) while the
+          // clock is still running. The structure-ended case is surfaced by the
+          // prominent CTA above the controls.
+          if (isAdmin &&
+              status != LiveGameStatus.completed &&
+              status != LiveGameStatus.cancelled &&
+              activePlayers.length <= 3 &&
+              game.timerRunning)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: AppButton(
+                size: AppButtonSize.md,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => context.go(RoutePaths.completeTournament),
+                child: const AppIconLabel(
+                  label: 'Record finish order',
+                  icon: Icons.emoji_events_outlined,
+                ),
+              ),
+            ),
+          // Danger zone: cancel tournament (spec §12 — confirmation + reason).
+          // Host/Admin only.
+          if (isAdmin &&
+              status != LiveGameStatus.completed &&
               status != LiveGameStatus.cancelled) ...[
             AppCard(
               borderColor: AppColors.destructive.withValues(alpha: 0.3),
@@ -988,216 +1341,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   const SizedBox(width: AppSpacing.md),
                   AppButton(
                     variant: AppButtonVariant.danger,
-                    onPressed: () => setState(() => _showCancelModal = true),
+                    onPressed: () => _showCancelPreview(app, settings),
                     child: const Text('Cancel tournament'),
                   ),
                 ],
               ),
             ),
           ],
-          // Structure edit modal — the full editor (edit any future blind /
-          // duration, insert or remove levels; active level locked).
-          // Audit fix B5: manual "Edit Future Levels" is available live.
-          AppModal(
-            open: _showStructureModal,
-            onClose: () => setState(() => _showStructureModal = false),
-            title: 'Edit future structure',
-            child: StructureEditor(
-              structure: structure,
-              currentLevel: currentLevel,
-              anteStyle: settings.anteStyle,
-              onSpeedUp: () => setState(() {
-                _showStructureModal = false;
-                _pendingSpeed = SpeedRecommendation.speedUp;
-              }),
-              onSlowDown: () => setState(() {
-                _showStructureModal = false;
-                _pendingSpeed = SpeedRecommendation.slowDown;
-              }),
-              onApply: (levels) {
-                app.applyFutureLevels(levels);
-                setState(() => _showStructureModal = false);
-              },
-            ),
-          ),
-          // Speed change PREVIEW — old vs. proposed structure and both
-          // estimated finish times, applied only on explicit confirm
-          // (audit fix B4).
-          if (_pendingSpeed != null) ...[
-            Builder(
-              builder: (context) {
-                final game2 = app.currentGame;
-                if (game2 == null) return const SizedBox.shrink();
-                final oldDur = game2.structure.levelDuration;
-                final newDur = _previewedDuration(game2, _pendingSpeed!);
-                final isUp = _pendingSpeed == SpeedRecommendation.speedUp;
-                return AppModal(
-                  open: true,
-                  onClose: () => setState(() => _pendingSpeed = null),
-                  title: isUp ? 'Preview: speed up' : 'Preview: slow down',
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      AppAlertBanner(
-                        type: AppAlertType.info,
-                        message:
-                            'Future levels change only — the active level and all '
-                            'completed levels stay exactly as they are.',
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _PreviewCol(
-                              label: 'Current',
-                              duration: '$oldDur min levels',
-                              finish: _estimateFinish(game2) ?? '—',
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.lg),
-                          Expanded(
-                            child: _PreviewCol(
-                              label: 'Proposed',
-                              duration: '$newDur min levels (future)',
-                              finish:
-                                  _estimateFinish(
-                                    game2,
-                                    futureDurationOverride: newDur,
-                                  ) ??
-                                  '—',
-                              highlighted: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: AppButton(
-                              variant: AppButtonVariant.secondary,
-                              onPressed: () =>
-                                  setState(() => _pendingSpeed = null),
-                              child: const Text('Cancel'),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: AppButton(
-                              onPressed: () {
-                                app.acceptSpeedRecommendation(
-                                  rec: _pendingSpeed,
-                                );
-                                setState(() => _pendingSpeed = null);
-                              },
-                              child: const Text('Apply change'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
-          // Undo PREVIEW — "Undo shows the action that will be reversed"
-          // (User Flow spec §12.6, audit fix E5).
-          AppModal(
-            open: _showUndoModal,
-            onClose: () => setState(() => _showUndoModal = false),
-            title: 'Undo last action?',
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  app.lastActionSummary ??
-                      'The most recent action will be reversed.',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Row(
-                  children: [
-                    Expanded(
-                      child: AppButton(
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => setState(() => _showUndoModal = false),
-                        child: const Text('Keep'),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: AppButton(
-                        variant: AppButtonVariant.danger,
-                        onPressed: () {
-                          app.undoLast();
-                          setState(() => _showUndoModal = false);
-                        },
-                        child: const Text('Undo action'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Restart level confirmation (spec §12: shows exact effect)
-          AppModal(
-            open: _showRestartModal,
-            onClose: () => setState(() => _showRestartModal = false),
-            title: 'Restart level ${game.currentLevel}?',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AppAlertBanner(
-                  type: AppAlertType.warning,
-                  message: level == null
-                      ? 'The timer resets to the full level duration and restarts running.'
-                      : 'Level ${game.currentLevel} (${Formatters.chips(level.sb)}/${Formatters.chips(level.bb)}) — the timer resets to ${game.structure.levelDuration} minutes and restarts running.',
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Row(
-                  children: [
-                    Expanded(
-                      child: AppButton(
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () =>
-                            setState(() => _showRestartModal = false),
-                        child: const Text('Keep going'),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: AppButton(
-                        onPressed: () {
-                          app.restartLevel();
-                          setState(() => _showRestartModal = false);
-                        },
-                        child: const Text('Restart level'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Cancel tournament confirmation (spec §12: reason required)
-          AppModal(
-            open: _showCancelModal,
-            onClose: () => setState(() => _showCancelModal = false),
-            title: 'Cancel tournament',
-            child: _CancelTournamentForm(
-              gameName: settings.name,
-              onCancel: (reason) {
-                app.cancelGame(reason);
-                setState(() => _showCancelModal = false);
-              },
-            ),
-          ),
+          // (Structure edit modal moved to showAppModal method)
+          // (Speed change PREVIEW modal moved out of inline build)
+          // (Cancel modal moved to showAppModal method)
           // Offline Conflict Modal
           AppModal(
             open: app.hasOfflineConflict,
@@ -1233,12 +1386,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   List<Widget> _playersTab(AppProvider app, LiveGame game) {
     final settings = game.settings;
-    final currentLevel = game.currentLevel;
-    final canRebuy =
-        settings.rebuys && currentLevel <= settings.rebuysCloseLevel;
+    // Rebuy is deliberately omitted from the active roster: it only applies to
+    // eliminated players (grantRebuy no-ops otherwise) and lives in the
+    // Eliminated tab. (User Flow §7.4 / Tech Spec §21 "rebuy requested for
+    // active player → Block".)
 
     return [
-      if (app.lateRegistrationOpen)
+      if (app.isAdmin && app.lateRegistrationOpen)
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.md),
           child: AppButton(
@@ -1308,18 +1462,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   runSpacing: AppSpacing.xs,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.danger,
-                      onPressed: () => _showEliminateModal(context, app, p),
-                      child: const Text('Out'),
-                    ),
-                    if (canRebuy)
+                    if (app.isAdmin)
                       AppButton(
                         size: AppButtonSize.sm,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => _confirmRebuy(context, app, p),
-                        child: const Text('Rebuy'),
+                        variant: AppButtonVariant.danger,
+                        onPressed: () => _showEliminateModal(context, app, p),
+                        child: const Text('Out'),
                       ),
                     if (settings.addOn &&
                         game.status == LiveGameStatus.rebuypause &&
@@ -1330,16 +1478,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         onPressed: () => _confirmAddOn(context, app, p),
                         child: const Text('Add-on'),
                       ),
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: () => _confirmRemovePlayer(context, app, p),
-                      child: const Icon(
-                        Icons.delete_outline,
-                        color: AppColors.destructive,
-                        size: 16,
+                    if (app.isAdmin)
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.ghost,
+                        onPressed: () => _confirmRemovePlayer(context, app, p),
+                        child: Icon(
+                          Icons.delete_outline,
+                          color: AppColors.destructive,
+                          size: 16,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ],
@@ -1358,7 +1507,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         children: [
           Text(
             'Are you sure you want to completely remove ${p.name} from this tournament?\n\n'
-            'This will delete their seat assignment and deduct their starting stack (${app.currentGame!.structure.startingStack} chips) and any rebuys/add-ons from the total chips in play.',
+            'This will delete their seat assignment and deduct their starting stack (${app.currentGame?.structure.startingStack ?? 0} chips) and any rebuys/add-ons from the total chips in play.',
             style: AppTypography.bodySm,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -1382,6 +1531,205 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showSpeedPreview(AppProvider app, LiveGame game, SpeedRecommendation rec) {
+    final oldDur = game.structure.levelDuration;
+    final newDur = _previewedDuration(game, rec);
+    final isUp = rec == SpeedRecommendation.speedUp;
+    
+    final futureLevels = game.structure.levels.where((l) => l.level > game.currentLevel).length;
+    final hasAnte = game.structure.levels.any((l) => l.level > game.currentLevel && l.ante != null);
+    
+    showAppModal(
+      context: context,
+      title: isUp ? 'Preview: speed up' : 'Preview: slow down',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppAlertBanner(
+            type: AppAlertType.info,
+            message:
+                'Future levels change only ($futureLevels levels). The active level and all '
+                'completed levels stay exactly as they are.'
+                '${hasAnte ? ' Ante durations will also adjust.' : ''}',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: _PreviewCol(
+                  label: 'Current',
+                  duration: '$oldDur min levels',
+                  finish: _estimateFinish(game, app.serverTimeOffset) ?? '—',
+                ),
+              ),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                child: _PreviewCol(
+                  label: 'Proposed',
+                  duration: '$newDur min levels (future)',
+                  finish: _estimateFinish(game, app.serverTimeOffset, futureDurationOverride: newDur) ?? '—',
+                  highlighted: true,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppButton(
+                  onPressed: () {
+                    // Always report the outcome. A speed change only touches
+                    // FUTURE levels, so the timer and current blinds on screen
+                    // do not move — without this the press looked like a no-op.
+                    final result = app.acceptSpeedRecommendation(rec: rec);
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(result),
+                        duration: const Duration(seconds: 6),
+                      ),
+                    );
+                  },
+                  child: const Text('Apply change'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUndoPreview(AppProvider app) {
+    showAppModal(
+      context: context,
+      title: 'Undo last action?',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            app.lastActionSummary ?? 'The most recent action will be reversed.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Keep'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.danger,
+                  onPressed: () {
+                    app.undoLast();
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Undo action'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRestartPreview(AppProvider app, LiveGame game, BlindLevel? level) {
+    showAppModal(
+      context: context,
+      title: 'Restart level ${game.currentLevel}?',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppAlertBanner(
+            type: AppAlertType.warning,
+            message: level == null
+                ? 'The timer resets to the full level duration and restarts running.'
+                : 'Level ${game.currentLevel} (${Formatters.chips(level.sb)}/${Formatters.chips(level.bb)}) — the timer resets to ${game.structure.levelDuration} minutes and restarts running.',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Keep going'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppButton(
+                  onPressed: () {
+                    app.restartLevel(idempotencyKey: _idemKey('restart'));
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Restart level'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCancelPreview(AppProvider app, GameSettings settings) {
+    showAppModal(
+      context: context,
+      title: 'Cancel tournament',
+      child: _CancelTournamentForm(
+        gameName: settings.name,
+        onCancel: (reason) {
+          app.cancelGame(reason);
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  void _showStructureEditor(AppProvider app, LiveGame game, TournamentStructure structure, int currentLevel, GameSettings settings) {
+    showAppModal(
+      context: context,
+      title: 'Edit future structure',
+      child: StructureEditor(
+        structure: structure,
+        currentLevel: currentLevel,
+        anteStyle: settings.anteStyle,
+        onSpeedUp: () {
+          Navigator.pop(context);
+          _showSpeedPreview(app, game, SpeedRecommendation.speedUp);
+        },
+        onSlowDown: () {
+          Navigator.pop(context);
+          _showSpeedPreview(app, game, SpeedRecommendation.slowDown);
+        },
+        onApply: (levels) {
+          app.applyFutureLevels(levels);
+          Navigator.pop(context);
+        },
       ),
     );
   }
@@ -1417,48 +1765,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  void _confirmRebuy(BuildContext context, AppProvider app, Player p) {
-    showAppModal(
-      context: context,
-      title: 'Grant rebuy',
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '${p.name} receives a fresh ${Formatters.chips(app.currentGame!.structure.rebuyStack)}-chip '
-            'rebuy stack and rejoins the game. The prize pool is recalculated.',
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Row(
-            children: [
-              Expanded(
-                child: AppButton(
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: AppButton(
-                  onPressed: () {
-                    app.grantRebuy(p.id);
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Grant rebuy'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   void _confirmAddOn(BuildContext context, AppProvider app, Player p) {
     showAppModal(
       context: context,
@@ -1468,7 +1774,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '${p.name} purchases the add-on stack (${Formatters.chips(app.currentGame!.structure.addOnStack)} chips). '
+            '${p.name} purchases the add-on stack (${Formatters.chips(app.currentGame?.structure.addOnStack ?? 0)} chips). '
             'The prize pool is recalculated.',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
@@ -1488,7 +1794,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               Expanded(
                 child: AppButton(
                   onPressed: () {
-                    app.grantAddOn(p.id);
+                    app.grantAddOn(
+                      p.id,
+                      idempotencyKey:
+                          'addon-${DateTime.now().microsecondsSinceEpoch}',
+                    );
                     Navigator.pop(context);
                   },
                   child: const Text('Grant add-on'),
@@ -1510,6 +1820,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (game == null) return;
     final koEnabled = game.settings.koEnabled;
     final options = game.activePlayers.where((p) => p.id != player.id).toList();
+    // Spec §4.12: before the rebuy deadline, ask "Leave Tournament or Rebuy?"
+    final canRebuyNow = game.settings.rebuys &&
+        game.currentLevel <= game.settings.rebuysCloseLevel;
 
     showAppModal(
       context: context,
@@ -1518,10 +1831,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         playerName: player.name,
         koEnabled: koEnabled,
         options: options,
+        canRebuy: canRebuyNow,
         onConfirm: (koRecipientId) {
-          app.eliminatePlayer(player.id, koRecipientId: koRecipientId);
+          app.eliminatePlayer(
+            player.id,
+            koRecipientId: koRecipientId,
+            idempotencyKey:
+                'elim-${DateTime.now().microsecondsSinceEpoch}',
+          );
           Navigator.of(context).pop();
         },
+        onEliminateAndRebuy: canRebuyNow
+            ? (koRecipientId) {
+                app.eliminatePlayer(
+                  player.id,
+                  koRecipientId: koRecipientId,
+                  idempotencyKey:
+                      'elim-${DateTime.now().microsecondsSinceEpoch}',
+                );
+                // Immediately grant rebuy after elimination
+                Future.microtask(() => app.grantRebuy(
+                      player.id,
+                      idempotencyKey:
+                          'rebuy-${DateTime.now().microsecondsSinceEpoch}',
+                    ));
+                Navigator.of(context).pop();
+              }
+            : null,
       ),
     );
   }
@@ -1667,13 +2003,18 @@ class _EliminatedTab extends StatelessWidget {
     required this.currentLevel,
     required this.onGrantRebuy,
     required this.onGrantReEntry,
+    required this.isAdmin,
   });
 
   final List<Player> players;
   final GameSettings settings;
   final int currentLevel;
-  final void Function(String playerId) onGrantRebuy;
-  final void Function(String playerId) onGrantReEntry;
+  final void Function(String playerId, String idempotencyKey) onGrantRebuy;
+  final void Function(String playerId, String idempotencyKey) onGrantReEntry;
+
+  /// Host/Admin only — result corrections and full removal are tournament-
+  /// advancing actions, out of Co-Admin's rebuy-only scope.
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -1729,7 +2070,10 @@ class _EliminatedTab extends StatelessWidget {
                       AppButton(
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.secondary,
-                        onPressed: () => onGrantRebuy(p.id),
+                        onPressed: () => onGrantRebuy(
+                          p.id,
+                          'rebuy-${p.id}-${DateTime.now().microsecondsSinceEpoch}',
+                        ),
                         child: const Text('Grant rebuy'),
                       ),
                     if (canReEnter)
@@ -1738,10 +2082,14 @@ class _EliminatedTab extends StatelessWidget {
                         child: AppButton(
                           size: AppButtonSize.sm,
                           variant: AppButtonVariant.ghost,
-                          onPressed: () => onGrantReEntry(p.id),
+                          onPressed: () => onGrantReEntry(
+                            p.id,
+                            'reentry-${p.id}-${DateTime.now().microsecondsSinceEpoch}',
+                          ),
                           child: const Text('Re-entry'),
                         ),
                       ),
+                    if (isAdmin) ...[
                     Padding(
                       padding: const EdgeInsets.only(left: AppSpacing.xs),
                       child: AppButton(
@@ -1750,7 +2098,7 @@ class _EliminatedTab extends StatelessWidget {
                         onPressed: () => context
                             .read<AppProvider>()
                             .correctElimination(p.id),
-                        child: const Text(
+                        child: Text(
                           'Correct Result',
                           style: TextStyle(color: AppColors.destructive),
                         ),
@@ -1797,12 +2145,13 @@ class _EliminatedTab extends StatelessWidget {
                           ),
                         );
                       },
-                      child: const Icon(
+                      child: Icon(
                         Icons.delete_outline,
                         color: AppColors.destructive,
                         size: 16,
                       ),
                     ),
+                    ],
                   ],
                 ),
               ),
@@ -1824,15 +2173,19 @@ class _SeatingTab extends StatelessWidget {
     final unseated = players.where((p) => p.table <= 0).toList();
     final tables = seated.map((p) => p.table).toSet().toList()..sort();
     final allTables = tables.isEmpty
-        ? const [1]
+        ? const <int>[]
         : [for (var t = tables.first; t <= tables.last; t++) t];
 
     final app = context.watch<AppProvider>();
     final rec = app.seatingRecommendation;
+    // Seating/balance management is Host/Admin only (Co-Admin's scope stops
+    // at membership + rebuys) — everyone else sees the read-only table view
+    // below.
+    final isAdmin = app.isAdmin;
 
     return Column(
       children: [
-        if (rec == null)
+        if (isAdmin && rec == null)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: Row(
@@ -1847,32 +2200,68 @@ class _SeatingTab extends StatelessWidget {
               ],
             ),
           ),
-        if (rec != null)
+        if (isAdmin && rec != null)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: AppAlertBanner(
-              type: AppAlertType.info,
-              message:
-                  'Table balance recommendation:\nMove ${rec.fromPlayerName} from Table ${rec.fromTable} to Table ${rec.toTable}, Seat ${rec.toSeat}.',
-              actionLabel: 'Confirm',
-              onAction: app.confirmSeatMove,
-              // We simulate a dismiss button by using a row inside message if we wanted,
-              // but AppAlertBanner only supports one action. So let's wrap it.
-            ),
-          ),
-        if (rec != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                AppButton(
-                  variant: AppButtonVariant.ghost,
-                  size: AppButtonSize.sm,
-                  onPressed: app.dismissSeatMove,
-                  child: const Text('Dismiss Recommendation'),
-                ),
-              ],
+            child: AppCard(
+              borderColor: AppColors.primary.withValues(alpha: 0.4),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Spec \u00A74.15: show from/to details, then three actions:
+                  // Confirm Move, Choose Another Move, Move Manually.
+                  Text(
+                    'Table balance recommendation',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Move ${rec.fromPlayerName} from Table ${rec.fromTable}, Seat ${rec.fromSeat} '
+                    'to Table ${rec.toTable}, Seat ${rec.toSeat}.',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          onPressed: app.confirmSeatMove,
+                          child: const Text('Confirm Move'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          variant: AppButtonVariant.secondary,
+                          // Re-run balance evaluation for a fresh suggestion.
+                          onPressed: () {
+                            app.dismissSeatMove();
+                            app.requestSeatingBalance();
+                          },
+                          child: const Text('Another Move'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          variant: AppButtonVariant.ghost,
+                          onPressed: app.dismissSeatMove,
+                          child: const Text('Move Manually'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         for (final table in allTables)
@@ -1919,6 +2308,38 @@ class _SeatingTab extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _PendingReviewBanner extends StatelessWidget {
+  const _PendingReviewBanner({
+    required this.game,
+    required this.onReview,
+  });
+
+  final LiveGame game;
+  final VoidCallback onReview;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = game.pendingGuests
+        .where((p) => p.name.trim().isNotEmpty)
+        .toList();
+    final unconfirmed =
+        game.players.where((p) => p.checkedIn && !p.confirmed).toList();
+    final total = pending.length + unconfirmed.length;
+    if (total == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: AppAlertBanner(
+        type: AppAlertType.warning,
+        message: total == 1
+            ? 'One guest is waiting for check-in review.'
+            : '$total guests are waiting for check-in review.',
+        actionLabel: 'Review',
+        onAction: onReview,
+      ),
     );
   }
 }
@@ -2022,12 +2443,17 @@ class _PrizeTab extends StatelessWidget {
     required this.settings,
     required this.remainingPlayers,
     required this.settled,
+    this.structureEnded = false,
   });
 
   final TournamentStructure structure;
   final GameSettings settings;
   final int remainingPlayers;
   final bool settled;
+
+  /// True when the structure's final level countdown has reached zero while
+  /// players remain — the tournament can still be finished per §4.17.
+  final bool structureEnded;
 
   @override
   Widget build(BuildContext context) {
@@ -2050,7 +2476,7 @@ class _PrizeTab extends StatelessWidget {
                       'Prize amounts are private — only visible to you as admin.',
                 ),
                 const SizedBox(height: AppSpacing.md),
-                const Icon(
+                Icon(
                   Icons.lock_outline,
                   size: 28,
                   color: AppColors.mutedForeground,
@@ -2064,7 +2490,7 @@ class _PrizeTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Prices are calculated at the end of Level ${settings.rebuysCloseLevel}, '
+                  'Payouts are calculated at the end of Level ${settings.rebuysCloseLevel}, '
                   'when the exact number of players, actual rebuys and selected add-ons are known.',
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
@@ -2105,6 +2531,27 @@ class _PrizeTab extends StatelessWidget {
                     ),
                   ],
                 ),
+                // 14-010 / 14-011: the residue is a ROUNDING REMAINDER, never an
+                // organizer cut. Shown only when it exists so a 0% game does not
+                // grow a mysterious retained line.
+                if (structure.roundingRemainder > 0)
+                  Row(
+                    children: [
+                      Text(
+                        'Rounding remainder',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${structure.roundingRemainder}',
+                        style: AppTypography.monoXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -2160,7 +2607,7 @@ class _PrizeTab extends StatelessWidget {
               for (final p in structure.prizes)
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(color: AppColors.border, width: 0.5),
                     ),
@@ -2277,7 +2724,7 @@ class _PrizeTab extends StatelessWidget {
             ),
           ),
         ],
-        if (remainingPlayers <= 3) ...[
+        if (remainingPlayers <= 3 || structureEnded) ...[
           const SizedBox(height: AppSpacing.md),
           AppButton(
             fullWidth: true,
@@ -2387,12 +2834,16 @@ class _EliminateContent extends StatefulWidget {
     required this.koEnabled,
     required this.options,
     required this.onConfirm,
+    this.canRebuy = false,
+    this.onEliminateAndRebuy,
   });
 
   final String playerName;
   final bool koEnabled;
   final List<Player> options;
   final void Function(String? koRecipientId) onConfirm;
+  final bool canRebuy;
+  final void Function(String? koRecipientId)? onEliminateAndRebuy;
 
   @override
   State<_EliminateContent> createState() => _EliminateContentState();
@@ -2449,6 +2900,15 @@ class _EliminateContentState extends State<_EliminateContent> {
             ),
           ],
         ),
+        if (widget.canRebuy) ...[
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.secondary,
+            onPressed: () => widget.onEliminateAndRebuy?.call(_koRecipient),
+            child: const Text('Eliminate + Rebuy'),
+          ),
+        ],
       ],
     );
   }
@@ -2578,3 +3038,104 @@ class _CancelTournamentFormState extends State<_CancelTournamentForm> {
     );
   }
 }
+
+/// Unique idempotency key for a single admin tap. A fresh value per press lets
+/// the provider's idempotency guard drop repeat/retried submissions of the
+/// same action (technical spec §18.1) — identical on mobile and large screens.
+String _idemKey(String prefix) =>
+    '$prefix-${DateTime.now().microsecondsSinceEpoch}';
+
+class _AdminAppTourCard extends StatelessWidget {
+  const _AdminAppTourCard({required this.game, required this.onDismiss});
+
+  final LiveGame game;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    String step = '';
+    String title = '';
+    String description = '';
+
+    if (game.status == LiveGameStatus.draft || game.status == LiveGameStatus.published || game.status == LiveGameStatus.checkin || game.status == LiveGameStatus.ready) {
+      if (game.players.any((p) => p.checkedIn && !p.confirmed) || game.pendingGuests.isNotEmpty) {
+        step = 'Step 1: Confirm Arrivals';
+        title = 'Seat Your Players';
+        description = 'Open the Check-in tab to approve requests. You must manually approve and seat players before the app can calculate the tournament math.';
+      } else if (!game.structureConfirmed) {
+        step = 'Step 2: Lock the Math';
+        title = 'Generate the Tournament';
+        description = 'Once everyone has checked in, tap "Generate Final Structure" to let Poker Night calculate the perfect starting stacks, blind levels, and prize pool.';
+      } else {
+        step = 'Step 3: Shuffle Up and Deal!';
+        title = 'Start the Clock';
+        description = 'Share the TV Mode link on your big screen, then tap "Start Tournament" to begin the game. All player screens will sync automatically.';
+      }
+    } else if (game.status == LiveGameStatus.rebuypause) {
+      step = 'Step 4: Settlement Break';
+      title = 'Lock the Prize Pool';
+      description = 'Rebuys are now closed. Tap "Complete Rebuy & Add-on Break" to record final add-ons, exchange small chips, and lock in the final Prize Pool.';
+    } else if ((game.status == LiveGameStatus.running || game.status == LiveGameStatus.finaltable) && game.activePlayers.length <= 1) {
+      step = 'Step 5: Finalize Results';
+      title = 'Publish the Winners';
+      description = 'Verify the final positions. Players will only see their rank, not the money. Tap "Finish Tournament" to save to History.';
+    } else if (game.status == LiveGameStatus.running || game.status == LiveGameStatus.finaltable) {
+      step = 'Now Playing';
+      title = 'Keep everyone in sync';
+      description = 'Mirror the tournament on your big screen with TV Mode (top bar) and post announcements in Chat — every player screen updates live.';
+    } else if (game.status == LiveGameStatus.paused) {
+      step = 'Paused';
+      title = 'Ready to resume?';
+      description = 'When the break ends, tap Resume Tournament in the top bar to restart the blinds clock where you left off.';
+    } else {
+      step = 'In the books';
+      title = 'Saved to History';
+      description = 'This tournament is complete. Open History (left menu) to replay the results, then start your next event from the Dashboard.';
+    }
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      color: AppColors.primarySoft,
+      borderColor: AppColors.primary,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lightbulb_outline, color: AppColors.primary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  step.toUpperCase(),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  description,
+                  style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 20),
+            color: AppColors.mutedForeground,
+            onPressed: onDismiss,
+            tooltip: 'Dismiss tour',
+          ),
+        ],
+      ),
+    );
+  }
+}
+

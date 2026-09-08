@@ -26,6 +26,9 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/code_display.dart';
 import '../../widgets/rsvp_badge.dart';
+import '../../widgets/chat_sheet.dart';
+import '../../widgets/app_alert_banner.dart';
+import '../../widgets/glass_styles.dart';
 
 /// Invitation / RSVP page mirroring the web `InvitationPage`.
 class InvitationScreen extends StatefulWidget {
@@ -37,16 +40,56 @@ class InvitationScreen extends StatefulWidget {
 
 class _InvitationScreenState extends State<InvitationScreen> {
   bool _copied = false;
+  bool _tourShown = false;
 
   Future<void> _copyLink(LiveGame game) async {
     await Clipboard.setData(
-      ClipboardData(text: 'https://pokernight.app/game/${game.publicCode}'),
+      ClipboardData(
+        text: 'https://poker-night-tools.web.app/game/${game.publicCode}',
+      ),
     );
     if (!mounted) return;
     setState(() => _copied = true);
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) setState(() => _copied = false);
     });
+  }
+
+  void _showAdminTutorialDialog(BuildContext context) {
+    showAppModal(
+      context: context,
+      title: 'Next Steps',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Your tournament is created! Here is what to do next.',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Text('1. Group members have been notified and can RSVP.'),
+          const Text('2. Share the 4-digit code below with any guests.'),
+          const Text(
+            '3. When you are ready to start seating players, tap "Open Check-in".',
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(
+            fullWidth: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextButton(
+            onPressed: () {
+              context.read<AppProvider>().setAppTour(false);
+              Navigator.of(context).pop();
+            },
+            child: const Text('Don\'t show this again'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _confirmCancelGame(
@@ -73,6 +116,20 @@ class _InvitationScreenState extends State<InvitationScreen> {
     final game = app.currentGame;
     final user = app.user;
 
+    if (app.isAdmin &&
+        app.showAppTour &&
+        game != null &&
+        (game.status == LiveGameStatus.draft ||
+            game.status == LiveGameStatus.published ||
+            game.status == LiveGameStatus.checkin ||
+            game.status == LiveGameStatus.ready) &&
+        !_tourShown) {
+      _tourShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showAdminTutorialDialog(context);
+      });
+    }
+
     if (game == null) {
       return Center(
         child: Text(
@@ -85,6 +142,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
     }
 
     final settings = game.settings;
+    final group = app.currentGroup;
     final myPlayer = game.players.where((p) => p.id == user?.id).firstOrNull;
     final going = game.players
         .where((p) => p.rsvp != null && p.rsvp!.isGoing)
@@ -110,7 +168,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
     // Private addresses are hidden until the viewer is confirmed (11-015).
     final showAddress =
         !settings.locationPrivate ||
-        (user?.isAdmin ?? false) ||
+        (app.isAdmin) ||
         (myPlayer?.confirmed ?? false);
 
     return AppPage(
@@ -122,30 +180,198 @@ class _InvitationScreenState extends State<InvitationScreen> {
             game: game,
             showAddress: showAddress,
             hostName: _hostName(app.currentGroup),
-            onEdit: user?.isAdmin == true
+            onEdit: app.isAdmin
                 ? () => _openEditModal(context, app, game)
                 : null,
           ),
+          if (app.isAdmin && app.lastSaveError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              child: AppAlertBanner(
+                type: AppAlertType.error,
+                message: app.lastSaveError!,
+              ),
+            ),
+          // §10.4: prominent display of recent event changes so members see
+          // updated values without digging through chat or audit history.
+          if (game.changeLog.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              borderColor: AppColors.primary.withValues(alpha: 0.5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '⚠️ Event updated',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  for (final entry in game.changeLog.reversed.take(3))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        entry,
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
           _ContextualMainButton(game: game, user: user, myPlayer: myPlayer),
+
+          if (user != null &&
+              !app.isGuest &&
+              game.status != LiveGameStatus.completed &&
+              game.status != LiveGameStatus.cancelled &&
+              (myPlayer == null ||
+                  (!myPlayer.checkedIn && !myPlayer.isGuest))) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              glow: true,
+              child: _RsvpSection(
+                myPlayer:
+                    myPlayer ??
+                    Player(
+                      id: user.id,
+                      name: user.name,
+                      isGuest: false,
+                      rsvp: null,
+                      checkedIn: false,
+                      confirmed: false,
+                      eliminated: false,
+                      rebuys: 0,
+                      hasAddOn: false,
+                      knockouts: 0,
+                      table: 0,
+                      seat: 0,
+                      active: true,
+                    ),
+                cutoffPassed: app.rsvpCutoffPassed,
+                onRsvp: (rsvp) {
+                  HapticFeedback.lightImpact();
+                  // Spec §7.1: warn if reducing guest count would remove
+                  // already-claimed or checked-in guest slots.
+                  final currentRsvp = myPlayer?.rsvp;
+                  final newGuestCount = rsvp?.guestCount ?? 0;
+                  final currentGuestCount = currentRsvp?.guestCount ?? 0;
+                  if (newGuestCount < currentGuestCount) {
+                    final claimedSlots = game.guestSlots
+                        .where(
+                          (s) =>
+                              s.inviterId == (myPlayer?.id ?? '') &&
+                              s.slot > newGuestCount &&
+                              !s.available,
+                        )
+                        .length;
+                    final slotsToRemove = currentGuestCount - newGuestCount;
+                    if (claimedSlots > 0 && slotsToRemove > 0) {
+                      showAppModal(
+                        context: context,
+                        title: 'Reduce guest count?',
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'You have $claimedSlots claimed guest slot${claimedSlots == 1 ? '' : 's'}. '
+                              'Reducing your response may remove a slot already reserved by a guest. '
+                              'The admin will need to resolve any conflict.',
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xl),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: AppButton(
+                                    variant: AppButtonVariant.secondary,
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
+                                    child: const Text('Keep current RSVP'),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: AppButton(
+                                    variant: AppButtonVariant.danger,
+                                    onPressed: () {
+                                      app.setRSVP(rsvp);
+                                      Navigator.of(context).pop();
+                                    },
+                                    child: const Text('Change anyway'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                      return;
+                    }
+                  }
+                  app.setRSVP(rsvp);
+                },
+              ),
+            ),
+          ],
           // Admin-only: where the structure stands. The AI estimate unlocks
           // 30 minutes before start (client rule) — before that the group is
           // still deciding who is coming.
-          if (user?.isAdmin == true &&
+          if (app.isAdmin &&
               game.status != LiveGameStatus.completed &&
               game.status != LiveGameStatus.cancelled) ...[
             const SizedBox(height: AppSpacing.sm),
             _StructureStatusCard(game: game),
           ],
-          if (user?.isAdmin == true &&
+          if (app.isAdmin &&
               game.status != LiveGameStatus.completed &&
               game.status != LiveGameStatus.cancelled) ...[
             const SizedBox(height: AppSpacing.sm),
-            AppButton(
-              fullWidth: true,
-              size: AppButtonSize.xl,
-              variant: AppButtonVariant.danger,
-              onPressed: () => _confirmCancelGame(context, app, game),
-              child: const Text('Cancel Game'),
+            // Danger zone — visually separated per spec §12.6 / §13.2.
+            AppCard(
+              borderColor: AppColors.destructive.withValues(alpha: 0.25),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Danger zone',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.destructive,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Cancel this game — requires a reason.',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    variant: AppButtonVariant.danger,
+                    onPressed: () => _confirmCancelGame(context, app, game),
+                    child: const Text('Cancel game'),
+                  ),
+                ],
+              ),
             ),
           ],
 
@@ -220,7 +446,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           // Event-day preparation checklist (spec §4.6) — admin only, pre-live.
-          if (user?.isAdmin == true &&
+          if (app.isAdmin &&
               game.status != LiveGameStatus.running &&
               game.status != LiveGameStatus.paused &&
               game.status != LiveGameStatus.finaltable &&
@@ -254,7 +480,13 @@ class _InvitationScreenState extends State<InvitationScreen> {
                             game.status == LiveGameStatus.ready) ||
                         game.players.any((p) => p.checkedIn),
                     actionLabel: 'Open',
-                    onAction: () => context.go(RoutePaths.checkIn),
+                    onAction: () {
+                      if (game.status == LiveGameStatus.draft ||
+                          game.status == LiveGameStatus.published) {
+                        app.updateGameStatus(LiveGameStatus.checkin);
+                      }
+                      context.go(RoutePaths.checkIn);
+                    },
                   ),
                   _ChecklistRow(
                     label: 'Generate structure estimate',
@@ -288,53 +520,131 @@ class _InvitationScreenState extends State<InvitationScreen> {
           // My RSVP
 
           // Share codes
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Share with guests',
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w600,
+          if (game.status != LiveGameStatus.cancelled) ...[
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Share with guests',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                CodeDisplay(code: game.publicCode, label: 'Game code'),
-                const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.sm,
+                  const SizedBox(height: AppSpacing.md),
+                  CodeDisplay(code: game.publicCode, label: 'Game code'),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    children: [
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => _copyLink(game),
+                        child: _copied
+                            ? AppIconLabel(
+                                label: 'Link copied',
+                                icon: Icons.check_circle,
+                                color: AppColors.success,
+                              )
+                            : const Text('Copy link'),
+                      ),
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => showAppLinkModal(context, game),
+                        child: const Text('Show QR code'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Guests open the link, choose who invited them, select their guest slot and request check-in. No account needed.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (myPlayer != null && (myPlayer.rsvp?.guestCount ?? 0) > 0) ...[
+              const SizedBox(height: AppSpacing.md),
+              AppCard(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.secondary,
-                      onPressed: () => _copyLink(game),
-                      child: _copied
-                          ? const AppIconLabel(
-                              label: 'Link copied',
-                              icon: Icons.check_circle,
-                              color: AppColors.success,
-                            )
-                          : const Text('Copy link'),
+                    Text(
+                      'Your guest slots',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.secondary,
-                      onPressed: () => showAppLinkModal(context, game),
-                      child: const Text('Show QR code'),
-                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    for (var i = 1; i <= myPlayer.rsvp!.guestCount; i++) ...[
+                      Builder(
+                        builder: (context) {
+                          final guest = game.players
+                              .where(
+                                (p) =>
+                                    p.isGuest &&
+                                    p.inviterId == myPlayer.id &&
+                                    p.guestSlot == i,
+                              )
+                              .firstOrNull;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.secondary,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    '$i',
+                                    style: AppTypography.monoXs.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    guest?.name.isNotEmpty == true
+                                        ? guest!.name
+                                        : 'Unclaimed',
+                                    style: AppTypography.bodySm.copyWith(
+                                      color: guest != null
+                                          ? AppColors.foreground
+                                          : AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                                if (guest != null)
+                                  AppBadge(
+                                    label: guest.confirmed
+                                        ? 'Confirmed'
+                                        : 'Pending',
+                                    variant: guest.confirmed
+                                        ? AppBadgeVariant.green
+                                        : AppBadgeVariant.muted,
+                                  ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'Guests open the link, choose who invited them, select their guest slot and request check-in. No account needed.',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            ],
+          ],
           const SizedBox(height: AppSpacing.lg),
           // Responses
           AppCard(
@@ -366,7 +676,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                     ),
                   ),
                 if (going.isNotEmpty) ...[
-                  const Divider(color: AppColors.border),
+                  Divider(color: AppColors.border),
                   const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [
@@ -391,6 +701,97 @@ class _InvitationScreenState extends State<InvitationScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Admin RSVP review — every guest awaiting a decision, with
+          // Accept / Decline. The event cannot move forward to check-in while
+          // any guest is still pending (see [_ContextualMainButton]).
+          if (app.isAdmin) ...[
+            Builder(
+              builder: (context) {
+                final pendingGuests = game.players
+                    .where(
+                      (p) =>
+                          p.isGuest && !p.confirmed && p.name.trim().isNotEmpty,
+                    )
+                    .toList();
+                return AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  borderColor: pendingGuests.isNotEmpty
+                      ? AppColors.primary.withValues(alpha: 0.5)
+                      : null,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Guest requests',
+                            style: AppTypography.bodySm.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (pendingGuests.isNotEmpty)
+                            AppBadge(
+                              label: '${pendingGuests.length} to review',
+                              variant: AppBadgeVariant.red,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      if (pendingGuests.isEmpty)
+                        Text(
+                          'No guests waiting. Everyone who requested a seat has been reviewed.',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        )
+                      else
+                        for (final g in pendingGuests)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: Row(
+                              children: [
+                                AppAvatar(name: g.name, size: AppAvatarSize.sm),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(g.name, style: AppTypography.bodySm),
+                                      Text(
+                                        'Guest of ${_memberName(game, g.inviterId ?? '')}',
+                                        style: AppTypography.bodyXs.copyWith(
+                                          color: AppColors.mutedForeground,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                AppButton(
+                                  size: AppButtonSize.sm,
+                                  onPressed: () => app.confirmGuest(g.id),
+                                  child: const Text('Accept'),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                AppButton(
+                                  size: AppButtonSize.sm,
+                                  variant: AppButtonVariant.danger,
+                                  onPressed: () => app.rejectGuest(g.id),
+                                  child: const Text('Decline'),
+                                ),
+                              ],
+                            ),
+                          ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // Guest slots (07-014) — the persisted named seats for "Going +N"
           // RSVPs, shown with their current status so the host can see which
           // guest seats are still open.
@@ -418,7 +819,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.event_seat_outlined,
                             size: 16,
                             color: AppColors.icon,
@@ -436,6 +837,86 @@ class _InvitationScreenState extends State<InvitationScreen> {
                         ],
                       ),
                     ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+
+          // Chat & Polls — visible to members only (spec §1: "Event rules,
+          // own RSVP, chat, polls"; guests see none of these).
+          if (!app.isGuest) ...[
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        size: 16,
+                        color: AppColors.icon,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        'Chat',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      Builder(
+                        builder: (_) {
+                          final count = app
+                              .gameChatMessages(game.id)
+                              .where((m) => !m.deleted)
+                              .length;
+                          if (count == 0) return const SizedBox.shrink();
+                          return AppBadge(
+                            label: '$count',
+                            variant: AppBadgeVariant.green,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppButton(
+                    fullWidth: true,
+                    size: AppButtonSize.sm,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => ChatSheet.show(context, game.id),
+                    child: const Text('Open chat'),
+                  ),
+                  if (group.polls.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    for (final poll in group.polls.take(3))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: AppCard(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                poll.question,
+                                style: AppTypography.bodySm.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Text(
+                                '${poll.totalVotes} vote${poll.totalVotes == 1 ? '' : 's'}${poll.closed ? ' · closed' : ''}',
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -462,10 +943,18 @@ class _Detail extends StatelessWidget {
   final Color? valueColor;
   final bool mono;
 
-  @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
       width: 160,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        // `secondary` is white-with-alpha in most palettes, so overriding
+        // its alpha turned these tiles into pale blocks with unreadable
+        // labels on mobile. See Glass.solidTint.
+        color: Glass.solidTint(AppColors.secondary),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -473,9 +962,10 @@ class _Detail extends StatelessWidget {
             label,
             style: AppTypography.bodyXs.copyWith(
               color: AppColors.mutedForeground,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             value,
             style: mono
@@ -483,7 +973,7 @@ class _Detail extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     color: valueColor ?? AppColors.foreground,
                   )
-                : AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500),
+                : AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -517,14 +1007,13 @@ class _StructureStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.read<AppProvider>();
     final start = game.settings.scheduledStart;
     final unlockAt = start?.subtract(const Duration(minutes: 30));
-    final hhmm = (DateTime dt) =>
+    String hhmm(DateTime dt) =>
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
     final hasStructure = game.structure.levels.isNotEmpty;
-    final reviewOpen = game.structureReviewOpen;
+    final reviewOpen = (game.status == LiveGameStatus.ready);
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -592,7 +1081,11 @@ class _GuestSlotBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, variant) = switch (status) {
       GuestSlotStatus.unclaimed => ('Free', AppBadgeVariant.muted),
-      GuestSlotStatus.reserved => ('Pending', AppBadgeVariant.accent),
+      GuestSlotStatus.reserved => ('Reserved', AppBadgeVariant.accent),
+      GuestSlotStatus.checkInRequested => (
+        'Check-in requested',
+        AppBadgeVariant.accent,
+      ),
       GuestSlotStatus.checkedIn => ('Checked in', AppBadgeVariant.green),
       GuestSlotStatus.cancelled => ('Cancelled', AppBadgeVariant.red),
     };
@@ -602,7 +1095,9 @@ class _GuestSlotBadge extends StatelessWidget {
 
 /// Admin "Review RSVPs" modal (audit fix E4 — the button used to navigate to
 /// Check-in). Shows the live attendance breakdown plus every member's answer.
-void _showRsvpListModal(BuildContext context, LiveGame game) {
+/// Admins can long-press a member row to correct or reopen that member's RSVP
+/// (User Flow §3.1).
+void _showRsvpListModal(BuildContext context, AppProvider app, LiveGame game) {
   final members = game.players.where((p) => !p.isGuest).toList();
   final going = members
       .where((p) => p.rsvp != null && p.rsvp!.isGoing)
@@ -653,20 +1148,89 @@ void _showRsvpListModal(BuildContext context, LiveGame game) {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         const SizedBox(height: AppSpacing.sm),
         for (final p in members)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-            child: Row(
-              children: [
-                AppAvatar(name: p.name, size: AppAvatarSize.sm),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: Text(p.name, style: AppTypography.bodySm)),
-                RSVPBadge(rsvp: p.rsvp),
-              ],
+            child: GestureDetector(
+              onLongPress: app.isAdmin
+                  ? () => _showAdminRsvpOverride(context, app, game, p)
+                  : null,
+              child: Row(
+                children: [
+                  AppAvatar(name: p.name, size: AppAvatarSize.sm),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: Text(p.name, style: AppTypography.bodySm)),
+                  RSVPBadge(rsvp: p.rsvp),
+                ],
+              ),
             ),
           ),
+        const SizedBox(height: AppSpacing.xl),
+        AppButton(
+          fullWidth: true,
+          size: AppButtonSize.xl,
+          onPressed: () {
+            Navigator.of(context).pop();
+            final app = context.read<AppProvider>();
+            app.updateGameStatus(LiveGameStatus.checkin);
+            context.go(RoutePaths.checkIn);
+          },
+          child: const Text('Open Check-in'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Admin correct-or-reopen for a single member's RSVP (User Flow §3.1).
+void _showAdminRsvpOverride(
+  BuildContext context,
+  AppProvider app,
+  LiveGame game,
+  Player p,
+) {
+  final choices = <String, Rsvp?>{
+    'Going': Rsvp.going,
+    'Going +1': Rsvp.goingPlus1,
+    'Going +2': Rsvp.goingPlus2,
+    'Going +3': Rsvp.goingPlus3,
+    'Going +4': Rsvp.goingPlus4,
+    'Maybe': Rsvp.maybe,
+    'Can’t come': Rsvp.cant,
+  };
+  showAppModal(
+    context: context,
+    title: 'Set RSVP for ${p.name}',
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final entry in choices.entries)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: AppButton(
+              variant: p.rsvp == entry.value
+                  ? AppButtonVariant.secondary
+                  : AppButtonVariant.ghost,
+              onPressed: () {
+                app.adminSetRSVP(p.id, entry.value, gameId: game.id);
+                Navigator.of(context).pop();
+              },
+              child: Text(entry.key),
+            ),
+          ),
+        AppButton(
+          variant: p.rsvp == null
+              ? AppButtonVariant.secondary
+              : AppButtonVariant.ghost,
+          onPressed: () {
+            app.adminSetRSVP(p.id, null, gameId: game.id);
+            Navigator.of(context).pop();
+          },
+          child: const Text('No response'),
+        ),
       ],
     ),
   );
@@ -767,12 +1331,70 @@ class _EditEventFormState extends State<_EditEventForm> {
 
   void _save() {
     final s = widget.settings;
+    // Validate required fields before saving.
+    final name = _name.text.trim();
+    if (name.isEmpty) {
+      showAppModal(
+        context: context,
+        title: 'Validation Error',
+        child: const Text('Event name cannot be empty.'),
+      );
+      return;
+    }
+    final buyInVal = num.tryParse(_buyIn.text) ?? 0;
+    if (buyInVal <= 0) {
+      showAppModal(
+        context: context,
+        title: 'Validation Error',
+        child: const Text('Buy-in must be a positive number.'),
+      );
+      return;
+    }
     final newDate = _date.text.trim().isEmpty ? s.date : _date.text.trim();
     final newTime = _time.text.trim().isEmpty ? s.time : _time.text.trim();
+    // Validate date format if changed.
+    if (newDate != s.date) {
+      final parsed = DateTime.tryParse(newDate);
+      if (parsed == null) {
+        showAppModal(
+          context: context,
+          title: 'Validation Error',
+          child: const Text('Invalid date format (YYYY-MM-DD).'),
+        );
+        return;
+      }
+    }
+    // Spec §12.2: reject a past date AND a past time on today's date — the
+    // same rule the creation wizard enforces in its step-1 validation.
+    if (newDate != s.date || newTime != s.time) {
+      final parsed = DateTime.tryParse(newDate);
+      if (parsed != null) {
+        final parts = newTime.split(':');
+        final h = int.tryParse(parts.isNotEmpty ? parts[0] : '');
+        final m = int.tryParse(parts.length > 1 ? parts[1] : '');
+        if (h != null && m != null && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+          final scheduled = DateTime(
+            parsed.year,
+            parsed.month,
+            parsed.day,
+            h,
+            m,
+          );
+          if (scheduled.isBefore(DateTime.now())) {
+            showAppModal(
+              context: context,
+              title: 'Validation Error',
+              child: const Text('Start time must be in the future.'),
+            );
+            return;
+          }
+        }
+      }
+    }
     // Player count is intentionally not editable here — it is derived from
     // who RSVPs (Going / Going +1/+2) and who actually checks in.
     final newS = s.copyWith(
-      name: _name.text.trim().isEmpty ? s.name : _name.text.trim(),
+      name: name,
       date: newDate,
       time: newTime,
       location: _location.text.trim(),
@@ -870,7 +1492,7 @@ class _EditEventFormState extends State<_EditEventForm> {
           keyboardType: TextInputType.number,
         ),
         const SizedBox(height: AppSpacing.lg),
-        const Divider(color: AppColors.border),
+        Divider(color: AppColors.border),
         const SizedBox(height: AppSpacing.sm),
         _SegmentedPicker(
           label: 'Duration',
@@ -1177,7 +1799,7 @@ class _SegmentedPicker extends StatelessWidget {
                 o,
                 style: AppTypography.bodyXs.copyWith(
                   color: o == selected
-                      ? Colors.white
+                      ? AppColors.foreground
                       : AppColors.mutedForeground,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1261,7 +1883,7 @@ void showAppLinkModal(BuildContext context, LiveGame game) {
       insetPadding: const EdgeInsets.all(AppSpacing.lg),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(color: AppColors.border),
       ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xxl),
@@ -1281,7 +1903,8 @@ void showAppLinkModal(BuildContext context, LiveGame game) {
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               child: QrImageView(
-                data: 'https://pokernight.app/game/${game.publicCode}',
+                data:
+                    'https://poker-night-tools.web.app/game/${game.publicCode}',
                 version: QrVersions.auto,
                 size: 200,
                 gapless: false,
@@ -1291,7 +1914,7 @@ void showAppLinkModal(BuildContext context, LiveGame game) {
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
-              'https://pokernight.app/game/${game.publicCode}',
+              'https://poker-night-tools.web.app/game/${game.publicCode}',
               textAlign: TextAlign.center,
               style: AppTypography.monoSm.copyWith(color: AppColors.primary),
             ),
@@ -1422,7 +2045,7 @@ class _ContextualMainButton extends StatelessWidget {
   Widget build(BuildContext context) {
     if (user == null) return const SizedBox.shrink();
     final app = context.read<AppProvider>();
-    final isAdmin = user!.isAdmin;
+    final isAdmin = app.isAdmin;
 
     if (isAdmin) {
       switch (game.status) {
@@ -1439,7 +2062,7 @@ class _ContextualMainButton extends StatelessWidget {
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
-            onPressed: () => _showRsvpListModal(context, game),
+            onPressed: () => _showRsvpListModal(context, app, game),
             child: const Text('Review RSVPs'),
           );
         case LiveGameStatus.checkin:
@@ -1448,6 +2071,23 @@ class _ContextualMainButton extends StatelessWidget {
               .where((p) => p.checkedIn && p.confirmed)
               .length;
           final seatingConfirmed = game.seatingConfirmed;
+          final pendingGuestCount = game.players
+              .where(
+                (p) => p.isGuest && !p.confirmed && p.name.trim().isNotEmpty,
+              )
+              .length;
+          if (pendingGuestCount > 0) {
+            // Spec: the admin reviews every attendee — accept/decline each
+            // guest — before the event can move forward.
+            return AppButton(
+              fullWidth: true,
+              size: AppButtonSize.xl,
+              onPressed: null,
+              child: Text(
+                'Review $pendingGuestCount guest request${pendingGuestCount == 1 ? '' : 's'} first',
+              ),
+            );
+          }
           if (checkedInCount >= 2 && seatingConfirmed) {
             return AppButton(
               fullWidth: true,
@@ -1456,7 +2096,7 @@ class _ContextualMainButton extends StatelessWidget {
                 app.updateEventSettings(
                   game.settings.copyWith(players: checkedInCount),
                 );
-                app.updateGameStatus(LiveGameStatus.running);
+                app.startTimer();
                 context.go(RoutePaths.adminDashboard);
               },
               child: const Text('Start Tournament'),
@@ -1502,6 +2142,18 @@ class _ContextualMainButton extends StatelessWidget {
       }
     } else {
       // Member flow
+      // Blocking states take priority (spec §12 / §9.1) — mirrors the
+      // canonical `_memberAction` in main_button.dart. Without this the member
+      // kept seeing "Check In" / "Your Seat Assignment" on a tournament the
+      // host had already cancelled.
+      if (game.status == LiveGameStatus.cancelled) {
+        return const AppButton(
+          fullWidth: true,
+          size: AppButtonSize.xl,
+          onPressed: null,
+          child: Text('Event Cancelled'),
+        );
+      }
       if (game.status == LiveGameStatus.completed) {
         return AppButton(
           fullWidth: true,
@@ -1526,6 +2178,27 @@ class _ContextualMainButton extends StatelessWidget {
       }
 
       final p = myPlayer;
+      // A member who joined the group after this game's roster was seeded
+      // (or who never answered the invite) has no row in game.players yet —
+      // p is null. They must still be able to check in once check-in is
+      // open (main_button.dart's canonical logic treats me == null as
+      // eligible too); falling through to SizedBox.shrink() here previously
+      // hid the Check In action entirely for them.
+      if (p == null &&
+          !game.checkInClosed &&
+          (game.status == LiveGameStatus.checkin ||
+              game.status == LiveGameStatus.ready)) {
+        return AppButton(
+          fullWidth: true,
+          size: AppButtonSize.xl,
+          // requestCheckIn creates the roster row (Going + checked in) as a
+          // single atomic write when none exists yet — do not also call
+          // setRSVP here, which would race a second, independent write
+          // against the same players.{uid} map (see requestCheckIn).
+          onPressed: () => app.requestCheckIn(user!.id),
+          child: const Text('Check In'),
+        );
+      }
       if (p != null) {
         if (p.checkedIn && p.confirmed) {
           final seated =
@@ -1554,7 +2227,7 @@ class _ContextualMainButton extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  const Divider(color: AppColors.border),
+                  Divider(color: AppColors.border),
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     'At your table',
@@ -1602,58 +2275,244 @@ class _ContextualMainButton extends StatelessWidget {
             onPressed: null,
             child: const Text('Waiting for Confirmation'),
           );
-        } else if ((game.status == LiveGameStatus.checkin ||
-            game.status == LiveGameStatus.ready)) {
+        } else if (!game.checkInClosed &&
+            (game.status == LiveGameStatus.checkin ||
+                game.status == LiveGameStatus.ready)) {
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
             onPressed: () => app.requestCheckIn(p.id),
             child: const Text('Check In'),
           );
-        } else {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your RSVP',
-                style: AppTypography.bodySm.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final opt in const [
-                      Rsvp.going,
-                      Rsvp.goingPlus1,
-                      Rsvp.goingPlus2,
-                      Rsvp.goingPlus3,
-                      Rsvp.goingPlus4,
-                      Rsvp.maybe,
-                      Rsvp.cant,
-                    ])
-                      Padding(
-                        padding: const EdgeInsets.only(right: AppSpacing.sm),
-                        child: _RsvpChip(
-                          label: opt.label,
-                          active: p.rsvp == opt,
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            app.setRSVP(opt);
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          );
         }
       }
+      return const SizedBox.shrink();
     }
-    return const SizedBox.shrink();
+  }
+}
+
+/// The full member RSVP section: three status chips (Going / Maybe / Can't)
+/// and, when "Going" is selected, an inline guest-count stepper (0–4).
+/// Spec §4.3: guest count is part of the Going answer, not a separate chip.
+class _RsvpSection extends StatefulWidget {
+  const _RsvpSection({
+    required this.myPlayer,
+    required this.cutoffPassed,
+    required this.onRsvp,
+  });
+
+  final Player myPlayer;
+  final bool cutoffPassed;
+  final void Function(Rsvp?) onRsvp;
+
+  @override
+  State<_RsvpSection> createState() => _RsvpSectionState();
+}
+
+class _RsvpSectionState extends State<_RsvpSection> {
+  Rsvp _rsvpForGuestCount(int guests) => switch (guests) {
+    1 => Rsvp.goingPlus1,
+    2 => Rsvp.goingPlus2,
+    3 => Rsvp.goingPlus3,
+    4 => Rsvp.goingPlus4,
+    _ => Rsvp.going,
+  };
+
+  bool get _isGoing {
+    final r = widget.myPlayer.rsvp;
+    return r != null && r.isGoing;
+  }
+
+  int get _currentGuestCount => widget.myPlayer.rsvp?.guestCount ?? 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = widget.myPlayer.rsvp;
+    final enabled = !widget.cutoffPassed;
+    final lastError = context.select<AppProvider, String?>(
+      (a) => a.lastRsvpError,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.cutoffPassed)
+          const Padding(
+            padding: EdgeInsets.only(bottom: AppSpacing.md),
+            child: AppAlertBanner(
+              type: AppAlertType.warning,
+              message: 'RSVP is closed — responses can no longer be changed.',
+            ),
+          ),
+        Text(
+          'Your RSVP',
+          style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        // Primary status chips: Going / Maybe / Can't
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            _RsvpChip(
+              label: 'Going',
+              active: _isGoing,
+              enabled: enabled,
+              onTap: () {
+                // Preserve current guest count when re-tapping "Going".
+                widget.onRsvp(_rsvpForGuestCount(_currentGuestCount));
+              },
+            ),
+            _RsvpChip(
+              label: 'Maybe',
+              active: current == Rsvp.maybe,
+              enabled: enabled,
+              onTap: () => widget.onRsvp(Rsvp.maybe),
+            ),
+            _RsvpChip(
+              label: "Can't come",
+              active: current == Rsvp.cant,
+              enabled: enabled,
+              onTap: () => widget.onRsvp(Rsvp.cant),
+            ),
+          ],
+        ),
+        // Guest-count stepper — only visible when "Going" is selected.
+        if (_isGoing && enabled) ...[
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Icon(
+                Icons.group_outlined,
+                size: 16,
+                color: AppColors.mutedForeground,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                'Bringing guests',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const Spacer(),
+              _GuestCountStepper(
+                value: _currentGuestCount,
+                max: 4,
+                onChanged: (n) {
+                  widget.onRsvp(_rsvpForGuestCount(n));
+                },
+              ),
+            ],
+          ),
+          if (_currentGuestCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(
+                'You + $_currentGuestCount guest${_currentGuestCount > 1 ? 's' : ''} = ${_currentGuestCount + 1} total seats',
+                style: AppTypography.bodyXs.copyWith(color: AppColors.success),
+              ),
+            ),
+        ],
+        if (widget.cutoffPassed)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Text(
+              'RSVPs are now closed.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+        if (lastError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Text(
+              lastError,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.destructive,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A compact +/− stepper for the guest count (0–max).
+class _GuestCountStepper extends StatelessWidget {
+  const _GuestCountStepper({
+    required this.value,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final int value;
+  final int max;
+  final void Function(int) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _StepButton(
+          icon: Icons.remove,
+          enabled: value > 0,
+          onTap: () => onChanged(value - 1),
+        ),
+        SizedBox(
+          width: 44,
+          child: Center(
+            child: Text(
+              '$value',
+              style: AppTypography.monoSm.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.foreground,
+              ),
+            ),
+          ),
+        ),
+        _StepButton(
+          icon: Icons.add,
+          enabled: value < max,
+          onTap: () => onChanged(value + 1),
+        ),
+      ],
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  const _StepButton({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: enabled ? AppColors.primary : AppColors.muted,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+        child: Icon(
+          icon,
+          size: 16,
+          color: enabled
+              ? AppColors.primaryForeground
+              : AppColors.mutedForeground,
+        ),
+      ),
+    );
   }
 }
 
@@ -1766,7 +2625,7 @@ class _PremiumEventHeader extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.calendar_today,
                           size: 16,
                           color: AppColors.mutedForeground,
@@ -1783,7 +2642,7 @@ class _PremiumEventHeader extends StatelessWidget {
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.access_time,
                           size: 16,
                           color: AppColors.mutedForeground,
@@ -1800,7 +2659,7 @@ class _PremiumEventHeader extends StatelessWidget {
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.location_on,
                           size: 16,
                           color: AppColors.mutedForeground,
@@ -1832,7 +2691,7 @@ class _PremiumEventHeader extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
                     IconButton(
                       onPressed: onEdit,
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.edit_outlined,
                         color: AppColors.mutedForeground,
                       ),
@@ -1897,14 +2756,14 @@ class _PremiumEventHeader extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.person_outline,
                     size: 14,
                     color: AppColors.mutedForeground,
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'Hosted by $hostName',
+                    'Admin: $hostName',
                     style: AppTypography.bodyXs.copyWith(
                       color: AppColors.mutedForeground,
                     ),
@@ -1913,7 +2772,7 @@ class _PremiumEventHeader extends StatelessWidget {
               ),
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.schedule_outlined,
                     size: 14,
                     color: AppColors.mutedForeground,
@@ -1940,10 +2799,12 @@ class _PremiumEventHeader extends StatelessWidget {
 class _RsvpChip extends StatefulWidget {
   final String label;
   final bool active;
+  final bool enabled;
   final VoidCallback onTap;
   const _RsvpChip({
     required this.label,
     required this.active,
+    this.enabled = true,
     required this.onTap,
   });
 
@@ -1975,33 +2836,38 @@ class _RsvpChipState extends State<_RsvpChip>
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) {
-        _controller.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () => _controller.reverse(),
+      onTapDown: widget.enabled ? (_) => _controller.forward() : null,
+      onTapUp: widget.enabled
+          ? (_) {
+              _controller.reverse();
+              widget.onTap();
+            }
+          : null,
+      onTapCancel: widget.enabled ? () => _controller.reverse() : null,
       child: ScaleTransition(
         scale: _scaleAnimation,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: BoxDecoration(
-            color: widget.active ? AppColors.primary : AppColors.card,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(
-              color: widget.active ? AppColors.primary : AppColors.border,
+        child: Opacity(
+          opacity: widget.enabled ? 1.0 : 0.4,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
             ),
-          ),
-          child: Text(
-            widget.label,
-            style: AppTypography.bodySm.copyWith(
-              color: widget.active
-                  ? AppColors.primaryForeground
-                  : AppColors.mutedForeground,
-              fontWeight: FontWeight.w600,
+            decoration: BoxDecoration(
+              color: widget.active ? AppColors.primary : AppColors.card,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(
+                color: widget.active ? AppColors.primary : AppColors.border,
+              ),
+            ),
+            child: Text(
+              widget.label,
+              style: AppTypography.bodySm.copyWith(
+                color: widget.active
+                    ? AppColors.primaryForeground
+                    : AppColors.mutedForeground,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),

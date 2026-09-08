@@ -4,6 +4,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../models/live_game.dart';
 
+import 'package:provider/provider.dart';
+import '../providers/app_provider.dart';
+
 import '../app/colors.dart';
 import '../app/typography.dart';
 import '../utils/formatters.dart';
@@ -153,27 +156,38 @@ class _LiveTimerBuilderState extends State<LiveTimerBuilder>
     with SingleTickerProviderStateMixin {
   late Ticker _ticker;
   int _lastSeconds = -1;
+  bool _tickerActive = false;
 
   @override
   void initState() {
     super.initState();
     _ticker = createTicker((_) {
       if (widget.game.timerRunning) {
-        final current = widget.game.currentSecondsRemaining;
+        final offset = context.read<AppProvider>().serverTimeOffset;
+        final current = widget.game.currentSecondsRemaining(offset);
         if (current != _lastSeconds) {
           _lastSeconds = current;
           setState(() {});
         }
       }
     });
-    _ticker.start();
+    if (widget.game.timerRunning) {
+      _ticker.start();
+      _tickerActive = true;
+    }
   }
 
   @override
   void didUpdateWidget(LiveTimerBuilder oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.game.timerRunning) {
-      _lastSeconds = widget.game.currentSecondsRemaining;
+    if (widget.game.timerRunning && !_tickerActive) {
+      _ticker.start();
+      _tickerActive = true;
+    } else if (!widget.game.timerRunning && _tickerActive) {
+      _ticker.stop();
+      _tickerActive = false;
+      final offset = context.read<AppProvider>().serverTimeOffset;
+      _lastSeconds = widget.game.currentSecondsRemaining(offset);
     }
   }
 
@@ -185,6 +199,8 @@ class _LiveTimerBuilderState extends State<LiveTimerBuilder>
 
   @override
   Widget build(BuildContext context) {
-    return widget.builder(context, widget.game.currentSecondsRemaining);
+    final offset = context.watch<AppProvider>().serverTimeOffset;
+    return widget.builder(context, widget.game.currentSecondsRemaining(offset));
   }
 }
+

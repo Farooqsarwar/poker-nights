@@ -12,9 +12,9 @@ import '../../constants/app_constants.dart';
 import '../../models/app_notification.dart';
 import '../../models/group.dart';
 import '../../models/live_game.dart';
-import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
+import '../../utils/main_button.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
@@ -24,7 +24,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
-import '../../widgets/poker_night_hero.dart';
+import '../../widgets/group_switcher.dart';
 
 /// Dashboard mirroring the web `HomePage`.
 class HomeScreen extends StatefulWidget {
@@ -35,19 +35,18 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final _joinController = TextEditingController();
   final _groupNameController = TextEditingController();
-  String _joinError = '';
-  bool _showJoin = false;
+  String _createError = '';
   bool _showCreate = false;
   bool _showRestoreModal = false;
+
+  void _openJoin() => context.go(RoutePaths.join);
 
   static String _hhmm(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
   @override
   void dispose() {
-    _joinController.dispose();
     _groupNameController.dispose();
     super.dispose();
   }
@@ -56,26 +55,19 @@ class _HomeScreenState extends State<HomeScreen> {
     // Always set the current game first so every destination screen
     // has the correct game in the provider (fixes navigation dead-ends).
     app.setCurrentGame(game);
-    final isAdmin = app.user?.isAdmin ?? false;
-    if (game.status == LiveGameStatus.completed) {
-      context.go(RoutePaths.resultPodium);
-    } else if (isAdmin && game.status.isActiveLive) {
-      context.go(RoutePaths.adminDashboard);
-    } else if ((game.status == LiveGameStatus.checkin ||
-            game.status == LiveGameStatus.ready) &&
-        isAdmin) {
-      context.go(RoutePaths.checkIn);
-    } else if (isAdmin) {
-      context.go(RoutePaths.invitation);
-    } else {
-      // Members: route to invitation for RSVP/pre-game states,
-      // live screen only once the game is actually running.
-      if (game.status.isActiveLive) {
-        context.go(RoutePaths.playerLive);
-      } else {
-        context.go(RoutePaths.invitation);
-      }
-    }
+    // The destination is the contextual main action (user-flow spec §9):
+    // one event, one dominant next action, resolved from role + state.
+    final user = app.user;
+    final isAdmin = app.isAdmin;
+    final me = user == null
+        ? null
+        : game.players.where((p) => p.id == user.id).firstOrNull;
+    final action = mainActionFor(
+      isAdmin ? MainButtonRole.admin : MainButtonRole.member,
+      game,
+      memberRow: me,
+    );
+    context.go(action.route ?? RoutePaths.invitation);
   }
 
   @override
@@ -83,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final app = context.watch<AppProvider>();
     final user = app.user;
     final group = app.currentGroup;
-    final isAdmin = user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
     // Draft games are only visible to admins (spec §3, §25).
     final games = group.games
         .where(
@@ -93,7 +85,6 @@ class _HomeScreenState extends State<HomeScreen> {
         )
         .toList();
     final activeGame = games.where((g) => g.status.isActiveLive).firstOrNull;
-    final unread = app.unreadCount;
 
     return Stack(
       children: [
@@ -103,6 +94,10 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppSpacing.sm),
+              // Persistent group context — the user always knows which group
+              // they are looking at, and can switch without leaving (IA §1).
+              const GroupContextHeader(),
+              const SizedBox(height: AppSpacing.lg),
               // Header
               Row(
                     children: [
@@ -111,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Dashboard',
+                              'Home',
                               style:
                                   AppTypography.display(
                                     size: AppFontSizes.display,
@@ -133,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Container(
                                   width: 6,
                                   height: 6,
-                                  decoration: const BoxDecoration(
+                                  decoration: BoxDecoration(
                                     color: AppColors.success,
                                     shape: BoxShape.circle,
                                   ),
@@ -142,7 +137,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 // Audit fix E11: no more "Welcome back, Guest".
                                 Text(
                                   user?.name != null && user!.name.isNotEmpty
-                                      ? 'Welcome back, ${user!.name}'
+                                      ? 'Welcome back, ${user.name}'
                                       : 'Welcome back',
                                   style: AppTypography.bodySm.copyWith(
                                     color: AppColors.mutedForeground,
@@ -153,78 +148,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ),
-                      InkWell(
-                        onTap: () => context.go(RoutePaths.notifications),
-                        borderRadius: BorderRadius.circular(AppRadius.lg),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: AppColors.card,
-                            borderRadius: BorderRadius.circular(AppRadius.lg),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          alignment: Alignment.center,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              const Icon(
-                                Icons.notifications_none,
-                                size: 22,
-                                color: AppColors.foreground,
-                              ),
-                              if (unread > 0)
-                                Positioned(
-                                  right: -4,
-                                  top: -4,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary,
-                                      borderRadius: BorderRadius.circular(
-                                        AppRadius.pill,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.primary.withValues(
-                                            alpha: 0.4,
-                                          ),
-                                          blurRadius: 8,
-                                        ),
-                                      ],
-                                    ),
-                                    child: Text(
-                                      '$unread',
-                                      style: AppTypography.mono(
-                                        size: 10,
-                                        weight: FontWeight.w700,
-                                        color: AppColors.primaryForeground,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
                     ],
-                  )
-                  .animate()
-                  .fadeIn(duration: 400.ms)
-                  .slideY(begin: -0.2, end: 0, curve: Curves.easeOut),
-              const SizedBox(height: AppSpacing.xl),
-              // Hero Banner
-              ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1000),
-                    child: const PokerNightHero(),
-                  )
-                  .animate()
-                  .fadeIn(duration: 800.ms)
-                  .slideY(begin: 0.1, curve: Curves.easeOutBack),
-              const SizedBox(height: AppSpacing.xl),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+              // Group activity snapshot — answers "how is the group doing?"
+              // at a glance (IA §7).
+              if (app.hasCurrentGroup) ...[
+                _GroupStats(group: group, app: app),
+                const SizedBox(height: AppSpacing.xl),
+              ],
               // Offline Conflict Banner
               if (app.hasOfflineConflict) ...[
                 AppAlertBanner(
@@ -236,8 +168,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ).animate().fadeIn(duration: 400.ms),
                 const SizedBox(height: AppSpacing.xl),
               ] else if (app.restoredFromRecovery && activeGame != null) ...[
-                // Audit fix B8: the restore is surfaced with the last-saved
-                // time and an explicit review (Tech §20.1).
                 AppAlertBanner(
                   type: AppAlertType.info,
                   message:
@@ -248,9 +178,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ).animate().fadeIn(duration: 400.ms),
                 const SizedBox(height: AppSpacing.xl),
               ],
-              // ── Next required action (User Flow §4.1: Home "should identify
-              // the next required action", not just list data). ─────────────
-              if (group != null) ...[
+
+              // Next required action (User Flow §4.1)
+              ...[
                 _NextActionCard(
                   app: app,
                   group: group,
@@ -259,8 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
               ],
-              // Primary actions: Create Event + Start Cash Game (§4.1).
-              // Audit fix B2 — "Start Cash Game" was missing from Home.
+
+              // Primary actions (User Flow §4.1)
               if (isAdmin) ...[
                 Row(
                   children: [
@@ -269,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: () =>
                             context.go(RoutePaths.createTournament),
                         child: const AppIconLabel(
-                          label: 'Create Event',
+                          label: 'New Game',
                           icon: Icons.add,
                         ),
                       ),
@@ -289,11 +219,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
               ],
-              // Stats row
-              if (user?.stats != null) ...[
-                _StatsRow(stats: user!.stats),
-                const SizedBox(height: AppSpacing.xl),
-              ],
               // Two-column layout
               LayoutBuilder(
                 builder: (context, constraints) {
@@ -306,7 +231,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           flex: 8,
                           child: _UpcomingGames(
                             games: games,
-                            isAdmin: user?.isAdmin ?? false,
+                            isAdmin: app.isAdmin,
+                            userId: user?.id,
                             onOpen: (g) => _openGame(context, app, g),
                           ),
                         ),
@@ -317,14 +243,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               _GroupCard(
-                                group: group,
-                                showJoin: () => setState(() {
-                                  _joinError = '';
-                                  _showJoin = true;
-                                }),
+                                group: app.hasCurrentGroup ? group : null,
+                                loading: app.groupBundleLoading,
+                                showJoin: _openJoin,
                                 showCreate: () =>
                                     setState(() => _showCreate = true),
-                                isAdmin: user?.isAdmin ?? false,
+                                isAdmin: app.isAdmin,
                               ),
                               const SizedBox(height: AppSpacing.xl),
                               if (app.notifications.any((n) => !n.read))
@@ -342,18 +266,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       _UpcomingGames(
                         games: games,
-                        isAdmin: user?.isAdmin ?? false,
+                        isAdmin: app.isAdmin,
+                        userId: user?.id,
                         onOpen: (g) => _openGame(context, app, g),
                       ),
                       const SizedBox(height: AppSpacing.xl),
                       _GroupCard(
-                        group: group,
-                        showJoin: () => setState(() {
-                          _joinError = '';
-                          _showJoin = true;
-                        }),
+                        group: app.hasCurrentGroup ? group : null,
+                        loading: app.groupBundleLoading,
+                        showJoin: _openJoin,
                         showCreate: () => setState(() => _showCreate = true),
-                        isAdmin: user?.isAdmin ?? false,
+                        isAdmin: app.isAdmin,
                       ),
                       const SizedBox(height: AppSpacing.xl),
                       if (app.notifications.any((n) => !n.read))
@@ -367,83 +290,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         // Modals
         AppModal(
-          open: _showJoin,
-          onClose: () => setState(() => _showJoin = false),
-          title: 'Join a group',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.sm),
-              AppTextField(
-                controller: _joinController,
-                placeholder: 'e.g. FRIDAY7',
-                error: _joinError,
-                keyboardType: TextInputType.visiblePassword,
-                textAlign: TextAlign.center,
-                textStyle: AppTypography.mono(
-                  size: AppFontSizes.xl,
-                  weight: FontWeight.w700,
-                  letterSpacing: 3.2,
-                ),
-                onChanged: (_) => setState(() => _joinError = ''),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.secondary.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Demo code: ',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    InkWell(
-                      onTap: () =>
-                          _joinController.text = AppAssets.demoGroupCode,
-                      child: Text(
-                        AppAssets.demoGroupCode,
-                        style: AppTypography.mono(
-                          size: AppFontSizes.xs,
-                          weight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              AppButton(
-                fullWidth: true,
-                size: AppButtonSize.lg,
-                onPressed: () {
-                  final ok = app.joinGroup(_joinController.text);
-                  if (!ok) {
-                    setState(
-                      () => _joinError =
-                          'Group not found. Check the code and try again.',
-                    );
-                  } else {
-                    setState(() {
-                      _showJoin = false;
-                      _joinController.clear();
-                      _joinError = '';
-                    });
-                  }
-                },
-                child: const Text('Join Group'),
-              ),
-            ],
-          ),
-        ),
-        AppModal(
           open: _showCreate,
           onClose: () => setState(() => _showCreate = false),
           title: 'Create a group',
@@ -455,16 +301,27 @@ class _HomeScreenState extends State<HomeScreen> {
                 controller: _groupNameController,
                 label: 'Group name',
                 placeholder: 'e.g. Friday Poker Club',
-                onChanged: (_) => setState(() {}),
+                error: _createError.isEmpty ? null : _createError,
+                onChanged: (_) => setState(() => _createError = ''),
               ),
               const SizedBox(height: AppSpacing.xl),
               AppButton(
                 fullWidth: true,
                 size: AppButtonSize.lg,
                 disabled: _groupNameController.text.trim().length < 2,
-                onPressed: () {
+                onPressed: () async {
                   if (_groupNameController.text.trim().length < 2) return;
-                  app.createGroup(_groupNameController.text.trim());
+                  final created = await app.createGroup(
+                    _groupNameController.text.trim(),
+                  );
+                  if (!context.mounted) return;
+                  if (created == null) {
+                    setState(
+                      () => _createError =
+                          'Could not create the group. Please try again.',
+                    );
+                    return;
+                  }
                   setState(() => _showCreate = false);
                   context.go(RoutePaths.group);
                 },
@@ -518,99 +375,102 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.stats});
+/// Group activity snapshot shown on Home — answers "how is the group doing?"
+/// with counts that already exist in the provider (IA §7).
+class _GroupStats extends StatelessWidget {
+  const _GroupStats({required this.group, required this.app});
 
-  final UserStats stats;
+  final Group group;
+  final AppProvider app;
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      ('Games', '${stats.played}', Icons.style_outlined),
-      ('Wins', '${stats.wins}', Icons.emoji_events_outlined),
-      ('Podiums', '${stats.podium}', Icons.workspace_premium_outlined),
-      (
-        'Avg Finish',
-        '#${stats.avgFinish.toStringAsFixed(1)}',
-        Icons.leaderboard_outlined,
-      ),
-      ('Knockouts', '${stats.knockouts}', Icons.track_changes_outlined),
+    final past = group.pastGames.length;
+    final members = group.members.length;
+    final cash = app.cashHistory.length;
+    final prizeVolume = group.pastGames
+        .fold<int>(0, (s, g) => s + g.structure.prizePool);
+    final cashVolume = app.cashHistory
+        .fold<double>(0, (s, c) => s + c.totalBuyIns);
+
+    final stats = [
+      ('Games', '$past', Icons.style_outlined),
+      ('Members', '$members', Icons.groups_outlined),
+      ('Cash games', '$cash', Icons.payments_outlined),
+      ('Volume', Formatters.chips(prizeVolume + cashVolume), Icons.account_balance_wallet_outlined),
     ];
+
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900
-            ? 5
-            : (constraints.maxWidth >= 480 ? 3 : 2);
-        return GridView.count(
-          crossAxisCount: columns,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: AppSpacing.md,
-          crossAxisSpacing: AppSpacing.md,
-          childAspectRatio: 1.5,
+      builder: (context, c) {
+        final twoCol = c.maxWidth < 560;
+        final w = twoCol ? (c.maxWidth - AppSpacing.sm) / 2 : null;
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
-            for (var i = 0; i < items.length; i++)
-              AppCard(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 26,
-                              height: 26,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.sm,
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: Icon(
-                                items[i].$3,
-                                size: 16,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: Text(
-                                items[i].$1.toUpperCase(),
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                  letterSpacing: 0.5,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          items[i].$2,
-                          style: AppTypography.mono(
-                            size: AppFontSizes.xxl,
-                            weight: FontWeight.w700,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                  .animate()
-                  .fadeIn(delay: (i * 80).ms, duration: 400.ms)
-                  .slideY(
-                    begin: 0.15,
-                    end: 0,
-                    delay: (i * 80).ms,
-                    duration: 400.ms,
-                    curve: Curves.easeOut,
-                  ),
+            for (final s in stats)
+              SizedBox(
+                width: w,
+                child: _HomeStat(icon: s.$3, label: s.$1, value: s.$2),
+              ),
           ],
         );
       },
+    );
+  }
+}
+
+class _HomeStat extends StatelessWidget {
+  const _HomeStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.primary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    style: AppTypography.mono(
+                      size: AppFontSizes.md,
+                      weight: FontWeight.w700,
+                      color: AppColors.foreground,
+                    ),
+                  ),
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -700,6 +560,8 @@ class _NextActionCard extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
       glow: game.status.isActiveLive,
+      color: AppColors.primarySoft,
+      borderColor: AppColors.primary.withValues(alpha: 0.3),
       child: Row(
         children: [
           Expanded(
@@ -720,7 +582,7 @@ class _NextActionCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (subtitle != null && subtitle.isNotEmpty)
+                if (subtitle.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
@@ -749,11 +611,13 @@ class _UpcomingGames extends StatelessWidget {
   const _UpcomingGames({
     required this.games,
     required this.isAdmin,
+    required this.userId,
     required this.onOpen,
   });
 
   final List<LiveGame> games;
   final bool isAdmin;
+  final String? userId;
   final ValueChanged<LiveGame> onOpen;
 
   @override
@@ -766,7 +630,7 @@ class _UpcomingGames extends StatelessWidget {
             Expanded(
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.calendar_month_outlined,
                     color: AppColors.primary,
                     size: 24,
@@ -812,7 +676,12 @@ class _UpcomingGames extends StatelessWidget {
           Column(
             children: [
               for (var i = 0; i < games.length; i++) ...[
-                _GameRow(game: games[i], onOpen: () => onOpen(games[i]))
+                _GameRow(
+                      game: games[i],
+                      isAdmin: isAdmin,
+                      userId: userId,
+                      onOpen: () => onOpen(games[i]),
+                    )
                     .animate()
                     .fadeIn(delay: (i * 100).ms, duration: 450.ms)
                     .slideX(
@@ -832,9 +701,16 @@ class _UpcomingGames extends StatelessWidget {
 }
 
 class _GameRow extends StatelessWidget {
-  const _GameRow({required this.game, required this.onOpen});
+  const _GameRow({
+    required this.game,
+    required this.isAdmin,
+    required this.userId,
+    required this.onOpen,
+  });
 
   final LiveGame game;
+  final bool isAdmin;
+  final String? userId;
   final VoidCallback onOpen;
 
   AppBadgeVariant _colorFor(LiveGameStatus s) {
@@ -859,6 +735,15 @@ class _GameRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final going = game.goingCount;
+    // One dominant next action per card (user-flow spec §7.2, §9).
+    final me = userId == null
+        ? null
+        : game.players.where((p) => p.id == userId).firstOrNull;
+    final action = mainActionFor(
+      isAdmin ? MainButtonRole.admin : MainButtonRole.member,
+      game,
+      memberRow: me,
+    );
     return AppCard(
       onTap: onOpen,
       padding: EdgeInsets.zero,
@@ -978,7 +863,7 @@ class _GameRow extends StatelessWidget {
                             Container(
                               width: 6,
                               height: 6,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: AppColors.success,
                                 shape: BoxShape.circle,
                               ),
@@ -1000,20 +885,19 @@ class _GameRow extends StatelessWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.lg),
-              child: Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: AppColors.secondary,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 14,
-                  color: AppColors.mutedForeground,
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.lg),
+                child: AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.primary,
+                  onPressed: action.enabled ? onOpen : null,
+                  child: Text(
+                    action.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
             ),
@@ -1030,12 +914,17 @@ class _GroupCard extends StatelessWidget {
     required this.showJoin,
     required this.showCreate,
     required this.isAdmin,
+    this.loading = false,
   });
 
   final Group? group;
   final VoidCallback showJoin;
   final VoidCallback showCreate;
   final bool isAdmin;
+
+  /// A group is selected but its live bundle is still loading (e.g. just
+  /// joined) — show a spinner instead of the card or the empty state.
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -1045,11 +934,7 @@ class _GroupCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Icon(
-              Icons.groups_outlined,
-              color: AppColors.primary,
-              size: 24,
-            ),
+            Icon(Icons.groups_outlined, color: AppColors.primary, size: 24),
             const SizedBox(width: AppSpacing.sm),
             Text(
               'My Group',
@@ -1061,7 +946,37 @@ class _GroupCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        if (g != null)
+        if (loading)
+          AppCard(
+            color: Colors.transparent,
+            borderColor: AppColors.border,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'Loading your group…',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else if (g != null) ...[
           AppCard(
             onTap: () => context.go(RoutePaths.group),
             glow: true,
@@ -1081,7 +996,7 @@ class _GroupCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Icon(
+                    Icon(
                       Icons.chevron_right,
                       color: AppColors.mutedForeground,
                       size: 18,
@@ -1113,10 +1028,14 @@ class _GroupCard extends StatelessWidget {
                                       width: 2,
                                     ),
                                     color:
-                                        AppColors.avatarPalette[g
-                                                .members[i]
-                                                .name
-                                                .codeUnitAt(0) %
+                                        AppColors.avatarPalette[(g
+                                                    .members[i]
+                                                    .name
+                                                    .isNotEmpty
+                                                ? g.members[i].name.codeUnitAt(
+                                                    0,
+                                                  )
+                                                : 0) %
                                             AppColors.avatarPalette.length],
                                   ),
                                   alignment: Alignment.center,
@@ -1124,10 +1043,10 @@ class _GroupCard extends StatelessWidget {
                                     g.members[i].name.isNotEmpty
                                         ? g.members[i].name[0].toUpperCase()
                                         : '?',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
-                                      color: Colors.white,
+                                      color: AppColors.foreground,
                                     ),
                                   ),
                                 ),
@@ -1180,15 +1099,30 @@ class _GroupCard extends StatelessWidget {
                 ),
               ],
             ),
-          )
-        else
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.secondary,
+            size: AppButtonSize.sm,
+            onPressed: showJoin,
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add, size: 16),
+                SizedBox(width: AppSpacing.xs),
+                Text('Join another group'),
+              ],
+            ),
+          ),
+        ] else
           AppCard(
             color: Colors.transparent,
             borderColor: AppColors.border,
             child: Column(
               children: [
                 const SizedBox(height: AppSpacing.xs),
-                const Icon(
+                Icon(
                   Icons.handshake_outlined,
                   size: 48,
                   color: AppColors.mutedForeground,
@@ -1240,7 +1174,7 @@ class _AlertsPreview extends StatelessWidget {
             Expanded(
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.notifications_active_outlined,
                     color: AppColors.primary,
                     size: 24,
@@ -1287,7 +1221,7 @@ class _AlertsPreview extends StatelessWidget {
                           width: 8,
                           height: 8,
                           margin: const EdgeInsets.only(top: 5),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.primary,
                             shape: BoxShape.circle,
                           ),

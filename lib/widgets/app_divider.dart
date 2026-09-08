@@ -13,17 +13,18 @@ class AppDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     if (label == null) {
       return Padding(
         padding: EdgeInsets.symmetric(vertical: space / 2),
-        child: const Divider(color: AppColors.border, height: 1),
+        child: Divider(color: AppColors.border, height: 1),
       );
     }
     return Padding(
       padding: EdgeInsets.symmetric(vertical: space / 2),
       child: Row(
         children: [
-          const Expanded(child: Divider(color: AppColors.border, height: 1)),
+          Expanded(child: Divider(color: AppColors.border, height: 1)),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             child: Text(
@@ -33,7 +34,7 @@ class AppDivider extends StatelessWidget {
               ),
             ),
           ),
-          const Expanded(child: Divider(color: AppColors.border, height: 1)),
+          Expanded(child: Divider(color: AppColors.border, height: 1)),
         ],
       ),
     );

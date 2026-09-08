@@ -13,6 +13,7 @@ import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_page.dart';
@@ -42,11 +43,23 @@ class ResultPodiumScreen extends StatelessWidget {
     final app = context.watch<AppProvider>();
     final game = gameId != null ? app.gameById(gameId!) : app.currentGame;
 
-    if (game == null || game.status != LiveGameStatus.completed) {
-      // Guard: only show the podium once the game is fully completed.
-      // A null game means it was deleted; a non-completed game means the user
-      // navigated here manually while the tournament is still running.
-      // Use the standardized AppEmptyState for UI consistency (checklist 20-008).
+    // Guard: Allow viewing results only when game is completed, or cancelled (admin only).
+    // A null game means it was deleted; a non-terminal game means the user navigated here
+    // manually while the tournament is still running. Spec §9.1: admin can view results
+    // for both completed and cancelled tournaments to understand what happened.
+    if (game == null) {
+      return const AppEmptyState(
+        icon: Icons.emoji_events_outlined,
+        title: 'Result unavailable',
+        description: 'This game may have been deleted or is not finished.',
+      );
+    }
+
+    final isAdminViewingCancelled =
+        app.isAdmin && game.status == LiveGameStatus.cancelled;
+    final isCompletedGame = game.status == LiveGameStatus.completed;
+
+    if (!isCompletedGame && !isAdminViewingCancelled) {
       return const AppEmptyState(
         icon: Icons.emoji_events_outlined,
         title: 'Result unavailable',
@@ -61,7 +74,7 @@ class ResultPodiumScreen extends StatelessWidget {
 
     // Individual payout amounts are private: only organisers see them
     // (checklist 14-042, 19-020). Public completed results carry no money.
-    final showAmounts = user?.isAdmin == true;
+    final showAmounts = app.isAdmin;
 
     final ranked = [
       for (var i = 0; i < finishOrder.length; i++)
@@ -79,7 +92,7 @@ class ResultPodiumScreen extends StatelessWidget {
     // shows the top three (1st/2nd/3rd), not the first three entries.
     final podium = ranked.where((r) => r.pos <= 3).toList()
       ..sort((a, b) => a.pos.compareTo(b.pos));
-    final myResult = ranked.where((r) => r.player.id == user?.id).firstOrNull;
+    final myResult = ranked.where((r) => r.player.id == user?.id || (app.hasGuestSession && app.guestSession!.gameId == game.id && r.player.name == app.guestSession!.name)).firstOrNull;
     final totalRebuys = players.fold<int>(0, (s, p) => s + p.rebuys);
 
     return AppPage(
@@ -92,7 +105,7 @@ class ResultPodiumScreen extends StatelessWidget {
             padding: const EdgeInsets.only(top: AppSpacing.lg),
             child: Column(
               children: [
-                const Icon(
+                Icon(
                   Icons.emoji_events,
                   size: AppFontSizes.displayLg,
                   color: AppColors.icon,
@@ -114,7 +127,6 @@ class ResultPodiumScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                if (showAmounts)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.lg,
@@ -128,7 +140,7 @@ class ResultPodiumScreen extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      '${Formatters.chips(game.structure.prizePool)} prize pool',
+                      '${game.settings.name} prize pool',
                       style: AppTypography.monoSm.copyWith(
                         color: AppColors.primary,
                         fontWeight: FontWeight.w600,
@@ -218,41 +230,54 @@ class ResultPodiumScreen extends StatelessWidget {
               ),
             ),
           const SizedBox(height: AppSpacing.md),
+          if (myResult != null && app.isGuest) ...[
+            AppAlertBanner(
+              type: AppAlertType.info,
+              message: 'Save this result to your permanent record.',
+              actionLabel: 'Create Account',
+              onAction: () => _showCreateAccountDialog(context, app),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           // Full results table
-          AppCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                    vertical: AppSpacing.md,
-                  ),
-                  child: Text(
-                    'Full results',
-                    style: AppTypography.bodySm.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.md,
+                ),
+                child: Text(
+                  'FULL RESULTS',
+                  style: AppTypography.bodyXs.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    color: AppColors.mutedForeground,
                   ),
                 ),
-                for (final r in ranked)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: AppSpacing.md,
-                    ),
-                    color: r.player.id == user?.id
-                        ? AppColors.primarySoft
-                        : null,
-                    child: Row(
-                      children: [
-                        SizedBox(
+              ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                child: Column(
+                  children: [
+                    for (final entry in ranked.asMap().entries)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                          vertical: AppSpacing.md,
+                        ),
+                        color: entry.value.player.id == user?.id
+                            ? AppColors.primarySoft
+                            : (entry.key % 2 == 0 ? AppColors.card : AppColors.background),
+                        child: Row(
+                          children: [
+                            SizedBox(
                           width: 32,
-                          child: r.pos <= 3
-                              ? MedalIcon(r.pos, size: AppFontSizes.lg)
+                          child: entry.value.pos <= 3
+                              ? MedalIcon(entry.value.pos, size: AppFontSizes.lg)
                               : Text(
-                                  '#${r.pos}',
+                                  '#${entry.value.pos}',
                                   textAlign: TextAlign.center,
                                   style: AppTypography.monoSm.copyWith(
                                     color: AppColors.mutedForeground,
@@ -264,16 +289,16 @@ class ResultPodiumScreen extends StatelessWidget {
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: AppColors.avatarPalette.first,
+                            color: AppColors.avatarColorFor(entry.value.player.name),
                             shape: BoxShape.circle,
                           ),
                           alignment: Alignment.center,
                           child: Text(
-                            r.player.name.trim().isEmpty
+                            entry.value.player.name.trim().isEmpty
                                 ? '?'
-                                : r.player.name.trim()[0].toUpperCase(),
+                                : entry.value.player.name.trim()[0].toUpperCase(),
                             style: AppTypography.bodyXs.copyWith(
-                              color: Colors.white,
+                              color: AppColors.foreground,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -284,20 +309,20 @@ class ResultPodiumScreen extends StatelessWidget {
                             children: [
                               Flexible(
                                 child: Text(
-                                  r.player.name,
+                                  entry.value.player.name,
                                   style: AppTypography.bodySm.copyWith(
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ),
-                              if (r.player.id == user?.id) ...[
+                              if (entry.value.player.id == user?.id) ...[
                                 const SizedBox(width: AppSpacing.xs),
                                 const AppBadge(
                                   label: 'You',
                                   variant: AppBadgeVariant.green,
                                 ),
                               ],
-                              if (r.player.isGuest) ...[
+                              if (entry.value.player.isGuest) ...[
                                 const SizedBox(width: AppSpacing.xs),
                                 const AppBadge(
                                   label: 'Guest',
@@ -311,10 +336,10 @@ class ResultPodiumScreen extends StatelessWidget {
                           const SizedBox(width: AppSpacing.sm),
                           Text(
                             [
-                              if (r.player.rebuys > 0) '${r.player.rebuys}R',
-                              if (r.player.hasAddOn) 'AO',
-                              if (r.player.knockouts > 0)
-                                '${r.player.knockouts} KO',
+                              if (entry.value.player.rebuys > 0) '${entry.value.player.rebuys}R',
+                              if (entry.value.player.hasAddOn) 'AO',
+                              if (entry.value.player.knockouts > 0)
+                                '${entry.value.player.knockouts} KO',
                             ].join(' · '),
                             style: AppTypography.bodyXs.copyWith(
                               color: AppColors.mutedForeground,
@@ -323,11 +348,11 @@ class ResultPodiumScreen extends StatelessWidget {
                         ],
                         const SizedBox(width: AppSpacing.md),
                         Text(
-                          showAmounts && r.prize != null
-                              ? Formatters.chips(r.prize!.amount)
+                          showAmounts && entry.value.prize != null
+                              ? Formatters.chips(entry.value.prize!.amount)
                               : '—',
                           style: AppTypography.monoSm.copyWith(
-                            color: showAmounts && r.prize != null
+                            color: showAmounts && entry.value.prize != null
                                 ? AppColors.primary
                                 : AppColors.mutedForeground,
                             fontWeight: FontWeight.w600,
@@ -336,9 +361,11 @@ class ResultPodiumScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
+        ),
           const SizedBox(height: AppSpacing.md),
           // Stats
           if (showAmounts)
@@ -400,7 +427,7 @@ class ResultPodiumScreen extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.arrow_back,
                         size: 14,
                         color: AppColors.icon,
@@ -439,6 +466,63 @@ class ResultPodiumScreen extends StatelessWidget {
     if (pos == 2) return 'nd';
     if (pos == 3) return 'rd';
     return 'th';
+  }
+
+  void _showCreateAccountDialog(BuildContext context, AppProvider app) {
+    final name = TextEditingController();
+    final email = TextEditingController();
+    final password = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Create Account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: name,
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: password,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Password'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final err = await app.convertGuestAccount(
+                name.text.trim(),
+                email.text.trim(),
+                password.text,
+              );
+              if (!ctx.mounted) return;
+              if (err != null) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(err)),
+                );
+                return;
+              }
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Create Account'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -14,24 +14,27 @@ class AppPage extends StatelessWidget {
     required this.child,
     this.maxWidth = 1280,
     this.padding,
-    this.color = AppColors.background,
+    this.color,
     this.scrollable = true,
   });
 
   final Widget child;
   final double maxWidth;
   final EdgeInsets? padding;
-  final Color color;
+  final Color? color;
   final bool scrollable;
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final device = AppBreakpoints.deviceOf(context);
     final effectivePadding =
         padding ??
         (device.isMobile
             ? AppSpacing.mobileContentPadding
             : AppSpacing.desktopContentPadding);
+
+    final effectiveColor = color ?? AppColors.background;
 
     final content = Center(
       child: ConstrainedBox(
@@ -42,14 +45,22 @@ class AppPage extends StatelessWidget {
 
     if (!scrollable) {
       return ColoredBox(
-        color: color,
-        child: Padding(padding: effectivePadding, child: content),
+        color: effectiveColor,
+        child: SafeArea(
+          bottom: true, 
+          top: false, 
+          child: Padding(padding: effectivePadding, child: content)
+        ),
       );
     }
 
     return ColoredBox(
-      color: color,
-      child: SingleChildScrollView(padding: effectivePadding, child: content),
+      color: effectiveColor,
+      child: SafeArea(
+        bottom: true, 
+        top: false, 
+        child: SingleChildScrollView(padding: effectivePadding, child: content)
+      ),
     );
   }
 }

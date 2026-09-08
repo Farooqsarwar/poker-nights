@@ -7,8 +7,8 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/game.dart';
-import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/voice_service.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_back_button.dart';
@@ -19,6 +19,7 @@ import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/event_day_checklist.dart';
 
 enum SeatingMode { random, manual, keepGuests, separateGuests }
 
@@ -49,6 +50,77 @@ class CheckInScreen extends StatefulWidget {
 
 class _CheckInScreenState extends State<CheckInScreen> {
   SeatingMode _seatingMode = SeatingMode.random;
+  bool _seatingModeInitialized = false;
+
+  /// The checked-in count the split prompt was last shown/dismissed for, so
+  /// it doesn't re-open every rebuild once the admin has responded to it at
+  /// this count.
+  int? _splitPromptRespondedAtCount;
+  bool _splitPromptShowing = false;
+
+  /// Once seating is generated the count naturally sits at/above the
+  /// threshold on every rebuild; only prompt before that first generation.
+  void _maybeShowSplitPrompt(
+    BuildContext context,
+    AppProvider app,
+    int checkedInCount,
+    int maxPerTable,
+    bool seatedYet,
+  ) {
+    if (seatedYet ||
+        checkedInCount < maxPerTable ||
+        _splitPromptShowing ||
+        _splitPromptRespondedAtCount == checkedInCount) {
+      return;
+    }
+    _splitPromptShowing = true;
+    showAppModal(
+      context: context,
+      title: 'Split into multiple tables?',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '$checkedInCount players have checked in — that\'s enough to '
+            'split across multiple tables (max $maxPerTable per table). '
+            'Generate seating now?',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () {
+                    _splitPromptRespondedAtCount = checkedInCount;
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Not yet'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppButton(
+                  onPressed: () {
+                    _splitPromptRespondedAtCount = checkedInCount;
+                    app.generateSeating(_seatingMode.tableMode);
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Generate seating'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ).then((_) {
+      _splitPromptShowing = false;
+    });
+  }
 
   void _showWalkInModal(BuildContext context, AppProvider app) {
     final controller = TextEditingController();
@@ -63,11 +135,32 @@ class _CheckInScreenState extends State<CheckInScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Register someone who showed up without an RSVP. They are checked in immediately and seated with the next seating generation.',
+                'Register someone who showed up without an RSVP or a guest slot. '
+                'This is an admin override \u2014 the normal guest invite flow is bypassed. '
+                'They are checked in immediately and seated with the next seating generation.',
                 style: AppTypography.bodySm.copyWith(
                   color: AppColors.mutedForeground,
                 ),
               ),
+              const SizedBox(height: AppSpacing.sm),
+              // Spec \u00A712.5: late registration is only allowed before the
+              // rebuy period closes. The provider enforces the hard gate;
+              // this banner makes the timing visible to the admin.
+              Builder(builder: (ctx) {
+                final app = ctx.read<AppProvider>();
+                if (!app.lateRegistrationOpen) {
+                  return const AppAlertBanner(
+                    type: AppAlertType.error,
+                    message:
+                        'Late registration is closed. No new players can be added after the rebuy period ends.',
+                  );
+                }
+                return const AppAlertBanner(
+                  type: AppAlertType.warning,
+                  message:
+                      'Admin override: this skips the normal guest slot flow.',
+                );
+              }),
               const SizedBox(height: AppSpacing.lg),
               AppTextField(
                 controller: controller,
@@ -88,7 +181,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: AppButton(
-                      onPressed: name.isEmpty
+                      onPressed: name.isEmpty || !app.lateRegistrationOpen
                           ? null
                           : () {
                               app.addWalkInPlayer(name);
@@ -110,7 +203,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
 
     // Seating setup is admin-only. Players see their seat from the invitation
     // screen, never this setup UI (client feedback 07-018).
@@ -129,6 +222,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
       return const SizedBox.shrink();
     }
 
+    if (!_seatingModeInitialized) {
+      _seatingModeInitialized = true;
+      _seatingMode = app.effectiveTableSettings.randomizeByDefault
+          ? SeatingMode.random
+          : SeatingMode.manual;
+    }
+
     final players = game.players;
     final checkedIn = players.where((p) => p.checkedIn && p.confirmed).toList();
     final notCheckedIn = players
@@ -143,9 +243,35 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final confirmedGuests = players
         .where((p) => p.isGuest && p.confirmed)
         .toList();
-    final canStart = checkedIn.length >= 2;
+    // Every guest who asked for a seat must be accepted or declined before the
+    // tournament can start (admin RSVP review gate).
+    final pendingGuestRequests = players
+        .where((p) => p.isGuest && !p.confirmed && p.name.trim().isNotEmpty)
+        .toList();
+    final canStart =
+        checkedIn.length >= 2 && pendingGuestRequests.isEmpty;
     final seatedYet = checkedIn.any((p) => p.table > 0 && p.seat > 0);
     final seatingConfirmed = game.seatingConfirmed;
+    // Event-day preparation checklist (user-flow spec §4.6): admin-only and
+    // only in the pre-live window (published / check-in / ready).
+    final showChecklist = EventDayChecklist.appliesTo(game);
+
+    // Table-split prompt (configurable threshold, spec §5e): once check-in
+    // reaches the group/tournament's configured capacity, offer to generate
+    // seating across multiple tables instead of silently waiting for a
+    // manual click.
+    final maxPerTable = app.effectiveTableSettings.maxPerTable;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _maybeShowSplitPrompt(
+          context,
+          app,
+          checkedIn.length,
+          maxPerTable,
+          seatedYet,
+        );
+      }
+    });
 
     return AppPage(
       maxWidth: 560,
@@ -177,33 +303,48 @@ class _CheckInScreenState extends State<CheckInScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Event-day preparation (user-flow spec §4.6) — always the first
+          // card so the admin never has to remember the sequence. We are on
+          // the check-in screen itself, so step 2 has no open action.
+          if (showChecklist) ...[
+            EventDayChecklist(
+              game: game,
+              onOpenCheckIn: null,
+              onOpenTvMode: () => context.go(RoutePaths.tvMode),
+              onTestVoice: () {
+                VoiceService.instance.speak('Voice test.');
+              },
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // Summary
-          Row(
-            children: [
-              Expanded(
-                child: _SummaryCard(
+          AppCard(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _InlineStat(
                   label: 'Checked in',
-                  value: '${checkedIn.length} / ${players.length}',
+                  value: '${checkedIn.length}/${players.length}',
                   color: AppColors.success,
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: _SummaryCard(
-                  label: 'Pending requests',
+                Container(width: 1, height: 24, color: AppColors.border),
+                _InlineStat(
+                  label: 'Pending',
                   value: '${pendingRequests.length}',
                   color: AppColors.warning,
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: _SummaryCard(
+                Container(width: 1, height: 24, color: AppColors.border),
+                _InlineStat(
                   label: 'Not arrived',
                   value: '${notCheckedIn.length}',
                   color: AppColors.mutedForeground,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           if (pendingRequests.isNotEmpty) ...[
@@ -216,101 +357,146 @@ class _CheckInScreenState extends State<CheckInScreen> {
           ],
           // Pending requests
           if (pendingRequests.isNotEmpty) ...[
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Pending check-in requests',
-                    style: AppTypography.bodySm.copyWith(
-                      fontWeight: FontWeight.w600,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+                  child: Text(
+                    'PENDING CHECK-IN REQUESTS',
+                    style: AppTypography.bodyXs.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5,
                       color: AppColors.warning,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  for (final g in pendingRequests) ...[
-                    _PendingGuestRow(
-                      guest: g,
-                      inviter: g.isGuest
-                          ? players
-                                .where((p) => p.id == g.inviterId)
-                                .firstOrNull
-                          : null,
-                      onConfirm: () => g.isGuest
-                          ? app.confirmGuest(g.id)
-                          : app.checkInPlayer(g.id),
-                      onReject: () => g.isGuest
-                          ? app.rejectGuest(g.id)
-                          : app.cancelCheckIn(g.id),
+                ),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: Container(
+                    color: AppColors.card,
+                    child: Column(
+                      children: [
+                        for (final g in pendingRequests)
+                          _PendingGuestRow(
+                            key: ValueKey('pending-${g.id}'),
+                            guest: g,
+                            inviter: g.isGuest
+                                ? players
+                                      .where((p) => p.id == g.inviterId)
+                                      .firstOrNull
+                                : null,
+                            onConfirm: () => g.isGuest
+                                ? app.confirmGuest(g.id)
+                                : app.checkInPlayer(g.id),
+                            onReject: () => g.isGuest
+                                ? app.rejectGuest(g.id)
+                                : app.cancelCheckIn(g.id),
+                          ),
+                      ],
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                  ],
-                ],
-              ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.lg),
           ],
           // Players
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Players',
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w600,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+                child: Text(
+                  'PLAYERS',
+                  style: AppTypography.bodyXs.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    color: AppColors.mutedForeground,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                for (final p in players.where((p) => !p.isGuest))
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.xs,
-                    ),
-                    child: Row(
-                      children: [
-                        AppAvatar(name: p.name, size: AppAvatarSize.sm),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                child: Container(
+                  color: AppColors.card,
+                  child: Column(
+                    children: [
+                      for (final p in players.where((p) => !p.isGuest))
+                        Container(
+                          key: ValueKey('player-${p.id}'),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.sm,
+                            horizontal: AppSpacing.md,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border(bottom: BorderSide(color: AppColors.border)),
+                          ),
+                          child: Row(
                             children: [
-                              Text(p.name, style: AppTypography.bodySm),
-                              if (p.rsvp != null)
+                              AppAvatar(name: p.name, size: AppAvatarSize.sm),
+                              const SizedBox(width: AppSpacing.md),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(p.name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+                                    if (p.rsvp != null)
+                                      Text(
+                                        '${p.rsvp!.label} RSVP',
+                                        style: AppTypography.bodyXs.copyWith(
+                                          color: AppColors.mutedForeground,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              if (p.checkedIn && p.confirmed)
+                                const AppBadge(
+                                  label: 'Checked in',
+                                  variant: AppBadgeVariant.green,
+                                )
+                              else if (p.checkedIn)
+                                AppButton(
+                                  size: AppButtonSize.sm,
+                                  variant: AppButtonVariant.secondary,
+                                  onPressed: game.checkInClosed
+                                      ? null
+                                      : () => app.checkInPlayer(p.id),
+                                  child: Text(
+                                    game.checkInClosed
+                                        ? 'Check-in closed'
+                                        : 'Accept check-in',
+                                  ),
+                                )
+                              else if (p.id == app.user?.id)
+                                AppButton(
+                                  size: AppButtonSize.sm,
+                                  variant: AppButtonVariant.secondary,
+                                  onPressed: game.checkInClosed
+                                      ? null
+                                      : () => app.checkInPlayer(p.id),
+                                  child: Text(
+                                    game.checkInClosed
+                                        ? 'Check-in closed'
+                                        : 'Mark me in',
+                                  ),
+                                )
+                              else
                                 Text(
-                                  '${p.rsvp!.label} RSVP',
-                                  style: AppTypography.bodyXs.copyWith(
+                                  'Not checked in yet',
+                                  style: AppTypography.bodySm.copyWith(
                                     color: AppColors.mutedForeground,
                                   ),
                                 ),
                             ],
                           ),
                         ),
-                        if (p.checkedIn)
-                          const AppBadge(
-                            label: 'Checked in',
-                            variant: AppBadgeVariant.green,
-                          )
-                        else
-                          AppButton(
-                            size: AppButtonSize.sm,
-                            variant: AppButtonVariant.secondary,
-                            onPressed: game.checkInClosed
-                                ? null
-                                : () => app.checkInPlayer(p.id),
-                            child: Text(
-                              game.checkInClosed
-                                  ? 'Check-in closed'
-                                  : 'Check in',
-                            ),
-                          ),
-                      ],
-                    ),
+                    ],
                   ),
-              ],
-            ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.lg),
           // Confirmed guests
@@ -557,6 +743,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     ),
                   ],
                 ),
+                if (game.rebuysClosed) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  AppAlertBanner(
+                    type: AppAlertType.warning,
+                    message: 'Late registration is permanently closed. No new players can be added.',
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.sm),
                 AppButton(
                   variant: AppButtonVariant.ghost,
@@ -608,7 +801,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     variant: AppButtonVariant.primary,
                     fullWidth: true,
                     onPressed: app.confirmSeating,
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
@@ -630,7 +823,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
               borderColor: AppColors.successSoftBorder,
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.check_circle,
                     size: AppFontSizes.xl,
                     color: AppColors.success,
@@ -654,7 +847,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 child: AppButton(
                   variant: AppButtonVariant.secondary,
                   onPressed: () => context.go(RoutePaths.invitation),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
@@ -672,7 +865,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                           app.updateEventSettings(
                             game.settings.copyWith(players: checkedIn.length),
                           );
-                          app.updateGameStatus(LiveGameStatus.running);
+                          app.startTimer();
                           context.go(RoutePaths.adminDashboard);
                         }
                       : null,
@@ -682,7 +875,9 @@ class _CheckInScreenState extends State<CheckInScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          !canStart
+                          pendingGuestRequests.isNotEmpty
+                              ? 'Review ${pendingGuestRequests.length} guest request${pendingGuestRequests.length == 1 ? '' : 's'} first'
+                              : !canStart
                               ? 'Need at least 2 checked in'
                               : !seatingConfirmed
                               ? 'Confirm seating first'
@@ -690,7 +885,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                         ),
                         if (canStart && seatingConfirmed) ...[
                           const SizedBox(width: 6),
-                          const Icon(
+                          Icon(
                             Icons.arrow_forward,
                             size: 14,
                             color: AppColors.icon,
@@ -710,8 +905,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
+class _InlineStat extends StatelessWidget {
+  const _InlineStat({
     required this.label,
     required this.value,
     required this.color,
@@ -723,33 +918,32 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: AppTypography.monoXl.copyWith(
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
+    return Column(
+      children: [
+        Text(
+          value,
+          style: AppTypography.monoXl.copyWith(
+            fontWeight: FontWeight.w700,
+            color: color,
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
-            ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label.toUpperCase(),
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+            letterSpacing: 1.0,
+            fontWeight: FontWeight.w600,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
 class _PendingGuestRow extends StatelessWidget {
   const _PendingGuestRow({
+    super.key,
     required this.guest,
     required this.inviter,
     required this.onConfirm,
@@ -769,9 +963,7 @@ class _PendingGuestRow extends StatelessWidget {
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: AppColors.secondary,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
@@ -787,7 +979,7 @@ class _PendingGuestRow extends StatelessWidget {
                 Text(
                   guest.name,
                   style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
@@ -800,17 +992,15 @@ class _PendingGuestRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          AppButton(
-            size: AppButtonSize.sm,
+          IconButton(
+            icon: Icon(Icons.check_circle_outline, color: AppColors.success),
             onPressed: onConfirm,
-            child: const Text('Confirm'),
+            tooltip: 'Confirm',
           ),
-          const SizedBox(width: AppSpacing.sm),
-          AppButton(
-            size: AppButtonSize.sm,
-            variant: AppButtonVariant.danger,
+          IconButton(
+            icon: Icon(Icons.cancel_outlined, color: AppColors.destructive),
             onPressed: onReject,
-            child: const Text('Reject'),
+            tooltip: 'Reject',
           ),
         ],
       ),

@@ -9,6 +9,7 @@ import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/tournament_engine.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
@@ -72,10 +73,23 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
     final seen = <int>{};
     final dups = <int>{};
     for (final c in _chips) {
-      if (!seen.add(c.value)) dups.add(c.value);
+      if (c.value > 0 && !seen.add(c.value)) dups.add(c.value);
     }
     return dups;
   }
+
+  Set<String> get _duplicateColors {
+    final seen = <String>{};
+    final dups = <String>{};
+    for (final c in _chips) {
+      final colorStr = c.color.trim().toLowerCase();
+      if (colorStr.isNotEmpty && !seen.add(colorStr)) dups.add(c.color.trim());
+    }
+    return dups;
+  }
+
+  bool get _hasEmptyChipSet =>
+      _chips.isEmpty || _chips.every((c) => c.quantity <= 0);
 
   void _addChip() {
     setState(() {
@@ -128,11 +142,25 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
     final app = context.read<AppProvider>();
     setState(() {
       _nameError = name.isEmpty ? 'Enter a chip set name.' : null;
-      _dupError = _duplicateValues.isNotEmpty
-          ? 'Two colours cannot share the same value (${_duplicateValues.join(', ')}).'
-          : null;
+      if (_duplicateValues.isNotEmpty) {
+        _dupError =
+            'Two colours cannot share the same value (${_duplicateValues.join(', ')}).';
+      } else if (_duplicateColors.isNotEmpty) {
+        _dupError =
+            'Two chips cannot share the same colour name (${_duplicateColors.join(', ')}).';
+      } else if (_chips.any((c) => c.value <= 0)) {
+        _dupError = 'All chips must have a value greater than zero.';
+      } else {
+        _dupError = null;
+      }
     });
     if (_nameError != null || _dupError != null) return;
+    if (_hasEmptyChipSet) {
+      setState(
+        () => _dupError = 'Add at least one chip with quantity above zero.',
+      );
+      return;
+    }
 
     // Unique name within saved sets (10-002).
     final duplicateName = app.savedChipSets.any(
@@ -350,7 +378,6 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
       itemCount: _chips.length,
       onReorder: (oldIndex, newIndex) {
         setState(() {
-          if (newIndex > oldIndex) newIndex -= 1;
           final chip = _chips.removeAt(oldIndex);
           _chips.insert(newIndex, chip);
           _reRecommend();
@@ -515,23 +542,35 @@ class _ChipRowState extends State<_ChipRow> {
     final v = int.tryParse(raw.trim());
     final valid = v != null && v > 0;
     setState(() => _valueError = !valid && raw.trim().isNotEmpty);
-    widget.onChanged(widget.chip.copyWith(value: valid ? v : 0));
+    if (valid) {
+      widget.onChanged(widget.chip.copyWith(value: v));
+    } else if (raw.trim().isEmpty) {
+      // Empty field — revert to previous valid value
+      widget.onChanged(widget.chip.copyWith(value: widget.chip.value));
+    }
+    // Invalid but non-empty: don't update model, just show error
   }
 
   void _onQuantity(String raw) {
     final q = int.tryParse(raw.trim());
     final valid = q != null && q >= 0;
     setState(() => _quantityError = !valid && raw.trim().isNotEmpty);
-    widget.onChanged(widget.chip.copyWith(quantity: valid ? q : 0));
+    if (valid) {
+      widget.onChanged(widget.chip.copyWith(quantity: q));
+    } else if (raw.trim().isEmpty) {
+      widget.onChanged(widget.chip.copyWith(quantity: 0));
+    }
   }
 
   void _pickColor() {
     Color pickerColor = Color(widget.chip.hex);
     final nameController = TextEditingController(text: widget.chip.color);
 
+    final dialogInsets = appDialogInsets(context);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        insetPadding: dialogInsets,
         title: const Text('Pick a color'),
         content: SingleChildScrollView(
           child: Column(
@@ -588,7 +627,7 @@ class _ChipRowState extends State<_ChipRow> {
           if (widget.showDragHandle)
             ReorderableDragStartListener(
               index: widget.index,
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.only(right: AppSpacing.xs),
                 child: Icon(
                   Icons.drag_handle,
@@ -696,7 +735,7 @@ class _ChipRowState extends State<_ChipRow> {
             ),
           ],
           IconButton(
-            icon: const Icon(Icons.delete, color: AppColors.destructive),
+            icon: Icon(Icons.delete, color: AppColors.destructive),
             onPressed: widget.onDelete,
           ),
         ],

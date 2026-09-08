@@ -1,29 +1,70 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
+import '../app/route_paths.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'
+    show DocumentSnapshot, FieldValue;
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:flutter/foundation.dart';
+
+import 'package:localstore/localstore.dart';
 
 import '../models/app_notification.dart';
 import '../models/cash_game.dart';
 import '../models/game.dart';
 import '../models/group.dart';
 import '../models/live_game.dart';
+import '../models/table_settings.dart';
 import '../models/tournament.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
 import '../models/chip_color.dart';
+import '../repositories/firebase_repository.dart';
 import '../utils/formatters.dart';
 import '../utils/mock_data.dart';
+import '../utils/model_codec.dart';
+import '../utils/sanitization.dart';
 import '../utils/tournament_engine.dart';
 import '../utils/voice_service.dart';
+import '../services/browser_notifications.dart';
+import '../services/onesignal_sender.dart';
 import '../services/projections.dart' as projections;
+import '../services/push_service.dart';
 import '../services/recovery_service.dart';
+
+part 'app_provider_auth.dart';
+part 'app_provider_cloud_sync.dart';
+part 'app_provider_user_data.dart';
+part 'app_provider_groups.dart';
+part 'app_provider_game.dart';
+part 'app_provider_timer.dart';
+part 'app_provider_players.dart';
+part 'app_provider_tournament.dart';
+part 'app_provider_social.dart';
+part 'app_provider_codes_cash.dart';
+part 'app_provider_notifications_settings.dart';
 
 /// One future-level edit produced by the admin structure editor.
 typedef LevelEdit = ({int level, int sb, int bb, int? ante, int durationMins});
 
 /// Result of looking up a game / TV code.
-enum CodeLookupResult { game, tv, notFound }
+enum CodeLookupResult { game, tv, notFound, rateLimited }
+
+/// What a scanned / typed / pasted join code points at. Produced by
+/// [AppProvider.resolveJoinCode] so the unified join screen can pick a flow.
+enum JoinCodeKind { group, game, tv, notFound, rateLimited, error }
+
+/// Outcome of [AppProvider.resolveJoinCode] — the [kind] plus the cleaned
+/// [code] that was extracted from whatever the user entered (bare code,
+/// full invite link, or QR payload).
+class JoinCodeResolution {
+  const JoinCodeResolution(this.kind, this.code);
+
+  final JoinCodeKind kind;
+  final String code;
+}
 
 /// How the admin wants checked-in players distributed to tables/seats
 /// (checklist §13.1). Mirrored by the screen's `SeatingMode`.
@@ -52,19 +93,282 @@ class SeatMoveRecommendation {
   final String reason;
 }
 
-/// Application-level UI state (no business logic / backend).
-class AppProvider extends ChangeNotifier {
-  AppProvider() {
-    _currentGame = null;
-    _startTick();
-    _loadRecovery();
+/// Folds member-owned fields from the [remote] server game back into the
+/// admin's [local] game just before an authority whole-document `.set()`, so a
+/// member's RSVP / guest-slot write that landed while the admin's save was
+/// debouncing is not silently overwritten.
+///
+/// Rules:
+///  - the admin's own player row ([adminId]) keeps the local value (the admin
+///    owns their own RSVP through a separate write path);
+///  - every other member row adopts a differing server RSVP;
+///  - rows present on the server but not locally are appended (a member who
+///    joined after the game was created writes their whole row on first RSVP;
+///    a "+N" RSVP creates guest rows) — local rows are never dropped;
+///  - the server's guest-slot list wins whenever it differs (members rewrite
+///    it via their +N count / guest names; the admin never edits slots).
+///
+/// Pure and side-effect free so it can be unit tested.
+LiveGame mergeMemberOwnedFields(LiveGame local, LiveGame remote,
+    {String? adminId}) {
+  if (remote.id != local.id) return local;
+  final localById = {for (final p in local.players) p.id: p};
+  var changed = false;
+
+  final merged = <Player>[
+    for (final p in local.players)
+      if (p.isGuest || p.id == adminId)
+        p
+      else
+        () {
+          final r = remote.players.where((x) => x.id == p.id).firstOrNull;
+          if (r != null) {
+            final rsvpChanged = r.rsvp != p.rsvp;
+            // Merge checkedIn if the member checked themselves in remotely,
+            // taking care not to let a stale remote overwrite an admin's local check-in.
+            final checkInArrived = r.checkedIn && !p.checkedIn;
+            
+            if (rsvpChanged || checkInArrived) {
+              changed = true;
+              return p.copyWith(
+                rsvp: r.rsvp,
+                checkedIn: checkInArrived ? true : p.checkedIn,
+              );
+            }
+          }
+          return p;
+        }(),
+  ];
+
+  for (final r in remote.players) {
+    if (!localById.containsKey(r.id)) {
+      merged.add(r);
+      changed = true;
+    }
   }
 
+  String slotSig(List<GuestSlot> s) =>
+      s.map((x) => guestSlotToMap(x).toString()).join('|');
+  final slotsDiffer = slotSig(remote.guestSlots) != slotSig(local.guestSlots);
+
+  if (!changed && !slotsDiffer) return local;
+  return local.copyWith(
+    players: merged,
+    guestSlots: slotsDiffer ? remote.guestSlots : null,
+  );
+}
+
+/// Re-attaches the admin-only figures that `saveGame` scrubs out of the public
+/// game document (organizer cut, prize amounts, per-player financial counters)
+/// onto a [remote] copy, taking them from the [local] one already in memory.
+///
+/// Every path that rebuilds the admin's current game from a server document
+/// must apply this, so all of them produce structurally identical results for
+/// identical server state. Pure and side-effect free for testing.
+LiveGame restoreAdminPrivateFields(LiveGame remote, LiveGame local) {
+  if (local.id != remote.id) return remote;
+  final saved = {for (final p in local.players) p.id: p};
+  return remote.copyWith(
+    settings: remote.settings.copyWith(
+      organizerPct: local.settings.organizerPct,
+    ),
+    players: [
+      for (final p in remote.players)
+        if (saved[p.id] case final r?)
+          p.copyWith(
+            rebuys: r.rebuys,
+            reEntries: r.reEntries,
+            hasAddOn: r.hasAddOn,
+            knockouts: r.knockouts,
+          )
+        else
+          p,
+    ],
+    structure: remote.structure.copyWith(
+      prizes: local.structure.prizes,
+      organizerAmount: local.structure.organizerAmount,
+    ),
+    // `saveGame` blanks the audit timeline out of the member-readable game
+    // document and keeps it in the admin sidecar, so the copy that comes back
+    // over the wire is always empty. Re-attach the one already in memory —
+    // otherwise every remote snapshot would wipe the host's audit history and
+    // flip the content signature on every emit.
+    auditHistory:
+        remote.auditHistory.isEmpty ? local.auditHistory : remote.auditHistory,
+    // Same story for the pending request queue: scrubbed on the wire, held
+    // in memory and in the admin sidecar.
+    rebuyRequests:
+        remote.rebuyRequests.isEmpty ? local.rebuyRequests : remote.rebuyRequests,
+    addOnRequests:
+        remote.addOnRequests.isEmpty ? local.addOnRequests : remote.addOnRequests,
+  );
+}
+
+/// Field state, app-wide constants and shared scalar helpers for
+/// [AppProvider].
+///
+/// The per-domain behaviour lives in the `AppProvider*` extension part files
+/// (`app_provider_*.dart`). Every field lives here — plus the small
+/// self-contained helpers and the `isAdmin` verdict — so they are visible to
+/// every one of those extensions (all parts share this library) and directly
+/// to the class body itself.
+class AppProvider extends ChangeNotifier {
+  final FirebaseRepository _repo = FirebaseRepository.instance;
+
+  /// False when Firebase never came up (widget tests) — every cloud sync
+  /// entry point checks this before touching the repository.
+  bool _backendUp = true;
+  bool _disposed = false;
+
+  /// Firebase auth session subscription — cancelled on dispose.
+  StreamSubscription<fa.User?>? _authSub;
+
+  /// Live data subscriptions, all keyed to the signed-in user / selected
+  /// group and cancelled on sign-out or dispose.
+  StreamSubscription<List<GroupMembership>>? _groupsSub;
+  StreamSubscription<Group>? _bundleSub;
+
+  /// Whether the current group's live bundle has delivered its first snapshot.
+  /// Reset to false on every [_selectGroup]; flipped true on the first emit.
+  bool _bundleLoaded = false;
+
+  /// Completes when the current group's bundle first loads (or errors). Lets
+  /// [joinGroup] wait for real-time group data before the caller navigates.
+  Completer<void>? _bundleReady;
+
+  /// Completes once the signed-in user's data has bootstrapped after login —
+  /// the groups index has loaded and (if a group was auto-selected) its bundle
+  /// too. Lets [login] / [register] land the user on a populated dashboard.
+  Completer<void>? _userBootstrap;
+
+  /// Future that resolves when post-login data is ready (see [_userBootstrap]).
+  Future<void> get userDataReady =>
+      _userBootstrap?.future ?? Future<void>.value();
+  StreamSubscription? _gameDocSub;
+
+  /// Backoff re-subscription timers for the game-scoped streams. A Firestore
+  /// `.snapshots()` that hits `permission-denied` (the auth token has not yet
+  /// propagated into the SDK in the seconds after a web login) is dead for
+  /// good, so we rebuild it a few times until it sticks — no page reload.
+  Timer? _gameDocRetryTimer;
+  Timer? _gameChatRetryTimer;
+
+  /// Per-game chat lives in `groups/{gid}/games/{gameId}/chat` — a subcollection
+  /// both the host and members append to directly. This keeps a member's
+  /// message from being rolled back by the game-doc rule that forbids member
+  /// `chat` writes, and from vanishing while it waits for the host to
+  /// re-publish a projection.
+  StreamSubscription<List<ChatMessage>>? _gameChatSub;
+  List<ChatMessage> _gameChatMessages = const [];
+  String? _gameChatKey;
+
+  /// The signed-in member's own pending RSVP per game id. The write is
+  /// committed the instant [setRSVP] runs; this overlay is re-applied on top
+  /// of every adopted remote game so a lagging or racing snapshot never
+  /// visibly reverts the member's own selection before their ack lands. The
+  /// entry is dropped once a remote snapshot agrees, or if the write is
+  /// rejected. `containsKey` distinguishes "no overlay" from "overlay = clear".
+  final Map<String, Rsvp?> _pendingOwnRsvp = {};
+  final Map<String, String> _pendingCheckIn = {};
+  final Map<String, bool> _checkInLanded = {};
+
+  /// Last member-RSVP patch failure, surfaced on the invitation screen so
+  /// backend rejections are never invisible (vs silent optimistic state that
+  /// vanishes on refresh). Debug aid for the persistence audit.
+  String? lastRsvpError;
+
+  /// Last authority whole-document save failure. Non-null means the admin's
+  /// most recent change did NOT reach Firestore — screens can surface it so a
+  /// rejected write is never mistaken for a successful one.
+  String? lastSaveError;
+
+  bool forceEditorClaim = false;
+
+  StreamSubscription<dynamic>? _lookupSub;
+  StreamSubscription<List<TournamentPreset>>? _presetsSub;
+  StreamSubscription<
+          List<({String id, String name, List<ChipColor> chips})>>?
+      _chipSetsSub;
+  StreamSubscription<List<AppNotification>>? _notificationsSub;
+  StreamSubscription<List<GameRequest>>? _requestsSub;
+  StreamSubscription<List<CashSession>>? _cashSub;
+  StreamSubscription<List<GameResultRow>>? _resultsSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _pendingInvitesSub;
+
+  /// Live member-rosters per group id, so the index-derived group list on the
+  /// home screen / sidebar shows real-time member counts (free plan — no Cloud
+  /// Function, and the membership index itself is not live).
+  final Map<String, StreamSubscription<List<AppUser>>> _groupMembersSubs = {};
+
+  /// Game ids whose own-result has already been written this session
+  /// (doc id = gameId makes the write idempotent anyway).
+  final Set<String> _resultsRecorded = <String>{};
+
+  /// This player's lifetime results — aggregated into [_user.stats].
+  List<GameResultRow> _myResults = const [];
+
+  /// Signature of the last stats summary pushed to roster rows (dedupe).
+  String? _lastPushedStatsKey;
+
+  /// Browser-notification delivery bookkeeping: the first inbox emission is
+  /// treated as history (never pushed); afterwards only new unread ids fire.
+  final Set<String> _seenNotificationIds = <String>{};
+  bool _notificationsPrimed = false;
+
+  /// Debounces whole-document game saves so rapid admin edits coalesce.
+  Timer? _gameSaveDebounce;
+  Timer? _projectionDebounce;
+
+  /// The game doc currently mirrored via [_gameDocSub] — used to skip
+  /// adopting our own server acks (echo prevention).
+  String? _syncedGameKey;
+
+  /// True once a remote emission for [_syncedGameKey] was adopted; afterwards
+  /// snapshots written by this device are ignored so debounced local edits are
+  /// never reverted by their own ack.
+  bool _gameSyncPrimed = false;
+
+  /// True while a debounced save is pending — remote adoptions wait until it
+  /// flushes so newer local state is not overwritten by an older snapshot.
+  bool _pendingGameSave = false;
+
+  /// Content signature of the last game state this device persisted (or
+  /// adopted). `_syncGameToCloud` compares against this instead of object
+  /// identity, so a bundle re-emit that hands back a fresh `LiveGame` instance
+  /// with unchanged content is NOT treated as a local edit — that false
+  /// "dirty" was starving the admin's `_adoptRemoteMap` and making the admin
+  /// side look frozen while members updated live.
+  String? _lastSavedSignature;
+  String _gameSignature(LiveGame g) => jsonEncode(liveGameToMap(g));
+
+  /// True the instant an authority makes a local edit to [_currentGame] that
+  /// has not yet been persisted — set synchronously when the debounce timer is
+  /// armed (not when it fires), so a remote snapshot that lands during the
+  /// debounce window can no longer overwrite the admin's optimistic change
+  /// (pause / resume / next level / accept check-in / confirm seating all
+  /// "undoing themselves" a beat after the tap). Cleared once the save queue
+  /// drains with nothing left to write.
+  bool _localGameDirty = false;
+
+  /// True once the first Firebase auth snapshot has been resolved. The router
+  /// holds navigation at splash until this flips so the persisted session is
+  /// restored before any guard runs.
+  bool _authReady = false;
+  bool get authReady => _authReady;
+
   bool _isTickUpdate = false;
+
+  /// Timestamp of the last Firestore game sync — shown on TV mode as a
+  /// staleness indicator so viewers know if the feed is stale.
+  DateTime? _lastGameUpdate;
+  DateTime? get lastGameUpdate => _lastGameUpdate;
 
   // ── Connectivity / recovery state (offline indicator, checklist 12-075) ────
   bool _isOffline = false;
   bool get isOffline => _isOffline;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  bool _hasReconnected = false;
+  bool get hasReconnected => _hasReconnected;
 
   /// True when the active game was restored from local storage on startup.
   bool _restoredFromRecovery = false;
@@ -76,220 +380,135 @@ class AppProvider extends ChangeNotifier {
   /// to show "last updated" and distinguish a live feed from a stale one
   /// (checklist 15-039, 18-028, 20-038). Clock ticks do not count as syncs.
   DateTime _lastSync = DateTime.now();
-  DateTime get lastSync => _lastSync;
-
-  /// Demo-only toggle: flips the connectivity indicator. While offline every
-  /// change is still persisted to local storage (RecoveryService), so nothing
-  /// is lost and the app "reconnects" on tap.
-  void toggleOffline() {
-    _isOffline = !_isOffline;
-    notifyListeners();
-  }
-
-  @override
-  void notifyListeners() {
-    super.notifyListeners();
-    if (_isTickUpdate) return;
-    _lastSync = DateTime.now();
-    if (_currentGame != null) {
-      RecoveryService.saveGame(_currentGame!);
-    } else {
-      RecoveryService.clearGame();
-    }
-    final session = _cashSession;
-    if (session != null && !session.isCompleted) {
-      RecoveryService.saveCashSession(session);
-    } else {
-      RecoveryService.clearCashSession();
-    }
-  }
 
   // ── Preferences ────────────────────────────────────────────────────────────
-  bool _notificationsEnabled = false;
-  bool get notificationsEnabled => _notificationsEnabled;
+  bool _notificationsEnabled = true;
 
-  void setNotificationsEnabled(bool value) {
-    _notificationsEnabled = value;
-    notifyListeners();
+  // ── Cloud sync plumbing ────────────────────────────────────────────────────
+  bool _gameSaveInFlight = false;
+
+  /// Sticky "this device is taking over" flag for the NEXT whole-document
+  /// save. [forceEditorClaim] is consumed the moment the debounce timer fires,
+  /// but the drain it kicks off may be a no-op (an earlier drain is still in
+  /// flight) — in which case the blocking write it was raised for (cancelling
+  /// a tournament) would have been retried WITHOUT the override. Latching it
+  /// here keeps the override attached to the queued state until the save that
+  /// carries it actually runs.
+  bool _pendingSaveForce = false;
+
+  /// Consecutive whole-document save failures. Holding the admin's unsaved
+  /// state blocks incoming updates, so that hold is bounded — see the
+  /// `_localGameDirty` assignment in [_drainGameSaveQueue].
+  int _consecutiveSaveFailures = 0;
+
+  /// A blind level proposed because play ran past the generated structure,
+  /// awaiting the admin's approval (User Flow sections 3.3 / 4.14, 12-082).
+  /// Null whenever there is nothing to approve. The clock is held while it is
+  /// set, so the app never advances the structure on its own.
+  BlindLevel? pendingLevelExtension;
+
+  /// Set by [_reconcileMemberOwnedFields] when the pre-save server read folded
+  /// a member's change (RSVP / check-in / a whole new roster row) into the
+  /// admin's live game. The save drain notifies listeners once it settles so
+  /// the host's screen actually redraws with it.
+  bool _reconcileAdoptedLocally = false;
+
+  /// Set by [_adoptRemoteMap] when a game-doc snapshot had to be dropped
+  /// because an authority save was in flight. The drain re-reads the document
+  /// once it settles, so a member write that landed inside that window is not
+  /// lost until the next unrelated write happens to wake the stream.
+  bool _droppedRemoteWhileBusy = false;
+  bool _editorClaimInFlight = false;
+  LiveGame? _pendingLatestSave;
+
+  LiveGame? _lastSavedGame;
+
+  /// Last resolved admin verdict per group id. While a group's live bundle is
+  /// re-subscribing, [_currentGroup] is briefly the empty placeholder
+  /// (blank ownerId, no members). Without this cache [isAdmin] would flip to
+  /// false for those frames and the router / screen guards would bounce the
+  /// admin off `/admin-dashboard` (or `/check-in`) mid-flow, then land them
+  /// back a moment later. The cache holds the last real answer across that gap.
+  final Map<String, bool> _adminVerdictByGroup = {};
+
+  DateTime? _lastEditorHeartbeatAt;
+  static const Duration _editorHeartbeatInterval = Duration(seconds: 25);
+
+  /// Resolves `(gid, gameId)` for cloud operations on the active game, or
+  /// null when there is nothing to target yet.
+  (String, String)? get _cloudGameContext {
+    final game = _currentGame;
+    if (game == null || _user == null || !_backendUp) return null;
+    final gid = game.groupId.isNotEmpty ? game.groupId : _currentGroupId;
+    if (gid == null) return null;
+    return (gid, game.id);
   }
 
-  Future<void> _loadRecovery() async {
-    final recovered = await RecoveryService.loadGame();
-    if (recovered != null) {
-      _currentGame = recovered;
-      _restoredFromRecovery = true;
-      _recoveryTime = DateTime.now();
-    }
-    final cash = await RecoveryService.loadCashSession();
-    if (cash != null && !cash.isCompleted) {
-      _cashSession = cash;
-    }
-    final guest = await RecoveryService.loadGuestSession();
-    if (guest != null) {
-      _guestSession = guest;
-    }
-    notifyListeners();
-  }
+  /// How many times this member has re-written their own RSVP for a game after
+  /// a foreign writer reverted it. Capped so a genuine rules rejection can't
+  /// loop forever.
+  final Map<String, int> _rsvpReassertCount = {};
 
-  /// True if the locally recovered game state differs from the "cloud" state.
-  bool get hasOfflineConflict {
-    if (_currentGame == null || !_restoredFromRecovery) return false;
-    final cloudGame = _currentGroup.games
-        .where((g) => g.id == _currentGame!.id)
-        .firstOrNull;
-    if (cloudGame == null) return false;
-    // Simple mock comparison: if local has more audit records or different level, it's out of sync
-    return _currentGame!.auditHistory.length != cloudGame.auditHistory.length ||
-        _currentGame!.currentLevel != cloudGame.currentLevel;
-  }
+  /// Lightweight placeholder used before a group's live bundle has loaded and
+  /// after the user leaves their last group.
+  static const Group _kEmptyGroup = Group(
+    id: '',
+    name: '',
+    joinCode: '',
+    ownerId: '',
+    members: [],
+    games: [],
+    chat: [],
+    polls: [],
+    notifications: [],
+  );
 
-  void resolveOfflineConflict({required bool keepLocal}) {
-    if (_currentGame != null) {
-      if (keepLocal) {
-        // Sync local up to cloud
-        final games = _currentGroup.games.toList();
-        final idx = games.indexWhere((g) => g.id == _currentGame!.id);
-        if (idx != -1) {
-          games[idx] = _currentGame!;
-          _setGroup(_currentGroup.copyWith(games: games));
-        }
-      } else {
-        // Revert local down to cloud
-        final cloudGame = _currentGroup.games
-            .where((g) => g.id == _currentGame!.id)
-            .firstOrNull;
-        if (cloudGame != null) {
-          _currentGame = cloudGame;
-          RecoveryService.saveGame(cloudGame);
-        }
-      }
-    }
-    _restoredFromRecovery = false;
-    notifyListeners();
-  }
-
-  /// Exposes the snapshot timestamp so the restore prompt can show
-  /// "last saved HH:MM" (Tech spec §20.1).
-  DateTime? get restoredAt => RecoveryService.lastSavedAt;
-
-  /// Admin declined the restored snapshot — drop the local active game.
-  void discardRestoredGame() {
-    _currentGame = null;
-    _restoredFromRecovery = false;
-    RecoveryService.clearGame();
-    _syncGroupGame();
-    notifyListeners();
-  }
+  // ── Notification outbox mirror (free-plan fan-out) ─────────────────────────
+  final Map<String, StreamSubscription<List<OutboxNotification>>>
+      _groupOutboxSubs = {};
+  final Set<String> _mirroredOutboxIds = <String>{};
+  final Map<String, bool> _outboxPrimed = {};
+  final Map<String, int> _mirrorCursors = {};
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   AppUser? _user;
-  AppUser? get user => _user;
 
-  bool get isAuthenticated => _user != null;
+  Future<void>? _hydrating;
 
-  /// Shared demo password for every seeded mock account.
-  static const seedPassword = 'password123';
-
-  /// Emails → passwords for every account that can sign in (seeded members
-  /// plus anything created via `register`). Acts as the dummy auth store.
-  final Map<String, String> _passwords = {
-    for (final m in MockData.members) m.email.toLowerCase(): seedPassword,
-  };
-
-  int _userIdSeq = 100;
-
-  bool login(String email, String password) {
-    final key = email.trim().toLowerCase();
-    final found = MockData.members.where((m) => m.email.toLowerCase() == key);
-    if (found.isNotEmpty && _passwords[key] == password) {
-      _user = found.first;
-      notifyListeners();
-      return true;
+  /// Fire-and-forget write of a single preference key.
+  void _persistPref(String key, Object? value) {
+    if (key == 'colorTheme' || key == 'themePreference') {
+      try {
+        final db = Localstore.instance;
+        db.collection('app').doc('prefs').set({key: value}, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Failed to save theme to localstore: $e');
+      }
     }
-    return false;
-  }
-
-  /// Returns `true` when a new account was created, `false` when the email
-  /// is already registered (duplicate).
-  bool register(String name, String email, String password) {
-    final key = email.trim().toLowerCase();
-    if (MockData.members.any((m) => m.email.toLowerCase() == key) ||
-        _passwords.containsKey(key)) {
-      return false;
-    }
-    final user = AppUser(
-      id: 'u-${_userIdSeq++}',
-      name: name.trim(),
-      email: email.trim(),
-      isAdmin: false,
-      stats: const UserStats(
-        played: 0,
-        wins: 0,
-        podium: 0,
-        avgFinish: 0,
-        knockouts: 0,
-      ),
-    );
-    _passwords[key] = password;
-    _user = user;
-    notifyListeners();
-    return true;
-  }
-
-  /// True when an account exists for [email], so a reset "link" can be sent.
-  bool requestPasswordReset(String email) {
-    final key = email.trim().toLowerCase();
-    return MockData.members.any((m) => m.email.toLowerCase() == key) ||
-        _passwords.containsKey(key);
-  }
-
-  void logout() {
-    _user = null;
-    notifyListeners();
+    
+    final uid = _repo.currentUid;
+    if (!_backendUp || uid == null) return;
+    unawaited(_repo
+        .saveUserPref(uid, key, value)
+        .catchError((Object e) => debugPrint('saveUserPref($key) failed: $e')));
   }
 
   // ── Chip Sets ──────────────────────────────────────────────────────────────
+  /// Starter chip set seeded into new Firestore accounts (doc id `cs-default`
+  /// keeps the "protected default" semantics of deleteChipSet).
+  static const seedChipSet = (
+    id: 'cs-default',
+    name: 'Home Set (4 colour)',
+    chips: MockData.defaultChipSet,
+  );
+
   final List<({String id, String name, List<ChipColor> chips})> _savedChipSets =
-      [
-        (
-          id: 'cs-default',
-          name: 'Home Set (4 colour)',
-          chips: MockData.defaultChipSet,
-        ),
-      ];
-
-  List<({String id, String name, List<ChipColor> chips})> get savedChipSets =>
-      _savedChipSets;
-
-  void saveChipSet(String id, String name, List<ChipColor> chips) {
-    final idx = _savedChipSets.indexWhere((c) => c.id == id);
-    if (idx >= 0) {
-      _savedChipSets[idx] = (id: id, name: name, chips: chips);
-    } else {
-      _savedChipSets.add((id: id, name: name, chips: chips));
-    }
-    notifyListeners();
-  }
-
-  void deleteChipSet(String id) {
-    if (id == 'cs-default') return; // protect default
-    _savedChipSets.removeWhere((c) => c.id == id);
-    notifyListeners();
-  }
-
-  /// Updates the signed-in member's display details (profile screen).
-  void updateProfile({String? name, String? email}) {
-    final current = _user;
-    if (current == null) return;
-    _user = current.copyWith(
-      name: name?.trim().isNotEmpty == true ? name!.trim() : current.name,
-      email: email?.trim().isNotEmpty == true ? email!.trim() : current.email,
-    );
-    notifyListeners();
-  }
+      [seedChipSet];
 
   // ── Tournament Presets (checklist §9.1) ──────────────────────────────────
-  final List<TournamentPreset> _presets = [
+  /// Starter presets seeded into new Firestore accounts so the create-
+  /// tournament wizard works out of the box.
+  static final List<TournamentPreset> seedPresets = [
     TournamentPreset(
       id: 'pr-friday',
       name: 'Friday Night Regular',
@@ -326,3039 +545,316 @@ class AppProvider extends ChangeNotifier {
     ),
   ];
 
-  List<TournamentPreset> get presets => List.unmodifiable(_presets);
-
-  TournamentPreset? presetById(String? id) {
-    if (id == null) return null;
-    for (final p in _presets) {
-      if (p.id == id) return p;
-    }
-    return null;
-  }
-
-  void savePreset(TournamentPreset preset) {
-    final idx = _presets.indexWhere((p) => p.id == preset.id);
-    if (idx >= 0) {
-      _presets[idx] = preset;
-    } else {
-      _presets.add(preset);
-    }
-    notifyListeners();
-  }
-
-  void deletePreset(String id) {
-    _presets.removeWhere((p) => p.id == id);
-    notifyListeners();
-  }
-
-  /// Suggests up to two presets that match the signals parsed from closed
-  /// polls (e.g. "What buy-in?" → 15, "How long?" → 3.5h). Used by the
-  /// create-tournament wizard (09-007 / 09-008 / 09-009).
-  List<TournamentPreset> suggestPresets({
-    required int expectedPlayers,
-    List<num> pollSignals = const [],
-  }) {
-    if (_presets.isEmpty) return const [];
-
-    int scoreFor(TournamentPreset p) {
-      var score = 0;
-      for (final s in pollSignals) {
-        if (s == p.buyIn) score += 40;
-        if (s == p.durationHours) score += 30;
-        if ((s - p.buyIn).abs() <= 2 && s != p.buyIn) score += 10;
-      }
-      if (expectedPlayers >= 2 && expectedPlayers <= 10 && p.rebuys) score += 5;
-      if (expectedPlayers > 10 && !p.rebuys) score += 5;
-      return score;
-    }
-
-    final scored =
-        _presets
-            .map((p) => (preset: p, score: scoreFor(p)))
-            .where((e) => e.score >= 15)
-            .toList()
-          ..sort((a, b) => b.score.compareTo(a.score));
-
-    return scored.take(2).map((e) => e.preset).toList();
-  }
+  final List<TournamentPreset> _presets = List.of(seedPresets);
 
   // ── Group ──────────────────────────────────────────────────────────────────
-  Group _currentGroup = MockData.demoGroup;
-  Group get currentGroup => _currentGroup;
+  /// Neutral placeholder until the first group of the signed-in user is
+  /// auto-selected (or the user creates/joins one).
+  Group _currentGroup = _kEmptyGroup;
 
-  /// Every group the user belongs to. The current group is always in this
-  /// list; pinned groups float to the top of the sidebar.
-  List<Group> _groups = [MockData.demoGroup, MockData.demoGroup2];
-  List<Group> get groups => List.unmodifiable(_groups);
+  /// The group whose live bundle is currently subscribed.
+  String? _currentGroupId;
 
-  /// Groups ordered pinned-first then alphabetically (client feedback: the
-  /// sidebar lists all groups, pinnable, not a single slot).
-  List<Group> get orderedGroups {
-    final sorted = [..._groups]
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-    return sorted;
-  }
+  /// Every group the user belongs to, rebuilt from the live index stream.
+  /// Rows are lightweight (no members/chat/games) — the rich state lives in
+  /// [currentGroup] via the bundle subscription.
+  List<Group> _groups = const [];
 
-  /// Replaces [currentGroup] everywhere it lives so the sidebar list and the
-  /// group hub always reflect the same state.
-  void _setGroup(Group group) {
-    _currentGroup = group;
-    final i = _groups.indexWhere((g) => g.id == group.id);
-    _groups = i == -1 ? [..._groups, group] : ([..._groups]..[i] = group);
-  }
-
-  void setCurrentGroup(Group group) {
-    _setGroup(group);
-    notifyListeners();
-  }
-
-  bool joinGroup(String code) {
-    if (code.trim().toUpperCase() == MockData.demoGroup.joinCode) {
-      _setGroup(MockData.demoGroup);
-      notifyListeners();
-      return true;
-    }
-    return false;
-  }
-
-  Group createGroup(String name, {String icon = '♠️'}) {
-    final group = Group(
-      id: 'grp-${DateTime.now().millisecondsSinceEpoch}',
-      name: name,
-      joinCode: Formatters.generateCode(),
-      ownerId: _user?.id ?? 'u1',
-      members: _user != null ? [_user!] : const [],
-      games: const [],
-      chat: const [],
-      polls: const [],
-      notifications: const [],
-      icon: icon,
-    );
-    _setGroup(group);
-    notifyListeners();
-    return group;
-  }
-
-  /// Pins/unpins a group so it floats to the top of the sidebar's group list.
-  void togglePinGroup(Group group) {
-    _setGroup(group.copyWith(pinned: !group.pinned));
-    notifyListeners();
-  }
-
-  void toggleAdminRole(String userId, bool isAdmin) {
-    if (_user?.id != _currentGroup.ownerId) return; // Only owner can do this
-    if (userId == _currentGroup.ownerId) return; // Cannot change owner's role
-    final members = _currentGroup.members.map((m) {
-      if (m.id == userId) {
-        return m.copyWith(isAdmin: isAdmin);
-      }
-      return m;
-    }).toList();
-    _setGroup(_currentGroup.copyWith(members: members));
-    notifyListeners();
-  }
+  /// The table-capacity/randomization rules that actually apply to the
+  /// active tournament: its own override if set, otherwise the group
+  /// default.
+  TableSettings get effectiveTableSettings =>
+      _currentGame?.settings.tableSettingsOverride ??
+      _currentGroup.tableSettings;
 
   // ── Game ───────────────────────────────────────────────────────────────────
   LiveGame? _currentGame;
-  LiveGame? get currentGame => _currentGame;
 
   // Undo stack (checklist 12-042/12-043/12-044, technical §11.3). Before every
   // admin mutation we snapshot the previous game; undo pops and restores it.
   static const int _maxUndoDepth = 30;
   final List<LiveGame?> _undoStack = [];
 
-  bool get canUndo => _undoStack.isNotEmpty;
-
-  /// Human-readable description of the most recent reversible action, used
-  /// by the Undo confirmation ("Undo shows the action that will be reversed"
-  /// — User Flow spec §12.6).
-  String? get lastActionSummary {
-    final history = _currentGame?.auditHistory;
-    if (history == null || history.isEmpty) return null;
-    return history.last.details;
-  }
+  /// An editor claim older than this is considered stale: any admin device may
+  /// take over the single-writer role (90 seconds of silence).
+  static const Duration _editorClaimStaleWindow = Duration(seconds: 90);
 
   /// Pending seat-balance recommendation (checklist §13.2), if any.
   SeatMoveRecommendation? _pendingSeatMove;
 
-  void _pushUndo() {
-    if (_currentGame == null) return;
-    if (_undoStack.length >= _maxUndoDepth) _undoStack.removeAt(0);
-    _undoStack.add(_currentGame);
-  }
-
-  void _clearUndoStack() {
-    _undoStack.clear();
-  }
-
-  void setCurrentGame(LiveGame game) {
-    _clearUndoStack();
-    _currentGame = game;
-    notifyListeners();
-  }
-
-  /// Resolves a game (live or past) by id from the group's synced list,
-  /// falling back to the current active game (checklist 16-007).
-  LiveGame? gameById(String id) {
-    for (final g in _currentGroup.games) {
-      if (g.id == id) return g;
-    }
-    return _currentGame?.id == id ? _currentGame : null;
-  }
-
-  LiveGame createGame(GameSettings settings) {
-    // Client flow: creating an event does NOT generate the structure. The AI
-    // estimates stacks/blinds/levels 30 minutes before start, using the
-    // attendance taken from RSVPs (Going + Going +N) — see
-    // [generateStructureFromRsvps]. Until then the structure stays empty.
-    final structure = const TournamentStructure(
-      startingStack: 0,
-      chipPlan: const [],
-      rebuyStack: 0,
-      rebuyChipPlan: const [],
-      addOnStack: 0,
-      addOnChipPlan: const [],
-      levels: const [],
-      levelDuration: 15,
-      expectedFinishMins: 0,
-      prizes: const [],
-      prizePool: 0,
-      organizerAmount: 0,
-      colorUpInstructions: const [],
-      warnings: const [],
-    );
-    // Seed participants from the group roster so the RSVP and check-in
-    // screens list the real members. Guest seats appear as guest slots when
-    // members answer Going +N — no placeholder players are invented.
-    final seeded = [
-      for (final member in _currentGroup.members)
-        Player(
-          id: member.id,
-          name: member.name,
-          isGuest: false,
-          rsvp: null,
-          checkedIn: false,
-          confirmed: false,
-          eliminated: false,
-          rebuys: 0,
-          hasAddOn: false,
-          knockouts: 0,
-          table: 0,
-          seat: 0,
-          active: true,
-        ),
-    ];
-    final game = LiveGame(
-      id: 'game-${DateTime.now().millisecondsSinceEpoch}',
-      groupId: _currentGroup.id,
-      settings: settings,
-      structure: structure,
-      status: LiveGameStatus.draft,
-      publicCode: Formatters.generateCode(),
-      tvCode: Formatters.generateCode(),
-      currentLevel: 1,
-      timerRunning: false,
-      secondsRemaining: structure.levelDuration * 60,
-      players: seeded,
-      chat: const [],
-      announcements: const [],
-      totalChipsInPlay: structure.startingStack * seeded.length,
-      pendingGuests: const [],
-      finishOrder: const [],
-      speedRecommendation: null,
-    );
-    _clearUndoStack();
-    _currentGame = game;
-    _syncGroupGame();
-    notifyListeners();
-    return game;
-  }
-
-  /// Keeps the group's copy of the current game in sync so the hub's upcoming
-  /// list and history (12-090) reflect the live game's latest status. When the
-  /// game does not exist yet on the group it is appended.
-  void _syncGroupGame() {
-    final game = _currentGame;
-    if (game == null) return;
-    final games = _currentGroup.games;
-    final idx = games.indexWhere((g) => g.id == game.id);
-    _setGroup(
-      _currentGroup.copyWith(
-        games: idx == -1 ? [...games, game] : ([...games]..[idx] = game),
-      ),
-    );
-  }
-
-  void updateGameStatus(LiveGameStatus status) {
-    final wasPublished = _currentGame?.status == LiveGameStatus.published;
-    _currentGame = _currentGame!.copyWith(status: status);
-    // Client feedback (07-018): inside the 30-minute window before start the
-    // AI refreshes the stacks/blinds/levels estimate from the expected count.
-    if (status == LiveGameStatus.checkin) refreshEstimate();
-    if (status == LiveGameStatus.checkin && wasPublished) {
-      pushNotification(
-        AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-          title: 'Check-in opened',
-          body:
-              '${_currentGame!.settings.name} — you can check in now. Seats are assigned after the host confirms.',
-          type: NotificationType.game,
-          link: '/invitation',
-          read: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
-    _syncGroupGame();
-    notifyListeners();
-  }
-
-  /// Cancels the tournament. Requires a reason: it is recorded in the audit
-  /// log and members are notified (spec §12, checklist 10-042). Blocking —
-  /// once cancelled the game cannot be started again.
-  void cancelGame(String reason) {
-    final game = _currentGame;
-    if (game == null || _user == null) return;
-    if (game.status == LiveGameStatus.completed ||
-        game.status == LiveGameStatus.cancelled) {
-      return;
-    }
-    _pushUndo();
-    _ticker?.cancel();
-    _currentGame = game.copyWith(
-      status: LiveGameStatus.cancelled,
-      timerRunning: false,
-    );
-    _syncGroupGame();
-    addAuditRecord(
-      'cancel',
-      'Cancelled ${game.settings.name}. Reason: ${reason.trim().isEmpty ? 'Not provided' : reason.trim()}',
-    );
-    pushNotification(
-      AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Tournament cancelled',
-        body: '${game.settings.name} has been cancelled.',
-        type: NotificationType.game,
-        link: '/invitation',
-        read: false,
-        timestamp: DateTime.now(),
-      ),
-    );
-    addAnnouncement('${game.settings.name} has been cancelled.', true);
-    notifyListeners();
-  }
-
-  /// Publishes the tournament (checklist §4.3): the game opens for RSVP, a
-  /// pinned event card is posted to the group chat, every member is notified,
-  /// and the published structure is snapshotted for the §12.4 live diff.
-  void publishGame() {
-    final game = _currentGame;
-    if (game == null || _user == null) return;
-    _pushUndo();
-
-    final anteText = game.settings.anteEnabled
-        ? 'Ante: L${game.settings.anteAfterLevel}+'
-        : 'No ante';
-    final rebuyText = game.settings.rebuysCloseLevel > 0
-        ? 'Rebuys: until L${game.settings.rebuysCloseLevel}'
-        : 'No rebuys';
-    final addonText = game.settings.addOn ? 'Add-on: Yes' : 'No add-on';
-
-    final card = ChatMessage(
-      id: 'pinned-${DateTime.now().millisecondsSinceEpoch}',
-      authorId: _user!.id,
-      authorName: _user!.name,
-      body:
-          '${game.settings.name} — ${game.settings.date} at ${game.settings.time}\n'
-          'Buy-in: ${game.settings.buyIn} · Code: ${game.publicCode}\n'
-          '$anteText · $rebuyText · $addonText',
-      timestamp: DateTime.now(),
-      deleted: false,
-      pinned: true,
-      gameId: game.id,
-    );
-    _currentGame = game.copyWith(
-      status: LiveGameStatus.published,
-      chat: [...game.chat, card],
-      originalLevels: List.of(game.structure.levels),
-    );
-    _setGroup(
-      _currentGroup.copyWith(
-        chat: [..._currentGroup.chat, card],
-        games: _currentGroup.games
-            .map(
-              (g) => g.id == game.id
-                  ? g.copyWith(
-                      status: LiveGameStatus.published,
-                      chat: [...g.chat, card],
-                      originalLevels: List.of(game.structure.levels),
-                    )
-                  : g,
-            )
-            .toList(),
-      ),
-    );
-    _syncGroupGame();
-    addAuditRecord(
-      'publish',
-      'Published ${game.settings.name} '
-          '(${game.settings.date} ${game.settings.time}) for RSVP.',
-    );
-    pushNotification(
-      AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'New game published',
-        body:
-            '${game.settings.name} is open for RSVP — '
-            '${game.settings.date} at ${game.settings.time}.',
-        type: NotificationType.game,
-        link: '/invitation',
-        read: false,
-        timestamp: DateTime.now(),
-      ),
-    );
-    addAnnouncement('${game.settings.name} is now open for RSVP.', true);
-    notifyListeners();
-  }
-
-  /// Admin edits an already-created event's details. Records an audit entry,
-  /// notifies members, and re-generates the structure when the field change
-  /// would affect it (checklist §10.4). RSVP validity is surfaced in the audit.
-  void updateEventSettings(GameSettings next, {bool clearRsvps = false}) {
-    final game = _currentGame;
-    if (game == null || _user == null) return;
-    final prev = game.settings;
-    if (prev == next) return;
-    _pushUndo();
-
-    var s = next;
-    // The structure only depends on players, buy-in, duration and ante rules;
-    // cosmetic fields (name/date/time/location/privacy) keep the structure.
-    final affectsStructure =
-        prev.players != s.players ||
-        prev.buyIn != s.buyIn ||
-        prev.durationHours != s.durationHours ||
-        prev.anteEnabled != s.anteEnabled ||
-        prev.anteAfterLevel != s.anteAfterLevel ||
-        prev.anteStyle != s.anteStyle ||
-        prev.koEnabled != s.koEnabled ||
-        prev.koAmount != s.koAmount ||
-        prev.rebuys != s.rebuys ||
-        prev.rebuysCloseLevel != s.rebuysCloseLevel ||
-        prev.reEntry != s.reEntry ||
-        prev.addOn != s.addOn ||
-        prev.addOnCloseLevel != s.addOnCloseLevel;
-
-    final edits = <String>[];
-    if (prev.name != s.name) edits.add('name → ${s.name}');
-    if (prev.date != s.date) edits.add('date → ${s.date}');
-    if (prev.time != s.time) edits.add('time → ${s.time}');
-    if (prev.location != s.location) {
-      edits.add('location ${s.locationPrivate ? '(private) ' : ''}updated');
-    }
-    if (prev.buyIn != s.buyIn) edits.add('buy-in → ${s.buyIn}');
-    if (prev.locationPrivate != s.locationPrivate) {
-      edits.add(s.locationPrivate ? 'address hidden' : 'address visible');
-    }
-
-    if (affectsStructure) {
-      if (game.structure.levels.isEmpty && !game.structureReviewOpen) {
-        _currentGame = game.copyWith(
-          settings: s,
-          players: clearRsvps
-              ? game.players.map((p) => p.copyWithClearRsvp()).toList()
-              : game.players,
-        );
-        edits.add('settings saved (structure deferred)');
-      } else {
-        var structure = TournamentEngine.generate(
-          TournamentParams(
-            players: s.players,
-            durationHours: s.durationHours,
-            buyIn: s.buyIn,
-            chipSet: s.chipSet,
-            rebuys: s.rebuys,
-            rebuysCloseLevel: s.rebuysCloseLevel,
-            reEntry: s.reEntry,
-            addOn: s.addOn,
-            anteEnabled: s.anteEnabled,
-            anteAfterLevel: s.anteAfterLevel,
-            anteStyle: s.anteStyle,
-            koEnabled: s.koEnabled,
-            koAmount: s.koAmount,
-            organizerPct: s.organizerPct,
-            rebuyCost: s.rebuyCost,
-            addOnCost: s.addOnCost,
-          ),
-        );
-        // After play starts the starting stacks are frozen (client rule).
-        if (game.stacksLocked) {
-          structure = structure.copyWith(
-            startingStack: game.structure.startingStack,
-            chipPlan: game.structure.chipPlan,
-            rebuyStack: game.structure.rebuyStack,
-            rebuyChipPlan: game.structure.rebuyChipPlan,
-            addOnStack: game.structure.addOnStack,
-            addOnChipPlan: game.structure.addOnChipPlan,
-          );
-        }
-        _currentGame = game.copyWith(
-          settings: s,
-          structure: structure,
-          secondsRemaining: structure.levelDuration * 60,
-          speedRecommendation: null,
-          players: clearRsvps
-              ? game.players.map((p) => p.copyWithClearRsvp()).toList()
-              : game.players,
-        );
-        edits.add('structure regenerated');
-      }
-    } else {
-      _currentGame = game.copyWith(
-        settings: s,
-        players: clearRsvps
-            ? game.players.map((p) => p.copyWithClearRsvp()).toList()
-            : game.players,
-      );
-    }
-
-    _syncGroupGame();
-    addAuditRecord('event_edit', 'Event updated: ${edits.join('; ')}.');
-    if (edits.isNotEmpty) {
-      pushNotification(
-        AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-          title: 'Event updated',
-          body: '${s.name} — ${edits.take(2).join('; ')}.',
-          type: NotificationType.game,
-          link: '/invitation',
-          read: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
-    addAnnouncement('Event details updated.', false);
-    notifyListeners();
-  }
-
-  /// Records that the end-of-rebuy settlement has been confirmed. From this
-  /// point the public label reads "Prize Pool" instead of "Estimated Prize
-  /// Pool" (12-068, 14-038/14-039, 15-009, 15-030), and no more rebuys,
-  /// re-entries or add-ons are possible (12-065).
-  /// Computes the *final* prize distribution from the actual contributions
-  /// recorded at the end of the rebuy level (client rule: prices are only
-  /// calculated there — exact field size, actual rebuys and the selected
-  /// add-ons). [addOnCount] is the number of add-ons taken at settlement.
-  ({int organizerAmount, int prizePool, List<Prize> prizes})
-  previewSettlementPrizes(int addOnCount) {
-    final game = _currentGame;
-    if (game == null)
-      return (organizerAmount: 0, prizePool: 0, prizes: const []);
-    final s = game.settings;
-    final participants = game.players
-        .where((p) => p.confirmed || p.checkedIn)
-        .length;
-    final rebuys = game.players.fold<int>(0, (sum, p) => sum + p.rebuys);
-    final reEntries = game.players.fold<int>(0, (sum, p) => sum + p.reEntries);
-    final addOns = game.players.where((p) => p.hasAddOn).length + addOnCount;
-    final gross =
-        s.buyIn * participants +
-        s.effectiveRebuyCost * rebuys +
-        s.buyIn * reEntries +
-        s.effectiveAddOnCost * addOns;
-    return TournamentEngine.recalculatePrizes(
-      gross,
-      participants,
-      s.organizerPct.toDouble(),
-      forcePaidPlaces: s.forcePaidPlaces,
-    );
-  }
-
-  void confirmSettlement() {
-    final game = _currentGame;
-    if (game == null) return;
-    final finalPrizes = previewSettlementPrizes(0);
-    _currentGame = game.copyWith(
-      settlementConfirmed: true,
-      pendingGuests: const [],
-      structure: game.structure.copyWith(
-        organizerAmount: finalPrizes.organizerAmount,
-        prizePool: finalPrizes.prizePool,
-        prizes: finalPrizes.prizes,
-      ),
-    );
-    _syncGroupGame();
-    addAuditRecord(
-      'settlement',
-      'Rebuy/add-on break settled. Final prize pool: ${finalPrizes.prizePool}.',
-    );
-    addAnnouncement('Prize pool confirmed: ${finalPrizes.prizePool}.', true);
-    pushNotification(
-      AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Prize Pool confirmed',
-        body:
-            '${game.settings.name} — final prize pool: ${finalPrizes.prizePool}.',
-        type: NotificationType.game,
-        link: '/player-live',
-        read: false,
-        timestamp: DateTime.now(),
-      ),
-    );
-    notifyListeners();
+  /// Idempotency guard (technical §18.1): claims the next revision for an
+  /// administrator action carrying [idempotencyKey]. Returns the new revision
+  /// to persist, or null when the key was already applied — a replayed action
+  /// (browser retry, offline-restore redelivery) must never be applied twice.
+  ///
+  /// Callers fold the returned revision (and the key) into their final
+  /// [LiveGame.copyWith] so the guard survives save, restore and fan-out.
+  /// Claims the next revision for an admin mutation, rejecting a replayed
+  /// action: if [idempotencyKey] matches the key that produced the current
+  /// revision, the call is a duplicate and returns null. When the caller does
+  /// not supply a key, one is derived deterministically from the action's own
+  /// identity (`action-target-revision+1`) instead of bypassing replay
+  /// protection entirely. Returns the new revision and the persistence key
+  /// (the caller stores the latter as `lastIdempotencyKey`).
+  (int?, String) _claimIdempotency(String idempotencyKey,
+      {required String action, String target = ''}) {
+    final g = _currentGame;
+    if (g == null) return (null, '');
+    final key = idempotencyKey.isNotEmpty
+        ? idempotencyKey
+        : '$action-${target.isEmpty ? g.id : target}-${g.revision + 1}';
+    if (g.lastIdempotencyKey == key) return (null, key); // replay
+    return (g.revision + 1, key);
   }
 
   // ── Timer ──────────────────────────────────────────────────────────────────
   Timer? _ticker;
+  Timer? _serverTimeRecalibration;
 
   /// Marks already announced per level (checklist 15-047/15-048) so the
   /// five-minute and one-minute warnings fire only once per level.
   final Set<String> _levelAnnouncementMarks = <String>{};
 
-  void _announceLevelMark(int remaining) {
-    final game = _currentGame;
-    if (game == null || !game.timerRunning) return;
-    final level = game.currentLevel;
-    final mark = '$level';
-    if (remaining <= 300 &&
-        remaining > 60 &&
-        !_levelAnnouncementMarks.contains('$mark:300')) {
-      _levelAnnouncementMarks.add('$mark:300');
-      addAnnouncement('Five minutes remaining in level $level.', true);
-    }
-    if (remaining <= 60 &&
-        remaining > 0 &&
-        !_levelAnnouncementMarks.contains('$mark:60')) {
-      _levelAnnouncementMarks.add('$mark:60');
-      addAnnouncement('One minute remaining in level $level.', true);
-    }
-  }
-
-  void _startTick() {
-    _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_currentGame == null || !_currentGame!.timerRunning) return;
-      int remaining;
-      if (_currentGame!.levelEndTime != null) {
-        remaining = _currentGame!.levelEndTime!
-            .difference(DateTime.now())
-            .inSeconds;
-      } else {
-        remaining = _currentGame!.secondsRemaining - 1;
-      }
-      if (remaining <= 0) {
-        final atRebuyClose =
-            _currentGame!.settings.rebuys &&
-            _currentGame!.currentLevel ==
-                _currentGame!.settings.rebuysCloseLevel;
-        _currentGame = _currentGame!.copyWith(
-          secondsRemaining: 0,
-          timerRunning: false,
-          status: atRebuyClose
-              ? LiveGameStatus.rebuypause
-              : _currentGame!.status,
-        );
-        addAnnouncement(
-          atRebuyClose
-              ? 'Rebuys are now closed. Add-ons are available.'
-              : 'Level ${_currentGame!.currentLevel} has ended.',
-        );
-        if (atRebuyClose) {
-          pushNotification(
-            AppNotification(
-              id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-              title: 'Rebuys closed',
-              body:
-                  '${_currentGame!.settings.name} — rebuy period ended. Settlement required.',
-              type: NotificationType.game,
-              link: '/rebuy-settlement',
-              read: false,
-              timestamp: DateTime.now(),
-            ),
-          );
-        }
-        _evaluateSpeedRecommendation();
-        return;
-      }
-      _announceLevelMark(remaining);
-      _currentGame = _currentGame!.copyWith(secondsRemaining: remaining);
-      _isTickUpdate = true;
-      notifyListeners();
-      _isTickUpdate = false;
-    });
-  }
-
-  /// Lightweight live recommendation (technical §11.4): compare the expected
-  /// elimination pace against what actually happened so far. If the field is
-  /// falling behind schedule the tournament runs long → suggest shorter future
-  /// levels; if it is ahead → suggest longer ones. Never mutates blinds, level
-  /// count or duration on its own.
-  /// Manually forces recalculation of finish time/speed recommendations
-  void forceEvaluateSpeedRecommendation() {
-    _evaluateSpeedRecommendation();
-    addAnnouncement('Recalculated speed recommendation.', false);
-  }
-
-  void _evaluateSpeedRecommendation() {
-    final game = _currentGame;
-    if (game == null || game.status != LiveGameStatus.running) return;
-    final total = game.players.length;
-    if (total < 2) return;
-    final levels = game.structure.levels.length;
-    final progress = (game.currentLevel - 1) / levels;
-    final expectedEliminated = (total * progress).round();
-    final eliminated = total - game.activePlayers.length;
-    final diff = eliminated - expectedEliminated;
-    final threshold = (total * 0.15).ceil();
-    SpeedRecommendation? rec;
-    if (diff < -threshold) {
-      rec = SpeedRecommendation.speedUp;
-    } else if (diff > threshold) {
-      rec = SpeedRecommendation.slowDown;
-    }
-    if (rec == game.speedRecommendation) return;
-    _currentGame = game.copyWith(speedRecommendation: rec);
-    notifyListeners();
-  }
-
-  void startTimer() {
-    // Client rule: no guessed player count at setup — the AI finalises the
-    // stacks/blinds/levels right now, from the actual final headcount
-    // (checked-in players if any confirmed, otherwise final RSVPs), the
-    // moment the admin presses Start. This supersedes whatever estimate the
-    // 30-minute pre-start window may have already shown.
-    recalculateStructure();
-    _currentGame = _currentGame!.copyWith(structureConfirmed: true);
-    addAuditRecord(
-      'structure_final',
-      'Structure finalised at start for ${_currentGame!.settings.players} '
-          'players: stack ${_currentGame!.structure.startingStack}, '
-          '${_currentGame!.structure.levels.length} levels.',
-    );
-
-    _levelAnnouncementMarks.clear();
-    final level = _currentGame!.currentLevelData;
-    _currentGame = _currentGame!.copyWith(
-      timerRunning: true,
-      status: LiveGameStatus.running,
-      levelEndTime: DateTime.now().add(
-        Duration(seconds: _currentGame!.secondsRemaining),
-      ),
-    );
-    addAnnouncement(
-      'Tournament starts. Level ${_currentGame!.currentLevel}. '
-      'Blinds ${level?.sb ?? 0} and ${level?.bb ?? 0}.',
-      true,
-    );
-    pushNotification(
-      AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Tournament starting',
-        body: '${_currentGame!.settings.name} is live now.',
-        type: NotificationType.game,
-        link: '/player-live',
-        read: false,
-        timestamp: DateTime.now(),
-      ),
-    );
-  }
-
-  void pauseTimer() {
-    _currentGame = _currentGame!.copyWith(
-      timerRunning: false,
-      status: LiveGameStatus.paused,
-      secondsRemaining: _currentGame!.currentSecondsRemaining,
-      levelEndTime: null,
-    );
-    notifyListeners();
-  }
-
-  void resumeTimer() {
-    _currentGame = _currentGame!.copyWith(
-      timerRunning: true,
-      status: LiveGameStatus.running,
-      levelEndTime: DateTime.now().add(
-        Duration(seconds: _currentGame!.secondsRemaining),
-      ),
-    );
-    notifyListeners();
-  }
-
-  void nextLevel() {
-    final next = _currentGame!.currentLevel + 1;
-    if (next > _currentGame!.structure.levels.length) return;
-    _pushUndo();
-    _levelAnnouncementMarks.clear();
-    final level = _currentGame!.structure.levels[next - 1];
-    _currentGame = _currentGame!.copyWith(
-      currentLevel: next,
-      secondsRemaining: level.durationMins * 60,
-      timerRunning: true,
-      status: LiveGameStatus.running,
-      speedRecommendation: null,
-      levelEndTime: DateTime.now().add(Duration(minutes: level.durationMins)),
-    );
-    addAnnouncement(
-      'Level $next. Blinds ${level.sb} and ${level.bb}'
-      '${level.ante != null ? ', ante ${level.ante}' : ''}.',
-      true,
-    );
-  }
-
-  /// Rewinds to the previous level (spec §12 "Previous" control). The clock
-  /// resets to the full previous-level duration and the game resumes running.
-  void previousLevel() {
-    final prev = _currentGame!.currentLevel - 1;
-    if (prev < 1) return;
-    _pushUndo();
-    _levelAnnouncementMarks.clear();
-    final level = _currentGame!.structure.levels[prev - 1];
-    _currentGame = _currentGame!.copyWith(
-      currentLevel: prev,
-      secondsRemaining: level.durationMins * 60,
-      timerRunning: true,
-      status: LiveGameStatus.running,
-      speedRecommendation: null,
-      levelEndTime: DateTime.now().add(Duration(minutes: level.durationMins)),
-    );
-    addAnnouncement(
-      'Level $prev. Blinds ${level.sb} and ${level.bb}'
-      '${level.ante != null ? ', ante ${level.ante}' : ''}.',
-      true,
-    );
-  }
-
-  /// Restarts the clock for the current level (spec §12: requires
-  /// confirmation showing its exact effect — the admin UI gates this behind a
-  /// confirm dialog). Resets to the full level duration and resumes running.
-  void restartLevel() {
-    final game = _currentGame;
-    if (game == null) return;
-    if (game.status != LiveGameStatus.running &&
-        game.status != LiveGameStatus.paused) {
-      return;
-    }
-    _pushUndo();
-    _levelAnnouncementMarks.clear();
-    final level = game.currentLevelData;
-    final durationMins = level?.durationMins ?? game.structure.levelDuration;
-    _currentGame = game.copyWith(
-      secondsRemaining: durationMins * 60,
-      timerRunning: true,
-      status: LiveGameStatus.running,
-      speedRecommendation: null,
-      levelEndTime: DateTime.now().add(Duration(minutes: durationMins)),
-    );
-    _syncGroupGame();
-    addAuditRecord(
-      'restart-level',
-      'Restarted level ${game.currentLevel} (blinds ${level?.sb ?? 0}/${level?.bb ?? 0}).',
-    );
-    addAnnouncement('Level ${game.currentLevel} restarted.', true);
-    notifyListeners();
-  }
-
-  // ── Player management ──────────────────────────────────────────────────────
-  void eliminatePlayer(String playerId, {String? koRecipientId}) {
-    _pushUndo();
-    final active = _currentGame!.players
-        .where((p) => p.active && !p.eliminated)
-        .toList();
-    final pos = active.length;
-    final bounty = _currentGame!.settings.koEnabled
-        ? _currentGame!.settings.koAmount
-        : 0;
-    final updated = _currentGame!.players.map((p) {
-      if (p.id == playerId) {
-        return p.copyWith(eliminated: true, active: false, eliminationPos: pos);
-      }
-      // Optional single knockout recipient (technical §11.3). The bounty
-      // chips transfer from the eliminated player, so total chips in play
-      // is unchanged — only the recipient's knockout count increases.
-      if (koRecipientId != null && p.id == koRecipientId) {
-        return p.copyWith(knockouts: p.knockouts + 1);
-      }
-      return p;
-    }).toList();
-    final remaining = updated.where((p) => p.active).length;
-    final wasMoreThanNine =
-        _currentGame!.players.where((p) => p.active).length > 9;
-    if (remaining == 9 && wasMoreThanNine) {
-      _currentGame = _currentGame!.copyWith(
-        players: updated,
-        status: LiveGameStatus.finaltable,
-        timerRunning: false,
-      );
-      pushNotification(
-        AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-          title: 'Final table reached',
-          body: '${_currentGame!.settings.name} — nine players remain.',
-          type: NotificationType.game,
-          link: '/final-table',
-          read: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-    } else {
-      _currentGame = _currentGame!.copyWith(players: updated);
-    }
-    final p = _currentGame!.players.firstWhere((pl) => pl.id == playerId);
-    // Elimination names are optional per tournament and disabled by default
-    // (15-053) — spoken only when the admin enabled the setting.
-    final speakElimination = _currentGame!.settings.announceEliminations;
-    if (koRecipientId != null && bounty > 0) {
-      final koPlayer = _currentGame!.players
-          .where((pl) => pl.id == koRecipientId)
-          .firstOrNull;
-      addAnnouncement(
-        '${p.name} eliminated by ${koPlayer?.name ?? '?'} — $bounty bounty awarded.',
-        speakElimination,
-      );
-    } else {
-      addAnnouncement('${p.name} eliminated.', speakElimination);
-    }
-  }
-
-  /// Explicitly corrects a past elimination without using Undo (which is unsafe
-  /// if dependent actions occurred). Adds a compensating audit action.
-  void correctElimination(String playerId) {
-    if (_currentGame == null) return;
-
-    // We intentionally bypass `_pushUndo()` for audit preservation,
-    // but the spec says "never delete audit history", so we just append.
-    final players = _currentGame!.players.map((p) {
-      if (p.id == playerId) {
-        return p.copyWith(
-          eliminated: false,
-          eliminationPos: null,
-          active: true,
-        );
-      }
-      return p;
-    }).toList();
-
-    _currentGame = _currentGame!.copyWith(players: players);
-    final correctedPlayer = players.firstWhere((p) => p.id == playerId);
-
-    addAuditRecord(
-      'correction',
-      'Corrected elimination for ${correctedPlayer.name}',
-    );
-    addAnnouncement(
-      'Correction: ${correctedPlayer.name} has been reinstated to the game.',
-      false,
-    );
-  }
-
-  void grantRebuy(String playerId) {
-    final game = _currentGame;
-    if (game == null) return;
-    if (!game.settings.rebuys || game.rebuysClosed) return;
-    final player = game.players.where((p) => p.id == playerId).firstOrNull;
-    if (player == null || !player.eliminated) return;
-
-    _pushUndo();
-    final rebuyStack = game.structure.rebuyStack;
-    _currentGame = game.copyWith(
-      players: game.players
-          .map(
-            (p) => p.id == playerId
-                ? p.copyWith(
-                    rebuys: p.rebuys + 1,
-                    eliminated: false,
-                    active: true,
-                  )
-                : p,
-          )
-          .toList(),
-      totalChipsInPlay: game.totalChipsInPlay + rebuyStack,
-      rebuyRequests: game.rebuyRequests.where((id) => id != playerId).toList(),
-    );
-    // Recalculate prize pool/prizes after money enters the game.
-    // This updates only prizePool, organizerAmount and prizes on the structure,
-    // leaving blind levels and any manual edits completely intact.
-    _updatePrizePool();
-  }
-
-  /// Registers a player's request for a rebuy from the live view. The admin
-  /// approves it from the dashboard, which clears the request.
-  void requestRebuy(String playerId) {
-    if (_currentGame!.rebuyRequests.contains(playerId)) return;
-    _currentGame = _currentGame!.copyWith(
-      rebuyRequests: [..._currentGame!.rebuyRequests, playerId],
-    );
-    notifyListeners();
-  }
-
-  void cancelRebuyRequest(String playerId) {
-    _currentGame = _currentGame!.copyWith(
-      rebuyRequests: _currentGame!.rebuyRequests
-          .where((id) => id != playerId)
-          .toList(),
-    );
-    notifyListeners();
-  }
-
-  /// Records a re-entry (checklist §12.5): a separate, secondary option that
-  /// grants the approved entry stack and is tracked independently of rebuys
-  /// (12-046/12-047). Closes with late registration/rebuys (12-049), which is
-  /// enforced by only showing the action while rebuys are still open.
-  void grantReEntry(String playerId) {
-    final game = _currentGame;
-    if (game == null) return;
-    if (!game.settings.reEntry || game.rebuysClosed) return;
-    final player = game.players.where((p) => p.id == playerId).firstOrNull;
-    if (player == null || !player.eliminated) return;
-
-    _pushUndo();
-    final entryStack = game.structure.startingStack;
-    _currentGame = game.copyWith(
-      players: game.players
-          .map(
-            (p) => p.id == playerId
-                ? p.copyWith(
-                    reEntries: p.reEntries + 1,
-                    eliminated: false,
-                    active: true,
-                  )
-                : p,
-          )
-          .toList(),
-      totalChipsInPlay: game.totalChipsInPlay + entryStack,
-    );
-    _updatePrizePool();
-  }
-
-  void grantAddOn(String playerId) {
-    final game = _currentGame;
-    if (game == null) return;
-    if (!game.settings.addOn || game.settlementConfirmed) return;
-    final player = game.players.where((p) => p.id == playerId).firstOrNull;
-    if (player == null ||
-        player.eliminated ||
-        !player.active ||
-        player.hasAddOn)
-      return;
-
-    _pushUndo();
-    final addOnStack = game.structure.addOnStack;
-    _currentGame = game.copyWith(
-      players: game.players
-          .map((p) => p.id == playerId ? p.copyWith(hasAddOn: true) : p)
-          .toList(),
-      totalChipsInPlay: game.totalChipsInPlay + addOnStack,
-      addOnRequests: game.addOnRequests.where((id) => id != playerId).toList(),
-    );
-    // Recalculate prize pool/prizes after money enters the game.
-    _updatePrizePool();
-  }
-
-  /// Registers a player's request for an add-on from the live view. The admin
-  /// approves it during the settlement flow, which clears the request.
-  void requestAddOn(String playerId) {
-    if (_currentGame!.addOnRequests.contains(playerId)) return;
-    _currentGame = _currentGame!.copyWith(
-      addOnRequests: [..._currentGame!.addOnRequests, playerId],
-    );
-    notifyListeners();
-  }
-
-  void cancelAddOnRequest(String playerId) {
-    _currentGame = _currentGame!.copyWith(
-      addOnRequests: _currentGame!.addOnRequests
-          .where((id) => id != playerId)
-          .toList(),
-    );
-    notifyListeners();
-  }
-
-  void undoLast() {
-    if (_undoStack.isEmpty) {
-      addAnnouncement('Nothing to undo.', false);
-      return;
-    }
-    final previous = _undoStack.removeLast();
-    if (previous == null) return;
-    _currentGame = previous;
-    notifyListeners();
-    addAnnouncement('Last action undone.', false);
-  }
-
-  void requestCheckIn(String playerId) {
-    final requester = _currentGame!.players
-        .where((p) => p.id == playerId)
-        .firstOrNull;
-    _currentGame = _currentGame!.copyWith(
-      players: _currentGame!.players
-          .map(
-            (p) => p.id == playerId
-                ? p.copyWith(checkedIn: true, confirmed: false)
-                : p,
-          )
-          .toList(),
-    );
-    if (requester != null && _user?.id != playerId) {
-      pushNotification(
-        AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-          title: 'Check-in request',
-          body: '${requester.name} is waiting to be checked in.',
-          type: NotificationType.game,
-          link: '/check-in',
-          read: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
-    notifyListeners();
-  }
-
-  void checkInPlayer(String playerId) {
-    _pushUndo();
-    _currentGame = _currentGame!.copyWith(
-      players: _currentGame!.players
-          .map(
-            (p) => p.id == playerId
-                ? p.copyWith(checkedIn: true, confirmed: true)
-                : p,
-          )
-          .toList(),
-    );
-  }
-
-  void cancelCheckIn(String playerId) {
-    _currentGame = _currentGame!.copyWith(
-      players: _currentGame!.players
-          .map(
-            (p) => p.id == playerId
-                ? p.copyWith(checkedIn: false, confirmed: false)
-                : p,
-          )
-          .toList(),
-    );
-    notifyListeners();
-  }
-
-  /// Closes door check-in (spec §4.7). Once closed, the host is prompted to
-  /// start the tournament and no further walk-ins are accepted.
-  void closeCheckIn() {
-    _currentGame = _currentGame!.copyWith(
-      checkInClosed: true,
-      status: LiveGameStatus.ready,
-    );
-    _syncGroupGame();
-    addAnnouncement(
-      'Check-in is now closed. No more players may join unless re-opened.',
-      false,
-    );
-    notifyListeners();
-  }
-
-  void reopenCheckIn() {
-    _currentGame = _currentGame!.copyWith(
-      checkInClosed: false,
-      status: LiveGameStatus.checkin,
-    );
-    _syncGroupGame();
-    addAnnouncement('Check-in re-opened.', false);
-    notifyListeners();
-  }
-
-  /// Registers an un-invited walk-in player at the door (spec §4.7). They are
-  /// checked in immediately and seated by the next seating generation.
-  void addWalkInPlayer(String name) {
-    final game = _currentGame;
-    if (game == null || name.trim().isEmpty || game.rebuysClosed) return;
-    _pushUndo();
-    final id = 'p-${DateTime.now().millisecondsSinceEpoch}';
-    final player = Player(
-      id: id,
-      name: name.trim(),
-      isGuest: false,
-      rsvp: null,
-      checkedIn: true,
-      confirmed: true,
-      eliminated: false,
-      rebuys: 0,
-      hasAddOn: false,
-      knockouts: 0,
-      table: 0,
-      seat: 0,
-      active: true,
-    );
-    _currentGame = game.copyWith(
-      players: [...game.players, player],
-      totalChipsInPlay: game.totalChipsInPlay + game.structure.startingStack,
-    );
-    _updatePrizePool();
-    recalculateStructure();
-
-    // Suggest a seat if tables are already generated (meaning play has started or seating is done)
-    if (_currentGame!.players.any((p) => p.table > 0)) {
-      final tables = _currentGame!.players
-          .where((p) => p.table > 0)
-          .map((p) => p.table)
-          .toSet();
-      if (tables.isNotEmpty) {
-        // Find table with minimum players
-        int minTable = tables.first;
-        int minCount = 999;
-        for (var t in tables) {
-          int count = _currentGame!.players
-              .where((p) => p.table == t && p.active)
-              .length;
-          if (count < minCount) {
-            minCount = count;
-            minTable = t;
-          }
-        }
-        // Find first empty seat at minTable
-        final taken = _currentGame!.players
-            .where((p) => p.table == minTable)
-            .map((p) => p.seat)
-            .toSet();
-        int freeSeat = 1;
-        while (taken.contains(freeSeat)) {
-          freeSeat++;
-        }
-        _pendingSeatMove = SeatMoveRecommendation(
-          fromPlayerId: player.id,
-          fromPlayerName: player.name,
-          fromTable: 0,
-          fromSeat: 0,
-          toTable: minTable,
-          toSeat: freeSeat,
-          reason: 'Late add requires a seat.',
-        );
-      }
-    }
-
-    _syncGroupGame();
-    addAnnouncement('${player.name} walked in and is checked in.', true);
-    notifyListeners();
-  }
-
-  void confirmGuest(String guestId) {
-    _pushUndo();
-    final game = _currentGame!;
-
-    final updated = game.players
-        .map(
-          (p) => p.id == guestId
-              ? p.copyWith(confirmed: true, checkedIn: true, active: true)
-              : p,
-        )
-        .toList();
-
-    final extraChips = game.structure.startingStack;
-    final guest = game.players.where((p) => p.id == guestId).firstOrNull;
-
-    final inviterId = guest?.inviterId;
-    final guestSlot = guest?.guestSlot;
-    final canTagSlot = guest != null && inviterId != null && guestSlot != null;
-
-    _currentGame = game.copyWith(
-      players: updated,
-      pendingGuests: game.pendingGuests.where((p) => p.id != guestId).toList(),
-      totalChipsInPlay: game.totalChipsInPlay + extraChips,
-      guestSlots: canTagSlot
-          ? game.guestSlots.map((s) {
-              if (s.inviterId == inviterId && s.slot == guestSlot) {
-                return s.copyWith(
-                  guestName: guest.name,
-                  status: GuestSlotStatus.checkedIn,
-                );
-              }
-              return s;
-            }).toList()
-          : game.guestSlots,
-    );
-
-    if (extraChips > 0) {
-      _updatePrizePool();
-    }
-
-    addAnnouncement('Guest confirmed and seated.', false);
-    if (guest != null) {
-      pushNotification(
-        AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-          title: 'Guest confirmed',
-          body: '${guest.name} is confirmed for ${game.settings.name}.',
-          type: NotificationType.invite,
-          link: '/guest-flow',
-          read: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
-  }
-
-  /// Admin rejects a pending guest request — the guest is removed from the
-  /// players list and no longer sits at the table (07-026). Their slot is
-  /// freed so another guest can claim it.
-  void rejectGuest(String guestId) {
-    _pushUndo();
-    final guest = _currentGame!.players
-        .where((p) => p.id == guestId)
-        .firstOrNull;
-    final inviterId = guest?.inviterId;
-    final guestSlot = guest?.guestSlot;
-    final canFree = guest != null && inviterId != null && guestSlot != null;
-    _currentGame = _currentGame!.copyWith(
-      players: _currentGame!.players.where((p) => p.id != guestId).toList(),
-      pendingGuests: _currentGame!.pendingGuests
-          .where((p) => p.id != guestId)
-          .toList(),
-      guestSlots: canFree
-          ? _currentGame!.guestSlots
-                .map(
-                  (s) => s.inviterId == inviterId && s.slot == guestSlot
-                      ? s.copyWith(
-                          guestName: null,
-                          status: GuestSlotStatus.unclaimed,
-                        )
-                      : s,
-                )
-                .toList()
-          : _currentGame!.guestSlots,
-    );
-    addAnnouncement('Guest request rejected.', false);
-  }
-
-  /// Marks the matching guest slot as reserved/claimed so the free-slot count
-  /// on the guest flow and invitation screens stays accurate.
-  List<GuestSlot> _markSlotReserved(
-    List<GuestSlot> slots,
-    String inviterId,
-    int slot, {
-    String? name,
-  }) {
-    final updated = slots.map((s) {
-      if (s.inviterId == inviterId && s.slot == slot && s.available) {
-        return s.copyWith(guestName: name, status: GuestSlotStatus.reserved);
-      }
-      return s;
-    }).toList();
-    // Safety net: the inviter somehow has no persisted slot record.
-    if (!updated.any((s) => s.inviterId == inviterId && s.slot == slot)) {
-      updated.add(
-        GuestSlot(
-          id: 'slot-${DateTime.now().millisecondsSinceEpoch}-$inviterId-$slot',
-          inviterId: inviterId,
-          slot: slot,
-          guestName: name,
-          status: GuestSlotStatus.reserved,
-        ),
-      );
-    }
-    return updated;
-  }
-
-  /// Guest flow: attach a brand-new guest to a game and mark them pending.
-  /// The guest's own session is persisted so the same device can recover the
-  /// request after a refresh (checklist 07-030). Returns an error string if
-  /// the slot is invalid or already taken.
-  String? requestGuestCheckIn(String name, String inviterId, int slot) {
-    final game = _currentGame;
-    if (game == null) return 'No active game found.';
-
-    final existingSlot = game.guestSlots
-        .where((s) => s.inviterId == inviterId && s.slot == slot)
-        .firstOrNull;
-    if (existingSlot != null && !existingSlot.available) {
-      return 'That guest slot is already reserved or checked in.';
-    }
-    final alreadyClaimed = game.players.any(
-      (p) => p.isGuest && p.inviterId == inviterId && p.guestSlot == slot,
-    );
-    if (alreadyClaimed) {
-      return 'That guest slot is already claimed.';
-    }
-
-    _pushUndo();
-    final id = 'g-${DateTime.now().millisecondsSinceEpoch}';
-    final guest = Player(
-      id: id,
-      name: name,
-      isGuest: true,
-      inviterId: inviterId,
-      guestSlot: slot,
-      rsvp: Rsvp.going,
-      checkedIn: false,
-      confirmed: false,
-      eliminated: false,
-      rebuys: 0,
-      hasAddOn: false,
-      knockouts: 0,
-      table: 0,
-      seat: 0,
-      active: false,
-    );
-    _currentGame = game.copyWith(
-      players: [...game.players, guest],
-      pendingGuests: [...game.pendingGuests, guest],
-      guestSlots: _markSlotReserved(
-        game.guestSlots,
-        inviterId,
-        slot,
-        name: name.trim(),
-      ),
-    );
-    _saveGuestSession(
-      GuestSession(
-        gameId: game.id,
-        name: name.trim(),
-        inviterId: inviterId,
-        slot: slot,
-      ),
-    );
-
-    // The guest stays pending until the host confirms them at check-in
-    // (spec §6 "waiting for admin confirmation", checklist 07-027/07-028).
-    notifyListeners();
-    return null;
-  }
+  /// Used to derive server-authoritative timer from Firestore server time.
+  Duration? _serverTimeOffset;
 
   // ── Guest session (device-local, checklist 07-030) ─────────────────────────
   GuestSession? _guestSession;
   GuestSession? get guestSession => _guestSession;
 
-  /// True while this device holds an approved/requested guest session
-  /// (used by the router guard to allow guests into player-live without an
-  /// account — checklist 15-014).
-  bool get hasGuestSession => _guestSession != null;
-
-  /// Role-safe game copies (§2.3). Non-admin views must never read private
-  /// fields; the public surfaces are fed from these projections, never from
-  /// the raw game object.
-  LiveGame? get tvGame =>
-      _currentGame == null ? null : projections.tvProjection(_currentGame!);
-
-  /// The game as a registered non-admin member sees it: payout amounts and
-  /// organizer amount removed, chat preserved.
-  LiveGame? get playerProjection => _currentGame == null
-      ? null
-      : projections.playerProjection(_currentGame!, viewerId: _user?.id);
-
-  /// The game as a guest sees it: payout/organizer amounts and chat removed.
-  LiveGame? get guestProjection =>
-      _currentGame == null ? null : projections.guestProjection(_currentGame!);
-
-  /// The projection matching the current viewer (guest vs registered member).
-  LiveGame? get viewerProjection =>
-      hasGuestSession ? guestProjection : playerProjection;
-
-  void _saveGuestSession(GuestSession session) {
-    _guestSession = session;
-    RecoveryService.saveGuestSession(session);
-  }
-
-  /// Clears the stored guest session (e.g. the guest was rejected or left).
-  void clearGuestSession() {
-    _guestSession = null;
-    RecoveryService.clearGuestSession();
-    notifyListeners();
-  }
-
-  /// Assign table + seat numbers to every checked-in player (spec §12.1).
-  /// Max 9 per table; 10+ checked-in players create multiple balanced tables.
-  /// Every player gets exactly one unique (table, seat) — no duplicates.
-  void generateSeating(TableSeatingMode mode) {
-    final game = _currentGame;
-    if (game == null) return;
-
-    // Only checked-in, confirmed, non-eliminated participants are seated.
-    final seated = game.players
-        .where((p) => p.checkedIn && p.confirmed && !p.eliminated)
-        .toList();
-    if (seated.isEmpty) return;
-    _pushUndo();
-
-    // Order players according to the chosen seating mode.
-    List<Player> ordered;
-    switch (mode) {
-      case TableSeatingMode.random:
-        ordered = [...seated]..shuffle(Random());
-        break;
-      case TableSeatingMode.manual:
-        ordered = [...seated];
-        break;
-      case TableSeatingMode.keepGuests:
-        // Group each guest next to their inviter so the round-robin deal keeps
-        // them on the same table where capacity allows.
-        ordered = _orderKeepingGuests(seated, together: true);
-        break;
-      case TableSeatingMode.separateGuests:
-        ordered = _orderKeepingGuests(seated, together: false);
-        break;
-    }
-
-    // Balanced tables: ceil(count / 9), distributed as evenly as possible.
-    final count = ordered.length;
-    final tableCount = (count / 9).ceil();
-    final perTable = List<int>.filled(tableCount, count ~/ tableCount);
-    for (var i = 0; i < count % tableCount; i++) {
-      perTable[i]++;
-    }
-
-    // Deal round-robin into tables, filling seats 1..n per table.
-    final seatCursor = List<int>.filled(tableCount, 0);
-    final assignments = <String, ({int table, int seat})>{};
-    var idx = 0;
-    for (final p in ordered) {
-      // Find the next table that still has capacity (round-robin).
-      var table = idx % tableCount;
-      var guard = 0;
-      while (seatCursor[table] >= perTable[table] && guard < tableCount) {
-        table = (table + 1) % tableCount;
-        guard++;
-      }
-      seatCursor[table]++;
-      assignments[p.id] = (table: table + 1, seat: seatCursor[table]);
-      idx++;
-    }
-
-    // Random initial dealer position (13-012/13-026) chosen from the seated
-    // players. The system does not track dealer-button rotation (13-032).
-    final dealer = seated.isEmpty
-        ? null
-        : seated[Random().nextInt(seated.length)];
-
-    _currentGame = game.copyWith(
-      players: game.players.map((p) {
-        final a = assignments[p.id];
-        return a == null ? p : p.copyWith(table: a.table, seat: a.seat);
-      }).toList(),
-      dealerPlayerId: dealer?.id,
-      // A new draw invalidates any previous confirmation (13-013).
-      seatingConfirmed: false,
-    );
-    // Announce the drawn dealer out loud so the room hears who deals first
-    // (checklist 13-026). Falls back quietly if voice is disabled.
-    if (dealer != null) {
-      addAnnouncement('Seating drawn. ${dealer.name} deals first.', true);
-    }
-    notifyListeners();
-  }
-
-  /// Marks the generated physical seating as confirmed before play starts
-  /// (checklist 13-013). Seats remain editable afterwards via the move flow.
-  void confirmSeating() {
-    final game = _currentGame;
-    if (game == null) return;
-    _currentGame = game.copyWith(seatingConfirmed: true);
-    addAnnouncement('Seating confirmed. Shuffle up and deal!', true);
-    // Notify each seated participant of their table and seat (Tech §14.3).
-    for (final p in game.players.where((p) => p.confirmed && p.table > 0)) {
-      pushNotification(
-        AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}-${p.id}',
-          title: 'Seat assigned',
-          body:
-              '${game.settings.name} — you are Table ${p.table}, Seat ${p.seat}.',
-          type: NotificationType.game,
-          link: '/invitation',
-          read: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
-  }
-
-  /// Assigns one player to an explicit (table, seat) — used by Manual seating
-  /// (13-002) and validated to prevent duplicate seats (13-021). Clearing the
-  /// previous confirmation forces a re-confirm of the physical layout.
-  String? assignSeat(String playerId, int table, int seat) {
-    final game = _currentGame;
-    if (game == null) return null;
-    if (table < 1 || seat < 1) return 'Choose a valid table and seat.';
-    final occupied = game.players.any(
-      (p) =>
-          p.id != playerId &&
-          p.table == table &&
-          p.seat == seat &&
-          !p.eliminated,
-    );
-    if (occupied) return 'That seat is already taken — choose another.';
-    _pushUndo();
-    _currentGame = game.copyWith(
-      players: game.players
-          .map(
-            (p) => p.id == playerId ? p.copyWith(table: table, seat: seat) : p,
-          )
-          .toList(),
-      seatingConfirmed: false,
-    );
-    notifyListeners();
-    return null;
-  }
-
-  /// Detects when tables differ by more than one active player and builds a
-  /// recommendation for the administrator (checklist 13-015/13-016/13-017).
-  SeatMoveRecommendation? _buildSeatMoveRecommendation() {
-    final game = _currentGame;
-    if (game == null) return null;
-    final seated = game.players.where((p) => p.active && p.table > 0).toList();
-    if (seated.length < 2) return null;
-    final counts = <int, int>{};
-    for (final p in seated) {
-      counts[p.table] = (counts[p.table] ?? 0) + 1;
-    }
-    final tables = counts.keys.toList();
-    if (tables.length < 2) return null;
-
-    // Sort tables by player count
-    final sortedByCount = tables.toList()
-      ..sort((a, b) => counts[a]!.compareTo(counts[b]!));
-    final minTable = sortedByCount.first;
-    final maxTable = sortedByCount.last;
-
-    final minCount = counts[minTable]!;
-    final maxCount = counts[maxTable]!;
-    if (maxCount - minCount <= 1) return null;
-    // Pick the player with the smallest seat number on the largest table so the
-    // recommendation is deterministic and understandable.
-    final mover = seated.where((p) => p.table == maxTable).toList()
-      ..sort((a, b) => a.seat.compareTo(b.seat));
-    final from = mover.first;
-    // Find the first free seat on the destination table.
-    final taken = seated
-        .where((p) => p.table == minTable)
-        .map((p) => p.seat)
-        .toSet();
-    var toSeat = 1;
-    while (taken.contains(toSeat)) {
-      toSeat++;
-    }
-    return SeatMoveRecommendation(
-      fromPlayerId: from.id,
-      fromPlayerName: from.name,
-      fromTable: from.table,
-      fromSeat: from.seat,
-      toTable: minTable,
-      toSeat: toSeat,
-      reason:
-          'Table $maxTable has $maxCount players while Table $minTable has '
-          '$minCount. Moving ${from.name} balances the tables.',
-    );
-  }
-
-  /// Current pending seat-move recommendation, if any (checklist §13.2).
-  SeatMoveRecommendation? get seatingRecommendation => _pendingSeatMove;
-
-  bool get hasSeatingImbalance => seatingRecommendation != null;
-
-  /// Asks the engine for a fresh table-balance recommendation. Nothing is
-  /// applied — the admin must review and confirm (13-018).
-  void requestSeatingBalance() {
-    _pendingSeatMove = _buildSeatMoveRecommendation();
-    notifyListeners();
-  }
-
-  /// Clears the pending recommendation without changing any seats (13-020).
-  void dismissSeatMove() {
-    if (_pendingSeatMove == null) return;
-    _pendingSeatMove = null;
-    notifyListeners();
-  }
-
-  /// Applies the confirmed recommendation: the player moves, source and
-  /// destination seats update consistently (13-018/13-019).
-  void confirmSeatMove() {
-    final rec = _pendingSeatMove;
-    if (rec == null) return;
-    final game = _currentGame;
-    if (game == null) return;
-    final occupied = game.players.any(
-      (p) =>
-          p.id != rec.fromPlayerId &&
-          p.table == rec.toTable &&
-          p.seat == rec.toSeat &&
-          !p.eliminated,
-    );
-    if (occupied) {
-      _pendingSeatMove = null;
-      notifyListeners();
-      return;
-    }
-    _pushUndo();
-    _currentGame = game.copyWith(
-      players: game.players
-          .map(
-            (p) => p.id == rec.fromPlayerId
-                ? p.copyWith(table: rec.toTable, seat: rec.toSeat)
-                : p,
-          )
-          .toList(),
-      seatingConfirmed: false,
-    );
-    _pendingSeatMove = null;
-    addAnnouncement(
-      '${rec.fromPlayerName} moved to Table ${rec.toTable} seat ${rec.toSeat}.',
-      true,
-    );
-    notifyListeners();
-  }
-
   // ── Late registration (checklist §12.3) ────────────────────────────────────
-
-  /// Late registration stays open until the rebuy period ends — the configured
-  /// closing level, normally the end of Level 6 (07-039, 12-028, 20-023).
-  bool get lateRegistrationOpen {
-    final game = _currentGame;
-    if (game == null) return false;
-    final live =
-        game.status == LiveGameStatus.running ||
-        game.status == LiveGameStatus.paused;
-    return live &&
-        !game.settlementConfirmed &&
-        game.currentLevel <= game.settings.rebuysCloseLevel;
-  }
-
-  /// Adds a registered player during late registration (12-022/12-023).
-  /// The late player receives a full fresh starting stack (12-024) and is
-  /// assigned to the recommended balanced table and an available seat
-  /// (12-025). Totals are recalculated (12-026).
-  void addLatePlayer(String name) {
-    if (!lateRegistrationOpen) return;
-    _pushUndo();
-    final game = _currentGame!;
-    final id = 'p-${DateTime.now().millisecondsSinceEpoch}';
-    final (table: table, seat: seat) = _findAvailableSeat();
-    final player = Player(
-      id: id,
-      name: name.trim(),
-      isGuest: false,
-      rsvp: null,
-      checkedIn: true,
-      confirmed: true,
-      eliminated: false,
-      rebuys: 0,
-      hasAddOn: false,
-      knockouts: 0,
-      table: table,
-      seat: seat,
-      active: true,
-    );
-    _currentGame = game.copyWith(
-      players: [...game.players, player],
-      totalChipsInPlay: game.totalChipsInPlay + game.structure.startingStack,
-    );
-    // Recalculate prize pool/prizes after money enters the game.
-    _updatePrizePool();
-    _syncGroupGame();
-    addAnnouncement('${player.name} has joined the tournament.', true);
-    notifyListeners();
-  }
-
-  /// Completely removes a player from the active tournament.
-  /// Deducts starting stack, rebuys, and add-ons from total chips.
-  /// Recalculates prize pool and distribution.
-  void removePlayer(String playerId) {
-    if (_currentGame == null) return;
-    _pushUndo();
-    final game = _currentGame!;
-    final p = game.players.where((pl) => pl.id == playerId).firstOrNull;
-    if (p == null) return;
-
-    int chipsToRemove = game.structure.startingStack;
-    if (p.rebuys > 0) {
-      chipsToRemove += p.rebuys * game.structure.startingStack;
-    }
-    if (p.hasAddOn) {
-      chipsToRemove += game.structure.addOnStack;
-    }
-
-    final newPlayers = game.players.where((pl) => pl.id != playerId).toList();
-
-    _currentGame = game.copyWith(
-      players: newPlayers,
-      totalChipsInPlay: (game.totalChipsInPlay - chipsToRemove).clamp(
-        0,
-        99999999,
-      ),
-    );
-
-    _updatePrizePool();
-    _syncGroupGame();
-    addAnnouncement('${p.name} has been removed from the tournament.', true);
-    notifyListeners();
-  }
-
-  /// Finds the table with the fewest active players and its first free seat.
-  ({int table, int seat}) _findAvailableSeat() {
-    final game = _currentGame;
-    if (game == null) return (table: 1, seat: 1);
-    final seated = game.players.where((p) => p.active && p.table > 0).toList();
-    if (seated.isEmpty) return (table: 1, seat: 1);
-    final counts = <int, int>{};
-    for (final p in seated) {
-      counts[p.table] = (counts[p.table] ?? 0) + 1;
-    }
-    final tableCount = (game.activePlayers.length / 9).ceil().clamp(1, 9);
-    var bestTable = 1;
-    var bestCount = 1 << 30;
-    for (var t = 1; t <= tableCount; t++) {
-      final c = counts[t] ?? 0;
-      if (c < 9 && c < bestCount) {
-        bestTable = t;
-        bestCount = c;
-      }
-    }
-    final taken = seated
-        .where((p) => p.table == bestTable)
-        .map((p) => p.seat)
-        .toSet();
-    var seat = 1;
-    while (taken.contains(seat)) {
-      seat++;
-    }
-    return (table: bestTable, seat: seat);
-  }
-
-  /// Re-computes prizePool, organizerAmount and prize distribution after any
-  /// money enters the game (late registration, rebuy, re-entry, add-on).
-  ///
-  /// This is surgical update on the structure only: it uses
-  /// [TournamentStructure.copyWith] to update the three financial fields while
-  /// leaving every blind level — including manual edits from StructureEditor —
-  /// completely unchanged (fixes checklist 12-026).
-  void _updatePrizePool() {
-    final game = _currentGame;
-    if (game == null) return;
-
-    final s = game.settings;
-    final structure = game.structure;
-
-    // Gross eligible = all actual money that entered the game:
-    //   confirmed players × buy-in  +  all rebuys × rebuy price
-    //   +  all re-entries × buy-in  +  all add-ons × add-on price.
-    // Rebuy/add-on prices default to the buy-in unless the admin set a custom
-    // price (09-050/12-051, 12-060).
-    final confirmedCount = game.players.where((p) => p.confirmed).length;
-    final totalRebuys = game.players.fold<int>(0, (sum, p) => sum + p.rebuys);
-    final totalReEntries = game.players.fold<int>(
-      0,
-      (sum, p) => sum + p.reEntries,
-    );
-    final totalAddOns = game.players.where((p) => p.hasAddOn).length;
-
-    final grossEligible =
-        confirmedCount * s.buyIn +
-        totalRebuys * s.effectiveRebuyCost +
-        totalReEntries * s.buyIn +
-        totalAddOns * (s.addOn ? s.effectiveAddOnCost : 0);
-
-    // Delegate the organizer-cut and prize-split maths to the shared helper in
-    // TournamentEngine so the rules stay consistent everywhere.
-    final recalculated = TournamentEngine.recalculatePrizes(
-      grossEligible,
-      confirmedCount,
-      s.organizerPct.toDouble(),
-      forcePaidPlaces: s.forcePaidPlaces,
-    );
-
-    // Patch only the financial fields; levels and all other structure data
-    // remain exactly as they were (including any StructureEditor overrides).
-    _currentGame = game.copyWith(
-      structure: structure.copyWith(
-        prizePool: recalculated.prizePool,
-        organizerAmount: recalculated.organizerAmount,
-        prizes: recalculated.prizes,
-      ),
-    );
-  }
-
-  /// Manually overrides the number of paid places and recalculates prizes.
-  void overridePaidPlaces(int? count) {
-    if (_currentGame == null) return;
-    _pushUndo();
-    _currentGame = _currentGame!.copyWith(
-      settings: _currentGame!.settings.copyWith(forcePaidPlaces: count),
-    );
-    _updatePrizePool();
-    addAuditRecord(
-      'structure_edit',
-      'Paid places overridden to ${count ?? 'auto'}',
-    );
-    notifyListeners();
-  }
-
-  /// Orders players so guests are placed immediately after (together) or far
-  /// from (separate) their inviter, used to steer the round-robin deal.
-  List<Player> _orderKeepingGuests(
-    List<Player> players, {
-    required bool together,
-  }) {
-    final registered = players.where((p) => !p.isGuest).toList();
-    final guests = players.where((p) => p.isGuest).toList();
-    if (together) {
-      final result = <Player>[];
-      for (final r in registered) {
-        result.add(r);
-        result.addAll(guests.where((g) => g.inviterId == r.id));
-      }
-      // Any guest whose inviter isn't seated still gets placed.
-      result.addAll(
-        guests.where((g) => !registered.any((r) => r.id == g.inviterId)),
-      );
-      return result;
-    }
-    // Separate: interleave registered and guests so inviter/guest land apart.
-    final result = <Player>[];
-    final maxLen = registered.length > guests.length
-        ? registered.length
-        : guests.length;
-    for (var i = 0; i < maxLen; i++) {
-      if (i < registered.length) result.add(registered[i]);
-      if (i < guests.length) result.add(guests[i]);
-    }
-    return result;
-  }
-
-  void acceptSpeedRecommendation({SpeedRecommendation? rec}) {
-    final game = _currentGame;
-    if (game == null) return;
-    final recommendation = rec ?? game.speedRecommendation;
-    if (recommendation == null) return;
-    _pushUndo();
-    final structure = game.structure;
-    final newDuration = recommendation == SpeedRecommendation.speedUp
-        ? structure.levelDuration - 5
-        : structure.levelDuration + 5;
-    final clamped = newDuration < 10
-        ? 10
-        : (newDuration > 20 ? 20 : newDuration);
-    // Apply the new duration to future levels only (spec: active level never changes, starts next level).
-    final levels = structure.levels
-        .map(
-          (l) => l.level > game.currentLevel
-              ? BlindLevel(
-                  level: l.level,
-                  sb: l.sb,
-                  bb: l.bb,
-                  ante: l.ante,
-                  durationMins: clamped,
-                )
-              : l,
-        )
-        .toList();
-    _currentGame = game.copyWith(
-      speedRecommendation: null,
-      structure: structure.copyWith(levels: levels, levelDuration: clamped),
-    );
-    addAnnouncement(
-      recommendation == SpeedRecommendation.speedUp
-          ? 'Future levels sped up to $clamped minutes.'
-          : 'Future levels slowed down to $clamped minutes.',
-      true,
-    );
-  }
-
-  TournamentStructure _structureWithLevels(
-    TournamentStructure s,
-    List<BlindLevel> levels,
-  ) {
-    return TournamentStructure(
-      startingStack: s.startingStack,
-      chipPlan: s.chipPlan,
-      rebuyStack: s.rebuyStack,
-      rebuyChipPlan: s.rebuyChipPlan,
-      addOnStack: s.addOnStack,
-      addOnChipPlan: s.addOnChipPlan,
-      levels: levels,
-      levelDuration: s.levelDuration,
-      expectedFinishMins: s.expectedFinishMins,
-      prizes: s.prizes,
-      prizePool: s.prizePool,
-      organizerAmount: s.organizerAmount,
-      colorUpInstructions: s.colorUpInstructions,
-      warnings: s.warnings,
-    );
-  }
-
-  /// Regenerates the whole structure for the actual confirmed attendance
-  /// (checklist 09-003 / 22-006: the engine always regenerates rather than
-  /// reusing a fixed template). Keeps the current level and resets its clock.
-  /// Total expected attendance taken from RSVPs: every "Going" answer counts
-  /// the member plus their guest slots (Going +2 = 3 people). Falls back to
-  /// the group roster when nobody has answered yet.
-  int expectedPlayersFromRsvps(LiveGame game) {
-    var total = 0;
-    for (final p in game.players) {
-      if (!p.isGuest && p.rsvp != null && p.rsvp!.isGoing) {
-        total += 1 + p.rsvp!.guestCount;
-      }
-    }
-    return total >= 2 ? total : game.players.where((p) => !p.isGuest).length;
-  }
-
-  /// Admin has reviewed the generated structure (30-minute estimate).
-  void confirmStructure() {
-    final game = _currentGame;
-    if (game == null) return;
-    _currentGame = game.copyWith(structureConfirmed: true);
-    addAuditRecord(
-      'structure_confirm',
-      'Structure confirmed: stack ${game.structure.startingStack}, '
-          '${game.structure.levels.length} levels of ${game.structure.levelDuration}m.',
-    );
-    _syncGroupGame();
-    notifyListeners();
-  }
-
-  /// Generates (or regenerates) the structure estimate from the inputs the
-  /// admin provided plus the current expected attendance. Only allowed once
-  /// the 30-minute pre-start window is open (client rule: the structure is
-  /// reviewed ~30 minutes before the game, while people are still deciding
-  /// whether to attend).
-  void generateStructureFromRsvps({bool force = false}) {
-    final game = _currentGame;
-    if (game == null || (!game.structureReviewOpen && !(kDebugMode && force)))
-      return;
-    _pushUndo();
-    final count = expectedPlayersFromRsvps(game);
-    final s = game.settings.copyWith(players: count);
-    final structure = TournamentEngine.generate(
-      TournamentParams(
-        players: count,
-        durationHours: s.durationHours,
-        buyIn: s.buyIn,
-        chipSet: s.chipSet,
-        rebuys: s.rebuys,
-        rebuysCloseLevel: s.rebuysCloseLevel,
-        reEntry: s.reEntry,
-        addOn: s.addOn,
-        anteEnabled: s.anteEnabled,
-        anteAfterLevel: s.anteAfterLevel,
-        anteStyle: s.anteStyle,
-        koEnabled: s.koEnabled,
-        koAmount: s.koAmount,
-        organizerPct: s.organizerPct,
-        rebuyCost: s.rebuyCost,
-        addOnCost: s.addOnCost,
-      ),
-    );
-    _currentGame = game.copyWith(
-      settings: s,
-      structure: structure,
-      originalLevels: List.of(structure.levels),
-      totalChipsInPlay: structure.startingStack * count,
-      currentLevel: 1,
-      secondsRemaining: structure.levelDuration * 60,
-      structureConfirmed: false,
-    );
-    addAuditRecord(
-      'structure_estimate',
-      'AI generated the structure estimate for $count expected players.',
-    );
-    notifyListeners();
-  }
-
-  void recalculateStructure() {
-    final game = _currentGame;
-    if (game == null) return;
-    _pushUndo();
-
-    final confirmed = game.players.where((p) => p.confirmed).length;
-    final count = confirmed >= 2 ? confirmed : expectedPlayersFromRsvps(game);
-    _recalculateWithPlayers(count);
-  }
-
-  void updateStructurePlayerCount(int players) {
-    final game = _currentGame;
-    if (game == null) return;
-    _pushUndo();
-    _recalculateWithPlayers(players);
-  }
-
-  void _recalculateWithPlayers(int count) {
-    final game = _currentGame!;
-    final s = game.settings;
-    final newSettings = s.copyWith(players: count);
-    var structure = TournamentEngine.generate(
-      TournamentParams(
-        players: count,
-        durationHours: newSettings.durationHours,
-        buyIn: newSettings.buyIn,
-        chipSet: newSettings.chipSet,
-        rebuys: newSettings.rebuys,
-        rebuysCloseLevel: newSettings.rebuysCloseLevel,
-        reEntry: newSettings.reEntry,
-        addOn: newSettings.addOn,
-        anteEnabled: newSettings.anteEnabled,
-        anteAfterLevel: newSettings.anteAfterLevel,
-        anteStyle: newSettings.anteStyle,
-        koEnabled: newSettings.koEnabled,
-        koAmount: newSettings.koAmount,
-        organizerPct: newSettings.organizerPct,
-        rebuyCost: newSettings.rebuyCost,
-        addOnCost: newSettings.addOnCost,
-      ),
-    );
-    // Once play has started the starting stacks are frozen — blinds, levels
-    // and the player count may still change (client rule).
-    if (game.stacksLocked) {
-      structure = structure.copyWith(
-        startingStack: game.structure.startingStack,
-        chipPlan: game.structure.chipPlan,
-        rebuyStack: game.structure.rebuyStack,
-        rebuyChipPlan: game.structure.rebuyChipPlan,
-        addOnStack: game.structure.addOnStack,
-        addOnChipPlan: game.structure.addOnChipPlan,
-      );
-    }
-
-    final newLevel = game.currentLevel.clamp(1, structure.levels.length);
-    _currentGame = game.copyWith(
-      settings: newSettings,
-      structure: structure,
-      currentLevel: newLevel,
-      secondsRemaining: structure.levels[newLevel - 1].durationMins * 60,
-      speedRecommendation: null,
-    );
-    addAnnouncement(
-      'Structure recalculated for $count confirmed player${count != 1 ? 's' : ''}.',
-      true,
-    );
-  }
-
-  /// Client feedback (07-018): inside the 30-minute window before start the AI
-  /// refreshes stacks/blinds/levels from the current expected player count.
-  /// No-op once stacks are locked (game running).
-  void refreshEstimate() {
-    final game = _currentGame;
-    if (game == null || !game.estimateDue) return;
-    recalculateStructure();
-    addAuditRecord(
-      'structure_estimate',
-      'AI refreshed the structure estimate for ${game.settings.players} expected players.',
-    );
-    notifyListeners();
-  }
-
-  /// Applies admin edits to future levels (the structure editor modal).
-  /// The active and already-finished levels are left untouched.
-  void applyLevelEdits(List<LevelEdit> edits) {
-    final game = _currentGame;
-    if (game == null || edits.isEmpty) return;
-    _pushUndo();
-    final byLevel = {for (final e in edits) e.level: e};
-    final levels = game.structure.levels.map((l) {
-      final e = byLevel[l.level];
-      if (e == null) return l;
-      return BlindLevel(
-        level: l.level,
-        sb: e.sb,
-        bb: e.bb,
-        ante: e.ante,
-        durationMins: e.durationMins,
-      );
-    }).toList();
-    _currentGame = game.copyWith(
-      structure: _structureWithLevels(game.structure, levels),
-    );
-    addAnnouncement('Level structure updated by admin.', false);
-  }
-
-  /// Replaces the future levels (everything from the current level onward)
-  /// with a renumbered list produced by the structure editor. Inserting or
-  /// removing levels is supported because the whole future segment is swapped,
-  /// not patched by level number (checklist §12.4).
-  void applyFutureLevels(List<BlindLevel> futureLevels) {
-    final game = _currentGame;
-    if (game == null || futureLevels.isEmpty) return;
-    _pushUndo();
-    final startIdx = game.currentLevel - 1;
-    final prefix = startIdx > 0
-        ? game.structure.levels.take(startIdx).toList()
-        : <BlindLevel>[];
-    // Renumber sequentially so inserting a level shifts the rest correctly.
-    var n = startIdx + 1;
-    final renumbered = [
-      for (final l in futureLevels)
-        BlindLevel(
-          level: n++,
-          sb: l.sb,
-          bb: l.bb,
-          ante: l.ante,
-          durationMins: l.durationMins,
-        ),
-    ];
-    final levels = [...prefix, ...renumbered];
-    _currentGame = game.copyWith(
-      structure: _structureWithLevels(game.structure, levels),
-      secondsRemaining: game.secondsRemaining,
-    );
-    addAuditRecord(
-      'structure_edit',
-      'Future levels updated: ${renumbered.length} future level'
-          '${renumbered.length == 1 ? '' : 's'} (was ${(game.structure.levels.length - prefix.length).clamp(0, 999)})',
-    );
-    addAnnouncement('Level structure updated by admin.', false);
-  }
-
-  void confirmFinalTable({
-    List<({String playerId, int seat})>? seating,
-    String? dealerId,
-  }) {
-    final finalists = _currentGame!.players
-        .where((p) => p.active && !p.eliminated)
-        .toList();
-    // The final table seats at most 9 players (checklist 13-025).
-    if (finalists.length > 9) return;
-    _pushUndo();
-    final players = seating == null
-        ? _currentGame!.players
-        : _currentGame!.players.map((p) {
-            for (final s in seating) {
-              if (s.playerId == p.id) {
-                return p.copyWith(seat: s.seat, table: 1);
-              }
-            }
-            return p;
-          }).toList();
-    // Initial dealer for the final table: the admin's choice, or a random
-    // finalist (Tech spec §12.3 — the redraw picks the seats AND the
-    // initial dealer-button position).
-    final dealer =
-        (dealerId != null
-            ? finalists.where((f) => f.id == dealerId).firstOrNull
-            : null) ??
-        (finalists.isEmpty
-            ? null
-            : finalists[Random().nextInt(finalists.length)]);
-    final currentLevelData = _currentGame!.currentLevelData;
-    final durationMins =
-        currentLevelData?.durationMins ?? _currentGame!.structure.levelDuration;
-    _currentGame = _currentGame!.copyWith(
-      players: players,
-      status: LiveGameStatus.running,
-      timerRunning: true,
-      dealerPlayerId: dealer?.id,
-      // The paused level is over — restart the clock for the current level.
-      secondsRemaining: durationMins * 60,
-      levelEndTime: DateTime.now().add(Duration(minutes: durationMins)),
-    );
-    addAnnouncement('Final table! Please take your new seats.', true);
-    if (dealer != null) {
-      addAnnouncement('Dealer on the final table: ${dealer.name}.', true);
-    }
-    pushNotification(
-      AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Final table reached',
-        body:
-            '${_currentGame!.settings.name} — 9 players remain, seats redrawn.',
-        type: NotificationType.game,
-        link: '/player-live',
-        read: false,
-        timestamp: DateTime.now(),
-      ),
-    );
-  }
-
-  void recordFinishOrder(List<String> order) {
-    _pushUndo();
-    _currentGame = _currentGame!.copyWith(
-      finishOrder: order,
-      status: LiveGameStatus.completed,
-      timerRunning: false,
-    );
-    _syncGroupGame();
-    addAnnouncement('We have a winner!', true);
-    pushNotification(
-      AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Tournament finished',
-        body: '${_currentGame!.settings.name} is over — see the final results.',
-        type: NotificationType.result,
-        link: '/result-podium',
-        read: false,
-        timestamp: DateTime.now(),
-      ),
-    );
-  }
-
-  void addAnnouncement(String text, [bool speakOutLoud = true]) {
-    final announcement = Announcement(
-      id: 'ann-${DateTime.now().millisecondsSinceEpoch}',
-      text: text,
-      timestamp: DateTime.now(),
-    );
-    _currentGame = _currentGame!.copyWith(
-      announcements: [..._currentGame!.announcements, announcement],
-    );
-    // Speak key tournament announcements when the admin has enabled voice
-    // and this device is the Audio Master (checklist §15.4). Failure is
-    // swallowed by VoiceService (15-054).
-    if (speakOutLoud && _voiceEnabled && thisDeviceIsAudioMaster) {
-      VoiceService.instance.speak(text);
-    }
-    notifyListeners();
-  }
-
-  /// Appends a new audit record to the history. This history is never deleted.
-  void addAuditRecord(String type, String details) {
-    if (_currentGame == null || _user == null) return;
-    final record = AuditRecord(
-      id: 'audit-${DateTime.now().millisecondsSinceEpoch}',
-      timestamp: DateTime.now(),
-      type: type,
-      actor: _user!.name,
-      details: details,
-    );
-    _currentGame = _currentGame!.copyWith(
-      auditHistory: [..._currentGame!.auditHistory, record],
-    );
-    notifyListeners();
-  }
+  /// Validation message explaining why completion was refused (User Flow
+  /// §4.17 "System validates that every paid position has one player"). Set
+  /// by [recordFinishOrder] when the recorded finish order fails
+  /// [validateCompletion]; cleared again on the next attempt.
+  String? _completionError;
 
   // ── Chat & polls ───────────────────────────────────────────────────────────
-  /// Maximum message length (checklist 08-009).
-  static const int maxChatMessageLength = 1000;
+  /// Basic spam rate limit (tech spec §14.1): at most
+  /// [_chatBurstLimit] messages per sliding [_chatBurstWindow], and no more
+  /// than one message per [_chatMinSendGap] (aligns the client with the
+  /// server-side ~3750ms `rate_limits` throttle so bursts aren't dropped).
+  static const int _chatBurstLimit = 8;
+  static const Duration _chatBurstWindow = Duration(seconds: 30);
+  static const Duration _chatMinSendGap = Duration(milliseconds: 4000);
+  final Map<String, List<DateTime>> _chatSendTimes = <String, List<DateTime>>{};
 
-  /// Sends a chat message. Returns a validation message when the message
-  /// cannot be sent (empty or too long), or null on success.
-  String? sendChatMessage(String? gameId, String body) {
-    if (_user == null) return null;
-    if (body.trim().isEmpty) return 'Message cannot be empty.';
-    if (body.trim().length > maxChatMessageLength) {
-      return 'Message is too long — maximum $maxChatMessageLength characters.';
-    }
-    final msg = ChatMessage(
-      id: 'msg-${DateTime.now().millisecondsSinceEpoch}',
-      authorId: _user!.id,
-      authorName: _user!.name,
-      body: body.trim(),
-      timestamp: DateTime.now(),
-      deleted: false,
-    );
-    if (gameId != null && gameId == _currentGame!.id) {
-      _currentGame = _currentGame!.copyWith(chat: [..._currentGame!.chat, msg]);
-    } else {
-      _setGroup(_currentGroup.copyWith(chat: [..._currentGroup.chat, msg]));
-    }
-    notifyListeners();
-    return null;
-  }
+  // ── Chat unread tracking (Tech Spec §14.1) ────────────────────────────────
+  /// Last-read timestamp per chat scope key. Scope keys are `group:<gid>`
+  /// for the group hub chat and `game:<gid>` for a live game's chat.
+  final Map<String, DateTime> _chatLastRead = {};
 
-  void deleteMessage(String msgId) {
-    _setGroup(
-      _currentGroup.copyWith(
-        chat: _currentGroup.chat
-            .map((m) => m.id == msgId ? m.copyWith(deleted: true) : m)
-            .toList(),
-      ),
-    );
-    _currentGame = _currentGame!.copyWith(
-      chat: _currentGame!.chat
-          .map((m) => m.id == msgId ? m.copyWith(deleted: true) : m)
-          .toList(),
-    );
-    notifyListeners();
-  }
-
-  /// Creates a poll. Returns a validation message when the question or options
-  /// are invalid (empty or duplicate options rejected — checklist 08-015/08-016),
-  /// or null on success.
-  String? createPoll(
-    String question,
-    List<String> options, {
-    bool multi = false,
-  }) {
-    final trimmedQuestion = question.trim();
-    final trimmed = options
-        .map((o) => o.trim())
-        .where((o) => o.isNotEmpty)
-        .toList();
-    if (trimmedQuestion.isEmpty) return 'Poll needs a question.';
-    if (trimmed.length < 2) return 'Poll needs at least two options.';
-    if (trimmed.length > 10) return 'Polls support at most ten options.';
-    final unique = <String>{};
-    for (final o in trimmed) {
-      if (!unique.add(o.toLowerCase())) {
-        return 'Duplicate options are not allowed.';
-      }
-    }
-    final poll = Poll(
-      id: 'poll-${DateTime.now().millisecondsSinceEpoch}',
-      question: trimmedQuestion,
-      options: trimmed,
-      votes: const {},
-      closed: false,
-      createdAt: DateTime.now(),
-      multi: multi,
-    );
-    _setGroup(_currentGroup.copyWith(polls: [..._currentGroup.polls, poll]));
-    pushNotification(
-      AppNotification(
-        id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-        title: 'New poll',
-        body: trimmedQuestion,
-        type: NotificationType.admin,
-        link: '/group',
-        read: false,
-        timestamp: DateTime.now(),
-      ),
-    );
-    notifyListeners();
-    return null;
-  }
-
-  /// Records a vote. For single-choice polls [selected] holds one option;
-  /// for multi-choice polls it holds every option the member ticked.
-  void votePoll(String pollId, List<String> selected) {
-    final userId = _user?.id;
-    if (userId == null) return;
-    _setGroup(
-      _currentGroup.copyWith(
-        polls: _currentGroup.polls.map((p) {
-          if (p.id != pollId || p.closed) return p;
-          final kept = p.multi
-              ? selected
-              : selected.isNotEmpty
-              ? [selected.first]
-              : <String>[];
-          return Poll(
-            id: p.id,
-            question: p.question,
-            options: p.options,
-            votes: {...p.votes, userId: kept},
-            closed: p.closed,
-            createdAt: p.createdAt,
-            multi: p.multi,
-          );
-        }).toList(),
-      ),
-    );
-    notifyListeners();
-  }
-
-  /// Admin closes a poll so it no longer accepts votes (checklist 08-022/08-023).
-  void closePoll(String pollId) {
-    var closedPoll;
-    _setGroup(
-      _currentGroup.copyWith(
-        polls: _currentGroup.polls
-            .map(
-              (p) => p.id == pollId
-                  ? (closedPoll = Poll(
-                      id: p.id,
-                      question: p.question,
-                      options: p.options,
-                      votes: p.votes,
-                      closed: true,
-                      createdAt: p.createdAt,
-                      multi: p.multi,
-                    ))
-                  : p,
-            )
-            .toList(),
-      ),
-    );
-    if (closedPoll != null) {
-      pushNotification(
-        AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-          title: 'Poll closed',
-          body: closedPoll.question,
-          type: NotificationType.admin,
-          link: '/group',
-          read: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
-    notifyListeners();
-  }
-
-  /// Whether the RSVP change deadline (1 hour before scheduled start,
-  /// 07-011/07-012, UAT-025) has passed for the current game.
-  bool get rsvpCutoffPassed => _currentGame?.settings.rsvpCutoffPassed ?? false;
-
-  void setRSVP(Rsvp? rsvp, {String? gameId}) {
-    final userId = _user?.id;
-    if (userId == null) return;
-
-    final isCurrent =
-        gameId == null || (_currentGame != null && gameId == _currentGame!.id);
-
-    // Check cutoff
-    if (isCurrent) {
-      if (_currentGame != null && _currentGame!.settings.rsvpCutoffPassed)
-        return;
-    } else {
-      final g = _currentGroup.games.firstWhere(
-        (g) => g.id == gameId,
-        orElse: () => _currentGame!,
-      );
-      if (g.settings.rsvpCutoffPassed) return;
-    }
-
-    if (isCurrent && _currentGame != null) {
-      var updated = _currentGame!.copyWith(
-        players: _currentGame!.players
-            .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
-            .toList(),
-      );
-      updated = _syncGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
-      updated = _reconcileExcessGuestSlots(
-        updated,
-        userId,
-        rsvp?.guestCount ?? 0,
-      );
-      _currentGame = updated;
-    }
-
-    // Keep the group's copy of the game in sync so badges update on the hub.
-    _setGroup(
-      _currentGroup.copyWith(
-        games: _currentGroup.games.map((g) {
-          if (isCurrent ? (g.id == _currentGame?.id) : (g.id == gameId)) {
-            var updated = g.copyWith(
-              players: g.players
-                  .map((p) => p.id == userId ? p.copyWith(rsvp: rsvp) : p)
-                  .toList(),
-            );
-            updated = _syncGuestSlots(updated, userId, rsvp?.guestCount ?? 0);
-            updated = _reconcileExcessGuestSlots(
-              updated,
-              userId,
-              rsvp?.guestCount ?? 0,
-            );
-            return updated;
-          }
-          return g;
-        }).toList(),
-      ),
-    );
-    notifyListeners();
-  }
-
-  /// Keeps the persisted [GuestSlot] records aligned with a member's "Going +N"
-  /// RSVP count (checklist 07-014). Missing slots are created as unclaimed;
-  /// slots beyond the new count that are still unclaimed are removed. Claimed
-  /// slots are never deleted here — excess claims are handled by
-  /// [_reconcileExcessGuestSlots].
-  LiveGame _syncGuestSlots(LiveGame game, String userId, int newCount) {
-    final existing = game.guestSlots
-        .where((s) => s.inviterId == userId)
-        .toList();
-    final claimed = existing.where((s) => !s.available).toList();
-    final keep = <GuestSlot>[];
-    for (var slot = 1; slot <= newCount; slot++) {
-      final existingForSlot = existing.where((s) => s.slot == slot).firstOrNull;
-      if (existingForSlot != null) {
-        keep.add(existingForSlot);
-      } else {
-        keep.add(
-          GuestSlot(
-            id: 'slot-${DateTime.now().millisecondsSinceEpoch}-$userId-$slot',
-            inviterId: userId,
-            slot: slot,
-            status: GuestSlotStatus.unclaimed,
-          ),
-        );
-      }
-    }
-    // Unclaimed slots beyond the new count are dropped; claimed ones remain.
-    final rest = game.guestSlots
-        .where(
-          (s) =>
-              s.inviterId != userId ||
-              (s.inviterId == userId && s.slot > newCount && !s.available),
-        )
-        .toList();
-    final slots = [
-      ...rest,
-      ...keep,
-      ...claimed.where((s) => s.slot <= newCount),
-    ];
-    // Deduplicate (id-based) to be safe.
-    final seen = <String>{};
-    final merged = <GuestSlot>[];
-    for (final s in slots) {
-      if (seen.add(s.id)) merged.add(s);
-    }
-    return game.copyWith(guestSlots: merged);
-  }
-
-  /// Checklist 07-015 / 20-030 / 20-031: when a player lowers their guest
-  /// count, unused guest slots beyond the new count are released safely.
-  /// Unconfirmed requests are removed; guests already confirmed on an excess
-  /// slot are kept but surfaced to the administrator as a conflict.
-  LiveGame _reconcileExcessGuestSlots(
-    LiveGame game,
-    String userId,
-    int newCount,
-  ) {
-    final excess = game.players
-        .where(
-          (p) =>
-              p.isGuest &&
-              p.inviterId == userId &&
-              (p.guestSlot ?? 0) > newCount,
-        )
-        .toList();
-    if (excess.isEmpty) return game;
-    final excessIds = excess.map((p) => p.id).toSet();
-    final confirmed = excess.where((p) => p.confirmed).toList();
-    final updated = game.copyWith(
-      players: game.players.where((p) => !excessIds.contains(p.id)).toList(),
-      pendingGuests: game.pendingGuests
-          .where((p) => !excessIds.contains(p.id))
-          .toList(),
-    );
-    if (confirmed.isNotEmpty) {
-      pushNotification(
-        AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-          title: 'RSVP reduced after guest check-in',
-          body:
-              '${confirmed.map((p) => p.name).join(', ')} '
-              '${confirmed.length == 1 ? 'is' : 'are'} confirmed on a guest slot '
-              'the inviter just removed. Review before seating.',
-          type: NotificationType.admin,
-          link: '/check-in',
-          read: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
-    return updated;
-  }
-
-  /// Sends an RSVP reminder to every member who has not yet responded
-  /// (checklist 04-023/04-024). Pushes a notification per member so the
-  /// (dummy) inbox shows the reminders, and logs the action for the admin.
-  void sendRSVPReminders(String gameId) {
-    final game = gameById(gameId);
-    if (game == null || _user == null) return;
-    final target = _currentGame?.id == gameId ? _currentGame : game;
-    if (target == null) return;
-    final pending = target.players
-        .where((p) => !p.isGuest && p.rsvp == null)
-        .toList();
-    if (pending.isEmpty) return;
-    for (final _ in pending) {
-      pushNotification(
-        AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
-          title: 'RSVP reminder',
-          body:
-              'You haven\'t responded to ${target.settings.name} '
-              '(${target.settings.date} at ${target.settings.time}). '
-              'Let the host know if you\'re in.',
-          type: NotificationType.rsvp,
-          link: '/invitation',
-          read: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
-    addAuditRecord(
-      'rsvp_reminder',
-      'Reminder sent to ${pending.length} member'
-          '${pending.length == 1 ? '' : 's'} who have not responded.',
-    );
-    addAnnouncement(
-      'Reminder sent to ${pending.length} player'
-      '${pending.length == 1 ? '' : 's'} without an RSVP.',
-      false,
-    );
-    notifyListeners();
-  }
+  /// Persists the member's own RSVP dot-path patch against a game doc (the one
+  /// open on screen or any game in the current group — chat invite card).
+  ///
+  /// The optimistic overlay ([_pendingOwnRsvp]) is held for the entire retry
+  /// window and only dropped once every attempt has failed — so a tap never
+  /// "un-selects itself" while the group id is still resolving or the auth
+  /// token is still propagating right after login.
+  final Map<String, int> _checkInReassertCount = {};
 
   // ── Code lookup ────────────────────────────────────────────────────────────
-  CodeLookupResult enterGameCode(String code) {
-    final c = code.trim().toUpperCase();
-    if (c == MockData.demoGame.publicCode || c == MockData.demoGame.tvCode) {
-      _currentGame = MockData.demoGame;
-      notifyListeners();
-      return c == MockData.demoGame.tvCode
-          ? CodeLookupResult.tv
-          : CodeLookupResult.game;
-    }
-    return CodeLookupResult.notFound;
-  }
+  /// Sliding-window throttle for join-code lookups (spec §22 rate limits).
+  /// Firestore rules cannot count reads, so the client caps itself at 10
+  /// lookups per minute per device.
+  final List<DateTime> _codeLookupTimes = <DateTime>[];
 
   // ── Cash game ──────────────────────────────────────────────────────────────
   CashSession? _cashSession;
-  CashSession? get cashSession => _cashSession;
 
-  /// Completed cash sessions shown in history (checklist 16-002). Seeded with
-  /// a demo record so the section is populated out of the box.
-  List<CashSession> _cashHistory = [
-    MockData.demoCashSession.copyWith(
-      isCompleted: true,
-      players: const [
-        CashPlayer(
-          id: 'cp-0',
-          name: 'Daniel',
-          stack: 0,
-          totalBuyIns: 60,
-          buyInCount: 2,
-          cashedOut: 82,
-        ),
-        CashPlayer(
-          id: 'cp-1',
-          name: 'Marcus',
-          stack: 0,
-          totalBuyIns: 20,
-          buyInCount: 1,
-          cashedOut: 14,
-        ),
-        CashPlayer(
-          id: 'cp-2',
-          name: 'Sophia',
-          stack: 0,
-          totalBuyIns: 40,
-          buyInCount: 2,
-          cashedOut: 38,
-        ),
-      ],
-    ),
-  ];
-  List<CashSession> get cashHistory => List.unmodifiable(_cashHistory);
-
-  void startCashGame(CashSessionSettings settings, List<String> playerNames) {
-    _cashSession = CashSession(
-      id: 'cash-${DateTime.now().millisecondsSinceEpoch}',
-      settings: settings,
-      isCompleted: false,
-      startTime: DateTime.now(),
-      players: List.generate(
-        playerNames.length,
-        (i) => CashPlayer(
-          id: 'cp-${DateTime.now().millisecondsSinceEpoch}-$i',
-          name: playerNames[i],
-          stack: settings.minBuyIn,
-          totalBuyIns: settings.minBuyIn,
-          buyInCount: 1,
-          cashedOut: 0,
-        ),
-      ),
-    );
-    notifyListeners();
-  }
-
-  /// Records a cash buy-in / rebuy for a player (or adds a brand-new player).
-  /// Returns a validation message when the amount falls outside the session's
-  /// [CashSessionSettings.minBuyIn]..[CashSessionSettings.maxBuyIn] bounds, or
-  /// null on success.
-  String? cashBuyIn(
-    String playerIdOrName,
-    double amount, {
-    bool isNew = false,
-  }) {
-    final session = _cashSession;
-    if (session == null) return 'No active cash session.';
-    if (amount <= 0) return 'Amount must be positive.';
-    final min = session.settings.minBuyIn;
-    final max = session.settings.maxBuyIn;
-    // No currency symbols in the primary interface (User Flow spec §3.4).
-    if (amount < min) return 'Minimum buy-in is $min.';
-    if (amount > max) return 'Maximum buy-in is $max.';
-    if (isNew) {
-      _cashSession = session.copyWith(
-        players: [
-          ...session.players,
-          CashPlayer(
-            id: 'cp-${DateTime.now().millisecondsSinceEpoch}',
-            name: playerIdOrName,
-            stack: amount,
-            totalBuyIns: amount,
-            buyInCount: 1,
-            cashedOut: 0,
-          ),
-        ],
-      );
-    } else {
-      _cashSession = session.copyWith(
-        players: session.players
-            .map(
-              (p) => p.id == playerIdOrName
-                  ? p.copyWith(
-                      stack: p.stack + amount,
-                      totalBuyIns: p.totalBuyIns + amount,
-                      buyInCount: p.buyInCount + 1,
-                    )
-                  : p,
-            )
-            .toList(),
-      );
-    }
-    notifyListeners();
-    return null;
-  }
-
-  void cashCashOut(String playerId, double amount) {
-    final session = _cashSession;
-    if (session == null) return;
-    _cashSession = session.copyWith(
-      players: session.players
-          .map(
-            (p) =>
-                p.id == playerId ? p.copyWith(cashedOut: amount, stack: 0) : p,
-          )
-          .toList(),
-    );
-    notifyListeners();
-  }
-
-  /// Corrects an incorrectly entered buy-in, top-up or cash-out (checklist
-  /// 17-020 / 17-028 / 20-047). All totals are recomputed from the corrected
-  /// fields; stack/total/buyInCount/cashedOut that are null are left as-is.
-  void cashEditPlayer(
-    String playerId, {
-    double? stack,
-    double? totalBuyIns,
-    int? buyInCount,
-    double? cashedOut,
-  }) {
-    final session = _cashSession;
-    if (session == null) return;
-    _cashSession = session.copyWith(
-      players: session.players
-          .map(
-            (p) => p.id == playerId
-                ? CashPlayer(
-                    id: p.id,
-                    name: p.name,
-                    stack: stack ?? p.stack,
-                    totalBuyIns: totalBuyIns ?? p.totalBuyIns,
-                    buyInCount: buyInCount ?? p.buyInCount,
-                    cashedOut: cashedOut ?? p.cashedOut,
-                  )
-                : p,
-          )
-          .toList(),
-    );
-    notifyListeners();
-  }
-
-  void endCashGame({String? unresolvedNote}) {
-    final session = _cashSession;
-    if (session == null) return;
-    _cashSession = session.copyWith(
-      isCompleted: true,
-      unresolvedNote: unresolvedNote,
-    );
-    _cashHistory = [_cashSession!, ..._cashHistory];
-    notifyListeners();
-    clearCashSession();
-  }
-
-  /// Discards the current cash session so a fresh game can be started.
-  void clearCashSession() {
-    _cashSession = null;
-    RecoveryService.clearCashSession();
-    notifyListeners();
-  }
+  /// Completed cash sessions shown in history (checklist 16-002). Cloud-backed
+  /// per group via [completedCashSessionsStream]; locally appended when the
+  /// backend is unavailable.
+  List<CashSession> _cashHistory = const [];
 
   // ── Notifications ──────────────────────────────────────────────────────────
-  List<AppNotification> _notifications = List.of(MockData.demoNotifications);
-  List<AppNotification> get notifications => _notifications;
-
-  int get unreadCount => _notifications.where((n) => !n.read).length;
-
-  void markAllRead() {
-    _notifications = _notifications.map((n) => n.copyWith(read: true)).toList();
-    notifyListeners();
-  }
-
-  void markNotificationRead(String id) {
-    _notifications = _notifications
-        .map((n) => n.id == id ? n.copyWith(read: true) : n)
-        .toList();
-    notifyListeners();
-  }
-
-  /// Appends a notification to the top of the inbox (checklist §08).
-  void pushNotification(AppNotification notification) {
-    _notifications = [notification, ..._notifications];
-    notifyListeners();
-  }
+  /// Replaced by the live inbox stream once user data is subscribed; empty
+  /// until then (no demo seed — a fresh account starts clean).
+  List<AppNotification> _notifications = const [];
 
   // ── Voice & misc ───────────────────────────────────────────────────────────
   bool _voiceEnabled = true;
-  bool get voiceEnabled => _voiceEnabled;
 
-  void toggleVoice() {
-    _voiceEnabled = !_voiceEnabled;
-    notifyListeners();
-  }
+  bool _showAppTour = true;
 
-  void setVoiceEnabled(bool value) {
-    if (_voiceEnabled == value) return;
-    _voiceEnabled = value;
-    notifyListeners();
-  }
-
-  /// Audio Master (checklist 15-041/15-042/15-043): the administrator manually
-  /// selects which connected device plays announcements. When no master is
-  /// chosen (`null`) every device with voice enabled may announce — the
-  /// backwards-compatible default.
-  ///
-  /// `_audioMasterDeviceId` is `null` when no master is selected; otherwise it
-  /// holds the device id of the chosen Audio Master. `thisDeviceIsAudioMaster`
-  /// is true when this device may speak.
-  String? _audioMasterDeviceId;
-
-  /// Stable per-session id for the current browser/device.
-  String? _thisDeviceId;
-  String get thisDeviceId =>
-      _thisDeviceId ??= 'dev-${DateTime.now().millisecondsSinceEpoch}';
-
-  String? get audioMasterDeviceId => _audioMasterDeviceId;
-
-  /// Whether announcements may play on this device (no master selected, or
-  /// this device is the master).
-  bool get thisDeviceIsAudioMaster =>
-      _audioMasterDeviceId == null || _audioMasterDeviceId == thisDeviceId;
-
-  /// Selects this device as the Audio Master. Only this device will announce.
-  void setAudioMasterDevice() {
-    if (_audioMasterDeviceId == thisDeviceId) return;
-    _audioMasterDeviceId = thisDeviceId;
-    notifyListeners();
-  }
-
-  /// Clears the Audio Master selection — every device with voice enabled may
-  /// announce again.
-  void clearAudioMasterDevice() {
-    if (_audioMasterDeviceId == null) return;
-    _audioMasterDeviceId = null;
-    notifyListeners();
-  }
-
-  /// Whether eliminated-player names are announced (checklist 15-053) —
-  /// optional per tournament and disabled by default.
-  bool get announceEliminations =>
-      _currentGame?.settings.announceEliminations ?? false;
-
-  void setAnnounceEliminations(bool value) {
-    final game = _currentGame;
-    if (game == null || game.settings.announceEliminations == value) return;
-    _currentGame = game.copyWith(
-      settings: game.settings.copyWith(announceEliminations: value),
-    );
-    _syncGroupGame();
-    notifyListeners();
-  }
+  // Audio Master (checklist 15-041/15-042/15-043, User Flow §7.4): the chosen
+  // speaking device now lives on the GAME (`LiveGame.audioMasterDeviceId`) and
+  // this device's identity comes from the repository's persisted device id.
+  // Both used to be per-session provider fields, which meant the choice was
+  // invisible to other devices and lost on every reload — so every open tab
+  // announced at once. See `thisDeviceIsAudioMaster`.
 
   // ── Account preferences (settings screen) ─────────────────────────────────
   bool _soundsEnabled = true;
-  bool get soundsEnabled => _soundsEnabled;
-
-  void setSoundsEnabled(bool value) {
-    if (_soundsEnabled == value) return;
-    _soundsEnabled = value;
-    notifyListeners();
-  }
 
   bool _compactSummary = false;
-  bool get compactSummary => _compactSummary;
-
-  void setCompactSummary(bool value) {
-    if (_compactSummary == value) return;
-    _compactSummary = value;
-    notifyListeners();
-  }
 
   /// SMS/text notifications for RSVPs and game events.
   bool _smsEnabled = false;
-  bool get smsEnabled => _smsEnabled;
-
-  void setSmsEnabled(bool value) {
-    if (_smsEnabled == value) return;
-    _smsEnabled = value;
-    notifyListeners();
-  }
 
   /// Theme preference: one of "dark", "light", "system".
   String _themePreference = 'dark';
-  String get themePreference => _themePreference;
 
-  void setThemePreference(String value) {
-    if (_themePreference == value) return;
-    _themePreference = value;
-    notifyListeners();
-  }
+  /// Color theme id — one of the [ThemePalettes.all] ids.
+  String _colorTheme = 'red';
 
   /// Id of the chip set used as the default for new tournaments; null = the
   /// standard set.
   String? _defaultChipSetId;
-  String? get defaultChipSetId => _defaultChipSetId;
-
-  void setDefaultChipSet(String? id) {
-    if (_defaultChipSetId == id) return;
-    _defaultChipSetId = id;
-    notifyListeners();
-  }
 
   /// Selected avatar colour index (into the app's avatar palette).
   int _avatarColorIndex = 0;
-  int get avatarColorIndex => _avatarColorIndex;
-
-  void setAvatarColor(int index) {
-    if (_avatarColorIndex == index) return;
-    _avatarColorIndex = index;
-    notifyListeners();
-  }
-
-  /// Deletes the signed-in account and invalidates every session so a deleted
-  /// account cannot keep using a stale live game (checklist 05-014).
-  void deleteAccount() {
-    _user = null;
-    _currentGame = null;
-    _cashSession = null;
-    _guestSession = null;
-    _restoredFromRecovery = false;
-    _recoveryTime = null;
-    RecoveryService.clearGame();
-    RecoveryService.clearCashSession();
-    RecoveryService.clearGuestSession();
-    notifyListeners();
-  }
 
   String _guestCode = '';
-  String get guestCode => _guestCode;
-
-  void setGuestCode(String code) {
-    _guestCode = code;
-    notifyListeners();
-  }
 
   // ── Drawer state ───────────────────────────────────────────────────────────
   bool _isDrawerOpen = false;
-  bool get isDrawerOpen => _isDrawerOpen;
 
-  void openDrawer() {
-    if (_isDrawerOpen) return;
-    _isDrawerOpen = true;
-    notifyListeners();
+  // ── App-wide constants ─────────────────────────────────────────────────────
+  /// Maximum message length (checklist 08-009).
+  static const int maxChatMessageLength = 1000;
+
+  // ── Admin verdict (shared by every domain; the class body needs it too) ────
+  /// True when the signed-in user administers the current group (owner or a
+  /// member row flagged `isAdmin`). Resilient to the transient empty-group
+  /// window via [_adminVerdictByGroup].
+  bool get isAdmin {
+    final user = _user;
+    if (user == null) return false;
+    final group = _currentGroup;
+    final gid = _currentGroupId ?? group.id;
+    final resolvable =
+        group.id.isNotEmpty && (group.ownerId.isNotEmpty || group.members.isNotEmpty);
+    if (resolvable) {
+      final verdict = group.ownerId == user.id ||
+          group.members.any((m) => m.id == user.id && m.isAdmin);
+      if (gid.isNotEmpty) _adminVerdictByGroup[gid] = verdict;
+      return verdict;
+    }
+    // Placeholder group during a bundle re-subscription — reuse the last
+    // real verdict for this group if we have one.
+    if (gid.isNotEmpty && _adminVerdictByGroup.containsKey(gid)) {
+      return _adminVerdictByGroup[gid]!;
+    }
+    return false;
   }
 
-  void closeDrawer() {
-    if (!_isDrawerOpen) return;
-    _isDrawerOpen = false;
-    notifyListeners();
+  /// Application-level UI state (no business logic / backend).
+  AppProvider({String? initialColorTheme, String? initialThemePreference}) {
+    if (initialColorTheme != null) _colorTheme = initialColorTheme;
+    if (initialThemePreference != null) _themePreference = initialThemePreference;
+    _currentGame = null;
+    AppProviderTimer(this)._startTick();
+    AppProviderUserData(this)._loadRecovery();
+    _initConnectivity();
+    // Firebase may be unavailable (widget tests run before initializeApp);
+    // degrade gracefully by marking auth resolved so route guards open up.
+    try {
+      _authSub = _repo.authStateChanges().listen(
+          (u) => AppProviderAuth(this)._onAuthStateChanged(u));
+    } catch (_) {
+      _backendUp = false;
+      _authReady = true;
+    }
   }
 
-  void toggleDrawer() {
-    _isDrawerOpen = !_isDrawerOpen;
-    notifyListeners();
+  /// Initializes real connectivity monitoring (spec §15).
+  void _initConnectivity() {
+    try {
+      _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+        final wasOffline = _isOffline;
+        _isOffline = results.every((r) => r == ConnectivityResult.none);
+        if (!wasOffline && _isOffline) {
+          AppProviderNotificationsSettings(this).pushNotification(
+            AppNotification(
+              id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+              title: 'Connection warning',
+              body: 'You are offline. Real-time sync is paused.',
+              type: NotificationType.system,
+              link: '/',
+              read: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        }
+        if (wasOffline && !_isOffline) {
+          _hasReconnected = true;
+        }
+        if (!_disposed) notifyListeners();
+      });
+    } catch (_) {
+      // connectivity_plus unavailable (tests) — stay with manual toggle
+    }
+  }
+
+  /// Clears the reconnection banner after the user acknowledges it.
+  void clearReconnectedBanner() {
+    _hasReconnected = false;
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Demo-only toggle: flips the connectivity indicator. While offline every
+  /// change is still persisted to local storage (RecoveryService), so nothing
+  /// is lost and the app "reconnects" on tap.
+  void toggleOffline() {
+    _isOffline = !_isOffline;
+    if (!_isOffline) _hasReconnected = true;
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+    if (_isTickUpdate) return;
+    _lastSync = DateTime.now();
+    AppProviderCloudSync(this)._syncGameToCloud();
+    AppProviderCloudSync(this)._ensureRequestsSubscription();
+    final game = _currentGame;
+    if (game == null) {
+      RecoveryService.clearGame();
+    } else if (isAdmin) {
+      // Crash-resume snapshots belong to the ADMIN only — they are the device
+      // that owns the live game document. Saving one on a member's device made
+      // their optimistic RSVP look "persisted" across a reload while the
+      // server never received it (and, worse, the restored copy then blocked
+      // all remote adoption — see [_dropRecoveryIfNotAuthority]).
+      RecoveryService.saveGame(game);
+    }
+    final session = _cashSession;
+    if (session != null && !session.isCompleted) {
+      RecoveryService.saveCashSession(session);
+    } else {
+      RecoveryService.clearCashSession();
+    }
   }
 
   @override
   void dispose() {
+    _disposed = true;
+    _requestsSub?.cancel();
     _ticker?.cancel();
+    _serverTimeRecalibration?.cancel();
+    _authSub?.cancel();
+    _connectivitySub?.cancel();
+    AppProviderUserData(this)._teardownUserData();
     super.dispose();
   }
+}
+
+/// Result of a guest slot resolve (booking vs re-identification vs conflict).
+enum GuestCheckInStatus { booked, confirmed, taken, failed }
+
+class GuestCheckInResult {
+  const GuestCheckInResult(this.status, {this.message});
+
+  final GuestCheckInStatus status;
+
+  /// Optional user-facing message, e.g. the conflict explanation when the slot
+  /// belongs to a different name.
+  final String? message;
+
+  /// True when the guest now owns a booking on the slot ([booked] just made
+  /// one; [confirmed] reused the one already under their name).
+  bool get ok =>
+      status == GuestCheckInStatus.booked || status == GuestCheckInStatus.confirmed;
 }

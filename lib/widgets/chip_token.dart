@@ -40,7 +40,7 @@ class ChipToken extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.3),
                   width: 2,
                 ),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
                     color: AppColors.shadowDark,
                     blurRadius: 6,
@@ -56,7 +56,7 @@ class ChipToken extends StatelessWidget {
                       weight: FontWeight.w700,
                       color: Colors.white,
                     ).copyWith(
-                      shadows: const [
+                      shadows: [
                         Shadow(
                           color: AppColors.shadowDeep,
                           blurRadius: 2,

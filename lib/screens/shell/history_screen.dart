@@ -15,6 +15,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_tabs.dart';
 import '../../widgets/medal_icon.dart';
+import '../../widgets/group_switcher.dart';
 import '../../responsive/responsive.dart';
 
 /// History + leaderboard mirroring the web `HistoryPage`.
@@ -35,7 +36,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final allPast = group.pastGames;
     final pastGames = allPast;
     final userId = app.user?.id;
-    final isAdmin = app.user?.isAdmin ?? false;
+    final isAdmin = app.isAdmin;
 
     final myGames = pastGames
         .where((g) => g.players.any((p) => p.id == userId))
@@ -48,26 +49,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'History',
-            style: AppTypography.display(
-              size: AppFontSizes.xxxl,
-              weight: FontWeight.w700,
-            ),
-          ),
+          const GroupContextHeader(title: 'History'),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            '${group.name} · all past tournaments',
+            group.name.isNotEmpty
+                ? '${group.name} · all past games'
+                : 'All past games',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          // Personal stats — the FIVE basic aggregate statistics only
-          // (Tech §15.2: "No ROI, profit, investment, winnings, rebuy/add-on
-          // history, graphs, streaks or advanced filters"). Audit fix C4:
-          // P&L / ROI% / ITM% / Bubbles / Rebuys / Add-ons and the range
-          // filter were removed for every role.
+          // Personal stats — the FIVE basic aggregate statistics (Tech §15.2:
+          // "No ROI, profit, investment, winnings, rebuy/add-on history,
+          // graphs, streaks or advanced filters").
           GridView.count(
             crossAxisCount: isMobile ? 3 : 5,
             shrinkWrap: true,
@@ -88,6 +83,35 @@ class _HistoryScreenState extends State<HistoryScreen> {
               _MiniStat(label: 'KOs', value: '${myStats.knockouts}'),
             ],
           ),
+          // Admin P&L row — only organisers see financial totals (spec §2.4).
+          if (isAdmin) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              borderColor: AppColors.primary.withValues(alpha: 0.2),
+              child: Row(
+                children: [
+                  Icon(Icons.account_balance_wallet_outlined, size: 16, color: AppColors.primary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    'Organizer P&L',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    Formatters.money('', myStats.totalPnl),
+                    style: AppTypography.monoSm.copyWith(
+                      color: myStats.totalPnl >= 0 ? AppColors.success : AppColors.destructive,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.xl),
           AppTabs(
             tabs: const [
@@ -110,13 +134,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  // Only the FIVE basic aggregate statistics (Tech §15.2). No financial
-  // fields — P&L, ROI, ITM, bubbles, rebuys and add-ons were removed.
-  ({int played, int wins, int podium, double avgFinish, int knockouts})
+  // Only the FIVE basic aggregate statistics (Tech §15.2). Admins also
+  // get a P&L row via the extra totalPnl field.
+  ({int played, int wins, int podium, double avgFinish, int knockouts, double totalPnl})
   _computeMyStats(List<LiveGame> myGames, String? userId) {
     var played = 0, wins = 0, podium = 0, knockouts = 0;
     var totalPlacements = 0;
     var placedGames = 0;
+    double totalPnl = 0;
     for (final g in myGames) {
       played++;
       final pos = g.finishOrder.indexOf(userId ?? '');
@@ -131,6 +156,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (me != null) {
         knockouts += me.knockouts;
       }
+      // Admin P&L: prize won minus (buy-in + rebuy cost × rebuys + add-on cost)
+      final prize = g.structure.prizes
+          .where((pr) => pr.place == (pos >= 0 ? g.finishOrder.length - pos : -1))
+          .fold<int>(0, (s, pr) => s + pr.amount);
+      final cost = g.settings.buyIn +
+          (g.settings.rebuyCost ?? g.settings.buyIn) * (me?.rebuys ?? 0) +
+          (g.settings.addOnCost ?? g.settings.buyIn) * ((me?.hasAddOn ?? false) ? 1 : 0);
+      totalPnl += prize - cost;
     }
     final avgFinish = placedGames == 0 ? 0.0 : totalPlacements / placedGames;
     return (
@@ -139,6 +172,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       podium: podium,
       avgFinish: avgFinish,
       knockouts: knockouts,
+      totalPnl: totalPnl,
     );
   }
 
@@ -148,7 +182,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           children: [
-            const Icon(
+            Icon(
               Icons.style_outlined,
               size: AppFontSizes.xxxl,
               color: AppColors.icon,
@@ -180,7 +214,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           children: [
-            const Icon(
+            Icon(
               Icons.payments_outlined,
               size: AppFontSizes.xxxl,
               color: AppColors.icon,
@@ -209,7 +243,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget _buildLeaderboard(List<LiveGame> pastGames, String? userId) {
     final statsMap = <String, _LbEntry>{};
     for (final game in pastGames) {
-      for (final p in game.players) {
+      for (final p in game.players.where((p) => !p.isGuest)) {
         final entry = statsMap.putIfAbsent(p.id, () => _LbEntry(name: p.name));
         entry.played++;
         entry.knockouts += p.knockouts;
@@ -235,7 +269,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: Text(
@@ -263,7 +297,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ? AppColors.primary.withValues(alpha: 0.04)
                       : Colors.transparent,
                   border: i < sorted.length - 1
-                      ? const Border(
+                      ? Border(
                           bottom: BorderSide(color: AppColors.border),
                         )
                       : null,
@@ -298,7 +332,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             : sorted[i].value.name[0].toUpperCase(),
                         style: AppTypography.bodyXs.copyWith(
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppColors.foreground,
                         ),
                       ),
                     ),
@@ -341,6 +375,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           value: '${sorted[i].value.played}',
                           label: 'played',
                         ),
+                        if (sorted[i].value.knockouts > 0) ...[
+                          const SizedBox(width: AppSpacing.lg),
+                          _LbStat(
+                            value: '${sorted[i].value.knockouts}',
+                            label: 'KOs',
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -363,11 +404,10 @@ class _LbEntry {
 }
 
 class _MiniStat extends StatelessWidget {
-  const _MiniStat({required this.label, required this.value, this.color});
+  const _MiniStat({required this.label, required this.value});
 
   final String label;
   final String value;
-  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -386,7 +426,7 @@ class _MiniStat extends StatelessWidget {
               style: AppTypography.mono(
                 size: AppFontSizes.md,
                 weight: FontWeight.w700,
-                color: color ?? AppColors.foreground,
+                color: AppColors.foreground,
               ),
             ),
           ),
@@ -458,7 +498,7 @@ class _CashHistoryRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             alignment: Alignment.center,
-            child: const Icon(
+            child: Icon(
               Icons.payments_outlined,
               size: 20,
               color: AppColors.icon,
@@ -526,6 +566,7 @@ class _HistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final myPos = game.finishOrder.indexOf(userId ?? '');
     final placement = myPos >= 0 ? game.finishOrder.length - myPos : null;
+    final me = game.players.where((p) => p.id == userId).firstOrNull;
     final winnerId = game.finishOrder.isNotEmpty ? game.finishOrder.last : null;
     final winner = game.players.where((p) => p.id == winnerId).firstOrNull;
     final playersCount = game.players.where((p) => !p.isGuest).length;
@@ -541,7 +582,10 @@ class _HistoryRow extends StatelessWidget {
               0;
     final net = placement == null
         ? null
-        : prizeForPlacement - game.settings.buyIn;
+        : prizeForPlacement -
+            game.settings.buyIn -
+            ((me?.rebuys ?? 0) * (game.settings.rebuyCost ?? game.settings.buyIn)) -
+            ((me?.hasAddOn ?? false) ? (game.settings.addOnCost ?? game.settings.buyIn) : 0);
 
     return AppCard(
       onTap: () {
@@ -566,7 +610,7 @@ class _HistoryRow extends StatelessWidget {
                 alignment: Alignment.center,
                 child: placement != null && placement <= 3
                     ? MedalIcon(placement, size: AppFontSizes.xl)
-                    : const Icon(
+                    : Icon(
                         Icons.style_outlined,
                         size: AppFontSizes.xl,
                         color: AppColors.icon,

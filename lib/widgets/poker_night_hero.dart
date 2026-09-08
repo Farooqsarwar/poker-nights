@@ -63,7 +63,7 @@ class _PokerNightHeroState extends State<PokerNightHero>
             height: isMobile ? null : height,
             width: double.infinity,
             child: DecoratedBox(
-              decoration: const BoxDecoration(color: AppColors.background),
+              decoration: BoxDecoration(color: AppColors.background),
               child: isMobile
                   ? Column(
                       mainAxisSize: MainAxisSize.min,

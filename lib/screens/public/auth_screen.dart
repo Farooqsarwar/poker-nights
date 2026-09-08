@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/colors.dart';
+import '../../repositories/firebase_repository.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
@@ -64,7 +66,25 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  void _handleSubmit() async {
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _error = null;
+      _loading = true;
+    });
+    final app = context.read<AppProvider>();
+    final error = await app.loginWithGoogle();
+    if (!mounted) return;
+    setState(() => _loading = false);
+    if (error == null) {
+      // Success — router redirect will take over once auth state updates.
+      context.go(widget.next ?? RoutePaths.home);
+    } else if (error.isNotEmpty) {
+      // Empty string == user cancelled; don't show an error.
+      setState(() => _error = error);
+    }
+  }
+
+  Future<void> _handleSubmit() async {
     setState(() {
       _error = null;
       _success = null;
@@ -78,20 +98,7 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
-    if (_isForgot) {
-      final app = context.read<AppProvider>();
-      final exists = app.requestPasswordReset(email);
-      if (!exists) {
-        setState(() => _error = 'No account found for that email.');
-        return;
-      }
-      setState(
-        () => _success = 'A password reset link has been sent to $email.',
-      );
-      return;
-    }
-
-    if (_passwordController.text.length < 8) {
+    if (!_isForgot && _passwordController.text.length < 8) {
       setState(() => _error = 'Password must be at least 8 characters.');
       return;
     }
@@ -107,35 +114,39 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 600));
+    final app = context.read<AppProvider>();
+
+    final String? error;
+    switch (widget.mode) {
+      case AuthMode.login:
+        error = await app.login(email, _passwordController.text);
+      case AuthMode.register:
+        error = await app.register(
+          _nameController.text.trim(),
+          email,
+          _passwordController.text,
+        );
+      case AuthMode.forgotPassword:
+        error = await app.requestPasswordReset(email);
+    }
     if (!mounted) return;
 
-    final app = context.read<AppProvider>();
-    final dest = widget.next ?? RoutePaths.home;
-    if (widget.mode == AuthMode.login) {
-      final ok = app.login(email, _passwordController.text);
-      if (!ok) {
-        setState(() {
-          _loading = false;
-          _error = 'Incorrect email or password.';
-        });
-        return;
-      }
-    } else {
-      final ok = app.register(
-        _nameController.text.trim(),
-        email,
-        _passwordController.text,
-      );
-      if (!ok) {
-        setState(() {
-          _loading = false;
-          _error = 'An account already exists for that email.';
-        });
-        return;
-      }
+    if (error != null) {
+      setState(() {
+        _loading = false;
+        _error = error;
+      });
+      return;
     }
-    context.go(dest);
+
+    if (_isForgot) {
+      setState(() {
+        _loading = false;
+        _success = 'A password reset link has been sent to $email.';
+      });
+      return;
+    }
+    context.go(widget.next ?? RoutePaths.home);
   }
 
   /// A leading field icon padded to sit inside the input pill.
@@ -267,6 +278,33 @@ class _AuthScreenState extends State<AuthScreen> {
                       style: AppTypography.display(size: AppFontSizes.xxl),
                     ),
                     const SizedBox(height: AppSpacing.xl),
+                    // Google Sign-In — shown on login & register, not on
+                    // forgot-password (which is email-only by nature).
+                    if (!_isForgot) ...[
+                      _GoogleSignInButton(
+                        loading: _loading,
+                        onPressed: _handleGoogleSignIn,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: AppColors.border)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                            ),
+                            child: Text(
+                              'or continue with email',
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ),
+                          Expanded(child: Divider(color: AppColors.border)),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
                     if (_isRegister) ...[
                       AppTextField(
                         controller: _nameController,
@@ -312,10 +350,13 @@ class _AuthScreenState extends State<AuthScreen> {
                         alignment: Alignment.centerRight,
                         child: InkWell(
                           onTap: () => context.go(RoutePaths.forgotPassword),
-                          child: Text(
-                            'Forgot Password?',
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.primary,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            child: Text(
+                              'Forgot Password?',
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.primary,
+                              ),
                             ),
                           ),
                         ),
@@ -362,51 +403,46 @@ class _AuthScreenState extends State<AuthScreen> {
                         context,
                         prompt: "Don't have an account? ",
                         action: 'Create Account',
-                        onTap: () => context.go(RoutePaths.register),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Center(
-                        child: SelectableText.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: 'Demo: ',
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                              TextSpan(
-                                text: 'daniel@example.com',
-                                style: AppTypography.monoXs.copyWith(
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              TextSpan(
-                                text: ' / ${AppProvider.seedPassword}',
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                            ],
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
+                        onTap: () {
+                          // Carry the deep-link destination through to the
+                          // register screen so it isn't lost mid-flow (C2).
+                          final next = widget.next;
+                          if (next != null) {
+                            context.go(
+                              '${RoutePaths.register}?next=${Uri.encodeComponent(next)}',
+                            );
+                          } else {
+                            context.go(RoutePaths.register);
+                          }
+                        },
                       ),
                     ] else if (_isRegister) ...[
                       _switchLine(
                         context,
                         prompt: 'Already have an account? ',
                         action: 'Sign In',
-                        onTap: () => context.go(RoutePaths.login),
+                        onTap: () {
+                          final next = widget.next;
+                          if (next != null) {
+                            context.go(
+                              '${RoutePaths.login}?next=${Uri.encodeComponent(next)}',
+                            );
+                          } else {
+                            context.go(RoutePaths.login);
+                          }
+                        },
                       ),
                     ] else ...[
                       Center(
                         child: InkWell(
                           onTap: () => context.go(RoutePaths.login),
-                          child: Text(
-                            'Back to Sign In',
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.primary,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            child: Text(
+                              'Back to Sign In',
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.primary,
+                              ),
                             ),
                           ),
                         ),
@@ -441,11 +477,14 @@ class _AuthScreenState extends State<AuthScreen> {
               alignment: PlaceholderAlignment.middle,
               child: InkWell(
                 onTap: onTap,
-                child: Text(
-                  action,
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                  child: Text(
+                    action,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -453,6 +492,64 @@ class _AuthScreenState extends State<AuthScreen> {
           ],
         ),
         textAlign: TextAlign.center,
+      ),
+    );
+  }
+}
+
+/// A full-width "Continue with Google" button using the official Google "G"
+/// logo asset (assets/google_logo.png).
+class _GoogleSignInButton extends StatelessWidget {
+  const _GoogleSignInButton({required this.onPressed, this.loading = false});
+
+  final VoidCallback onPressed;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton(
+        onPressed: loading ? null : onPressed,
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: AppColors.border),
+          backgroundColor: AppColors.card,
+          foregroundColor: AppColors.foreground,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        ),
+        child: loading
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.mutedForeground,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Official Google "G" logo asset.
+                  Image.asset(
+                    'assets/google_logo.png',
+                    width: 20,
+                    height: 20,
+                    filterQuality: FilterQuality.high,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Text(
+                    'Continue with Google',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.foreground,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

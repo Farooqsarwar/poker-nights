@@ -1,6 +1,8 @@
 import 'app_timer.dart';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_provider.dart';
 
 import '../app/colors.dart';
 import '../app/typography.dart';
@@ -29,10 +31,10 @@ class TournamentDisplayBlock extends StatelessWidget {
   /// set this to false: payouts are private to the host (§13.1).
   final bool showPayoutAmounts;
 
-  static const Color _black = AppColors.background;
-  static const Color _red = Color(0xFFFF0015);
-  static const Color _divider = Color(0xFF2A2A2A);
-  static const Color _muted = Color(0xFFA8A8AD);
+  static final Color _black = AppColors.background;
+  static final Color _red = AppColors.primary;
+  static final Color _divider = AppColors.border;
+  static final Color _muted = AppColors.mutedForeground;
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +98,7 @@ TextStyle _numberStyle({
 }
 
 class _GameValues {
-  _GameValues(this.game)
+  _GameValues(this.game, Duration offset)
       : level = game.currentLevelData,
         next = game.nextLevelData,
         isBreak = game.status == LiveGameStatus.rebuypause,
@@ -114,12 +116,12 @@ class _GameValues {
 
     levelSeconds = (level?.durationMins ?? 1) * 60;
     if (level != null) {
-      totalSeconds += levelSeconds - game.currentSecondsRemaining;
+      totalSeconds += levelSeconds - game.currentSecondsRemaining(offset);
     }
 
     progress = level == null
         ? 0
-        : ((levelSeconds - game.currentSecondsRemaining) / levelSeconds)
+        : ((levelSeconds - game.currentSecondsRemaining(offset)) / levelSeconds)
         .clamp(0.0, 1.0)
         .toDouble();
   }
@@ -150,7 +152,8 @@ class _WideLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data = _GameValues(game);
+    final offset = context.watch<AppProvider>().serverTimeOffset;
+    final data = _GameValues(game, offset);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -276,7 +279,17 @@ class _WideLayout extends StatelessWidget {
 
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: heroSide - side),
-                  child: _ProgressBar(value: data.progress, height: 14 * s),
+                  child: LiveTimerBuilder(
+                    game: game,
+                    builder: (context, remaining) {
+                      final duration = data.level?.durationMins ?? 1;
+                      final progress = (duration * 60) > 0 ? 1.0 - (remaining / (duration * 60)) : 0.0;
+                      return _ProgressBar(
+                        value: progress.clamp(0.0, 1.0),
+                        height: 14 * s,
+                      );
+                    },
+                  ),
                 ),
                 SizedBox(height: 40 * s),
                 const _HorizontalLine(),
@@ -370,7 +383,7 @@ class _PlainNumberTimer extends StatelessWidget {
     final style = AppTypography.mono(
       size: fontSize,
       weight: FontWeight.w400,
-      color: danger ? TournamentDisplayBlock._red : Colors.white,
+      color: danger ? TournamentDisplayBlock._red : AppColors.foreground,
       letterSpacing: -fontSize * .035,
       height: 1.1, // <-- FIX: Increased slightly so native bounding box is generous
     );
@@ -425,7 +438,7 @@ class _BlindValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = highlighted ? TournamentDisplayBlock._red : Colors.white;
+    final color = highlighted ? TournamentDisplayBlock._red : AppColors.foreground;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -437,7 +450,7 @@ class _BlindValue extends StatelessWidget {
             size: labelSize,
             color: highlighted
                 ? TournamentDisplayBlock._red
-                : const Color(0xFFD7D7DA),
+                : AppColors.mutedForeground,
             letterSpacing: 1,
             height: 1,
           ),
@@ -478,18 +491,18 @@ class _ProgressBar extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            const ColoredBox(color: Color(0xFF1C1C1F)),
+            ColoredBox(color: AppColors.muted),
             FractionallySizedBox(
               widthFactor: value,
               alignment: Alignment.centerLeft,
-              child: const DecoratedBox(
+              child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
                       TournamentDisplayBlock._red,
-                      Color(0xFFFF0015),
-                      Color(0xFF74131C),
-                      Color(0xFF14151A),
+                      TournamentDisplayBlock._red,
+                      AppColors.destructiveSoft,
+                      AppColors.secondary,
                     ],
                     stops: [0, .48, .77, 1],
                   ),
@@ -521,7 +534,7 @@ class _StatValue extends StatelessWidget {
     final valueStyle = _numberStyle(
       size: 34 * scale,
       weight: FontWeight.w300,
-      color: Colors.white,
+      color: AppColors.foreground,
     );
     final slash = value.indexOf('/');
 
@@ -552,7 +565,7 @@ class _StatValue extends StatelessWidget {
                 style: valueStyle,
                 children: [
                   TextSpan(text: value.substring(0, slash)),
-                  const TextSpan(
+                  TextSpan(
                     text: '/',
                     style: TextStyle(color: TournamentDisplayBlock._red),
                   ),
@@ -599,7 +612,7 @@ class _NextLevelValue extends StatelessWidget {
         if (next == null)
           Text(
             'END',
-            style: AppTypography.mono(size: 28 * scale, color: Colors.white),
+            style: AppTypography.mono(size: 28 * scale, color: AppColors.foreground),
           )
         else
           FittedBox(
@@ -663,7 +676,7 @@ class _MiniValue extends StatelessWidget {
           style: _numberStyle(
             size: 28 * scale,
             weight: FontWeight.w300,
-            color: Colors.white,
+            color: AppColors.foreground,
           ),
         ),
       ],
@@ -756,7 +769,7 @@ class _PayoutValue extends StatelessWidget {
               style: _numberStyle(
                 size: 28 * scale,
                 weight: FontWeight.w300,
-                color: Colors.white,
+                color: AppColors.foreground,
               ),
             ),
           ),
@@ -779,7 +792,8 @@ class _CompactLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data = _GameValues(game);
+    final offset = context.watch<AppProvider>().serverTimeOffset;
+    final data = _GameValues(game, offset);
 
     return ColoredBox(
       color: TournamentDisplayBlock._black,
@@ -866,7 +880,17 @@ class _CompactLayout extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 22),
-            _ProgressBar(value: data.progress, height: 5),
+            LiveTimerBuilder(
+              game: game,
+              builder: (context, remaining) {
+                final duration = data.level?.durationMins ?? 1;
+                final progress = (duration * 60) > 0 ? 1.0 - (remaining / (duration * 60)) : 0.0;
+                return _ProgressBar(
+                  value: progress.clamp(0.0, 1.0),
+                  height: 5,
+                );
+              },
+            ),
             const SizedBox(height: 18),
             const _HorizontalLine(),
             _CompactPair(
@@ -970,7 +994,7 @@ class _CompactStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = _numberStyle(size: 16, color: Colors.white);
+    final style = _numberStyle(size: 16, color: AppColors.foreground);
     final slash = value.indexOf('/');
 
     return Padding(
@@ -996,7 +1020,7 @@ class _CompactStat extends StatelessWidget {
                 style: style,
                 children: [
                   TextSpan(text: value.substring(0, slash)),
-                  const TextSpan(
+                  TextSpan(
                     text: '/',
                     style: TextStyle(color: TournamentDisplayBlock._red),
                   ),
@@ -1037,7 +1061,7 @@ class _CompactNext extends StatelessWidget {
           if (next == null)
             Text(
               'END',
-              style: AppTypography.mono(size: 14, color: Colors.white),
+              style: AppTypography.mono(size: 14, color: AppColors.foreground),
             )
           else
             FittedBox(
@@ -1081,8 +1105,9 @@ class _StatusSpade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final logoPath = 'assets/logo_${AppColors.currentPalette.id.replaceAll("-", "_")}.png';
     return Image.asset(
-      'assets/logo.png',
+      logoPath,
       width: width,
       height: height,
       fit: BoxFit.contain,
@@ -1095,7 +1120,7 @@ class _HorizontalLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
+    return SizedBox(
       height: 1,
       child: ColoredBox(color: TournamentDisplayBlock._divider),
     );
@@ -1111,7 +1136,7 @@ class _InsetVerticalLine extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: inset),
-      child: const SizedBox(
+      child: SizedBox(
         width: 1,
         child: ColoredBox(color: TournamentDisplayBlock._divider),
       ),

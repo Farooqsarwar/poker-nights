@@ -11,6 +11,7 @@ import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_alert_banner.dart';
 import '../../widgets/backgrounds.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/tournament_display_block.dart';
@@ -34,12 +35,15 @@ class _TVModeScreenState extends State<TVModeScreen> {
     super.dispose();
   }
 
-  void _connect() {
-    final result = context.read<AppProvider>().enterGameCode(
+  Future<void> _connect() async {
+    final result = await context.read<AppProvider>().enterGameCode(
       _codeController.text.trim(),
     );
+    if (!mounted) return;
     if (result == CodeLookupResult.notFound) {
       setState(() => _codeError = 'Code not found — try again');
+    } else if (result == CodeLookupResult.rateLimited) {
+      setState(() => _codeError = 'Too many attempts — wait a minute');
     } else {
       setState(() => _codeError = null);
     }
@@ -50,13 +54,13 @@ class _TVModeScreenState extends State<TVModeScreen> {
     final app = context.watch<AppProvider>();
     final game = app.tvGame;
 
-    if (game == null)
+    if (game == null || game.status == LiveGameStatus.cancelled) {
       return _CodeEntry(
         controller: _codeController,
         error: _codeError,
         onConnect: _connect,
       );
-
+    }
     return TVBackground(child: _TVLayout(game: game));
   }
 }
@@ -88,11 +92,7 @@ class _CodeEntry extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
-                        Icons.style,
-                        size: 60,
-                        color: AppColors.primary,
-                      ),
+                      Icon(Icons.style, size: 60, color: AppColors.primary),
                       const SizedBox(width: AppSpacing.md),
                       Text(
                         'POKER NIGHT',
@@ -120,7 +120,7 @@ class _CodeEntry extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
-                          'Enter the TV code shown by the host',
+                          'Enter the TV code shown by the admin',
                           style: AppTypography.bodySm.copyWith(
                             color: AppColors.mutedForeground,
                           ),
@@ -151,15 +151,11 @@ class _CodeEntry extends StatelessWidget {
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(AppRadius.sm),
-                              borderSide: const BorderSide(
-                                color: AppColors.border,
-                              ),
+                              borderSide: BorderSide(color: AppColors.border),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(AppRadius.sm),
-                              borderSide: const BorderSide(
-                                color: AppColors.ring,
-                              ),
+                              borderSide: BorderSide(color: AppColors.ring),
                             ),
                           ),
                         ),
@@ -244,35 +240,137 @@ class _TVLayout extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth >= 900) {
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: SingleChildScrollView(
-                      child: TournamentDisplayBlock(
+      body: Column(
+        children: [
+          // Reconnection banner for TV mode (tech spec §4.2).
+          Consumer<AppProvider>(
+            builder: (_, app, x) {
+              if (app.hasReconnected) {
+                return AppAlertBanner(
+                  type: AppAlertType.success,
+                  message: 'Back online — data is live.',
+                  actionLabel: 'Dismiss',
+                  onAction: () => app.clearReconnectedBanner(),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final s = (constraints.maxWidth / 1536)
+                    .clamp(0.5, 2.0)
+                    .toDouble();
+                if (constraints.maxWidth >= 900) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  child: TournamentDisplayBlock(
+                                    game: game,
+                                    showPayoutAmounts: false,
+                                  ),
+                                ),
+                              ),
+                              Consumer<AppProvider>(
+                                builder: (_, app, x) {
+                                  final lastSync = app.lastGameUpdate;
+                                  if (lastSync == null)
+                                    return const SizedBox.shrink();
+                                  final stale =
+                                      DateTime.now()
+                                          .difference(lastSync)
+                                          .inSeconds >
+                                      10;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: stale
+                                          ? AppAlertBanner(
+                                              type: AppAlertType.warning,
+                                              message:
+                                                  'Connection interrupted — feed may be stale.',
+                                            )
+                                          : Text(
+                                              'Synced ${_formatLastSync(lastSync)}',
+                                              style: AppTypography.mono(
+                                                size: 10,
+                                                color:
+                                                    AppColors.mutedForeground,
+                                              ),
+                                            ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 3,
+                          child: _RotatingPanel(game: game, scale: s),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      TournamentDisplayBlock(
                         game: game,
                         showPayoutAmounts: false,
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      Consumer<AppProvider>(
+                        builder: (_, app, x) {
+                          final lastSync = app.lastGameUpdate;
+                          if (lastSync == null) return const SizedBox.shrink();
+                          final stale =
+                              DateTime.now().difference(lastSync).inSeconds >
+                              10;
+                          return stale
+                              ? AppAlertBanner(
+                                  type: AppAlertType.warning,
+                                  message:
+                                      'Connection interrupted — feed may be stale.',
+                                )
+                              : Text(
+                                  'Synced ${_formatLastSync(lastSync)}',
+                                  style: AppTypography.mono(
+                                    size: 10,
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                );
+                        },
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  SizedBox(width: 340, child: _RotatingPanel(game: game)),
-                ],
-              ),
-            );
-          }
-          return SingleChildScrollView(
-            child: TournamentDisplayBlock(game: game, showPayoutAmounts: false),
-          );
-        },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  String _formatLastSync(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 10) return 'just now';
+    if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    return '${diff.inHours}h ago';
   }
 }
 
@@ -389,16 +487,22 @@ class _PodiumStep extends StatelessWidget {
 }
 
 class _RotatingPanel extends StatefulWidget {
-  const _RotatingPanel({required this.game});
+  const _RotatingPanel({required this.game, this.scale = 1.0});
 
   final LiveGame game;
+  final double scale;
 
   @override
   State<_RotatingPanel> createState() => _RotatingPanelState();
 }
 
 class _RotatingPanelState extends State<_RotatingPanel> {
-  static const _titles = ['LEADERBOARD', 'PRIZE POOL', 'UPCOMING'];
+  static const _titles = [
+    'LEADERBOARD',
+    'PRIZE POOL',
+    'ANNOUNCEMENTS',
+    'UPCOMING',
+  ];
 
   int _panel = 0;
   Timer? _timer;
@@ -407,7 +511,9 @@ class _RotatingPanelState extends State<_RotatingPanel> {
   void initState() {
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 8), (_) {
-      setState(() => _panel = (_panel + 1) % 3);
+      final hasAnnouncements = widget.game.announcements.isNotEmpty;
+      final maxPanels = hasAnnouncements ? 4 : 3;
+      setState(() => _panel = (_panel + 1) % maxPanels);
     });
   }
 
@@ -419,35 +525,52 @@ class _RotatingPanelState extends State<_RotatingPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final hasAnnouncements = widget.game.announcements.isNotEmpty;
+    final maxPanels = hasAnnouncements ? 4 : 3;
+    final effectivePanel = _panel % maxPanels;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0D0D),
-        border: Border.all(color: const Color(0xFF222222)),
+        color: AppColors.background,
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            _titles[_panel],
+            _titles[effectivePanel],
             style: AppTypography.mono(
-              size: 15,
+              size: 15 * widget.scale,
               weight: FontWeight.w700,
               letterSpacing: 2.5,
-              color: Color(0xFFFF0015),
+              color: AppColors.primary,
             ),
           ),
           const SizedBox(height: 10),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
-              child: switch (_panel) {
+              child: switch (effectivePanel) {
                 0 => _LeaderboardPanel(
                   key: const ValueKey(0),
                   game: widget.game,
+                  scale: widget.scale,
                 ),
-                1 => _PayoutsPanel(key: const ValueKey(1), game: widget.game),
-                _ => _UpcomingPanel(key: const ValueKey(2), game: widget.game),
+                1 => _PayoutsPanel(
+                  key: const ValueKey(1),
+                  game: widget.game,
+                  scale: widget.scale,
+                ),
+                2 => _AnnouncementsPanel(
+                  key: const ValueKey(2),
+                  game: widget.game,
+                  scale: widget.scale,
+                ),
+                _ => _UpcomingPanel(
+                  key: const ValueKey(3),
+                  game: widget.game,
+                  scale: widget.scale,
+                ),
               },
             ),
           ),
@@ -458,17 +581,33 @@ class _RotatingPanelState extends State<_RotatingPanel> {
 }
 
 class _LeaderboardPanel extends StatelessWidget {
-  const _LeaderboardPanel({super.key, required this.game});
+  const _LeaderboardPanel({super.key, required this.game, this.scale = 1.0});
 
   final LiveGame game;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
     final players = [...game.players]
       ..sort((a, b) {
+        if (a.active && !b.active) return -1;
+        if (!a.active && b.active) return 1;
+        if (!a.active && !b.active) {
+          return (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0);
+        }
         final t = a.table.compareTo(b.table);
         return t != 0 ? t : a.seat.compareTo(b.seat);
       });
+
+    String _ordinalPlace(int n) {
+      if (n % 100 >= 11 && n % 100 <= 13) return '${n}th';
+      return switch (n % 10) {
+        1 => '${n}st',
+        2 => '${n}nd',
+        3 => '${n}rd',
+        _ => '${n}th',
+      };
+    }
 
     return ListView(
       children: [
@@ -483,18 +622,22 @@ class _LeaderboardPanel extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.mono(
-                      size: 12,
+                      size: 12 * scale,
                       color: p.active
-                          ? Colors.white
+                          ? AppColors.foreground
                           : AppColors.mutedForeground,
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'T${p.table} · S${p.seat}',
+                  p.active
+                      ? 'T${p.table} · S${p.seat}'
+                      : p.eliminationPos != null
+                      ? '${_ordinalPlace(p.eliminationPos!)} place'
+                      : 'Out',
                   style: AppTypography.mono(
-                    size: 11,
+                    size: 11 * scale,
                     color: AppColors.mutedForeground,
                   ),
                 ),
@@ -507,42 +650,60 @@ class _LeaderboardPanel extends StatelessWidget {
 }
 
 class _PayoutsPanel extends StatelessWidget {
-  const _PayoutsPanel({super.key, required this.game});
+  const _PayoutsPanel({super.key, required this.game, this.scale = 1.0});
 
   final LiveGame game;
+  final double scale;
 
   static const _ords = ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH'];
 
   @override
   Widget build(BuildContext context) {
-    final paidPlaces = game.structure.prizes.take(6).length;
+    // Projections carry an empty `prizes` list plus a count, so read the
+    // count rather than the list length (see TournamentStructure.paidPlaces).
+    final paidPlaces = game.structure.paidPlacesForDisplay.clamp(0, 6);
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 4),
-          Text(
-            Formatters.chips(game.structure.prizePool),
-            textAlign: TextAlign.center,
-            style: AppTypography.mono(
-              size: 42,
-              weight: FontWeight.w300,
-              color: Colors.white,
+          // 14-043 / 15-034: the pool total is a LIVE figure. Once the
+          // tournament is finished, public and player results show the paid
+          // positions only — no money. The podium and history screens already
+          // gate on this; TV did not.
+          if (game.status != LiveGameStatus.completed) ...[
+            Text(
+              Formatters.prize(game.structure.prizePool),
+              textAlign: TextAlign.center,
+              style: AppTypography.mono(
+                size: 42 * scale,
+                weight: FontWeight.w300,
+                color: AppColors.foreground,
+              ),
             ),
-          ),
-          Text(
-            game.prizePoolLabel.toUpperCase(),
-            textAlign: TextAlign.center,
-            style: AppTypography.mono(
-              size: 12,
-              letterSpacing: 2,
-              color: AppColors.mutedForeground,
+            Text(
+              game.prizePoolLabel.toUpperCase(),
+              textAlign: TextAlign.center,
+              style: AppTypography.mono(
+                size: 12 * scale,
+                letterSpacing: 2,
+                color: AppColors.mutedForeground,
+              ),
             ),
-          ),
+          ] else
+            Text(
+              'FINAL POSITIONS',
+              textAlign: TextAlign.center,
+              style: AppTypography.mono(
+                size: 12 * scale,
+                letterSpacing: 2,
+                color: AppColors.mutedForeground,
+              ),
+            ),
           if (game.status == LiveGameStatus.completed) ...[
             const SizedBox(height: 16),
-            const Divider(height: 1, color: Color(0xFF222222)),
+            Divider(height: 1, color: AppColors.border),
             const SizedBox(height: 8),
             for (var i = 0; i < paidPlaces; i++)
               Padding(
@@ -552,15 +713,18 @@ class _PayoutsPanel extends StatelessWidget {
                     Text(
                       _ords[i],
                       style: AppTypography.mono(
-                        size: 12,
+                        size: 12 * scale,
                         weight: FontWeight.w700,
-                        color: Color(0xFFFF0015),
+                        color: AppColors.primary,
                       ),
                     ),
                     const Spacer(),
                     Text(
                       _podiumName(i + 1),
-                      style: AppTypography.mono(size: 13, color: Colors.white),
+                      style: AppTypography.mono(
+                        size: 13 * scale,
+                        color: AppColors.foreground,
+                      ),
                     ),
                   ],
                 ),
@@ -584,9 +748,10 @@ class _PayoutsPanel extends StatelessWidget {
 }
 
 class _UpcomingPanel extends StatelessWidget {
-  const _UpcomingPanel({super.key, required this.game});
+  const _UpcomingPanel({super.key, required this.game, this.scale = 1.0});
 
   final LiveGame game;
+  final double scale;
 
   @override
   Widget build(BuildContext context) {
@@ -601,7 +766,7 @@ class _UpcomingPanel extends StatelessWidget {
           game.status == LiveGameStatus.completed
               ? 'TOURNAMENT COMPLETE'
               : 'END',
-          style: AppTypography.mono(size: 14, color: Color(0xFFFF0015)),
+          style: AppTypography.mono(size: 14 * scale, color: AppColors.primary),
         ),
       );
     }
@@ -617,9 +782,9 @@ class _UpcomingPanel extends StatelessWidget {
                   Text(
                     'L${l.level}',
                     style: AppTypography.mono(
-                      size: 13,
+                      size: 13 * scale,
                       weight: FontWeight.w700,
-                      color: Color(0xFFFF0015),
+                      color: AppColors.primary,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -627,7 +792,10 @@ class _UpcomingPanel extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     child: Text(
                       'SB ${Formatters.chips(l.sb)} · BB ${Formatters.chips(l.bb)}',
-                      style: AppTypography.mono(size: 13, color: Colors.white),
+                      style: AppTypography.mono(
+                        size: 13 * scale,
+                        color: AppColors.foreground,
+                      ),
                     ),
                   ),
                   if (l.ante != null) ...[
@@ -635,7 +803,7 @@ class _UpcomingPanel extends StatelessWidget {
                     Text(
                       'ANTE ${Formatters.chips(l.ante!)}',
                       style: AppTypography.mono(
-                        size: 11,
+                        size: 11 * scale,
                         color: AppColors.mutedForeground,
                       ),
                     ),
@@ -645,6 +813,44 @@ class _UpcomingPanel extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _AnnouncementsPanel extends StatelessWidget {
+  const _AnnouncementsPanel({super.key, required this.game, this.scale = 1.0});
+
+  final LiveGame game;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    final announcements = game.announcements.toList().reversed.take(8).toList();
+    if (announcements.isEmpty) {
+      return Center(
+        child: Text(
+          'No announcements',
+          style: AppTypography.mono(
+            size: 14 * scale,
+            color: AppColors.mutedForeground,
+          ),
+        ),
+      );
+    }
+    return ListView(
+      children: [
+        for (final a in announcements)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              a.text,
+              style: AppTypography.mono(
+                size: 12 * scale,
+                color: AppColors.foreground,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../app/colors.dart';
 import '../constants/app_constants.dart';
 import '../app/typography.dart';
+import 'glass_styles.dart';
 
-/// Toggle switch mirroring the web `Toggle` component.
+/// Toggle switch mirroring the web `Toggle` component with glassmorphism.
+///
+/// Glass track with frosted thumb, ambient glow when active, and subtle
+/// neumorphic shadows.
 class AppToggle extends StatelessWidget {
   const AppToggle({
     super.key,
@@ -19,42 +22,45 @@ class AppToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => onChanged(!value),
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedContainer(
-            duration: AppDurations.fast,
-            width: 40,
-            height: 20,
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: value ? AppColors.primary : AppColors.border,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-            ),
-            child: AnimatedAlign(
-              duration: AppDurations.fast,
-              alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-              child: Container(
-                width: 16,
-                height: 16,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: AppColors.shadowSoft, blurRadius: 2),
-                  ],
+    Theme.of(context);
+    return Semantics(
+      toggled: value,
+      label: label ?? 'Toggle',
+      button: true,
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+            AnimatedContainer(
+              duration: AppDurations.normal,
+              curve: Curves.easeInOut,
+              width: 44,
+              height: 24,
+              padding: const EdgeInsets.all(2),
+              decoration: Glass.glassToggle(active: value),
+              child: AnimatedAlign(
+                duration: AppDurations.normal,
+                curve: Curves.easeInOut,
+                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: Glass.glassToggleThumb(),
                 ),
               ),
             ),
-          ),
-          if (label != null) ...[
-            const SizedBox(width: AppSpacing.md),
-            Text(label!, style: AppTypography.bodySm),
+            if (label != null) ...[
+              const SizedBox(width: AppSpacing.md),
+              Text(label!, style: AppTypography.bodySm),
+            ],
           ],
-        ],
+        ),
+        ),
       ),
     );
   }

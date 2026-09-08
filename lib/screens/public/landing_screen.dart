@@ -19,7 +19,7 @@ class LandingScreen extends StatefulWidget {
 }
 
 class _LandingScreenState extends State<LandingScreen> {
-  void _joinAsGuest() {
+  void _openJoin() {
     context.go(RoutePaths.join);
   }
 
@@ -53,7 +53,7 @@ class _LandingScreenState extends State<LandingScreen> {
         horizontal: isMobile ? AppSpacing.lg : AppSpacing.xxl,
         vertical: AppSpacing.lg,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.hairlineWhite)),
       ),
       child: Row(
@@ -141,7 +141,7 @@ class _LandingScreenState extends State<LandingScreen> {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 500),
                 child: Text(
-                  'One host, one app. Tournament structure generated from your real chips. Timer, blinds, seating and prizes — handled.',
+                  'One admin, one app. Tournament structure generated from your real chips. Timer, blinds, seating and prizes — handled.',
                   textAlign: TextAlign.center,
                   style: AppTypography.bodyStyle.copyWith(
                     color: AppColors.mutedForeground,
@@ -170,8 +170,8 @@ class _LandingScreenState extends State<LandingScreen> {
               AppButton(
                 variant: AppButtonVariant.primary,
                 size: AppButtonSize.sm,
-                onPressed: _joinAsGuest,
-                child: const Text('Join as guest'),
+                onPressed: _openJoin,
+                child: const Text('Join with a code'),
               ),
             ],
           ),
@@ -209,7 +209,7 @@ class _LandingScreenState extends State<LandingScreen> {
         horizontal: isDesktop ? AppSpacing.xxxl : AppSpacing.lg,
         vertical: AppSpacing.huge,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.hairlineWhite)),
       ),
       child: Center(
@@ -253,7 +253,7 @@ class _LandingScreenState extends State<LandingScreen> {
         horizontal: AppSpacing.xxl,
         vertical: AppSpacing.lg,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.hairlineWhite)),
       ),
       child: Wrap(
@@ -261,7 +261,7 @@ class _LandingScreenState extends State<LandingScreen> {
         spacing: AppSpacing.lg,
         runSpacing: AppSpacing.sm,
         children: [
-          const Text(
+          Text(
             '© 2026 Poker Night. All rights reserved.',
             style: TextStyle(
               fontSize: AppFontSizes.xs,
@@ -288,7 +288,7 @@ class _LandingScreenState extends State<LandingScreen> {
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                        vertical: 6.0,
+                        vertical: 12.0,
                         horizontal: 8.0,
                       ),
                       child: Text(

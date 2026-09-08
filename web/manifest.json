@@ -2,11 +2,13 @@
     "name": "Poker Night",
     "short_name": "PokerNight",
     "start_url": ".",
+    "scope": ".",
     "display": "standalone",
     "background_color": "#121212",
     "theme_color": "#121212",
     "description": "Poker Night - Tournament & Cash Game Manager",
     "orientation": "any",
+    "categories": ["games", "entertainment"],
     "prefer_related_applications": false,
     "icons": [
         {

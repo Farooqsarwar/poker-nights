@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app/colors.dart';
@@ -8,6 +9,7 @@ import '../providers/app_provider.dart';
 import 'app_avatar.dart';
 import 'app_button.dart';
 import 'app_text_field.dart';
+import 'glass_styles.dart';
 
 class ChatSheet extends StatefulWidget {
   const ChatSheet({super.key, required this.gameId});
@@ -18,18 +20,43 @@ class ChatSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
-        decoration: const BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppRadius.lg),
+      barrierColor: Colors.black.withValues(alpha: 0.75),
+      builder: (context) => ClipRRect(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.lg),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: Glass.blurHeavy,
+            sigmaY: Glass.blurHeavy,
+          ),
+          child: Container(
+            height: MediaQuery.of(context).size.height * 0.75,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                // Opaque. At 65% fading to 45% the page behind read straight
+                // through the sheet — the backdrop blur that was meant to
+                // hide it does not reliably render on web. See Glass.solid.
+                colors: [
+                  Glass.solid(AppColors.card, 0.92),
+                  Glass.solid(AppColors.card, 0.98),
+                ],
+              ),
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.border.withValues(alpha: Glass.borderOpacity),
+                ),
+              ),
+            ),
+            child: ChatSheet(gameId: gameId),
           ),
         ),
-        child: ChatSheet(gameId: gameId),
       ),
     );
   }
+
 
   @override
   State<ChatSheet> createState() => _ChatSheetState();
@@ -38,6 +65,19 @@ class ChatSheet extends StatefulWidget {
 class _ChatSheetState extends State<ChatSheet> {
   final _chatController = TextEditingController();
   String? _chatError;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _markRead());
+  }
+
+  // While the sheet is open the conversation is visible, so every message
+  // that arrives is immediately marked read (Tech Spec §14.1).
+  void _markRead() {
+    if (!mounted) return;
+    context.read<AppProvider>().markChatRead('game:${widget.gameId}');
+  }
 
   @override
   void dispose() {
@@ -69,7 +109,12 @@ class _ChatSheetState extends State<ChatSheet> {
     final userId = app.user?.id;
     if (game == null) return const SizedBox();
 
-    final messages = game.chat.where((m) => !m.deleted).toList();
+    final messages =
+        app.gameChatMessages(widget.gameId).where((m) => !m.deleted).toList();
+
+    if (userId != null && app.unreadGameChatCount(widget.gameId) > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _markRead());
+    }
 
     return Column(
       children: [
@@ -83,13 +128,13 @@ class _ChatSheetState extends State<ChatSheet> {
                 style: AppTypography.display(size: AppFontSizes.lg),
               ),
               IconButton(
-                icon: const Icon(Icons.close, color: AppColors.foreground),
+                icon: Icon(Icons.close, color: AppColors.foreground),
                 onPressed: () => Navigator.pop(context),
               ),
             ],
           ),
         ),
-        const Divider(height: 1, color: AppColors.border),
+        Divider(height: 1, color: AppColors.border),
         Expanded(
           child: SingleChildScrollView(
             reverse: true,
@@ -107,12 +152,12 @@ class _ChatSheetState extends State<ChatSheet> {
                   )
                 : Column(
                     children: [
-                      for (final msg in messages.reversed)
+                      for (final msg in messages)
                         _ChatBubble(
                           message: msg,
                           isMine: msg.authorId == userId,
                           canDelete:
-                              (app.user?.isAdmin ?? false) &&
+                              (app.isAdmin) &&
                               msg.authorId != userId,
                           onDelete: () => app.deleteMessage(msg.id),
                         ),
@@ -128,7 +173,7 @@ class _ChatSheetState extends State<ChatSheet> {
               top: AppSpacing.md,
               bottom: AppSpacing.md + MediaQuery.of(context).viewInsets.bottom,
             ),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
             child: Column(
@@ -171,7 +216,7 @@ class _ChatSheetState extends State<ChatSheet> {
         else
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
             child: Text(
@@ -183,6 +228,41 @@ class _ChatSheetState extends State<ChatSheet> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Red pill with an unread-message count, shown next to chat entry buttons
+/// until the conversation is opened (Tech Spec §14.1).
+class ChatUnreadBadge extends StatelessWidget {
+  const ChatUnreadBadge({super.key, required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: AppColors.destructive.withValues(alpha: Glass.badgeOpacity),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: AppColors.destructive.withValues(alpha: Glass.borderOpacity),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.destructive.withValues(alpha: 0.30),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: Text(
+        '$count',
+        style: AppTypography.bodyXs.copyWith(
+          color: AppColors.destructiveForeground,
+          fontSize: 10,
+        ),
+      ),
     );
   }
 }
@@ -202,6 +282,7 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final avatar = AppAvatar(name: message.authorName, size: AppAvatarSize.sm);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
@@ -211,7 +292,7 @@ class _ChatBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isMine) ...[
-            AppAvatar(name: message.authorName, size: AppAvatarSize.sm),
+            avatar,
             const SizedBox(width: AppSpacing.sm),
           ],
           Flexible(
@@ -221,7 +302,7 @@ class _ChatBubble extends StatelessWidget {
                   : CrossAxisAlignment.start,
               children: [
                 Text(
-                  message.authorName,
+                  isMine ? 'You' : message.authorName,
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
                     fontSize: 10,
@@ -234,12 +315,27 @@ class _ChatBubble extends StatelessWidget {
                     vertical: AppSpacing.sm,
                   ),
                   decoration: BoxDecoration(
-                    color: isMine ? AppColors.primary : AppColors.secondary,
+                    color: isMine
+                        ? AppColors.primary
+                        : Glass.solid(AppColors.card, Glass.surfaceOpacity),
                     borderRadius: BorderRadius.circular(AppRadius.lg).copyWith(
                       topRight: isMine ? const Radius.circular(2) : null,
                       topLeft: !isMine ? const Radius.circular(2) : null,
                     ),
-                    border: isMine ? null : Border.all(color: AppColors.border),
+                    border: isMine
+                        ? null
+                        : Border.all(
+                            color: AppColors.border.withValues(alpha: Glass.borderOpacity),
+                          ),
+                    boxShadow: isMine
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
                   ),
                   child: Text(
                     message.body,
@@ -252,7 +348,34 @@ class _ChatBubble extends StatelessWidget {
                 ),
                 if (canDelete)
                   InkWell(
-                    onTap: onDelete,
+                    onTap: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: AppColors.card,
+                          title: const Text('Delete message?'),
+                          content: Text(
+                            'This message will be removed from the chat.',
+                            style: AppTypography.bodySm,
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(false),
+                              child: Text('Cancel',
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.mutedForeground)),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(true),
+                              child: Text('Delete',
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.destructive)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) onDelete();
+                    },
                     child: Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
@@ -267,6 +390,10 @@ class _ChatBubble extends StatelessWidget {
               ],
             ),
           ),
+          if (isMine) ...[
+            const SizedBox(width: AppSpacing.sm),
+            avatar,
+          ],
         ],
       ),
     );

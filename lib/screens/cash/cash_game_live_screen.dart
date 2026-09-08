@@ -47,6 +47,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   final _editTotal = TextEditingController();
   final _editBuyInCount = TextEditingController();
   final _editCashedOut = TextEditingController();
+  bool _editHasCashedOut = false;
 
   @override
   void dispose() {
@@ -56,6 +57,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
     _editTotal.dispose();
     _editBuyInCount.dispose();
     _editCashedOut.dispose();
+    _unresolvedNote.dispose();
     super.dispose();
   }
 
@@ -66,6 +68,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
       _editTotal.text = _num(p.totalBuyIns);
       _editBuyInCount.text = '${p.buyInCount}';
       _editCashedOut.text = _num(p.cashedOut);
+      _editHasCashedOut = p.hasCashedOut;
       _forceEnd = false;
     });
   }
@@ -77,14 +80,16 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
     final total = num.tryParse(_editTotal.text.trim())?.toDouble();
     final count = num.tryParse(_editBuyInCount.text.trim())?.toInt();
     final cashedOut = num.tryParse(_editCashedOut.text.trim())?.toDouble();
-    if (stack == null || total == null || count == null || cashedOut == null)
+    if (stack == null || total == null || count == null || cashedOut == null) {
       return;
+    }
     app.cashEditPlayer(
       id,
       stack: stack,
       totalBuyIns: total,
       buyInCount: count,
       cashedOut: cashedOut,
+      hasCashedOut: _editHasCashedOut,
     );
     setState(() => _editPlayerId = null);
   }
@@ -102,17 +107,32 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
     final action = _action;
     if (action == null) return;
 
+    if (action.type == _CashActionType.buyIn && amt <= 0) return;
+
+    String? error;
     if (action.type == _CashActionType.buyIn) {
       final pid = action.playerId;
       if (pid != null) {
-        app.cashBuyIn(pid, amt);
+        error = app.cashBuyIn(pid, amt);
       } else if (_newPlayerName.text.trim().isNotEmpty) {
-        app.cashBuyIn(_newPlayerName.text.trim(), amt, isNew: true);
-        _newPlayerName.clear();
+        error = app.cashBuyIn(_newPlayerName.text.trim(), amt, isNew: true);
+        if (error == null) _newPlayerName.clear();
       }
     } else if (action.type == _CashActionType.cashOut &&
         action.playerId != null) {
       app.cashCashOut(action.playerId!, amt);
+    }
+
+    if (error != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error),
+            backgroundColor: AppColors.destructive,
+          ),
+        );
+      }
+      return;
     }
 
     setState(() {
@@ -122,9 +142,15 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   }
 
   void _endGame(AppProvider app) {
-    app.endCashGame(
+    final error = app.endCashGame(
       unresolvedNote: _forceEnd ? _unresolvedNote.text.trim() : null,
     );
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: AppColors.destructive),
+      );
+      return;
+    }
     setState(() => _showEndModal = false);
     context.go(RoutePaths.history);
   }
@@ -132,6 +158,14 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+
+    // Spec §3.3: Cash game module is admin-only.
+    if (!app.isAdmin) {
+      return const Scaffold(
+        body: Center(child: Text('Admin access required.')),
+      );
+    }
+
     final session = app.cashSession;
 
     if (session == null) {
@@ -202,7 +236,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.success,
                             shape: BoxShape.circle,
                           ),
@@ -226,7 +260,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                     size: AppButtonSize.sm,
                     variant: AppButtonVariant.ghost,
                     onPressed: () => setState(() => _showReconcile = true),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
@@ -332,7 +366,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                                   ? '?'
                                   : players[pi].name.trim()[0].toUpperCase(),
                               style: AppTypography.bodyXs.copyWith(
-                                color: Colors.white,
+                                color: AppColors.foreground,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -597,6 +631,26 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: AppSpacing.md),
+                      InkWell(
+                        onTap: () => setState(
+                          () => _editHasCashedOut = !_editHasCashedOut,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _editHasCashedOut
+                                  ? Icons.check_box
+                                  : Icons.check_box_outline_blank,
+                              color: _editHasCashedOut
+                                  ? AppColors.primary
+                                  : AppColors.mutedForeground,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            const Text('Player has cashed out'),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: AppSpacing.lg),
                       Row(
                         children: [
@@ -658,7 +712,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                               '- ${Formatters.money(currency, totalCashedOut)}',
                           valueColor: AppColors.success,
                         ),
-                        const Divider(
+                        Divider(
                           color: AppColors.border,
                           height: AppSpacing.lg,
                         ),
@@ -674,7 +728,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                           label: 'Actual in play',
                           value: Formatters.money(currency, totalInPlay),
                         ),
-                        const Divider(
+                        Divider(
                           color: AppColors.border,
                           height: AppSpacing.lg,
                         ),
@@ -692,6 +746,88 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                       ],
                     ),
                   ),
+                  // Settlement ledger — who pays whom
+                  Builder(builder: (context) {
+                    final settled = session.players
+                        .where((p) => p.hasCashedOut)
+                        .toList();
+                    if (settled.length < 2) return const SizedBox.shrink();
+                    // Build mutable net lists
+                    final creditors = <({String name, double amount})>[];
+                    final debtors = <({String name, double amount})>[];
+                    for (final p in settled) {
+                      if (p.net > 0.009) {
+                        creditors.add((name: p.name, amount: p.net));
+                      } else if (p.net < -0.009) {
+                        debtors.add((name: p.name, amount: -p.net));
+                      }
+                    }
+                    // Greedy settle
+                    final transfers = <String>[];
+                    final cAmts = creditors.map((c) => c.amount).toList();
+                    final dAmts = debtors.map((d) => d.amount).toList();
+                    var ci = 0;
+                    var di = 0;
+                    while (ci < creditors.length && di < debtors.length) {
+                      final pay = cAmts[ci] < dAmts[di] ? cAmts[ci] : dAmts[di];
+                      transfers.add(
+                        '${debtors[di].name} pays ${creditors[ci].name} '
+                        '${Formatters.money(currency, pay)}',
+                      );
+                      cAmts[ci] -= pay;
+                      dAmts[di] -= pay;
+                      if (cAmts[ci] < 0.01) ci++;
+                      if (dAmts[di] < 0.01) di++;
+                    }
+                    if (transfers.isEmpty) return const SizedBox.shrink();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          'Settlement',
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Container(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          decoration: BoxDecoration(
+                            color: AppColors.muted,
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final t in transfers)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                      bottom: AppSpacing.xs),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.arrow_forward,
+                                        size: 14,
+                                        color: AppColors.mutedForeground,
+                                      ),
+                                      const SizedBox(width: AppSpacing.xs),
+                                      Expanded(
+                                        child: Text(
+                                          t,
+                                          style: AppTypography.bodySm,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
                   const SizedBox(height: AppSpacing.md),
                   AppButton(
                     variant: AppButtonVariant.secondary,
@@ -804,8 +940,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                             const SizedBox(height: AppSpacing.sm),
                             AppTextField(
                               controller: _unresolvedNote,
-                              placeholder: 'Reason for mismatch (optional)',
+                              placeholder: 'Reason for mismatch (required)',
                               autofocus: true,
+                              onChanged: (_) => setState(() {}),
                             ),
                           ],
                         ],
@@ -829,8 +966,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                       Expanded(
                         child: AppButton(
                           variant: AppButtonVariant.danger,
-                          disabled:
-                              session.difference.abs() > 0.01 && !_forceEnd,
+                          disabled: (session.difference.abs() > 0.01 && !_forceEnd) ||
+                              (_forceEnd &&
+                                  _unresolvedNote.text.trim().isEmpty),
                           onPressed: () => _endGame(app),
                           child: const Text('End game'),
                         ),

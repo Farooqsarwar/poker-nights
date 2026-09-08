@@ -91,11 +91,13 @@ class Player {
 
   Player copyWith({
     String? name,
+    String? inviterId,
     Rsvp? rsvp,
     bool? checkedIn,
     bool? confirmed,
     bool? eliminated,
     int? eliminationPos,
+    bool clearEliminationPos = false,
     int? rebuys,
     int? reEntries,
     bool? hasAddOn,
@@ -108,13 +110,14 @@ class Player {
       id: id,
       name: name ?? this.name,
       isGuest: isGuest,
-      inviterId: inviterId,
+      inviterId: inviterId ?? this.inviterId,
       guestSlot: guestSlot,
       rsvp: rsvp ?? this.rsvp,
       checkedIn: checkedIn ?? this.checkedIn,
       confirmed: confirmed ?? this.confirmed,
       eliminated: eliminated ?? this.eliminated,
-      eliminationPos: eliminationPos ?? this.eliminationPos,
+      eliminationPos:
+          clearEliminationPos ? null : eliminationPos ?? this.eliminationPos,
       rebuys: rebuys ?? this.rebuys,
       reEntries: reEntries ?? this.reEntries,
       hasAddOn: hasAddOn ?? this.hasAddOn,
@@ -192,8 +195,9 @@ class ChatMessage {
   }
 }
 
-/// Status of a reserved guest slot under an inviter.
-enum GuestSlotStatus { unclaimed, reserved, checkedIn, cancelled }
+/// Status of a reserved guest slot under an inviter (user-flow spec §7.1:
+/// Unclaimed, Reserved, Check-in Requested, Checked In, Cancelled).
+enum GuestSlotStatus { unclaimed, reserved, checkInRequested, checkedIn, cancelled }
 
 /// A named guest seat reserved through a "Going +N" RSVP. Slots are created
 /// when the member RSVPs and are persisted until the event starts, so the
@@ -217,12 +221,16 @@ class GuestSlot {
 
   bool get available => status == GuestSlotStatus.unclaimed;
 
-  GuestSlot copyWith({String? guestName, GuestSlotStatus? status}) {
+  GuestSlot copyWith({
+    String? guestName,
+    bool clearGuestName = false,
+    GuestSlotStatus? status,
+  }) {
     return GuestSlot(
       id: id,
       inviterId: inviterId,
       slot: slot,
-      guestName: guestName ?? this.guestName,
+      guestName: clearGuestName ? null : guestName ?? this.guestName,
       status: status ?? this.status,
     );
   }
@@ -278,6 +286,18 @@ class Announcement {
   final String id;
   final String text;
   final DateTime timestamp;
+
+  Announcement copyWith({
+    String? id,
+    String? text,
+    DateTime? timestamp,
+  }) {
+    return Announcement(
+      id: id ?? this.id,
+      text: text ?? this.text,
+      timestamp: timestamp ?? this.timestamp,
+    );
+  }
 }
 
 /// An audit record of a system or administrator event.
@@ -295,4 +315,20 @@ class AuditRecord {
   final String type;
   final String actor;
   final String details;
+
+  AuditRecord copyWith({
+    String? id,
+    DateTime? timestamp,
+    String? type,
+    String? actor,
+    String? details,
+  }) {
+    return AuditRecord(
+      id: id ?? this.id,
+      timestamp: timestamp ?? this.timestamp,
+      type: type ?? this.type,
+      actor: actor ?? this.actor,
+      details: details ?? this.details,
+    );
+  }
 }

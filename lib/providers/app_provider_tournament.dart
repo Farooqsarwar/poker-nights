@@ -188,6 +188,7 @@ extension AppProviderTournament on AppProvider {
       structure: structure.copyWith(
         prizePool: recalculated.prizePool,
         organizerAmount: recalculated.organizerAmount,
+        roundingRemainder: recalculated.roundingRemainder,
         prizes: recalculated.prizes,
       ),
     );
@@ -843,20 +844,29 @@ extension AppProviderTournament on AppProvider {
         (finalists.isEmpty
             ? null
             : finalists[Random().nextInt(finalists.length)]);
+    // RESUME the paused level — do not restart it.
+    //
+    // 13-030 says play resumes after the admin confirms seating, and 12-013
+    // says the timer must not gain material time. The redraw fires mid-level
+    // on an elimination, so rewriting `secondsRemaining` to a full level
+    // handed the table however much of the level was left, every time.
+    final remaining = _currentGame!.currentSecondsRemaining(
+      _serverTimeOffset ?? Duration.zero,
+    );
     final currentLevelData = _currentGame!.currentLevelData;
     final durationMins =
         currentLevelData?.durationMins ?? _currentGame!.structure.levelDuration;
+    final resumeSeconds = remaining > 0 ? remaining : durationMins * 60;
     _currentGame = _currentGame!.copyWith(
       players: players,
       status: LiveGameStatus.running,
       timerRunning: true,
       finalTableRedrawCompleted: true,
       dealerPlayerId: dealer?.id,
-      // The paused level is over — restart the clock for the current level.
       // Uses the server-calibrated clock (like every other timer reset) so the
       // countdown stays in sync across all connected devices.
-      secondsRemaining: durationMins * 60,
-      levelEndTime: _serverNow.add(Duration(minutes: durationMins)),
+      secondsRemaining: resumeSeconds,
+      levelEndTime: _serverNow.add(Duration(seconds: resumeSeconds)),
     );
     addAnnouncement('Final table! Please take your new seats.', true);
     if (dealer != null) {
@@ -1013,6 +1023,71 @@ extension AppProviderTournament on AppProvider {
       ),
     );
     return true;
+  }
+
+  /// Live add-on chip recommendation (09-032, User Flow section 4.13) and the
+  /// rebuy composition for the CURRENT level (10-041 / 10-043).
+  int get recommendedAddOnStack {
+    final game = _currentGame;
+    if (game == null) return 0;
+    return TournamentEngine.recommendedAddOnStack(
+      startingStack: game.structure.startingStack,
+      totalChipsInPlay: game.totalChipsInPlay,
+      playersRemaining: game.activePlayers.length,
+      currentBB: game.currentLevelData?.bb ?? game.structure.levels.first.bb,
+      chips: game.settings.chipSet,
+    );
+  }
+
+  /// Physical composition of a rebuy handed out right now — same total value,
+  /// fewer obsolete small chips as the blinds grow.
+  List<ChipPlanEntry> get liveRebuyChipPlan {
+    final game = _currentGame;
+    if (game == null) return const [];
+    return TournamentEngine.chipPlanAtLevel(
+      stack: game.structure.rebuyStack,
+      chips: game.settings.chipSet,
+      currentBB: game.currentLevelData?.bb ?? game.structure.levels.first.bb,
+      // Without a real head-count the divisor falls back to 1, letting a
+      // single rebuy plan lay claim to the entire box — the host would be
+      // told to hand over chips that are already in other people's stacks.
+      playersRemaining: game.activePlayers.length,
+    );
+  }
+
+  /// Composition of the recommended add-on at the current level.
+  List<ChipPlanEntry> get liveAddOnChipPlan {
+    final game = _currentGame;
+    if (game == null) return const [];
+    return TournamentEngine.chipPlanAtLevel(
+      stack: recommendedAddOnStack,
+      chips: game.settings.chipSet,
+      currentBB: game.currentLevelData?.bb ?? game.structure.levels.first.bb,
+      // Every active player may take one add-on, so the box has to stretch
+      // that far — not to a single stack.
+      playersRemaining: game.activePlayers.length,
+    );
+  }
+
+  /// Applies the recommended add-on chip amount to the live structure so
+  /// `grantAddOn` hands out that many chips (09-032). The PRICE stays the
+  /// admin's own input.
+  void applyRecommendedAddOnStack() {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return;
+    final game = _currentGame;
+    if (game == null) return;
+    final recommended = recommendedAddOnStack;
+    if (recommended <= 0 || recommended == game.structure.addOnStack) return;
+    _currentGame = game.copyWith(
+      structure: game.structure.copyWith(addOnStack: recommended),
+    );
+    addAuditRecord(
+      'addon_stack',
+      'Add-on chip amount set to $recommended from the live table.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
   }
 
   void addAnnouncement(String text, [bool speakOutLoud = true]) {

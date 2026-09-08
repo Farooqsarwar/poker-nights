@@ -74,12 +74,20 @@ class TournamentEngine {
     ];
   }
 
-  /// Valid blind levels as [smallBlind, bigBlind] pairs.
+  /// Practical blind ladder.
   ///
-  /// Client constraint: 25/50, 50/100, 75/150, 100/200, then small blinds in
-  /// multiples of 50 up to 300 and 100-step jumps after (150/300, 200/400,
-  /// 250/500, 300/600, 400/800, …). The big blind is always 2x the small.
+  /// Extended downward from 25/50 so small chip sets have somewhere to start:
+  /// 11-015 / 11-016 require openings drawn from the chip set, "including 5/10
+  /// and 10/20". 20/50 is deliberately NOT a 2x pair — 11-009 forbids assuming
+  /// the small blind is always half the big blind and 11-010 names 20/50 as
+  /// permitted, and Technical section 8.4 step 8 wants the SB at 40-50% of BB.
+  /// Entries are filtered against the live denominations at generation time so
+  /// every blind is actually postable (11-004).
   static const List<List<int>> validBlindLevels = [
+    [5, 10],
+    [10, 20],
+    [20, 40],
+    [20, 50],
     [25, 50],
     [50, 100],
     [75, 150],
@@ -114,6 +122,16 @@ class TournamentEngine {
 
   /// Valid level durations in minutes.
   static const List<int> validLevelDurations = [10, 15, 20];
+
+  /// Extra levels generated past the target duration so a slow field never
+  /// plays off the end of the structure (11-014). They are deliberately
+  /// excluded from the finish estimate.
+  static const int _spareLevels = 4;
+
+  /// Allowance for the end-of-rebuy settlement pause (User Flow section 4.13).
+  /// It has no clock of its own but it is real elapsed time, so 11-031 counts
+  /// it in the duration model.
+  static const int settlementBreakMins = 15;
 
   /// Standard blind level lengths. Short events get 10-minute levels so the
   /// admin's speed up/slow down can nudge them to 15/20 later (12-078).
@@ -222,12 +240,127 @@ class TournamentEngine {
   static void validateMaxChipsPerPlayerForTest(int value) =>
       _validateMaxChipsPerPlayer(value);
 
+  /// Recommended add-on CHIP AMOUNT for the live table.
+  ///
+  /// 09-032 splits this the other way round from how it shipped: the admin
+  /// enters only the PRICE (defaulting to the buy-in, 09-033) and the engine
+  /// recommends the chip amount. The add-on stack was instead pinned to one
+  /// full starting stack at generation time while the settlement screen
+  /// suggested a price from stack depth — the inverse of the specification.
+  ///
+  /// Derived from the live figures User Flow section 4.13 names: average
+  /// stack, big blind, remaining players and total chips. An add-on should be
+  /// worth taking without dwarfing the table, so it targets the larger of the
+  /// current average stack and 25 big blinds, and is capped at twice the
+  /// starting stack.
+  static int recommendedAddOnStack({
+    required int startingStack,
+    required int totalChipsInPlay,
+    required int playersRemaining,
+    required int currentBB,
+    required List<ChipColor> chips,
+  }) {
+    if (startingStack <= 0) return 0;
+    final avg = playersRemaining > 0
+        ? totalChipsInPlay ~/ playersRemaining
+        : startingStack;
+    var target = math.max(avg, currentBB > 0 ? currentBB * 25 : startingStack);
+    target = math.min(target, startingStack * 2);
+    target = math.max(target, startingStack ~/ 2);
+    // Snap to something the box can actually hand over.
+    final values = chips.map((c) => c.value).where((v) => v > 0).toList()
+      ..sort();
+    final unit = values.isEmpty ? 1 : values.first;
+    final snapped = (target / unit).round() * unit;
+    return snapped <= 0 ? startingStack : snapped;
+  }
+
+  /// Physical composition of one [stack] handed out at the CURRENT level.
+  ///
+  /// 10-041 / 10-043 and Technical section 7.4: a rebuy keeps the same total
+  /// value, but its composition changes as blinds grow — "use fewer obsolete
+  /// small chips and more medium/high chips while keeping enough chips to post
+  /// the current blinds easily". The stored `rebuyChipPlan` is generated once
+  /// at setup, so a level-9 rebuy was being handed out in level-1 chips; live
+  /// screens call this instead.
+  ///
+  /// [currentBB] drives which denominations count as obsolete: anything below
+  /// a tenth of the big blind is skipped unless it is needed to make the total
+  /// exact, and at least a few blind-payable chips are always included.
+  static List<ChipPlanEntry> chipPlanAtLevel({
+    required int stack,
+    required List<ChipColor> chips,
+    required int currentBB,
+    int playersRemaining = 1,
+  }) {
+    if (stack <= 0 || chips.isEmpty) return const [];
+    final obsoleteBelow = currentBB > 0 ? currentBB ~/ 10 : 0;
+    final usable = chips
+        .where((c) => c.value > 0 && c.value >= obsoleteBelow)
+        .toList();
+    // Never strip the set bare — if the filter removed everything, fall back
+    // to the full set so the total can still be made exactly.
+    final source = usable.isEmpty ? chips : usable;
+    final plan = _buildChipPlan(
+      stack,
+      source,
+      math.max(1, playersRemaining),
+      1.0,
+      smallBlind: currentBB > 0 ? currentBB ~/ 2 : 0,
+    );
+    final covered = plan.fold<int>(0, (a, e) => a + e.count * e.value);
+    if (covered >= stack) return plan;
+    // Shortfall: top up from the full set so the declared value is exact
+    // (23-002 — a rebuy stack equals the starting stack in value).
+    return _buildChipPlan(
+      stack,
+      chips,
+      math.max(1, playersRemaining),
+      1.0,
+      smallBlind: currentBB > 0 ? currentBB ~/ 2 : 0,
+    );
+  }
+
+  /// How many chips of the lowest and second-lowest blind-payable
+  /// denominations a stack is seeded with before the top-down fill.
+  ///
+  /// Filling strictly top-down and only adding low chips to absorb a leftover
+  /// remainder meant a ROUND target produced no change at all: 800 from a
+  /// {1,5,25,100,500} set built as 1x500 + 3x100 and stopped. The change test
+  /// then failed, the coarse stack grid was abandoned, and the search only
+  /// succeeded at ragged values like 815 or 995 — whose remainders happened to
+  /// force small chips in. Reserving change up front makes the round numbers
+  /// work (10-033, 10-034, Technical section 7.2 / 7.3).
+  static const int _seedLowestChips = 8;
+  static const int _seedSecondLowestChips = 6;
+
+  /// STANDING DEVIATION (PN-051, Technical section 7.3).
+  ///
+  /// The spec describes a SCORED ENUMERATION over practical combinations —
+  /// `early_blind_payability + counting_simplicity + stack_aesthetics +
+  /// rebuy_reserve_health + colour_up_efficiency - excessive_chip_count`.
+  /// What is implemented is greedy: seed change, fill top-down, top up, test.
+  ///
+  /// The practical consequence is that some round stacks stay out of reach on
+  /// a tight box. 800 IS constructible with change from a {1,5,25,100,500}
+  /// set — 1x500 + 1x100 + 6x25 + 8x5 + 10x1 — but seed-then-fill cannot find
+  /// that shape, so Standard 300 at 6-14 players lands on 845 / 850 / 815
+  /// instead. Every such stack is exact in value, inside the 80-240 BB band
+  /// and postable; only the aesthetics suffer.
+  ///
+  /// Replacing this with a memoised search over (denomination index,
+  /// remaining) would resolve it, and would also remove the "rebuild without
+  /// the seed" branch below, which exists only because greedy seeding can
+  /// cost exact coverage. Deferred: it changes every generated stack, so it
+  /// wants the property tests and a client decision on whether round numbers
+  /// are worth it.
   static List<ChipPlanEntry> _buildChipPlan(
     int targetStack,
     List<ChipColor> chips,
     int playerCount,
-    double reserveMultiplier,
-  ) {
+    double reserveMultiplier, {
+    int smallBlind = 0,
+  }) {
     final sorted = [...chips]..sort((a, b) => a.value - b.value);
     final plan = <ChipPlanEntry>[];
     var remaining = targetStack;
@@ -240,6 +373,38 @@ class TournamentEngine {
     final perPlayerDivisor =
         math.max(1.0, playerCount * reserveMultiplier);
 
+    // ── Reserve change BEFORE filling top-down ──────────────────────────
+    // Only denominations that can actually pay the small blind count, and
+    // only when the caller told us what the blind is.
+    final seeded = <String, int>{};
+    if (smallBlind > 0) {
+      final payable = sorted
+          .where((c) => c.value > 0 && c.value <= smallBlind)
+          .toList();
+      for (var i = 0; i < payable.length && i < 2; i++) {
+        final chip = payable[i];
+        final want = i == 0 ? _seedLowestChips : _seedSecondLowestChips;
+        final maxPerPlayer = (chip.quantity / perPlayerDivisor).floor();
+        final affordable = remaining ~/ chip.value;
+        final use = math.min(
+          want,
+          math.min(affordable, math.min(maxPerPlayer, maxChipsPerPlayer)),
+        );
+        if (use > 0) {
+          seeded[chip.color] = use;
+          plan.add(
+            ChipPlanEntry(
+              color: chip.color,
+              hex: chip.hex,
+              value: chip.value,
+              count: use,
+            ),
+          );
+          remaining -= use * chip.value;
+        }
+      }
+    }
+
     final reversed = sorted.reversed.toList();
     for (final chip in reversed) {
       // A zero/negative denomination would make `remaining ~/ chip.value`
@@ -247,17 +412,33 @@ class TournamentEngine {
       if (chip.value <= 0) continue;
       final maxPerPlayer = (chip.quantity / perPlayerDivisor).floor();
       if (maxPerPlayer <= 0) continue;
+      // Whatever the change seed already claimed of this colour comes off
+      // both the budget and the caps.
+      final already = seeded[chip.color] ?? 0;
+      final headroom =
+          math.min(maxPerPlayer, maxChipsPerPlayer) - already;
+      if (headroom <= 0) continue;
       final need = remaining ~/ chip.value;
-      final use = math.min(need, math.min(maxPerPlayer, maxChipsPerPlayer));
+      final use = math.min(need, headroom);
       if (use > 0) {
-        plan.add(
-          ChipPlanEntry(
+        final index = plan.indexWhere((p) => p.color == chip.color);
+        if (index >= 0) {
+          plan[index] = ChipPlanEntry(
             color: chip.color,
             hex: chip.hex,
             value: chip.value,
-            count: use,
-          ),
-        );
+            count: plan[index].count + use,
+          );
+        } else {
+          plan.add(
+            ChipPlanEntry(
+              color: chip.color,
+              hex: chip.hex,
+              value: chip.value,
+              count: use,
+            ),
+          );
+        }
         remaining -= use * chip.value;
       }
     }
@@ -294,6 +475,24 @@ class TournamentEngine {
     }
 
     plan.sort((a, b) => b.value - a.value);
+
+    // The change seed must never cost exact coverage. Seeded low chips eat the
+    // per-colour headroom the final top-up needs, so on a tight inventory a
+    // stack that WOULD have been reachable can fall a few units short — which
+    // then pushed the solver into absurd fallbacks (measured: 1 BB stacks).
+    // If that happens, rebuild without the seed and keep the total exact:
+    // a stack of the declared value beats a stack with nicer change (23-002).
+    if (smallBlind > 0) {
+      final covered = plan.fold<int>(0, (a, e) => a + e.count * e.value);
+      if (covered < targetStack) {
+        return _buildChipPlan(
+          targetStack,
+          chips,
+          playerCount,
+          reserveMultiplier,
+        );
+      }
+    }
     return plan;
   }
 
@@ -307,6 +506,29 @@ class TournamentEngine {
   ///  * finally capped so every paid place can still receive at least the
   ///    minimum award of 10 (`paidPlaces <= prizePool ~/ 10`), which prevents a
   ///    "paid" place from ever landing on 0.
+  /// DOCUMENTED DEVIATION (section 25 preamble, 14-028, 25-001…25-066).
+  ///
+  /// Where the place COUNT agrees, the split matches the section-25 reference
+  /// table exactly — 0 deviations across all 67 reference pools. The counts
+  /// themselves differ for one reason: three places begin at 10 unique
+  /// players here, where the table starts them at 8. An 8-player game with a
+  /// 110 pool therefore pays 90/20 rather than 70/30/10, and 184 of 396
+  /// tested field x pool combinations differ from the table on that basis
+  /// alone.
+  ///
+  /// The justification section 25 asks for: Technical section 9.3 sets the
+  /// target at "around 15-25% of unique players, subject to a meaningful
+  /// lowest prize". Three places out of 8 is 37.5% of the field — well above
+  /// that band — and at typical home buy-ins the third prize lands at or near
+  /// the 10 minimum, which is less than the buy-in and so pays a player less
+  /// than they staked. Two places out of 8 is 25%, at the top of the band,
+  /// and keeps every paid place meaningful. Three places start at 10 players,
+  /// where 30% is closer to the band and the pool can carry a real third
+  /// prize.
+  ///
+  /// This is a calibration choice, not a defect. If the client would rather
+  /// match the reference table exactly, change the `players >= 10` threshold
+  /// below to `players >= 8` — nothing else needs to move.
   static int _paidPlacesFor(int prizePool, int players) {
     var places = 1;
     if (players >= 6) places = 2;
@@ -457,14 +679,27 @@ class TournamentEngine {
     // Distribution weights approximating the section-25 reference style.
     // Index 0 is place 1 (largest). Chosen per place count:
     //   2 places ~ 73/27, 3 places ~ 57/30/13, 4 places ~ 56/30/10/4.
+    /// Descending payout weights for [n] places, normalised to 1.
+    ///
+    /// The `default` branch used to return a FOUR-element list for every
+    /// n > 4, so `_calcPrizes` then read `weights[i]` past the end and threw a
+    /// RangeError for 5+ paid places — reachable straight from the shipped
+    /// 1-10 dropdowns (14-027, 12-087). Beyond 4 places we fall back to the
+    /// spec's own curve: Technical section 9.4, `weight_i = exp(-lambda * i)`,
+    /// normalised to the pool.
     List<double> weightsFor(int n) {
       switch (n) {
         case 2:
           return [0.73, 0.27];
         case 3:
           return [0.57, 0.30, 0.13];
-        default:
+        case 4:
           return [0.56, 0.30, 0.10, 0.04];
+        default:
+          const lambda = 0.7;
+          final raw = [for (var i = 0; i < n; i++) math.exp(-lambda * i)];
+          final total = raw.reduce((a, b) => a + b);
+          return [for (final w in raw) w / total];
       }
     }
 
@@ -546,7 +781,13 @@ class TournamentEngine {
   /// safely round payouts on 10 and every place stays clean. Sub-10 buy-ins
   /// (e.g. a 5 or 7 game) fall back to unit 1 so sums stay exact; a 5-unit
   /// would let payouts end in 5, which §9.4 forbids.
-  static int roundingUnitFor(int buyIn) => buyIn < 10 ? 1 : 10;
+  /// Always 10. Payouts must be multiples of 10 and must never end in 5
+  /// (14-022 / 14-023, Technical section 9.4), and that holds regardless of
+  /// buy-in size. This used to drop to 1 for sub-10 buy-ins "so sums stay
+  /// exact", which permitted amounts like 27; exactness is now preserved by
+  /// carrying the sub-10 residue out of the pool as
+  /// [TournamentStructure.roundingRemainder] instead.
+  static int roundingUnitFor(int buyIn) => 10;
 
   /// Gross eligible for the prize pool. KO bounty is EXCLUDED (it is a
   /// separate field, never part of `buyIn`, spec §9.1/§23.1).
@@ -566,7 +807,12 @@ class TournamentEngine {
         (totalAddOns * (addOnEnabled ? effectiveAddOnCost : 0));
   }
 
-  static ({int organizerAmount, int prizePool, List<Prize> prizes})
+  static ({
+    int organizerAmount,
+    int prizePool,
+    List<Prize> prizes,
+    int roundingRemainder,
+  })
   recalculatePrizes(
     int grossEligible,
     int players,
@@ -586,23 +832,41 @@ class TournamentEngine {
     if (organizerPct > 0) {
       // Two candidates that carry the correct units digit mod 10, bracketing
       // the target. Pick the closer one; ties broken toward the smaller value.
+      //
+      // `best` is nullable on purpose. It used to be seeded at 0 and that seed
+      // was then treated as "unset" (`organizerAmount == 0 && c >= 0` accepted
+      // ANY candidate), so whenever 0 was the nearest valid amount the loop
+      // still took the upper candidate: gross 100 at 1% retained 10 against a
+      // target of 1. Technical section 9.2 wants the NEAREST amount, ties
+      // broken downward, and 14-016 prefers retaining less.
+      int? best;
       final baseUnits = (targetOrganizer - mod).toDouble();
       final floorCandidate = (baseUnits / roundingUnit).floor() * roundingUnit + mod;
       final ceilCandidate = floorCandidate + roundingUnit;
       for (final c in [floorCandidate, ceilCandidate]) {
         if (c < 0 || c > grossEligible) continue;
-        final d = (targetOrganizer - c).abs();
-        final bestD = (targetOrganizer - organizerAmount).abs();
-        if (organizerAmount == 0 && c >= 0 ||
-            d < bestD ||
-            (d == bestD && c < organizerAmount)) {
-          organizerAmount = c;
+        if (best == null) {
+          best = c;
+          continue;
         }
+        final d = (targetOrganizer - c).abs();
+        final bestD = (targetOrganizer - best).abs();
+        if (d < bestD || (d == bestD && c < best)) best = c;
       }
+      organizerAmount = best ?? 0;
     }
 
     var prizePool = grossEligible - organizerAmount;
     if (prizePool < 0) prizePool = 0;
+
+    // Carry any sub-10 residue OUT of the pool (14-022 / 14-023). A pool that
+    // is not a multiple of 10 cannot be split into payouts that are all
+    // multiples of 10, so with a 0% organizer cut — the documented default in
+    // Technical section 6.1, i.e. the common case — an 11 x 15 game produced
+    // 105/40/20 and 105 ends in 5. The residue is NOT an organizer cut and is
+    // reported separately so it is never labelled as one (14-010, 14-011).
+    final roundingRemainder = prizePool % roundingUnit;
+    prizePool -= roundingRemainder;
 
     final prizes = _calcPrizes(
       prizePool,
@@ -614,6 +878,7 @@ class TournamentEngine {
       organizerAmount: organizerAmount,
       prizePool: prizePool,
       prizes: prizes,
+      roundingRemainder: roundingRemainder,
     );
   }
 
@@ -627,8 +892,15 @@ class TournamentEngine {
 
     final warnings = <String>[];
     final levelDuration = _levelDurationFor(params.durationHours);
-    final playingMinutes = params.durationHours * 60 * 0.9;
-    final numLevels = math.max(6, (playingMinutes / levelDuration).floor());
+    // Full target, not 90% of it. The old 0.9 factor meant a 3.5 h event only
+    // ever generated ~3 h 09 m of levels, which both understated the finish
+    // (11-030) and made play run off the end of the structure — the trigger
+    // for the unconfirmed auto-extension in `nextLevel()` (11-014).
+    final playingMinutes = params.durationHours * 60;
+    // Levels that actually fit the target. Everything that models PACE uses
+    // this; the spare tail below is overtime insurance, not part of the plan.
+    final plannedLevels = math.max(6, (playingMinutes / levelDuration).ceil());
+    final numLevels = plannedLevels + _spareLevels;
 
     final targetBBDepth = math.min(
       240,
@@ -642,40 +914,206 @@ class TournamentEngine {
 
     final sortedChips = [...params.chipSet]..sort((a, b) => a.value - b.value);
     final minChip = sortedChips.isNotEmpty ? sortedChips.first.value : 1;
-    int startIndex = validBlindLevels.indexWhere(
-      (level) => level[0] >= minChip,
-    );
-    if (startIndex < 0) startIndex = validBlindLevels.length - 1;
-    final openingLevel = validBlindLevels[startIndex];
-    final openingBB = openingLevel[1];
 
-    final startingStack = math.max(
-      openingBB,
-      ((targetBBDepth * openingBB) / 100).round() * 100,
-    );
+    // ── Joint stack + opening-blind solve (Technical sections 7.2 and 8.2,
+    // 10-029, 11-019, 11-020) ───────────────────────────────────────────────
+    //
+    // The opening blind used to be pinned to the first ladder entry the
+    // smallest chip could pay (25/50 for any set holding a 25), and the stack
+    // was then shrunk 100 at a time until the chip plan covered it — WITHOUT
+    // ever reconsidering the blind. On the app's own presets that produced
+    // openings of 2, 12, 14 and 16 big blinds: a push-fold game from level 1,
+    // against a spec that clamps starting depth to 80-240 BB.
+    //
+    // Stack and blinds are now solved TOGETHER: every ladder pair the real
+    // denominations can post is evaluated, each against the largest stack the
+    // inventory can actually supply, and the pair landing closest to the
+    // target depth inside the 80-240 band wins.
 
-    // The chip plan must never hand a player an absurd number of chips. If the
-    // inventory can't cover the target stack, reduce the stack (rounding to the
-    // nearest 100, never below one opening blind) until it fits. This keeps the
-    // starting stack and the chip plan consistent instead of piling ~1000 small
-    // chips onto a single colour.
-    var stack = startingStack;
-    List<ChipPlanEntry> chipPlan;
-    while (true) {
-      final int bufferedPlayers =
-          params.players + (params.players * 0.20).ceil();
-      chipPlan = _buildChipPlan(
-        stack,
-        params.chipSet,
-        bufferedPlayers,
-        params.rebuys ? 2 : 1.2,
-      );
-      final covered = chipPlan.fold<int>(0, (s, e) => s + e.count * e.value);
-      if (covered >= stack || stack <= openingBB) break;
-      final newStack = math.max(openingBB, ((stack - 100) ~/ 100) * 100);
-      if (newStack == stack) break;
-      stack = newStack;
+    // Real expected entries rather than a flat `players x 1.2 x 2` buffer —
+    // the same figures Technical section 6.3 step 4 uses for the blind curve.
+    final expectedRebuysForChips =
+        params.rebuys ? (params.players * 0.35).round() : 0;
+    final expectedAddOnsForChips =
+        params.addOn ? (params.players * 0.65).round() : 0;
+
+    // How many stacks the inventory is divided across when building ONE
+    // player's starting stack. Tried from most conservative to least: hold
+    // back chips for every expected rebuy and add-on first, and only relax
+    // toward seats-only if that reserve cannot fund a legal starting depth.
+    // Relaxing is legitimate — busted stacks return to the box and are
+    // recycled into rebuys, so the full reserve is a floor, not a hard need
+    // (Technical section 7.2).
+    final reserveTiers = <int>{
+      params.players + expectedRebuysForChips + expectedAddOnsForChips,
+      params.players + expectedRebuysForChips,
+      params.players,
+    }.where((v) => v > 0).toList();
+
+    List<ChipPlanEntry> planFor(int candidate, int divisor, int sb) =>
+        _buildChipPlan(
+          candidate,
+          params.chipSet,
+          math.max(1, divisor),
+          1.0,
+          smallBlind: sb,
+        );
+
+    bool covers(int candidate, List<ChipPlanEntry> plan) =>
+        plan.fold<int>(0, (s, e) => s + e.count * e.value) >= candidate;
+
+    /// A stack has to be postable, not merely large (11-020, 10-033).
+    ///
+    /// Counting chips worth "<= the small blind" made the test EASIER at
+    /// higher blinds — at 25/50 the 25-value chips count as change — so under
+    /// tight inventory the solver was pushed toward big blinds and shallow
+    /// stacks to satisfy it. Home Set with 18 players came out at 25/50 and
+    /// 18.5 BB: perfectly postable, and push-fold from level one. Depth is
+    /// selected first (the 80-240 band gate below); change is a constraint
+    /// applied INSIDE that band, never a reason to leave it.
+    bool hasChange(List<ChipPlanEntry> plan, int sb) {
+      final payable =
+          plan.where((e) => e.value <= sb).fold<int>(0, (s, e) => s + e.count);
+      if (payable < 6) return false;
+      // At least a couple of chips must be strictly SMALLER than the small
+      // blind, so a player can make change rather than only pay it exactly.
+      final belowBlind = plan
+          .where((e) => e.value < sb)
+          .fold<int>(0, (s, e) => s + e.count);
+      return belowBlind >= 2;
     }
+
+    ({int index, int stack, double depth, int divisor})? best;
+
+    for (final divisor in reserveTiers) {
+      for (var i = 0; i < validBlindLevels.length; i++) {
+        final sb = validBlindLevels[i][0];
+        final bb = validBlindLevels[i][1];
+        // 11-004: every blind must be postable with the chips in play.
+        if (minChip <= 0 || sb % minChip != 0 || bb % minChip != 0) continue;
+
+        // Largest stack at this opening that both hits the target depth and
+        // the inventory can supply.
+        //
+        // Stepping down one small blind at a time produced stacks like 815,
+        // 845 and 995 — 81.5 BB is neither round nor easy to announce at the
+        // table (10-034, Technical section 7.3 `counting_simplicity` /
+        // `stack_aesthetics`). Try a coarse, countable grid first — 10 then 5
+        // big blinds — and only fall back to single-blind steps if nothing
+        // coarser fits the box.
+        final floor = (80 * bb / sb).ceil() * sb;
+        int? chosen;
+        List<ChipPlanEntry>? chosenPlan;
+        for (final step in [bb * 10, bb * 5, sb]) {
+          if (step <= 0) continue;
+          var candidate = (targetBBDepth * bb / step).floor() * step;
+          while (candidate >= floor) {
+            final plan = planFor(candidate, divisor, sb);
+            if (covers(candidate, plan) && hasChange(plan, sb)) {
+              chosen = candidate;
+              chosenPlan = plan;
+              break;
+            }
+            final next = candidate - step;
+            if (next <= 0) break;
+            candidate = next;
+          }
+          if (chosen != null) break;
+        }
+        if (chosen == null || chosenPlan == null) continue;
+        final candidate = chosen;
+
+        final depth = candidate / bb;
+        if (depth < 80 || depth > 240) continue;
+
+        // Prefer the depth closest to target; break ties toward the LARGER
+        // opening blind, which needs fewer physical chips per stack (10-034,
+        // Technical section 7.3). The ladder is walked ascending and the
+        // comparison was strictly `<`, so equal-distance candidates kept the
+        // FIRST — i.e. the smaller blind — the opposite of what is documented.
+        final delta = (depth - targetBBDepth).abs();
+        final bestDelta =
+            best == null ? double.infinity : (best.depth - targetBBDepth).abs();
+        if (best == null ||
+            delta < bestDelta ||
+            (delta == bestDelta && bb > validBlindLevels[best.index][1])) {
+          best = (index: i, stack: candidate, depth: depth, divisor: divisor);
+        }
+      }
+      // The first tier that yields a legal depth wins — it is the most
+      // conservative one that still works.
+      if (best != null) break;
+    }
+
+    if (best == null) {
+      // 10-039: say so rather than silently shipping a push-fold structure.
+      warnings.add(
+        'These chips cannot fund an 80 big-blind starting stack for '
+        '${params.players} players. Add more low-denomination chips, or '
+        'reduce the field, for a deeper start.',
+      );
+      // Fall back to the DEEPEST legal opening the inventory can pay, not the
+      // first one that happens to fit — and still insist on change in hand.
+      //
+      // This loop originally tested `covers(...)` alone. Dropping `hasChange`
+      // produced stacks nobody can post a blind from: Home Set with 14 players
+      // built 1,100 at 5/10 as 2 x 500 + 1 x 100 — three chips, none of them
+      // 10 or under (10-033, 11-020, Technical section 7.2). Below spec on
+      // DEPTH is a warning; below spec on payability is unplayable.
+      ({int index, int stack, double depth, int divisor})? withChange;
+      ({int index, int stack, double depth, int divisor})? anyCover;
+
+      for (var i = 0; i < validBlindLevels.length; i++) {
+        final sb = validBlindLevels[i][0];
+        final bb = validBlindLevels[i][1];
+        if (minChip <= 0 || sb % minChip != 0 || bb % minChip != 0) continue;
+        var candidate = (targetBBDepth * bb / sb).round() * sb;
+        // Floor the search. Walking all the way down to one small blind meant
+        // a tight inventory could "succeed" at a 1 big-blind stack, which is
+        // not a tournament. Below 20 BB the opening is unplayable, so try the
+        // next ladder entry instead — and if every entry bottoms out, the
+        // shortage warning above already tells the host why.
+        final fallbackFloor = 20 * bb;
+        List<ChipPlanEntry>? plan;
+        while (candidate >= fallbackFloor) {
+          final p = planFor(candidate, params.players, sb);
+          if (covers(candidate, p)) {
+            plan = p;
+            break;
+          }
+          candidate -= sb;
+        }
+        if (plan == null || candidate < fallbackFloor) continue;
+        final depth = candidate / bb;
+        final entry = (
+          index: i,
+          stack: candidate,
+          depth: depth,
+          divisor: params.players,
+        );
+        if (anyCover == null || depth > anyCover.depth) anyCover = entry;
+        if (hasChange(plan, sb) &&
+            (withChange == null || depth > withChange.depth)) {
+          withChange = entry;
+        }
+      }
+      // Prefer the deepest PLAYABLE candidate; only if none has change at all
+      // does the deepest coverable one stand.
+      best = withChange ?? anyCover;
+    }
+
+    // Absolute last resort: an inventory that can pay nothing at all.
+    best ??= (
+      index: 0,
+      stack: math.max(validBlindLevels.first[1], minChip * 10),
+      depth: 10,
+      divisor: math.max(1, params.players),
+    );
+
+    final startIndex = best.index;
+    final openingBB = validBlindLevels[startIndex][1];
+    final stack = best.stack;
+    final chipPlan = planFor(stack, best.divisor, validBlindLevels[startIndex][0]);
 
     final addOnStack = params.addOn ? stack : 0;
     final rebuyStack = stack;
@@ -714,10 +1152,16 @@ class TournamentEngine {
         stack * expectedRebuysTotal +
         addOnStack * expectedAddOnsTotal;
     final targetFinalBB = expectedTotalChips / (2 * targetHeadsUpAverageBB);
+    // Technical section 8.4: the exponent is `1 / max(1, plannedLevels - 1)`.
+    // Using `numLevels` here spread the curve across the spare tail as well,
+    // so blinds grew ~30% slower per level than the formula intends and the
+    // big blind at the target finish came in around 2.5x too shallow — about
+    // an hour of extra play. The same factor simply continues through the
+    // spare levels, which is what you want if the game does run long.
     final growthFactor = math
         .pow(
           math.max(targetFinalBB, openingBB.toDouble()) / openingBB,
-          1 / math.max(1, numLevels - 1),
+          1 / math.max(1, plannedLevels - 1),
         )
         .toDouble();
 
@@ -783,17 +1227,20 @@ class TournamentEngine {
       );
     }
 
+    final openingSb = validBlindLevels[startIndex][0];
     final rebuyChipPlan = _buildChipPlan(
       rebuyStack,
       params.chipSet,
       params.players,
       2,
+      smallBlind: openingSb,
     );
     final addOnChipPlan = _buildChipPlan(
       addOnStack,
       params.chipSet,
       params.players,
       2,
+      smallBlind: openingSb,
     );
 
     // Colour-up schedule (10-044): a concrete exchange for every chip colour
@@ -850,8 +1297,21 @@ class TournamentEngine {
     final organizerAmount = recalculated.organizerAmount;
     final prizePool = recalculated.prizePool;
     final prizes = recalculated.prizes;
+    final roundingRemainder = recalculated.roundingRemainder;
 
-    final expectedFinishMins = (numLevels * levelDuration * 1.05).round();
+    // 11-030 / 11-031 and Technical section 6.3 step 11: an ESTIMATE derived
+    // from what was actually generated, plus the end-of-rebuy settlement
+    // pause — real elapsed time even though no level runs during it.
+    //
+    // Restating the target (`durationHours * 60 + 15`) made this tautological:
+    // it could never disagree with the request, so it could never warn that
+    // the generated structure does not fit. Summing the PLANNED levels agrees
+    // with the target in the normal case and diverges visibly when it cannot.
+    var plannedMins = 0;
+    for (var i = 0; i < plannedLevels && i < levels.length; i++) {
+      plannedMins += levels[i].durationMins;
+    }
+    final expectedFinishMins = plannedMins + settlementBreakMins;
 
     if (params.players < 4) {
       warnings.add('Very small field — consider a shorter structure.');
@@ -871,10 +1331,12 @@ class TournamentEngine {
       addOnChipPlan: addOnChipPlan,
       levels: levels,
       levelDuration: levelDuration,
+      plannedLevels: plannedLevels,
       expectedFinishMins: expectedFinishMins,
       prizes: prizes,
       prizePool: prizePool,
       organizerAmount: organizerAmount,
+      roundingRemainder: roundingRemainder,
       colorUpInstructions: colorUpInstructions,
       warnings: warnings,
     );

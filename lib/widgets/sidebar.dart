@@ -18,6 +18,10 @@ import 'glass_surface.dart';
 import 'group_switcher.dart';
 
 /// Desktop left sidebar mirroring the web `Nav` component.
+/// Width of the desktop sidebar. Dialogs offset by this so they centre over
+/// the content area instead of the window (see [ShellInsets]).
+const double kSidebarWidth = 264;
+
 class Sidebar extends StatelessWidget {
   const Sidebar({super.key});
 
@@ -55,7 +59,7 @@ class Sidebar extends StatelessWidget {
       borderRadius: BorderRadius.zero,
       decoration: Glass.glassNav(),
       child: SizedBox(
-        width: 264,
+        width: kSidebarWidth,
         child: Column(
           children: [
             // Logo
@@ -104,7 +108,7 @@ class Sidebar extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 children: [
-                  // Current group â€” the single group selector (IA Â§10).
+                  // Current group — the single group selector (IA §10).
                   InkWell(
                     onTap: () => showGroupSwitcher(context),
                     borderRadius: BorderRadius.circular(AppRadius.md),
@@ -278,7 +282,7 @@ class Sidebar extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  user?.name ?? 'â€”',
+                                  user?.name ?? '—',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTypography.bodySm.copyWith(

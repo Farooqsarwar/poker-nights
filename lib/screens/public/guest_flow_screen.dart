@@ -32,6 +32,10 @@ enum _GuestStep {
   rejected,
   notLive,
   wrongOwner,
+  /// Arrived after late registration closed permanently, or the event was
+  /// called off. A real dead end for tonight — say so kindly and offer the
+  /// only things that still help.
+  tooLate,
   completed,
 }
 
@@ -49,6 +53,10 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   final TextEditingController _nameController = TextEditingController();
   String? _codeError;
   String? _nameError;
+
+  /// Why tonight is over for this guest — closed registration, or the event
+  /// being called off. Drives [_buildTooLate].
+  String? _tooLateReason;
   String? _selectedInviter;
   int? _selectedSlot;
   bool _submittingCheckIn = false;
@@ -228,7 +236,20 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       return;
     }
     if (!result.ok) {
-      // Transient / validation failure — keep them at the name step.
+      // Registration closing is not a validation error the guest can correct
+      // by retyping their name — it is the end of the road for tonight. It
+      // used to leave them staring at a red line under the name field with no
+      // way forward. Route it to a proper explanation instead.
+      final closed = _closedMessage(result.message);
+      if (closed != null) {
+        setState(() {
+          _nameError = null;
+          _tooLateReason = closed;
+          _step = _GuestStep.tooLate;
+        });
+        return;
+      }
+      // Anything else really is transient — keep them at the name step.
       setState(
         () => _nameError = result.message ?? 'Could not reserve that slot.',
       );
@@ -255,7 +276,22 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       _nameController.clear();
       _codeError = null;
       _nameError = null;
+      _tooLateReason = null;
     });
+  }
+
+  /// Recognises the "the door is shut" failures, which a guest cannot fix by
+  /// editing anything, and returns the sentence to show them.
+  String? _closedMessage(String? raw) {
+    final m = (raw ?? '').toLowerCase();
+    if (m.contains('late registration') || m.contains('registration has closed')) {
+      return 'Registration for tonight closed when the rebuy period ended, '
+          'so no new players can be added to this tournament.';
+    }
+    if (m.contains('cancelled')) {
+      return 'This tournament has been cancelled by the host.';
+    }
+    return null;
   }
 
   @override
@@ -284,10 +320,18 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
 
   Widget _buildBody(AppProvider app, LiveGame? game) {
     if (game != null && game.status == LiveGameStatus.cancelled) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _startOver();
-      });
-      return _buildCodeEntry();
+      // Silently bouncing back to the code screen looked like the code had
+      // stopped working. Say what happened.
+      if (_step != _GuestStep.tooLate) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            _tooLateReason = 'This tournament has been cancelled by the host.';
+            _step = _GuestStep.tooLate;
+          });
+        });
+      }
+      return _buildTooLate();
     }
 
     if (game == null) {
@@ -435,6 +479,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           _GuestStep.waiting => _buildWaiting(game, inviter),
           _GuestStep.confirmed => _buildConfirmed(level),
           _GuestStep.rejected => _buildRejected(),
+          _GuestStep.tooLate => _buildTooLate(),
           _GuestStep.notLive => _buildNotLive(game),
           _GuestStep.completed => _buildCompleted(),
           _GuestStep.wrongOwner => _buildWrongOwner(),
@@ -713,7 +758,18 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
               child: Text(
-                'No one has RSVP\'d with guests. Please ask the admin.',
+                // Two situations were reported with one sentence and the
+                // guest could not tell which applied: nobody brought guests
+                // at all, versus every slot already claimed. The second is
+                // far more likely for a guest arriving last.
+                game.guestSlots.isEmpty &&
+                        !game.players.any((p) => p.isGuest)
+                    ? 'Nobody has brought a guest to this game yet. Ask '
+                          'whoever invited you to add you as their +1, then '
+                          'come back.'
+                    : 'Every guest place has already been claimed. Ask the '
+                          'person who invited you, or the host, to free one '
+                          'up for you.',
                 textAlign: TextAlign.center,
                 style: AppTypography.bodySm.copyWith(
                   color: AppColors.mutedForeground,
@@ -1055,6 +1111,83 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Dead end for tonight — registration closed, or the event was called off.
+  ///
+  /// A guest who turns up late is still a person standing in the room, so this
+  /// says plainly what happened, what the host can and cannot do about it, and
+  /// leaves the one door that is still open: make an account so the next
+  /// invitation comes straight to them.
+  Widget _buildTooLate() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppCard(
+          borderColor: AppColors.border,
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: Column(
+            children: [
+              Icon(
+                Icons.schedule,
+                size: AppFontSizes.displayLg,
+                color: AppColors.mutedForeground,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'You have missed this one',
+                textAlign: TextAlign.center,
+                style: AppTypography.display(
+                  size: AppFontSizes.xl,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                _tooLateReason ??
+                    'This tournament is no longer accepting new players.',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Text(
+                  'Have a word with the host — they can see exactly where the '
+                  'tournament is up to. Nothing here can reopen it for you.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          size: AppButtonSize.lg,
+          fullWidth: true,
+          onPressed: () => context.go(RoutePaths.register),
+          child: const Text('Create an account for next time'),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppButton(
+          variant: AppButtonVariant.secondary,
+          size: AppButtonSize.lg,
+          fullWidth: true,
+          onPressed: _startOver,
+          child: const Text('Enter a different code'),
+        ),
+      ],
     );
   }
 

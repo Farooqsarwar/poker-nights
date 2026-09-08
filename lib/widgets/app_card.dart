@@ -53,7 +53,9 @@ class _AppCardState extends State<AppCard> {
     final shadows = isElevated ? Glass.cardElevatedShadow : Glass.cardShadow;
 
     final decoration = BoxDecoration(
-      color: baseColor.withValues(alpha: Glass.surfaceOpacity),
+      // Opaque, pre-blended against the background rather than a 40% fill
+      // relying on a backdrop blur that web often skips — see Glass.solid.
+      color: Glass.solid(baseColor, Glass.surfaceOpacity),
       borderRadius: borderRadius,
       border: Border.all(
         color: isElevated

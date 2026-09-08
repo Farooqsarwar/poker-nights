@@ -126,33 +126,79 @@ extension AppProviderTimer on AppProvider {
     if (game == null || !game.status.isActiveLive) return 0;
     if (game.players.length < 2) return 0;
     final levels = game.structure.levels;
-    // Elapsed playing time: completed levels plus the consumed seconds of the
-    // current level.
-    var elapsedMins = 0.0;
-    for (var i = 0; i < game.currentLevel - 1 && i < levels.length; i++) {
-      elapsedMins += levels[i].durationMins;
-    }
     final currentLevelData = game.currentLevelData;
     final currentDurationMins =
         currentLevelData?.durationMins ?? game.structure.levelDuration;
-    final consumedSeconds =
-        currentDurationMins * 60 - game.currentSecondsRemaining();
-    elapsedMins += consumedSeconds.clamp(0, currentDurationMins * 60) / 60.0;
-    // Remaining scheduled work: future levels only.
-    var remainingLevelsMins = 0;
-    for (var i = game.currentLevel; i < levels.length; i++) {
+
+    // Elapsed time against the WALL CLOCK, from the first Start press.
+    //
+    // Summing level durations could not see a pause, and the biggest pause of
+    // the night is a scheduled one: the end-of-rebuy settlement break runs
+    // without a countdown (User Flow section 4.13) and the engine budgets 15
+    // minutes for it (11-031). A settlement that took half an hour therefore
+    // left this reading on-target while the dashboard's own wall-clock finish
+    // window — computed from `DateTime.now()` — showed the evening slipping.
+    // The two now agree, and a long pause produces the "Speed Up" offer the
+    // spec relies on (Technical section 11.4).
+    var elapsedMins = 0.0;
+    final startedAt = game.startedAt;
+    if (startedAt != null) {
+      elapsedMins = _serverNow.difference(startedAt).inSeconds / 60.0;
+      if (elapsedMins < 0) elapsedMins = 0;
+    } else {
+      // Legacy game, or the clock was never started through `startTimer`:
+      // fall back to scheduled level time.
+      for (var i = 0; i < game.currentLevel - 1 && i < levels.length; i++) {
+        elapsedMins += levels[i].durationMins;
+      }
+      final consumedSeconds =
+          currentDurationMins * 60 - game.currentSecondsRemaining();
+      elapsedMins += consumedSeconds.clamp(0, currentDurationMins * 60) / 60.0;
+    }
+    // Remaining scheduled work: future PLANNED levels only.
+    //
+    // The generator appends a spare tail so a slow field cannot run off the
+    // end of the structure. Counting it here made a fresh 3.5 h / 15-minute
+    // event report about +45 minutes of drift at level 1 with a full field and
+    // nobody eliminated — past the 20-minute threshold, so "Speed Up" was
+    // recommended from the first level boundary of every tournament. A
+    // permanent nag trains the admin to ignore a control the spec leans on
+    // (Technical section 11.4, 12-071).
+    final planned = game.structure.effectivePlannedLevels;
+    var remainingLevelsMins = 0.0;
+    for (var i = game.currentLevel; i < planned && i < levels.length; i++) {
       remainingLevelsMins += levels[i].durationMins;
     }
-    // Pace factor: how the actual remaining field compares with the expected
-    // one (clamped so extreme fields cannot produce absurd estimates).
-    final expectedRemaining = game.settings.players;
+    // The rest of the level being played is still work to do. Its CONSUMED
+    // part was added to `elapsedMins` above but its remainder was counted
+    // nowhere, so the estimate understated by up to a full level — enough on
+    // its own to tip a fresh event into a false "Slow Down".
+    remainingLevelsMins +=
+        game.currentSecondsRemaining().clamp(0, currentDurationMins * 60) / 60.0;
+
+    final targetMins = game.settings.durationHours * 60;
     final actualRemaining = game.activePlayers.length;
-    if (actualRemaining < 1 || expectedRemaining < 1) return 0;
-    final paceFactor =
-        (expectedRemaining / actualRemaining).clamp(0.5, 2.0);
+    final startingField = game.settings.players;
+    if (actualRemaining < 1 || startingField < 1 || targetMins <= 0) return 0;
+
+    // Pace factor: actual field against the EXPECTED field at this point in
+    // the schedule (Technical section 11.4 — "compare actual players remaining
+    // with the expected curve").
+    //
+    // This used to divide the STARTING field by the current one, which grows
+    // without bound as players bust. It therefore drifted toward "Speed Up"
+    // precisely when the field was thinning and the tournament was running
+    // AHEAD: at a three-handed final table of a ten-player game the factor
+    // clamped to 2.0 and recommended speeding up a game about to finish early.
+    // The comparison now runs the right way round — more players left than the
+    // schedule expects means slow progress (speed up); fewer means fast
+    // progress (slow down).
+    final elapsedFraction = (elapsedMins / targetMins).clamp(0.0, 1.0);
+    final expectedNow = max(2.0, startingField * (1 - elapsedFraction));
+    final paceFactor = (actualRemaining / expectedNow).clamp(0.5, 2.0);
+
     final estimateMins = remainingLevelsMins * paceFactor;
-    final targetRemainingMins =
-        game.settings.durationHours * 60 - elapsedMins;
+    final targetRemainingMins = targetMins - elapsedMins;
     return (estimateMins - targetRemainingMins).round();
   }
 
@@ -251,6 +297,11 @@ extension AppProviderTimer on AppProvider {
       levelEndTime: _serverNow.add(
         Duration(seconds: _currentGame!.secondsRemaining),
       ),
+      // Wall-clock origin for the pace model. Set once, on the first Start,
+      // and never rewritten — a restart of the current level or a recovered
+      // session must not move it, or the drift estimate loses the pauses it
+      // exists to notice (11-031).
+      startedAt: _currentGame!.startedAt ?? _serverNow,
     );
     addAnnouncement(
       'Tournament starts. Level ${_currentGame!.currentLevel}. '
@@ -350,29 +401,56 @@ extension AppProviderTimer on AppProvider {
         ),
       );
     } else {
-      // Spec C5: if next index is past the generated end, append an auto-extension
-      // level (payable, ~1.4x last BB, same duration, capped by chips in play).
+      // Play has run past the generated structure.
+      //
+      // User Flow sections 3.3 and 4.14 allow a future level to be inserted
+      // "only after admin confirmation" (12-082), and 11-004 requires every
+      // blind to be postable. This used to silently invent a level at
+      // ceil(lastBB * 1.4) with an SB at ceil(bb * 0.4) — unconfirmed, and
+      // snapped to nothing, so it could ask for blinds the chips cannot pay.
+      //
+      // The engine now generates spare levels past the target so this is rare.
+      // When it still happens the clock HOLDS on the finished level and the
+      // admin is asked to approve the extension, rather than the app changing
+      // the structure on its own.
       if (next > _currentGame!.structure.levels.length) {
         final lastLevel = _currentGame!.structure.levels.last;
-        int nextBB = (lastLevel.bb * 1.4).ceil();
         final chipsInPlay = _currentGame!.totalChipsInPlay;
-        if (nextBB >= chipsInPlay) {
-          nextBB = chipsInPlay;
-          addAnnouncement('Max blinds reached - sudden death until a winner is decided.', true);
+        var proposedBB = TournamentEngine.snapToPracticalBlind(
+          lastLevel.bb * 1.4,
+          _currentGame!.settings.chipSet,
+        );
+        if (proposedBB <= lastLevel.bb) proposedBB = lastLevel.bb * 2;
+        if (chipsInPlay > 0 && proposedBB > chipsInPlay) {
+          proposedBB = TournamentEngine.snapToPracticalBlind(
+            chipsInPlay.toDouble(),
+            _currentGame!.settings.chipSet,
+          );
         }
-        final nextSB = (nextBB * 0.4).ceil();
-        final extensionLevel = BlindLevel(
+        final proposedSB = TournamentEngine.snapToPracticalBlind(
+          proposedBB * 0.45,
+          _currentGame!.settings.chipSet,
+        );
+        pendingLevelExtension = BlindLevel(
           level: next,
-          sb: nextSB,
-          bb: nextBB,
+          sb: proposedSB >= proposedBB ? (proposedBB ~/ 2) : proposedSB,
+          bb: proposedBB,
           durationMins: lastLevel.durationMins,
           ante: lastLevel.ante,
         );
         _currentGame = _currentGame!.copyWith(
-          structure: _currentGame!.structure.copyWith(
-            levels: [..._currentGame!.structure.levels, extensionLevel],
-          ),
+          timerRunning: false,
+          secondsRemaining: 0,
+          levelEndTime: null,
+          clearLevelEndTime: true,
         );
+        addAnnouncement(
+          'Structure complete — the host must approve the next blind level.',
+          true,
+        );
+        _syncGroupGame();
+        if (!_disposed) notifyListeners();
+        return;
       }
       final extLevel = _currentGame!.structure.levels[next - 1];
       _currentGame = _currentGame!.copyWith(
@@ -393,6 +471,38 @@ extension AppProviderTimer on AppProvider {
       );
     }
     _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Applies the extension level the admin has just approved (12-082).
+  /// Returns false when there is nothing pending or this device is read-only.
+  bool acceptLevelExtension() {
+    final proposed = pendingLevelExtension;
+    final game = _currentGame;
+    if (proposed == null || game == null) return false;
+    _forceClaimEditor();
+    if (!_isGameAuthority) return false;
+    pendingLevelExtension = null;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      structure: game.structure.copyWith(
+        levels: [...game.structure.levels, proposed],
+      ),
+    );
+    addAuditRecord(
+      'structure_extend',
+      'Approved extension level ${proposed.level}: '
+      '${proposed.sb}/${proposed.bb} for ${proposed.durationMins} minutes.',
+    );
+    nextLevel(idempotencyKey: 'extend-${proposed.level}');
+    return true;
+  }
+
+  /// Dismisses the proposal without changing the structure. The clock stays
+  /// held so the admin can finish the tournament instead.
+  void declineLevelExtension() {
+    if (pendingLevelExtension == null) return;
+    pendingLevelExtension = null;
     if (!_disposed) notifyListeners();
   }
 

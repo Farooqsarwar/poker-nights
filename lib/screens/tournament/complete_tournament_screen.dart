@@ -15,6 +15,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/medal_icon.dart';
+import '../../widgets/glass_styles.dart';
 
 /// Record finish order mirroring the web `CompleteTournamentPage`.
 class CompleteTournamentScreen extends StatefulWidget {
@@ -339,7 +340,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                               vertical: AppSpacing.sm,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.muted.withValues(alpha: 0.3),
+                              color: Glass.solidTint(AppColors.muted),
                               borderRadius: BorderRadius.circular(AppRadius.md),
                               border: Border.all(color: AppColors.border),
                             ),
@@ -563,7 +564,9 @@ class _EditPrizesModalState extends State<_EditPrizesModal> {
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       isDense: true,
-                      prefixText: '\$',
+                      // 04-013 / User Flow 3.4: money is shown WITHOUT a
+                      // currency symbol anywhere in the app.
+                      isCollapsed: false,
                     ),
                   ),
                 ),
@@ -585,7 +588,10 @@ class _EditPrizesModalState extends State<_EditPrizesModal> {
             if (totalNew != totalOriginal) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Payouts sum to \$$totalNew, but the prize pool is \$$totalOriginal.'),
+                  content: Text(
+                    'Payouts sum to $totalNew, but the prize pool is '
+                    '$totalOriginal.',
+                  ),
                   backgroundColor: AppColors.destructive,
                 ),
               );

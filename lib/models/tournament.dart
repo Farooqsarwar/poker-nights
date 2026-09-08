@@ -113,10 +113,13 @@ class TournamentStructure {
     required this.addOnChipPlan,
     required this.levels,
     required this.levelDuration,
+    this.plannedLevels = 0,
     required this.expectedFinishMins,
     required this.prizes,
     required this.prizePool,
     required this.organizerAmount,
+    this.roundingRemainder = 0,
+    this.paidPlaces = 0,
     required this.colorUpInstructions,
     required this.warnings,
   });
@@ -132,10 +135,56 @@ class TournamentStructure {
 
   final List<BlindLevel> levels;
   final int levelDuration;
+
+  /// How many of [levels] fall inside the TARGET duration.
+  ///
+  /// The generator appends a short tail of spare levels so a slow field never
+  /// plays off the end of the structure (11-014). Those spares are meant to go
+  /// unused, so anything modelling PACE — the blind growth exponent, the
+  /// finish estimate, the speed-up/slow-down drift — must count only the
+  /// planned levels. Counting the tail flattened the curve by roughly 30% and
+  /// made every tournament report ~45 minutes of drift from level 1.
+  ///
+  /// 0 on structures written before this field existed; callers fall back to
+  /// `levels.length`.
+  final int plannedLevels;
+
+  /// Planned levels, or the whole ladder for a legacy structure.
+  int get effectivePlannedLevels =>
+      plannedLevels > 0 && plannedLevels <= levels.length
+          ? plannedLevels
+          : levels.length;
+
   final int expectedFinishMins;
   final List<Prize> prizes;
   final int prizePool;
   final int organizerAmount;
+
+  /// Money left over when the eligible gross is not a multiple of 10.
+  ///
+  /// Every displayed payout must be a multiple of 10 and must never end in 5
+  /// (14-022 / 14-023, Technical section 9.4). A pool that is not itself a
+  /// multiple of 10 cannot be split into such payouts at all — any partition
+  /// of multiples of 10 sums to a multiple of 10 — so the residue has to leave
+  /// the pool. It is tracked SEPARATELY from [organizerAmount] because it is
+  /// not an organizer cut and must never be labelled as one (14-010, 14-011);
+  /// show it as "rounding remainder".
+  final int roundingRemainder;
+
+  /// How many places are paid, WITHOUT the amounts.
+  ///
+  /// Non-admin views need only the count — "3 places paid" — never the
+  /// figures. Projections therefore ship an EMPTY `prizes` list and this
+  /// scalar instead, which lets the Firestore rules verify the omission
+  /// (`prizes.size() == 0`). Zeroed `Prize` entries could not be verified:
+  /// the rules language cannot iterate a list to confirm every amount is 0,
+  /// so the boundary would have rested on the client alone (19-019).
+  final int paidPlaces;
+
+  /// Paid-place count for display, whichever shape this copy is in.
+  int get paidPlacesForDisplay =>
+      prizes.isNotEmpty ? prizes.length : paidPlaces;
+
   final List<String> colorUpInstructions;
   final List<String> warnings;
 
@@ -153,10 +202,13 @@ class TournamentStructure {
     List<ChipPlanEntry>? addOnChipPlan,
     List<BlindLevel>? levels,
     int? levelDuration,
+    int? plannedLevels,
     int? expectedFinishMins,
     List<Prize>? prizes,
     int? prizePool,
     int? organizerAmount,
+    int? roundingRemainder,
+    int? paidPlaces,
     List<String>? colorUpInstructions,
     List<String>? warnings,
   }) {
@@ -169,10 +221,13 @@ class TournamentStructure {
       addOnChipPlan: addOnChipPlan ?? this.addOnChipPlan,
       levels: levels ?? this.levels,
       levelDuration: levelDuration ?? this.levelDuration,
+      plannedLevels: plannedLevels ?? this.plannedLevels,
       expectedFinishMins: expectedFinishMins ?? this.expectedFinishMins,
       prizes: prizes ?? this.prizes,
       prizePool: prizePool ?? this.prizePool,
       organizerAmount: organizerAmount ?? this.organizerAmount,
+      roundingRemainder: roundingRemainder ?? this.roundingRemainder,
+      paidPlaces: paidPlaces ?? this.paidPlaces,
       colorUpInstructions: colorUpInstructions ?? this.colorUpInstructions,
       warnings: warnings ?? this.warnings,
     );

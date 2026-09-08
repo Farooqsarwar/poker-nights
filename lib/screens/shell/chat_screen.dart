@@ -11,6 +11,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/chat_bubble.dart';
 import '../../widgets/group_switcher.dart';
+import '../../widgets/glass_styles.dart';
 
 /// Group chat as a full screen (single navigation layer — no hub tabs, so the
 /// Chat item never appears twice).
@@ -289,7 +290,7 @@ class _ChatInputState extends State<_ChatInput> {
       constraints: const BoxConstraints(minHeight: 48),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.muted.withValues(alpha: 0.55),
+        color: Glass.solidTint(AppColors.muted),
         borderRadius: BorderRadius.circular(26),
         border: Border.all(
           color: _focused

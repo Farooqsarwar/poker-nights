@@ -9,6 +9,7 @@ import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/tournament_engine.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
@@ -565,9 +566,11 @@ class _ChipRowState extends State<_ChipRow> {
     Color pickerColor = Color(widget.chip.hex);
     final nameController = TextEditingController(text: widget.chip.color);
 
+    final dialogInsets = appDialogInsets(context);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        insetPadding: dialogInsets,
         title: const Text('Pick a color'),
         content: SingleChildScrollView(
           child: Column(

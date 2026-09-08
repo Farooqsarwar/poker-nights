@@ -11,6 +11,7 @@ import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
+import '../../utils/tournament_engine.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -19,7 +20,6 @@ import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
-import '../../widgets/coin_shuffle_animation.dart';
 import '../../widgets/glass_styles.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/screen_shell.dart';
@@ -55,10 +55,21 @@ class StructureReviewScreen extends StatelessWidget {
 
     final structure = game.structure;
     final settings = game.settings;
-    final totalMins = structure.levels.fold<int>(
-      0,
-      (s, l) => s + l.durationMins,
-    );
+    // Playing time the structure is PLANNED to take, not the length of every
+    // level it contains. The generator appends a spare tail so a slow field
+    // cannot run off the end (11-014), and those levels are meant to go
+    // unused — folding them in made a 3.5 h event predict a finish an hour
+    // late on the very screen where the host approves the structure (11-030,
+    // User Flow section 4.8 / Appendix A.3). `expectedFinishMins` is the
+    // engine's own answer and already includes the settlement pause (11-031);
+    // fall back to the planned levels for a structure generated before that
+    // field existed.
+    final plannedMins = structure.levels
+        .take(structure.effectivePlannedLevels)
+        .fold<int>(0, (s, l) => s + l.durationMins);
+    final totalMins = structure.expectedFinishMins > 0
+        ? structure.expectedFinishMins
+        : plannedMins + TournamentEngine.settlementBreakMins;
     final anteStartLevel =
         structure.levels.indexWhere((l) => l.ante != null) + 1;
     final expectedRebuys = settings.rebuys
@@ -150,28 +161,9 @@ class StructureReviewScreen extends StatelessWidget {
                     size: AppButtonSize.lg,
                     onPressed: () async {
                       // Show the splash animation while "generating"
-                      showDialog(
+                      showGeneratingModal(
                         context: context,
-                        barrierDismissible: false,
-                        builder: (ctx) => Dialog(
-                          backgroundColor: Colors.transparent,
-                          elevation: 0,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const CoinShuffleAnimation(),
-                              const SizedBox(height: 24),
-                              Text(
-                                'AI is generating structure...',
-                                style: TextStyle(
-                                  color: AppColors.foreground,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        message: 'AI is generating structure...',
                       );
                       // Fake delay to show off the animation
                       await Future.delayed(const Duration(seconds: 3));
@@ -770,6 +762,30 @@ class StructureReviewScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                // 14-010 / 14-011: the residue is a ROUNDING REMAINDER, never
+                // an organizer cut. Rendered only when it exists so a 0% game
+                // does not grow a mysterious retained line.
+                if (structure.roundingRemainder > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Rounding remainder',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${structure.roundingRemainder}',
+                          style: AppTypography.monoXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -901,35 +917,9 @@ class StructureReviewScreen extends StatelessWidget {
                 child: AppButton(
                   onPressed: () async {
                     // Show the splash animation while "generating/publishing"
-                    showDialog(
+                    showGeneratingModal(
                       context: context,
-                      barrierDismissible: false,
-                      builder: (ctx) => Dialog(
-                        backgroundColor: AppColors.card,
-                        elevation: 24,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.lg),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.xxxl,
-                            vertical: AppSpacing.xxxl,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const CoinShuffleAnimation(),
-                              const SizedBox(height: AppSpacing.xxl),
-                              Text(
-                                'AI is generating structure...',
-                                textAlign: TextAlign.center,
-                                style: AppTypography.display(size: AppFontSizes.lg),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                      message: 'AI is generating structure...',
                     );
                     // Fake delay to show off the animation
                     await Future.delayed(const Duration(seconds: 3));

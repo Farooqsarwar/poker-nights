@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in_all_platforms/google_sign_in_all_platforms.dart';
@@ -173,11 +175,35 @@ class FirebaseRepository {
   fa.FirebaseAuth get _auth => fa.FirebaseAuth.instance;
 
   /// Stable per-install id stamped onto every write as `writerId`.
+  /// Document key for the email -> uid index.
+  ///
+  /// The address is HASHED, so `emailIndex` no longer stores plaintext and a
+  /// caller must already know the exact address to look one up. Keyed by the
+  /// address itself, the collection was an account-existence oracle: any
+  /// signed-in caller, anonymous guests included, could confirm whether an
+  /// address had an account and read its uid (19-005, 19-023).
+  static String emailIndexKey(String email) =>
+      sha256.convert(utf8.encode(email.trim().toLowerCase())).toString();
+
   /// Persisted via [initDeviceId] so it survives app restarts — echo
   /// prevention and the single-active-editor claim key off this, and a fresh
   /// id on every launch defeated the editor-staleness window.
   String? _deviceId;
   String get deviceId => _deviceId ??= _freshDeviceId();
+
+  /// Identity of THIS TAB, for the current run only. Never persisted.
+  ///
+  /// [deviceId] lives in Localstore, which is per-ORIGIN and therefore shared
+  /// by every tab of the app in the same browser. Stamping writes with it
+  /// meant two tabs looked identical to each other, so the echo guard in
+  /// `_adoptRemoteMap` discarded the other tab's writes as its own: open TV
+  /// Mode in a second tab while signed in as host and that TV froze, quietly,
+  /// for the rest of the night.
+  ///
+  /// Writes are stamped with this instead, so two tabs stay in step. The
+  /// editor claim deliberately keeps using [deviceId] — it wants continuity
+  /// across a reload, which a per-run id would throw away.
+  late final String sessionId = '${deviceId}_${_freshDeviceId()}';
 
   static String _freshDeviceId() {
     final r = Random();
@@ -221,7 +247,8 @@ class FirebaseRepository {
   Map<String, dynamic> _stamp(Map<String, dynamic>? data) => {
     ...?data,
     'updatedAt': FieldValue.serverTimestamp(),
-    'writerId': deviceId,
+    // Per-TAB, not per-device — see [sessionId].
+    'writerId': sessionId,
   };
 
   // ── Auth ───────────────────────────────────────────────────────────────────
@@ -433,10 +460,9 @@ class FirebaseRepository {
       );
       if (emailLower.isNotEmpty) {
         // Public email→uid index for the admin "add member by email" flow.
-        batch.set(_db.collection('emailIndex').doc(emailLower), {
+        batch.set(_db.collection('emailIndex').doc(emailIndexKey(emailLower)), {
           'uid': uid,
           'name': name,
-          'emailLower': emailLower,
         });
       }
       for (final p in starterPresets) {
@@ -467,11 +493,10 @@ class FirebaseRepository {
         );
       }
       if (emailLower.isNotEmpty) {
-        await _db.collection('emailIndex').doc(emailLower).set({
-          'uid': uid,
-          'name': storedName,
-          'emailLower': emailLower,
-        }, SetOptions(merge: true));
+        await _db
+            .collection('emailIndex')
+            .doc(emailIndexKey(emailLower))
+            .set({'uid': uid, 'name': storedName}, SetOptions(merge: true));
       }
     }
   }
@@ -645,7 +670,11 @@ class FirebaseRepository {
     // so we never have to touch groups/{gid} — non-members cannot read that doc.
     final name = (data['name'] as String?) ?? '';
     final icon = (data['icon'] as String?) ?? '♠️';
-    return joinGroup(gid, user, groupName: name, groupIcon: icon);
+    // The code travels onto the membership row so the RULES can verify it
+    // against `groups/{gid}.joinCode`. Checking it only here (client-side) let
+    // any signed-in user — including an anonymous guest — join any group by id
+    // without ever holding the code (19-003, User Flow section 2.3).
+    return joinGroup(gid, user, groupName: name, groupIcon: icon, joinCode: key);
   }
 
   /// Idempotent join: safe to call when already a member.
@@ -656,6 +685,7 @@ class FirebaseRepository {
     AppUser user, {
     String groupName = '',
     String groupIcon = '??',
+    String joinCode = '',
   }) async {
     final memberRef = _db
         .collection('groups')
@@ -672,6 +702,9 @@ class FirebaseRepository {
         'name': user.name,
         'role': 'member',
         'joinedAt': FieldValue.serverTimestamp(),
+        // Proof of code possession, verified by the rules against
+        // `groups/{gid}.joinCode` on create.
+        'viaCode': joinCode.trim().toUpperCase(),
       });
     }
     batch.set(
@@ -798,7 +831,10 @@ class FirebaseRepository {
   Future<AppUser?> findUserByEmail(String email) async {
     final key = email.trim().toLowerCase();
     if (key.isEmpty) return null;
-    final snap = await _db.collection('emailIndex').doc(key).get();
+    final snap = await _db
+        .collection('emailIndex')
+        .doc(emailIndexKey(key))
+        .get();
     final uid = snap.data()?['uid'] as String?;
     if (uid == null || uid.isEmpty) return null;
     return AppUser(
@@ -864,8 +900,19 @@ class FirebaseRepository {
   Future<void> removePendingInvite(String inviteId) =>
       _db.collection('pendingInvites').doc(inviteId).delete();
 
-  DocumentReference<Map<String, dynamic>> get serverTimeRef =>
-      _db.collection('_meta').doc('serverTime');
+  /// Per-caller clock-calibration document.
+  ///
+  /// Calibration used to write the SHARED `_meta/serverTime` document, whose
+  /// rule constrained only the key set — so any signed-in client, anonymous
+  /// guests included, could write an arbitrary timestamp and poison every
+  /// other device's offset, including the admin's, which drives `levelEndTime`
+  /// for the whole tournament (Technical section 4.3, 19-008). Each caller now
+  /// owns its own document and the rule pins the value to `request.time`.
+  DocumentReference<Map<String, dynamic>> get serverTimeRef => _db
+      .collection('_meta')
+      .doc('clock')
+      .collection('users')
+      .doc(currentUid ?? 'anon');
 
   /// Full group assembly: meta doc + members + chat + polls + games merged
   /// into a single [Group]. Emits whenever any part changes. The first
@@ -1116,12 +1163,23 @@ class FirebaseRepository {
     gameId,
   ).doc(msgId).set({'deleted': true}, SetOptions(merge: true));
 
-  Future<void> savePoll(String gid, Poll poll) => _db
-      .collection('groups')
-      .doc(gid)
-      .collection('polls')
-      .doc(poll.id)
-      .set(pollToMap(poll));
+  /// Writes a poll. A member VOTE also stamps the throttle document the rules
+  /// require (19-010) in the same batch, so the rule's `getAfter` observes it.
+  /// Admin writes (create / close) are not throttled.
+  Future<void> savePoll(String gid, Poll poll, {bool asVote = false}) async {
+    final ref = _db.collection('groups').doc(gid).collection('polls').doc(poll.id);
+    final uid = currentUid;
+    if (!asVote || uid == null) {
+      await ref.set(pollToMap(poll));
+      return;
+    }
+    final batch = _db.batch();
+    batch.set(ref, pollToMap(poll));
+    batch.set(_db.collection('rate_limits').doc('vote-$uid'), {
+      'time': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+  }
 
   // ── Games ──────────────────────────────────────────────────────────────────
   /// Atomically declares this device the single active editor for [gameId].
@@ -1170,66 +1228,150 @@ class FirebaseRepository {
     });
   }
 
-  Future<void> saveGame(
+  /// Writes the whole game document, merging member-owned fields ATOMICALLY.
+  ///
+  /// Returns the game as it was actually written, which may differ from
+  /// [game]: [reconcile] folds in anything the members changed while this
+  /// edit was in flight.
+  ///
+  /// The merge has to happen INSIDE the transaction. It used to be a separate
+  /// `gameDocOnce` read moments earlier, which left a window a whole network
+  /// round trip wide between "read what the members did" and "write the whole
+  /// document" - and anything landing in that window was silently overwritten
+  /// by the `.set()`.
+  ///
+  /// That window opened at the worst possible moment. Tapping "Open check-in"
+  /// triggers a save, and opening check-in is precisely what makes members tap
+  /// Check In. Their patch landed mid-save, the admin's write reverted
+  /// `checkedIn` to false, the member's optimistic overlay kept showing them
+  /// as checked in, and the host's queue stayed empty. It recovered only when
+  /// `_maybeReassertOwnCheckIn` re-sent the patch after some later change -
+  /// the "it works the second time" symptom.
+  Future<LiveGame> saveGame(
     LiveGame game, {
     String? viewerId,
     bool isUpdate = true,
     int? expectedRevision,
     bool force = false,
+    LiveGame Function(LiveGame local, LiveGame remote)? reconcile,
   }) async {
-    final fullDoc = liveGameToFirestoreDoc(game);
+    final gameRef = _db
+        .collection('groups')
+        .doc(game.groupId)
+        .collection('games')
+        .doc(game.id);
 
-    // Save private sidecar so admin can recover on a new device. The full
-    // players array travels here because the public doc scrubs per-player
-    // financial fields below (User Flow §2.3/§5.6).
-    final privateDoc = <String, dynamic>{
-      'organizerPct': game.settings.organizerPct,
-      'players': game.players.map(playerToMap).toList(),
-      // The audit timeline is admin-only (User Flow §11: "Admin controls/audit
-      // log — Admin Yes, Registered Member No"). It rides in the sidecar so
-      // the host keeps it across devices while it stays out of the
-      // member-readable game document below.
-      'auditHistory': fullDoc['auditHistory'],
-      // Pending rebuy / add-on requests name the members who asked. User Flow
-      // section 5.6 keeps "other players' private actions" off a member's
-      // view and section 22 forbids exposing contribution identities, so the
-      // queue is admin-side state. Members no longer write these arrays
-      // either — they post to `requests/{gameId}/items`, which only a group
-      // admin can list.
-      'rebuyRequests': fullDoc['rebuyRequests'],
-      'addOnRequests': fullDoc['addOnRequests'],
-      if (game.structure != null) ...{
-        'prizes': fullDoc['structure']['prizes'],
-        'organizerAmount': fullDoc['structure']['organizerAmount'],
-      },
-    };
-    // The sidecar lives under `.../admin/**`, whose rule requires the strict
-    // `isGroupAdmin(gid)` (group owner, or a members/{uid} row with
-    // role == 'admin'). The public game document below only requires
-    // membership. Letting a sidecar rejection abort the whole call meant one
-    // permission mismatch silently discarded every game update — so it is
-    // logged and skipped instead. Losing the private figures is recoverable;
-    // losing the game state is not.
+    // The game as actually committed - [game] plus whatever the transaction
+    // merged in. Read back after the transaction returns.
+    var written = game;
+
+    await _db.runTransaction((tx) async {
+      // Reset per attempt: a transaction body can run more than once.
+      written = game;
+
+      // One read serves the concurrency guards AND the merge. Firestore
+      // requires every read before any write, so it happens up front.
+      final needsRead =
+          reconcile != null || (expectedRevision != null && !force);
+      DocumentSnapshot<Map<String, dynamic>>? snap;
+      if (needsRead) snap = await tx.get(gameRef);
+
+      // `force` is the blocking-action override (currently: cancelling a
+      // tournament). It means "this device is taking over", so it bypasses
+      // BOTH concurrency guards below, not just the editor claim. A cancel
+      // that loses a revision race must still land: the event is over.
+      if (expectedRevision != null && !force && snap != null && snap.exists) {
+        final data = snap.data()!;
+        final currentRevision = (data['revision'] as num?)?.toInt() ?? 0;
+        if (currentRevision != expectedRevision) {
+          throw fa.FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'aborted',
+            message:
+                'Game revision mismatch. Expected $expectedRevision, got $currentRevision.',
+          );
+        }
+        final serverEditor = data['editorDeviceId'] as String?;
+        if (serverEditor != null &&
+            serverEditor.isNotEmpty &&
+            serverEditor != deviceId) {
+          final serverClaimed = parseEditorClaimedAt(data['editorClaimedAt']);
+          final now = DateTime.now();
+          // Unparseable / missing stamp counts as stale: never let a claim we
+          // cannot date block the authority device forever.
+          final isStale =
+              serverClaimed == null ||
+              now.difference(serverClaimed) > const Duration(seconds: 90);
+          if (!isStale) {
+            throw fa.FirebaseException(
+              plugin: 'cloud_firestore',
+              code: 'aborted',
+              message: 'Another admin is actively editing this game.',
+            );
+          }
+        }
+      }
+
+      // Fold in the members' own fields from the copy just read, so nothing
+      // committed since this edit began can be lost.
+      if (reconcile != null && snap != null && snap.exists) {
+        try {
+          final remote = liveGameFromFirestoreDoc(
+            Map<String, dynamic>.from(snap.data()!),
+          );
+          if (remote.id == game.id) written = reconcile(game, remote);
+        } catch (e) {
+          debugPrint('saveGame: could not decode remote for merge: $e');
+        }
+      }
+
+      tx.set(gameRef, _stamp(_publicGameDoc(written, viewerId)));
+    });
+
+    // Admin-only sidecar, written from the MERGED game so the host's private
+    // copy matches what everyone else can see. Its rule requires the strict
+    // `isGroupAdmin(gid)` while the public document only requires membership;
+    // letting a sidecar rejection abort the whole call meant one permission
+    // mismatch silently discarded every game update, so it is logged and
+    // skipped instead. Losing the private figures is recoverable; losing the
+    // game state is not.
     try {
-      await _db
-          .collection('groups')
-          .doc(game.groupId)
-          .collection('games')
-          .doc(game.id)
+      await gameRef
           .collection('admin')
           .doc('privateData')
-          .set(privateDoc, SetOptions(merge: true));
+          .set(_privateGameDoc(written), SetOptions(merge: true));
     } catch (e) {
       debugPrint('saveGame: private sidecar rejected (continuing): $e');
     }
 
-    // Scrub private fields from the public document
-    final publicDoc = Map<String, dynamic>.from(fullDoc);
+    return written;
+  }
 
-    // Members read this document directly (see `gameDocSnapshots`), so the
-    // admin-only audit timeline must not travel in it — projecting it away on
-    // the client is not a boundary (User Flow §2.3). It is preserved in the
-    // sidecar above and re-attached locally by `restoreAdminPrivateFields`.
+  /// Admin-only companion document: everything scrubbed out of the public one.
+  Map<String, dynamic> _privateGameDoc(LiveGame game) {
+    final fullDoc = liveGameToFirestoreDoc(game);
+    return <String, dynamic>{
+      'organizerPct': game.settings.organizerPct,
+      // The full players array travels here because the public doc scrubs
+      // per-player financial fields (User Flow sections 2.3 / 5.6).
+      'players': game.players.map(playerToMap).toList(),
+      // Admin-only audit timeline (User Flow section 11).
+      'auditHistory': fullDoc['auditHistory'],
+      // Pending rebuy / add-on requests name the members who asked (section
+      // 5.6 / section 22), so the queue is admin-side state.
+      'rebuyRequests': fullDoc['rebuyRequests'],
+      'addOnRequests': fullDoc['addOnRequests'],
+      'prizes': fullDoc['structure']['prizes'],
+      'organizerAmount': fullDoc['structure']['organizerAmount'],
+    };
+  }
+
+  /// The member-readable game document: everything private removed BEFORE the
+  /// write, because members read this document directly and a client-side
+  /// projection is not a boundary (User Flow section 2.3).
+  Map<String, dynamic> _publicGameDoc(LiveGame game, String? viewerId) {
+    final publicDoc = Map<String, dynamic>.from(liveGameToFirestoreDoc(game));
+
     publicDoc['auditHistory'] = const <Map<String, dynamic>>[];
     publicDoc['rebuyRequests'] = const <String>[];
     publicDoc['addOnRequests'] = const <String>[];
@@ -1249,9 +1391,9 @@ class FirebaseRepository {
       publicDoc['structure'] = publicStructure;
     }
 
-    // Per-player financial fields are private (Tech §5.6): scrub rebuys /
-    // reEntries / hasAddOn / knockouts for every player except the viewer's
-    // own record, matching the projection rule enforced at the data boundary.
+    // Per-player financial fields are private (Technical section 5.6), the
+    // writer's own row included - 14-045 / 05-033 / 19-021 say a player does
+    // not see their own investment either.
     if (publicDoc['players'] is Map) {
       final publicPlayers = Map<String, dynamic>.from(
         publicDoc['players'] as Map,
@@ -1259,10 +1401,6 @@ class FirebaseRepository {
       final scrubbed = <String, dynamic>{};
       for (final e in publicPlayers.entries) {
         final value = Map<String, dynamic>.from(e.value as Map);
-        if (e.key == viewerId) {
-          scrubbed[e.key] = value;
-          continue;
-        }
         value['rebuys'] = 0;
         value['reEntries'] = 0;
         value['hasAddOn'] = false;
@@ -1271,56 +1409,7 @@ class FirebaseRepository {
       }
       publicDoc['players'] = scrubbed;
     }
-
-    final gameRef = _db
-        .collection('groups')
-        .doc(game.groupId)
-        .collection('games')
-        .doc(game.id);
-
-    await _db.runTransaction((tx) async {
-      // `force` is the blocking-action override (currently: cancelling a
-      // tournament). It means "this device is taking over" — so it bypasses
-      // BOTH concurrency guards below, not just the editor claim. A cancel
-      // that loses a revision race must still land: the event is over.
-      if (expectedRevision != null && !force) {
-        final snap = await tx.get(gameRef);
-        if (snap.exists) {
-          final data = snap.data()!;
-          final currentRevision = (data['revision'] as num?)?.toInt() ?? 0;
-          if (currentRevision != expectedRevision) {
-            throw fa.FirebaseException(
-              plugin: 'cloud_firestore',
-              code: 'aborted',
-              message:
-                  'Game revision mismatch. Expected $expectedRevision, got $currentRevision.',
-            );
-          }
-          final serverEditor = data['editorDeviceId'] as String?;
-          if (serverEditor != null &&
-              serverEditor.isNotEmpty &&
-              serverEditor != deviceId) {
-            final serverClaimed = parseEditorClaimedAt(
-              data['editorClaimedAt'],
-            );
-            final now = DateTime.now();
-            // Unparseable / missing stamp counts as stale: never let a claim
-            // we cannot date block the authority device forever.
-            final isStale =
-                serverClaimed == null ||
-                now.difference(serverClaimed) > const Duration(seconds: 90);
-            if (!isStale) {
-              throw fa.FirebaseException(
-                plugin: 'cloud_firestore',
-                code: 'aborted',
-                message: 'Another admin is actively editing this game.',
-              );
-            }
-          }
-        }
-      }
-      tx.set(gameRef, _stamp(publicDoc));
-    });
+    return publicDoc;
   }
 
   /// Decodes an `editorClaimedAt` value from a game document.
@@ -1589,6 +1678,15 @@ class FirebaseRepository {
         'consumed': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
+      // 19-010: claims are creatable by any anonymous caller, so without a
+      // throttle one script could squat every slot in a game. Stamped inside
+      // the same transaction the rule's `getAfter` observes.
+      final uid = currentUid;
+      if (uid != null) {
+        tx.set(_db.collection('rate_limits').doc('guestclaim-$uid'), {
+          'time': FieldValue.serverTimestamp(),
+        });
+      }
       return null;
     });
   }
@@ -1701,27 +1799,71 @@ class FirebaseRepository {
   //     inbox — rules only allow the inbox owner to create docs.
   //  3. The originating device also fans the event out as a REAL push
   //     (OneSignal REST API, include_aliases = member uids).
+  /// Serialises notification staging so the rules' throttle can never lose one.
+  ///
+  /// The rule requires a fresh `rate_limits/notify-{uid}` stamp, and the
+  /// `rate_limits` update rule enforces a minimum gap. Two notifications
+  /// closer together than that gap — an admin tapping through a queue of
+  /// guest confirmations, or two eliminations in quick succession — made the
+  /// SECOND batch fail, and it was dropped with only a debugPrint. The
+  /// notification stayed in the sender's own inbox while never reaching
+  /// anybody else's, which is the worst possible outcome for a throttle.
+  ///
+  /// Writes now queue behind one another with a safe spacing, so a burst is
+  /// delayed rather than discarded.
+  Future<void>? _notifyChain;
+  DateTime? _lastNotifyAt;
+  static const Duration _notifyGap = Duration(milliseconds: 1700);
+
   Future<void> stageGroupNotification(
     String gid,
     AppNotification notification,
-  ) => _db
-      .collection('groups')
-      .doc(gid)
-      .collection('notifications')
-      .doc(notification.id)
-      .set(
-        _stamp({
-          'title': notification.title,
-          'body': notification.body,
-          'type': notification.type.name,
-          'link': notification.link,
-          'read': false,
-          'timestamp': FieldValue.serverTimestamp(),
-          if (notification.audience != null &&
-              notification.audience!.isNotEmpty)
-            'audience': notification.audience,
-        }),
-      );
+  ) {
+    final prev = _notifyChain ?? Future<void>.value();
+    final next = prev
+        .catchError((Object _) {})
+        .then((_) async {
+          final last = _lastNotifyAt;
+          if (last != null) {
+            final since = DateTime.now().difference(last);
+            if (since < _notifyGap) await Future<void>.delayed(_notifyGap - since);
+          }
+          _lastNotifyAt = DateTime.now();
+          await _stageGroupNotificationNow(gid, notification);
+        });
+    _notifyChain = next;
+    return next;
+  }
+
+  Future<void> _stageGroupNotificationNow(
+    String gid,
+    AppNotification notification,
+  ) async {
+    final uid = currentUid;
+    if (uid == null) return;
+    final batch = _db.batch();
+    batch.set(
+      _db
+          .collection('groups')
+          .doc(gid)
+          .collection('notifications')
+          .doc(notification.id),
+      _stamp({
+        'title': notification.title,
+        'body': notification.body,
+        'type': notification.type.name,
+        'link': notification.link,
+        'read': false,
+        'timestamp': FieldValue.serverTimestamp(),
+        if (notification.audience != null && notification.audience!.isNotEmpty)
+          'audience': notification.audience,
+      }),
+    );
+    batch.set(_db.collection('rate_limits').doc('notify-$uid'), {
+      'time': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+  }
 
   /// Live stream of a group's staged-notification outbox.
   Stream<List<OutboxNotification>> groupOutboxStream(String gid) => _db

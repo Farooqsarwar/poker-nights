@@ -165,14 +165,24 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
           if (_step == _SettlementStep.confirmPlayers)
             _ConfirmPlayersStep(
               game: game,
+              onGrantRebuy: settings.rebuys
+                  ? (id) => app.grantRebuy(
+                      id,
+                      idempotencyKey:
+                          'final-rebuy-$id-${DateTime.now().microsecondsSinceEpoch}',
+                    )
+                  : null,
               onConfirm: () => setState(() => _step = _SettlementStep.addOns),
             ),
           // Step 1: Add-ons
           if (_step == _SettlementStep.addOns)
             _AddOnsStep(
               activePlayers: activePlayers,
-              addOnStack: structure.addOnStack,
-              addOnChipPlan: structure.addOnChipPlan,
+              // 09-032 / 10-043: the engine recommends the CHIP AMOUNT from
+              // the live table, and the composition is rebuilt for the level
+              // actually being played rather than reused from setup.
+              addOnStack: app.recommendedAddOnStack,
+              addOnChipPlan: app.liveAddOnChipPlan,
               selections: _addOnSelections,
               onToggle: (id) => setState(() {
                 if (!_addOnSelections.remove(id)) _addOnSelections.add(id);
@@ -196,9 +206,13 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                         activePlayers.length)
                   : structure.startingStack,
               onApplySuggestion: () {
+                // Price stays the admin's input (09-033, defaulting to the
+                // buy-in); applying the suggestion also pins the recommended
+                // chip amount so grantAddOn hands out that many chips.
                 app.updateEventSettings(
                   settings.copyWith(addOnCost: suggestedPrice),
                 );
+                app.applyRecommendedAddOnStack();
               },
               onConfirm: () => setState(() => _step = _SettlementStep.colorUp),
             ),
@@ -872,10 +886,18 @@ class _ConfirmRow extends StatelessWidget {
 /// Records any final eliminations and rebuys that happened during the
 /// last hand before the deadline (spec §4.13).
 class _ConfirmPlayersStep extends StatelessWidget {
-  const _ConfirmPlayersStep({required this.game, required this.onConfirm});
+  const _ConfirmPlayersStep({
+    required this.game,
+    required this.onConfirm,
+    this.onGrantRebuy,
+  });
 
   final LiveGame game;
   final VoidCallback onConfirm;
+
+  /// Records a final eligible rebuy during the settlement break. Null when
+  /// rebuys were never enabled for this tournament.
+  final void Function(String playerId)? onGrantRebuy;
 
   @override
   Widget build(BuildContext context) {
@@ -895,8 +917,9 @@ class _ConfirmPlayersStep extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Check the eliminations and rebuys from the last hand before the '
-            'deadline. The app already tracks each one — this confirms the exact '
-            'field before the add-on price is calculated.',
+            'deadline. A hand that began before the deadline can still be '
+            'settled here — tap "Final rebuy" to record one. This confirms the '
+            'exact field before the add-on price is calculated.',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),
@@ -946,6 +969,20 @@ class _ConfirmPlayersStep extends StatelessWidget {
                             label: 'Out',
                             variant: AppBadgeVariant.red,
                           ),
+                    // User Flow section 4.13 / 12-056: "the administrator
+                    // records any final valid rebuy from a hand that began
+                    // before the deadline". That happens HERE, during the
+                    // break — there was previously no way to do it, because
+                    // `rebuysClosed` flipped the moment settlement began.
+                    if (onGrantRebuy != null && p.rebuys == 0) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => onGrantRebuy!(p.id),
+                        child: const Text('Final rebuy'),
+                      ),
+                    ],
                   ],
                 ),
               ),

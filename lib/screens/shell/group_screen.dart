@@ -38,9 +38,11 @@ class GroupScreen extends StatefulWidget {
 class _GroupScreenState extends State<GroupScreen> {
   void _confirmLeaveGroup(BuildContext context) {
     final app = context.read<AppProvider>();
+    final dialogInsets = appDialogInsets(context);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        insetPadding: dialogInsets,
         title: const Text('Leave Group'),
         content: const Text(
           'Leave this group? You can rejoin with the group code.',
@@ -73,10 +75,12 @@ class _GroupScreenState extends State<GroupScreen> {
         .toList();
     if (members.isEmpty) return;
     String? selectedId;
+    final dialogInsets = appDialogInsets(context);
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
+              insetPadding: dialogInsets,
           backgroundColor: AppColors.card,
           title: const Text('Transfer Ownership'),
           content: Column(
@@ -185,8 +189,8 @@ class _GroupScreenState extends State<GroupScreen> {
                 const SizedBox(height: AppSpacing.lg),
                 Text(
                   app.currentGroup.name.isEmpty
-                      ? 'Loading groupâ€¦'
-                      : 'Loading ${app.currentGroup.name}â€¦',
+                      ? 'Loading group…'
+                      : 'Loading ${app.currentGroup.name}…',
                   style: AppTypography.bodySm.copyWith(
                     color: AppColors.mutedForeground,
                   ),
@@ -242,7 +246,7 @@ class _GroupScreenState extends State<GroupScreen> {
     final group = app.currentGroup;
     final user = app.user;
     final isAdmin = app.isAdmin;
-    // Draft games are only visible to admins (spec Â§3, Â§25).
+    // Draft games are only visible to admins (spec §3, §25).
     final upcomingGames = group.upcomingGames
         .where((g) => isAdmin || g.status != LiveGameStatus.draft)
         .toList();
@@ -334,8 +338,8 @@ class _GroupScreenState extends State<GroupScreen> {
         icon: Icons.sports_esports_outlined,
         title: 'No upcoming games',
         description: isAdmin
-            ? 'No upcoming games â€” create the first one!'
-            : 'No upcoming game â€” wait for the first game to be created.',
+            ? 'No upcoming games — create the first one!'
+            : 'No upcoming game — wait for the first game to be created.',
         action: isAdmin
             ? AppButton(
                 onPressed: () => context.go(RoutePaths.createTournament),
@@ -899,7 +903,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                // RSVP is set on the game screen only â€” here it is read-only.
+                // RSVP is set on the game screen only — here it is read-only.
                 if (widget.user != null)
                   Row(
                     children: [

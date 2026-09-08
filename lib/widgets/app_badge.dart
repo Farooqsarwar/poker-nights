@@ -28,7 +28,7 @@ class AppBadge extends StatelessWidget {
     Theme.of(context);
     final (background, foreground, tint) = switch (variant) {
       AppBadgeVariant.default_ => (
-        AppColors.secondary.withValues(alpha: Glass.badgeOpacity + 0.10),
+        Glass.solidTint(AppColors.secondary),
         AppColors.secondaryForeground,
         AppColors.primary,
       ),
@@ -48,7 +48,7 @@ class AppBadge extends StatelessWidget {
         AppColors.destructive,
       ),
       AppBadgeVariant.muted => (
-        AppColors.muted.withValues(alpha: Glass.badgeOpacity + 0.10),
+        Glass.solidTint(AppColors.muted),
         AppColors.mutedForeground,
         AppColors.border,
       ),

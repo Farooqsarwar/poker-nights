@@ -25,7 +25,6 @@ import '../../widgets/app_toggle.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/chip_token.dart';
-import '../../widgets/coin_shuffle_animation.dart';
 
 enum _ChipMode { preset, quick, exact }
 
@@ -698,35 +697,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     app.setCurrentGame(game);
     app.publishGame();
 
-    showDialog(
+    showGeneratingModal(
       context: context,
-      barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        backgroundColor: AppColors.card,
-        elevation: 24,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: AppSpacing.xxl,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CoinShuffleAnimation(),
-              const SizedBox(height: AppSpacing.xxl),
-              Text(
-                'AI is generating tournament...',
-                textAlign: TextAlign.center,
-                style: AppTypography.display(size: AppFontSizes.lg),
-              ),
-            ],
-          ),
-        ),
-      ),
+      message: 'AI is generating tournament...',
     );
     await Future.delayed(const Duration(seconds: 6));
     if (!mounted) return;
@@ -1352,17 +1325,15 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     final valueController = TextEditingController(text: '100');
     final qtyController = TextEditingController(text: '50');
 
+    final dialogInsets = appDialogInsets(context);
     showDialog(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.72),
       builder: (context) => Dialog(
+        insetPadding: dialogInsets,
         backgroundColor: AppColors.card,
         surfaceTintColor: Colors.transparent,
         clipBehavior: Clip.antiAlias,
-        insetPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xl,
-          vertical: AppSpacing.xxl,
-        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
           side: BorderSide(color: AppColors.border),

@@ -7,6 +7,7 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
+import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 
 import '../../utils/formatters.dart';
@@ -378,7 +379,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                   Expanded(
                     child: _StatCard(
                       label: game.prizePoolLabel,
-                      value: Formatters.chips(game.structure.prizePool),
+                      value: Formatters.prize(game.structure.prizePool),
                       valueColor: AppColors.primary,
                     ),
                   ),
@@ -874,7 +875,11 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    if (game.structure.prizes.isEmpty)
+                    // Non-admin copies carry an empty `prizes` list and only
+                    // a paid-place COUNT — the amounts never leave the host's
+                    // device. Build the rows from that count so a member still
+                    // sees which positions pay, with '—' where money would be.
+                    if (game.structure.paidPlacesForDisplay == 0)
                       Text(
                         'No prizes set yet.',
                         style: AppTypography.bodySm.copyWith(
@@ -882,7 +887,14 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         ),
                       )
                     else
-                      for (final p in game.structure.prizes)
+                      for (final p in (game.structure.prizes.isNotEmpty
+                          ? game.structure.prizes
+                          : [
+                              for (var i = 1;
+                                  i <= game.structure.paidPlacesForDisplay;
+                                  i++)
+                                Prize(place: i, amount: 0),
+                            ]))
                         Container(
                           padding: const EdgeInsets.symmetric(
                             vertical: AppSpacing.sm,
@@ -916,7 +928,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                 ),
                               ),
                               Text(
-                                isAdmin ? Formatters.chips(p.amount) : '—',
+                                isAdmin ? Formatters.prize(p.amount) : '—',
                                 style: AppTypography.monoSm.copyWith(
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.primary,
@@ -937,7 +949,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         const Spacer(),
                         Text(
                           isAdmin
-                              ? Formatters.chips(game.structure.prizePool)
+                              ? Formatters.prize(game.structure.prizePool)
                               : '—',
                           style: AppTypography.monoXs.copyWith(
                             color: AppColors.foreground,

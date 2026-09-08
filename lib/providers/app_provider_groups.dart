@@ -64,7 +64,7 @@ extension AppProviderGroups on AppProvider {
     final user = _user;
     if (!_backendUp || user == null) return null;
     final group = Group(
-      id: 'grp-${DateTime.now().millisecondsSinceEpoch}',
+      id: Formatters.secureId('grp'), // 19-007: ids must not be guessable
       name: name,
       joinCode: Formatters.generateCode(),
       ownerId: user.id,

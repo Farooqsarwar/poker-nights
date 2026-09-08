@@ -36,9 +36,12 @@ class ChatSheet extends StatefulWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
+                // Opaque. At 65% fading to 45% the page behind read straight
+                // through the sheet — the backdrop blur that was meant to
+                // hide it does not reliably render on web. See Glass.solid.
                 colors: [
-                  AppColors.background.withValues(alpha: 0.65),
-                  AppColors.background.withValues(alpha: 0.45),
+                  Glass.solid(AppColors.card, 0.92),
+                  Glass.solid(AppColors.card, 0.98),
                 ],
               ),
               border: Border(
@@ -314,7 +317,7 @@ class _ChatBubble extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isMine
                         ? AppColors.primary
-                        : AppColors.card.withValues(alpha: Glass.surfaceOpacity),
+                        : Glass.solid(AppColors.card, Glass.surfaceOpacity),
                     borderRadius: BorderRadius.circular(AppRadius.lg).copyWith(
                       topRight: isMine ? const Radius.circular(2) : null,
                       topLeft: !isMine ? const Radius.circular(2) : null,

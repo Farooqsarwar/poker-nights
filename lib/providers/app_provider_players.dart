@@ -352,7 +352,7 @@ extension AppProviderPlayers on AppProvider {
       addAnnouncement('This tournament has finished.', false);
       return;
     }
-    if (_currentGame!.status.isActiveLive && _currentGame!.rebuysClosed) {
+    if (_currentGame!.registrationClosed) {
       addAnnouncement('Late registration has closed.', false);
       return;
     }
@@ -457,7 +457,7 @@ extension AppProviderPlayers on AppProvider {
       addAnnouncement('This tournament has finished.', false);
       return;
     }
-    if (_currentGame!.status.isActiveLive && _currentGame!.rebuysClosed) {
+    if (_currentGame!.registrationClosed) {
       addAnnouncement('Late registration has closed.', false);
       return;
     }
@@ -549,7 +549,7 @@ extension AppProviderPlayers on AppProvider {
       default:
         break;
     }
-    if (game.status.isActiveLive && game.rebuysClosed) {
+    if (game.registrationClosed) {
       return 'Late registration has closed — no new players can be added.';
     }
     _pushUndo();
@@ -637,7 +637,7 @@ extension AppProviderPlayers on AppProvider {
     // rebuys have closed while the game is live. Mirrors the guard applied
     // when the guest request first arrived (_applyQueuedGuestCheckIn) so the
     // admin cannot confirm a late guest the event no longer accepts.
-    if (game.status.isActiveLive && game.rebuysClosed) {
+    if (game.registrationClosed) {
       addAnnouncement(
         'Late registration is closed — ${guest.name} cannot be confirmed now.',
         false,
@@ -874,7 +874,7 @@ extension AppProviderPlayers on AppProvider {
     // Late registration closes permanently once the rebuy window shuts (User
     // Flow §3.2/§10.3, Tech Spec §21/§12.5): reject the booking before the
     // optimistic reserve so the guest never sees a phantom "booked" slot.
-    if (game.status.isActiveLive && game.rebuysClosed) {
+    if (game.registrationClosed) {
       return const GuestCheckInResult(
         GuestCheckInStatus.failed,
         message: 'Late registration has closed - no new players can be added.',

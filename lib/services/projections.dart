@@ -8,7 +8,6 @@ import '../models/tournament.dart';
 /// interface never holds private fields for the wrong role (§2.3).
 enum GameProjectionRole { admin, player, guest, tv }
 
-const _noPrizesAmounts = 0;
 const _noOrganizerAmount = 0;
 
 /// Returns a copy of [game] safe for [role].
@@ -56,15 +55,20 @@ LiveGame projectionFor(
     locationPrivate: game.settings.locationPrivate,
   );
 
-  // 16: Zero other players' rebuys / reEntries / hasAddOn / knockouts except viewer's own record (registered member only)
-  final publicPlayers = game.players.map((p) {
-    final isViewer =
-        role == GameProjectionRole.player &&
-        viewerId != null &&
-        p.id == viewerId;
-    if (isViewer) return p;
-    return p.copyWith(rebuys: 0, reEntries: 0, hasAddOn: false, knockouts: 0);
-  }).toList();
+  // 14-045 / 05-033 / 19-021: players do not see their own investment either —
+  // not their rebuys, re-entries or add-ons. The viewer used to be exempted
+  // here, which left exactly the figures the checklist names as hidden sitting
+  // in the member's own row.
+  final publicPlayers = game.players
+      .map(
+        (p) => p.copyWith(
+          rebuys: 0,
+          reEntries: 0,
+          hasAddOn: false,
+          knockouts: 0,
+        ),
+      )
+      .toList();
 
   // 17: Filter rebuyRequests / addOnRequests to viewer's own id for players; empty for guest/TV
   final publicRebuyRequests =
@@ -92,10 +96,12 @@ LiveGame projectionFor(
     settings: publicSettings,
     structure: game.structure.copyWith(
       organizerAmount: _noOrganizerAmount,
-      prizes: [
-        for (final p in game.structure.prizes)
-          Prize(place: p.place, amount: _noPrizesAmounts),
-      ],
+      // The amounts do not travel at all. Zeroed `Prize` rows used to, and the
+      // Firestore rules cannot iterate a list to confirm each one is 0 — so
+      // the omission rested entirely on this function (19-019). An EMPTY list
+      // plus a separate count is verifiable: `prizes.size() == 0`.
+      prizes: const <Prize>[],
+      paidPlaces: game.structure.prizes.length,
     ),
     players: publicPlayers,
     chat: viewerCanSeeChat ? game.chat : const <ChatMessage>[],

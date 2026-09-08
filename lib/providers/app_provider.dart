@@ -396,6 +396,17 @@ class AppProvider extends ChangeNotifier {
   /// carries it actually runs.
   bool _pendingSaveForce = false;
 
+  /// Consecutive whole-document save failures. Holding the admin's unsaved
+  /// state blocks incoming updates, so that hold is bounded — see the
+  /// `_localGameDirty` assignment in [_drainGameSaveQueue].
+  int _consecutiveSaveFailures = 0;
+
+  /// A blind level proposed because play ran past the generated structure,
+  /// awaiting the admin's approval (User Flow sections 3.3 / 4.14, 12-082).
+  /// Null whenever there is nothing to approve. The clock is held while it is
+  /// set, so the app never advances the structure on its own.
+  BlindLevel? pendingLevelExtension;
+
   /// Set by [_reconcileMemberOwnedFields] when the pre-save server read folded
   /// a member's change (RSVP / check-in / a whole new roster row) into the
   /// admin's live game. The save drain notifies listeners once it settles so

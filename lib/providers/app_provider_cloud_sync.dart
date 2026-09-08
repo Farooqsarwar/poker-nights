@@ -41,6 +41,7 @@ extension AppProviderCloudSync on AppProvider {
       _gameSaveInFlight = false;
       _pendingLatestSave = null;
       _pendingSaveForce = false;
+      _consecutiveSaveFailures = 0;
       _reconcileAdoptedLocally = false;
       _droppedRemoteWhileBusy = false;
       _lastSavedGame = null;
@@ -144,14 +145,9 @@ extension AppProviderCloudSync on AppProvider {
         // Prefer the very latest authoritative state for this game.
         final freshest = (g != null && g.id == target.id) ? g : target;
         if (identical(_lastSavedGame, freshest)) continue;
-        var toWrite = freshest.groupId.isNotEmpty
+        final toWrite = freshest.groupId.isNotEmpty
             ? freshest
             : freshest.copyWith(groupId: effectiveGid);
-        // A member RSVP / guest-slot patch may have committed to the server
-        // while this edit was debouncing (adoption was held off by
-        // [_localGameDirty]). The whole-doc `.set()` below would silently
-        // overwrite it, so fold those member-owned fields back in first.
-        toWrite = await _reconcileMemberOwnedFields(toWrite);
         // Retry with backoff exactly like the member RSVP patch: right after a
         // web login the admin's writes are rejected with permission-denied
         // until the fresh auth token reaches the Firestore SDK. Previously the
@@ -170,17 +166,24 @@ extension AppProviderCloudSync on AppProvider {
           if (_user == null) break;
           var step = 'saveGame';
           try {
-            await _repo.saveGame(
+            // The merge runs INSIDE the write transaction, so a member
+            // patch landing mid-save can no longer be overwritten. What
+            // comes back is what was actually committed.
+            final committed = await _repo.saveGame(
               toWrite,
               viewerId: _user?.id,
               expectedRevision: _lastSavedGame?.revision,
               force: force,
+              reconcile: (local, remote) =>
+                  mergeMemberOwnedFields(local, remote, adminId: _user?.id),
             );
             step = 'publishProjections';
-            await _publishProjections(toWrite);
-            _lastSavedGame = toWrite;
-            _lastSavedSignature = _gameSignature(toWrite);
+            await _publishProjections(committed);
+            _adoptCommittedMemberFields(committed);
+            _lastSavedGame = committed;
+            _lastSavedSignature = _gameSignature(committed);
             saved = true;
+            _consecutiveSaveFailures = 0;
             if (lastSaveError != null) {
               lastSaveError = null;
               if (!_disposed) notifyListeners();
@@ -200,6 +203,7 @@ extension AppProviderCloudSync on AppProvider {
           // Never rethrow out of this fire-and-forget drain — surface it
           // instead so the admin sees that their change did not persist.
           saveFailed = true;
+          _consecutiveSaveFailures++;
           final errorStr = (lastError ?? '').toString().toLowerCase();
           if (_isRetriablePermissionError(lastError ?? '')) {
             lastSaveError =
@@ -238,7 +242,21 @@ extension AppProviderCloudSync on AppProvider {
         // upcoming next to the "could not be saved" banner. Staying dirty
         // holds the optimistic state, and because `_lastSavedSignature` was
         // not advanced the next notifyListeners() re-arms the save.
-        _localGameDirty = saveFailed;
+        //
+        // BOUNDED, though. Each drain has already retried six times with
+        // backoff, so three failed drains means the write is not coming back.
+        // Holding the gate shut past that point would leave the host frozen
+        // on a stale view of the game — no member RSVP, no check-in, nothing
+        // — with only the error banner to explain it. Better to let the
+        // server through and lose the one unsaved edit, which the banner has
+        // already reported, than to blind the host for the rest of the night.
+        _localGameDirty = saveFailed && _consecutiveSaveFailures < 3;
+        if (saveFailed && _consecutiveSaveFailures >= 3) {
+          debugPrint(
+            'save failed $_consecutiveSaveFailures times in a row — releasing '
+            'the adoption gate so remote updates can reach this device again.',
+          );
+        }
       }
       if (settled && !_localGameDirty) {
         // The gate is open again — publish whatever the pre-save reconcile
@@ -283,49 +301,26 @@ extension AppProviderCloudSync on AppProvider {
   /// authority whole-doc save, so a member RSVP that committed during the
   /// debounce window is not silently overwritten. Best-effort: any failure or
   /// an in-progress admin RSVP change for this game leaves [game] untouched.
-  Future<LiveGame> _reconcileMemberOwnedFields(LiveGame game) async {
-    if (!_backendUp || game.groupId.isEmpty) return game;
-    try {
-      final raw = await _repo.gameDocOnce(game.groupId, game.id);
-      if (raw == null) return game;
-      final remote = liveGameFromFirestoreDoc(Map<String, dynamic>.from(raw));
-      if (remote.id != game.id) return game;
-      final merged = mergeMemberOwnedFields(game, remote, adminId: _user?.id);
-
-      // The merge is not just for the wire. Whatever the members changed while
-      // this edit was debouncing has to reach the ADMIN'S SCREEN too.
-      //
-      // Folding it only into the outgoing document left `_currentGame`
-      // permanently behind `_lastSavedSignature` (which is computed from the
-      // MERGED copy) — so the very next notifyListeners() saw a signature
-      // mismatch, re-flagged the game dirty and re-saved it, forever. Every
-      // snapshot that loop produced carried this device's own `writerId` and
-      // was dropped by the echo guard in [_adoptRemoteMap], so the admin never
-      // saw the member's check-in (or RSVP) again — while the server, and the
-      // member's own screen, had it all along.
-      //
-      // Merge against the LIVE game rather than [game]: the read above is
-      // asynchronous, so the admin may have edited something else meanwhile.
-      // `mergeMemberOwnedFields` only ever takes member-owned fields, so the
-      // admin's concurrent edit is preserved.
-      final live = _currentGame;
-      if (live != null && live.id == game.id) {
-        final mergedLive = mergeMemberOwnedFields(
-          live,
-          remote,
-          adminId: _user?.id,
-        );
-        if (!identical(mergedLive, live)) {
-          _currentGame = mergedLive;
-          _syncGroupGame();
-          _reconcileAdoptedLocally = true;
-        }
-      }
-      return merged;
-    } catch (e) {
-      debugPrint('reconcileMemberOwnedFields failed: $e');
-      return game;
-    }
+  /// Brings whatever the write transaction merged in onto the host's OWN
+  /// screen, and into the group's copy of the game.
+  ///
+  /// The transaction folds member-owned fields into the document it commits.
+  /// Without this the host would have published a check-in they cannot see:
+  /// `_lastSavedSignature` is taken from the committed copy, so `_currentGame`
+  /// would sit permanently behind it, re-flagging the game dirty on every
+  /// notify and re-saving forever — and every snapshot that loop produced
+  /// would carry this device's own `writerId` and be skipped by the echo
+  /// guard in [_adoptRemoteMap].
+  void _adoptCommittedMemberFields(LiveGame committed) {
+    final live = _currentGame;
+    if (live == null || live.id != committed.id) return;
+    // Only member-owned fields cross over: the host may have edited something
+    // else while the write was in flight, and that must survive.
+    final merged = mergeMemberOwnedFields(live, committed, adminId: _user?.id);
+    if (identical(merged, live)) return;
+    _currentGame = merged;
+    _syncGroupGame();
+    _reconcileAdoptedLocally = true;
   }
 
   /// True when the signed-in user holds the elevated Co-Admin role in the
@@ -354,6 +349,15 @@ extension AppProviderCloudSync on AppProvider {
   /// The editor role lives in [LiveGame.editorDeviceId]: the first admin
   /// device to open a live game claims it, which prevents two admin sessions
   /// from racing whole-document writes (the seating-confirm revert bug).
+  ///
+  /// Keyed on the PERSISTED device id on purpose, so a reload resumes
+  /// editorship instead of waiting out the staleness window. The consequence
+  /// is that two tabs of the same browser both qualify as authority and will
+  /// both write. That is now merely wasteful rather than harmful: writes are
+  /// stamped with a per-tab `sessionId`, so the tabs see each other's changes
+  /// and converge, where before the echo guard made each discard the other's
+  /// and they diverged silently. Genuinely serialising two tabs would need
+  /// cross-tab coordination (a BroadcastChannel lock) and is not implemented.
   bool get _isGameAuthority =>
       isAdmin &&
       _currentGame != null &&
@@ -674,7 +678,7 @@ extension AppProviderCloudSync on AppProvider {
   void _adoptRemoteMap(Map<String, dynamic> data) {
     if (!_gameSyncPrimed) {
       _gameSyncPrimed = true;
-    } else if (data['writerId'] == _repo.deviceId) {
+    } else if (data['writerId'] == _repo.sessionId) {
       return;
     }
     // A non-authority device must never let a local crash-resume snapshot win
@@ -748,7 +752,7 @@ extension AppProviderCloudSync on AppProvider {
     final uid = _user?.id;
     if (uid == null || _isGameAuthority) return;
     if (!_pendingOwnRsvp.containsKey(remote.id)) return;
-    if (writerId != null && writerId == _repo.deviceId) return;
+    if (writerId != null && writerId == _repo.sessionId) return;
     final want = _pendingOwnRsvp[remote.id];
     final serverMine = remote.players.where((p) => p.id == uid).firstOrNull;
     if (serverMine?.rsvp == want) return; // server already agrees

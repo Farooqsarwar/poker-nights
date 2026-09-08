@@ -16,6 +16,7 @@ import 'app_button.dart';
 import 'bottom_nav.dart';
 import 'brand_lockup.dart';
 import 'nav_drawer.dart';
+import 'shell_insets.dart';
 import 'sidebar.dart';
 import 'backgrounds.dart';
 
@@ -87,7 +88,15 @@ class ScreenShell extends StatelessWidget {
               children: [
                 const Sidebar(),
                 VerticalDivider(width: 1, color: AppColors.border),
-                Expanded(child: child),
+                // Tell dialogs how much chrome sits to their left, so they
+                // centre over the CONTENT rather than over the window — see
+                // ShellInsets.
+                Expanded(
+                  child: ShellInsets(
+                    left: kSidebarWidth + 1,
+                    child: child,
+                  ),
+                ),
               ],
             ),
           ),

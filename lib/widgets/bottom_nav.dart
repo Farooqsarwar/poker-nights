@@ -176,7 +176,7 @@ class BottomNav extends StatelessWidget {
     final hasGroup = app.hasCurrentGroup;
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.card,
+      backgroundColor: Glass.solid(AppColors.card, 0.98),
       barrierColor: Colors.black.withValues(alpha: 0.5),
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
@@ -206,53 +206,53 @@ class BottomNav extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: AppSpacing.sm,
-                crossAxisSpacing: AppSpacing.sm,
-                children: [
-                  _MoreTile(
-                    icon: Icons.poll_outlined,
-                    label: 'Polls',
-                    subtitle: 'Vote & plan',
-                    count: hasGroup ? app.currentGroup.polls.length : 0,
-                    onTap: hasGroup
-                        ? () {
-                            Navigator.of(sheetContext).pop();
-                            context.go(RoutePaths.polls);
-                          }
-                        : null,
-                  ),
-                  _MoreTile(
-                    icon: Icons.history,
-                    label: 'History',
-                    subtitle: 'Past games',
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      context.go(RoutePaths.history);
-                    },
-                  ),
-                  _MoreTile(
-                    icon: Icons.payments_outlined,
-                    label: 'Cash Game',
-                    subtitle: 'Live cash play',
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      context.go(RoutePaths.cashGame);
-                    },
-                  ),
-                  _MoreTile(
-                    icon: Icons.settings_outlined,
-                    label: 'Settings',
-                    subtitle: 'Account & group',
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      context.go(RoutePaths.settings);
-                    },
-                  ),
-                ],
+              // A LIST, not a grid.
+              //
+              // `GridView.count` defaults to square tiles, so on a narrow
+              // phone each one became half the screen wide and just as tall —
+              // an icon at the top, a label at the bottom and a large empty
+              // gap between them, with the whole sheet pushed down the screen.
+              // A row per destination is the ordinary pattern for a "more"
+              // menu: nothing empty, a bigger tap target, and the sheet only
+              // as tall as it needs to be.
+              _MoreRow(
+                icon: Icons.poll_outlined,
+                label: 'Polls',
+                subtitle: 'Vote & plan',
+                count: hasGroup ? app.currentGroup.polls.length : 0,
+                onTap: hasGroup
+                    ? () {
+                        Navigator.of(sheetContext).pop();
+                        context.go(RoutePaths.polls);
+                      }
+                    : null,
+              ),
+              _MoreRow(
+                icon: Icons.history,
+                label: 'History',
+                subtitle: 'Past games',
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  context.go(RoutePaths.history);
+                },
+              ),
+              _MoreRow(
+                icon: Icons.payments_outlined,
+                label: 'Cash Game',
+                subtitle: 'Live cash play',
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  context.go(RoutePaths.cashGame);
+                },
+              ),
+              _MoreRow(
+                icon: Icons.settings_outlined,
+                label: 'Settings',
+                subtitle: 'Account & group',
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  context.go(RoutePaths.settings);
+                },
               ),
             ],
           ),
@@ -262,8 +262,8 @@ class BottomNav extends StatelessWidget {
   }
 }
 
-class _MoreTile extends StatelessWidget {
-  const _MoreTile({
+class _MoreRow extends StatelessWidget {
+  const _MoreRow({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -279,65 +279,89 @@ class _MoreTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: onTap == null
-              ? Colors.transparent
-              : AppColors.muted.withValues(alpha: 0.35),
+    final enabled = onTap != null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.md,
+            ),
+            decoration: BoxDecoration(
+              color: Glass.solidTint(AppColors.muted),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
               children: [
-                Icon(
-                  icon,
-                  color: AppColors.primary,
-                  size: 22,
-                ),
-                const Spacer(),
-                if (count != null)
-                  _CountChip(count: count!)
-                else
-                  Icon(
-                    Icons.chevron_right,
-                    color: AppColors.mutedForeground,
-                    size: 18,
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 2),
-              Text(
-                subtitle!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodyXs.copyWith(
+                  child: Icon(
+                    icon,
+                    size: 20,
+                    color: enabled
+                        ? AppColors.primary
+                        : AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: enabled
+                              ? AppColors.foreground
+                              : AppColors.mutedForeground,
+                        ),
+                      ),
+                      if (subtitle != null)
+                        Text(
+                          subtitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (count != null && count! > 0) ...[
+                  _CountChip(count: count!),
+                  const SizedBox(width: AppSpacing.sm),
+                ],
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
                   color: AppColors.mutedForeground,
                 ),
-              ),
-            ],
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-/// Compact primary pill with a count, used for the Chat unread badge.
 class _BadgeCount extends StatelessWidget {
   const _BadgeCount({required this.count});
 

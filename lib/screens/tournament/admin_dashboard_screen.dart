@@ -55,12 +55,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String? _estimateFinish(LiveGame game, Duration clockOffset, {int? futureDurationOverride}) {
     final levels = game.structure.levels;
     if (levels.isEmpty) return null;
+    // Only the PLANNED levels count. The generator appends a spare tail as
+    // overtime insurance (11-014); folding it in here added an hour to the
+    // headline estimate from level one of every tournament, and disagreed
+    // with the drift model, which already bounds itself the same way
+    // (11-030, Technical section 11.4).
+    final planned = game.structure.effectivePlannedLevels;
     var mins = game.currentSecondsRemaining(clockOffset) ~/ 60;
     for (final l in levels) {
-      if (l.level > game.currentLevel) {
-        mins += l.level > game.currentLevel && futureDurationOverride != null
-            ? futureDurationOverride
-            : l.durationMins;
+      if (l.level > game.currentLevel && l.level <= planned) {
+        // The enclosing condition already established the level is in the
+        // future; the old inner ternary re-tested it for no reason.
+        mins += futureDurationOverride ?? l.durationMins;
       }
     }
     String hhmm(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
@@ -109,10 +115,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       _showedFinalTablePrompt = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+          final dialogInsets = appDialogInsets(context);
           showDialog(
             context: context,
             barrierDismissible: false,
             builder: (ctx) => AppModal(
+              insetPadding: dialogInsets,
               open: true,
               onClose: () => Navigator.pop(ctx),
               title: 'Final Table Reached!',
@@ -452,6 +460,59 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           ],
           const SizedBox(height: AppSpacing.xxl),
+          // Play ran past the generated structure. 12-082 requires the admin to
+          // confirm every pace change, so the clock is held until they decide
+          // instead of the app inventing a blind level on its own.
+          if (app.pendingLevelExtension != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: AppCard(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                borderColor: AppColors.primary.withValues(alpha: 0.5),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Structure complete — approve the next level?',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'The clock is paused. Proposed level '
+                      '${app.pendingLevelExtension!.level}: blinds '
+                      '${app.pendingLevelExtension!.sb} / '
+                      '${app.pendingLevelExtension!.bb} for '
+                      '${app.pendingLevelExtension!.durationMins} minutes. '
+                      'Both blinds are payable with the chips in play.',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppButton(
+                            variant: AppButtonVariant.secondary,
+                            onPressed: app.declineLevelExtension,
+                            child: const Text('Not now'),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: AppButton(
+                            onPressed: app.acceptLevelExtension,
+                            child: const Text('Add level & continue'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // Blocking cancelled state — blocking states take priority (spec §12).
           if (status == LiveGameStatus.cancelled)
             Padding(
@@ -2470,6 +2531,27 @@ class _PrizeTab extends StatelessWidget {
                     ),
                   ],
                 ),
+                // 14-010 / 14-011: the residue is a ROUNDING REMAINDER, never an
+                // organizer cut. Shown only when it exists so a 0% game does not
+                // grow a mysterious retained line.
+                if (structure.roundingRemainder > 0)
+                  Row(
+                    children: [
+                      Text(
+                        'Rounding remainder',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${structure.roundingRemainder}',
+                        style: AppTypography.monoXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),

@@ -28,6 +28,7 @@ import '../../widgets/code_display.dart';
 import '../../widgets/rsvp_badge.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/app_alert_banner.dart';
+import '../../widgets/glass_styles.dart';
 
 /// Invitation / RSVP page mirroring the web `InvitationPage`.
 class InvitationScreen extends StatefulWidget {
@@ -947,7 +948,10 @@ class _Detail extends StatelessWidget {
       width: 160,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.secondary.withValues(alpha: 0.5),
+        // `secondary` is white-with-alpha in most palettes, so overriding
+        // its alpha turned these tiles into pale blocks with unreadable
+        // labels on mobile. See Glass.solidTint.
+        color: Glass.solidTint(AppColors.secondary),
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
       ),

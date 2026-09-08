@@ -14,6 +14,7 @@ import 'app_badge.dart';
 import 'app_button.dart';
 import 'app_modal.dart';
 import 'rsvp_badge.dart';
+import 'glass_styles.dart';
 
 /// A single chat message: pinned system announcements render as an event card,
 /// everything else as a traditional chat bubble (mine right/filled, theirs
@@ -214,7 +215,7 @@ class _EventCard extends StatelessWidget {
             gradient: LinearGradient(
               colors: [
                 AppColors.primary.withValues(alpha: 0.12),
-                AppColors.secondary.withValues(alpha: 0.06),
+                Glass.solidTint(AppColors.secondary),
               ],
             ),
             borderRadius: BorderRadius.circular(AppRadius.md),

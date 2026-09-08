@@ -259,6 +259,7 @@ class LiveGame {
     this.rebuyRequests = const [],
     this.addOnRequests = const [],
     this.levelEndTime,
+    this.startedAt,
     this.changeLog = const [],
     this.revision = 0,
     this.lastIdempotencyKey,
@@ -351,6 +352,19 @@ class LiveGame {
   /// The exact timestamp when the current timer will hit 0. Null if paused or stopped.
   final DateTime? levelEndTime;
 
+  /// Server-clock instant the tournament actually started (first Start press).
+  ///
+  /// Pace has to be measured against the WALL CLOCK, not against the sum of
+  /// level durations. Level time alone cannot see a pause: the end-of-rebuy
+  /// settlement break has no countdown of its own (User Flow section 4.13)
+  /// and the engine budgets 15 minutes for it (11-031), so a half-hour
+  /// settlement left the drift model reading on-target while the dashboard's
+  /// own wall-clock finish window showed the evening slipping — the two
+  /// indicators contradicting each other. Null for a legacy game or before
+  /// the clock is first started, in which case callers fall back to summed
+  /// level durations.
+  final DateTime? startedAt;
+
   /// Human-readable audit of post-publication event edits (user-flow spec
   /// §10.4): "2026-08-24 14:05 · buy-in 15 → 20". Oldest first; the provider
   /// caps the list when appending. Rendered prominently on the event page.
@@ -440,11 +454,44 @@ class LiveGame {
     return structure.levels[currentLevel];
   }
 
+  /// True once no further rebuy may be recorded.
+  ///
+  /// The settlement break itself is NOT closed: User Flow section 4.13 and
+  /// 12-056 require the admin to record "any final valid rebuy from a hand
+  /// that began before the deadline", and that happens during the break. This
+  /// used to flip the instant status reached `rebuypause`, so `grantRebuy`
+  /// refused for exactly the window the spec reserves for it. The real gate is
+  /// [settlementConfirmed] — once the host confirms settlement, registration
+  /// is closed permanently.
   bool get rebuysClosed {
     if (!settings.rebuys) return true;
-    if (status.index >= LiveGameStatus.rebuypause.index) return true;
+    if (settlementConfirmed) return true;
+    if (status == LiveGameStatus.rebuypause) return false;
+    if (status.index > LiveGameStatus.rebuypause.index) return true;
     return currentLevel > settings.rebuysCloseLevel;
   }
+
+  /// True once NO NEW PLAYER may enter (User Flow section 4.13, Technical
+  /// section 10.3: "Late registration closes permanently when the rebuy level
+  /// ends").
+  ///
+  /// Deliberately distinct from [rebuysClosed]. The settlement break is a
+  /// window where an already-eliminated player may still take the final rebuy
+  /// from a hand that began before the deadline (12-056), but nobody new may
+  /// join. Sharing one flag meant reopening the rebuy window would also have
+  /// reopened the door.
+  bool get registrationClosed =>
+      status.index >= LiveGameStatus.rebuypause.index ||
+      // The closing LEVEL applies whether or not rebuys are enabled.
+      //
+      // Gating this on `settings.rebuys` left a no-rebuy tournament with no
+      // closing point at all: `rebuypause` is only ever set inside
+      // `nextLevel`'s `shouldPauseRebuy` branch, which itself requires
+      // rebuys, so the status never reaches it and walk-ins, guest claims and
+      // check-ins stayed open at level 12 of a live game. Technical section
+      // 10.3 closes late registration when the rebuy level ends regardless.
+      (settings.rebuysCloseLevel > 0 &&
+          currentLevel > settings.rebuysCloseLevel);
 
 
   /// Starting stacks are frozen the moment the tournament goes live. Blinds,
@@ -485,6 +532,7 @@ class LiveGame {
     List<String>? rebuyRequests,
     List<String>? addOnRequests,
     DateTime? levelEndTime,
+    DateTime? startedAt,
     bool clearSpeedRecommendation = false,
     bool clearLevelEndTime = false,
     List<String>? changeLog,
@@ -528,6 +576,7 @@ class LiveGame {
       levelEndTime: clearLevelEndTime
           ? null
           : levelEndTime ?? this.levelEndTime,
+      startedAt: startedAt ?? this.startedAt,
       changeLog: changeLog ?? this.changeLog,
       revision: revision ?? this.revision,
       lastIdempotencyKey: lastIdempotencyKey ?? this.lastIdempotencyKey,

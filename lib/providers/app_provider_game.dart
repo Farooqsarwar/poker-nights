@@ -201,7 +201,7 @@ extension AppProviderGame on AppProvider {
         ),
     ];
     final game = LiveGame(
-      id: 'game-${DateTime.now().millisecondsSinceEpoch}',
+      id: Formatters.secureId('game'), // 19-007: ids must not be guessable
       groupId: _currentGroup.id,
       settings: settings,
       structure: structure,
@@ -574,11 +574,21 @@ extension AppProviderGame on AppProvider {
   /// recorded at the end of the rebuy level (client rule: prices are only
   /// calculated there — exact field size, actual rebuys and the selected
   /// add-ons). [addOnCount] is the number of add-ons taken at settlement.
-  ({int organizerAmount, int prizePool, List<Prize> prizes})
+  ({
+    int organizerAmount,
+    int prizePool,
+    List<Prize> prizes,
+    int roundingRemainder,
+  })
   previewSettlementPrizes(int addOnCount) {
     final game = _currentGame;
     if (game == null) {
-      return (organizerAmount: 0, prizePool: 0, prizes: const []);
+      return (
+        organizerAmount: 0,
+        prizePool: 0,
+        prizes: const [],
+        roundingRemainder: 0,
+      );
     }
     final s = game.settings;
     final confirmedCount = game.players.where((p) => p.confirmed).length;

@@ -75,9 +75,11 @@ class MembersScreen extends StatelessWidget {
 
   void _confirmRemoveMember(BuildContext context, AppUser member) {
     final app = context.read<AppProvider>();
+    final dialogInsets = appDialogInsets(context);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        insetPadding: dialogInsets,
         backgroundColor: AppColors.card,
         title: const Text('Remove Member'),
         content: Text(

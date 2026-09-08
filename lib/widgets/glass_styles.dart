@@ -253,12 +253,44 @@ class Glass {
     ],
   );
 
+  // ── Opaque glass ─────────────────────────────────────────────────────────
+
+  /// The colour a translucent glass surface *looks like*, pre-blended against
+  /// the app background so it needs no transparency at all.
+  ///
+  /// The glass surfaces were built as semi-transparent fills (a card at 40%,
+  /// a modal at 65%) sitting on top of a [BackdropFilter] that frosts whatever
+  /// is behind them. That works when the blur renders. On Flutter WEB it
+  /// frequently does not — and this app ships as a web build — so instead of
+  /// frosted glass you get a plain see-through panel: page text reading
+  /// straight through a dialog, and cards that wash out over anything bright.
+  ///
+  /// Blending the same colour against the background up front gives an opaque
+  /// fill that is visually identical where the blur DID work, and legible
+  /// everywhere it did not.
+  static Color solid(Color c, double alpha) =>
+      Color.alphaBlend(c.withValues(alpha: alpha), AppColors.background);
+
+  /// Flattens a palette colour that ALREADY carries its own alpha.
+  ///
+  /// Several palettes define their frost surfaces as white-with-alpha —
+  /// `secondary` in the default palette is `0x0DFFFFFF`, i.e. white at 5%.
+  /// Calling `.withValues(alpha: 0.5)` on one of those does not dim it by
+  /// half, it REPLACES the 5% with 50% and you get a big pale block with
+  /// unreadable text on it. That is what turned the event detail tiles white
+  /// on mobile.
+  ///
+  /// Use this to render such a colour as its designer intended: its own alpha,
+  /// flattened against the background so nothing shows through.
+  static Color solidTint(Color c) =>
+      Color.alphaBlend(c, AppColors.background);
+
   // ── Decoration builders ──────────────────────────────────────────────────
 
   /// Primary glass surface decoration (cards, panels).
   static BoxDecoration glassCard({Color? color, Color? borderColor}) {
     return BoxDecoration(
-      color: (color ?? AppColors.card).withValues(alpha: surfaceOpacity),
+      color: solid(color ?? AppColors.card, surfaceOpacity),
       borderRadius: BorderRadius.circular(AppRadius.md),
       border: Border.all(
         color: (borderColor ?? AppColors.border)
@@ -276,8 +308,8 @@ class Glass {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          AppColors.card.withValues(alpha: navOpacity + 0.05),
-          AppColors.card.withValues(alpha: navOpacity - 0.05),
+          solid(AppColors.card, navOpacity + 0.05),
+          solid(AppColors.card, navOpacity - 0.05),
         ],
       ),
       border: Border(
@@ -296,8 +328,8 @@ class Glass {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          AppColors.card.withValues(alpha: bottomNavOpacity - 0.05),
-          AppColors.card.withValues(alpha: bottomNavOpacity),
+          solid(AppColors.card, bottomNavOpacity - 0.05),
+          solid(AppColors.card, bottomNavOpacity),
         ],
       ),
       border: Border(
@@ -329,8 +361,8 @@ class Glass {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          AppColors.card.withValues(alpha: modalOpacity),
-          AppColors.card.withValues(alpha: modalOpacity - 0.08),
+          solid(AppColors.card, modalOpacity),
+          solid(AppColors.card, modalOpacity - 0.08),
         ],
       ),
       borderRadius: BorderRadius.circular(AppRadius.lg),

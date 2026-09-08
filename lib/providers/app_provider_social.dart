@@ -152,11 +152,13 @@ extension AppProviderSocial on AppProvider {
   }
 
   /// Persists a poll create/update to `groups/{gid}/polls` (fire-and-forget).
-  void _persistPoll(Poll poll) {
+  /// Persists a poll. [asVote] marks a member's own vote, which the rules
+  /// throttle (19-010); admin create/close writes are not throttled.
+  void _persistPoll(Poll poll, {bool asVote = false}) {
     if (!_backendUp || _currentGroupId == null) return;
     unawaited(
       _repo
-          .savePoll(_currentGroupId!, poll)
+          .savePoll(_currentGroupId!, poll, asVote: asVote)
           .catchError((Object e) => debugPrint('savePoll failed: $e')),
     );
   }
@@ -286,7 +288,7 @@ extension AppProviderSocial on AppProvider {
         }).toList(),
       ),
     );
-    if (updated != null) _persistPoll(updated!);
+    if (updated != null) _persistPoll(updated!, asVote: !isAdmin);
     if (!_disposed) notifyListeners();
   }
 
@@ -511,7 +513,7 @@ extension AppProviderSocial on AppProvider {
     final uid = _user?.id;
     if (uid == null || _isGameAuthority) return;
     if (_pendingCheckIn[remote.id] != uid) return;
-    if (writerId != null && writerId == _repo.deviceId) return;
+    if (writerId != null && writerId == _repo.sessionId) return;
     final serverMine = remote.players.where((p) => p.id == uid).firstOrNull;
     if (serverMine?.checkedIn == true) {
       _pendingCheckIn.remove(remote.id);
@@ -639,21 +641,26 @@ extension AppProviderSocial on AppProvider {
           debugPrint('RSVP patch failed (attempt ${attempt + 1}): $e');
           if (_isRetriablePermissionError(e)) {
             await _nudgeAuthToken();
-            // The game doc is member-gated. If this signed-in user reached the
-            // game via a shared game code / link they were never added to the
-            // group roster, so `isMember` is false and the write is denied.
-            // Self-join the roster (rules allow a user to create their own
-            // 'member' row) and try again.
+            // A permission denial here means this user is not on the group
+            // roster. Self-joining on the strength of the GAME code used to
+            // paper over that, but a game/TV code is something a guest holds
+            // by design — treating it as proof of membership handed anyone in
+            // the room full group access (User Flow section 2.2 / 6.4).
+            //
+            // Someone who reached the game by link is a guest; they RSVP
+            // through the guest flow, or the admin adds them, or they join
+            // with the group's own code. Surface it instead of retrying a
+            // write the rules will keep refusing.
             if (!triedSelfJoin && !isGuest) {
               triedSelfJoin = true;
-              try {
-                await _repo.joinGroup(gid, _user!);
-                debugPrint(
-                  'RSVP patch: self-joined group $gid roster, retrying',
-                );
-              } catch (joinErr) {
-                debugPrint('RSVP patch: self-join failed: $joinErr');
-              }
+              debugPrint(
+                'RSVP patch: not a member of $gid — a group code or an admin '
+                'invitation is required. Use the guest flow instead.',
+              );
+              lastRsvpError =
+                  'You are not a member of this group yet. Ask the host for '
+                  'the group code, or join as a guest.';
+              if (!_disposed) notifyListeners();
             }
           }
         }

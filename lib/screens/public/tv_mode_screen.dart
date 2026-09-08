@@ -659,31 +659,48 @@ class _PayoutsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paidPlaces = game.structure.prizes.take(6).length;
+    // Projections carry an empty `prizes` list plus a count, so read the
+    // count rather than the list length (see TournamentStructure.paidPlaces).
+    final paidPlaces = game.structure.paidPlacesForDisplay.clamp(0, 6);
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 4),
-          Text(
-            Formatters.chips(game.structure.prizePool),
-            textAlign: TextAlign.center,
-            style: AppTypography.mono(
-              size: 42 * scale,
-              weight: FontWeight.w300,
-              color: AppColors.foreground,
+          // 14-043 / 15-034: the pool total is a LIVE figure. Once the
+          // tournament is finished, public and player results show the paid
+          // positions only — no money. The podium and history screens already
+          // gate on this; TV did not.
+          if (game.status != LiveGameStatus.completed) ...[
+            Text(
+              Formatters.prize(game.structure.prizePool),
+              textAlign: TextAlign.center,
+              style: AppTypography.mono(
+                size: 42 * scale,
+                weight: FontWeight.w300,
+                color: AppColors.foreground,
+              ),
             ),
-          ),
-          Text(
-            game.prizePoolLabel.toUpperCase(),
-            textAlign: TextAlign.center,
-            style: AppTypography.mono(
-              size: 12 * scale,
-              letterSpacing: 2,
-              color: AppColors.mutedForeground,
+            Text(
+              game.prizePoolLabel.toUpperCase(),
+              textAlign: TextAlign.center,
+              style: AppTypography.mono(
+                size: 12 * scale,
+                letterSpacing: 2,
+                color: AppColors.mutedForeground,
+              ),
             ),
-          ),
+          ] else
+            Text(
+              'FINAL POSITIONS',
+              textAlign: TextAlign.center,
+              style: AppTypography.mono(
+                size: 12 * scale,
+                letterSpacing: 2,
+                color: AppColors.mutedForeground,
+              ),
+            ),
           if (game.status == LiveGameStatus.completed) ...[
             const SizedBox(height: 16),
             Divider(height: 1, color: AppColors.border),

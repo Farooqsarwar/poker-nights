@@ -48,10 +48,15 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Widget _buildHeader(BuildContext context) {
     final isMobile = AppBreakpoints.deviceOf(context).isMobile;
+    final statusBarHeight = MediaQuery.paddingOf(context).top;
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isMobile ? AppSpacing.lg : AppSpacing.xxl,
-        vertical: AppSpacing.lg,
+      padding: EdgeInsets.only(
+        left: isMobile ? AppSpacing.lg : AppSpacing.xxl,
+        right: isMobile ? AppSpacing.lg : AppSpacing.xxl,
+        // Absorb the status-bar inset so content sits below it,
+        // while the background bleeds all the way to the top edge.
+        top: statusBarHeight + (isMobile ? AppSpacing.sm : AppSpacing.lg),
+        bottom: isMobile ? AppSpacing.sm : AppSpacing.lg,
       ),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.hairlineWhite)),
@@ -86,7 +91,7 @@ class _LandingScreenState extends State<LandingScreen> {
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: isDesktop ? AppSpacing.xxxl : AppSpacing.lg,
-            vertical: AppSpacing.huge,
+            vertical: isDesktop ? AppSpacing.huge : AppSpacing.xl,
           ),
           child: Column(
             children: [
@@ -207,7 +212,7 @@ class _LandingScreenState extends State<LandingScreen> {
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: isDesktop ? AppSpacing.xxxl : AppSpacing.lg,
-        vertical: AppSpacing.huge,
+        vertical: isDesktop ? AppSpacing.huge : AppSpacing.xl,
       ),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.hairlineWhite)),

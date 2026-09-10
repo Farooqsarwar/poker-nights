@@ -397,6 +397,21 @@ extension AppProviderGame on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  /// Whether two chip inventories are the same tray of physical chips.
+  ///
+  /// [ChipColor] has a value equality, but the lists arrive in whatever order
+  /// the editor left them in, so a plain `==` on the lists would report a
+  /// reordering as a change and regenerate the structure for nothing.
+  bool _sameChipSet(List<ChipColor> a, List<ChipColor> b) {
+    if (a.length != b.length) return false;
+    final sortedA = [...a]..sort((x, y) => x.value - y.value);
+    final sortedB = [...b]..sort((x, y) => x.value - y.value);
+    for (var i = 0; i < sortedA.length; i++) {
+      if (sortedA[i] != sortedB[i]) return false;
+    }
+    return true;
+  }
+
   /// Admin edits an already-created event's details. Records an audit entry,
   /// notifies members, and re-generates the structure when the field change
   /// would affect it (checklist §10.4). RSVP validity is surfaced in the audit.
@@ -408,10 +423,17 @@ extension AppProviderGame on AppProvider {
     _pushUndo();
 
     var s = next;
-    // The structure only depends on players, buy-in, duration and ante rules;
-    // cosmetic fields (name/date/time/location/privacy) keep the structure.
+    // The structure only depends on players, buy-in, duration, the chip
+    // inventory and the ante/rebuy rules; cosmetic fields
+    // (name/date/time/location/privacy) keep the structure.
+    //
+    // `chipSet` was missing from this list, so once chips became editable
+    // after publish (User Flow 4.5) a host could change their tray and the
+    // app would keep planning stacks out of chips they no longer had.
     final affectsStructure =
         prev.players != s.players ||
+        !_sameChipSet(prev.chipSet, s.chipSet) ||
+        prev.expectedPlayersOverride != s.expectedPlayersOverride ||
         prev.buyIn != s.buyIn ||
         prev.durationHours != s.durationHours ||
         prev.anteEnabled != s.anteEnabled ||
@@ -433,6 +455,16 @@ extension AppProviderGame on AppProvider {
       edits.add('location ${s.locationPrivate ? '(private) ' : ''}updated');
     }
     if (prev.buyIn != s.buyIn) edits.add('buy-in → ${s.buyIn}');
+    if (!_sameChipSet(prev.chipSet, s.chipSet)) {
+      edits.add('chip set → ${s.chipSetName} (${s.chipSet.length} colours)');
+    }
+    if (prev.expectedPlayersOverride != s.expectedPlayersOverride) {
+      edits.add(
+        s.expectedPlayersOverride == null
+            ? 'expected players → follow RSVPs'
+            : 'expected players → ${s.expectedPlayersOverride}',
+      );
+    }
     if (prev.locationPrivate != s.locationPrivate) {
       edits.add(s.locationPrivate ? 'address hidden' : 'address visible');
     }
@@ -450,7 +482,15 @@ extension AppProviderGame on AppProvider {
       } else {
         var structure = TournamentEngine.generate(
           TournamentParams(
-            players: s.players,
+            // `s.players` is the ROSTER at this point in the lifecycle, not
+            // a confirmed head-count, so an override must replace it outright
+            // rather than being floored by it — otherwise a host planning a
+            // small game inside a large group would silently get the group's
+            // size. `generateFinalStructure` floors by actual check-ins,
+            // which is the only figure an override may not undercut.
+            players: s.expectedPlayersOverride != null
+                ? max(2, s.expectedPlayersOverride!)
+                : s.players,
             durationHours: s.durationHours,
             buyIn: s.buyIn,
             chipSet: s.chipSet,

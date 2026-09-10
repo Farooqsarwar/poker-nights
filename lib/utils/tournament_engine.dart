@@ -321,39 +321,41 @@ class TournamentEngine {
     );
   }
 
-  /// How many chips of the lowest and second-lowest blind-payable
-  /// denominations a stack is seeded with before the top-down fill.
+  /// Builds one player's physical stack out of the host's chips.
   ///
-  /// Filling strictly top-down and only adding low chips to absorb a leftover
-  /// remainder meant a ROUND target produced no change at all: 800 from a
-  /// {1,5,25,100,500} set built as 1x500 + 3x100 and stopped. The change test
-  /// then failed, the coarse stack grid was abandoned, and the search only
-  /// succeeded at ragged values like 815 or 995 — whose remainders happened to
-  /// force small chips in. Reserving change up front makes the round numbers
-  /// work (10-033, 10-034, Technical section 7.2 / 7.3).
-  static const int _seedLowestChips = 8;
-  static const int _seedSecondLowestChips = 6;
-
-  /// STANDING DEVIATION (PN-051, Technical section 7.3).
-  ///
-  /// The spec describes a SCORED ENUMERATION over practical combinations —
+  /// Technical section 7.3 asks for a SCORED ENUMERATION over practical chip
+  /// combinations rather than a single greedy pass, judged on
   /// `early_blind_payability + counting_simplicity + stack_aesthetics +
   /// rebuy_reserve_health + colour_up_efficiency - excessive_chip_count`.
-  /// What is implemented is greedy: seed change, fill top-down, top up, test.
   ///
-  /// The practical consequence is that some round stacks stay out of reach on
-  /// a tight box. 800 IS constructible with change from a {1,5,25,100,500}
-  /// set — 1x500 + 1x100 + 6x25 + 8x5 + 10x1 — but seed-then-fill cannot find
-  /// that shape, so Standard 300 at 6-14 players lands on 845 / 850 / 815
-  /// instead. Every such stack is exact in value, inside the 80-240 BB band
-  /// and postable; only the aesthetics suffer.
+  /// Greedy top-down (the previous implementation) cannot satisfy that. It
+  /// produced the failure the client reported from a real game: a stack of
+  /// seven high-value chips and nothing small enough to post the small blind
+  /// with. Filling from the top is locally optimal for chip COUNT and pessimal
+  /// for payability, and a single fixed change seed in front of it only moved
+  /// the problem — it ate the per-colour headroom the final top-up needed, so
+  /// exact coverage was lost and the solver fell back to absurd stacks
+  /// (measured: 1 BB).
   ///
-  /// Replacing this with a memoised search over (denomination index,
-  /// remaining) would resolve it, and would also remove the "rebuild without
-  /// the seed" branch below, which exists only because greedy seeding can
-  /// cost exact coverage. Deferred: it changes every generated stack, so it
-  /// wants the property tests and a client decision on whether round numbers
-  /// are worth it.
+  /// What runs now is the enumeration. The only real degree of freedom is how
+  /// much change to reserve before filling, so the search walks a ladder of
+  /// reserve sizes across the three lowest blind-payable denominations,
+  /// completes each one top-down, and scores the finished stacks. The all-zero
+  /// reserve is one of the candidates, so this can never do worse than the
+  /// plain greedy fill it replaces, and the "rebuild without the seed"
+  /// fallback the old code needed is gone with it.
+  ///
+  /// [smallBlind] is what makes a chip "change": denominations at or below it
+  /// can post the blind, denominations strictly below it can make change for
+  /// it. With no blind context (0) there is nothing to be payable FOR, so the
+  /// search collapses to the single unseeded fill.
+  ///
+  /// PERFORMANCE. The stack solver calls this thousands of times while walking
+  /// candidate depths, so the inner loop works on parallel `List<int>` buffers
+  /// allocated once per call rather than on maps of colour names — the first
+  /// cut of this enumeration did the latter and took 1.4 SECONDS per
+  /// `generate`, which is a visible freeze on every settings save. Only the
+  /// winning candidate is ever turned into [ChipPlanEntry] objects.
   static List<ChipPlanEntry> _buildChipPlan(
     int targetStack,
     List<ChipColor> chips,
@@ -361,139 +363,248 @@ class TournamentEngine {
     double reserveMultiplier, {
     int smallBlind = 0,
   }) {
-    final sorted = [...chips]..sort((a, b) => a.value - b.value);
-    final plan = <ChipPlanEntry>[];
-    var remaining = targetStack;
+    if (targetStack <= 0) return const [];
+    final sorted = [...chips.where((c) => c.value > 0)]
+      ..sort((a, b) => a.value - b.value);
+    final n = sorted.length;
+    if (n == 0) return const [];
 
     // Guard the divisor: a zero head-count (e.g. the structure estimate the
     // admin triggers the instant check-in opens, before anyone has checked in)
     // made `quantity / 0` evaluate to Infinity, and `Infinity.floor()` throws
     // `UnsupportedError: Infinity` — crashing the tap instead of producing a
     // plan. One seat is the smallest meaningful divisor.
-    final perPlayerDivisor =
-        math.max(1.0, playerCount * reserveMultiplier);
+    final perPlayerDivisor = math.max(1.0, playerCount * reserveMultiplier);
 
-    // ── Reserve change BEFORE filling top-down ──────────────────────────
-    // Only denominations that can actually pay the small blind count, and
-    // only when the caller told us what the blind is.
-    final seeded = <String, int>{};
+    final values = List<int>.generate(n, (i) => sorted[i].value);
+    final caps = List<int>.generate(
+      n,
+      (i) => math.min(
+        (sorted[i].quantity / perPlayerDivisor).floor(),
+        maxChipsPerPlayer,
+      ),
+    );
+
+    // How many of the lowest denominations can pay the small blind. Only the
+    // three lowest are worth reserving: above that a chip is not change, it is
+    // just a smaller way of holding the stack.
+    var payableCount = 0;
     if (smallBlind > 0) {
-      final payable = sorted
-          .where((c) => c.value > 0 && c.value <= smallBlind)
-          .toList();
-      for (var i = 0; i < payable.length && i < 2; i++) {
-        final chip = payable[i];
-        final want = i == 0 ? _seedLowestChips : _seedSecondLowestChips;
-        final maxPerPlayer = (chip.quantity / perPlayerDivisor).floor();
-        final affordable = remaining ~/ chip.value;
-        final use = math.min(
-          want,
-          math.min(affordable, math.min(maxPerPlayer, maxChipsPerPlayer)),
-        );
-        if (use > 0) {
-          seeded[chip.color] = use;
-          plan.add(
-            ChipPlanEntry(
-              color: chip.color,
-              hex: chip.hex,
-              value: chip.value,
-              count: use,
-            ),
-          );
-          remaining -= use * chip.value;
-        }
+      while (payableCount < n &&
+          payableCount < 3 &&
+          values[payableCount] <= smallBlind) {
+        payableCount++;
       }
     }
 
-    final reversed = sorted.reversed.toList();
-    for (final chip in reversed) {
-      // A zero/negative denomination would make `remaining ~/ chip.value`
-      // throw; such a chip can never contribute to a stack anyway.
-      if (chip.value <= 0) continue;
-      final maxPerPlayer = (chip.quantity / perPlayerDivisor).floor();
-      if (maxPerPlayer <= 0) continue;
-      // Whatever the change seed already claimed of this colour comes off
-      // both the budget and the caps.
-      final already = seeded[chip.color] ?? 0;
-      final headroom =
-          math.min(maxPerPlayer, maxChipsPerPlayer) - already;
-      if (headroom <= 0) continue;
-      final need = remaining ~/ chip.value;
-      final use = math.min(need, headroom);
-      if (use > 0) {
-        final index = plan.indexWhere((p) => p.color == chip.color);
-        if (index >= 0) {
-          plan[index] = ChipPlanEntry(
-            color: chip.color,
-            hex: chip.hex,
-            value: chip.value,
-            count: plan[index].count + use,
-          );
-        } else {
-          plan.add(
-            ChipPlanEntry(
-              color: chip.color,
-              hex: chip.hex,
-              value: chip.value,
-              count: use,
-            ),
-          );
-        }
-        remaining -= use * chip.value;
-      }
-    }
+    // Reserve ladders, coarsest first. Even numbers only — a stack that pays
+    // blinds in pairs is easier to count down than one holding sevens.
+    const ladder0 = [0, 4, 6, 8, 10, 12];
+    const ladder1 = [0, 2, 4, 6, 8];
+    const ladder2 = [0, 2, 4];
 
-    final smallest = sorted.where((c) => c.value > 0).firstOrNull;
-    if (remaining > 0 && smallest != null) {
-      final small = smallest;
-      final smallMaxPerPlayer = (small.quantity / perPlayerDivisor).floor();
-      final index = plan.indexWhere((p) => p.color == small.color);
-      final existing = index >= 0 ? plan[index].count : 0;
-      final extra = math.min(
-        (remaining / small.value).ceil(),
-        math.max(0, math.min(smallMaxPerPlayer, maxChipsPerPlayer) - existing),
+    final counts = List<int>.filled(n, 0);
+    final bestCounts = List<int>.filled(n, 0);
+    var bestScore = double.negativeInfinity;
+    var haveBest = false;
+
+    void consider(int r0, int r1, int r2) {
+      final covered = _fillStack(
+        targetStack,
+        values,
+        caps,
+        counts,
+        payableCount,
+        r0,
+        r1,
+        r2,
       );
-      if (extra > 0) {
-        if (index >= 0) {
-          plan[index] = ChipPlanEntry(
-            color: small.color,
-            hex: small.hex,
-            value: small.value,
-            count: plan[index].count + extra,
-          );
-        } else {
-          plan.add(
-            ChipPlanEntry(
-              color: small.color,
-              hex: small.hex,
-              value: small.value,
-              count: extra,
-            ),
-          );
+      final score = _scoreStack(
+        counts,
+        values,
+        targetStack,
+        covered,
+        smallBlind,
+      );
+      if (!haveBest || score > bestScore) {
+        bestScore = score;
+        haveBest = true;
+        bestCounts.setAll(0, counts);
+      }
+    }
+
+    if (payableCount == 0) {
+      consider(0, 0, 0);
+    } else {
+      for (final a in ladder0) {
+        for (final b in payableCount > 1 ? ladder1 : const [0]) {
+          for (final c in payableCount > 2 ? ladder2 : const [0]) {
+            consider(a, b, c);
+          }
         }
       }
     }
 
-    plan.sort((a, b) => b.value - a.value);
-
-    // The change seed must never cost exact coverage. Seeded low chips eat the
-    // per-colour headroom the final top-up needs, so on a tight inventory a
-    // stack that WOULD have been reachable can fall a few units short — which
-    // then pushed the solver into absurd fallbacks (measured: 1 BB stacks).
-    // If that happens, rebuild without the seed and keep the total exact:
-    // a stack of the declared value beats a stack with nicer change (23-002).
-    if (smallBlind > 0) {
-      final covered = plan.fold<int>(0, (a, e) => a + e.count * e.value);
-      if (covered < targetStack) {
-        return _buildChipPlan(
-          targetStack,
-          chips,
-          playerCount,
-          reserveMultiplier,
+    final plan = <ChipPlanEntry>[];
+    for (var i = n - 1; i >= 0; i--) {
+      if (bestCounts[i] > 0) {
+        plan.add(
+          ChipPlanEntry(
+            color: sorted[i].color,
+            hex: sorted[i].hex,
+            value: sorted[i].value,
+            count: bestCounts[i],
+          ),
         );
       }
     }
     return plan;
+  }
+
+  /// Completes one candidate stack into [counts] and returns its total value.
+  ///
+  /// Lays down the requested change reserve across the lowest [payableCount]
+  /// denominations, fills the rest top-down, then tops up from the smallest
+  /// denomination so the declared value is exact (23-002).
+  static int _fillStack(
+    int targetStack,
+    List<int> values,
+    List<int> caps,
+    List<int> counts,
+    int payableCount,
+    int r0,
+    int r1,
+    int r2,
+  ) {
+    final n = values.length;
+    for (var i = 0; i < n; i++) {
+      counts[i] = 0;
+    }
+    var remaining = targetStack;
+
+    for (var i = 0; i < payableCount; i++) {
+      final want = i == 0
+          ? r0
+          : i == 1
+              ? r1
+              : r2;
+      if (want <= 0) continue;
+      var use = want;
+      if (use > caps[i]) use = caps[i];
+      final affordable = remaining ~/ values[i];
+      if (use > affordable) use = affordable;
+      if (use > 0) {
+        counts[i] = use;
+        remaining -= use * values[i];
+      }
+    }
+
+    for (var i = n - 1; i >= 0; i--) {
+      final headroom = caps[i] - counts[i];
+      if (headroom <= 0) continue;
+      var use = remaining ~/ values[i];
+      if (use > headroom) use = headroom;
+      if (use > 0) {
+        counts[i] += use;
+        remaining -= use * values[i];
+      }
+    }
+
+    // Any residue smaller than the cheapest chip already placed can only be
+    // absorbed by rounding up on the smallest denomination.
+    if (remaining > 0) {
+      final headroom = caps[0] - counts[0];
+      if (headroom > 0) {
+        var extra = (remaining + values[0] - 1) ~/ values[0];
+        if (extra > headroom) extra = headroom;
+        counts[0] += extra;
+        remaining -= extra * values[0];
+      }
+    }
+
+    return targetStack - remaining;
+  }
+
+  /// Technical section 7.3's scoring terms, as a single comparable number.
+  ///
+  /// Exactness is not a term but a gate: a stack that is not worth what it
+  /// says is disqualified outright, because every downstream figure — the
+  /// prize pool, the average stack, the colour-up — is computed from the
+  /// declared value. Missing the target by any amount outranks every
+  /// aesthetic consideration there is.
+  static double _scoreStack(
+    List<int> counts,
+    List<int> values,
+    int targetStack,
+    int covered,
+    int smallBlind,
+  ) {
+    var score = 0.0;
+
+    // ── exactness gate ──────────────────────────────────────────────────
+    if (covered != targetStack) {
+      // Ordered so that "closer" still beats "further" among failures, and
+      // any failure loses to any exact stack.
+      score -= 10000 + (covered - targetStack).abs();
+    }
+
+    var total = 0;
+    var colours = 0;
+    var payable = 0;
+    var change = 0;
+    var tidy = 0.0;
+    var singletons = 0;
+
+    for (var i = 0; i < counts.length; i++) {
+      final c = counts[i];
+      if (c == 0) continue;
+      total += c;
+      colours++;
+      if (c == 1) singletons++;
+      if (smallBlind > 0) {
+        if (values[i] <= smallBlind) payable += c;
+        if (values[i] < smallBlind) change += c;
+      }
+      // counting_simplicity: counts on 5s and 10s are read at a glance
+      // across a table.
+      if (c % 10 == 0) {
+        tidy += 3;
+      } else if (c % 5 == 0) {
+        tidy += 2;
+      } else if (c.isEven) {
+        tidy += 1;
+      }
+    }
+    if (total == 0) return double.negativeInfinity;
+
+    // ── early_blind_payability ──────────────────────────────────────────
+    // The term the client's "seven blue chips" complaint lives in.
+    if (smallBlind > 0) {
+      score += math.min(payable, 12) * 2.5;
+      score += math.min(change, 4) * 2.5;
+      // The two floors `hasChange` enforces downstream. Scored rather than
+      // filtered so a hopeless inventory still yields the best stack it can
+      // instead of nothing at all.
+      if (payable < 6) score -= 60;
+      if (change < 2) score -= 60;
+    }
+
+    score += math.min(tidy, 15.0);
+
+    // ── stack_aesthetics ────────────────────────────────────────────────
+    // A stack should look like a pyramid: three to five colours, more of the
+    // cheap ones than the dear ones. A single stray chip of one colour is the
+    // classic "why do I have exactly one of these" annoyance.
+    if (colours >= 3 && colours <= 5) score += 8;
+    score -= singletons * 1.5;
+
+    // ── excessive_chip_count ────────────────────────────────────────────
+    // Too many chips is slow to count and slow to colour up; too few is the
+    // unplayable brick the client was handed.
+    if (total > 22) score -= (total - 22) * 3.0;
+    if (total < 12) score -= (12 - total) * 2.0;
+
+    return score;
   }
 
   /// Decides how many places get paid.
@@ -977,6 +1088,15 @@ class TournamentEngine {
       if (payable < 6) return false;
       // At least a couple of chips must be strictly SMALLER than the small
       // blind, so a player can make change rather than only pay it exactly.
+      //
+      // Unless the box cannot do it at all: when the cheapest chip the host
+      // owns IS the small blind, no stack can hold anything below it. Demanded
+      // unconditionally, this rejected every candidate for such a set, sent
+      // the solver into the shortage fallback, and printed "these chips cannot
+      // fund an 80 big-blind stack" over a stack that was 92 big blinds deep
+      // (measured: Home Set, 18 players, 925 at 5/10). An impossible condition
+      // is not a failing one.
+      if (minChip >= sb) return true;
       final belowBlind = plan
           .where((e) => e.value < sb)
           .fold<int>(0, (s, e) => s + e.count);

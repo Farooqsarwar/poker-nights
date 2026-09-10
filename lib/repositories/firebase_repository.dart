@@ -299,26 +299,27 @@ class FirebaseRepository {
 
   // ── Google Sign-In (v7 API) ────────────────────────────────────────────────
 
+  // Web OAuth 2.0 client ID (type 3 in google-services.json / GoogleService-Info.plist).
+  // Used on Android & iOS as the serverClientId so Firebase receives a valid
+  // ID-token audience.  On web the popup flow uses the same ID.
+  // clientSecret is only required for the desktop PKCE flow — leave it null
+  // on mobile so the package uses the native Google Sign-In SDK instead.
+  static const _webClientId =
+      '885018943861-j9abh2tqc4eiqr58bc9ihel3l2d3q89f.apps.googleusercontent.com';
+
   static final GoogleSignIn googleSignIn = GoogleSignIn(
     params: const GoogleSignInParams(
-      clientId:
-          'YOUR_CLIENT_ID.apps.googleusercontent.com', // Replace with your Client ID
-      clientSecret:
-          'YOUR_CLIENT_SECRET', // Replace with your Client Secret for desktop
+      clientId: _webClientId,
       scopes: ['openid', 'profile', 'email'],
     ),
   );
 
   /// Initialises the [GoogleSignIn] singleton.
-  /// The new package handles initialization automatically, so this can be a no-op or silentSignIn.
+  /// The package handles initialization automatically — no pre-warming needed.
   static Future<void> initGoogleSignIn() async {
-    try {
-      if (!kIsWeb) {
-        await googleSignIn.silentSignIn();
-      }
-    } catch (_) {
-      // Ignore
-    }
+    // Intentionally empty: calling silentSignIn() here would cache a session
+    // and cause signIn() to skip the account chooser on the next explicit
+    // sign-in attempt. The package self-initializes on first use.
   }
 
   /// Builds a Firebase credential from [GoogleSignInCredentials].
@@ -332,21 +333,22 @@ class FirebaseRepository {
   }
 
   /// Signs in (or creates) a Firebase account via Google OAuth. Returns
-  /// `null` when the user cancels the flow.
+  /// `null` when the user cancels the flow. Throws on real errors so the
+  /// caller can surface a meaningful message.
   Future<fa.UserCredential?> signInWithGoogle() async {
-    try {
-      if (kIsWeb) {
-        return await _auth.signInWithPopup(fa.GoogleAuthProvider());
-      } else {
-        final credentials = await googleSignIn.signIn();
-        if (credentials == null) return null;
-        final credential = await _googleCredential(credentials);
-        return _auth.signInWithCredential(credential);
-      }
-    } catch (e) {
-      debugPrint('signInWithGoogle failed: $e');
-      return null;
+    if (kIsWeb) {
+      return await _auth.signInWithPopup(fa.GoogleAuthProvider());
     }
+    // Clear any stored token first so there's no leftover session.
+    try {
+      await googleSignIn.signOut();
+    } catch (_) {}
+    // signInOnline() always triggers the full OAuth web flow, bypassing the
+    // "use previously selected account" shortcut that signIn() uses.
+    final credentials = await googleSignIn.signInOnline();
+    if (credentials == null) return null;
+    final credential = await _googleCredential(credentials);
+    return _auth.signInWithCredential(credential);
   }
 
   /// Signs in to Firebase with existing credentials.
@@ -369,19 +371,16 @@ class FirebaseRepository {
     if (user == null || !user.isAnonymous) {
       throw StateError('No anonymous session to upgrade.');
     }
-    try {
-      if (kIsWeb) {
-        return await user.linkWithPopup(fa.GoogleAuthProvider());
-      } else {
-        final credentials = await googleSignIn.signIn();
-        if (credentials == null) return null;
-        final credential = await _googleCredential(credentials);
-        return user.linkWithCredential(credential);
-      }
-    } catch (e) {
-      debugPrint('linkGuestWithGoogle failed: $e');
-      return null;
+    if (kIsWeb) {
+      return await user.linkWithPopup(fa.GoogleAuthProvider());
     }
+    try {
+      await googleSignIn.signOut();
+    } catch (_) {}
+    final credentials = await googleSignIn.signInOnline();
+    if (credentials == null) return null;
+    final credential = await _googleCredential(credentials);
+    return user.linkWithCredential(credential);
   }
 
   /// Signs out from Firebase **and** clears the Google Sign-In session so the

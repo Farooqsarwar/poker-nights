@@ -34,6 +34,7 @@ class GameSettings {
     this.addOnCost,
     this.locationPrivate = false,
     this.tableSettingsOverride,
+    this.expectedPlayersOverride,
   });
 
   final String name;
@@ -97,6 +98,16 @@ class GameSettings {
   /// ([AppProvider.effectiveTableSettings] resolves this).
   final TableSettings? tableSettingsOverride;
 
+  /// Head-count the host is preparing for, when they have overridden the
+  /// figure the app derives from RSVPs (Technical section 6.1: "Expected
+  /// players: from RSVP **or admin override**").
+  ///
+  /// RSVPs undercount routinely — people turn up who never answered, and the
+  /// host knows it. Without this the chip and blind plan is built for the
+  /// people who replied, which is exactly the "15 said yes, prepare for 20"
+  /// case the client raised. Null means "trust the RSVPs".
+  final int? expectedPlayersOverride;
+
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
 
@@ -130,6 +141,8 @@ class GameSettings {
     bool? locationPrivate,
     TableSettings? tableSettingsOverride,
     bool clearTableSettingsOverride = false,
+    int? expectedPlayersOverride,
+    bool clearExpectedPlayersOverride = false,
   }) {
     return GameSettings(
       name: name ?? this.name,
@@ -162,6 +175,9 @@ class GameSettings {
       tableSettingsOverride: clearTableSettingsOverride
           ? null
           : (tableSettingsOverride ?? this.tableSettingsOverride),
+      expectedPlayersOverride: clearExpectedPlayersOverride
+          ? null
+          : (expectedPlayersOverride ?? this.expectedPlayersOverride),
     );
   }
 

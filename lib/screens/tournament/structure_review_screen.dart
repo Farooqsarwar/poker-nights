@@ -24,6 +24,7 @@ import '../../widgets/glass_styles.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/structure_editor.dart';
+import '../../widgets/count_stepper.dart';
 
 /// Structure review mirroring the web `StructureReviewPage`.
 class StructureReviewScreen extends StatelessWidget {
@@ -323,11 +324,29 @@ class StructureReviewScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Starting stack — ${Formatters.chips(structure.startingStack)}',
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Starting stack — '
+                        '${Formatters.chips(structure.startingStack)}',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    // Technical section 17 lists Regenerate, EDIT and Confirm
+                    // as the three actions on the estimate. The blind schedule
+                    // below already has its own editor; the stack had none, so
+                    // the only way to change it was Recalculate — which throws
+                    // away every manual edit. This adjusts it in place.
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.ghost,
+                      onPressed: () => _showAdjustModal(context, app, structure),
+                      child: const Text('Adjust'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: AppSpacing.md),
                 for (final c in structure.chipPlan)
@@ -953,6 +972,137 @@ class StructureReviewScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// Section 17's "Edit" action: nudge the estimate without rebuilding it.
+///
+/// The two dimensions a host actually wants to move are the starting stack
+/// (rounder numbers are easier to hand out and count) and the level length
+/// (the whole night runs long or short). Blinds, prizes and paid places are
+/// deliberately left alone — a host who wants those rebuilt has Recalculate
+/// right next to this.
+void _showAdjustModal(
+  BuildContext context,
+  AppProvider app,
+  TournamentStructure structure,
+) {
+  final locked = app.currentGame?.stacksLocked ?? false;
+  var stack = structure.startingStack;
+
+  // Step by something countable: 5% of the stack rounded to a round number,
+  // never finer than the smallest chip in play.
+  final chipValues = (app.currentGame?.settings.chipSet ?? const [])
+      .map((c) => c.value)
+      .where((v) => v > 0)
+      .toList()
+    ..sort();
+  final minChip = chipValues.isEmpty ? 25 : chipValues.first;
+  final rawStep = (structure.startingStack * 0.05).round();
+  final step = rawStep <= minChip
+      ? minChip
+      : (rawStep ~/ minChip) * minChip;
+
+  showAppModal(
+    context: context,
+    title: 'Adjust structure',
+    maxWidth: 440,
+    child: StatefulBuilder(
+      builder: (modalContext, setModalState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Changes apply straight to this structure. Blinds, prizes and '
+            'paid places stay exactly as they are, and nobody loses their '
+            'RSVP or check-in.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Starting stack',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      locked
+                          ? 'Frozen — play has started'
+                          : 'In steps of $step',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Opacity(
+                opacity: locked ? 0.4 : 1,
+                child: IgnorePointer(
+                  ignoring: locked,
+                  child: CountStepper(
+                    value: stack,
+                    min: step,
+                    max: 1000000,
+                    step: step,
+                    semanticLabel: 'Starting stack',
+                    onChanged: (v) => setModalState(() => stack = v),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Level lengths and individual blinds are edited from the blind '
+            'schedule below.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.of(modalContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppButton(
+                  onPressed: () {
+                    final summary = app.adjustStructure(
+                      startingStack: stack,
+                    );
+                    Navigator.of(modalContext).pop();
+                    if (summary != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(summary)),
+                      );
+                    }
+                  },
+                  child: const Text('Apply'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _SummaryCard extends StatelessWidget {

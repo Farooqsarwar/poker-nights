@@ -25,6 +25,7 @@ import '../../widgets/app_toggle.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/chip_token.dart';
+import '../../widgets/count_stepper.dart';
 
 enum _ChipMode { preset, quick, exact }
 
@@ -231,7 +232,16 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
   // Preset support (checklist §9.1). Tech spec §6.2: before starting from
   // zero, saved presets close to the current base inputs are suggested.
-  int _expectedPlayers = 0;
+  int _expectedPlayers = 2;
+
+  /// The RSVP/roster figure the stepper started from, kept so "Use RSVP
+  /// count" can put it back.
+  int _derivedExpectedPlayers = 2;
+
+  /// True once the host has moved the stepper. Only then is
+  /// [GameSettings.expectedPlayersOverride] written — an untouched stepper
+  /// must keep tracking RSVPs as they come in.
+  bool _expectedOverridden = false;
 
   /// Top §6.2 matches (at most two, best score first), recomputed while the
   /// admin edits the base inputs.
@@ -288,6 +298,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         }
       }
 
+      _derivedExpectedPlayers = expected < 2 ? 2 : expected;
+      if (!_expectedOverridden) _expectedPlayers = _derivedExpectedPlayers;
+
       if (widget.presetId != null) {
         final preset = app.presetById(widget.presetId);
         if (preset != null) {
@@ -296,7 +309,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         }
       }
 
-      _expectedPlayers = expected;
       _refreshPresetMatches(app);
     });
   }
@@ -547,7 +559,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             ),
           // Player count is not an input — it comes from the Going /
           // Going +N RSVPs (client rule).
-          _ConfirmItem('Players', 'From RSVPs'),
+          _ConfirmItem(
+            'Players',
+            _expectedOverridden
+                ? '$_expectedPlayers (your override)'
+                : 'From RSVPs',
+          ),
           _ConfirmItem('Buy-in', _buyIn.text.trim()),
           _ConfirmItem('Duration', _durationLabel),
         ],
@@ -661,9 +678,11 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         date: _date.text.trim(),
         time: _time.text.trim(),
         location: Sanitization.sanitizeLocation(_location.text.trim()),
-        // Roster size — the real player count comes from RSVPs, never from an
-        // input field (client rule).
+        // Roster size — the working head-count still comes from RSVPs and
+        // check-in; `expectedPlayersOverride` below is what lets the host say
+        // "plan for more than replied" (Tech 6.1).
         players: app.currentGroup.members.length,
+        expectedPlayersOverride: _expectedOverridden ? _expectedPlayers : null,
         durationHours: _duration,
         buyIn: num.tryParse(_buyIn.text)?.toInt() ?? 0,
         koEnabled: _koEnabled,
@@ -960,11 +979,87 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          // Client rule: 4h is the "generally" duration, so it is the first
-          // (and default) option; the host can pick any other duration.
+          // Tech spec 6.1: "Expected players: from RSVP **or admin override**".
+          // The derived figure is only ever as good as the RSVPs, and the host
+          // routinely knows better ("15 said yes, but prepare for 20"). The
+          // stepper seeds itself from the derived count and marks itself
+          // overridden the moment it is touched.
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Expected players',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _expectedOverridden
+                          ? 'Your override — chips and blinds are planned for this many'
+                          : 'From RSVPs. Adjust if you expect more.',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: _expectedOverridden
+                            ? AppColors.primary
+                            : AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              CountStepper(
+                value: _expectedPlayers,
+                min: 2,
+                max: 200,
+                semanticLabel: 'Expected players',
+                onChanged: (v) {
+                  setState(() {
+                    _expectedPlayers = v;
+                    _expectedOverridden = true;
+                  });
+                  _refreshPresetMatches(app);
+                },
+              ),
+            ],
+          ),
+          if (_expectedOverridden) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Align(
+              alignment: Alignment.centerRight,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _expectedOverridden = false;
+                    _expectedPlayers = _derivedExpectedPlayers;
+                  });
+                  _refreshPresetMatches(app);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xs),
+                  child: Text(
+                    'Use RSVP count ($_derivedExpectedPlayers)',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          // Tech spec 6.1 / User Flow 4.3 list these as an ascending ladder.
+          // 4h is the default (see `_duration = 4.0`) but NOT the first
+          // option: hoisting it out of order made the row read
+          // "3, 3.5, 4.5" and the client reported 4h as missing.
           _SegmentedPicker(
             label: 'Target duration',
-            options: const ['4h', '3h', '3.5h', '4.5h', '5h', '5.5h', '6h'],
+            options: const ['3h', '3.5h', '4h', '4.5h', '5h', '5.5h', '6h'],
             selected: _durationLabel,
             onChanged: (v) {
               final val = v.replaceAll('h', '');
@@ -1113,6 +1208,27 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             ),
             const SizedBox(height: AppSpacing.lg),
           ],
+          // User Flow 4.5 / Tech 7.1 require all three ways in. They were all
+          // here, but as three unlabelled pills above a pre-filled preset, so
+          // the client read the screen as "these are the chips, take them or
+          // leave them" and never tried the other two. Naming the question and
+          // saying what each mode is for is the whole fix.
+          Text(
+            'Which chips are you using?',
+            style: AppTypography.display(
+              size: AppFontSizes.md,
+              weight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'These are your physical chips. Pick a saved set, or set up your '
+            'own — the starting stack is built out of whatever you choose.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
           Row(
             children: [
               for (int i = 0; i < _ChipMode.values.length; i++) ...[
@@ -1132,6 +1248,20 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   const SizedBox(width: AppSpacing.sm),
               ],
             ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            switch (_chipMode) {
+              _ChipMode.preset =>
+                'Use a chip set you have already saved, or one of the standard sets.',
+              _ChipMode.quick =>
+                'Tell us which colours you own and how common each is — we suggest the values.',
+              _ChipMode.exact =>
+                'Enter each colour, its value and exactly how many you have.',
+            },
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           if (_chipMode == _ChipMode.preset) ...[

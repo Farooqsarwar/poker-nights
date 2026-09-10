@@ -550,7 +550,15 @@ extension AppProviderTournament on AppProvider {
         : (game.goingWithGuestsCount > 0
             ? game.goingWithGuestsCount
             : game.settings.players);
-    final count = expected < 2 ? 2 : expected;
+    // Technical section 6.1: the head-count comes from RSVPs OR an admin
+    // override. When the host has said "prepare for 20", plan for 20 — but
+    // never for fewer people than have already checked in, since those are
+    // standing in the room holding a buy-in.
+    final override = game.settings.expectedPlayersOverride;
+    final planned = override != null
+        ? max(override, confirmedCount)
+        : expected;
+    final count = planned < 2 ? 2 : planned;
     final s = game.settings.copyWith(players: count);
     final structure = TournamentEngine.generate(
       TournamentParams(
@@ -594,8 +602,80 @@ extension AppProviderTournament on AppProvider {
     _pushUndo();
 
     final confirmed = game.players.where((p) => p.confirmed).length;
-    final count = confirmed >= 2 ? confirmed : expectedPlayersFromRsvps(game);
-    _recalculateWithPlayers(count);
+    final derived =
+        confirmed >= 2 ? confirmed : expectedPlayersFromRsvps(game);
+    final override = game.settings.expectedPlayersOverride;
+    // Same rule as `generateFinalStructure`: an explicit override wins over
+    // the derived figure, floored at whoever is already confirmed.
+    final count =
+        override != null ? max(override, confirmed) : derived;
+    _recalculateWithPlayers(count < 2 ? 2 : count);
+  }
+
+  /// Technical section 17 offers THREE actions on the generated estimate:
+  /// Regenerate, **Edit** and Confirm. The blind schedule had an editor;
+  /// the starting stack had none, so a host who liked the structure but
+  /// wanted a rounder stack could only Recalculate — which rebuilds
+  /// everything and discards every manual blind edit. That is the "if I want
+  /// to adjust something I have to start over" the client reported.
+  ///
+  /// This edits in place: blinds, level lengths, prizes and paid places are
+  /// untouched, and section 21's rule holds — attendance is not disturbed, so
+  /// nobody loses an RSVP or a check-in.
+  ///
+  /// Returns a human summary, or null when nothing changed.
+  String? adjustStructure({required int startingStack}) {
+    final game = _currentGame;
+    if (game == null) return null;
+    final s = game.structure;
+
+    // Once play has started the stacks in front of people are physical facts.
+    if (game.stacksLocked) {
+      return 'The starting stack is frozen once play has begun.';
+    }
+    if (startingStack <= 0 || startingStack == s.startingStack) return null;
+    _pushUndo();
+
+    final openingSb = s.levels.isNotEmpty ? s.levels.first.sb : 0;
+    final openingBb = s.levels.isNotEmpty ? s.levels.first.bb : 0;
+
+    List<ChipPlanEntry> planFor(int stack) => TournamentEngine.chipPlanAtLevel(
+          stack: stack,
+          chips: game.settings.chipSet,
+          currentBB: openingBb,
+          playersRemaining: game.settings.players,
+        );
+
+    final addOnStack = s.addOnStack > 0 ? startingStack : 0;
+    final structure = s.copyWith(
+      startingStack: startingStack,
+      chipPlan: planFor(startingStack),
+      rebuyStack: startingStack,
+      rebuyChipPlan: planFor(startingStack),
+      addOnStack: addOnStack,
+      addOnChipPlan: addOnStack > 0 ? planFor(addOnStack) : s.addOnChipPlan,
+    );
+
+    _currentGame = game.copyWith(
+      structure: structure,
+      totalChipsInPlay: startingStack * game.settings.players,
+      // Editing invalidates a previous confirmation — the host has to look at
+      // what they changed before it is locked in (section 17).
+      structureConfirmed: false,
+    );
+
+    addAuditRecord(
+      'structure_edit',
+      'Starting stack edited: ${s.startingStack} -> $startingStack.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+
+    final blindNote = openingSb > 0
+        ? ' Opening blinds stay at $openingSb/$openingBb — recalculate if you '
+            'want them rebuilt around the new stack.'
+        : '';
+    return 'Starting stack is now $startingStack.$blindNote';
   }
 
   void updateStructurePlayerCount(int players) {

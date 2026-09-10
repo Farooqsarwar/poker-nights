@@ -8,6 +8,7 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
+import '../../models/chip_color.dart';
 import '../../models/game.dart';
 import '../../models/group.dart';
 import '../../models/live_game.dart';
@@ -29,6 +30,8 @@ import '../../widgets/rsvp_badge.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/glass_styles.dart';
+import '../../widgets/chip_set_editor.dart';
+import '../../widgets/count_stepper.dart';
 
 /// Invitation / RSVP page mirroring the web `InvitationPage`.
 class InvitationScreen extends StatefulWidget {
@@ -1285,6 +1288,17 @@ class _EditEventFormState extends State<_EditEventForm> {
   late int _anteAfterLevel;
   late final TextEditingController _orgPct;
 
+  /// User Flow 4.5: chips may be configured "before the event or shortly
+  /// before check-in closes". Until now the set was frozen at publish, so a
+  /// host who found a different tray on the night had no way to tell the app.
+  late List<ChipColor> _chipSet;
+  late String _chipSetName;
+  bool _chipsEdited = false;
+
+  /// Tech 6.1 admin override of the expected head-count.
+  late int _expectedPlayers;
+  late bool _expectedOverridden;
+
   @override
   void initState() {
     super.initState();
@@ -1309,6 +1323,10 @@ class _EditEventFormState extends State<_EditEventForm> {
     _antePreference = s.antePreference;
     _anteAfterLevel = s.anteAfterLevel;
     _orgPct = TextEditingController(text: '${s.organizerPct}');
+    _chipSet = List.of(s.chipSet);
+    _chipSetName = s.chipSetName;
+    _expectedOverridden = s.expectedPlayersOverride != null;
+    _expectedPlayers = s.expectedPlayersOverride ?? s.players;
   }
 
   @override
@@ -1327,6 +1345,58 @@ class _EditEventFormState extends State<_EditEventForm> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// Opens the shared [ChipSetEditor] over this form. The edit is staged in
+  /// local state and only committed by the form's own Save, so backing out of
+  /// the sheet leaves the published event alone.
+  void _openChipEditor(BuildContext context) {
+    var chips = List.of(_chipSet);
+    var name = _chipSetName;
+    showAppModal(
+      context: context,
+      title: 'Chip set',
+      maxWidth: 520,
+      child: StatefulBuilder(
+        builder: (modalContext, setModalState) {
+          // Two colours on the same denomination make the blind ladder
+          // ambiguous, so the commit button is disabled rather than silently
+          // doing nothing — the editor shows why inline.
+          final values = chips.map((c) => c.value).toList();
+          final valid =
+              chips.isNotEmpty && values.toSet().length == values.length;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ChipSetEditor(
+                initial: chips,
+                initialName: name,
+                onChanged: (next, nextName) => setModalState(() {
+                  chips = next;
+                  name = nextName;
+                }),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              AppButton(
+                fullWidth: true,
+                onPressed: valid
+                    ? () {
+                        setState(() {
+                          _chipSet = chips;
+                          _chipSetName = name;
+                          _chipsEdited = true;
+                        });
+                        Navigator.of(modalContext).pop();
+                      }
+                    : null,
+                child: const Text('Use these chips'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   void _save() {
@@ -1391,9 +1461,14 @@ class _EditEventFormState extends State<_EditEventForm> {
         }
       }
     }
-    // Player count is intentionally not editable here — it is derived from
-    // who RSVPs (Going / Going +1/+2) and who actually checks in.
+    // `players` itself stays derived from RSVPs and check-in; what the host
+    // edits here is the OVERRIDE, which the structure generator prefers when
+    // it is set (Tech 6.1).
     final newS = s.copyWith(
+      chipSet: _chipsEdited ? _chipSet : null,
+      chipSetName: _chipsEdited ? _chipSetName : null,
+      expectedPlayersOverride: _expectedOverridden ? _expectedPlayers : null,
+      clearExpectedPlayersOverride: !_expectedOverridden,
       name: name,
       date: newDate,
       time: newTime,
@@ -1494,9 +1569,62 @@ class _EditEventFormState extends State<_EditEventForm> {
         const SizedBox(height: AppSpacing.lg),
         Divider(color: AppColors.border),
         const SizedBox(height: AppSpacing.sm),
+        // Tech 6.1 — admin override of the expected head-count.
+        _EditRow(
+          title: 'Expected players',
+          subtitle: _expectedOverridden
+              ? 'Planning for this many, whatever the RSVPs say'
+              : 'Following RSVPs. Set a number to plan for more.',
+          trailing: CountStepper(
+            value: _expectedPlayers,
+            min: 2,
+            max: 200,
+            semanticLabel: 'Expected players',
+            onChanged: (v) => setState(() {
+              _expectedPlayers = v;
+              _expectedOverridden = true;
+            }),
+          ),
+        ),
+        if (_expectedOverridden)
+          Align(
+            alignment: Alignment.centerRight,
+            child: InkWell(
+              onTap: () => setState(() {
+                _expectedOverridden = false;
+                _expectedPlayers = widget.settings.players;
+              }),
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xs),
+                child: Text(
+                  'Follow RSVPs instead',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        const SizedBox(height: AppSpacing.sm),
+        // User Flow 4.5 — chips stay editable right up to check-in closing.
+        _EditRow(
+          title: 'Chip set',
+          subtitle: _chipsEdited
+              ? '${_chipSet.length} colours (edited)'
+              : (_chipSetName.isEmpty ? 'Custom' : _chipSetName),
+          trailing: AppButton(
+            variant: AppButtonVariant.secondary,
+            onPressed: () => _openChipEditor(context),
+            child: const Text('Change chips'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Divider(color: AppColors.border),
+        const SizedBox(height: AppSpacing.sm),
         _SegmentedPicker(
           label: 'Duration',
-          options: const ['4h', '3h', '3.5h', '4.5h', '5h', '5.5h', '6h'],
+          options: const ['3h', '3.5h', '4h', '4.5h', '5h', '5.5h', '6h'],
           selected:
               '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h',
           onChanged: (v) {

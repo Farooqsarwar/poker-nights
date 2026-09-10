@@ -232,6 +232,7 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'tableSettingsOverride': s.tableSettingsOverride == null
           ? null
           : tableSettingsToMap(s.tableSettingsOverride!),
+      'expectedPlayersOverride': s.expectedPlayersOverride,
     };
 
 GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
@@ -270,6 +271,8 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
           ? null
           : tableSettingsFromMap(
               Map<String, dynamic>.from(m['tableSettingsOverride'] as Map)),
+      expectedPlayersOverride:
+          (m['expectedPlayersOverride'] as num?)?.toInt(),
     );
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -179,6 +179,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
     final card = _buildCard(context);
 
+    final statusBarHeight = MediaQuery.paddingOf(context).top;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: FeltBackground(
@@ -200,21 +201,26 @@ class _AuthScreenState extends State<AuthScreen> {
                   )
                 : Center(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      padding: EdgeInsets.only(
+                        left: AppSpacing.lg,
+                        right: AppSpacing.lg,
+                        // Push scroll content below the status bar + back button
+                        top: statusBarHeight + AppSpacing.xxl,
+                        bottom: AppSpacing.huge,
+                      ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const SizedBox(height: AppSpacing.huge),
                           logo,
                           const SizedBox(height: AppSpacing.xxl),
                           card,
-                          const SizedBox(height: AppSpacing.huge),
                         ],
                       ),
                     ),
                   ),
             Positioned(
-              top: AppSpacing.xl,
+              // Sit the back button just below the status bar
+              top: statusBarHeight + AppSpacing.sm,
               left: AppSpacing.xl,
               child: Semantics(
                 button: true,

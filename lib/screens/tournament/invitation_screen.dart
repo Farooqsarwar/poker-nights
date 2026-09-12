@@ -1288,6 +1288,12 @@ class _EditEventFormState extends State<_EditEventForm> {
   late int _anteAfterLevel;
   late final TextEditingController _orgPct;
 
+  /// Spec 7 caps organizer cost at 20%. This form edits games that already
+  /// exist, some created under the old 0-100 rule, so the ceiling is raised to
+  /// whatever the game was saved with when that is higher. An existing figure
+  /// is never silently rewritten — it can only be reduced.
+  late final int _orgPctCeiling;
+
   /// User Flow 4.5: chips may be configured "before the event or shortly
   /// before check-in closes". Until now the set was frozen at publish, so a
   /// host who found a different tray on the night had no way to tell the app.
@@ -1323,6 +1329,7 @@ class _EditEventFormState extends State<_EditEventForm> {
     _antePreference = s.antePreference;
     _anteAfterLevel = s.anteAfterLevel;
     _orgPct = TextEditingController(text: '${s.organizerPct}');
+    _orgPctCeiling = s.organizerPct > 20 ? s.organizerPct : 20;
     _chipSet = List.of(s.chipSet);
     _chipSetName = s.chipSetName;
     _expectedOverridden = s.expectedPlayersOverride != null;
@@ -1491,10 +1498,8 @@ class _EditEventFormState extends State<_EditEventForm> {
       anteStyle: _antePreference == AntePreference.individual
           ? AnteStyle.individual
           : AnteStyle.bigBlind,
-      organizerPct: (int.tryParse(_orgPct.text.trim()) ?? s.organizerPct).clamp(
-        0,
-        100,
-      ),
+      organizerPct: (int.tryParse(_orgPct.text.trim()) ?? s.organizerPct)
+          .clamp(0, _orgPctCeiling),
     );
 
     if (s.date != newDate || s.time != newTime) {
@@ -1818,14 +1823,16 @@ class _EditEventFormState extends State<_EditEventForm> {
         const SizedBox(height: AppSpacing.sm),
         _EditRow(
           title: 'Organizational costs',
-          subtitle: 'Percentage (%) — admin only, never shown to players',
-          trailing: SizedBox(
-            width: 90,
-            child: AppTextField(
-              controller: _orgPct,
-              label: '%',
-              keyboardType: TextInputType.number,
-            ),
+          // Spec 7 and 18 fix this wording; spec 32 forbids calling it a rake.
+          subtitle: 'Percentage retained for equipment, drinks & snacks — '
+              'admin only, never shown to players',
+          trailing: CountStepper(
+            value: int.tryParse(_orgPct.text.trim()) ?? 0,
+            min: 0,
+            max: _orgPctCeiling,
+            suffix: '%',
+            semanticLabel: 'Organizational costs percentage',
+            onChanged: (v) => setState(() => _orgPct.text = '$v'),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),

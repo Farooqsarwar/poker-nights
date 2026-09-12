@@ -151,7 +151,10 @@ class NavDrawer extends StatelessWidget {
                     AppSpacing.sm,
                   ),
                   child: Text(
-                    app.hasCurrentGroup ? 'CURRENT GROUP' : 'GROUP',
+                    // Spec 3: users may belong to multiple groups, so the
+                    // navigation is plural. The heading names the section, not
+                    // the single group currently selected.
+                    'GROUPS',
                     style: AppTypography.bodyXs.copyWith(
                       color: AppColors.mutedForeground,
                       fontWeight: FontWeight.w600,

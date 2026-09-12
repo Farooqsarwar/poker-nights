@@ -50,6 +50,13 @@ extension AppProviderTournament on AppProvider {
     _updatePrizePool();
     _syncGroupGame();
     addAnnouncement('${player.name} has joined the tournament.', true);
+    // Spec 14: a late player is a live operational action — seat and time
+    // both recorded.
+    addAuditRecord(
+      'late_player',
+      '${player.name} joined during late registration — '
+          'table $table seat $seat, ${game.structure.startingStack} chips.',
+    );
     if (!_disposed) notifyListeners();
   }
 

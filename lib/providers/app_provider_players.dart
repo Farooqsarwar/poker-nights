@@ -79,6 +79,13 @@ extension AppProviderPlayers on AppProvider {
     } else {
       addAnnouncement('${p.name} eliminated.', speakElimination);
     }
+    // Spec 14: elimination records the finishing position and a timestamp.
+    addAuditRecord(
+      'elimination',
+      '${p.name} eliminated'
+          '${p.eliminationPos != null ? ' in position ${p.eliminationPos}' : ''}'
+          '${koRecipientId != null && bounty > 0 ? ' — $bounty bounty awarded' : ''}.',
+    );
   }
 
   /// Manual trigger for final table state (small tournaments that never
@@ -187,6 +194,14 @@ extension AppProviderPlayers on AppProvider {
     // This updates only prizePool, organizerAmount and prizes on the structure,
     // leaving blind levels and any manual edits completely intact.
     _updatePrizePool();
+    // Spec sections 14 and 29: every live operational action creates a
+    // timestamped activity-log record. Money entering the game without one was
+    // the largest gap in the log.
+    addAuditRecord(
+      'rebuy',
+      '${player.name} rebought for ${game.settings.effectiveRebuyCost} '
+          '(rebuy ${player.rebuys + 1}) — $rebuyStack chips added.',
+    );
   }
 
   /// Registers a player's request for a rebuy from the live view. The admin
@@ -301,6 +316,11 @@ extension AppProviderPlayers on AppProvider {
     );
     // Recalculate prize pool/prizes after money enters the game.
     _updatePrizePool();
+    addAuditRecord(
+      'addon',
+      '${player.name} took the add-on for '
+          '${game.settings.effectiveAddOnCost} — $addOnStack chips added.',
+    );
   }
 
   /// Registers a player's request for an add-on from the live view. The admin
@@ -1149,6 +1169,15 @@ extension AppProviderPlayers on AppProvider {
     if (dealer != null) {
       addAnnouncement('Seating drawn. ${dealer.name} deals first.', true);
     }
+    // Spec 14: generating or re-randomising seats is a live operational
+    // action. An announcement is not a log entry — the draw has to be
+    // reconstructable afterwards.
+    addAuditRecord(
+      'seating',
+      'Seating drawn (${mode.name}): ${assignments.length} players across '
+          '$tableCount table${tableCount == 1 ? '' : 's'}'
+          '${dealer != null ? ', ${dealer.name} deals first' : ''}.',
+    );
     if (!_disposed) notifyListeners();
   }
 

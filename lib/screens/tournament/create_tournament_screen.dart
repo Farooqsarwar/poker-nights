@@ -227,8 +227,19 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     AntePreference.none => AnteStyle.individual, // disabled by _anteEnabled=false
   };
   bool get _anteEnabled => _antePreference != AntePreference.none;
-  final _orgPctController = TextEditingController(text: '0');
+  // Spec 7 and 18: organizer cost defaults to 10%, is capped at 20%, and is
+  // adjusted with a +/- stepper rather than typed. The controller stays the
+  // source of truth so `_applyPreset`, validation and dispose are unchanged;
+  // the stepper just writes through it.
+  final _orgPctController = TextEditingController(text: '10');
   int get _orgPct => int.tryParse(_orgPctController.text.trim()) ?? 0;
+
+  /// Spec 7's 20% cap, raised only far enough to hold a legacy value the form
+  /// was loaded with (see `_applyPreset`).
+  static const int kOrganizerPctMax = 20;
+  int _orgPctLoadedCeiling = kOrganizerPctMax;
+  int get _orgPctCeiling =>
+      _orgPct > _orgPctLoadedCeiling ? _orgPct : _orgPctLoadedCeiling;
 
   // Preset support (checklist §9.1). Tech spec §6.2: before starting from
   // zero, saved presets close to the current base inputs are suggested.
@@ -381,6 +392,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         : AntePreference.none;
     _anteAfterLevel = p.anteAfterLevel;
     _orgPctController.text = p.organizerPct.toString();
+    if (p.organizerPct > kOrganizerPctMax) {
+      _orgPctLoadedCeiling = p.organizerPct;
+    }
     _chipSet = List.of(p.chipSet);
     if (TournamentEngine.presetNames.contains(p.chipSetName)) {
       _chipMode = _ChipMode.preset;
@@ -484,8 +498,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     }
 
     final orgPct = num.tryParse(_orgPctController.text)?.toInt();
-    if (orgPct == null || orgPct < 0 || orgPct > 100) {
-      _errors['orgPct'] = 'Must be 0-100';
+    // Spec 7 caps this at 20%. A preset created under the old 0-100 rule may
+    // still carry a higher figure, so the ceiling is whatever the form was
+    // loaded with when that exceeds 20 — an existing value is never silently
+    // rewritten, it can only be reduced.
+    if (orgPct == null || orgPct < 0 || orgPct > _orgPctCeiling) {
+      _errors['orgPct'] = 'Must be 0-$_orgPctCeiling';
     }
 
     setState(() {});
@@ -2083,22 +2101,50 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
               ),
               const SizedBox(height: 2),
+              // Spec 7 and 18 fix this wording exactly, and spec 32 lists it
+              // as a term that must not drift — it is never called a rake.
               Text(
-                'Percentage for equipment, drinks & snacks. Admin only — never shown to players.',
+                'Percentage retained for equipment, drinks & snacks. '
+                'Admin only — never shown to players.',
                 style: AppTypography.bodyXs.copyWith(
                   color: AppColors.mutedForeground,
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              SizedBox(
-                width: 130,
-                child: AppTextField(
-                  controller: _orgPctController,
-                  keyboardType: TextInputType.number,
-                  label: 'Percentage (%)',
-                  error: _errors['orgPct'],
-                ),
+              Row(
+                children: [
+                  CountStepper(
+                    value: _orgPct,
+                    min: 0,
+                    max: _orgPctCeiling,
+                    suffix: '%',
+                    semanticLabel: 'Organizational costs percentage',
+                    onChanged: (v) => setState(() {
+                      _orgPctController.text = '$v';
+                      _errors.remove('orgPct');
+                    }),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  if (_orgPct == 0)
+                    Expanded(
+                      child: Text(
+                        'Off — the whole pool goes to the players.',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ),
+                ],
               ),
+              if (_errors['orgPct'] != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  _errors['orgPct']!,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.destructive,
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'Private — the prize pool keeps the remaining percentage of gross.',

@@ -8,6 +8,7 @@ class BlindLevel {
     required this.bb,
     required this.ante,
     required this.durationMins,
+    this.manuallyEdited = false,
   });
 
   final int level;
@@ -16,7 +17,38 @@ class BlindLevel {
   final int? ante;
   final int durationMins;
 
+  /// True when a human set this level's values rather than the engine.
+  ///
+  /// Specification sections 11 and 29: "manual future edits need visible
+  /// markers and cannot be silently overwritten by Recalculate". Recalculate
+  /// used to rebuild the whole ladder, so a host who hand-tuned level 9 lost
+  /// it the next time anything regenerated — with no warning and no way to
+  /// tell it had happened.
+  ///
+  /// Defaults to false, so every structure written before this field existed
+  /// loads as "all engine-generated", which is what it was.
+  final bool manuallyEdited;
+
   bool get hasAnte => ante != null;
+
+  BlindLevel copyWith({
+    int? level,
+    int? sb,
+    int? bb,
+    int? ante,
+    bool clearAnte = false,
+    int? durationMins,
+    bool? manuallyEdited,
+  }) {
+    return BlindLevel(
+      level: level ?? this.level,
+      sb: sb ?? this.sb,
+      bb: bb ?? this.bb,
+      ante: clearAnte ? null : (ante ?? this.ante),
+      durationMins: durationMins ?? this.durationMins,
+      manuallyEdited: manuallyEdited ?? this.manuallyEdited,
+    );
+  }
 }
 
 /// A chip used within a starting/rebuystack plan.

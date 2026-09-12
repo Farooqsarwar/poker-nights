@@ -557,14 +557,15 @@ extension AppProviderTournament on AppProvider {
         : (game.goingWithGuestsCount > 0
             ? game.goingWithGuestsCount
             : game.settings.players);
-    // Technical section 6.1: the head-count comes from RSVPs OR an admin
-    // override. When the host has said "prepare for 20", plan for 20 — but
-    // never for fewer people than have already checked in, since those are
-    // standing in the room holding a buy-in.
+    // Section 6's precedence: Locked beats the admin override, which beats
+    // the RSVP-derived figure. When the host has said "prepare for 20", plan
+    // for 20 — but never for fewer people than have already checked in, since
+    // those are standing in the room holding a buy-in.
+    final locked = game.settings.lockedExpectedPlayers;
     final override = game.settings.expectedPlayersOverride;
-    final planned = override != null
-        ? max(override, confirmedCount)
-        : expected;
+    final stated = locked ?? override;
+    final planned =
+        stated != null ? max(stated, confirmedCount) : expected;
     final count = planned < 2 ? 2 : planned;
     final s = game.settings.copyWith(players: count);
     final structure = TournamentEngine.generate(
@@ -603,20 +604,136 @@ extension AppProviderTournament on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
-  void recalculateStructure() {
+  /// The head-count physical preparation should be based on (section 6).
+  ///
+  /// Section 6 orders these deliberately. Locked wins when set, because the
+  /// host has already counted chips into stacks against it; otherwise the
+  /// admin override; otherwise the RSVP-derived figure. Actual checked-in is
+  /// a separate thing and drives the start CTA, not the preparation.
+  int plannedHeadcount(LiveGame game) {
+    final locked = game.settings.lockedExpectedPlayers;
+    if (locked != null) return locked;
+    final override = game.settings.expectedPlayersOverride;
+    if (override != null) return override;
+    return expectedPlayersFromRsvps(game);
+  }
+
+  /// Freezes the expected count for physical preparation (section 6).
+  ///
+  /// Passing null locks whatever the current planning figure is, which is the
+  /// normal case: the host has decided and wants it held still.
+  void lockExpectedPlayers([int? count]) {
+    final game = _currentGame;
+    if (game == null) return;
+    final value = count ?? plannedHeadcount(game);
+    if (value < 2) return;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(lockedExpectedPlayers: value),
+    );
+    addAuditRecord(
+      'headcount_lock',
+      'Expected players locked at $value for chip preparation.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Releases the freeze so the count tracks RSVPs again (section 6).
+  void unlockExpectedPlayers() {
+    final game = _currentGame;
+    if (game == null || game.settings.lockedExpectedPlayers == null) return;
+    _pushUndo();
+    final was = game.settings.lockedExpectedPlayers;
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(clearLockedExpectedPlayers: true),
+    );
+    addAuditRecord(
+      'headcount_unlock',
+      'Expected players unlocked (was $was) — following RSVPs again.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// How far RSVPs have drifted from a locked preparation (section 6).
+  ///
+  /// Section 6: "late RSVP changes do not silently reshuffle the locked
+  /// preparation." They do not change anything — they surface here so the host
+  /// can decide whether to re-lock. Positive means more people than prepared
+  /// for. Null when nothing is locked.
+  int? lockedHeadcountDrift(LiveGame game) {
+    final locked = game.settings.lockedExpectedPlayers;
+    if (locked == null) return null;
+    return expectedPlayersFromRsvps(game) - locked;
+  }
+
+  /// How many future levels a Recalculate would discard.
+  ///
+  /// Specification sections 11 and 29 forbid silently overwriting manual
+  /// edits, so the caller asks this first and puts the number in front of the
+  /// host before doing anything.
+  int manuallyEditedFutureLevels() {
+    final game = _currentGame;
+    if (game == null) return 0;
+    return game.structure.levels
+        .where((l) => l.level > game.currentLevel && l.manuallyEdited)
+        .length;
+  }
+
+  /// Rebuilds the structure from current settings and attendance.
+  ///
+  /// [keepManualLevels] preserves hand-tuned future levels through the rebuild
+  /// (sections 11, 29). It defaults to true: losing a manual edit must be a
+  /// deliberate choice, never the path of least resistance. The UI asks which
+  /// the host wants whenever `manuallyEditedFutureLevels()` is non-zero.
+  void recalculateStructure({bool keepManualLevels = true}) {
     final game = _currentGame;
     if (game == null) return;
     _pushUndo();
 
+    // Snapshot the hand-tuned future levels BEFORE the rebuild replaces them.
+    final preserved = keepManualLevels
+        ? {
+            for (final l in game.structure.levels)
+              if (l.level > game.currentLevel && l.manuallyEdited) l.level: l,
+          }
+        : const <int, BlindLevel>{};
+
     final confirmed = game.players.where((p) => p.confirmed).length;
     final derived =
         confirmed >= 2 ? confirmed : expectedPlayersFromRsvps(game);
-    final override = game.settings.expectedPlayersOverride;
-    // Same rule as `generateFinalStructure`: an explicit override wins over
-    // the derived figure, floored at whoever is already confirmed.
-    final count =
-        override != null ? max(override, confirmed) : derived;
+    // Same precedence as `generateFinalStructure`: Locked, then the admin
+    // override, then the derived figure — floored at whoever is confirmed.
+    final stated = game.settings.lockedExpectedPlayers ??
+        game.settings.expectedPlayersOverride;
+    final count = stated != null ? max(stated, confirmed) : derived;
     _recalculateWithPlayers(count < 2 ? 2 : count);
+
+    if (preserved.isEmpty) return;
+    // Re-apply by level NUMBER. A rebuild can change how many levels there
+    // are, so an edit whose level no longer exists is dropped rather than
+    // appended somewhere it was never meant to be — and the host is told.
+    final rebuilt = _currentGame!.structure;
+    final restored = [
+      for (final l in rebuilt.levels)
+        if (l.level > _currentGame!.currentLevel && preserved.containsKey(l.level))
+          preserved[l.level]!
+        else
+          l,
+    ];
+    final kept = restored.where((l) => l.manuallyEdited).length;
+    final lost = preserved.length - kept;
+    _currentGame = _currentGame!.copyWith(
+      structure: _structureWithLevels(rebuilt, restored),
+    );
+    addAuditRecord(
+      'structure_recalculate',
+      'Structure recalculated for $count players. '
+          '$kept manual level${kept == 1 ? '' : 's'} preserved'
+          '${lost > 0 ? ', $lost dropped (no longer in the schedule)' : ''}.',
+    );
+    if (!_disposed) notifyListeners();
   }
 
   /// Technical section 17 offers THREE actions on the generated estimate:
@@ -802,6 +919,11 @@ extension AppProviderTournament on AppProvider {
     // Keep all completed levels PLUS the currently active level.
     final prefix = game.structure.levels.take(game.currentLevel).toList();
     // Renumber sequentially so inserting a level shifts the rest correctly.
+    //
+    // Everything arriving here came out of the structure editor, so it is by
+    // definition a manual edit (specification sections 11 and 29). The marker
+    // is what stops Recalculate from throwing it away without asking, and what
+    // the UI badges.
     var n = game.currentLevel + 1;
     final renumbered = [
       for (final l in futureLevels)
@@ -811,6 +933,7 @@ extension AppProviderTournament on AppProvider {
           bb: l.bb,
           ante: l.ante,
           durationMins: l.durationMins,
+          manuallyEdited: true,
         ),
     ];
     final levels = [...prefix, ...renumbered];

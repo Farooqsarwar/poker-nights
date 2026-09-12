@@ -557,11 +557,30 @@ class StructureReviewScreen extends StatelessWidget {
                         child: Row(
                           children: [
                             Expanded(
-                              child: Text(
-                                '${l.level}',
-                                style: AppTypography.monoXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    '${l.level}',
+                                    style: AppTypography.monoXs.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                  // Section 11 requires manual edits to carry
+                                  // a visible marker, so the host can see
+                                  // which rows are theirs before recalculating
+                                  // rather than finding out afterwards.
+                                  if (l.manuallyEdited) ...[
+                                    const SizedBox(width: 4),
+                                    Tooltip(
+                                      message: 'Edited by hand',
+                                      child: Icon(
+                                        Icons.edit_outlined,
+                                        size: 11,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                             Expanded(
@@ -876,6 +895,7 @@ class StructureReviewScreen extends StatelessWidget {
                 child: AppButton(
                   variant: AppButtonVariant.secondary,
                   onPressed: () {
+                    final manualCount = app.manuallyEditedFutureLevels();
                     showAppModal(
                       context: context,
                       title: 'Recalculate structure',
@@ -885,35 +905,96 @@ class StructureReviewScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            'Recalculating regenerates the blinds, levels and prize distribution '
-                            'from the current settings and attendance. Manual level edits will be '
-                            'lost. Starting stacks stay frozen once the tournament has started.',
+                            'Recalculating regenerates the blinds, levels and '
+                            'prize distribution from the current settings and '
+                            'attendance. Starting stacks stay frozen once the '
+                            'tournament has started.',
                             style: AppTypography.bodySm.copyWith(
                               color: AppColors.mutedForeground,
                             ),
                           ),
+                          // Sections 11 and 29: manual edits are never
+                          // silently overwritten. With none, this stays out of
+                          // the way; with some, the host is told how many and
+                          // chooses. Keeping them is the default action.
+                          if (manualCount > 0) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            Container(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.md),
+                                border: Border.all(
+                                  color: AppColors.primary
+                                      .withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Text(
+                                'You have hand-edited $manualCount future '
+                                'level${manualCount == 1 ? '' : 's'}. Keep '
+                                'them, or let the recalculation replace them?',
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.foreground,
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: AppSpacing.xl),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: AppButton(
-                                  variant: AppButtonVariant.secondary,
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  child: const Text('Keep current'),
-                                ),
+                          if (manualCount > 0) ...[
+                            AppButton(
+                              fullWidth: true,
+                              onPressed: () {
+                                app.recalculateStructure();
+                                Navigator.of(context).pop();
+                              },
+                              child: Text(
+                                'Recalculate, keep my $manualCount '
+                                'level${manualCount == 1 ? '' : 's'}',
                               ),
-                              const SizedBox(width: AppSpacing.md),
-                              Expanded(
-                                child: AppButton(
-                                  onPressed: () {
-                                    app.recalculateStructure();
-                                    Navigator.of(context).pop();
-                                  },
-                                  child: const Text('Recalculate'),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            AppButton(
+                              fullWidth: true,
+                              variant: AppButtonVariant.destructive,
+                              onPressed: () {
+                                app.recalculateStructure(
+                                  keepManualLevels: false,
+                                );
+                                Navigator.of(context).pop();
+                              },
+                              child: const Text('Replace my edits'),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            AppButton(
+                              fullWidth: true,
+                              variant: AppButtonVariant.secondary,
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('Cancel'),
+                            ),
+                          ] else
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: AppButton(
+                                    variant: AppButtonVariant.secondary,
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
+                                    child: const Text('Keep current'),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: AppButton(
+                                    onPressed: () {
+                                      app.recalculateStructure();
+                                      Navigator.of(context).pop();
+                                    },
+                                    child: const Text('Recalculate'),
+                                  ),
+                                ),
+                              ],
+                            ),
                         ],
                       ),
                     );

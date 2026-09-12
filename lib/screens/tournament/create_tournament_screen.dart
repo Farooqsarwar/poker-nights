@@ -205,7 +205,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   int _rebuysClose = 6;
   final _rebuyLimit = TextEditingController(text: '1');
   final _rebuyCost = TextEditingController();
-  bool _reEntry = false;
+  /// Moves with [_rebuys] -- sections 7 and 32 make them one toggle. Kept as
+  /// its own field because it is still stored, still gates the re-entry live
+  /// action, and still feeds the engine's expected-chip projection.
+  bool _reEntry = true;
   bool _addOn = true;
   int _addOnClose = 6;
   final _addOnCost = TextEditingController();
@@ -588,14 +591,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ],
         ruleRows: <_ConfirmItem>[
           _ConfirmItem(
-            'Rebuys',
+            'Rebuys & re-entry',
             _rebuys
                 ? (_rebuyUnlimited
                       ? 'Unlimited to L$_rebuysClose'
                       : 'Limited to L$_rebuysClose')
                 : 'Off',
           ),
-          _ConfirmItem('Re-entry', _reEntry ? 'Yes' : 'No'),
+
           _ConfirmItem('Add-on', _addOn ? 'Yes, to L$_addOnClose' : 'No'),
           _ConfirmItem('Bounty', _koEnabled ? 'Yes (${_koAmount.text})' : 'No'),
           _ConfirmItem(
@@ -1640,7 +1643,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Players can re-enter after elimination',
+                  'Players can buy back in after elimination',
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
                   ),
@@ -1664,6 +1667,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     _rebuyUnlimited = true;
                     _rebuysClose = 6;
                   }
+                  // Specification sections 7 and 32: "Rebuy/re-entry is one
+                  // toggle." They were two independent switches, so a host
+                  // could enable rebuys and be surprised that re-entry was a
+                  // separate thing they had missed. `reEntry` stays a stored
+                  // field -- it still gates its own live action and feeds the
+                  // engine's chip projection -- it just no longer has a
+                  // control of its own.
+                  _reEntry = _rebuys;
                   // §6.2: rule edits refresh the suggested presets.
                   _refreshPresetMatches(app);
                 }),
@@ -1758,13 +1769,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             ),
           ],
           Divider(color: AppColors.border),
-          _ToggleRow(
-            title: 'Re-entry',
-            subtitle:
-                'Separate option — buy a new entry stack after elimination',
-            value: _reEntry,
-            onChanged: (v) => setState(() => _reEntry = v),
-          ),
+          // The standalone "Re-entry" switch was removed here: sections 7 and
+          // 32 make rebuy and re-entry a single ON/OFF, and the control above
+          // now sets both.
           if (_reEntry)
             Padding(
               padding: const EdgeInsets.only(

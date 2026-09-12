@@ -1639,8 +1639,8 @@ class _EditEventFormState extends State<_EditEventForm> {
         ),
         const SizedBox(height: AppSpacing.lg),
         _EditRow(
-          title: 'Rebuys',
-          subtitle: 'Players can re-enter after elimination',
+          title: 'Rebuys & re-entry',
+          subtitle: 'Players can buy back in after elimination',
           trailing: _SegmentedPicker(
             options: const ['Off', 'Limited', 'Unlimited'],
             selected: _rebuys
@@ -1658,6 +1658,14 @@ class _EditEventFormState extends State<_EditEventForm> {
                 _rebuyUnlimited = true;
                 _rebuysClose = 6;
               }
+              // Sections 7 and 32 make these one toggle, but this form edits
+              // games that ALREADY EXIST. Turning the pair off turns both off;
+              // turning it on does NOT retroactively enable re-entry on a game
+              // that was deliberately created without it, because that would
+              // change the engine's chip projection and unlock a live action
+              // the host never agreed to. Re-entry follows only when it is
+              // being switched off, or when it was already on.
+              if (!_rebuys) _reEntry = false;
             }),
           ),
         ),
@@ -1704,13 +1712,21 @@ class _EditEventFormState extends State<_EditEventForm> {
             ),
           ),
         const SizedBox(height: AppSpacing.sm),
-        _ToggleRow(
-          title: 'Re-entry',
-          subtitle: 'Separate option — buy a new entry stack after elimination',
-          value: _reEntry,
-          onChanged: (v) => setState(() => _reEntry = v),
-        ),
-        const SizedBox(height: AppSpacing.sm),
+        // The standalone "Re-entry" switch was removed: sections 7 and 32 make
+        // rebuy and re-entry a single ON/OFF. A game created before that
+        // change keeps whatever it was stored with -- the control above only
+        // clears re-entry when the pair is switched off.
+        if (_rebuys && !_reEntry)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Text(
+              'This game was set up with rebuys but without re-entry. '
+              'That is kept as it is.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
         _EditRow(
           title: 'Add-on',
           subtitle: 'One per active player at rebuy close',

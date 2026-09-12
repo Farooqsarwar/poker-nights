@@ -347,6 +347,20 @@ class _CheckInScreenState extends State<CheckInScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Section 6 -- the four head-count concepts, and the lock that makes
+          // physical preparation safe. Chips get counted into stacks against a
+          // number; once that has happened, a late RSVP must not quietly move
+          // it. Locking freezes the figure the structure is built from, and
+          // any subsequent drift is REPORTED rather than applied.
+          _HeadcountCard(
+            planned: app.plannedHeadcount(game),
+            locked: game.settings.lockedExpectedPlayers,
+            drift: app.lockedHeadcountDrift(game),
+            checkedIn: checkedIn.length,
+            onLock: () => app.lockExpectedPlayers(),
+            onUnlock: app.unlockExpectedPlayers,
+          ),
+          const SizedBox(height: AppSpacing.lg),
           if (pendingRequests.isNotEmpty) ...[
             AppAlertBanner(
               type: AppAlertType.warning,
@@ -1041,6 +1055,117 @@ class _SeatingOption extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
+      ),
+    );
+  }
+}
+
+
+/// Section 6's head-count panel: what we are preparing for, whether it is
+/// frozen, and how far RSVPs have drifted since it was.
+class _HeadcountCard extends StatelessWidget {
+  const _HeadcountCard({
+    required this.planned,
+    required this.locked,
+    required this.drift,
+    required this.checkedIn,
+    required this.onLock,
+    required this.onUnlock,
+  });
+
+  final int planned;
+  final int? locked;
+  final int? drift;
+  final int checkedIn;
+  final VoidCallback onLock;
+  final VoidCallback onUnlock;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLocked = locked != null;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isLocked ? Icons.lock_outline : Icons.lock_open_outlined,
+                size: 16,
+                color: isLocked
+                    ? AppColors.primary
+                    : AppColors.mutedForeground,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  isLocked
+                      ? 'Preparing for $locked players'
+                      : 'Preparing for $planned players',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              AppButton(
+                size: AppButtonSize.sm,
+                variant: isLocked
+                    ? AppButtonVariant.secondary
+                    : AppButtonVariant.primary,
+                onPressed: isLocked ? onUnlock : onLock,
+                child: Text(isLocked ? 'Unlock' : 'Lock for prep'),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            isLocked
+                ? 'Locked. Late RSVP changes will not move this number or '
+                      'rebuild the structure.'
+                : 'Following RSVPs. Lock it once you have counted chips into '
+                      'stacks.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          // Drift is surfaced, never applied -- that is the whole point of
+          // the lock. The host decides whether to re-lock.
+          if (isLocked && drift != null && drift != 0) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Text(
+                drift! > 0
+                    ? 'RSVPs have grown by $drift since you locked. Unlock and '
+                          'lock again to prepare for the larger field.'
+                    : 'RSVPs have dropped by ${-drift!} since you locked. The '
+                          'preparation is unchanged.',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.foreground,
+                ),
+              ),
+            ),
+          ],
+          if (checkedIn > 0) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              // Section 6: the START CTA uses actual checked-in, not this.
+              '$checkedIn checked in so far — the start button uses that '
+              'count, not the prepared one.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

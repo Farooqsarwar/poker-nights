@@ -109,3 +109,106 @@ behavioural test would not catch the actual regression — somebody adding a
 ### Rollback
 
 `git revert` the branch. No schema change, so no data cleanup.
+
+---
+
+## Phase 5 — Structure integrity
+
+**Branch:** `phase/5-structure-integrity`
+**Spec:** §6, §7, §11, §29, §32
+**Date:** 12 September 2026
+
+### Step 5.1 — Manual future edits are marked and protected (§11, §29)
+
+> *"Manual future edits need visible markers and cannot be silently
+> overwritten by Recalculate."*
+
+Recalculate rebuilt the whole ladder, so a host who hand-tuned level 9 lost it
+the next time anything regenerated — with no warning, and no way to tell it had
+happened.
+
+| Requirement | Evidence |
+|---|---|
+| Marker exists | `BlindLevel.manuallyEdited`, defaults `false` |
+| Set on human edits | `applyFutureLevels` marks everything the structure editor returns |
+| **Visible** marker | Pencil icon beside the level number in the blind schedule, tooltip *"Edited by hand"* |
+| Not silently overwritten | `recalculateStructure({keepManualLevels = true})` — **keeping is the default** |
+| Host is asked | Recalculate dialog counts the edits and offers *Keep* / *Replace* / *Cancel*; with none it is unchanged |
+| Outcome recorded | `'structure_recalculate'` audit entry names how many were kept and how many dropped |
+
+**Compatibility.** Additive and defaults to `false`, which is not merely a safe
+default but factually correct: every level written before the marker existed
+*was* engine output. Re-application is by level **number**, so an edit whose
+level no longer exists after a rebuild is dropped rather than appended
+somewhere it was never meant to be — and the audit entry says so.
+
+### Step 5.2 — One rebuy / re-entry toggle (§7, §32)
+
+> *"Rebuy/re-entry: Single ON/OFF."* · *"Rebuy/re-entry is one toggle."*
+
+They were two independent switches, so a host could enable rebuys and never
+notice re-entry was a separate decision.
+
+- The Off / Limited / Unlimited control is now the single toggle, titled
+  **"Rebuys & re-entry"**
+- The standalone *Re-entry* switch is gone from both forms
+- `reEntry` **remains a stored field** — it still gates its own live action
+  (`app_provider_players.dart`) and still feeds the engine's expected-chip
+  projection. It simply no longer has a control of its own (§2.1)
+
+**The asymmetry is deliberate.** In the creation wizard the pair moves
+together. In the *edit* form, switching the pair **off** clears re-entry, but
+switching it **on** does *not* retroactively enable re-entry on a game created
+without it — that would change the engine's chip projection and unlock a live
+action the host never agreed to (§2.3). Such a game shows a line saying its
+setting is being kept as-is.
+
+### Step 5.3 — Locked headcount (§6)
+
+§6 names four distinct concepts. Three existed; **Locked** did not.
+
+| Concept | Source |
+|---|---|
+| Confirmed | `GameSettings.players` |
+| Expected | `expectedPlayersOverride` (built earlier) |
+| **Locked** | `lockedExpectedPlayers` — **new** |
+| Actual checked-in | `confirmedCount` — still what the start CTA uses |
+
+- `lockExpectedPlayers([count])` freezes the current planning figure
+- `unlockExpectedPlayers()` releases it
+- `plannedHeadcount(game)` resolves the precedence: **Locked → override → RSVP-derived**
+- `lockedHeadcountDrift(game)` reports how far RSVPs have moved from the lock,
+  so §6's *"late RSVP changes do not silently reshuffle the locked
+  preparation"* holds — drift surfaces, it does not act
+- Both `generateFinalStructure` and `recalculateStructure` honour the
+  precedence, still floored at whoever has actually checked in
+
+Unlocking needs its own `clearLockedExpectedPlayers` flag, because `null` in
+`copyWith` means *leave alone* — without it a host could never release a lock.
+Asserted.
+
+### Gate
+
+| Check | Result |
+|---|---|
+| `flutter analyze --no-pub` | 37 issues, 0 errors — unchanged from baseline |
+| `flutter test` | **113 passing, 0 failing** (Phase 1 left it at 104) |
+| New tests | `test/structure_integrity_test.dart` — 9 passing |
+| Schema | additive only; old documents load as unedited / unlocked, both asserted |
+
+Lock/unlock is surfaced on the check-in screen as a head-count panel: what the
+night is being prepared for, a Lock / Unlock action, the drift notice when
+RSVPs move after a lock, and a reminder that the start CTA uses actual
+checked-in rather than the prepared figure.
+
+### Not done in this phase
+
+- Table balance and colour-up still need the §14 activity-log check carried
+  over from Phase 1.
+- The lock panel has no widget test. It is presentational over an API that is
+  unit-tested; worth a golden if the design settles.
+
+### Rollback
+
+`git revert` the branch. The two new fields would remain in existing
+documents and are ignored by the reverted code.

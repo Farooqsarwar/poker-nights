@@ -124,6 +124,7 @@ Map<String, dynamic> blindLevelToMap(BlindLevel l) => {
       'bb': l.bb,
       'ante': l.ante,
       'durationMins': l.durationMins,
+      'manuallyEdited': l.manuallyEdited,
     };
 
 BlindLevel blindLevelFromMap(Map<String, dynamic> m) => BlindLevel(
@@ -132,6 +133,9 @@ BlindLevel blindLevelFromMap(Map<String, dynamic> m) => BlindLevel(
       bb: (m['bb'] as num?)?.toInt() ?? 0,
       ante: (m['ante'] as num?)?.toInt(),
       durationMins: (m['durationMins'] as num?)?.toInt() ?? 15,
+      // Absent on every structure written before the marker existed, which is
+      // correct: those levels were all engine-generated.
+      manuallyEdited: (m['manuallyEdited'] as bool?) ?? false,
     );
 
 Map<String, dynamic> chipPlanEntryToMap(ChipPlanEntry c) =>
@@ -233,6 +237,7 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
           ? null
           : tableSettingsToMap(s.tableSettingsOverride!),
       'expectedPlayersOverride': s.expectedPlayersOverride,
+      'lockedExpectedPlayers': s.lockedExpectedPlayers,
     };
 
 GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
@@ -273,6 +278,9 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
               Map<String, dynamic>.from(m['tableSettingsOverride'] as Map)),
       expectedPlayersOverride:
           (m['expectedPlayersOverride'] as num?)?.toInt(),
+      // Absent on everything written before section 6's Locked concept
+      // existed, which reads correctly as "not locked".
+      lockedExpectedPlayers: (m['lockedExpectedPlayers'] as num?)?.toInt(),
     );
 
 // ─────────────────────────────────────────────────────────────────────────────

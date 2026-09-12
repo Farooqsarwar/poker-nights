@@ -35,6 +35,7 @@ class GameSettings {
     this.locationPrivate = false,
     this.tableSettingsOverride,
     this.expectedPlayersOverride,
+    this.lockedExpectedPlayers,
   });
 
   final String name;
@@ -98,6 +99,22 @@ class GameSettings {
   /// ([AppProvider.effectiveTableSettings] resolves this).
   final TableSettings? tableSettingsOverride;
 
+  /// The expected count FROZEN for physical preparation (specification
+  /// section 6).
+  ///
+  /// Section 6 distinguishes four things, and this is the one that was
+  /// missing: Confirmed (raw RSVPs), Expected (the organizer's estimate),
+  /// **Locked** (that estimate frozen), and Actual checked-in.
+  ///
+  /// The point is stated in the specification directly: "late RSVP changes do
+  /// not silently reshuffle the locked preparation". Once the host has counted
+  /// physical chips into stacks for 15 people, a 16th RSVP arriving must not
+  /// quietly rebuild the structure underneath them — it surfaces as a notice
+  /// instead.
+  ///
+  /// Null means not locked. The start CTA still uses actual checked-in.
+  final int? lockedExpectedPlayers;
+
   /// Head-count the host is preparing for, when they have overridden the
   /// figure the app derives from RSVPs (Technical section 6.1: "Expected
   /// players: from RSVP **or admin override**").
@@ -143,6 +160,8 @@ class GameSettings {
     bool clearTableSettingsOverride = false,
     int? expectedPlayersOverride,
     bool clearExpectedPlayersOverride = false,
+    int? lockedExpectedPlayers,
+    bool clearLockedExpectedPlayers = false,
   }) {
     return GameSettings(
       name: name ?? this.name,
@@ -178,6 +197,9 @@ class GameSettings {
       expectedPlayersOverride: clearExpectedPlayersOverride
           ? null
           : (expectedPlayersOverride ?? this.expectedPlayersOverride),
+      lockedExpectedPlayers: clearLockedExpectedPlayers
+          ? null
+          : (lockedExpectedPlayers ?? this.lockedExpectedPlayers),
     );
   }
 

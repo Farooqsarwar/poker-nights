@@ -630,6 +630,50 @@ class TournamentEngine {
     return score;
   }
 
+  /// Which ante style suits this tournament (§7's "system recommendation").
+  ///
+  /// The option existed in the UI but always resolved to Big Blind Ante, so it
+  /// recommended nothing -- it was a third label for the same choice.
+  ///
+  /// The real trade-off is operational, not theoretical. A big-blind ante is
+  /// one payment per hand from one player: fast, and nobody has to be chased.
+  /// An individual ante is a chip from everyone, every hand -- fairer in
+  /// principle and slower in practice, and the slowness compounds with the
+  /// number of players at the table.
+  ///
+  /// So: big-blind ante for anything but the smallest fields, individual for
+  /// short-handed games where the per-hand cost of collecting is small and the
+  /// fairness is more noticeable. Very short events skip antes entirely --
+  /// there is not enough runway for them to matter before the blinds do the
+  /// work anyway.
+  static AnteRecommendation recommendAnte({
+    required int players,
+    required double durationHours,
+  }) {
+    if (durationHours < 3.5 && players <= 6) {
+      return const AnteRecommendation(
+        enabled: false,
+        style: AnteStyle.bigBlind,
+        reason: 'A short game with a small field does not need antes — the '
+            'blinds create the pressure on their own.',
+      );
+    }
+    if (players <= 6) {
+      return const AnteRecommendation(
+        enabled: true,
+        style: AnteStyle.individual,
+        reason: 'Short-handed, so an individual ante is quick to collect and '
+            'spreads the cost evenly.',
+      );
+    }
+    return const AnteRecommendation(
+      enabled: true,
+      style: AnteStyle.bigBlind,
+      reason: 'One payment per hand from the big blind — faster at a full '
+          'table than collecting from everybody.',
+    );
+  }
+
   /// Step 5 of the addendum's generation sequence: where the rebuy window
   /// should actually close.
   ///

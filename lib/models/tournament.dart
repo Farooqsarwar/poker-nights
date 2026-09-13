@@ -230,6 +230,28 @@ enum TournamentStyle {
       };
 }
 
+/// What the engine suggests for antes, and why (§7 "system recommendation").
+class AnteRecommendation {
+  const AnteRecommendation({
+    required this.enabled,
+    required this.style,
+    required this.reason,
+  });
+
+  final bool enabled;
+  final AnteStyle style;
+
+  /// Plain language, shown beside the option so the host can disagree with a
+  /// reason rather than a coin flip.
+  final String reason;
+
+  String get label => !enabled
+      ? 'No ante'
+      : style == AnteStyle.bigBlind
+          ? 'Big blind ante'
+          : 'Individual ante';
+}
+
 /// Prize line.
 class Prize {
   const Prize({required this.place, required this.amount});

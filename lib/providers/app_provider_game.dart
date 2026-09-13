@@ -507,7 +507,7 @@ extension AppProviderGame on AppProvider {
             anteStyle: s.anteStyle,
             koEnabled: s.koEnabled,
             koAmount: s.koAmount,
-            organizerPct: s.organizerPct,
+            organizerPct: s.effectiveOrganizerPct,
             rebuyCost: s.rebuyCost,
             addOnCost: s.addOnCost,
             breaks: s.breaks,
@@ -656,7 +656,7 @@ extension AppProviderGame on AppProvider {
     return TournamentEngine.recalculatePrizes(
       gross,
       confirmedCount,
-      s.organizerPct.toDouble(),
+      s.effectiveOrganizerPct.toDouble(),
       forcePaidPlaces: s.forcePaidPlaces,
       roundingUnit: roundingUnit,
     );

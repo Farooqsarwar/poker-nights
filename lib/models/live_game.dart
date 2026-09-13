@@ -133,6 +133,23 @@ class GameSettings {
   /// case the client raised. Null means "trust the RSVPs".
   final int? expectedPlayersOverride;
 
+  /// Ceiling on the organizer allocation (specification §7 and §18:
+  /// "0-20%").
+  static const int maxOrganizerPct = 20;
+
+  /// The percentage calculations should actually use.
+  ///
+  /// The stored [organizerPct] is left exactly as written -- clamping it in
+  /// the constructor would retroactively rewrite games created under the old
+  /// 0-100 rule, and a stored value must never change meaning underneath a
+  /// host who already ran the night. This clamps at the point of USE instead,
+  /// so no prize split can be computed against a figure the specification
+  /// forbids, however the settings were constructed.
+  ///
+  /// The forms cap entry at 20 as well; this is the backstop for every other
+  /// path -- a preset, a restored document, a direct provider call.
+  int get effectiveOrganizerPct => organizerPct.clamp(0, maxOrganizerPct);
+
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
 

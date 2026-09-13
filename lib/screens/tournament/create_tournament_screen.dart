@@ -240,12 +240,24 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   bool _randomizeSeating = false;
   // Spec §4.3 Step 2: 'none' means no ante at all; 'individual' means a
   // fixed chip per player; 'recommend'/'bigBlind' means BB-ante style.
+  /// §7's "system recommendation", resolved from the actual tournament.
+  ///
+  /// This used to map straight to Big Blind Ante, which made "Recommended" a
+  /// third label for the same choice rather than a recommendation.
+  AnteRecommendation get _anteAdvice => TournamentEngine.recommendAnte(
+        players: _expectedPlayers,
+        durationHours: _duration,
+      );
+
   AnteStyle get _anteStyle => switch (_antePreference) {
-    AntePreference.recommend || AntePreference.bigBlind => AnteStyle.bigBlind,
+    AntePreference.recommend => _anteAdvice.style,
+    AntePreference.bigBlind => AnteStyle.bigBlind,
     AntePreference.individual => AnteStyle.individual,
     AntePreference.none => AnteStyle.individual, // disabled by _anteEnabled=false
   };
-  bool get _anteEnabled => _antePreference != AntePreference.none;
+  bool get _anteEnabled => _antePreference == AntePreference.recommend
+      ? _anteAdvice.enabled
+      : _antePreference != AntePreference.none;
   // Spec 7 and 18: organizer cost defaults to 10%, is capped at 20%, and is
   // adjusted with a +/- stepper rather than typed. The controller stays the
   // source of truth so `_applyPreset`, validation and dispose are unchanged;
@@ -2358,6 +2370,17 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 const SizedBox(height: AppSpacing.sm),
                 Column(
                   children: [
+                    if (_antePreference == AntePreference.recommend) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: Text(
+                          '${_anteAdvice.label} — ${_anteAdvice.reason}',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                     Row(
                       children: [
                         Expanded(

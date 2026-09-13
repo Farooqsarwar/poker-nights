@@ -22,6 +22,8 @@ import '../models/tournament_preset.dart';
 import '../models/user.dart';
 import '../models/chip_color.dart';
 import '../repositories/firebase_repository.dart';
+import '../services/entitlements.dart';
+import '../services/payment_service.dart';
 import '../utils/formatters.dart';
 import '../utils/mock_data.dart';
 import '../utils/model_codec.dart';
@@ -275,6 +277,26 @@ class AppProvider extends ChangeNotifier {
   /// Last member-RSVP patch failure, surfaced on the invitation screen so
   /// backend rejections are never invisible (vs silent optimistic state that
   /// vanishes on refresh). Debug aid for the persistence audit.
+  /// Addendum §3: free hosting covers one table, up to nine active players.
+  ///
+  /// Device-local, read from [MockPaymentService]. Real Premium authorization
+  /// belongs on a server (§7, acceptance 12) and does not exist yet, so this
+  /// is an honest product limit rather than security. A determined user can
+  /// change it; the point is that an ordinary host is told before the night
+  /// goes wrong, not that it cannot be defeated.
+  PremiumTier premiumTier = PremiumTier.free;
+
+  Future<void> loadPremiumTier() async {
+    final tier = await MockPaymentService().currentTier();
+    if (_disposed) return;
+    premiumTier = tier;
+    notifyListeners();
+  }
+
+  /// Whether this device may host a field of [players] (addendum §3, §4).
+  bool canHostPlayers(int players) =>
+      Entitlements.canHost(premiumTier, players);
+
   String? lastRsvpError;
 
   /// Last authority whole-document save failure. Non-null means the admin's

@@ -23,6 +23,16 @@ extension AppProviderTournament on AppProvider {
   /// (12-025). Totals are recalculated (12-026).
   void addLatePlayer(String name) {
     if (!lateRegistrationOpen) return;
+    // Same free-hosting limit as check-in (addendum §3). A late arrival is
+    // still an active player.
+    final active =
+        _currentGame!.players.where((p) => p.active && !p.eliminated).length;
+    if (!canHostPlayers(active + 1)) {
+      lastRsvpError =
+          Entitlements.hostingBlockedReason(premiumTier, active + 1);
+      if (!_disposed) notifyListeners();
+      return;
+    }
     _pushUndo();
     final game = _currentGame!;
     final id = 'p-${DateTime.now().millisecondsSinceEpoch}';
@@ -184,7 +194,7 @@ extension AppProviderTournament on AppProvider {
     final recalculated = TournamentEngine.recalculatePrizes(
       grossEligible,
       confirmedCount,
-      s.organizerPct.toDouble(),
+      s.effectiveOrganizerPct.toDouble(),
       forcePaidPlaces: s.forcePaidPlaces,
       roundingUnit: roundingUnit,
     );
@@ -583,7 +593,7 @@ extension AppProviderTournament on AppProvider {
         anteStyle: s.anteStyle,
         koEnabled: s.koEnabled,
         koAmount: s.koAmount,
-        organizerPct: s.organizerPct,
+        organizerPct: s.effectiveOrganizerPct,
         rebuyCost: s.rebuyCost,
         addOnCost: s.addOnCost,
         breaks: s.breaks,
@@ -836,7 +846,7 @@ extension AppProviderTournament on AppProvider {
         anteStyle: newSettings.anteStyle,
         koEnabled: newSettings.koEnabled,
         koAmount: newSettings.koAmount,
-        organizerPct: newSettings.organizerPct,
+        organizerPct: newSettings.effectiveOrganizerPct,
         rebuyCost: newSettings.rebuyCost,
         addOnCost: newSettings.addOnCost,
         breaks: newSettings.breaks,

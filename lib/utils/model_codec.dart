@@ -9,6 +9,7 @@ import '../models/tournament.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
 import '../models/payment_record.dart';
+import '../models/shot_clock.dart';
 
 /// Canonical model ⇄ map codecs shared by the local recovery store and the
 /// cloud repository so both persistence layers can never drift apart.
@@ -483,6 +484,13 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'structure': tournamentStructureToMap(game.structure),
     'payments': game.payments.map(paymentRecordToMap).toList(),
     'organizerIds': List<String>.from(game.organizerIds),
+    'shotClock': game.shotClock == null
+        ? null
+        : {
+            'playerId': game.shotClock!.playerId,
+            'endsAt': game.shotClock!.endsAt.toIso8601String(),
+            'seconds': game.shotClock!.seconds,
+          },
     'status': game.status.name,
     'publicCode': game.publicCode,
     'tvCode': game.tvCode,
@@ -539,6 +547,19 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       // reads correctly as "admin only".
       organizerIds:
           List<String>.from(map['organizerIds'] as List? ?? const []),
+      shotClock: map['shotClock'] == null
+          ? null
+          : () {
+              final sc = Map<String, dynamic>.from(map['shotClock'] as Map);
+              final endsAt = DateTime.tryParse((sc['endsAt'] as String?) ?? '');
+              if (endsAt == null) return null;
+              return ShotClock(
+                playerId: (sc['playerId'] as String?) ?? '',
+                endsAt: endsAt,
+                seconds: (sc['seconds'] as num?)?.toInt() ??
+                    ShotClock.defaultSeconds,
+              );
+            }(),
       structure: tournamentStructureFromMap(
           Map<String, dynamic>.from(map['structure'] as Map)),
       status: _enumByName(

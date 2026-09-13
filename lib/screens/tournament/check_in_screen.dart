@@ -222,7 +222,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.isAdmin;
+    final isAdmin = app.canRunCurrentGame;
 
     // Seating setup is admin-only. Players see their seat from the invitation
     // screen, never this setup UI (client feedback 07-018).

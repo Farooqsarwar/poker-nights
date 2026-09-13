@@ -394,6 +394,53 @@ extension AppProviderTimer on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  /// Puts a player on the clock (§12).
+  ///
+  /// Host-initiated, never automatic: an automatic clock belongs in a casino
+  /// with floor staff, not at a kitchen table. It runs BESIDE the level timer
+  /// and never touches it -- §12 requires it to be "independent of level
+  /// timer", and a level must not end early because somebody tanked.
+  void startShotClock(String playerId, {int? seconds}) {
+    final game = _currentGame;
+    if (game == null) return;
+    final duration = seconds ?? ShotClock.defaultSeconds;
+    _currentGame = game.copyWith(
+      shotClock: ShotClock(
+        playerId: playerId,
+        // A timestamp, not a countdown -- every device derives the same
+        // remaining time without having to tick in step, exactly as the level
+        // clock does.
+        endsAt: _serverNow.add(Duration(seconds: duration)),
+        seconds: duration,
+      ),
+    );
+    final name =
+        game.players.where((p) => p.id == playerId).firstOrNull?.name;
+    addAnnouncement(
+      '${name ?? 'Player'} is on the clock — $duration seconds.',
+      true,
+    );
+    addAuditRecord(
+      'shot_clock',
+      '${name ?? playerId} put on the clock for $duration seconds.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Clears the clock — the player acted, or the table waved it off.
+  ///
+  /// Nothing else happens. It is a SOFT clock: running out does not fold a
+  /// hand, and neither does clearing it. The table decides what a expired
+  /// clock means, which is the only workable rule for a home game.
+  void clearShotClock() {
+    final game = _currentGame;
+    if (game == null || game.shotClock == null) return;
+    _currentGame = game.copyWith(clearShotClock: true);
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
   /// Ends a scheduled break and starts the next level.
   ///
   /// Called by the clock when the break runs out, and by the host if they want

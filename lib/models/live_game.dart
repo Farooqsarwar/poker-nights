@@ -1,5 +1,6 @@
 import 'chip_color.dart';
 import 'payment_record.dart';
+import 'shot_clock.dart';
 import 'game.dart';
 import 'table_settings.dart';
 import 'tournament.dart';
@@ -341,6 +342,7 @@ class LiveGame {
     this.changeLog = const [],
     this.payments = const [],
     this.organizerIds = const [],
+    this.shotClock,
     this.revision = 0,
     this.lastIdempotencyKey,
     this.editorDeviceId = '',
@@ -455,6 +457,14 @@ class LiveGame {
   /// Combined with [lastIdempotencyKey] this guards against double-applying a
   /// duplicate action after a browser retry or an offline-restore replay
   /// (technical §18.1).
+  /// A soft shot clock, when one is running (§12).
+  ///
+  /// Null almost always — it exists for the handful of moments a night when
+  /// somebody needs putting on the clock. Deliberately separate from
+  /// [levelEndTime]: §12 requires it to be "independent of level timer", and a
+  /// level must never end early because a player tanked.
+  final ShotClock? shotClock;
+
   /// Users given operational control of THIS tournament (§3, §28).
   ///
   /// Tournament-scoped by design — §32 lists it as a decision that must not
@@ -652,6 +662,8 @@ class LiveGame {
     List<String>? finishOrder,
     List<PaymentRecord>? payments,
     List<String>? organizerIds,
+    ShotClock? shotClock,
+    bool clearShotClock = false,
     SpeedRecommendation? speedRecommendation,
     TournamentStructure? structure,
     bool? settlementConfirmed,
@@ -695,6 +707,7 @@ class LiveGame {
       finishOrder: finishOrder ?? this.finishOrder,
       payments: payments ?? this.payments,
       organizerIds: organizerIds ?? this.organizerIds,
+      shotClock: clearShotClock ? null : (shotClock ?? this.shotClock),
       speedRecommendation: clearSpeedRecommendation
           ? null
           : speedRecommendation ?? this.speedRecommendation,

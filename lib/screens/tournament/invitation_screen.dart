@@ -1205,7 +1205,7 @@ void _showAdminRsvpOverride(
   };
   showAppModal(
     context: context,
-    title: 'Set RSVP for ${p.name}',
+    title: p.name,
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1234,6 +1234,56 @@ void _showAdminRsvpOverride(
           },
           child: const Text('No response'),
         ),
+        // Sections 3 and 28 -- hand this ONE night to somebody else.
+        //
+        // A host who is also playing is the bottleneck on every rebuy at their
+        // own table; this is the way out of that. Scoped to this tournament:
+        // an organizer gets the live controls and this game's private money,
+        // and nothing at group level.
+        //
+        // Guests are excluded deliberately (decision D7): an organizer has to
+        // be assignable, auditable and accountable, which needs an account
+        // rather than a name in a slot.
+        if (!p.isGuest) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Divider(color: AppColors.border),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Tournament organizer',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            game.isOrganizer(p.id)
+                ? '${p.name} can run this tournament — rebuys, add-ons, '
+                      'eliminations and seating. Nothing at group level, and '
+                      'nothing in any other game.'
+                : 'Let ${p.name} run this tournament for you. They get the '
+                      'live controls for tonight only.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: game.isOrganizer(p.id)
+                ? AppButtonVariant.destructive
+                : AppButtonVariant.secondary,
+            onPressed: () {
+              app.setTournamentOrganizer(
+                p.id,
+                assigned: !game.isOrganizer(p.id),
+              );
+              Navigator.of(context).pop();
+            },
+            child: Text(
+              game.isOrganizer(p.id)
+                  ? 'Remove as organizer'
+                  : 'Make organizer for this game',
+            ),
+          ),
+        ],
       ],
     ),
   );

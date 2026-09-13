@@ -17,6 +17,7 @@ import '../models/game.dart';
 import '../models/group.dart';
 import '../models/live_game.dart';
 import '../models/payment_record.dart';
+import '../models/shot_clock.dart';
 import '../models/table_settings.dart';
 import '../models/tournament.dart';
 import '../models/tournament_preset.dart';

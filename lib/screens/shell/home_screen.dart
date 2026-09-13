@@ -719,6 +719,7 @@ class _GameRow extends StatelessWidget {
         return AppBadgeVariant.green;
       case LiveGameStatus.paused:
       case LiveGameStatus.rebuypause:
+      case LiveGameStatus.onBreak:
       case LiveGameStatus.finaltable:
       case LiveGameStatus.published:
       case LiveGameStatus.checkin:

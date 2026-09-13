@@ -8,6 +8,8 @@ import '../models/table_settings.dart';
 import '../models/tournament.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
+import '../models/payment_record.dart';
+import '../models/shot_clock.dart';
 
 /// Canonical model ⇄ map codecs shared by the local recovery store and the
 /// cloud repository so both persistence layers can never drift apart.
@@ -124,6 +126,7 @@ Map<String, dynamic> blindLevelToMap(BlindLevel l) => {
       'bb': l.bb,
       'ante': l.ante,
       'durationMins': l.durationMins,
+      'manuallyEdited': l.manuallyEdited,
     };
 
 BlindLevel blindLevelFromMap(Map<String, dynamic> m) => BlindLevel(
@@ -132,6 +135,44 @@ BlindLevel blindLevelFromMap(Map<String, dynamic> m) => BlindLevel(
       bb: (m['bb'] as num?)?.toInt() ?? 0,
       ante: (m['ante'] as num?)?.toInt(),
       durationMins: (m['durationMins'] as num?)?.toInt() ?? 15,
+      // Absent on every structure written before the marker existed, which is
+      // correct: those levels were all engine-generated.
+      manuallyEdited: (m['manuallyEdited'] as bool?) ?? false,
+    );
+
+Map<String, dynamic> paymentRecordToMap(PaymentRecord p) => {
+      'id': p.id,
+      'playerId': p.playerId,
+      'purpose': p.purpose.name,
+      'amount': p.amount,
+      'status': p.status.name,
+      'timestamp': p.timestamp.toIso8601String(),
+      'idempotencyKey': p.idempotencyKey,
+      'failureReason': p.failureReason,
+    };
+
+PaymentRecord paymentRecordFromMap(Map<String, dynamic> m) => PaymentRecord(
+      id: (m['id'] as String?) ?? '',
+      playerId: (m['playerId'] as String?) ?? '',
+      purpose: _enumByName(
+          PaymentPurpose.values, m['purpose'], PaymentPurpose.buyIn),
+      amount: (m['amount'] as num?)?.toInt() ?? 0,
+      status:
+          _enumByName(PaymentStatus.values, m['status'], PaymentStatus.failed),
+      timestamp:
+          DateTime.tryParse((m['timestamp'] as String?) ?? '') ?? DateTime.now(),
+      idempotencyKey: (m['idempotencyKey'] as String?) ?? '',
+      failureReason: m['failureReason'] as String?,
+    );
+
+Map<String, dynamic> scheduledBreakToMap(ScheduledBreak b) => {
+      'afterLevel': b.afterLevel,
+      'durationMins': b.durationMins,
+    };
+
+ScheduledBreak scheduledBreakFromMap(Map<String, dynamic> m) => ScheduledBreak(
+      afterLevel: (m['afterLevel'] as num?)?.toInt() ?? 0,
+      durationMins: (m['durationMins'] as num?)?.toInt() ?? 10,
     );
 
 Map<String, dynamic> chipPlanEntryToMap(ChipPlanEntry c) =>
@@ -159,6 +200,7 @@ Map<String, dynamic> tournamentStructureToMap(TournamentStructure s) => {
       'addOnStack': s.addOnStack,
       'addOnChipPlan': s.addOnChipPlan.map(chipPlanEntryToMap).toList(),
       'levels': s.levels.map(blindLevelToMap).toList(),
+      'breaks': s.breaks.map(scheduledBreakToMap).toList(),
       'levelDuration': s.levelDuration,
       'plannedLevels': s.plannedLevels,
       'expectedFinishMins': s.expectedFinishMins,
@@ -184,6 +226,12 @@ TournamentStructure tournamentStructureFromMap(Map<String, dynamic> m) =>
           .map(chipPlanEntryFromMap)
           .toList(),
       levels: _mapList(m['levels'] as List? ?? const []).map(blindLevelFromMap).toList(),
+      breaks: _mapList(m['breaks'] as List? ?? const [])
+          .map(scheduledBreakFromMap)
+          .toList(),
+      styleNote: (m['styleNote'] as String?) ?? '',
+      rebuysCloseLevel:
+          (m['structureRebuysCloseLevel'] as num?)?.toInt() ?? 0,
       levelDuration: (m['levelDuration'] as num?)?.toInt() ?? 15,
       plannedLevels: (m['plannedLevels'] as num?)?.toInt() ?? 0,
       expectedFinishMins: (m['expectedFinishMins'] as num?)?.toInt() ?? 0,
@@ -233,6 +281,8 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
           ? null
           : tableSettingsToMap(s.tableSettingsOverride!),
       'expectedPlayersOverride': s.expectedPlayersOverride,
+      'lockedExpectedPlayers': s.lockedExpectedPlayers,
+      'breaks': s.breaks.map(scheduledBreakToMap).toList(),
     };
 
 GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
@@ -273,6 +323,14 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
               Map<String, dynamic>.from(m['tableSettingsOverride'] as Map)),
       expectedPlayersOverride:
           (m['expectedPlayersOverride'] as num?)?.toInt(),
+      // Absent on everything written before section 6's Locked concept
+      // existed, which reads correctly as "not locked".
+      lockedExpectedPlayers: (m['lockedExpectedPlayers'] as num?)?.toInt(),
+      // Absent on everything written before section 8's breaks existed, and
+      // an empty list reads correctly as "runs straight through".
+      breaks: _mapList(m['breaks'] as List? ?? const [])
+          .map(scheduledBreakFromMap)
+          .toList(),
     );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -424,6 +482,15 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'groupId': game.groupId,
     'settings': gameSettingsToMap(game.settings),
     'structure': tournamentStructureToMap(game.structure),
+    'payments': game.payments.map(paymentRecordToMap).toList(),
+    'organizerIds': List<String>.from(game.organizerIds),
+    'shotClock': game.shotClock == null
+        ? null
+        : {
+            'playerId': game.shotClock!.playerId,
+            'endsAt': game.shotClock!.endsAt.toIso8601String(),
+            'seconds': game.shotClock!.seconds,
+          },
     'status': game.status.name,
     'publicCode': game.publicCode,
     'tvCode': game.tvCode,
@@ -473,6 +540,26 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       groupId: (map['groupId'] as String?) ?? '',
       settings:
           gameSettingsFromMap(Map<String, dynamic>.from(map['settings'] as Map)),
+      payments: _mapList(map['payments'] as List? ?? const [])
+          .map(paymentRecordFromMap)
+          .toList(),
+      // Absent on every tournament written before the role existed, which
+      // reads correctly as "admin only".
+      organizerIds:
+          List<String>.from(map['organizerIds'] as List? ?? const []),
+      shotClock: map['shotClock'] == null
+          ? null
+          : () {
+              final sc = Map<String, dynamic>.from(map['shotClock'] as Map);
+              final endsAt = DateTime.tryParse((sc['endsAt'] as String?) ?? '');
+              if (endsAt == null) return null;
+              return ShotClock(
+                playerId: (sc['playerId'] as String?) ?? '',
+                endsAt: endsAt,
+                seconds: (sc['seconds'] as num?)?.toInt() ??
+                    ShotClock.defaultSeconds,
+              );
+            }(),
       structure: tournamentStructureFromMap(
           Map<String, dynamic>.from(map['structure'] as Map)),
       status: _enumByName(
@@ -666,6 +753,7 @@ Map<String, dynamic> tournamentPresetToMap(TournamentPreset p) => {
       'reEntry': p.reEntry,
       'addOn': p.addOn,
       'addOnCloseLevel': p.addOnCloseLevel,
+      'breaks': p.breaks.map(scheduledBreakToMap).toList(),
       'durationHours': p.durationHours,
       'anteEnabled': p.anteEnabled,
       'anteAfterLevel': p.anteAfterLevel,
@@ -689,6 +777,9 @@ TournamentPreset tournamentPresetFromMap(Map<String, dynamic> m) =>
       reEntry: (m['reEntry'] as bool?) ?? false,
       addOn: (m['addOn'] as bool?) ?? false,
       addOnCloseLevel: (m['addOnCloseLevel'] as num?)?.toInt() ?? 6,
+      breaks: _mapList(m['breaks'] as List? ?? const [])
+          .map(scheduledBreakFromMap)
+          .toList(),
       durationHours: (m['durationHours'] as num?)?.toDouble() ?? 3,
       anteEnabled: (m['anteEnabled'] as bool?) ?? false,
       anteAfterLevel: (m['anteAfterLevel'] as num?)?.toInt() ?? 0,

@@ -106,6 +106,48 @@ void main() {
     });
   });
 
+  group('Spec 2026-09 section 18 — organizer allocation', () {
+    // The worked example the client's specification states verbatim:
+    // "Gross 165 -> organizer target 10% -> clean rounded organizer amount 15
+    //  -> net 150." Asserted under its new section number so the client can
+    // trace the requirement straight to a passing test.
+    test('gross 165 at the new 10% default yields 15 organizer / 150 net', () {
+      final r = TournamentEngine.recalculatePrizes(165, 11, 10);
+      expect(r.organizerAmount, 15);
+      expect(r.prizePool, 150);
+    });
+
+    test('the allocation reconciles exactly to gross', () {
+      // Section 30's financial invariant, and section 18's requirement that
+      // nothing is invented or lost between gross and what is paid out.
+      for (final gross in [100, 150, 165, 200, 240, 300, 455]) {
+        final r = TournamentEngine.recalculatePrizes(gross, 11, 10);
+        final paid = r.prizes.fold<int>(0, (a, p) => a + p.amount);
+        expect(
+          paid + r.organizerAmount + r.roundingRemainder,
+          gross,
+          reason: 'gross $gross did not reconcile',
+        );
+      }
+    });
+
+    test('0% remains reachable — the setting is still optional', () {
+      // Spec section 7 makes organizer cost an ON/OFF with a 0-20 range, so
+      // 10 being the DEFAULT must not make 0 unreachable.
+      final r = TournamentEngine.recalculatePrizes(165, 11, 0);
+      expect(r.organizerAmount, 0);
+    });
+
+    test('a legacy percentage above the new 20% cap still computes', () {
+      // Games created under the old 0-100 rule keep their stored figure
+      // (see `_orgPctCeiling`). The engine must not choke on one.
+      final r = TournamentEngine.recalculatePrizes(1000, 11, 35);
+      expect(r.organizerAmount, greaterThan(0));
+      final paid = r.prizes.fold<int>(0, (a, p) => a + p.amount);
+      expect(paid + r.organizerAmount + r.roundingRemainder, 1000);
+    });
+  });
+
   group('PN-004 — organizer amount is the NEAREST valid value', () {
     // The candidate loop seeded `organizerAmount = 0` and then treated that
     // seed as "unset", so the upper candidate was accepted regardless of

@@ -28,6 +28,12 @@ import '../../widgets/chat_sheet.dart';
 import '../../widgets/tournament_display_block.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/structure_editor.dart';
+import '../../models/payment_record.dart';
+import '../../widgets/dummy_payment_sheet.dart';
+import '../../widgets/payment_ledger_card.dart';
+import 'dart:async';
+import '../../widgets/glass_styles.dart';
+import '../../models/shot_clock.dart';
 
 /// Admin live dashboard mirroring the web `AdminDashboardPage`.
 class AdminDashboardScreen extends StatefulWidget {
@@ -102,7 +108,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.isAdmin;
+    // Sections 3 and 28: an assigned Tournament Organizer runs the
+    // game they were given. Gating on `isAdmin` here would have left
+    // the role unusable -- the host could assign somebody and that
+    // person would still see a read-only screen.
+    final isAdmin = app.canRunCurrentGame;
     // MVP spec §3.1: exactly one administrator per event.
     // Auth guarding is handled securely by GoRouter's redirect logic.
 
@@ -894,15 +904,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   players: eliminatedPlayers,
                                   settings: settings,
                                   currentLevel: currentLevel,
-                                  onGrantRebuy:
-                                      (id, key) => app.grantRebuy(id, idempotencyKey: key),
-                                  onGrantReEntry:
-                                      (id, key) => app.grantReEntry(id, idempotencyKey: key),
+                                  // QA section 12: money is collected before
+                                  // the chips are handed over. The sheet is
+                                  // simulated, but the accounting it produces
+                                  // is what the prize pool is built from, so
+                                  // the grant only happens once the payment
+                                  // has actually settled as paid.
+                                  onGrantRebuy: (id, key) => _payThenGrant(
+                                    context: context,
+                                    app: app,
+                                    playerId: id,
+                                    purpose: PaymentPurpose.rebuy,
+                                    grant: () =>
+                                        app.grantRebuy(id, idempotencyKey: key),
+                                  ),
+                                  onGrantReEntry: (id, key) => _payThenGrant(
+                                    context: context,
+                                    app: app,
+                                    playerId: id,
+                                    purpose: PaymentPurpose.reEntry,
+                                    grant: () => app.grantReEntry(
+                                      id,
+                                      idempotencyKey: key,
+                                    ),
+                                  ),
                                   isAdmin: isAdmin,
                                 ),
                               if (_tab == 'seating')
                                 _SeatingTab(players: activePlayers),
-                              if (_tab == 'prize')
+                              if (_tab == 'prize') ...[
                                 _PrizeTab(
                                   structure: structure,
                                   settings: settings,
@@ -916,6 +946,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       !game.timerRunning &&
                                       game.secondsRemaining == 0,
                                 ),
+                                // Host only. `projectionFor` strips payments
+                                // for every non-admin role, so this can never
+                                // reach a player screen -- but it lives on the
+                                // prize tab, which is admin-gated anyway.
+                                if (isAdmin) ...[
+                                  const SizedBox(height: AppSpacing.lg),
+                                  Builder(
+                                    builder: (_) {
+                                      final r = app.paymentReconciliation;
+                                      return PaymentLedgerCard(
+                                        game: game,
+                                        inPlay: r.inPlay,
+                                        collected: r.collected,
+                                        outstanding: r.outstanding,
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ],
                               if (_tab == 'audit')
                                 _AuditTab(auditHistory: game.auditHistory),
                             ],
@@ -1392,6 +1441,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     // active player → Block".)
 
     return [
+      // Section 12's soft shot clock. Lives at the top of the players tab
+      // because that is where the host already is when somebody starts
+      // tanking -- looking at the list of who is still in.
+      if (app.canRunCurrentGame && game.status.isActiveLive)
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: _ShotClockBar(app: app, game: game),
+        ),
       if (app.isAdmin && app.lateRegistrationOpen)
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -1794,12 +1851,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               Expanded(
                 child: AppButton(
                   onPressed: () {
-                    app.grantAddOn(
-                      p.id,
-                      idempotencyKey:
-                          'addon-${DateTime.now().microsecondsSinceEpoch}',
-                    );
                     Navigator.pop(context);
+                    _payThenGrant(
+                      context: context,
+                      app: app,
+                      playerId: p.id,
+                      purpose: PaymentPurpose.addOn,
+                      grant: () => app.grantAddOn(
+                        p.id,
+                        idempotencyKey:
+                            'addon-${DateTime.now().microsecondsSinceEpoch}',
+                      ),
+                    );
                   },
                   child: const Text('Grant add-on'),
                 ),
@@ -1996,6 +2059,218 @@ class _AnnouncementCard extends StatelessWidget {
 }
 
 // ── Tabs content ──────────────────────────────────────────────────────────────
+/// The soft shot clock (§12).
+///
+/// Running: shows who is on it and how long is left. Idle: a single button
+/// that opens a short list of players.
+///
+/// Deliberately does nothing when it expires. §12 calls it *soft*, and at a
+/// home game the clock exists so somebody can be asked to hurry up without it
+/// becoming an argument — not so the app can fold their hand. It says the time
+/// is up; the table decides what that means.
+class _ShotClockBar extends StatefulWidget {
+  const _ShotClockBar({required this.app, required this.game});
+
+  final AppProvider app;
+  final LiveGame game;
+
+  @override
+  State<_ShotClockBar> createState() => _ShotClockBarState();
+}
+
+class _ShotClockBarState extends State<_ShotClockBar> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    // Its own ticker: the clock has to count down smoothly even while the
+    // level timer is paused, which is exactly the independence §12 asks for.
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && widget.game.shotClock != null) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  void _pick() {
+    final active = widget.game.players
+        .where((p) => p.active && !p.eliminated)
+        .toList();
+    showAppModal(
+      context: context,
+      title: 'Put a player on the clock',
+      maxWidth: 400,
+      child: StatefulBuilder(
+        builder: (modalContext, setModalState) {
+          var seconds = ShotClock.defaultSeconds;
+          return StatefulBuilder(
+            builder: (ctx, setInner) => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Seconds',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    for (final s in ShotClock.presets) ...[
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          variant: s == seconds
+                              ? AppButtonVariant.primary
+                              : AppButtonVariant.secondary,
+                          onPressed: () => setInner(() => seconds = s),
+                          child: Text('$s'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                for (final p in active)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: AppButton(
+                      fullWidth: true,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () {
+                        widget.app.startShotClock(p.id, seconds: seconds);
+                        Navigator.of(ctx).pop();
+                      },
+                      child: Text(p.name),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final clock = widget.game.shotClock;
+    if (clock == null) {
+      return AppButton(
+        fullWidth: true,
+        variant: AppButtonVariant.secondary,
+        onPressed: _pick,
+        child: const AppIconLabel(
+          label: 'Put a player on the clock',
+          trailing: Icons.timer_outlined,
+        ),
+      );
+    }
+
+    final now = DateTime.now();
+    final left = clock.remainingAt(now);
+    final expired = clock.expiredAt(now);
+    final urgent = clock.isUrgentAt(now);
+    final name = widget.game.players
+            .where((p) => p.id == clock.playerId)
+            .firstOrNull
+            ?.name ??
+        'Player';
+
+    final colour = expired
+        ? AppColors.mutedForeground
+        : urgent
+            ? AppColors.destructive
+            : AppColors.primary;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Glass.solidTint(colour),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: colour, width: urgent ? 2 : 1),
+      ),
+      child: Row(
+        children: [
+          Text(
+            expired ? "Time" : '$left',
+            style: AppTypography.display(
+              size: AppFontSizes.xxl,
+              weight: FontWeight.w700,
+            ).copyWith(color: colour),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  expired
+                      ? 'Time is up — the table decides.'
+                      : 'On the clock',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          AppButton(
+            size: AppButtonSize.sm,
+            variant: AppButtonVariant.ghost,
+            onPressed: widget.app.clearShotClock,
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Collects payment, then grants — in that order.
+///
+/// QA section 12 and section 14 both describe the same sequence: confirm,
+/// take the money, add the chips, update the pool, timestamp it. Granting
+/// first and collecting after would leave a tournament whose chips in play and
+/// prize pool disagree if the payment is declined, and that discrepancy is
+/// exactly what a host cannot reconcile at the end of the night.
+///
+/// A declined or cancelled payment grants nothing (PN-DPAY-011, PN-DPAY-012).
+void _payThenGrant({
+  required BuildContext context,
+  required AppProvider app,
+  required String playerId,
+  required PaymentPurpose purpose,
+  required VoidCallback grant,
+}) {
+  final player = app.currentGame?.players
+      .where((p) => p.id == playerId)
+      .firstOrNull;
+  showDummyPaymentSheet(
+    context: context,
+    playerId: playerId,
+    playerName: player?.name ?? 'Player',
+    purpose: purpose,
+    onSettled: (record) {
+      if (record?.status == PaymentStatus.paid) grant();
+    },
+  );
+}
+
 class _EliminatedTab extends StatelessWidget {
   const _EliminatedTab({
     required this.players,
@@ -2181,7 +2456,11 @@ class _SeatingTab extends StatelessWidget {
     // Seating/balance management is Host/Admin only (Co-Admin's scope stops
     // at membership + rebuys) — everyone else sees the read-only table view
     // below.
-    final isAdmin = app.isAdmin;
+    // Sections 3 and 28: an assigned Tournament Organizer runs the
+    // game they were given. Gating on `isAdmin` here would have left
+    // the role unusable -- the host could assign somebody and that
+    // person would still see a read-only screen.
+    final isAdmin = app.canRunCurrentGame;
 
     return Column(
       children: [

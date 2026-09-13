@@ -4,22 +4,56 @@
 part of 'app_provider.dart';
 
 extension AppProviderTimer on AppProvider {
+  /// Voice marks within a level (specification section 17).
+  ///
+  /// Section 17 narrowed the scope to "level-transition announcements only"
+  /// and specifies exactly two moments:
+  ///
+  ///   * at 1 minute — "1 minute remaining", THEN the next level's blinds;
+  ///   * at level end — an audible 5-4-3-2-1, then the new level.
+  ///
+  /// The next-level blinds are the useful half: a player deciding whether to
+  /// play a marginal hand wants to know what it will cost them next level,
+  /// not merely that time is short.
+  ///
+  /// The five-minute warning that used to fire here was removed. It is not in
+  /// section 17's list, and the addendum's "Voice" section names only the
+  /// one-minute warning and the level transition.
   void _announceLevelMark(int remaining) {
     final game = _currentGame;
     if (game == null || !game.timerRunning) return;
+    // A scheduled break has its own rhythm; counting a level down through it
+    // would announce blinds nobody is about to post.
+    if (game.status == LiveGameStatus.onBreak) return;
     final level = game.currentLevel;
     final mark = '$level';
-    if (remaining <= 300 &&
-        remaining > 60 &&
-        !_levelAnnouncementMarks.contains('$mark:300')) {
-      _levelAnnouncementMarks.add('$mark:300');
-      addAnnouncement('Five minutes remaining in level $level.', true);
-    }
+
     if (remaining <= 60 &&
-        remaining > 0 &&
+        remaining > 5 &&
         !_levelAnnouncementMarks.contains('$mark:60')) {
       _levelAnnouncementMarks.add('$mark:60');
-      addAnnouncement('One minute remaining in level $level.', true);
+      final next = game.currentLevel < game.structure.levels.length
+          ? game.structure.levels[game.currentLevel]
+          : null;
+      final blinds = next == null
+          ? ''
+          : ' Next level: blinds ${next.sb} and ${next.bb}'
+              '${next.ante != null ? ', ante ${next.ante}' : ''}.';
+      addAnnouncement('One minute remaining in level $level.$blinds', true);
+    }
+
+    // Section 17's audible countdown. Spoken one number per second so it
+    // lands with the clock rather than as a single burst.
+    if (remaining <= 5 && remaining >= 1) {
+      final key = '$mark:count:$remaining';
+      if (!_levelAnnouncementMarks.contains(key)) {
+        _levelAnnouncementMarks.add(key);
+        // Silent in the feed — this is a spoken cue, not a written notice,
+        // and five one-digit rows would bury the announcements list.
+        if (_voiceEnabled && thisDeviceIsAudioMaster) {
+          VoiceService.instance.speak('$remaining');
+        }
+      }
     }
   }
 
@@ -47,6 +81,14 @@ extension AppProviderTimer on AppProvider {
         // display state only, and the host's next snapshot remains the truth.
         if (!_isGameAuthority) {
           _rollOverLevelForViewer();
+          return;
+        }
+        // A scheduled break that has run its time ends by itself and play
+        // resumes — section 8 makes it part of the structure, so it does not
+        // wait for the host the way a manual pause does.
+        if (_currentGame!.status == LiveGameStatus.onBreak) {
+          endBreak();
+          _evaluateSpeedRecommendation();
           return;
         }
         final isLastLevel = _currentGame!.currentLevel >= _currentGame!.structure.levels.length;
@@ -352,6 +394,75 @@ extension AppProviderTimer on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  /// Puts a player on the clock (§12).
+  ///
+  /// Host-initiated, never automatic: an automatic clock belongs in a casino
+  /// with floor staff, not at a kitchen table. It runs BESIDE the level timer
+  /// and never touches it -- §12 requires it to be "independent of level
+  /// timer", and a level must not end early because somebody tanked.
+  void startShotClock(String playerId, {int? seconds}) {
+    final game = _currentGame;
+    if (game == null) return;
+    final duration = seconds ?? ShotClock.defaultSeconds;
+    _currentGame = game.copyWith(
+      shotClock: ShotClock(
+        playerId: playerId,
+        // A timestamp, not a countdown -- every device derives the same
+        // remaining time without having to tick in step, exactly as the level
+        // clock does.
+        endsAt: _serverNow.add(Duration(seconds: duration)),
+        seconds: duration,
+      ),
+    );
+    final name =
+        game.players.where((p) => p.id == playerId).firstOrNull?.name;
+    addAnnouncement(
+      '${name ?? 'Player'} is on the clock — $duration seconds.',
+      true,
+    );
+    addAuditRecord(
+      'shot_clock',
+      '${name ?? playerId} put on the clock for $duration seconds.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Clears the clock — the player acted, or the table waved it off.
+  ///
+  /// Nothing else happens. It is a SOFT clock: running out does not fold a
+  /// hand, and neither does clearing it. The table decides what a expired
+  /// clock means, which is the only workable rule for a home game.
+  void clearShotClock() {
+    final game = _currentGame;
+    if (game == null || game.shotClock == null) return;
+    _currentGame = game.copyWith(clearShotClock: true);
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Ends a scheduled break and starts the next level.
+  ///
+  /// Called by the clock when the break runs out, and by the host if they want
+  /// to cut it short. Section 8 makes the break part of the structure, so
+  /// ending it simply resumes the sequence — it is not a separate "resume"
+  /// with its own rules.
+  void endBreak({bool skipped = false}) {
+    final game = _currentGame;
+    if (game == null || game.status != LiveGameStatus.onBreak) return;
+    _pushUndo();
+    _currentGame = game.copyWith(status: LiveGameStatus.running);
+    addAuditRecord(
+      skipped ? 'break_skipped' : 'break_end',
+      skipped
+          ? 'Break after level ${game.currentLevel} ended early by the host.'
+          : 'Break after level ${game.currentLevel} finished.',
+    );
+    // Now advance for real. The status is no longer onBreak, so `nextLevel`
+    // will not re-enter the same break.
+    nextLevel();
+  }
+
   void nextLevel({String? idempotencyKey}) {
     final (rev, idemKey) =
         _claimIdempotency(idempotencyKey ?? '', action: 'nextLevel');
@@ -359,6 +470,43 @@ extension AppProviderTimer on AppProvider {
     final next = _currentGame!.currentLevel + 1;
     _pushUndo();
     _levelAnnouncementMarks.clear();
+
+    // Section 8 / addendum section 5: a scheduled break is a real state, not
+    // a manual pause. If one falls after the level that just finished, the
+    // tournament enters it and the clock counts the break down; `endBreak`
+    // then advances into the next level. Without this the breaks were
+    // configured, stored and counted in the duration but never actually
+    // happened.
+    final scheduled =
+        _currentGame!.structure.breakAfter(_currentGame!.currentLevel);
+    if (scheduled != null &&
+        _currentGame!.status != LiveGameStatus.onBreak &&
+        next <= _currentGame!.structure.levels.length) {
+      _currentGame = _currentGame!.copyWith(
+        status: LiveGameStatus.onBreak,
+        timerRunning: true,
+        secondsRemaining: scheduled.durationMins * 60,
+        levelEndTime: DateTime.now().add(
+          Duration(minutes: scheduled.durationMins),
+        ),
+        speedRecommendation: null,
+        clearSpeedRecommendation: true,
+        revision: rev,
+        lastIdempotencyKey: idemKey,
+      );
+      addAnnouncement(
+        'Break — ${scheduled.durationMins} minutes.',
+        true,
+      );
+      addAuditRecord(
+        'break_start',
+        'Scheduled break after level ${_currentGame!.currentLevel} '
+            '(${scheduled.durationMins} minutes).',
+      );
+      _syncGroupGame();
+      if (!_disposed) notifyListeners();
+      return;
+    }
     // Auto-trigger rebuy pause when crossing rebuysCloseLevel (spec §1, §12 A12)
     final wasBelowRebuyClose =
         _currentGame!.currentLevel <= _currentGame!.settings.rebuysCloseLevel;
@@ -464,9 +612,12 @@ extension AppProviderTimer on AppProvider {
         revision: rev,
         lastIdempotencyKey: idemKey,
       );
+      // Section 17's exact shape: "Start of level N — blinds X — duration Y
+      // minutes."
       addAnnouncement(
-        'Level $next. Blinds ${extLevel.sb} / ${extLevel.bb}'
-        '${extLevel.ante != null ? " — ante ${extLevel.ante}" : ""}.',
+        'Start of level $next — blinds ${extLevel.sb} / ${extLevel.bb}'
+        '${extLevel.ante != null ? ", ante ${extLevel.ante}" : ""}'
+        ' — ${extLevel.durationMins} minutes.',
         true,
       );
     }

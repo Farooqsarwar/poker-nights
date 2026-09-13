@@ -71,6 +71,7 @@ bool _checkInOpen(LiveGame game) {
     case LiveGameStatus.running:
     case LiveGameStatus.paused:
     case LiveGameStatus.rebuypause:
+    case LiveGameStatus.onBreak:
     case LiveGameStatus.finaltable:
       return true;
     case LiveGameStatus.draft:
@@ -164,6 +165,14 @@ MainAction _adminAction(LiveGame game) {
         MainActionId.completeRebuyBreak,
         'Complete Rebuy & Add-on Break',
         route: RoutePaths.rebuySettlement,
+      );
+    // A scheduled break runs itself and ends on its own timer, so the host's
+    // action is the same as during play: manage the tournament.
+    case LiveGameStatus.onBreak:
+      return const MainAction(
+        MainActionId.manageTournament,
+        'Manage Tournament',
+        route: RoutePaths.adminDashboard,
       );
     case LiveGameStatus.completed:
       return const MainAction(

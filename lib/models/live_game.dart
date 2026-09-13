@@ -1,4 +1,6 @@
 import 'chip_color.dart';
+import 'payment_record.dart';
+import 'shot_clock.dart';
 import 'game.dart';
 import 'table_settings.dart';
 import 'tournament.dart';
@@ -35,6 +37,8 @@ class GameSettings {
     this.locationPrivate = false,
     this.tableSettingsOverride,
     this.expectedPlayersOverride,
+    this.lockedExpectedPlayers,
+    this.breaks = const [],
   });
 
   final String name;
@@ -98,6 +102,29 @@ class GameSettings {
   /// ([AppProvider.effectiveTableSettings] resolves this).
   final TableSettings? tableSettingsOverride;
 
+  /// Breaks the organizer configured (specification section 8).
+  ///
+  /// Empty means OFF, which is exactly how every tournament created before
+  /// breaks existed behaved. The engine places the default when the organizer
+  /// turns breaks on without choosing a position.
+  final List<ScheduledBreak> breaks;
+
+  /// The expected count FROZEN for physical preparation (specification
+  /// section 6).
+  ///
+  /// Section 6 distinguishes four things, and this is the one that was
+  /// missing: Confirmed (raw RSVPs), Expected (the organizer's estimate),
+  /// **Locked** (that estimate frozen), and Actual checked-in.
+  ///
+  /// The point is stated in the specification directly: "late RSVP changes do
+  /// not silently reshuffle the locked preparation". Once the host has counted
+  /// physical chips into stacks for 15 people, a 16th RSVP arriving must not
+  /// quietly rebuild the structure underneath them — it surfaces as a notice
+  /// instead.
+  ///
+  /// Null means not locked. The start CTA still uses actual checked-in.
+  final int? lockedExpectedPlayers;
+
   /// Head-count the host is preparing for, when they have overridden the
   /// figure the app derives from RSVPs (Technical section 6.1: "Expected
   /// players: from RSVP **or admin override**").
@@ -107,6 +134,23 @@ class GameSettings {
   /// people who replied, which is exactly the "15 said yes, prepare for 20"
   /// case the client raised. Null means "trust the RSVPs".
   final int? expectedPlayersOverride;
+
+  /// Ceiling on the organizer allocation (specification §7 and §18:
+  /// "0-20%").
+  static const int maxOrganizerPct = 20;
+
+  /// The percentage calculations should actually use.
+  ///
+  /// The stored [organizerPct] is left exactly as written -- clamping it in
+  /// the constructor would retroactively rewrite games created under the old
+  /// 0-100 rule, and a stored value must never change meaning underneath a
+  /// host who already ran the night. This clamps at the point of USE instead,
+  /// so no prize split can be computed against a figure the specification
+  /// forbids, however the settings were constructed.
+  ///
+  /// The forms cap entry at 20 as well; this is the backstop for every other
+  /// path -- a preset, a restored document, a direct provider call.
+  int get effectiveOrganizerPct => organizerPct.clamp(0, maxOrganizerPct);
 
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
@@ -143,6 +187,9 @@ class GameSettings {
     bool clearTableSettingsOverride = false,
     int? expectedPlayersOverride,
     bool clearExpectedPlayersOverride = false,
+    int? lockedExpectedPlayers,
+    bool clearLockedExpectedPlayers = false,
+    List<ScheduledBreak>? breaks,
   }) {
     return GameSettings(
       name: name ?? this.name,
@@ -178,6 +225,10 @@ class GameSettings {
       expectedPlayersOverride: clearExpectedPlayersOverride
           ? null
           : (expectedPlayersOverride ?? this.expectedPlayersOverride),
+      lockedExpectedPlayers: clearLockedExpectedPlayers
+          ? null
+          : (lockedExpectedPlayers ?? this.lockedExpectedPlayers),
+      breaks: breaks ?? this.breaks,
     );
   }
 
@@ -204,7 +255,16 @@ enum LiveGameStatus {
   rebuypause,
   finaltable,
   completed,
-  cancelled;
+  cancelled,
+
+  /// A scheduled break is running (section 8; addendum section 5).
+  ///
+  /// Distinct from `paused` and from `rebuypause`: those are things a host
+  /// does, this one is part of the generated structure and ends by itself.
+  /// Added at the END of the enum so stored index positions do not shift, and
+  /// `_enumByName` degrades an unknown value to a safe fallback for clients
+  /// that predate it.
+  onBreak;
 
   String get label {
     switch (this) {
@@ -228,6 +288,8 @@ enum LiveGameStatus {
         return 'Completed';
       case LiveGameStatus.cancelled:
         return 'Cancelled';
+      case LiveGameStatus.onBreak:
+        return 'Break';
     }
   }
 
@@ -235,6 +297,7 @@ enum LiveGameStatus {
       this == LiveGameStatus.running ||
       this == LiveGameStatus.paused ||
       this == LiveGameStatus.rebuypause ||
+      this == LiveGameStatus.onBreak ||
       this == LiveGameStatus.finaltable;
 
   bool get isUpcoming =>
@@ -277,6 +340,9 @@ class LiveGame {
     this.levelEndTime,
     this.startedAt,
     this.changeLog = const [],
+    this.payments = const [],
+    this.organizerIds = const [],
+    this.shotClock,
     this.revision = 0,
     this.lastIdempotencyKey,
     this.editorDeviceId = '',
@@ -391,6 +457,65 @@ class LiveGame {
   /// Combined with [lastIdempotencyKey] this guards against double-applying a
   /// duplicate action after a browser retry or an offline-restore replay
   /// (technical §18.1).
+  /// A soft shot clock, when one is running (§12).
+  ///
+  /// Null almost always — it exists for the handful of moments a night when
+  /// somebody needs putting on the clock. Deliberately separate from
+  /// [levelEndTime]: §12 requires it to be "independent of level timer", and a
+  /// level must never end early because a player tanked.
+  final ShotClock? shotClock;
+
+  /// Users given operational control of THIS tournament (§3, §28).
+  ///
+  /// Tournament-scoped by design — §32 lists it as a decision that must not
+  /// drift. An organizer runs the night: rebuys, add-ons, eliminations,
+  /// seating, and the private financials OF THIS GAME. They get no group-level
+  /// rights at all: no approving members, no editing group settings, no
+  /// managing admins, and nothing whatsoever in any other tournament.
+  ///
+  /// It solves a real problem rather than a theoretical one. A host who is
+  /// also playing is the bottleneck on every rebuy at their own table; this
+  /// lets them hand the controls to somebody for one evening without handing
+  /// over the group.
+  ///
+  /// Empty on every tournament created before the role existed, which reads
+  /// correctly as "admin only".
+  final List<String> organizerIds;
+
+  /// Whether [userId] is running this tournament as an assigned organizer.
+  bool isOrganizer(String? userId) =>
+      userId != null && organizerIds.contains(userId);
+
+  /// Simulated payments recorded against this tournament (QA section 12).
+  ///
+  /// No money moves and no provider is contacted. The ledger exists so the
+  /// prize pool, the host's view of who has settled up and the audit trail all
+  /// agree — the part that has to be right whether the money went through the
+  /// app or across the table in cash.
+  final List<PaymentRecord> payments;
+
+  /// Whether [playerId] has a successful payment of [purpose] on file.
+  ///
+  /// Rebuys are deliberately excluded from this shortcut: a player may rebuy
+  /// several times, so "have they paid for a rebuy" is not a yes/no question.
+  bool hasPaid(String playerId, PaymentPurpose purpose) => payments.any(
+        (p) =>
+            p.playerId == playerId &&
+            p.purpose == purpose &&
+            p.status == PaymentStatus.paid,
+      );
+
+  /// Total collected through the app, by purpose. Only successful payments
+  /// count — a failed or cancelled attempt contributes nothing.
+  int collected(PaymentPurpose purpose) => payments
+      .where((p) => p.purpose == purpose && p.status.countsTowardPool)
+      .fold<int>(0, (a, p) => a + p.amount);
+
+  /// Everything collected through the app.
+  int get totalCollected => payments
+      .where((p) => p.status.countsTowardPool)
+      .fold<int>(0, (a, p) => a + p.amount);
+
   final int revision;
 
   /// The idempotency key of the most recently accepted administrator action.
@@ -535,6 +660,10 @@ class LiveGame {
     int? totalChipsInPlay,
     List<Player>? pendingGuests,
     List<String>? finishOrder,
+    List<PaymentRecord>? payments,
+    List<String>? organizerIds,
+    ShotClock? shotClock,
+    bool clearShotClock = false,
     SpeedRecommendation? speedRecommendation,
     TournamentStructure? structure,
     bool? settlementConfirmed,
@@ -576,6 +705,9 @@ class LiveGame {
       totalChipsInPlay: totalChipsInPlay ?? this.totalChipsInPlay,
       pendingGuests: pendingGuests ?? this.pendingGuests,
       finishOrder: finishOrder ?? this.finishOrder,
+      payments: payments ?? this.payments,
+      organizerIds: organizerIds ?? this.organizerIds,
+      shotClock: clearShotClock ? null : (shotClock ?? this.shotClock),
       speedRecommendation: clearSpeedRecommendation
           ? null
           : speedRecommendation ?? this.speedRecommendation,

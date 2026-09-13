@@ -167,6 +167,99 @@ service cloud.firestore {
       return settingsSafe && structureSafe && auditSafe && requestsSafe;
     }
 
+    // ---------- server-side value validation ----------
+    //
+    // Security rules run on Google's servers, so these ARE server-side checks
+    // even with no Cloud Functions on this project. Rules cannot COMPUTE a
+    // value, but they can refuse one that does not add up -- which gives the
+    // same protection against a tampered client for the cases that matter.
+    //
+    // Every helper here is written so a legacy document keeps working. A game
+    // created under an older rule set may hold a value these rules would now
+    // reject; re-saving it unchanged must not start failing, or the app breaks
+    // for that host with no way out. So each check passes when the field is
+    // absent, or when it is UNCHANGED from what is already stored.
+
+    // Specification sections 7 and 18: the organizer allocation is 0-20%.
+    // Previously enforced only in the entry forms, so any other write path
+    // could store 99% and have prizes calculated against it.
+    function organizerPctSafe() {
+      let data = request.resource.data;
+      let hasSettings = data.keys().hasAll(['settings']);
+      let pct = hasSettings ? data.settings.get('organizerPct', 0) : 0;
+      let legacy = resource != null
+          && resource.data.keys().hasAll(['settings'])
+          && resource.data.settings.get('organizerPct', 0) == pct;
+      return !hasSettings
+          || !data.settings.keys().hasAny(['organizerPct'])
+          || (pct is int && pct >= 0 && pct <= 20)
+          || legacy;
+    }
+
+    // Section 30's financial invariant, and section 18's requirement that
+    // nothing is invented or lost: what is paid out, plus the organizer's
+    // cut, plus whatever rounding could not place, must equal the gross.
+    //
+    // The rules cannot recompute the split, but they can refuse one that does
+    // not reconcile -- which is what a tampered payout would look like.
+    function prizePoolReconciles() {
+      let data = request.resource.data;
+      let hasStructure = data.keys().hasAll(['structure']);
+      let st = hasStructure ? data.structure : {};
+      let pool = st.get('prizePool', 0);
+      let organizer = st.get('organizerAmount', 0);
+      let remainder = st.get('roundingRemainder', 0);
+      let gross = st.get('grossCollected', 0);
+      // Only checkable once a gross figure is present; before settlement the
+      // pool is an estimate and gross is absent.
+      return !hasStructure
+          || gross == 0
+          || pool + organizer + remainder == gross;
+    }
+
+    // Sections 11 and 29: "completed levels never mutate". The client already
+    // enforces this; a direct write should not be able to go around it.
+    function completedLevelsIntact() {
+      let data = request.resource.data;
+      let hasStructure = data.keys().hasAll(['structure']);
+      let currentLevel = data.get('currentLevel', 0);
+      // A rules file cannot walk the levels array element by element, so this
+      // is the checkable part: the level counter never moves backwards, which
+      // is what rewriting history would require.
+      return !hasStructure
+          || resource == null
+          || currentLevel >= resource.data.get('currentLevel', 0);
+    }
+
+    // Specification sections 3 and 28: a Tournament Organizer runs the game
+    // they were assigned and nothing else. The assignment lives on the game
+    // document itself (`organizerIds`), so it is tournament-scoped by
+    // construction -- there is no group-level role to leak.
+    //
+    // Two things an organizer must NOT be able to do, and cannot here:
+    //  * appoint themselves -- organizerIds is only writable by an admin,
+    //    enforced below by requiring it to be unchanged on an organizer write;
+    //  * touch any other tournament -- the rule is scoped to {gameId}, so a
+    //    write to a different game is evaluated against THAT game's list.
+    function isTournamentOrganizer() {
+      return signedIn()
+          && resource != null
+          && resource.data.get('organizerIds', []).hasAny([request.auth.uid]);
+    }
+
+    function organizerWriteSafe() {
+      // An organizer may not change who the organizers are.
+      return resource != null
+          && request.resource.data.get('organizerIds', [])
+              == resource.data.get('organizerIds', []);
+    }
+
+    function gameValuesSafe() {
+      return organizerPctSafe()
+          && prizePoolReconciles()
+          && completedLevelsIntact();
+    }
+
     // Member CREATE: a member RSVPing on a game doc that does not exist yet
     // (e.g. a legacy game whose document was never persisted) falls back to a
     // merge-set create carrying ONLY their own slice. Gate it so the created
@@ -327,13 +420,18 @@ service cloud.firestore {
         // Because private financial data is split into the admin sidecar,
         // all members can safely read the main public game document.
         allow read: if isMember(gid);
-        allow create: if (isGroupAdmin(gid) && publicGameDocSafe())
+        allow create: if (isGroupAdmin(gid) && publicGameDocSafe() && gameValuesSafe())
             || (isMember(gid) && memberGameCreate());
         allow delete: if isGroupAdmin(gid);
         // Members may update only their own slice of the game doc (their rsvp,
         // their guest slots, their own id in the rebuy/add-on request arrays);
         // anything else requires admin/owner authority (memberGameEdit).
-        allow update: if (isGroupAdmin(gid) && publicGameDocSafe()) || (isMember(gid) && memberGameEdit());
+        allow update: if (isGroupAdmin(gid) && publicGameDocSafe() && gameValuesSafe())
+            || (isTournamentOrganizer()
+                && organizerWriteSafe()
+                && publicGameDocSafe()
+                && gameValuesSafe())
+            || (isMember(gid) && memberGameEdit());
 
         // Reserved for a per-member server-side projection. NOT IN USE: it
         // would need a Cloud Function to maintain, and this deployment has
@@ -676,6 +774,32 @@ service cloud.firestore {
     match /{document=**} {
       allow read, write: if false;
     }
+
+    // ---------- entitlements ----------
+    //
+    // Premium, enforced without Cloud Functions.
+    //
+    // The one thing security rules genuinely cannot do is establish that
+    // somebody paid: if a client may write its own entitlement, it may write
+    // `premium: true`. The answer that needs no server is to make the document
+    // READ-ONLY to every client and grant it out of band -- the Firebase
+    // console, or the Admin SDK from a machine you control.
+    //
+    // A client can therefore read its own tier and can never forge one. That
+    // is real server-side enforcement: the rule runs on Google's servers and
+    // no request from the app can satisfy the write condition, because there
+    // isn't one.
+    //
+    // This is manual, and deliberately so. For a private home-poker product
+    // with tens of groups, granting Premium by hand costs nothing and removes
+    // an entire class of problem. It stops scaling when self-serve purchase
+    // arrives -- at which point the payment provider's webhook becomes the
+    // trusted writer, and that is the moment a server is genuinely required.
+    match /entitlements/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
   }
 }
 // touched 1788311317619

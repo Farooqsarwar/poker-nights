@@ -255,6 +255,27 @@ class FirebaseRepository {
   Stream<fa.User?> authStateChanges() => _auth.authStateChanges();
   fa.User? get currentUser => _auth.currentUser;
   String? get currentUid => _auth.currentUser?.uid;
+
+  /// The signed-in user's Premium entitlement, as held on the server.
+  ///
+  /// `entitlements/{uid}` is READ-ONLY to every client (`allow write: if
+  /// false` in firestore.rules), so this value cannot be forged from the app
+  /// however the device is tampered with. It is granted out of band — the
+  /// Firebase console, or the Admin SDK from a machine the owner controls.
+  ///
+  /// Returns false when absent, unreadable or offline: the safe answer to
+  /// "has this person paid?" is no.
+  Future<bool> fetchPremiumEntitlement() async {
+    final uid = currentUid;
+    if (uid == null) return false;
+    try {
+      final doc = await _db.collection('entitlements').doc(uid).get();
+      return (doc.data()?['premium'] as bool?) ?? false;
+    } catch (e) {
+      debugPrint('fetchPremiumEntitlement failed: $e');
+      return false;
+    }
+  }
   bool get isSignedInAsGuest => _auth.currentUser?.isAnonymous ?? false;
 
   Future<fa.UserCredential> signUp({

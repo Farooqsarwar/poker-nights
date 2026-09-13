@@ -1,6 +1,7 @@
 import '../models/game.dart';
 import '../models/live_game.dart';
 import '../models/tournament.dart';
+import '../models/payment_record.dart';
 
 /// Who a game projection is addressed to. Permissions must be enforced by the
 /// backend (§22); this function is the single projection rule the future
@@ -104,6 +105,16 @@ LiveGame projectionFor(
       paidPlaces: game.structure.prizes.length,
     ),
     players: publicPlayers,
+    // Section 23: members and guests must not receive "rebuy/add-on totals"
+    // or "gross collected". The player rows above are scrubbed of rebuys,
+    // re-entries and add-ons for exactly that reason — and the payment ledger
+    // hands all three straight back, plus the gross, to anyone who sums it.
+    //
+    // So it does not travel at all. Not even the viewer's own rows: the same
+    // decision was already taken for their own investment a few lines up, and
+    // a single record still reveals the buy-in amount alongside a player id.
+    // The host sees the ledger; nobody else does.
+    payments: const <PaymentRecord>[],
     chat: viewerCanSeeChat ? game.chat : const <ChatMessage>[],
     auditHistory: const <AuditRecord>[], // 14
     pendingGuests: publicPendingGuests,

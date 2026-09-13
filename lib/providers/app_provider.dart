@@ -16,12 +16,17 @@ import '../models/cash_game.dart';
 import '../models/game.dart';
 import '../models/group.dart';
 import '../models/live_game.dart';
+import '../models/payment_record.dart';
+import '../models/shot_clock.dart';
 import '../models/table_settings.dart';
 import '../models/tournament.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
 import '../models/chip_color.dart';
 import '../repositories/firebase_repository.dart';
+import '../services/entitlements.dart';
+import '../services/permissions.dart';
+import '../services/payment_service.dart';
 import '../utils/formatters.dart';
 import '../utils/mock_data.dart';
 import '../utils/model_codec.dart';
@@ -44,6 +49,7 @@ part 'app_provider_players.dart';
 part 'app_provider_tournament.dart';
 part 'app_provider_social.dart';
 part 'app_provider_codes_cash.dart';
+part 'app_provider_payments.dart';
 part 'app_provider_notifications_settings.dart';
 
 /// One future-level edit produced by the admin structure editor.
@@ -275,6 +281,65 @@ class AppProvider extends ChangeNotifier {
   /// Last member-RSVP patch failure, surfaced on the invitation screen so
   /// backend rejections are never invisible (vs silent optimistic state that
   /// vanishes on refresh). Debug aid for the persistence audit.
+  /// Addendum §3: free hosting covers one table, up to nine active players.
+  ///
+  /// Device-local, read from [MockPaymentService]. Real Premium authorization
+  /// belongs on a server (§7, acceptance 12) and does not exist yet, so this
+  /// is an honest product limit rather than security. A determined user can
+  /// change it; the point is that an ordinary host is told before the night
+  /// goes wrong, not that it cannot be defeated.
+  PremiumTier premiumTier = PremiumTier.free;
+
+  /// Resolves the effective Premium tier.
+  ///
+  /// Two sources, deliberately:
+  ///
+  ///  * `entitlements/{uid}` in Firestore — AUTHORITATIVE. Read-only to every
+  ///    client by security rule, so it cannot be forged from the app. This is
+  ///    the enforcement the specification asks for (§7, acceptance 12), and it
+  ///    needs no Cloud Functions: the rule runs on Google's servers and there
+  ///    is no write condition a client request can satisfy.
+  ///
+  ///  * [MockPaymentService] on the device — DEMO ONLY. It is what the
+  ///    dummy checkout screen writes, so the upgrade flow can be shown and
+  ///    reviewed while the commercial terms are unsettled. Trivially
+  ///    bypassed, and never treated as proof of anything.
+  ///
+  /// Either grants Premium, because the demo has to work. When real billing
+  /// arrives, delete the local branch and this becomes enforcement outright.
+  /// Whether the device-local demo entitlement may grant Premium.
+  ///
+  /// True by default so the dummy checkout screen works while the commercial
+  /// terms are unsettled. Build with `--dart-define=DEMO_PREMIUM=false` and
+  /// ONLY the server-held entitlement counts -- at which point a manipulated
+  /// client flag grants nothing, which is what QA cases PN-SEC-003 and
+  /// PN-NEG-001 are actually asking for.
+  static const bool demoPremiumEnabled =
+      bool.fromEnvironment('DEMO_PREMIUM', defaultValue: true);
+
+  Future<void> loadPremiumTier() async {
+    final server = _backendUp ? await _repo.fetchPremiumEntitlement() : false;
+    final local = demoPremiumEnabled
+        ? await MockPaymentService().currentTier()
+        : PremiumTier.free;
+    if (_disposed) return;
+    premiumTier = (server || local == PremiumTier.premium)
+        ? PremiumTier.premium
+        : PremiumTier.free;
+    premiumIsServerGranted = server;
+    notifyListeners();
+  }
+
+  /// True when Premium came from the server rather than the local demo flag.
+  ///
+  /// Screens that need to be honest about this — a settings panel, a support
+  /// view — can say "granted" rather than implying a purchase happened.
+  bool premiumIsServerGranted = false;
+
+  /// Whether this device may host a field of [players] (addendum §3, §4).
+  bool canHostPlayers(int players) =>
+      Entitlements.canHost(premiumTier, players);
+
   String? lastRsvpError;
 
   /// Last authority whole-document save failure. Non-null means the admin's
@@ -718,6 +783,71 @@ class AppProvider extends ChangeNotifier {
   /// True when the signed-in user administers the current group (owner or a
   /// member row flagged `isAdmin`). Resilient to the transient empty-group
   /// window via [_adminVerdictByGroup].
+  /// What the signed-in user is, for the tournament in front of them (§28).
+  Actor get currentActor => Permissions.actorFor(
+        user: _user,
+        group: _currentGroup,
+        game: _currentGame,
+        isGuestSession: hasGuestSession,
+      );
+
+  /// Whether the signed-in user may run the CURRENT tournament — an admin
+  /// anywhere, or an organizer assigned to this one (§3, §28).
+  ///
+  /// This is what the live controls should ask, rather than `isAdmin`: an
+  /// organizer exists precisely so the host can hand over a night without
+  /// handing over the group.
+  bool get canRunCurrentGame =>
+      Permissions.can(Capability.runThisTournament, currentActor);
+
+  /// Whether the signed-in user may see this tournament's private money.
+  /// §28's one conditional cell: an organizer, but only for their own game.
+  bool get canSeePrivateFinancials =>
+      Permissions.can(Capability.viewPrivateFinancials, currentActor);
+
+  /// Assigns or removes a tournament organizer (§3).
+  ///
+  /// Admin only — §28 puts organizer management alongside the other
+  /// group-level rights an organizer does not get, so an organizer cannot
+  /// appoint another.
+  void setTournamentOrganizer(String userId, {required bool assigned}) {
+    final game = _currentGame;
+    if (game == null || !isAdmin) return;
+    if (game.isOrganizer(userId) == assigned) return;
+
+    // D7: a guest can never be an organizer. §32 fixes guests as
+    // event-scoped, and an organizer must be assignable, auditable and
+    // accountable across check-in, seating and money — which needs an account,
+    // not a name in a slot.
+    final member = _currentGroup.members.any((m) => m.id == userId);
+    if (assigned && !member) {
+      lastRsvpError =
+          'Only a group member can run a tournament. Ask them to join first.';
+      if (!_disposed) notifyListeners();
+      return;
+    }
+
+    _pushUndo();
+    _currentGame = game.copyWith(
+      organizerIds: assigned
+          ? [...game.organizerIds, userId]
+          : game.organizerIds.where((id) => id != userId).toList(),
+    );
+    final name = _currentGroup.members
+            .where((m) => m.id == userId)
+            .firstOrNull
+            ?.name ??
+        userId;
+    addAuditRecord(
+      assigned ? 'organizer_assigned' : 'organizer_removed',
+      assigned
+          ? '$name was made organizer of this tournament.'
+          : '$name is no longer organizer of this tournament.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
   bool get isAdmin {
     final user = _user;
     if (user == null) return false;

@@ -79,6 +79,13 @@ extension AppProviderPlayers on AppProvider {
     } else {
       addAnnouncement('${p.name} eliminated.', speakElimination);
     }
+    // Spec 14: elimination records the finishing position and a timestamp.
+    addAuditRecord(
+      'elimination',
+      '${p.name} eliminated'
+          '${p.eliminationPos != null ? ' in position ${p.eliminationPos}' : ''}'
+          '${koRecipientId != null && bounty > 0 ? ' — $bounty bounty awarded' : ''}.',
+    );
   }
 
   /// Manual trigger for final table state (small tournaments that never
@@ -187,6 +194,14 @@ extension AppProviderPlayers on AppProvider {
     // This updates only prizePool, organizerAmount and prizes on the structure,
     // leaving blind levels and any manual edits completely intact.
     _updatePrizePool();
+    // Spec sections 14 and 29: every live operational action creates a
+    // timestamped activity-log record. Money entering the game without one was
+    // the largest gap in the log.
+    addAuditRecord(
+      'rebuy',
+      '${player.name} rebought for ${game.settings.effectiveRebuyCost} '
+          '(rebuy ${player.rebuys + 1}) — $rebuyStack chips added.',
+    );
   }
 
   /// Registers a player's request for a rebuy from the live view. The admin
@@ -301,6 +316,11 @@ extension AppProviderPlayers on AppProvider {
     );
     // Recalculate prize pool/prizes after money enters the game.
     _updatePrizePool();
+    addAuditRecord(
+      'addon',
+      '${player.name} took the add-on for '
+          '${game.settings.effectiveAddOnCost} — $addOnStack chips added.',
+    );
   }
 
   /// Registers a player's request for an add-on from the live view. The admin
@@ -461,6 +481,22 @@ extension AppProviderPlayers on AppProvider {
       addAnnouncement('Late registration has closed.', false);
       return;
     }
+    // Addendum §3 and §4: free hosting is one table, up to nine active
+    // players. Checked HERE rather than only in the UI, because the screens
+    // are not the only way in -- a kiosk, a self-check-in or a later caller
+    // would otherwise walk straight past the limit.
+    final alreadyIn = _currentGame!.players
+        .where((p) => p.checkedIn && p.confirmed && p.id != playerId)
+        .length;
+    if (!canHostPlayers(alreadyIn + 1)) {
+      lastRsvpError = Entitlements.hostingBlockedReason(
+        premiumTier,
+        alreadyIn + 1,
+      );
+      if (!_disposed) notifyListeners();
+      return;
+    }
+
     _pushUndo();
     _currentGame = _currentGame!.copyWith(
       players: _currentGame!.players
@@ -1106,7 +1142,17 @@ extension AppProviderPlayers on AppProvider {
     // group's default otherwise (spec: configurable, defaults to 10).
     final maxPerTable = effectiveTableSettings.maxPerTable.clamp(2, 999);
     final count = ordered.length;
-    final tableCount = (count / maxPerTable).ceil();
+    // Addendum §3: multi-table hosting is Premium. A free night stays on one
+    // table, which is also why nine is the boundary -- the seating model is
+    // 1-9 on one table and 10 becomes 5+5.
+    //
+    // The check-in and late-player gates should have stopped a free field
+    // reaching ten, so this is a backstop rather than the primary limit: it
+    // keeps a free tournament on one table even if players arrived by some
+    // path those gates do not cover.
+    final tableCount = canHostPlayers(count)
+        ? (count / maxPerTable).ceil()
+        : 1;
     final perTable = List<int>.filled(tableCount, count ~/ tableCount);
     for (var i = 0; i < count % tableCount; i++) {
       perTable[i]++;
@@ -1149,6 +1195,15 @@ extension AppProviderPlayers on AppProvider {
     if (dealer != null) {
       addAnnouncement('Seating drawn. ${dealer.name} deals first.', true);
     }
+    // Spec 14: generating or re-randomising seats is a live operational
+    // action. An announcement is not a log entry — the draw has to be
+    // reconstructable afterwards.
+    addAuditRecord(
+      'seating',
+      'Seating drawn (${mode.name}): ${assignments.length} players across '
+          '$tableCount table${tableCount == 1 ? '' : 's'}'
+          '${dealer != null ? ', ${dealer.name} deals first' : ''}.',
+    );
     if (!_disposed) notifyListeners();
   }
 

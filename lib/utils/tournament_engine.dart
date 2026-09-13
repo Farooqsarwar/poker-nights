@@ -214,6 +214,29 @@ class TournamentEngine {
   /// is required. Until then, 25 is used universally.
   static const int maxChipsPerPlayer = 25;
 
+  /// Opening-depth band the solver will accept, in big blinds.
+  ///
+  /// The v11 addendum's style table spans Turbo (~40-60) to Deep (~120-200+)
+  /// and is explicit that these are "style guidance, never hard constraints"
+  /// -- guidance for what the engine MAY choose, not depths it must be able
+  /// to produce on demand.
+  ///
+  /// The floor stays at 80 deliberately. Dropping it to 40 to "reach Turbo"
+  /// was tried and made structures worse, not more flexible: with Standard 300
+  /// at 9 players over 4 hours the solver stopped targeting ~136 BB and took a
+  /// 65 BB stack that was down to 16 BB by level three. Nothing asked for that
+  /// -- it simply became legal, and won.
+  ///
+  /// Turbo and Fast are unreachable for a different and correct reason: the
+  /// shortest duration the product offers is 3 hours, and 3 hours of play
+  /// properly wants ~110 BB. Those bands describe events this app does not
+  /// schedule. If short-format events are ever added, lower the floor WITH a
+  /// shorter duration option, not on its own.
+  ///
+  /// The ceiling did move: 240 overshot even Deep's ~200.
+  static const int kMinOpeningBBDepth = 80;
+  static const int kMaxOpeningBBDepth = 200;
+
   /// Validates [value] as a legal maxChipsPerPlayer limit. Throws an
   /// [ArgumentError] if out of range [1, 100].
   static void _validateMaxChipsPerPlayer(int value) {
@@ -607,6 +630,194 @@ class TournamentEngine {
     return score;
   }
 
+  /// Which ante style suits this tournament (§7's "system recommendation").
+  ///
+  /// The option existed in the UI but always resolved to Big Blind Ante, so it
+  /// recommended nothing -- it was a third label for the same choice.
+  ///
+  /// The real trade-off is operational, not theoretical. A big-blind ante is
+  /// one payment per hand from one player: fast, and nobody has to be chased.
+  /// An individual ante is a chip from everyone, every hand -- fairer in
+  /// principle and slower in practice, and the slowness compounds with the
+  /// number of players at the table.
+  ///
+  /// So: big-blind ante for anything but the smallest fields, individual for
+  /// short-handed games where the per-hand cost of collecting is small and the
+  /// fairness is more noticeable. Very short events skip antes entirely --
+  /// there is not enough runway for them to matter before the blinds do the
+  /// work anyway.
+  static AnteRecommendation recommendAnte({
+    required int players,
+    required double durationHours,
+  }) {
+    if (durationHours < 3.5 && players <= 6) {
+      return const AnteRecommendation(
+        enabled: false,
+        style: AnteStyle.bigBlind,
+        reason: 'A short game with a small field does not need antes — the '
+            'blinds create the pressure on their own.',
+      );
+    }
+    if (players <= 6) {
+      return const AnteRecommendation(
+        enabled: true,
+        style: AnteStyle.individual,
+        reason: 'Short-handed, so an individual ante is quick to collect and '
+            'spreads the cost evenly.',
+      );
+    }
+    return const AnteRecommendation(
+      enabled: true,
+      style: AnteStyle.bigBlind,
+      reason: 'One payment per hand from the big blind — faster at a full '
+          'table than collecting from everybody.',
+    );
+  }
+
+  /// Step 5 of the addendum's generation sequence: where the rebuy window
+  /// should actually close.
+  ///
+  /// Addendum section 6 is explicit that "Level 6 remains the UI default, not
+  /// the authoritative AI rule", and that the engine "may choose different
+  /// cutoffs for different player counts, level lengths and blind
+  /// progressions". It is equally explicit about what NOT to do: "Do not use a
+  /// fixed rule such as 'rebuys always end after two hours.'"
+  ///
+  /// So this optimises against the shape of the structure rather than the
+  /// clock. Rebuys should close while the field is still deep enough that
+  /// buying back in is worth the money — once the average stack is short, a
+  /// rebuy buys a player a few orbits and nothing more. The window lands on
+  /// the last level where a fresh starting stack is still worth at least
+  /// [_rebuyWorthwhileBB] big blinds, bounded so it can never swallow the
+  /// whole tournament or vanish to nothing.
+  ///
+  /// [requested] is the organizer's value. Section 6: "Manual organizer
+  /// changes are authoritative for that tournament", so an explicit choice is
+  /// returned untouched — only the UI default is optimised.
+  static const int _rebuyWorthwhileBB = 20;
+
+  static int optimiseRebuyCloseLevel({
+    required int requested,
+    required bool organizerChose,
+    required List<List<int>> levelBlinds,
+    required int startingStack,
+    required int plannedLevels,
+  }) {
+    if (organizerChose) return requested;
+    if (levelBlinds.isEmpty || startingStack <= 0) return requested;
+
+    // Last level at which a rebuy still buys a playable stack.
+    var viable = 1;
+    for (var i = 0; i < levelBlinds.length && i < plannedLevels; i++) {
+      final bb = levelBlinds[i][1];
+      if (bb <= 0) continue;
+      if (startingStack / bb >= _rebuyWorthwhileBB) viable = i + 1;
+    }
+
+    // Never past the halfway point -- a rebuy period covering most of the
+    // night removes the pressure the late game depends on.
+    final ceiling = math.max(2, (plannedLevels * 0.55).floor());
+    return viable.clamp(2, ceiling);
+  }
+
+  /// Plain-language explanation of the depth this structure landed on.
+  ///
+  /// Addendum section 2: "If the engine chooses an unusual depth, explain why
+  /// in plain language." Naming the style is half of it; saying why it is not
+  /// the default is the half that actually helps.
+  static String _styleNarrative({
+    required TournamentStyle style,
+    required double depth,
+    required bool inventoryLimited,
+    required double durationHours,
+  }) {
+    final rounded = depth.round();
+    final base = '${style.label} — $rounded big blinds to start, '
+        '${style.purpose}.';
+    if (style == TournamentStyle.standard) return base;
+    if (inventoryLimited) {
+      return '$base Your chips could not fund a deeper start, so the '
+          'structure opens shorter than usual.';
+    }
+    if (style == TournamentStyle.deep) {
+      return '$base Chosen because ${durationHours}h leaves room for '
+          'post-flop play.';
+    }
+    return '$base Chosen to finish near your ${durationHours}h target.';
+  }
+
+  /// Decides where scheduled breaks fall (specification section 8, and the
+  /// v11 addendum which raised the maximum from 2 to 3).
+  ///
+  /// A requested break with `afterLevel <= 0` means the organizer turned
+  /// breaks on but left the position to us. The rule:
+  ///
+  ///  * rebuys or re-entry enabled -> immediately after the rebuy window
+  ///    closes, because that is when players settle up and the field is about
+  ///    to shrink;
+  ///  * otherwise -> the structural midpoint of the planned levels, which is
+  ///    the ordinary home-game convention.
+  ///
+  /// Further automatic breaks are spread evenly through what remains, so two
+  /// breaks do not land on adjacent levels. Explicit placements are honoured
+  /// exactly as given.
+  static List<ScheduledBreak> _placeBreaks({
+    required List<ScheduledBreak> requested,
+    required int plannedLevels,
+    required bool rebuysEnabled,
+    required int rebuysCloseLevel,
+  }) {
+    if (requested.isEmpty || plannedLevels <= 1) return const [];
+
+    final capped = requested.take(kMaxScheduledBreaks).toList();
+    final placed = <ScheduledBreak>[];
+    final taken = <int>{};
+
+    // Honour explicit placements first so an automatic one cannot steal a
+    // level the organizer already chose.
+    for (final b in capped) {
+      if (b.afterLevel > 0) {
+        final level = b.afterLevel.clamp(1, plannedLevels - 1);
+        if (taken.add(level)) {
+          placed.add(b.copyWith(afterLevel: level));
+        }
+      }
+    }
+
+    final autos = capped.where((b) => b.afterLevel <= 0).toList();
+    if (autos.isNotEmpty) {
+      final midpoint = (plannedLevels / 2).round();
+      var anchor = rebuysEnabled && rebuysCloseLevel > 0
+          ? rebuysCloseLevel
+          : midpoint;
+      anchor = anchor.clamp(1, plannedLevels - 1);
+
+      for (var i = 0; i < autos.length; i++) {
+        // First automatic break takes the anchor; later ones are spread
+        // through the remaining levels rather than stacking beside it.
+        var level = i == 0
+            ? anchor
+            : (anchor + ((plannedLevels - anchor) * i / autos.length)).round();
+        level = level.clamp(1, plannedLevels - 1);
+        // Nudge off any level already used.
+        var guard = 0;
+        while (taken.contains(level) && guard < plannedLevels) {
+          level = (level + 1).clamp(1, plannedLevels - 1);
+          if (taken.contains(level) && level == plannedLevels - 1) {
+            level = (level - 1).clamp(1, plannedLevels - 1);
+          }
+          guard++;
+        }
+        if (taken.add(level)) {
+          placed.add(autos[i].copyWith(afterLevel: level));
+        }
+      }
+    }
+
+    placed.sort((a, b) => a.afterLevel - b.afterLevel);
+    return placed;
+  }
+
   /// Decides how many places get paid.
   ///
   /// Depends on BOTH the size of the field AND the prize pool (checklist
@@ -918,6 +1129,82 @@ class TournamentEngine {
         (totalAddOns * (addOnEnabled ? effectiveAddOnCost : 0));
   }
 
+  /// Several ways to split the pool, for the organizer to choose between
+  /// (specification sections 18 and 25).
+  ///
+  /// The engine's own recommendation — `_paidPlacesFor`, which weighs field
+  /// size against pool size — comes first and is the default. Around it sit
+  /// the neighbouring shapes, so a host who wants to pay one more or one fewer
+  /// place can see exactly what that costs the winner before deciding.
+  ///
+  /// Options that cannot produce a meaningful lowest prize are dropped rather
+  /// than offered: paying a fourth place 10 out of a 200 pool is worse than
+  /// not paying it.
+  static List<PayoutOption> payoutOptions(
+    int grossEligible,
+    int players,
+    int organizerPct, {
+    int roundingUnit = 10,
+  }) {
+    final recommended = recalculatePrizes(
+      grossEligible,
+      players,
+      organizerPct,
+      roundingUnit: roundingUnit,
+    );
+    final defaultPlaces = recommended.prizes.length;
+    if (defaultPlaces == 0) return const [];
+
+    // The recommendation, then one fewer, then more — capped at 5 places
+    // (section 18's own example range) and at what the field can support.
+    final candidates = <int>{
+      defaultPlaces,
+      defaultPlaces - 1,
+      defaultPlaces + 1,
+      defaultPlaces + 2,
+    }.where((n) => n >= 1 && n <= 5 && n <= players).toList()
+      ..sort();
+
+    final options = <PayoutOption>[];
+    for (final places in candidates) {
+      final r = recalculatePrizes(
+        grossEligible,
+        players,
+        organizerPct,
+        forcePaidPlaces: places,
+        roundingUnit: roundingUnit,
+      );
+      if (r.prizes.length != places) continue;
+      if (r.prizes.any((p) => p.amount <= 0)) continue;
+      // Drop shapes where the tail is meaningless. Rounding to clean amounts
+      // can leave three or more places sharing the same minimum award
+      // (measured: 90/30/10/10/10 from a 150 pool), which pays nobody
+      // anything worth collecting and is not a real alternative to offer.
+      if (places >= 3) {
+        final lowest = r.prizes.last.amount;
+        final atLowest = r.prizes.where((p) => p.amount == lowest).length;
+        if (atLowest >= 3) continue;
+      }
+      options.add(
+        PayoutOption(
+          paidPlaces: places,
+          prizes: r.prizes,
+          prizePool: r.prizePool,
+          roundingRemainder: r.roundingRemainder,
+          rationale: _payoutRationale(places, defaultPlaces),
+        ),
+      );
+    }
+    return options;
+  }
+
+  static String _payoutRationale(int places, int recommended) {
+    if (places == recommended) return 'Recommended for this field and pool';
+    if (places == 1) return 'Winner takes all';
+    if (places < recommended) return 'Top-heavy — bigger first prize';
+    return 'Flatter — more players get paid';
+  }
+
   static ({
     int organizerAmount,
     int prizePool,
@@ -1007,16 +1294,24 @@ class TournamentEngine {
     // ever generated ~3 h 09 m of levels, which both understated the finish
     // (11-030) and made play run off the end of the structure — the trigger
     // for the unconfirmed auto-extension in `nextLevel()` (11-014).
-    final playingMinutes = params.durationHours * 60;
+    //
+    // Specification section 8: break time is INSIDE the target duration, not
+    // added to it -- "target 4h = 3h40 playing + 20 min scheduled breaks". So
+    // the levels are generated against what is left after the breaks, which is
+    // what stops a 4-hour night with two breaks from actually running 4h20.
+    final scheduledBreakMins =
+        params.breaks.fold<int>(0, (a, b) => a + b.durationMins);
+    final playingMinutes =
+        math.max(60.0, params.durationHours * 60 - scheduledBreakMins);
     // Levels that actually fit the target. Everything that models PACE uses
     // this; the spare tail below is overtime insurance, not part of the plan.
     final plannedLevels = math.max(6, (playingMinutes / levelDuration).ceil());
     final numLevels = plannedLevels + _spareLevels;
 
     final targetBBDepth = math.min(
-      240,
+      kMaxOpeningBBDepth.toDouble(),
       math.max(
-        80,
+        kMinOpeningBBDepth.toDouble(),
         125 +
             28 * (params.durationHours - 3.5) -
             2.5 * math.max(0, params.players - 8),
@@ -1121,7 +1416,10 @@ class TournamentEngine {
         // `stack_aesthetics`). Try a coarse, countable grid first — 10 then 5
         // big blinds — and only fall back to single-blind steps if nothing
         // coarser fits the box.
-        final floor = (80 * bb / sb).ceil() * sb;
+        // Addendum section 2 replaced the old hard floor with style bands
+        // reaching down to Turbo (~40 BB). An 80 BB floor made Turbo and Fast
+        // unreachable no matter what the host asked for.
+        final floor = (kMinOpeningBBDepth * bb / sb).ceil() * sb;
         int? chosen;
         List<ChipPlanEntry>? chosenPlan;
         for (final step in [bb * 10, bb * 5, sb]) {
@@ -1144,7 +1442,9 @@ class TournamentEngine {
         final candidate = chosen;
 
         final depth = candidate / bb;
-        if (depth < 80 || depth > 240) continue;
+        if (depth < kMinOpeningBBDepth || depth > kMaxOpeningBBDepth) {
+          continue;
+        }
 
         // Prefer the depth closest to target; break ties toward the LARGER
         // opening blind, which needs fewer physical chips per stack (10-034,
@@ -1431,7 +1731,49 @@ class TournamentEngine {
     for (var i = 0; i < plannedLevels && i < levels.length; i++) {
       plannedMins += levels[i].durationMins;
     }
-    final expectedFinishMins = plannedMins + settlementBreakMins;
+    // `settlementBreakMins` is a DIFFERENT thing -- the post-rebuy settlement
+    // pause -- so the two are summed separately rather than conflated.
+    final expectedFinishMins =
+        plannedMins + settlementBreakMins + scheduledBreakMins;
+
+    // Resolve break placement now that the level count is known. A break
+    // carrying `afterLevel: 0` means "organizer turned breaks on but left the
+    // position to us".
+    // Step 5 of the addendum's generation sequence. Done before breaks,
+    // because the default break position hangs off where rebuys close.
+    final optimisedRebuyClose = (params.rebuys || params.reEntry)
+        ? optimiseRebuyCloseLevel(
+            requested: params.rebuysCloseLevel,
+            organizerChose: params.rebuyCloseChosenByOrganizer,
+            levelBlinds: [
+              for (final l in levels) [l.sb, l.bb],
+            ],
+            startingStack: stack,
+            plannedLevels: plannedLevels,
+          )
+        : params.rebuysCloseLevel;
+
+    final resolvedBreaks = _placeBreaks(
+      requested: params.breaks,
+      plannedLevels: plannedLevels,
+      rebuysEnabled: params.rebuys || params.reEntry,
+      rebuysCloseLevel: optimisedRebuyClose,
+    );
+
+    // Addendum section 2 — say, in plain language, what depth was chosen and
+    // why. A warning is not an explanation.
+    final openingDepthBB = levels.isNotEmpty && levels.first.bb > 0
+        ? stack / levels.first.bb
+        : 0.0;
+    final chosenStyle = TournamentStyle.fromBigBlinds(openingDepthBB);
+    final styleNote = openingDepthBB <= 0
+        ? ''
+        : _styleNarrative(
+            style: chosenStyle,
+            depth: openingDepthBB,
+            inventoryLimited: warnings.any((w) => w.contains('cannot fund')),
+            durationHours: params.durationHours,
+          );
 
     if (params.players < 4) {
       warnings.add('Very small field — consider a shorter structure.');
@@ -1443,6 +1785,9 @@ class TournamentEngine {
     }
 
     return TournamentStructure(
+      breaks: resolvedBreaks,
+      styleNote: styleNote,
+      rebuysCloseLevel: optimisedRebuyClose,
       startingStack: stack,
       chipPlan: chipPlan,
       rebuyStack: rebuyStack,

@@ -1205,7 +1205,7 @@ void _showAdminRsvpOverride(
   };
   showAppModal(
     context: context,
-    title: 'Set RSVP for ${p.name}',
+    title: p.name,
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1234,6 +1234,56 @@ void _showAdminRsvpOverride(
           },
           child: const Text('No response'),
         ),
+        // Sections 3 and 28 -- hand this ONE night to somebody else.
+        //
+        // A host who is also playing is the bottleneck on every rebuy at their
+        // own table; this is the way out of that. Scoped to this tournament:
+        // an organizer gets the live controls and this game's private money,
+        // and nothing at group level.
+        //
+        // Guests are excluded deliberately (decision D7): an organizer has to
+        // be assignable, auditable and accountable, which needs an account
+        // rather than a name in a slot.
+        if (!p.isGuest) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Divider(color: AppColors.border),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Tournament organizer',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            game.isOrganizer(p.id)
+                ? '${p.name} can run this tournament — rebuys, add-ons, '
+                      'eliminations and seating. Nothing at group level, and '
+                      'nothing in any other game.'
+                : 'Let ${p.name} run this tournament for you. They get the '
+                      'live controls for tonight only.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: game.isOrganizer(p.id)
+                ? AppButtonVariant.destructive
+                : AppButtonVariant.secondary,
+            onPressed: () {
+              app.setTournamentOrganizer(
+                p.id,
+                assigned: !game.isOrganizer(p.id),
+              );
+              Navigator.of(context).pop();
+            },
+            child: Text(
+              game.isOrganizer(p.id)
+                  ? 'Remove as organizer'
+                  : 'Make organizer for this game',
+            ),
+          ),
+        ],
       ],
     ),
   );
@@ -1288,6 +1338,12 @@ class _EditEventFormState extends State<_EditEventForm> {
   late int _anteAfterLevel;
   late final TextEditingController _orgPct;
 
+  /// Spec 7 caps organizer cost at 20%. This form edits games that already
+  /// exist, some created under the old 0-100 rule, so the ceiling is raised to
+  /// whatever the game was saved with when that is higher. An existing figure
+  /// is never silently rewritten — it can only be reduced.
+  late final int _orgPctCeiling;
+
   /// User Flow 4.5: chips may be configured "before the event or shortly
   /// before check-in closes". Until now the set was frozen at publish, so a
   /// host who found a different tray on the night had no way to tell the app.
@@ -1323,6 +1379,7 @@ class _EditEventFormState extends State<_EditEventForm> {
     _antePreference = s.antePreference;
     _anteAfterLevel = s.anteAfterLevel;
     _orgPct = TextEditingController(text: '${s.organizerPct}');
+    _orgPctCeiling = s.organizerPct > 20 ? s.organizerPct : 20;
     _chipSet = List.of(s.chipSet);
     _chipSetName = s.chipSetName;
     _expectedOverridden = s.expectedPlayersOverride != null;
@@ -1491,10 +1548,8 @@ class _EditEventFormState extends State<_EditEventForm> {
       anteStyle: _antePreference == AntePreference.individual
           ? AnteStyle.individual
           : AnteStyle.bigBlind,
-      organizerPct: (int.tryParse(_orgPct.text.trim()) ?? s.organizerPct).clamp(
-        0,
-        100,
-      ),
+      organizerPct: (int.tryParse(_orgPct.text.trim()) ?? s.organizerPct)
+          .clamp(0, _orgPctCeiling),
     );
 
     if (s.date != newDate || s.time != newTime) {
@@ -1634,8 +1689,8 @@ class _EditEventFormState extends State<_EditEventForm> {
         ),
         const SizedBox(height: AppSpacing.lg),
         _EditRow(
-          title: 'Rebuys',
-          subtitle: 'Players can re-enter after elimination',
+          title: 'Rebuys & re-entry',
+          subtitle: 'Players can buy back in after elimination',
           trailing: _SegmentedPicker(
             options: const ['Off', 'Limited', 'Unlimited'],
             selected: _rebuys
@@ -1653,6 +1708,14 @@ class _EditEventFormState extends State<_EditEventForm> {
                 _rebuyUnlimited = true;
                 _rebuysClose = 6;
               }
+              // Sections 7 and 32 make these one toggle, but this form edits
+              // games that ALREADY EXIST. Turning the pair off turns both off;
+              // turning it on does NOT retroactively enable re-entry on a game
+              // that was deliberately created without it, because that would
+              // change the engine's chip projection and unlock a live action
+              // the host never agreed to. Re-entry follows only when it is
+              // being switched off, or when it was already on.
+              if (!_rebuys) _reEntry = false;
             }),
           ),
         ),
@@ -1699,13 +1762,21 @@ class _EditEventFormState extends State<_EditEventForm> {
             ),
           ),
         const SizedBox(height: AppSpacing.sm),
-        _ToggleRow(
-          title: 'Re-entry',
-          subtitle: 'Separate option — buy a new entry stack after elimination',
-          value: _reEntry,
-          onChanged: (v) => setState(() => _reEntry = v),
-        ),
-        const SizedBox(height: AppSpacing.sm),
+        // The standalone "Re-entry" switch was removed: sections 7 and 32 make
+        // rebuy and re-entry a single ON/OFF. A game created before that
+        // change keeps whatever it was stored with -- the control above only
+        // clears re-entry when the pair is switched off.
+        if (_rebuys && !_reEntry)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Text(
+              'This game was set up with rebuys but without re-entry. '
+              'That is kept as it is.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
         _EditRow(
           title: 'Add-on',
           subtitle: 'One per active player at rebuy close',
@@ -1818,14 +1889,16 @@ class _EditEventFormState extends State<_EditEventForm> {
         const SizedBox(height: AppSpacing.sm),
         _EditRow(
           title: 'Organizational costs',
-          subtitle: 'Percentage (%) — admin only, never shown to players',
-          trailing: SizedBox(
-            width: 90,
-            child: AppTextField(
-              controller: _orgPct,
-              label: '%',
-              keyboardType: TextInputType.number,
-            ),
+          // Spec 7 and 18 fix this wording; spec 32 forbids calling it a rake.
+          subtitle: 'Percentage retained for equipment, drinks & snacks — '
+              'admin only, never shown to players',
+          trailing: CountStepper(
+            value: int.tryParse(_orgPct.text.trim()) ?? 0,
+            min: 0,
+            max: _orgPctCeiling,
+            suffix: '%',
+            semanticLabel: 'Organizational costs percentage',
+            onChanged: (v) => setState(() => _orgPct.text = '$v'),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -2252,6 +2325,13 @@ class _ContextualMainButton extends StatelessWidget {
             size: AppButtonSize.xl,
             onPressed: () => context.go(RoutePaths.rebuySettlement),
             child: const Text('Complete Rebuy & Add-on Break'),
+          );
+        case LiveGameStatus.onBreak:
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            onPressed: () => context.go(RoutePaths.adminDashboard),
+            child: const Text('Manage Tournament'),
           );
         case LiveGameStatus.completed:
           return AppButton(

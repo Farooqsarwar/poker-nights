@@ -277,12 +277,19 @@ class _LandingScreenState extends State<LandingScreen> {
             spacing: AppSpacing.lg,
             runSpacing: AppSpacing.sm,
             children: [
-              for (final l in ['Privacy Policy', 'Terms of Service', 'Support'])
+              for (final l in [
+                'Free Tools',
+                'Privacy Policy',
+                'Terms of Service',
+                'Support',
+              ])
                 Padding(
                   padding: const EdgeInsets.only(left: AppSpacing.lg),
                   child: InkWell(
                     onTap: () {
-                      if (l == 'Privacy Policy') {
+                      if (l == 'Free Tools') {
+                        context.go(RoutePaths.tools);
+                      } else if (l == 'Privacy Policy') {
                         context.go(RoutePaths.privacy);
                       } else if (l == 'Terms of Service') {
                         context.go(RoutePaths.terms);

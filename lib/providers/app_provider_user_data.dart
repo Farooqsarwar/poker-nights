@@ -18,6 +18,11 @@ extension AppProviderUserData on AppProvider {
       if (!bootstrap.isCompleted) bootstrap.complete();
     }
 
+    // Addendum §3's free hosting tier. Loaded alongside the rest of the
+    // user's data so the check-in and seating gates have it before anybody
+    // reaches them.
+    loadPremiumTier();
+
     _groupsSub?.cancel();
     _groupsSub = _repo.groupsIndexStream(uid).listen((rows) {
       // Rebuild from the lightweight index, but keep the already-loaded rich

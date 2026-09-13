@@ -25,7 +25,11 @@ import '../../widgets/app_toggle.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/chip_token.dart';
+import '../../services/entitlements.dart';
+import '../../services/payment_service.dart';
 import '../../widgets/count_stepper.dart';
+import '../../widgets/glass_styles.dart';
+import '../../widgets/premium_gate.dart';
 
 enum _ChipMode { preset, quick, exact }
 
@@ -205,9 +209,25 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   int _rebuysClose = 6;
   final _rebuyLimit = TextEditingController(text: '1');
   final _rebuyCost = TextEditingController();
-  bool _reEntry = false;
+  /// Moves with [_rebuys] -- sections 7 and 32 make them one toggle. Kept as
+  /// its own field because it is still stored, still gates the re-entry live
+  /// action, and still feeds the engine's expected-chip projection.
+  bool _reEntry = true;
   bool _addOn = true;
   int _addOnClose = 6;
+
+  /// Scheduled breaks (specification section 8; v11 addendum raised the
+  /// maximum to 3). Empty means OFF. `afterLevel: 0` means "you choose" —
+  /// the engine places it after the rebuy window, or at the structural
+  /// midpoint when rebuys are off.
+  /// Addendum section 3: free hosting covers one table, up to nine players.
+  /// Read once on load; the gate below is a visible limit and an upgrade
+  /// path, NOT enforcement -- section 7 and acceptance criterion 12 put real
+  /// Premium authorization on the server, which does not exist yet.
+  PremiumTier _tier = PremiumTier.free;
+
+  List<ScheduledBreak> _breaks = const [];
+  bool get _breaksOn => _breaks.isNotEmpty;
   final _addOnCost = TextEditingController();
   bool _koEnabled = false;
   final _koAmount = TextEditingController(text: '5');
@@ -221,14 +241,37 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   bool _randomizeSeating = false;
   // Spec §4.3 Step 2: 'none' means no ante at all; 'individual' means a
   // fixed chip per player; 'recommend'/'bigBlind' means BB-ante style.
+  /// §7's "system recommendation", resolved from the actual tournament.
+  ///
+  /// This used to map straight to Big Blind Ante, which made "Recommended" a
+  /// third label for the same choice rather than a recommendation.
+  AnteRecommendation get _anteAdvice => TournamentEngine.recommendAnte(
+        players: _expectedPlayers,
+        durationHours: _duration,
+      );
+
   AnteStyle get _anteStyle => switch (_antePreference) {
-    AntePreference.recommend || AntePreference.bigBlind => AnteStyle.bigBlind,
+    AntePreference.recommend => _anteAdvice.style,
+    AntePreference.bigBlind => AnteStyle.bigBlind,
     AntePreference.individual => AnteStyle.individual,
     AntePreference.none => AnteStyle.individual, // disabled by _anteEnabled=false
   };
-  bool get _anteEnabled => _antePreference != AntePreference.none;
-  final _orgPctController = TextEditingController(text: '0');
+  bool get _anteEnabled => _antePreference == AntePreference.recommend
+      ? _anteAdvice.enabled
+      : _antePreference != AntePreference.none;
+  // Spec 7 and 18: organizer cost defaults to 10%, is capped at 20%, and is
+  // adjusted with a +/- stepper rather than typed. The controller stays the
+  // source of truth so `_applyPreset`, validation and dispose are unchanged;
+  // the stepper just writes through it.
+  final _orgPctController = TextEditingController(text: '10');
   int get _orgPct => int.tryParse(_orgPctController.text.trim()) ?? 0;
+
+  /// Spec 7's 20% cap, raised only far enough to hold a legacy value the form
+  /// was loaded with (see `_applyPreset`).
+  static const int kOrganizerPctMax = 20;
+  int _orgPctLoadedCeiling = kOrganizerPctMax;
+  int get _orgPctCeiling =>
+      _orgPct > _orgPctLoadedCeiling ? _orgPct : _orgPctLoadedCeiling;
 
   // Preset support (checklist §9.1). Tech spec §6.2: before starting from
   // zero, saved presets close to the current base inputs are suggested.
@@ -300,6 +343,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
       _derivedExpectedPlayers = expected < 2 ? 2 : expected;
       if (!_expectedOverridden) _expectedPlayers = _derivedExpectedPlayers;
+
+      MockPaymentService().currentTier().then((t) {
+        if (mounted) setState(() => _tier = t);
+      });
 
       if (widget.presetId != null) {
         final preset = app.presetById(widget.presetId);
@@ -373,6 +420,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     _reEntry = p.reEntry;
     _addOn = p.addOn;
     _addOnClose = p.addOnCloseLevel;
+    _breaks = List.of(p.breaks);
     _addOnCost.text = p.addOnCost?.toString() ?? '';
     _koEnabled = p.koEnabled;
     _koAmount.text = p.koAmount.toString();
@@ -381,6 +429,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         : AntePreference.none;
     _anteAfterLevel = p.anteAfterLevel;
     _orgPctController.text = p.organizerPct.toString();
+    if (p.organizerPct > kOrganizerPctMax) {
+      _orgPctLoadedCeiling = p.organizerPct;
+    }
     _chipSet = List.of(p.chipSet);
     if (TournamentEngine.presetNames.contains(p.chipSetName)) {
       _chipMode = _ChipMode.preset;
@@ -484,8 +535,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     }
 
     final orgPct = num.tryParse(_orgPctController.text)?.toInt();
-    if (orgPct == null || orgPct < 0 || orgPct > 100) {
-      _errors['orgPct'] = 'Must be 0-100';
+    // Spec 7 caps this at 20%. A preset created under the old 0-100 rule may
+    // still carry a higher figure, so the ceiling is whatever the form was
+    // loaded with when that exceeds 20 — an existing value is never silently
+    // rewritten, it can only be reduced.
+    if (orgPct == null || orgPct < 0 || orgPct > _orgPctCeiling) {
+      _errors['orgPct'] = 'Must be 0-$_orgPctCeiling';
     }
 
     setState(() {});
@@ -570,15 +625,21 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ],
         ruleRows: <_ConfirmItem>[
           _ConfirmItem(
-            'Rebuys',
+            'Rebuys & re-entry',
             _rebuys
                 ? (_rebuyUnlimited
                       ? 'Unlimited to L$_rebuysClose'
                       : 'Limited to L$_rebuysClose')
                 : 'Off',
           ),
-          _ConfirmItem('Re-entry', _reEntry ? 'Yes' : 'No'),
+
           _ConfirmItem('Add-on', _addOn ? 'Yes, to L$_addOnClose' : 'No'),
+          _ConfirmItem(
+            'Breaks',
+            _breaksOn
+                ? '${_breaks.length} x ${_breaks.first.durationMins} min'
+                : 'None',
+          ),
           _ConfirmItem('Bounty', _koEnabled ? 'Yes (${_koAmount.text})' : 'No'),
           _ConfirmItem(
             'Ante',
@@ -696,6 +757,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         reEntry: _reEntry,
         addOn: _addOn,
         addOnCloseLevel: _addOnClose,
+        breaks: _breaks,
         addOnCost: num.tryParse(_addOnCost.text)?.toInt(),
         anteEnabled: _anteEnabled,
         anteAfterLevel: _anteAfterLevel,
@@ -862,6 +924,54 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     );
   }
 
+  /// Reads the start time, falling back to a sensible evening default when
+  /// the field is empty or malformed.
+  TimeOfDay get _startTime {
+    final parts = _time.text.split(':');
+    if (parts.length == 2) {
+      final h = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      if (h != null && m != null && h >= 0 && h < 24 && m >= 0 && m < 60) {
+        return TimeOfDay(hour: h, minute: m);
+      }
+    }
+    return const TimeOfDay(hour: 20, minute: 0);
+  }
+
+  void _setStartTime(AppProvider app, TimeOfDay t) {
+    final h = t.hour.toString().padLeft(2, '0');
+    final m = t.minute.toString().padLeft(2, '0');
+    setState(() => _time.text = '$h:$m');
+    _refreshPresetMatches(app);
+  }
+
+  /// Section 7's +/- 30 minute stepper.
+  ///
+  /// Moving from an odd minute snaps to the half hour first, so a time typed
+  /// as 20:12 becomes 20:30 rather than 20:42 — the stepper is there to land
+  /// on round times, not to preserve arbitrary ones.
+  void _nudgeStartTime(AppProvider app, int deltaMins) {
+    final now = _startTime;
+    final total = now.hour * 60 + now.minute;
+    final snapped = deltaMins > 0
+        ? ((total ~/ 30) + 1) * 30
+        : ((total + 29) ~/ 30 - 1) * 30;
+    final wrapped = ((snapped % (24 * 60)) + 24 * 60) % (24 * 60);
+    _setStartTime(
+      app,
+      TimeOfDay(hour: wrapped ~/ 60, minute: wrapped % 60),
+    );
+  }
+
+  Future<void> _pickStartTime(AppProvider app) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime,
+      builder: _centerDialog,
+    );
+    if (picked != null && mounted) _setStartTime(app, picked);
+  }
+
   Widget _buildStep1(AppProvider app) {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -907,37 +1017,74 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
+              // Section 7: "Start time — centered premium control; +/- 30
+              // minute stepper." A clock picker makes the host set minutes
+              // nobody uses; home games start on the hour or the half hour.
+              // Tapping the time still opens the full picker for the rare
+              // 20:15 start, so nothing is lost.
               Expanded(
-                child: GestureDetector(
-                  onTap: () async {
-                    final parts = _time.text.split(':');
-                    var initialTime = TimeOfDay.now();
-                    if (parts.length == 2) {
-                      final h = int.tryParse(parts[0]);
-                      final m = int.tryParse(parts[1]);
-                      if (h != null && m != null) {
-                        initialTime = TimeOfDay(hour: h, minute: m);
-                      }
-                    }
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: initialTime,
-                      builder: _centerDialog,
-                    );
-                    if (picked != null) {
-                      final h = picked.hour.toString().padLeft(2, '0');
-                      final m = picked.minute.toString().padLeft(2, '0');
-                      setState(() => _time.text = '$h:$m');
-                      _refreshPresetMatches(app);
-                    }
-                  },
-                  child: AbsorbPointer(
-                    child: AppTextField(
-                      controller: _time,
-                      label: 'Start time',
-                      readOnly: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Start time',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Glass.solidTint(AppColors.secondary),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            tooltip: '30 minutes earlier',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _nudgeStartTime(app, -30),
+                            icon: Icon(
+                              Icons.remove,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => _pickStartTime(app),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.sm,
+                                ),
+                                child: Text(
+                                  _time.text.isEmpty ? '--:--' : _time.text,
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.display(
+                                    size: AppFontSizes.lg,
+                                    weight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '30 minutes later',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _nudgeStartTime(app, 30),
+                            icon: Icon(
+                              Icons.add,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1027,6 +1174,44 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               ),
             ],
           ),
+          if (Entitlements.hostingBlockedReason(_tier, _expectedPlayers)
+              case final blocked?) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.workspace_premium,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      blocked,
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.foreground,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    onPressed: () => context.push(RoutePaths.upgrade),
+                    child: const Text('See Premium'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (_expectedOverridden) ...[
             const SizedBox(height: AppSpacing.xs),
             Align(
@@ -1622,7 +1807,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Players can re-enter after elimination',
+                  'Players can buy back in after elimination',
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
                   ),
@@ -1646,6 +1831,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     _rebuyUnlimited = true;
                     _rebuysClose = 6;
                   }
+                  // Specification sections 7 and 32: "Rebuy/re-entry is one
+                  // toggle." They were two independent switches, so a host
+                  // could enable rebuys and be surprised that re-entry was a
+                  // separate thing they had missed. `reEntry` stays a stored
+                  // field -- it still gates its own live action and feeds the
+                  // engine's chip projection -- it just no longer has a
+                  // control of its own.
+                  _reEntry = _rebuys;
                   // §6.2: rule edits refresh the suggested presets.
                   _refreshPresetMatches(app);
                 }),
@@ -1740,13 +1933,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             ),
           ],
           Divider(color: AppColors.border),
-          _ToggleRow(
-            title: 'Re-entry',
-            subtitle:
-                'Separate option — buy a new entry stack after elimination',
-            value: _reEntry,
-            onChanged: (v) => setState(() => _reEntry = v),
-          ),
+          // The standalone "Re-entry" switch was removed here: sections 7 and
+          // 32 make rebuy and re-entry a single ON/OFF, and the control above
+          // now sets both.
           if (_reEntry)
             Padding(
               padding: const EdgeInsets.only(
@@ -1761,6 +1950,202 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
               ),
             ),
+          Divider(color: AppColors.border),
+          // Section 8 — breaks are a dedicated setup section, and their
+          // minutes come out of the target duration rather than being added
+          // on top of it.
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Breaks',
+                            style: AppTypography.bodySm.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _breaksOn
+                                ? 'Break time comes out of your $_durationLabel '
+                                      'target, not on top of it.'
+                                : 'Scheduled pauses built into the structure.',
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    _SegmentedPicker(
+                      options: const ['Off', '1', '2', '3'],
+                      selected: _breaksOn ? '${_breaks.length}' : 'Off',
+                      onChanged: (v) => setState(() {
+                        if (v == 'Off') {
+                          _breaks = const [];
+                          return;
+                        }
+                        final count = int.parse(v);
+                        final mins = _breaksOn
+                            ? _breaks.first.durationMins
+                            : 10;
+                        // afterLevel 0 asks the engine to place it: after the
+                        // rebuy window, or the midpoint when rebuys are off.
+                        _breaks = List.generate(
+                          count,
+                          (i) => i < _breaks.length
+                              ? _breaks[i]
+                              : ScheduledBreak(
+                                  afterLevel: 0,
+                                  durationMins: mins,
+                                ),
+                        );
+                      }),
+                    ),
+                  ],
+                ),
+                if (_breaksOn) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  // Section 8: each break carries its own placement and
+                  // duration, presets PLUS custom. One row per break so a
+                  // three-break night can put them where it wants.
+                  for (var i = 0; i < _breaks.length; i++) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: Container(
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: Glass.solidTint(AppColors.secondary),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Break ${i + 1}',
+                              style: AppTypography.bodyXs.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.foreground,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Row(
+                              children: [
+                                Text(
+                                  'After level',
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                CountStepper(
+                                  // 0 means "you choose" — the engine places
+                                  // it after the rebuy window, or at the
+                                  // midpoint when rebuys are off.
+                                  value: _breaks[i].afterLevel,
+                                  min: 0,
+                                  max: 30,
+                                  semanticLabel: 'Break ${i + 1} after level',
+                                  onChanged: (v) => setState(() {
+                                    _breaks = [
+                                      for (var j = 0; j < _breaks.length; j++)
+                                        j == i
+                                            ? _breaks[j].copyWith(afterLevel: v)
+                                            : _breaks[j],
+                                    ];
+                                  }),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                if (_breaks[i].afterLevel == 0)
+                                  Expanded(
+                                    child: Text(
+                                      'Auto',
+                                      style: AppTypography.bodyXs.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Row(
+                              children: [
+                                Text(
+                                  'Minutes',
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                _SegmentedPicker(
+                                  // Section 8's presets, plus Custom — which
+                                  // simply hands the stepper below any value.
+                                  options: const ['5', '10', '15', '20'],
+                                  selected: kBreakDurationPresets
+                                          .contains(_breaks[i].durationMins)
+                                      ? '${_breaks[i].durationMins}'
+                                      : '',
+                                  onChanged: (v) => setState(() {
+                                    final mins = int.parse(v);
+                                    _breaks = [
+                                      for (var j = 0; j < _breaks.length; j++)
+                                        j == i
+                                            ? _breaks[j]
+                                                .copyWith(durationMins: mins)
+                                            : _breaks[j],
+                                    ];
+                                  }),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                CountStepper(
+                                  value: _breaks[i].durationMins,
+                                  min: 1,
+                                  max: 60,
+                                  step: 1,
+                                  semanticLabel: 'Break ${i + 1} minutes',
+                                  onChanged: (v) => setState(() {
+                                    _breaks = [
+                                      for (var j = 0; j < _breaks.length; j++)
+                                        j == i
+                                            ? _breaks[j]
+                                                .copyWith(durationMins: v)
+                                            : _breaks[j],
+                                    ];
+                                  }),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  Text(
+                    _breaks.every((b) => b.afterLevel > 0)
+                        ? 'Placed exactly where you have chosen.'
+                        : _rebuys
+                            ? 'Anything left on Auto goes after the rebuy '
+                                  'window closes (around L$_rebuysClose).'
+                            : 'Anything left on Auto goes around the middle '
+                                  'of the tournament.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
           Divider(color: AppColors.border),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -1869,10 +2254,18 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     ],
                   ),
                 ),
-                _SegmentedPicker(
-                  options: const ['Yes', 'No'],
-                  selected: _koEnabled ? 'Yes' : 'No',
-                  onChanged: (v) => setState(() => _koEnabled = v == 'Yes'),
+                // Addendum §3 lists "Advanced payout/ICM functionality and
+                // KO/PKO" under Premium. Locked rather than hidden -- a host
+                // should see the setting exists, otherwise the product looks
+                // smaller than it is and the upgrade is harder to want.
+                PremiumLock(
+                  tier: _tier,
+                  feature: PremiumFeature.advancedPayoutsAndIcm,
+                  child: _SegmentedPicker(
+                    options: const ['Yes', 'No'],
+                    selected: _koEnabled ? 'Yes' : 'No',
+                    onChanged: (v) => setState(() => _koEnabled = v == 'Yes'),
+                  ),
                 ),
               ],
             ),
@@ -1986,6 +2379,17 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 const SizedBox(height: AppSpacing.sm),
                 Column(
                   children: [
+                    if (_antePreference == AntePreference.recommend) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: Text(
+                          '${_anteAdvice.label} — ${_anteAdvice.reason}',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                     Row(
                       children: [
                         Expanded(
@@ -2083,22 +2487,50 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
               ),
               const SizedBox(height: 2),
+              // Spec 7 and 18 fix this wording exactly, and spec 32 lists it
+              // as a term that must not drift — it is never called a rake.
               Text(
-                'Percentage for equipment, drinks & snacks. Admin only — never shown to players.',
+                'Percentage retained for equipment, drinks & snacks. '
+                'Admin only — never shown to players.',
                 style: AppTypography.bodyXs.copyWith(
                   color: AppColors.mutedForeground,
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              SizedBox(
-                width: 130,
-                child: AppTextField(
-                  controller: _orgPctController,
-                  keyboardType: TextInputType.number,
-                  label: 'Percentage (%)',
-                  error: _errors['orgPct'],
-                ),
+              Row(
+                children: [
+                  CountStepper(
+                    value: _orgPct,
+                    min: 0,
+                    max: _orgPctCeiling,
+                    suffix: '%',
+                    semanticLabel: 'Organizational costs percentage',
+                    onChanged: (v) => setState(() {
+                      _orgPctController.text = '$v';
+                      _errors.remove('orgPct');
+                    }),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  if (_orgPct == 0)
+                    Expanded(
+                      child: Text(
+                        'Off — the whole pool goes to the players.',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ),
+                ],
               ),
+              if (_errors['orgPct'] != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  _errors['orgPct']!,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.destructive,
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'Private — the prize pool keeps the remaining percentage of gross.',

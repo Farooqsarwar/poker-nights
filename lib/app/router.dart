@@ -27,6 +27,8 @@ import '../screens/shell/profile_screen.dart';
 import '../screens/shell/settings_screen.dart';
 import '../screens/shell/stats_screen.dart';
 import '../screens/shell/chip_sets_screen.dart';
+import '../screens/premium/checkout_screen.dart';
+import '../screens/premium/upgrade_screen.dart';
 import '../screens/shell/edit_chip_set_screen.dart';
 import '../screens/shell/presets_screen.dart';
 import '../screens/tournament/admin_dashboard_screen.dart';
@@ -355,6 +357,23 @@ GoRouter buildAppRouter(AppProvider app) {
     GoRoute(
       path: RoutePaths.settings,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const SettingsScreen(), path: RoutePaths.settings)),
+    ),
+    GoRoute(
+      path: RoutePaths.upgrade,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(const UpgradeScreen(), path: RoutePaths.upgrade),
+      ),
+    ),
+    GoRoute(
+      path: RoutePaths.checkout,
+      pageBuilder: (context, state) => NoTransitionPage(
+        key: ValueKey(state.uri.path),
+        child: shell(
+          CheckoutScreen(planId: state.extra as String?),
+          path: RoutePaths.checkout,
+        ),
+      ),
     ),
     GoRoute(
       path: RoutePaths.stats,

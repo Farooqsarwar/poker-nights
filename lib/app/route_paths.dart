@@ -52,4 +52,8 @@ abstract final class RoutePaths {
   static const String chipSets = '/chip-sets';
   static const String editChipSet = '/edit-chip-set';
   static const String presets = '/presets';
+
+  // Premium (specification v11 section 3).
+  static const String upgrade = '/upgrade';
+  static const String checkout = '/checkout';
 }

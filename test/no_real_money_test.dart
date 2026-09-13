@@ -122,18 +122,38 @@ void main() {
       expect(source, contains("bool.fromEnvironment('DEMO_PREMIUM'"));
     });
 
-    test('the deploy script switches it off', () {
+    test('the deploy script makes a deliberate, documented choice', () {
       final deploy = File('deploy.ps1');
       if (!deploy.existsSync()) {
         // Gitignored: it carries a secret. Skip rather than fail on a machine
         // that does not have it.
         return;
       }
+      final source = deploy.readAsStringSync();
       expect(
-        deploy.readAsStringSync(),
-        contains('DEMO_PREMIUM=false'),
-        reason: 'the shipped build must not accept a device-local Premium flag',
+        RegExp('DEMO_PREMIUM=(true|false)').hasMatch(source),
+        isTrue,
+        reason: 'the flag must be set explicitly, never left to the default',
       );
+
+      // It is currently TRUE, on purpose: the client asked for a working
+      // dummy checkout, and a flag of false makes paying grant nothing on the
+      // deployed site. That is a product decision, not an oversight, so the
+      // reasoning has to be written where the next person will read it.
+      if (source.contains('DEMO_PREMIUM=true')) {
+        expect(
+          source,
+          contains('not a security boundary'),
+          reason: 'if the deployed build accepts a device-local Premium flag, '
+              'the script must say so and say why -- otherwise the free-tier '
+              'limit looks enforced when it is not',
+        );
+        expect(
+          source,
+          contains('the day billing is connected'),
+          reason: 'and must name the condition under which it flips back',
+        );
+      }
     });
   });
 }

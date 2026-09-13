@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
+import '../../providers/app_provider.dart';
 import '../../services/payment_service.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -36,11 +38,18 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     _load();
   }
 
+  /// Re-resolves the tier through the provider.
+  ///
+  /// Deliberately NOT `_payments.currentTier()`. The device-local mock is only
+  /// one of two sources -- a server-held entitlement also grants Premium, and
+  /// a build with DEMO_PREMIUM=false ignores the local one entirely. Asking
+  /// the mock directly gives an answer the rest of the app disagrees with.
   Future<void> _load() async {
-    final tier = await _payments.currentTier();
+    final app = context.read<AppProvider>();
+    await app.loadPremiumTier();
     if (!mounted) return;
     setState(() {
-      _tier = tier;
+      _tier = app.premiumTier;
       _loading = false;
     });
   }
@@ -113,13 +122,17 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             child: TextButton(
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
-                await _payments.restore();
+                final found = await _payments.restore();
                 if (!mounted) return;
                 await _load();
                 if (!mounted) return;
                 messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('No previous purchase found on this device.'),
+                  SnackBar(
+                    content: Text(
+                      found == PremiumTier.premium
+                          ? 'Premium restored on this device.'
+                          : 'No previous purchase found on this device.',
+                    ),
                   ),
                 );
               },

@@ -61,14 +61,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
   /// Addendum section 3's free hosting limit. Read once; the notice below is
   /// a visible limit and an upgrade path, not enforcement -- section 7 puts
   /// real Premium authorization on a server that does not exist yet.
-  PremiumTier _tier = PremiumTier.free;
 
   @override
   void initState() {
     super.initState();
-    MockPaymentService().currentTier().then((t) {
-      if (mounted) setState(() => _tier = t);
-    });
   }
 
   /// The checked-in count the split prompt was last shown/dismissed for, so
@@ -389,7 +385,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
           // core tournament operation free, and refusing to check somebody in
           // at the table would be a worse product than telling the host their
           // night now needs two tables.
-          if (Entitlements.hostingBlockedReason(_tier, checkedIn.length)
+          // Read live rather than cached: the user can upgrade from the
+          // button below this gate, and on returning the gate must be
+          // gone. A tier snapshotted in initState would still say Free.
+          if (Entitlements.hostingBlockedReason(
+                    app.premiumTier,
+                    checkedIn.length,
+                  )
               case final blocked?) ...[
             const SizedBox(height: AppSpacing.lg),
             Container(

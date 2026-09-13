@@ -87,7 +87,14 @@ class PaymentResult {
 abstract class PaymentService {
   Future<PremiumTier> currentTier();
   Future<PaymentResult> purchase(PremiumPlan plan);
-  Future<void> restore();
+
+  /// Re-checks for an existing entitlement and returns what was found.
+  ///
+  /// Returning the tier rather than void is what lets the caller say
+  /// something true afterwards. A restore that always reports "nothing
+  /// found" while the user is sitting on a valid entitlement is worse
+  /// than no restore button at all.
+  Future<PremiumTier> restore();
   Future<void> cancel();
 }
 
@@ -148,8 +155,9 @@ class MockPaymentService implements PaymentService {
   }
 
   @override
-  Future<void> restore() async {
+  Future<PremiumTier> restore() async {
     await Future<void>.delayed(latency);
+    return currentTier();
   }
 
   @override

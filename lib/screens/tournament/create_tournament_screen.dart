@@ -26,7 +26,6 @@ import '../../widgets/app_badge.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/chip_token.dart';
 import '../../services/entitlements.dart';
-import '../../services/payment_service.dart';
 import '../../widgets/count_stepper.dart';
 import '../../widgets/glass_styles.dart';
 import '../../widgets/premium_gate.dart';
@@ -224,7 +223,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   /// Read once on load; the gate below is a visible limit and an upgrade
   /// path, NOT enforcement -- section 7 and acceptance criterion 12 put real
   /// Premium authorization on the server, which does not exist yet.
-  PremiumTier _tier = PremiumTier.free;
 
   List<ScheduledBreak> _breaks = const [];
   bool get _breaksOn => _breaks.isNotEmpty;
@@ -344,9 +342,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       _derivedExpectedPlayers = expected < 2 ? 2 : expected;
       if (!_expectedOverridden) _expectedPlayers = _derivedExpectedPlayers;
 
-      MockPaymentService().currentTier().then((t) {
-        if (mounted) setState(() => _tier = t);
-      });
 
       if (widget.presetId != null) {
         final preset = app.presetById(widget.presetId);
@@ -1174,7 +1169,11 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               ),
             ],
           ),
-          if (Entitlements.hostingBlockedReason(_tier, _expectedPlayers)
+          // Live, not cached -- see check_in_screen.
+          if (Entitlements.hostingBlockedReason(
+                    context.watch<AppProvider>().premiumTier,
+                    _expectedPlayers,
+                  )
               case final blocked?) ...[
             const SizedBox(height: AppSpacing.sm),
             Container(
@@ -2259,7 +2258,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 // should see the setting exists, otherwise the product looks
                 // smaller than it is and the upgrade is harder to want.
                 PremiumLock(
-                  tier: _tier,
+                  tier: context.watch<AppProvider>().premiumTier,
                   feature: PremiumFeature.advancedPayoutsAndIcm,
                   child: _SegmentedPicker(
                     options: const ['Yes', 'No'],

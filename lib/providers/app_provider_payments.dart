@@ -105,14 +105,6 @@ extension AppProviderPayments on AppProvider {
     return record;
   }
 
-  /// Every payment on file for a player, newest first.
-  List<PaymentRecord> paymentsFor(String playerId) {
-    final game = _currentGame;
-    if (game == null) return const [];
-    return game.payments.where((p) => p.playerId == playerId).toList()
-      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-  }
-
   /// Whether this player still owes their entry.
   bool owesBuyIn(String playerId) {
     final game = _currentGame;

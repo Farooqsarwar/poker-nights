@@ -4,6 +4,7 @@ import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/live_game.dart';
+import '../models/game.dart';
 import '../models/payment_record.dart';
 import 'app_card.dart';
 import 'glass_styles.dart';
@@ -28,12 +29,19 @@ class PaymentLedgerCard extends StatelessWidget {
     required this.inPlay,
     required this.collected,
     required this.outstanding,
+    this.unpaid = const [],
   });
 
   final LiveGame game;
   final int inPlay;
   final int collected;
   final int outstanding;
+
+  /// Checked-in players who have not settled their entry.
+  ///
+  /// The reconciliation total says how much is missing; this says who to ask.
+  /// A host standing at the table needs the second one.
+  final List<Player> unpaid;
 
   @override
   Widget build(BuildContext context) {
@@ -101,6 +109,51 @@ class PaymentLedgerCard extends StatelessWidget {
                 style: AppTypography.bodyXs.copyWith(
                   color: AppColors.foreground,
                 ),
+              ),
+            ),
+          ],
+          if (unpaid.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Not settled yet',
+              style: AppTypography.bodyXs.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final p in unpaid)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      border: Border.all(
+                        color: AppColors.warning.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Text(
+                      p.name,
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.foreground,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Checked in, entry not recorded. Cash at the table is fine -- '
+              'this only tracks what the app has been told.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
               ),
             ),
           ],

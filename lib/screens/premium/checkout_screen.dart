@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
+import '../../providers/app_provider.dart';
 import '../../services/payment_service.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -85,6 +87,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() => _processing = true);
     final result = await _payments.purchase(_plan);
     if (!mounted) return;
+    // Re-resolve the tier rather than assuming it changed. The device-local
+    // demo entitlement is only one of two sources, and in a build with
+    // DEMO_PREMIUM=false it grants nothing at all -- so the only honest way to
+    // know what the user now has is to ask.
+    if (result.succeeded) {
+      await context.read<AppProvider>().loadPremiumTier();
+      if (!mounted) return;
+    }
     setState(() {
       _processing = false;
       _result = result;
@@ -286,6 +296,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _success() {
+    // Whether anything actually unlocked. Saying "You are Premium" over a
+    // build that grants nothing is the kind of small lie that costs a
+    // demo its credibility the moment somebody taps through to the feature.
+    final granted =
+        context.watch<AppProvider>().premiumTier == PremiumTier.premium;
     return AppPage(
       maxWidth: 480,
       child: Column(
@@ -297,14 +312,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             height: 64,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: Glass.solidTint(AppColors.success),
+              color: Glass.solidTint(
+                granted ? AppColors.success : AppColors.warning,
+              ),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.check, size: 32, color: AppColors.success),
+            child: Icon(
+              granted ? Icons.check : Icons.science_outlined,
+              size: 32,
+              color: granted ? AppColors.success : AppColors.warning,
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'You are Premium',
+            granted ? 'You are Premium' : 'Checkout complete',
             textAlign: TextAlign.center,
             style: AppTypography.display(
               size: AppFontSizes.xxl,
@@ -313,8 +334,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Multi-table tournaments, AI-optimised structures and the advanced '
-            'tooling are unlocked on this device.',
+            granted
+                ? 'Multi-table tournaments, AI-optimised structures and the '
+                    'advanced tooling are unlocked on this device.'
+                : 'This is the checkout flow as it will work once billing is '
+                    'connected. Nothing was charged and Premium has not been '
+                    'granted -- on this build only a server-held entitlement '
+                    'can do that.',
             textAlign: TextAlign.center,
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,

@@ -960,6 +960,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         inPlay: r.inPlay,
                                         collected: r.collected,
                                         outstanding: r.outstanding,
+                                        unpaid: app.unpaidPlayers,
                                       );
                                     },
                                   ),

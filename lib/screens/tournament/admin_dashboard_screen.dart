@@ -30,6 +30,7 @@ import '../../widgets/medal_icon.dart';
 import '../../widgets/structure_editor.dart';
 import '../../models/payment_record.dart';
 import '../../widgets/dummy_payment_sheet.dart';
+import '../../widgets/payment_ledger_card.dart';
 
 /// Admin live dashboard mirroring the web `AdminDashboardPage`.
 class AdminDashboardScreen extends StatefulWidget {
@@ -924,7 +925,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 ),
                               if (_tab == 'seating')
                                 _SeatingTab(players: activePlayers),
-                              if (_tab == 'prize')
+                              if (_tab == 'prize') ...[
                                 _PrizeTab(
                                   structure: structure,
                                   settings: settings,
@@ -938,6 +939,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       !game.timerRunning &&
                                       game.secondsRemaining == 0,
                                 ),
+                                // Host only. `projectionFor` strips payments
+                                // for every non-admin role, so this can never
+                                // reach a player screen -- but it lives on the
+                                // prize tab, which is admin-gated anyway.
+                                if (isAdmin) ...[
+                                  const SizedBox(height: AppSpacing.lg),
+                                  Builder(
+                                    builder: (_) {
+                                      final r = app.paymentReconciliation;
+                                      return PaymentLedgerCard(
+                                        game: game,
+                                        inPlay: r.inPlay,
+                                        collected: r.collected,
+                                        outstanding: r.outstanding,
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ],
                               if (_tab == 'audit')
                                 _AuditTab(auditHistory: game.auditHistory),
                             ],

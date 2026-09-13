@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/game.dart';
 import 'package:poker_night/models/live_game.dart';
+import 'package:poker_night/models/payment_record.dart';
 import 'package:poker_night/models/tournament.dart';
 import 'package:poker_night/services/projections.dart' as projections;
 import 'package:poker_night/utils/model_codec.dart';
@@ -94,6 +95,26 @@ LiveGame _game() => LiveGame(
   finishOrder: const [],
   rebuyRequests: const ['u1'],
   addOnRequests: const ['u2'],
+  payments: [
+    PaymentRecord(
+      id: 'pay-1',
+      playerId: 'u1',
+      purpose: PaymentPurpose.buyIn,
+      amount: 20,
+      status: PaymentStatus.paid,
+      timestamp: DateTime.parse('2026-09-07T19:45:00.000'),
+      idempotencyKey: 'k1',
+    ),
+    PaymentRecord(
+      id: 'pay-2',
+      playerId: 'u2',
+      purpose: PaymentPurpose.rebuy,
+      amount: 20,
+      status: PaymentStatus.paid,
+      timestamp: DateTime.parse('2026-09-07T20:15:00.000'),
+      idempotencyKey: 'k2',
+    ),
+  ],
 );
 
 void main() {
@@ -198,6 +219,46 @@ void main() {
     });
   });
 
+  group('section 23 — the payment ledger never leaves the host', () {
+    // The player rows are already scrubbed of rebuys, re-entries and add-ons
+    // because section 23 forbids members seeing "rebuy/add-on totals". The
+    // ledger hands all three back — plus "gross collected" — to anybody who
+    // sums it, which would defeat that scrubbing entirely.
+    for (final entry in {
+      'player': projections.playerProjection(_game(), viewerId: 'u1'),
+      'guest': projections.guestProjection(_game()),
+      'tv': projections.tvProjection(_game()),
+    }.entries) {
+      test('${entry.key} receives no payment records', () {
+        expect(
+          entry.value.payments,
+          isEmpty,
+          reason: 'summing the ledger yields rebuy totals, add-on totals and '
+              'gross collected — every one of them named in section 23 as '
+              'hidden from members and guests',
+        );
+      });
+
+      test('${entry.key} cannot derive the gross', () {
+        expect(entry.value.totalCollected, 0);
+        expect(entry.value.collected(PaymentPurpose.rebuy), 0);
+        expect(entry.value.collected(PaymentPurpose.addOn), 0);
+      });
+
+      test('${entry.key} is not told who has paid', () {
+        expect(entry.value.hasPaid('u1', PaymentPurpose.buyIn), isFalse);
+      });
+    }
+
+    test('the ledger survives serialization for the host', () {
+      // Stripping it from the projection must not mean losing it on the way
+      // to storage — the host's own copy carries the records.
+      final back = liveGameFromMap(liveGameToMap(_game()));
+      expect(back.payments, hasLength(2));
+      expect(back.totalCollected, 40);
+    });
+  });
+
   group('PN-024 — the admin projection is untouched', () {
     test('the host still sees everything', () {
       final admin = projections.projectionFor(
@@ -208,6 +269,8 @@ void main() {
       expect(admin.settings.organizerPct, 12);
       expect(admin.structure.organizerAmount, 26);
       expect(admin.players.first.rebuys, 3);
+      expect(admin.payments, hasLength(2));
+      expect(admin.totalCollected, 40);
     });
   });
 }

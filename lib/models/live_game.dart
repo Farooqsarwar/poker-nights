@@ -236,7 +236,16 @@ enum LiveGameStatus {
   rebuypause,
   finaltable,
   completed,
-  cancelled;
+  cancelled,
+
+  /// A scheduled break is running (section 8; addendum section 5).
+  ///
+  /// Distinct from `paused` and from `rebuypause`: those are things a host
+  /// does, this one is part of the generated structure and ends by itself.
+  /// Added at the END of the enum so stored index positions do not shift, and
+  /// `_enumByName` degrades an unknown value to a safe fallback for clients
+  /// that predate it.
+  onBreak;
 
   String get label {
     switch (this) {
@@ -260,6 +269,8 @@ enum LiveGameStatus {
         return 'Completed';
       case LiveGameStatus.cancelled:
         return 'Cancelled';
+      case LiveGameStatus.onBreak:
+        return 'Break';
     }
   }
 
@@ -267,6 +278,7 @@ enum LiveGameStatus {
       this == LiveGameStatus.running ||
       this == LiveGameStatus.paused ||
       this == LiveGameStatus.rebuypause ||
+      this == LiveGameStatus.onBreak ||
       this == LiveGameStatus.finaltable;
 
   bool get isUpcoming =>

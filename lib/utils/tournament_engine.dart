@@ -214,6 +214,29 @@ class TournamentEngine {
   /// is required. Until then, 25 is used universally.
   static const int maxChipsPerPlayer = 25;
 
+  /// Opening-depth band the solver will accept, in big blinds.
+  ///
+  /// The v11 addendum's style table spans Turbo (~40-60) to Deep (~120-200+)
+  /// and is explicit that these are "style guidance, never hard constraints"
+  /// -- guidance for what the engine MAY choose, not depths it must be able
+  /// to produce on demand.
+  ///
+  /// The floor stays at 80 deliberately. Dropping it to 40 to "reach Turbo"
+  /// was tried and made structures worse, not more flexible: with Standard 300
+  /// at 9 players over 4 hours the solver stopped targeting ~136 BB and took a
+  /// 65 BB stack that was down to 16 BB by level three. Nothing asked for that
+  /// -- it simply became legal, and won.
+  ///
+  /// Turbo and Fast are unreachable for a different and correct reason: the
+  /// shortest duration the product offers is 3 hours, and 3 hours of play
+  /// properly wants ~110 BB. Those bands describe events this app does not
+  /// schedule. If short-format events are ever added, lower the floor WITH a
+  /// shorter duration option, not on its own.
+  ///
+  /// The ceiling did move: 240 overshot even Deep's ~200.
+  static const int kMinOpeningBBDepth = 80;
+  static const int kMaxOpeningBBDepth = 200;
+
   /// Validates [value] as a legal maxChipsPerPlayer limit. Throws an
   /// [ArgumentError] if out of range [1, 100].
   static void _validateMaxChipsPerPlayer(int value) {
@@ -605,6 +628,78 @@ class TournamentEngine {
     if (total < 12) score -= (12 - total) * 2.0;
 
     return score;
+  }
+
+  /// Step 5 of the addendum's generation sequence: where the rebuy window
+  /// should actually close.
+  ///
+  /// Addendum section 6 is explicit that "Level 6 remains the UI default, not
+  /// the authoritative AI rule", and that the engine "may choose different
+  /// cutoffs for different player counts, level lengths and blind
+  /// progressions". It is equally explicit about what NOT to do: "Do not use a
+  /// fixed rule such as 'rebuys always end after two hours.'"
+  ///
+  /// So this optimises against the shape of the structure rather than the
+  /// clock. Rebuys should close while the field is still deep enough that
+  /// buying back in is worth the money — once the average stack is short, a
+  /// rebuy buys a player a few orbits and nothing more. The window lands on
+  /// the last level where a fresh starting stack is still worth at least
+  /// [_rebuyWorthwhileBB] big blinds, bounded so it can never swallow the
+  /// whole tournament or vanish to nothing.
+  ///
+  /// [requested] is the organizer's value. Section 6: "Manual organizer
+  /// changes are authoritative for that tournament", so an explicit choice is
+  /// returned untouched — only the UI default is optimised.
+  static const int _rebuyWorthwhileBB = 20;
+
+  static int optimiseRebuyCloseLevel({
+    required int requested,
+    required bool organizerChose,
+    required List<List<int>> levelBlinds,
+    required int startingStack,
+    required int plannedLevels,
+  }) {
+    if (organizerChose) return requested;
+    if (levelBlinds.isEmpty || startingStack <= 0) return requested;
+
+    // Last level at which a rebuy still buys a playable stack.
+    var viable = 1;
+    for (var i = 0; i < levelBlinds.length && i < plannedLevels; i++) {
+      final bb = levelBlinds[i][1];
+      if (bb <= 0) continue;
+      if (startingStack / bb >= _rebuyWorthwhileBB) viable = i + 1;
+    }
+
+    // Never past the halfway point -- a rebuy period covering most of the
+    // night removes the pressure the late game depends on.
+    final ceiling = math.max(2, (plannedLevels * 0.55).floor());
+    return viable.clamp(2, ceiling);
+  }
+
+  /// Plain-language explanation of the depth this structure landed on.
+  ///
+  /// Addendum section 2: "If the engine chooses an unusual depth, explain why
+  /// in plain language." Naming the style is half of it; saying why it is not
+  /// the default is the half that actually helps.
+  static String _styleNarrative({
+    required TournamentStyle style,
+    required double depth,
+    required bool inventoryLimited,
+    required double durationHours,
+  }) {
+    final rounded = depth.round();
+    final base = '${style.label} — $rounded big blinds to start, '
+        '${style.purpose}.';
+    if (style == TournamentStyle.standard) return base;
+    if (inventoryLimited) {
+      return '$base Your chips could not fund a deeper start, so the '
+          'structure opens shorter than usual.';
+    }
+    if (style == TournamentStyle.deep) {
+      return '$base Chosen because ${durationHours}h leaves room for '
+          'post-flop play.';
+    }
+    return '$base Chosen to finish near your ${durationHours}h target.';
   }
 
   /// Decides where scheduled breaks fall (specification section 8, and the
@@ -1170,9 +1265,9 @@ class TournamentEngine {
     final numLevels = plannedLevels + _spareLevels;
 
     final targetBBDepth = math.min(
-      240,
+      kMaxOpeningBBDepth.toDouble(),
       math.max(
-        80,
+        kMinOpeningBBDepth.toDouble(),
         125 +
             28 * (params.durationHours - 3.5) -
             2.5 * math.max(0, params.players - 8),
@@ -1277,7 +1372,10 @@ class TournamentEngine {
         // `stack_aesthetics`). Try a coarse, countable grid first — 10 then 5
         // big blinds — and only fall back to single-blind steps if nothing
         // coarser fits the box.
-        final floor = (80 * bb / sb).ceil() * sb;
+        // Addendum section 2 replaced the old hard floor with style bands
+        // reaching down to Turbo (~40 BB). An 80 BB floor made Turbo and Fast
+        // unreachable no matter what the host asked for.
+        final floor = (kMinOpeningBBDepth * bb / sb).ceil() * sb;
         int? chosen;
         List<ChipPlanEntry>? chosenPlan;
         for (final step in [bb * 10, bb * 5, sb]) {
@@ -1300,7 +1398,9 @@ class TournamentEngine {
         final candidate = chosen;
 
         final depth = candidate / bb;
-        if (depth < 80 || depth > 240) continue;
+        if (depth < kMinOpeningBBDepth || depth > kMaxOpeningBBDepth) {
+          continue;
+        }
 
         // Prefer the depth closest to target; break ties toward the LARGER
         // opening blind, which needs fewer physical chips per stack (10-034,
@@ -1595,12 +1695,41 @@ class TournamentEngine {
     // Resolve break placement now that the level count is known. A break
     // carrying `afterLevel: 0` means "organizer turned breaks on but left the
     // position to us".
+    // Step 5 of the addendum's generation sequence. Done before breaks,
+    // because the default break position hangs off where rebuys close.
+    final optimisedRebuyClose = (params.rebuys || params.reEntry)
+        ? optimiseRebuyCloseLevel(
+            requested: params.rebuysCloseLevel,
+            organizerChose: params.rebuyCloseChosenByOrganizer,
+            levelBlinds: [
+              for (final l in levels) [l.sb, l.bb],
+            ],
+            startingStack: stack,
+            plannedLevels: plannedLevels,
+          )
+        : params.rebuysCloseLevel;
+
     final resolvedBreaks = _placeBreaks(
       requested: params.breaks,
       plannedLevels: plannedLevels,
       rebuysEnabled: params.rebuys || params.reEntry,
-      rebuysCloseLevel: params.rebuysCloseLevel,
+      rebuysCloseLevel: optimisedRebuyClose,
     );
+
+    // Addendum section 2 — say, in plain language, what depth was chosen and
+    // why. A warning is not an explanation.
+    final openingDepthBB = levels.isNotEmpty && levels.first.bb > 0
+        ? stack / levels.first.bb
+        : 0.0;
+    final chosenStyle = TournamentStyle.fromBigBlinds(openingDepthBB);
+    final styleNote = openingDepthBB <= 0
+        ? ''
+        : _styleNarrative(
+            style: chosenStyle,
+            depth: openingDepthBB,
+            inventoryLimited: warnings.any((w) => w.contains('cannot fund')),
+            durationHours: params.durationHours,
+          );
 
     if (params.players < 4) {
       warnings.add('Very small field — consider a shorter structure.');
@@ -1613,6 +1742,8 @@ class TournamentEngine {
 
     return TournamentStructure(
       breaks: resolvedBreaks,
+      styleNote: styleNote,
+      rebuysCloseLevel: optimisedRebuyClose,
       startingStack: stack,
       chipPlan: chipPlan,
       rebuyStack: rebuyStack,

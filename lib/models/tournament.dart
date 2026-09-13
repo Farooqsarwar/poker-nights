@@ -98,6 +98,7 @@ class TournamentParams {
     this.rebuyCost,
     this.addOnCost,
     this.breaks = const [],
+    this.rebuyCloseChosenByOrganizer = false,
   });
 
   final int players;
@@ -122,6 +123,15 @@ class TournamentParams {
 
   final int? rebuyCost;
   final int? addOnCost;
+
+  /// True when the organizer set [rebuysCloseLevel] deliberately rather than
+  /// leaving the UI default.
+  ///
+  /// Addendum section 6: "Level 6 remains the UI default, not the
+  /// authoritative AI rule" and "Manual organizer changes are authoritative
+  /// for that tournament". The engine optimises the default and leaves an
+  /// explicit choice alone, so this flag is what separates the two.
+  final bool rebuyCloseChosenByOrganizer;
 
   /// Scheduled breaks to place (specification section 8). Empty means OFF.
   ///
@@ -181,6 +191,44 @@ const List<int> kBreakDurationPresets = [5, 10, 15, 20];
 /// Section 8 of the 10 September specification said 1 or 2; the v11 addendum
 /// raised it to 3.
 const int kMaxScheduledBreaks = 3;
+
+/// How deep the tournament starts, in the v11 addendum's own vocabulary.
+///
+/// Addendum section 2 replaced the old hard 50-100 BB rule with style bands
+/// that are "style guidance, never hard constraints", and requires that when
+/// the engine picks an unusual depth it "explain why in plain language". This
+/// is that vocabulary.
+enum TournamentStyle {
+  turbo,
+  fast,
+  standard,
+  deep;
+
+  /// Band boundaries from addendum section 2's table.
+  static TournamentStyle fromBigBlinds(double bb) {
+    if (bb < 60) return TournamentStyle.turbo;
+    if (bb < 75) return TournamentStyle.fast;
+    if (bb <= 120) return TournamentStyle.standard;
+    return TournamentStyle.deep;
+  }
+
+  String get label => switch (this) {
+        TournamentStyle.turbo => 'Turbo',
+        TournamentStyle.fast => 'Fast',
+        TournamentStyle.standard => 'Standard',
+        TournamentStyle.deep => 'Deep',
+      };
+
+  /// The "purpose" column of the addendum's table, in plain language.
+  String get purpose => switch (this) {
+        TournamentStyle.turbo =>
+          'a short, aggressive event — expect early all-ins',
+        TournamentStyle.fast => 'quick but still playable',
+        TournamentStyle.standard => 'the balanced home-game default',
+        TournamentStyle.deep =>
+          'more post-flop play, for a longer evening',
+      };
+}
 
 /// Prize line.
 class Prize {
@@ -254,7 +302,38 @@ class TournamentStructure {
     required this.colorUpInstructions,
     required this.warnings,
     this.breaks = const [],
+    this.styleNote = '',
+    this.rebuysCloseLevel = 0,
   });
+
+  /// The rebuy cutoff this structure was actually built around.
+  ///
+  /// Addendum acceptance criterion 10 — "AI can dynamically change the rebuy
+  /// cutoff in generated structures" — only means anything if the chosen level
+  /// reaches the settings that gate rebuys live. The engine reports it here
+  /// and the provider adopts it. 0 on structures generated before this field
+  /// existed; callers fall back to the settings value.
+  final int rebuysCloseLevel;
+
+  /// Plain-language explanation of the depth this structure chose.
+  ///
+  /// Addendum section 2: "If the engine chooses an unusual depth, explain why
+  /// in plain language." A warning is not an explanation — the host needs to
+  /// know this is a Turbo because their chips could not fund anything deeper,
+  /// not just that something is "short".
+  final String styleNote;
+
+  /// The style band this structure's opening depth falls into.
+  TournamentStyle? get style {
+    if (levels.isEmpty || levels.first.bb <= 0) return null;
+    return TournamentStyle.fromBigBlinds(startingStack / levels.first.bb);
+  }
+
+  /// Opening depth in big blinds.
+  double? get openingBBDepth {
+    if (levels.isEmpty || levels.first.bb <= 0) return null;
+    return startingStack / levels.first.bb;
+  }
 
   /// Breaks actually placed in this structure (section 8). Empty means the
   /// tournament runs straight through, which is what every structure written

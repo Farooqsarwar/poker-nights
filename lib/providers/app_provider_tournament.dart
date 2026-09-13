@@ -589,8 +589,15 @@ extension AppProviderTournament on AppProvider {
         breaks: s.breaks,
       ),
     );
+    // Addendum acceptance criterion 10: the engine may move the rebuy cutoff
+    // while optimising, and that choice has to reach the settings that gate
+    // rebuys live -- otherwise it is a number in a structure nobody reads.
+    final withRebuyClose = structure.rebuysCloseLevel > 0
+        ? s.copyWith(rebuysCloseLevel: structure.rebuysCloseLevel)
+        : s;
+
     _currentGame = game.copyWith(
-      settings: s,
+      settings: withRebuyClose,
       structure: structure,
       originalLevels: List.of(structure.levels),
       totalChipsInPlay: structure.startingStack * count,

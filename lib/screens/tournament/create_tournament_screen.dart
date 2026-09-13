@@ -25,6 +25,8 @@ import '../../widgets/app_toggle.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/chip_token.dart';
+import '../../services/entitlements.dart';
+import '../../services/payment_service.dart';
 import '../../widgets/count_stepper.dart';
 import '../../widgets/glass_styles.dart';
 
@@ -217,6 +219,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   /// maximum to 3). Empty means OFF. `afterLevel: 0` means "you choose" —
   /// the engine places it after the rebuy window, or at the structural
   /// midpoint when rebuys are off.
+  /// Addendum section 3: free hosting covers one table, up to nine players.
+  /// Read once on load; the gate below is a visible limit and an upgrade
+  /// path, NOT enforcement -- section 7 and acceptance criterion 12 put real
+  /// Premium authorization on the server, which does not exist yet.
+  PremiumTier _tier = PremiumTier.free;
+
   List<ScheduledBreak> _breaks = const [];
   bool get _breaksOn => _breaks.isNotEmpty;
   final _addOnCost = TextEditingController();
@@ -322,6 +330,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
       _derivedExpectedPlayers = expected < 2 ? 2 : expected;
       if (!_expectedOverridden) _expectedPlayers = _derivedExpectedPlayers;
+
+      MockPaymentService().currentTier().then((t) {
+        if (mounted) setState(() => _tier = t);
+      });
 
       if (widget.presetId != null) {
         final preset = app.presetById(widget.presetId);
@@ -1149,6 +1161,44 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               ),
             ],
           ),
+          if (Entitlements.hostingBlockedReason(_tier, _expectedPlayers)
+              case final blocked?) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.workspace_premium,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      blocked,
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.foreground,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    onPressed: () => context.push(RoutePaths.upgrade),
+                    child: const Text('See Premium'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (_expectedOverridden) ...[
             const SizedBox(height: AppSpacing.xs),
             Align(

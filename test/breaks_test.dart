@@ -143,7 +143,12 @@ void main() {
   });
 
   group('§29 gate — default is after the rebuy period', () {
-    test('with rebuys on, the automatic break follows the rebuy close', () {
+    test('the automatic break lands where the rebuy window actually closes', () {
+      // Section 8 places the default break "immediately after the end of the
+      // rebuy period". Which level that IS is decided by the v11 addendum
+      // section 6 optimiser, not by the UI default — "Level 6 remains the UI
+      // default, not the authoritative AI rule" — so the assertion is the
+      // relationship, not a fixed number.
       final s = TournamentEngine.generate(
         params(
           rebuys: true,
@@ -151,23 +156,83 @@ void main() {
           breaks: const [ScheduledBreak(afterLevel: 0, durationMins: 10)],
         ),
       );
+      expect(s.rebuysCloseLevel, greaterThan(0));
       expect(
         s.breaks.single.afterLevel,
-        6,
-        reason: 'section 8: default recommendation is immediately after the '
-            'end of the rebuy period',
+        s.rebuysCloseLevel,
+        reason: 'the break must follow the rebuy window wherever it closed',
       );
     });
 
-    test('a different rebuy close moves the default with it', () {
+    test('an organizer-chosen cutoff is honoured and the break follows it', () {
+      // Section 6: "Manual organizer changes are authoritative for that
+      // tournament" — the optimiser must not move a deliberate choice.
       final s = TournamentEngine.generate(
-        params(
+        TournamentParams(
+          players: 9,
+          durationHours: 4,
+          buyIn: 20,
+          chipSet: chips,
           rebuys: true,
           rebuysCloseLevel: 4,
+          rebuyCloseChosenByOrganizer: true,
+          reEntry: false,
+          addOn: true,
+          anteEnabled: false,
+          anteAfterLevel: 7,
+          anteStyle: AnteStyle.bigBlind,
+          koEnabled: false,
+          koAmount: 0,
+          organizerPct: 10,
           breaks: const [ScheduledBreak(afterLevel: 0, durationMins: 10)],
         ),
       );
+      expect(s.rebuysCloseLevel, 4);
       expect(s.breaks.single.afterLevel, 4);
+    });
+  });
+
+  group('addendum §6 — the AI may move the rebuy cutoff', () {
+    test('acceptance #10: the generated cutoff is a real decision', () {
+      final s = TournamentEngine.generate(
+        params(rebuys: true, rebuysCloseLevel: 6),
+      );
+      expect(
+        s.rebuysCloseLevel,
+        greaterThanOrEqualTo(2),
+        reason: 'the rebuy window must survive past the opening levels',
+      );
+      expect(
+        s.rebuysCloseLevel,
+        lessThan(s.plannedLevels),
+        reason: 'a rebuy window covering the whole tournament removes the '
+            'late-game pressure the structure depends on',
+      );
+    });
+
+    test('an explicit choice is never silently overwritten', () {
+      for (final level in [3, 5, 8]) {
+        final s = TournamentEngine.generate(
+          TournamentParams(
+            players: 9,
+            durationHours: 4,
+            buyIn: 20,
+            chipSet: chips,
+            rebuys: true,
+            rebuysCloseLevel: level,
+            rebuyCloseChosenByOrganizer: true,
+            reEntry: false,
+            addOn: true,
+            anteEnabled: false,
+            anteAfterLevel: 7,
+            anteStyle: AnteStyle.bigBlind,
+            koEnabled: false,
+            koAmount: 0,
+            organizerPct: 10,
+          ),
+        );
+        expect(s.rebuysCloseLevel, level);
+      }
     });
   });
 

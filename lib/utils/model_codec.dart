@@ -202,6 +202,9 @@ TournamentStructure tournamentStructureFromMap(Map<String, dynamic> m) =>
       breaks: _mapList(m['breaks'] as List? ?? const [])
           .map(scheduledBreakFromMap)
           .toList(),
+      styleNote: (m['styleNote'] as String?) ?? '',
+      rebuysCloseLevel:
+          (m['structureRebuysCloseLevel'] as num?)?.toInt() ?? 0,
       levelDuration: (m['levelDuration'] as num?)?.toInt() ?? 15,
       plannedLevels: (m['plannedLevels'] as num?)?.toInt() ?? 0,
       expectedFinishMins: (m['expectedFinishMins'] as num?)?.toInt() ?? 0,

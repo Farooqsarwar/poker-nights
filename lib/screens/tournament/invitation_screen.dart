@@ -2276,6 +2276,13 @@ class _ContextualMainButton extends StatelessWidget {
             onPressed: () => context.go(RoutePaths.rebuySettlement),
             child: const Text('Complete Rebuy & Add-on Break'),
           );
+        case LiveGameStatus.onBreak:
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            onPressed: () => context.go(RoutePaths.adminDashboard),
+            child: const Text('Manage Tournament'),
+          );
         case LiveGameStatus.completed:
           return AppButton(
             fullWidth: true,

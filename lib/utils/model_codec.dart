@@ -482,6 +482,7 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'settings': gameSettingsToMap(game.settings),
     'structure': tournamentStructureToMap(game.structure),
     'payments': game.payments.map(paymentRecordToMap).toList(),
+    'organizerIds': List<String>.from(game.organizerIds),
     'status': game.status.name,
     'publicCode': game.publicCode,
     'tvCode': game.tvCode,
@@ -534,6 +535,10 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       payments: _mapList(map['payments'] as List? ?? const [])
           .map(paymentRecordFromMap)
           .toList(),
+      // Absent on every tournament written before the role existed, which
+      // reads correctly as "admin only".
+      organizerIds:
+          List<String>.from(map['organizerIds'] as List? ?? const []),
       structure: tournamentStructureFromMap(
           Map<String, dynamic>.from(map['structure'] as Map)),
       status: _enumByName(

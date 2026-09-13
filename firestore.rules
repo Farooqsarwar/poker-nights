@@ -231,6 +231,29 @@ service cloud.firestore {
           || currentLevel >= resource.data.get('currentLevel', 0);
     }
 
+    // Specification sections 3 and 28: a Tournament Organizer runs the game
+    // they were assigned and nothing else. The assignment lives on the game
+    // document itself (`organizerIds`), so it is tournament-scoped by
+    // construction -- there is no group-level role to leak.
+    //
+    // Two things an organizer must NOT be able to do, and cannot here:
+    //  * appoint themselves -- organizerIds is only writable by an admin,
+    //    enforced below by requiring it to be unchanged on an organizer write;
+    //  * touch any other tournament -- the rule is scoped to {gameId}, so a
+    //    write to a different game is evaluated against THAT game's list.
+    function isTournamentOrganizer() {
+      return signedIn()
+          && resource != null
+          && resource.data.get('organizerIds', []).hasAny([request.auth.uid]);
+    }
+
+    function organizerWriteSafe() {
+      // An organizer may not change who the organizers are.
+      return resource != null
+          && request.resource.data.get('organizerIds', [])
+              == resource.data.get('organizerIds', []);
+    }
+
     function gameValuesSafe() {
       return organizerPctSafe()
           && prizePoolReconciles()
@@ -404,6 +427,10 @@ service cloud.firestore {
         // their guest slots, their own id in the rebuy/add-on request arrays);
         // anything else requires admin/owner authority (memberGameEdit).
         allow update: if (isGroupAdmin(gid) && publicGameDocSafe() && gameValuesSafe())
+            || (isTournamentOrganizer()
+                && organizerWriteSafe()
+                && publicGameDocSafe()
+                && gameValuesSafe())
             || (isMember(gid) && memberGameEdit());
 
         // Reserved for a per-member server-side projection. NOT IN USE: it

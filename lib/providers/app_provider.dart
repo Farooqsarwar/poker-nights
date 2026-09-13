@@ -24,6 +24,7 @@ import '../models/user.dart';
 import '../models/chip_color.dart';
 import '../repositories/firebase_repository.dart';
 import '../services/entitlements.dart';
+import '../services/permissions.dart';
 import '../services/payment_service.dart';
 import '../utils/formatters.dart';
 import '../utils/mock_data.dart';
@@ -781,6 +782,71 @@ class AppProvider extends ChangeNotifier {
   /// True when the signed-in user administers the current group (owner or a
   /// member row flagged `isAdmin`). Resilient to the transient empty-group
   /// window via [_adminVerdictByGroup].
+  /// What the signed-in user is, for the tournament in front of them (§28).
+  Actor get currentActor => Permissions.actorFor(
+        user: _user,
+        group: _currentGroup,
+        game: _currentGame,
+        isGuestSession: hasGuestSession,
+      );
+
+  /// Whether the signed-in user may run the CURRENT tournament — an admin
+  /// anywhere, or an organizer assigned to this one (§3, §28).
+  ///
+  /// This is what the live controls should ask, rather than `isAdmin`: an
+  /// organizer exists precisely so the host can hand over a night without
+  /// handing over the group.
+  bool get canRunCurrentGame =>
+      Permissions.can(Capability.runThisTournament, currentActor);
+
+  /// Whether the signed-in user may see this tournament's private money.
+  /// §28's one conditional cell: an organizer, but only for their own game.
+  bool get canSeePrivateFinancials =>
+      Permissions.can(Capability.viewPrivateFinancials, currentActor);
+
+  /// Assigns or removes a tournament organizer (§3).
+  ///
+  /// Admin only — §28 puts organizer management alongside the other
+  /// group-level rights an organizer does not get, so an organizer cannot
+  /// appoint another.
+  void setTournamentOrganizer(String userId, {required bool assigned}) {
+    final game = _currentGame;
+    if (game == null || !isAdmin) return;
+    if (game.isOrganizer(userId) == assigned) return;
+
+    // D7: a guest can never be an organizer. §32 fixes guests as
+    // event-scoped, and an organizer must be assignable, auditable and
+    // accountable across check-in, seating and money — which needs an account,
+    // not a name in a slot.
+    final member = _currentGroup.members.any((m) => m.id == userId);
+    if (assigned && !member) {
+      lastRsvpError =
+          'Only a group member can run a tournament. Ask them to join first.';
+      if (!_disposed) notifyListeners();
+      return;
+    }
+
+    _pushUndo();
+    _currentGame = game.copyWith(
+      organizerIds: assigned
+          ? [...game.organizerIds, userId]
+          : game.organizerIds.where((id) => id != userId).toList(),
+    );
+    final name = _currentGroup.members
+            .where((m) => m.id == userId)
+            .firstOrNull
+            ?.name ??
+        userId;
+    addAuditRecord(
+      assigned ? 'organizer_assigned' : 'organizer_removed',
+      assigned
+          ? '$name was made organizer of this tournament.'
+          : '$name is no longer organizer of this tournament.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
   bool get isAdmin {
     final user = _user;
     if (user == null) return false;

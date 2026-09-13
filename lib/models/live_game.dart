@@ -340,6 +340,7 @@ class LiveGame {
     this.startedAt,
     this.changeLog = const [],
     this.payments = const [],
+    this.organizerIds = const [],
     this.revision = 0,
     this.lastIdempotencyKey,
     this.editorDeviceId = '',
@@ -454,6 +455,27 @@ class LiveGame {
   /// Combined with [lastIdempotencyKey] this guards against double-applying a
   /// duplicate action after a browser retry or an offline-restore replay
   /// (technical §18.1).
+  /// Users given operational control of THIS tournament (§3, §28).
+  ///
+  /// Tournament-scoped by design — §32 lists it as a decision that must not
+  /// drift. An organizer runs the night: rebuys, add-ons, eliminations,
+  /// seating, and the private financials OF THIS GAME. They get no group-level
+  /// rights at all: no approving members, no editing group settings, no
+  /// managing admins, and nothing whatsoever in any other tournament.
+  ///
+  /// It solves a real problem rather than a theoretical one. A host who is
+  /// also playing is the bottleneck on every rebuy at their own table; this
+  /// lets them hand the controls to somebody for one evening without handing
+  /// over the group.
+  ///
+  /// Empty on every tournament created before the role existed, which reads
+  /// correctly as "admin only".
+  final List<String> organizerIds;
+
+  /// Whether [userId] is running this tournament as an assigned organizer.
+  bool isOrganizer(String? userId) =>
+      userId != null && organizerIds.contains(userId);
+
   /// Simulated payments recorded against this tournament (QA section 12).
   ///
   /// No money moves and no provider is contacted. The ledger exists so the
@@ -629,6 +651,7 @@ class LiveGame {
     List<Player>? pendingGuests,
     List<String>? finishOrder,
     List<PaymentRecord>? payments,
+    List<String>? organizerIds,
     SpeedRecommendation? speedRecommendation,
     TournamentStructure? structure,
     bool? settlementConfirmed,
@@ -671,6 +694,7 @@ class LiveGame {
       pendingGuests: pendingGuests ?? this.pendingGuests,
       finishOrder: finishOrder ?? this.finishOrder,
       payments: payments ?? this.payments,
+      organizerIds: organizerIds ?? this.organizerIds,
       speedRecommendation: clearSpeedRecommendation
           ? null
           : speedRecommendation ?? this.speedRecommendation,

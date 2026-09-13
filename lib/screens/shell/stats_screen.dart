@@ -7,6 +7,8 @@ import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
+import '../../services/entitlements.dart';
+import '../../widgets/premium_gate.dart';
 
 /// Detailed statistics mirroring the account area of the web app.
 class StatsScreen extends StatelessWidget {
@@ -16,6 +18,29 @@ class StatsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final user = app.user;
+
+    // Addendum §3: "Advanced statistics, analytics, history and exports" are
+    // Premium. Basic group history (games played, wins, podiums) stays free
+    // and lives on the history screen -- this is the analytics view.
+    if (user != null &&
+        !Entitlements.allows(app.premiumTier, PremiumFeature.advancedStats)) {
+      return AppPage(
+        maxWidth: 560,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: AppSpacing.xxl),
+            PremiumGate(
+              tier: app.premiumTier,
+              feature: PremiumFeature.advancedStats,
+              blurb: 'Finishing positions over time, knockout records and '
+                  'exportable history. Your basic group history stays free.',
+              child: const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      );
+    }
 
     if (user == null) {
       return AppPage(

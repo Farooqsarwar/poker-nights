@@ -20,6 +20,8 @@ import '../../widgets/app_select.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/chip_token.dart';
+import '../../services/entitlements.dart';
+import '../../widgets/premium_gate.dart';
 
 /// Tournament preset manager (checklist §9.1): create, edit, delete and use
 /// saved tournament templates. Presets store inputs only — the blind structure
@@ -131,6 +133,28 @@ class _PresetsScreenState extends State<PresetsScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final presets = app.presets;
+
+    // Addendum §3 lists saved presets under Premium. Gated as a whole screen
+    // rather than per-control because there is no "basic presets" tier to
+    // fall back to -- you either have a reusable library or you do not.
+    if (!Entitlements.allows(app.premiumTier, PremiumFeature.savedPresets)) {
+      return AppPage(
+        maxWidth: 560,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: AppSpacing.xxl),
+            PremiumGate(
+              tier: app.premiumTier,
+              feature: PremiumFeature.savedPresets,
+              blurb: 'Save a tournament setup once and reuse it every week — '
+                  'buy-in, blinds, rebuys, chips and all.',
+              child: const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      );
+    }
 
     return AppPage(
       maxWidth: 760,

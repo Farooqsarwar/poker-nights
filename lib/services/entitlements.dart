@@ -44,6 +44,54 @@ abstract final class Entitlements {
       tier == PremiumTier.premium;
 }
 
+/// Where "basic" ends and "advanced" begins.
+///
+/// The addendum lists Premium features as "advanced seating", "advanced
+/// balancing", "advanced structure customization" and so on, but never says
+/// where the line falls. Somebody has to draw it or nothing can be built, so
+/// these are the lines drawn here — chosen so the FREE path is a complete,
+/// usable product, per §3's monetization principle: "Do not paywall the core
+/// clock, check-in, basic payouts or basic tournament operation."
+///
+/// Every one of these is a judgement, not a requirement. They are gathered in
+/// one place, and named, precisely so the product owner can move any of them
+/// without hunting through screens.
+///
+/// | Feature | Free gets | Premium adds |
+/// |---|---|---|
+/// | Seating | Random draw | Manual, keep guests together, separate guests |
+/// | Structure | The generated schedule | Hand-editing individual levels |
+/// | Payouts | The recommended split | Choosing between the AI's options |
+/// | Chips | The standard presets | Building and saving custom sets |
+/// | Balancing | Automatic recommendation | Manual seat moves |
+/// | TV | One read-only display | Customisation, multiple displays |
+/// | Stats | Group history | Analytics and export |
+///
+/// Two deliberately NOT gated:
+///
+///  * **The tournament engine itself.** §3 puts "AI-optimized structures"
+///    under Premium, but the engine is the only structure generator there is —
+///    gating it would leave free users with nothing to run a night on, which
+///    §3's own principle forbids. Building a deliberately worse second engine
+///    is more work than leaving it free, and a worse product.
+///
+///  * **Rebuys, add-ons and eliminations.** Core operation, explicitly free.
+abstract final class PremiumBoundary {
+  /// Seating modes a free host may use (§3 "advanced seating controls").
+  static const freeSeatingModes = ['random'];
+
+  /// Whether a free host may hand-edit generated blind levels.
+  static const bool freeCanEditStructure = false;
+
+  /// Whether a free host may choose between the AI's payout options, rather
+  /// than taking the recommended one.
+  static const bool freeCanChoosePayoutShape = false;
+
+  /// Whether a free host may build a custom chip set rather than picking a
+  /// standard preset.
+  static const bool freeCanBuildChipSets = false;
+}
+
 /// The Premium column of addendum §3, as a type.
 enum PremiumFeature {
   multiTable,

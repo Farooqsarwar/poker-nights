@@ -29,6 +29,7 @@ import '../../services/entitlements.dart';
 import '../../services/payment_service.dart';
 import '../../widgets/count_stepper.dart';
 import '../../widgets/glass_styles.dart';
+import '../../widgets/premium_gate.dart';
 
 enum _ChipMode { preset, quick, exact }
 
@@ -2253,10 +2254,18 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     ],
                   ),
                 ),
-                _SegmentedPicker(
-                  options: const ['Yes', 'No'],
-                  selected: _koEnabled ? 'Yes' : 'No',
-                  onChanged: (v) => setState(() => _koEnabled = v == 'Yes'),
+                // Addendum §3 lists "Advanced payout/ICM functionality and
+                // KO/PKO" under Premium. Locked rather than hidden -- a host
+                // should see the setting exists, otherwise the product looks
+                // smaller than it is and the upgrade is harder to want.
+                PremiumLock(
+                  tier: _tier,
+                  feature: PremiumFeature.advancedPayoutsAndIcm,
+                  child: _SegmentedPicker(
+                    options: const ['Yes', 'No'],
+                    selected: _koEnabled ? 'Yes' : 'No',
+                    onChanged: (v) => setState(() => _koEnabled = v == 'Yes'),
+                  ),
                 ),
               ],
             ),

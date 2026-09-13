@@ -303,9 +303,21 @@ class AppProvider extends ChangeNotifier {
   ///
   /// Either grants Premium, because the demo has to work. When real billing
   /// arrives, delete the local branch and this becomes enforcement outright.
+  /// Whether the device-local demo entitlement may grant Premium.
+  ///
+  /// True by default so the dummy checkout screen works while the commercial
+  /// terms are unsettled. Build with `--dart-define=DEMO_PREMIUM=false` and
+  /// ONLY the server-held entitlement counts -- at which point a manipulated
+  /// client flag grants nothing, which is what QA cases PN-SEC-003 and
+  /// PN-NEG-001 are actually asking for.
+  static const bool demoPremiumEnabled =
+      bool.fromEnvironment('DEMO_PREMIUM', defaultValue: true);
+
   Future<void> loadPremiumTier() async {
     final server = _backendUp ? await _repo.fetchPremiumEntitlement() : false;
-    final local = await MockPaymentService().currentTier();
+    final local = demoPremiumEnabled
+        ? await MockPaymentService().currentTier()
+        : PremiumTier.free;
     if (_disposed) return;
     premiumTier = (server || local == PremiumTier.premium)
         ? PremiumTier.premium

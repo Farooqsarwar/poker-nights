@@ -22,6 +22,7 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/event_day_checklist.dart';
+import '../../widgets/premium_gate.dart';
 
 enum SeatingMode { random, manual, keepGuests, separateGuests }
 
@@ -646,14 +647,25 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   crossAxisSpacing: AppSpacing.sm,
                   childAspectRatio: 2.4,
                   children: [
+                    // Addendum §3 "advanced table balancing and seating
+                    // controls". PremiumBoundary draws the line: a random
+                    // draw seats a night perfectly well and stays free;
+                    // choosing WHO sits where is the advanced part.
                     for (final mode in SeatingMode.values)
-                      _SeatingOption(
-                        label: mode.label,
-                        active: _seatingMode == mode,
-                        onTap: () {
-                          setState(() => _seatingMode = mode);
-                          app.generateSeating(mode.tableMode);
-                        },
+                      PremiumLock(
+                        tier: PremiumBoundary.freeSeatingModes
+                                .contains(mode.name)
+                            ? PremiumTier.premium // never locked
+                            : app.premiumTier,
+                        feature: PremiumFeature.advancedSeating,
+                        child: _SeatingOption(
+                          label: mode.label,
+                          active: _seatingMode == mode,
+                          onTap: () {
+                            setState(() => _seatingMode = mode);
+                            app.generateSeating(mode.tableMode);
+                          },
+                        ),
                       ),
                   ],
                 ),

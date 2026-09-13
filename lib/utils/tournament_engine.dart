@@ -607,6 +607,78 @@ class TournamentEngine {
     return score;
   }
 
+  /// Decides where scheduled breaks fall (specification section 8, and the
+  /// v11 addendum which raised the maximum from 2 to 3).
+  ///
+  /// A requested break with `afterLevel <= 0` means the organizer turned
+  /// breaks on but left the position to us. The rule:
+  ///
+  ///  * rebuys or re-entry enabled -> immediately after the rebuy window
+  ///    closes, because that is when players settle up and the field is about
+  ///    to shrink;
+  ///  * otherwise -> the structural midpoint of the planned levels, which is
+  ///    the ordinary home-game convention.
+  ///
+  /// Further automatic breaks are spread evenly through what remains, so two
+  /// breaks do not land on adjacent levels. Explicit placements are honoured
+  /// exactly as given.
+  static List<ScheduledBreak> _placeBreaks({
+    required List<ScheduledBreak> requested,
+    required int plannedLevels,
+    required bool rebuysEnabled,
+    required int rebuysCloseLevel,
+  }) {
+    if (requested.isEmpty || plannedLevels <= 1) return const [];
+
+    final capped = requested.take(kMaxScheduledBreaks).toList();
+    final placed = <ScheduledBreak>[];
+    final taken = <int>{};
+
+    // Honour explicit placements first so an automatic one cannot steal a
+    // level the organizer already chose.
+    for (final b in capped) {
+      if (b.afterLevel > 0) {
+        final level = b.afterLevel.clamp(1, plannedLevels - 1);
+        if (taken.add(level)) {
+          placed.add(b.copyWith(afterLevel: level));
+        }
+      }
+    }
+
+    final autos = capped.where((b) => b.afterLevel <= 0).toList();
+    if (autos.isNotEmpty) {
+      final midpoint = (plannedLevels / 2).round();
+      var anchor = rebuysEnabled && rebuysCloseLevel > 0
+          ? rebuysCloseLevel
+          : midpoint;
+      anchor = anchor.clamp(1, plannedLevels - 1);
+
+      for (var i = 0; i < autos.length; i++) {
+        // First automatic break takes the anchor; later ones are spread
+        // through the remaining levels rather than stacking beside it.
+        var level = i == 0
+            ? anchor
+            : (anchor + ((plannedLevels - anchor) * i / autos.length)).round();
+        level = level.clamp(1, plannedLevels - 1);
+        // Nudge off any level already used.
+        var guard = 0;
+        while (taken.contains(level) && guard < plannedLevels) {
+          level = (level + 1).clamp(1, plannedLevels - 1);
+          if (taken.contains(level) && level == plannedLevels - 1) {
+            level = (level - 1).clamp(1, plannedLevels - 1);
+          }
+          guard++;
+        }
+        if (taken.add(level)) {
+          placed.add(autos[i].copyWith(afterLevel: level));
+        }
+      }
+    }
+
+    placed.sort((a, b) => a.afterLevel - b.afterLevel);
+    return placed;
+  }
+
   /// Decides how many places get paid.
   ///
   /// Depends on BOTH the size of the field AND the prize pool (checklist
@@ -918,6 +990,82 @@ class TournamentEngine {
         (totalAddOns * (addOnEnabled ? effectiveAddOnCost : 0));
   }
 
+  /// Several ways to split the pool, for the organizer to choose between
+  /// (specification sections 18 and 25).
+  ///
+  /// The engine's own recommendation — `_paidPlacesFor`, which weighs field
+  /// size against pool size — comes first and is the default. Around it sit
+  /// the neighbouring shapes, so a host who wants to pay one more or one fewer
+  /// place can see exactly what that costs the winner before deciding.
+  ///
+  /// Options that cannot produce a meaningful lowest prize are dropped rather
+  /// than offered: paying a fourth place 10 out of a 200 pool is worse than
+  /// not paying it.
+  static List<PayoutOption> payoutOptions(
+    int grossEligible,
+    int players,
+    int organizerPct, {
+    int roundingUnit = 10,
+  }) {
+    final recommended = recalculatePrizes(
+      grossEligible,
+      players,
+      organizerPct,
+      roundingUnit: roundingUnit,
+    );
+    final defaultPlaces = recommended.prizes.length;
+    if (defaultPlaces == 0) return const [];
+
+    // The recommendation, then one fewer, then more — capped at 5 places
+    // (section 18's own example range) and at what the field can support.
+    final candidates = <int>{
+      defaultPlaces,
+      defaultPlaces - 1,
+      defaultPlaces + 1,
+      defaultPlaces + 2,
+    }.where((n) => n >= 1 && n <= 5 && n <= players).toList()
+      ..sort();
+
+    final options = <PayoutOption>[];
+    for (final places in candidates) {
+      final r = recalculatePrizes(
+        grossEligible,
+        players,
+        organizerPct,
+        forcePaidPlaces: places,
+        roundingUnit: roundingUnit,
+      );
+      if (r.prizes.length != places) continue;
+      if (r.prizes.any((p) => p.amount <= 0)) continue;
+      // Drop shapes where the tail is meaningless. Rounding to clean amounts
+      // can leave three or more places sharing the same minimum award
+      // (measured: 90/30/10/10/10 from a 150 pool), which pays nobody
+      // anything worth collecting and is not a real alternative to offer.
+      if (places >= 3) {
+        final lowest = r.prizes.last.amount;
+        final atLowest = r.prizes.where((p) => p.amount == lowest).length;
+        if (atLowest >= 3) continue;
+      }
+      options.add(
+        PayoutOption(
+          paidPlaces: places,
+          prizes: r.prizes,
+          prizePool: r.prizePool,
+          roundingRemainder: r.roundingRemainder,
+          rationale: _payoutRationale(places, defaultPlaces),
+        ),
+      );
+    }
+    return options;
+  }
+
+  static String _payoutRationale(int places, int recommended) {
+    if (places == recommended) return 'Recommended for this field and pool';
+    if (places == 1) return 'Winner takes all';
+    if (places < recommended) return 'Top-heavy — bigger first prize';
+    return 'Flatter — more players get paid';
+  }
+
   static ({
     int organizerAmount,
     int prizePool,
@@ -1007,7 +1155,15 @@ class TournamentEngine {
     // ever generated ~3 h 09 m of levels, which both understated the finish
     // (11-030) and made play run off the end of the structure — the trigger
     // for the unconfirmed auto-extension in `nextLevel()` (11-014).
-    final playingMinutes = params.durationHours * 60;
+    //
+    // Specification section 8: break time is INSIDE the target duration, not
+    // added to it -- "target 4h = 3h40 playing + 20 min scheduled breaks". So
+    // the levels are generated against what is left after the breaks, which is
+    // what stops a 4-hour night with two breaks from actually running 4h20.
+    final scheduledBreakMins =
+        params.breaks.fold<int>(0, (a, b) => a + b.durationMins);
+    final playingMinutes =
+        math.max(60.0, params.durationHours * 60 - scheduledBreakMins);
     // Levels that actually fit the target. Everything that models PACE uses
     // this; the spare tail below is overtime insurance, not part of the plan.
     final plannedLevels = math.max(6, (playingMinutes / levelDuration).ceil());
@@ -1431,7 +1587,20 @@ class TournamentEngine {
     for (var i = 0; i < plannedLevels && i < levels.length; i++) {
       plannedMins += levels[i].durationMins;
     }
-    final expectedFinishMins = plannedMins + settlementBreakMins;
+    // `settlementBreakMins` is a DIFFERENT thing -- the post-rebuy settlement
+    // pause -- so the two are summed separately rather than conflated.
+    final expectedFinishMins =
+        plannedMins + settlementBreakMins + scheduledBreakMins;
+
+    // Resolve break placement now that the level count is known. A break
+    // carrying `afterLevel: 0` means "organizer turned breaks on but left the
+    // position to us".
+    final resolvedBreaks = _placeBreaks(
+      requested: params.breaks,
+      plannedLevels: plannedLevels,
+      rebuysEnabled: params.rebuys || params.reEntry,
+      rebuysCloseLevel: params.rebuysCloseLevel,
+    );
 
     if (params.players < 4) {
       warnings.add('Very small field — consider a shorter structure.');
@@ -1443,6 +1612,7 @@ class TournamentEngine {
     }
 
     return TournamentStructure(
+      breaks: resolvedBreaks,
       startingStack: stack,
       chipPlan: chipPlan,
       rebuyStack: rebuyStack,

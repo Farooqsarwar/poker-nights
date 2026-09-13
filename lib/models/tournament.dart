@@ -97,6 +97,7 @@ class TournamentParams {
     required this.organizerPct,
     this.rebuyCost,
     this.addOnCost,
+    this.breaks = const [],
   });
 
   final int players;
@@ -122,9 +123,64 @@ class TournamentParams {
   final int? rebuyCost;
   final int? addOnCost;
 
+  /// Scheduled breaks to place (specification section 8). Empty means OFF.
+  ///
+  /// When breaks are ON but no placement was chosen, pass a break with
+  /// `afterLevel: 0` and the engine picks the default position: immediately
+  /// after the rebuy window when rebuys are enabled, otherwise the structural
+  /// midpoint (v11 addendum section 5).
+  final List<ScheduledBreak> breaks;
+
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
 }
+
+/// A scheduled break in the tournament structure (specification section 8).
+///
+/// Deliberately NOT the same thing as a manual pause. Section 8 is explicit:
+/// "A break is a real scheduled state, not merely a manual pause." It is part
+/// of the generated structure and its minutes count toward the target
+/// duration, which is why it lives here and not in the live-game status alone.
+class ScheduledBreak {
+  const ScheduledBreak({
+    required this.afterLevel,
+    required this.durationMins,
+  });
+
+  /// The break runs once this level has finished. Level 6 means "after
+  /// Level 6", i.e. between Level 6 and Level 7.
+  final int afterLevel;
+
+  /// 5, 10, 15, 20 or a custom value (section 8).
+  final int durationMins;
+
+  ScheduledBreak copyWith({int? afterLevel, int? durationMins}) =>
+      ScheduledBreak(
+        afterLevel: afterLevel ?? this.afterLevel,
+        durationMins: durationMins ?? this.durationMins,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is ScheduledBreak &&
+      other.afterLevel == afterLevel &&
+      other.durationMins == durationMins;
+
+  @override
+  int get hashCode => Object.hash(afterLevel, durationMins);
+
+  @override
+  String toString() => 'Break after L$afterLevel for ${durationMins}m';
+}
+
+/// Break duration options offered in setup (section 8), plus Custom.
+const List<int> kBreakDurationPresets = [5, 10, 15, 20];
+
+/// How many breaks a tournament may schedule.
+///
+/// Section 8 of the 10 September specification said 1 or 2; the v11 addendum
+/// raised it to 3.
+const int kMaxScheduledBreaks = 3;
 
 /// Prize line.
 class Prize {
@@ -132,6 +188,49 @@ class Prize {
 
   final int place;
   final int amount;
+}
+
+/// One way of splitting the prize pool (specification section 18).
+///
+/// Section 18 and section 25 both require the engine to offer SEVERAL shapes
+/// rather than imposing one: "AI generates multiple payout options, not only
+/// one. Example options could cover 3, 4 or 5 paid positions. Each option
+/// shows position, percentage and calculated amount." The organizer picks.
+class PayoutOption {
+  const PayoutOption({
+    required this.paidPlaces,
+    required this.prizes,
+    required this.prizePool,
+    required this.roundingRemainder,
+    required this.rationale,
+  });
+
+  final int paidPlaces;
+  final List<Prize> prizes;
+
+  /// Net pool this option splits — gross minus the organizer allocation.
+  final int prizePool;
+
+  /// Whatever could not be split into clean amounts. Section 18 requires
+  /// deterministic rounding to "practical clean amounts", so a few units may
+  /// be left over rather than producing an ugly figure.
+  final int roundingRemainder;
+
+  /// Plain-language reason this shape is offered, e.g. "Top-heavy — rewards
+  /// the win". Shown beside the option so the choice is informed.
+  final String rationale;
+
+  /// Percentage of the pool each place receives, rounded for display.
+  List<int> get percentages => [
+        for (final p in prizes)
+          prizePool == 0 ? 0 : ((p.amount / prizePool) * 100).round(),
+      ];
+
+  /// Section 30's financial invariant: what is paid plus what is left over
+  /// must equal the pool exactly.
+  bool get reconciles =>
+      prizes.fold<int>(0, (a, p) => a + p.amount) + roundingRemainder ==
+      prizePool;
 }
 
 /// The generated tournament structure.
@@ -154,7 +253,26 @@ class TournamentStructure {
     this.paidPlaces = 0,
     required this.colorUpInstructions,
     required this.warnings,
+    this.breaks = const [],
   });
+
+  /// Breaks actually placed in this structure (section 8). Empty means the
+  /// tournament runs straight through, which is what every structure written
+  /// before breaks existed did.
+  final List<ScheduledBreak> breaks;
+
+  /// Total scheduled break time. Section 8: "target 4h = 3h40 playing + 20 min
+  /// scheduled breaks", so this is part of the duration, not outside it.
+  int get totalBreakMins =>
+      breaks.fold<int>(0, (a, b) => a + b.durationMins);
+
+  /// Whether a break falls immediately after [level].
+  ScheduledBreak? breakAfter(int level) {
+    for (final b in breaks) {
+      if (b.afterLevel == level) return b;
+    }
+    return null;
+  }
 
   final int startingStack;
   final List<ChipPlanEntry> chipPlan;

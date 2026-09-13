@@ -138,6 +138,16 @@ BlindLevel blindLevelFromMap(Map<String, dynamic> m) => BlindLevel(
       manuallyEdited: (m['manuallyEdited'] as bool?) ?? false,
     );
 
+Map<String, dynamic> scheduledBreakToMap(ScheduledBreak b) => {
+      'afterLevel': b.afterLevel,
+      'durationMins': b.durationMins,
+    };
+
+ScheduledBreak scheduledBreakFromMap(Map<String, dynamic> m) => ScheduledBreak(
+      afterLevel: (m['afterLevel'] as num?)?.toInt() ?? 0,
+      durationMins: (m['durationMins'] as num?)?.toInt() ?? 10,
+    );
+
 Map<String, dynamic> chipPlanEntryToMap(ChipPlanEntry c) =>
     {'color': c.color, 'hex': c.hex, 'value': c.value, 'count': c.count};
 
@@ -163,6 +173,7 @@ Map<String, dynamic> tournamentStructureToMap(TournamentStructure s) => {
       'addOnStack': s.addOnStack,
       'addOnChipPlan': s.addOnChipPlan.map(chipPlanEntryToMap).toList(),
       'levels': s.levels.map(blindLevelToMap).toList(),
+      'breaks': s.breaks.map(scheduledBreakToMap).toList(),
       'levelDuration': s.levelDuration,
       'plannedLevels': s.plannedLevels,
       'expectedFinishMins': s.expectedFinishMins,
@@ -188,6 +199,9 @@ TournamentStructure tournamentStructureFromMap(Map<String, dynamic> m) =>
           .map(chipPlanEntryFromMap)
           .toList(),
       levels: _mapList(m['levels'] as List? ?? const []).map(blindLevelFromMap).toList(),
+      breaks: _mapList(m['breaks'] as List? ?? const [])
+          .map(scheduledBreakFromMap)
+          .toList(),
       levelDuration: (m['levelDuration'] as num?)?.toInt() ?? 15,
       plannedLevels: (m['plannedLevels'] as num?)?.toInt() ?? 0,
       expectedFinishMins: (m['expectedFinishMins'] as num?)?.toInt() ?? 0,
@@ -238,6 +252,7 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
           : tableSettingsToMap(s.tableSettingsOverride!),
       'expectedPlayersOverride': s.expectedPlayersOverride,
       'lockedExpectedPlayers': s.lockedExpectedPlayers,
+      'breaks': s.breaks.map(scheduledBreakToMap).toList(),
     };
 
 GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
@@ -281,6 +296,11 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
       // Absent on everything written before section 6's Locked concept
       // existed, which reads correctly as "not locked".
       lockedExpectedPlayers: (m['lockedExpectedPlayers'] as num?)?.toInt(),
+      // Absent on everything written before section 8's breaks existed, and
+      // an empty list reads correctly as "runs straight through".
+      breaks: _mapList(m['breaks'] as List? ?? const [])
+          .map(scheduledBreakFromMap)
+          .toList(),
     );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -674,6 +694,7 @@ Map<String, dynamic> tournamentPresetToMap(TournamentPreset p) => {
       'reEntry': p.reEntry,
       'addOn': p.addOn,
       'addOnCloseLevel': p.addOnCloseLevel,
+      'breaks': p.breaks.map(scheduledBreakToMap).toList(),
       'durationHours': p.durationHours,
       'anteEnabled': p.anteEnabled,
       'anteAfterLevel': p.anteAfterLevel,
@@ -697,6 +718,9 @@ TournamentPreset tournamentPresetFromMap(Map<String, dynamic> m) =>
       reEntry: (m['reEntry'] as bool?) ?? false,
       addOn: (m['addOn'] as bool?) ?? false,
       addOnCloseLevel: (m['addOnCloseLevel'] as num?)?.toInt() ?? 6,
+      breaks: _mapList(m['breaks'] as List? ?? const [])
+          .map(scheduledBreakFromMap)
+          .toList(),
       durationHours: (m['durationHours'] as num?)?.toDouble() ?? 3,
       anteEnabled: (m['anteEnabled'] as bool?) ?? false,
       anteAfterLevel: (m['anteAfterLevel'] as num?)?.toInt() ?? 0,

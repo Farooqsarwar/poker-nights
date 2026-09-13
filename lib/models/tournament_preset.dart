@@ -1,4 +1,5 @@
 import 'chip_color.dart';
+import 'tournament.dart';
 
 /// A saved tournament template (checklist §9.1). Stores the inputs the admin
 /// chooses before generation — never a fixed blind structure; the engine
@@ -16,6 +17,7 @@ class TournamentPreset {
     required this.reEntry,
     required this.addOn,
     this.addOnCloseLevel = 6,
+    this.breaks = const [],
     required this.durationHours,
     required this.anteEnabled,
     required this.anteAfterLevel,
@@ -39,6 +41,9 @@ class TournamentPreset {
 
   /// Level after which add-ons close (defaults to end of Level 6).
   final int addOnCloseLevel;
+
+  /// Scheduled breaks remembered with the preset (section 8).
+  final List<ScheduledBreak> breaks;
 
   final double durationHours;
   final bool anteEnabled;
@@ -65,6 +70,7 @@ class TournamentPreset {
     bool? reEntry,
     bool? addOn,
     int? addOnCloseLevel,
+    List<ScheduledBreak>? breaks,
     double? durationHours,
     bool? anteEnabled,
     int? anteAfterLevel,
@@ -85,6 +91,7 @@ class TournamentPreset {
       reEntry: reEntry ?? this.reEntry,
       addOn: addOn ?? this.addOn,
       addOnCloseLevel: addOnCloseLevel ?? this.addOnCloseLevel,
+      breaks: breaks ?? this.breaks,
       durationHours: durationHours ?? this.durationHours,
       anteEnabled: anteEnabled ?? this.anteEnabled,
       anteAfterLevel: anteAfterLevel ?? this.anteAfterLevel,

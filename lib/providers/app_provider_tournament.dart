@@ -586,6 +586,7 @@ extension AppProviderTournament on AppProvider {
         organizerPct: s.organizerPct,
         rebuyCost: s.rebuyCost,
         addOnCost: s.addOnCost,
+        breaks: s.breaks,
       ),
     );
     _currentGame = game.copyWith(
@@ -831,6 +832,7 @@ extension AppProviderTournament on AppProvider {
         organizerPct: newSettings.organizerPct,
         rebuyCost: newSettings.rebuyCost,
         addOnCost: newSettings.addOnCost,
+        breaks: newSettings.breaks,
       ),
     );
     // Once play has started the starting stacks are frozen — blinds, levels

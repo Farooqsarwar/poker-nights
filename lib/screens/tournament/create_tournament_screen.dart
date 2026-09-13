@@ -26,6 +26,7 @@ import '../../widgets/app_badge.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/chip_token.dart';
 import '../../widgets/count_stepper.dart';
+import '../../widgets/glass_styles.dart';
 
 enum _ChipMode { preset, quick, exact }
 
@@ -211,6 +212,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   bool _reEntry = true;
   bool _addOn = true;
   int _addOnClose = 6;
+
+  /// Scheduled breaks (specification section 8; v11 addendum raised the
+  /// maximum to 3). Empty means OFF. `afterLevel: 0` means "you choose" —
+  /// the engine places it after the rebuy window, or at the structural
+  /// midpoint when rebuys are off.
+  List<ScheduledBreak> _breaks = const [];
+  bool get _breaksOn => _breaks.isNotEmpty;
   final _addOnCost = TextEditingController();
   bool _koEnabled = false;
   final _koAmount = TextEditingController(text: '5');
@@ -387,6 +395,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     _reEntry = p.reEntry;
     _addOn = p.addOn;
     _addOnClose = p.addOnCloseLevel;
+    _breaks = List.of(p.breaks);
     _addOnCost.text = p.addOnCost?.toString() ?? '';
     _koEnabled = p.koEnabled;
     _koAmount.text = p.koAmount.toString();
@@ -600,6 +609,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           ),
 
           _ConfirmItem('Add-on', _addOn ? 'Yes, to L$_addOnClose' : 'No'),
+          _ConfirmItem(
+            'Breaks',
+            _breaksOn
+                ? '${_breaks.length} x ${_breaks.first.durationMins} min'
+                : 'None',
+          ),
           _ConfirmItem('Bounty', _koEnabled ? 'Yes (${_koAmount.text})' : 'No'),
           _ConfirmItem(
             'Ante',
@@ -717,6 +732,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         reEntry: _reEntry,
         addOn: _addOn,
         addOnCloseLevel: _addOnClose,
+        breaks: _breaks,
         addOnCost: num.tryParse(_addOnCost.text)?.toInt(),
         anteEnabled: _anteEnabled,
         anteAfterLevel: _anteAfterLevel,
@@ -883,6 +899,54 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     );
   }
 
+  /// Reads the start time, falling back to a sensible evening default when
+  /// the field is empty or malformed.
+  TimeOfDay get _startTime {
+    final parts = _time.text.split(':');
+    if (parts.length == 2) {
+      final h = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      if (h != null && m != null && h >= 0 && h < 24 && m >= 0 && m < 60) {
+        return TimeOfDay(hour: h, minute: m);
+      }
+    }
+    return const TimeOfDay(hour: 20, minute: 0);
+  }
+
+  void _setStartTime(AppProvider app, TimeOfDay t) {
+    final h = t.hour.toString().padLeft(2, '0');
+    final m = t.minute.toString().padLeft(2, '0');
+    setState(() => _time.text = '$h:$m');
+    _refreshPresetMatches(app);
+  }
+
+  /// Section 7's +/- 30 minute stepper.
+  ///
+  /// Moving from an odd minute snaps to the half hour first, so a time typed
+  /// as 20:12 becomes 20:30 rather than 20:42 — the stepper is there to land
+  /// on round times, not to preserve arbitrary ones.
+  void _nudgeStartTime(AppProvider app, int deltaMins) {
+    final now = _startTime;
+    final total = now.hour * 60 + now.minute;
+    final snapped = deltaMins > 0
+        ? ((total ~/ 30) + 1) * 30
+        : ((total + 29) ~/ 30 - 1) * 30;
+    final wrapped = ((snapped % (24 * 60)) + 24 * 60) % (24 * 60);
+    _setStartTime(
+      app,
+      TimeOfDay(hour: wrapped ~/ 60, minute: wrapped % 60),
+    );
+  }
+
+  Future<void> _pickStartTime(AppProvider app) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime,
+      builder: _centerDialog,
+    );
+    if (picked != null && mounted) _setStartTime(app, picked);
+  }
+
   Widget _buildStep1(AppProvider app) {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -928,37 +992,74 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
+              // Section 7: "Start time — centered premium control; +/- 30
+              // minute stepper." A clock picker makes the host set minutes
+              // nobody uses; home games start on the hour or the half hour.
+              // Tapping the time still opens the full picker for the rare
+              // 20:15 start, so nothing is lost.
               Expanded(
-                child: GestureDetector(
-                  onTap: () async {
-                    final parts = _time.text.split(':');
-                    var initialTime = TimeOfDay.now();
-                    if (parts.length == 2) {
-                      final h = int.tryParse(parts[0]);
-                      final m = int.tryParse(parts[1]);
-                      if (h != null && m != null) {
-                        initialTime = TimeOfDay(hour: h, minute: m);
-                      }
-                    }
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: initialTime,
-                      builder: _centerDialog,
-                    );
-                    if (picked != null) {
-                      final h = picked.hour.toString().padLeft(2, '0');
-                      final m = picked.minute.toString().padLeft(2, '0');
-                      setState(() => _time.text = '$h:$m');
-                      _refreshPresetMatches(app);
-                    }
-                  },
-                  child: AbsorbPointer(
-                    child: AppTextField(
-                      controller: _time,
-                      label: 'Start time',
-                      readOnly: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Start time',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Glass.solidTint(AppColors.secondary),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            tooltip: '30 minutes earlier',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _nudgeStartTime(app, -30),
+                            icon: Icon(
+                              Icons.remove,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => _pickStartTime(app),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.sm,
+                                ),
+                                child: Text(
+                                  _time.text.isEmpty ? '--:--' : _time.text,
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.display(
+                                    size: AppFontSizes.lg,
+                                    weight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '30 minutes later',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _nudgeStartTime(app, 30),
+                            icon: Icon(
+                              Icons.add,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1786,6 +1887,114 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
               ),
             ),
+          Divider(color: AppColors.border),
+          // Section 8 — breaks are a dedicated setup section, and their
+          // minutes come out of the target duration rather than being added
+          // on top of it.
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Breaks',
+                            style: AppTypography.bodySm.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _breaksOn
+                                ? 'Break time comes out of your $_durationLabel '
+                                      'target, not on top of it.'
+                                : 'Scheduled pauses built into the structure.',
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    _SegmentedPicker(
+                      options: const ['Off', '1', '2', '3'],
+                      selected: _breaksOn ? '${_breaks.length}' : 'Off',
+                      onChanged: (v) => setState(() {
+                        if (v == 'Off') {
+                          _breaks = const [];
+                          return;
+                        }
+                        final count = int.parse(v);
+                        final mins = _breaksOn
+                            ? _breaks.first.durationMins
+                            : 10;
+                        // afterLevel 0 asks the engine to place it: after the
+                        // rebuy window, or the midpoint when rebuys are off.
+                        _breaks = List.generate(
+                          count,
+                          (i) => i < _breaks.length
+                              ? _breaks[i]
+                              : ScheduledBreak(
+                                  afterLevel: 0,
+                                  durationMins: mins,
+                                ),
+                        );
+                      }),
+                    ),
+                  ],
+                ),
+                if (_breaksOn) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Text(
+                        'Each break',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      _SegmentedPicker(
+                        options: const ['5', '10', '15', '20'],
+                        selected: '${_breaks.first.durationMins}',
+                        onChanged: (v) => setState(() {
+                          final mins = int.parse(v);
+                          _breaks = [
+                            for (final b in _breaks)
+                              b.copyWith(durationMins: mins),
+                          ];
+                        }),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        'min',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    _rebuys
+                        ? 'Placed after the rebuy window closes (L$_rebuysClose). '
+                              'You can move it once the structure is generated.'
+                        : 'Placed around the middle of the tournament. '
+                              'You can move it once the structure is generated.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
           Divider(color: AppColors.border),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),

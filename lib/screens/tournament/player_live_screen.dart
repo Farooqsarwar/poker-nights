@@ -23,6 +23,7 @@ import '../../widgets/app_back_button.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/tournament_display_block.dart';
+import '../../widgets/stack_depth.dart';
 import '../../responsive/responsive.dart';
 import '../../models/game.dart';
 
@@ -370,9 +371,18 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
-                    child: _StatCard(
-                      label: 'Avg stack',
-                      value: Formatters.chips(avgStack),
+                    // Section 12: green/amber/red depth indicator around
+                    // AVG STACK. The chip count alone says nothing -- 12,000
+                    // is deep at 50/100 and desperate at 1000/2000.
+                    child: StackDepthRing(
+                      depth: StackDepth.of(
+                        avgStack: avgStack,
+                        bigBlind: game.currentLevelData?.bb ?? 0,
+                      ),
+                      child: _StatCard(
+                        label: 'Avg stack',
+                        value: Formatters.chips(avgStack),
+                      ),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),

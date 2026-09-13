@@ -433,6 +433,10 @@ extension AppProviderGame on AppProvider {
     final affectsStructure =
         prev.players != s.players ||
         !_sameChipSet(prev.chipSet, s.chipSet) ||
+        // Section 8: break minutes are inside the target duration, so adding
+        // or moving one changes how many levels fit.
+        prev.breaks.length != s.breaks.length ||
+        prev.breaks.join() != s.breaks.join() ||
         prev.expectedPlayersOverride != s.expectedPlayersOverride ||
         prev.buyIn != s.buyIn ||
         prev.durationHours != s.durationHours ||
@@ -506,6 +510,7 @@ extension AppProviderGame on AppProvider {
             organizerPct: s.organizerPct,
             rebuyCost: s.rebuyCost,
             addOnCost: s.addOnCost,
+            breaks: s.breaks,
           ),
         );
         // After play starts the starting stacks are frozen (client rule).

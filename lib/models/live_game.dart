@@ -36,6 +36,7 @@ class GameSettings {
     this.tableSettingsOverride,
     this.expectedPlayersOverride,
     this.lockedExpectedPlayers,
+    this.breaks = const [],
   });
 
   final String name;
@@ -98,6 +99,13 @@ class GameSettings {
   /// randomization rules. Null means "use the group default"
   /// ([AppProvider.effectiveTableSettings] resolves this).
   final TableSettings? tableSettingsOverride;
+
+  /// Breaks the organizer configured (specification section 8).
+  ///
+  /// Empty means OFF, which is exactly how every tournament created before
+  /// breaks existed behaved. The engine places the default when the organizer
+  /// turns breaks on without choosing a position.
+  final List<ScheduledBreak> breaks;
 
   /// The expected count FROZEN for physical preparation (specification
   /// section 6).
@@ -162,6 +170,7 @@ class GameSettings {
     bool clearExpectedPlayersOverride = false,
     int? lockedExpectedPlayers,
     bool clearLockedExpectedPlayers = false,
+    List<ScheduledBreak>? breaks,
   }) {
     return GameSettings(
       name: name ?? this.name,
@@ -200,6 +209,7 @@ class GameSettings {
       lockedExpectedPlayers: clearLockedExpectedPlayers
           ? null
           : (lockedExpectedPlayers ?? this.lockedExpectedPlayers),
+      breaks: breaks ?? this.breaks,
     );
   }
 

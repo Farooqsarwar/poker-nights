@@ -2001,42 +2001,130 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
                 if (_breaksOn) ...[
                   const SizedBox(height: AppSpacing.md),
-                  Row(
-                    children: [
-                      Text(
-                        'Each break',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
+                  // Section 8: each break carries its own placement and
+                  // duration, presets PLUS custom. One row per break so a
+                  // three-break night can put them where it wants.
+                  for (var i = 0; i < _breaks.length; i++) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: Container(
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: Glass.solidTint(AppColors.secondary),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Break ${i + 1}',
+                              style: AppTypography.bodyXs.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.foreground,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Row(
+                              children: [
+                                Text(
+                                  'After level',
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                CountStepper(
+                                  // 0 means "you choose" — the engine places
+                                  // it after the rebuy window, or at the
+                                  // midpoint when rebuys are off.
+                                  value: _breaks[i].afterLevel,
+                                  min: 0,
+                                  max: 30,
+                                  semanticLabel: 'Break ${i + 1} after level',
+                                  onChanged: (v) => setState(() {
+                                    _breaks = [
+                                      for (var j = 0; j < _breaks.length; j++)
+                                        j == i
+                                            ? _breaks[j].copyWith(afterLevel: v)
+                                            : _breaks[j],
+                                    ];
+                                  }),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                if (_breaks[i].afterLevel == 0)
+                                  Expanded(
+                                    child: Text(
+                                      'Auto',
+                                      style: AppTypography.bodyXs.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Row(
+                              children: [
+                                Text(
+                                  'Minutes',
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                _SegmentedPicker(
+                                  // Section 8's presets, plus Custom — which
+                                  // simply hands the stepper below any value.
+                                  options: const ['5', '10', '15', '20'],
+                                  selected: kBreakDurationPresets
+                                          .contains(_breaks[i].durationMins)
+                                      ? '${_breaks[i].durationMins}'
+                                      : '',
+                                  onChanged: (v) => setState(() {
+                                    final mins = int.parse(v);
+                                    _breaks = [
+                                      for (var j = 0; j < _breaks.length; j++)
+                                        j == i
+                                            ? _breaks[j]
+                                                .copyWith(durationMins: mins)
+                                            : _breaks[j],
+                                    ];
+                                  }),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                CountStepper(
+                                  value: _breaks[i].durationMins,
+                                  min: 1,
+                                  max: 60,
+                                  step: 1,
+                                  semanticLabel: 'Break ${i + 1} minutes',
+                                  onChanged: (v) => setState(() {
+                                    _breaks = [
+                                      for (var j = 0; j < _breaks.length; j++)
+                                        j == i
+                                            ? _breaks[j]
+                                                .copyWith(durationMins: v)
+                                            : _breaks[j],
+                                    ];
+                                  }),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: AppSpacing.md),
-                      _SegmentedPicker(
-                        options: const ['5', '10', '15', '20'],
-                        selected: '${_breaks.first.durationMins}',
-                        onChanged: (v) => setState(() {
-                          final mins = int.parse(v);
-                          _breaks = [
-                            for (final b in _breaks)
-                              b.copyWith(durationMins: mins),
-                          ];
-                        }),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        'min',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
+                    ),
+                  ],
                   Text(
-                    _rebuys
-                        ? 'Placed after the rebuy window closes (L$_rebuysClose). '
-                              'You can move it once the structure is generated.'
-                        : 'Placed around the middle of the tournament. '
-                              'You can move it once the structure is generated.',
+                    _breaks.every((b) => b.afterLevel > 0)
+                        ? 'Placed exactly where you have chosen.'
+                        : _rebuys
+                            ? 'Anything left on Auto goes after the rebuy '
+                                  'window closes (around L$_rebuysClose).'
+                            : 'Anything left on Auto goes around the middle '
+                                  'of the tournament.',
                     style: AppTypography.bodyXs.copyWith(
                       color: AppColors.mutedForeground,
                     ),

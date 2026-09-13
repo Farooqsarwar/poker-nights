@@ -15,6 +15,8 @@ import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../services/entitlements.dart';
+import '../../services/payment_service.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
@@ -51,6 +53,19 @@ class CheckInScreen extends StatefulWidget {
 class _CheckInScreenState extends State<CheckInScreen> {
   SeatingMode _seatingMode = SeatingMode.random;
   bool _seatingModeInitialized = false;
+
+  /// Addendum section 3's free hosting limit. Read once; the notice below is
+  /// a visible limit and an upgrade path, not enforcement -- section 7 puts
+  /// real Premium authorization on a server that does not exist yet.
+  PremiumTier _tier = PremiumTier.free;
+
+  @override
+  void initState() {
+    super.initState();
+    MockPaymentService().currentTier().then((t) {
+      if (mounted) setState(() => _tier = t);
+    });
+  }
 
   /// The checked-in count the split prompt was last shown/dismissed for, so
   /// it doesn't re-open every rebuild once the admin has responded to it at
@@ -360,6 +375,54 @@ class _CheckInScreenState extends State<CheckInScreen> {
             onLock: () => app.lockExpectedPlayers(),
             onUnlock: app.unlockExpectedPlayers,
           ),
+          // Addendum section 3: free hosting covers one table, up to nine
+          // players. Surfaced HERE as well as at creation, because this is
+          // where the count actually crosses the line -- a host who set up for
+          // eight and had two more turn up finds out at the door, not after
+          // starting.
+          //
+          // A notice, not a block. Section 3's monetization principle keeps
+          // core tournament operation free, and refusing to check somebody in
+          // at the table would be a worse product than telling the host their
+          // night now needs two tables.
+          if (Entitlements.hostingBlockedReason(_tier, checkedIn.length)
+              case final blocked?) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.workspace_premium,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      blocked,
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.foreground,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    onPressed: () => context.push(RoutePaths.upgrade),
+                    child: const Text('See Premium'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           if (pendingRequests.isNotEmpty) ...[
             AppAlertBanner(

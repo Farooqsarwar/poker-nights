@@ -14,6 +14,17 @@ abstract final class RoutePaths {
   static const String support = '/support';
   static const String join = '/join';
 
+  /// The public tools (specification section 2).
+  ///
+  /// Each has its own URL because they are meant to be found and linked
+  /// individually — somebody searching for an ICM calculator should land on
+  /// the ICM calculator, not on a hub they then have to navigate.
+  static const String tools = '/tools';
+  static const String toolBlinds = '/tools/blind-structure';
+  static const String toolClock = '/tools/clock';
+  static const String toolIcm = '/tools/icm';
+  static const String toolPayouts = '/tools/payouts';
+
   /// Group invite deep link (`?code=CODE`) — shared as a link or encoded in
   /// the group's QR code. Requires sign-in; unauthenticated visitors are
   /// bounced through login with `?next=` and land back here to complete the

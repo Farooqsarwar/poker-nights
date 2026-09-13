@@ -15,6 +15,7 @@ import '../screens/public/privacy_screen.dart';
 import '../screens/public/terms_screen.dart';
 import '../screens/public/support_screen.dart';
 import '../screens/public/join_screen.dart';
+import '../screens/public/tools_screen.dart';
 import '../screens/shell/chat_screen.dart';
 import '../screens/shell/group_screen.dart';
 import '../screens/shell/history_screen.dart';
@@ -58,6 +59,11 @@ const _publicPaths = {
   RoutePaths.terms,
   RoutePaths.support,
   RoutePaths.join,
+  RoutePaths.tools,
+  RoutePaths.toolBlinds,
+  RoutePaths.toolClock,
+  RoutePaths.toolIcm,
+  RoutePaths.toolPayouts,
 };
 
 /// Admin-only routes — non-admins are bounced to invitation (if a game exists)
@@ -310,6 +316,29 @@ GoRouter buildAppRouter(AppProvider app) {
       path: RoutePaths.join,
       builder: (context, state) =>
           JoinScreen(initialCode: state.uri.queryParameters['code']),
+    ),
+
+    // The public tools (section 2). No account, no shell, no guard -- a
+    // visitor who came to settle a chop should get the answer, not a login.
+    GoRoute(
+      path: RoutePaths.tools,
+      builder: (context, state) => const ToolsScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.toolBlinds,
+      builder: (context, state) => const ToolBlindsScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.toolClock,
+      builder: (context, state) => const ToolClockScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.toolIcm,
+      builder: (context, state) => const ToolIcmScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.toolPayouts,
+      builder: (context, state) => const ToolPayoutsScreen(),
     ),
 
     // ── App shell ────────────────────────────────────────────────────────────

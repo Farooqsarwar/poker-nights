@@ -23,6 +23,9 @@ import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/event_day_checklist.dart';
 import '../../widgets/premium_gate.dart';
+import '../../models/payment_record.dart';
+import '../../models/live_game.dart';
+import '../../widgets/dummy_payment_sheet.dart';
 
 enum SeatingMode { random, manual, keepGuests, separateGuests }
 
@@ -540,11 +543,21 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                   variant: AppButtonVariant.secondary,
                                   onPressed: game.checkInClosed
                                       ? null
-                                      : () => app.checkInPlayer(p.id),
+                                      : () => _acceptWithBuyIn(
+                                            context,
+                                            app,
+                                            game,
+                                            p,
+                                          ),
                                   child: Text(
                                     game.checkInClosed
                                         ? 'Check-in closed'
-                                        : 'Accept check-in',
+                                        : game.hasPaid(
+                                            p.id,
+                                            PaymentPurpose.buyIn,
+                                          )
+                                            ? 'Accept check-in'
+                                            : 'Take buy-in',
                                   ),
                                 )
                               else if (p.id == app.user?.id)
@@ -1135,6 +1148,37 @@ class _SeatingOption extends StatelessWidget {
   }
 }
 
+
+/// Accepts a check-in, collecting the buy-in first if it is still owed.
+///
+/// QA case PN-DPAY-001 and section 14: money is collected, then the player is
+/// official. Confirming first and collecting after would let a host start a
+/// tournament whose prize pool does not match who is sitting at the table.
+///
+/// A player who has already paid — cash at the door, recorded earlier, or a
+/// re-confirmation — skips straight through rather than being asked twice.
+/// A declined or cancelled payment leaves them pending, which is the correct
+/// state: present, not yet settled.
+void _acceptWithBuyIn(
+  BuildContext context,
+  AppProvider app,
+  LiveGame game,
+  Player player,
+) {
+  if (game.hasPaid(player.id, PaymentPurpose.buyIn)) {
+    app.checkInPlayer(player.id);
+    return;
+  }
+  showDummyPaymentSheet(
+    context: context,
+    playerId: player.id,
+    playerName: player.name,
+    purpose: PaymentPurpose.buyIn,
+    onSettled: (record) {
+      if (record?.status == PaymentStatus.paid) app.checkInPlayer(player.id);
+    },
+  );
+}
 
 /// Section 6's head-count panel: what we are preparing for, whether it is
 /// frozen, and how far RSVPs have drifted since it was.

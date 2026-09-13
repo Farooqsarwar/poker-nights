@@ -16,6 +16,7 @@ import '../models/cash_game.dart';
 import '../models/game.dart';
 import '../models/group.dart';
 import '../models/live_game.dart';
+import '../models/payment_record.dart';
 import '../models/table_settings.dart';
 import '../models/tournament.dart';
 import '../models/tournament_preset.dart';
@@ -46,6 +47,7 @@ part 'app_provider_players.dart';
 part 'app_provider_tournament.dart';
 part 'app_provider_social.dart';
 part 'app_provider_codes_cash.dart';
+part 'app_provider_payments.dart';
 part 'app_provider_notifications_settings.dart';
 
 /// One future-level edit produced by the admin structure editor.

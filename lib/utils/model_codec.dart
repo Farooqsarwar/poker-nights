@@ -8,6 +8,7 @@ import '../models/table_settings.dart';
 import '../models/tournament.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
+import '../models/payment_record.dart';
 
 /// Canonical model ⇄ map codecs shared by the local recovery store and the
 /// cloud repository so both persistence layers can never drift apart.
@@ -136,6 +137,31 @@ BlindLevel blindLevelFromMap(Map<String, dynamic> m) => BlindLevel(
       // Absent on every structure written before the marker existed, which is
       // correct: those levels were all engine-generated.
       manuallyEdited: (m['manuallyEdited'] as bool?) ?? false,
+    );
+
+Map<String, dynamic> paymentRecordToMap(PaymentRecord p) => {
+      'id': p.id,
+      'playerId': p.playerId,
+      'purpose': p.purpose.name,
+      'amount': p.amount,
+      'status': p.status.name,
+      'timestamp': p.timestamp.toIso8601String(),
+      'idempotencyKey': p.idempotencyKey,
+      'failureReason': p.failureReason,
+    };
+
+PaymentRecord paymentRecordFromMap(Map<String, dynamic> m) => PaymentRecord(
+      id: (m['id'] as String?) ?? '',
+      playerId: (m['playerId'] as String?) ?? '',
+      purpose: _enumByName(
+          PaymentPurpose.values, m['purpose'], PaymentPurpose.buyIn),
+      amount: (m['amount'] as num?)?.toInt() ?? 0,
+      status:
+          _enumByName(PaymentStatus.values, m['status'], PaymentStatus.failed),
+      timestamp:
+          DateTime.tryParse((m['timestamp'] as String?) ?? '') ?? DateTime.now(),
+      idempotencyKey: (m['idempotencyKey'] as String?) ?? '',
+      failureReason: m['failureReason'] as String?,
     );
 
 Map<String, dynamic> scheduledBreakToMap(ScheduledBreak b) => {
@@ -455,6 +481,7 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'groupId': game.groupId,
     'settings': gameSettingsToMap(game.settings),
     'structure': tournamentStructureToMap(game.structure),
+    'payments': game.payments.map(paymentRecordToMap).toList(),
     'status': game.status.name,
     'publicCode': game.publicCode,
     'tvCode': game.tvCode,
@@ -504,6 +531,9 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       groupId: (map['groupId'] as String?) ?? '',
       settings:
           gameSettingsFromMap(Map<String, dynamic>.from(map['settings'] as Map)),
+      payments: _mapList(map['payments'] as List? ?? const [])
+          .map(paymentRecordFromMap)
+          .toList(),
       structure: tournamentStructureFromMap(
           Map<String, dynamic>.from(map['structure'] as Map)),
       status: _enumByName(

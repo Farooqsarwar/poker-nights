@@ -28,6 +28,8 @@ import '../../widgets/chat_sheet.dart';
 import '../../widgets/tournament_display_block.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/structure_editor.dart';
+import '../../models/payment_record.dart';
+import '../../widgets/dummy_payment_sheet.dart';
 
 /// Admin live dashboard mirroring the web `AdminDashboardPage`.
 class AdminDashboardScreen extends StatefulWidget {
@@ -894,10 +896,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   players: eliminatedPlayers,
                                   settings: settings,
                                   currentLevel: currentLevel,
-                                  onGrantRebuy:
-                                      (id, key) => app.grantRebuy(id, idempotencyKey: key),
-                                  onGrantReEntry:
-                                      (id, key) => app.grantReEntry(id, idempotencyKey: key),
+                                  // QA section 12: money is collected before
+                                  // the chips are handed over. The sheet is
+                                  // simulated, but the accounting it produces
+                                  // is what the prize pool is built from, so
+                                  // the grant only happens once the payment
+                                  // has actually settled as paid.
+                                  onGrantRebuy: (id, key) => _payThenGrant(
+                                    context: context,
+                                    app: app,
+                                    playerId: id,
+                                    purpose: PaymentPurpose.rebuy,
+                                    grant: () =>
+                                        app.grantRebuy(id, idempotencyKey: key),
+                                  ),
+                                  onGrantReEntry: (id, key) => _payThenGrant(
+                                    context: context,
+                                    app: app,
+                                    playerId: id,
+                                    purpose: PaymentPurpose.reEntry,
+                                    grant: () => app.grantReEntry(
+                                      id,
+                                      idempotencyKey: key,
+                                    ),
+                                  ),
                                   isAdmin: isAdmin,
                                 ),
                               if (_tab == 'seating')
@@ -1794,12 +1816,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               Expanded(
                 child: AppButton(
                   onPressed: () {
-                    app.grantAddOn(
-                      p.id,
-                      idempotencyKey:
-                          'addon-${DateTime.now().microsecondsSinceEpoch}',
-                    );
                     Navigator.pop(context);
+                    _payThenGrant(
+                      context: context,
+                      app: app,
+                      playerId: p.id,
+                      purpose: PaymentPurpose.addOn,
+                      grant: () => app.grantAddOn(
+                        p.id,
+                        idempotencyKey:
+                            'addon-${DateTime.now().microsecondsSinceEpoch}',
+                      ),
+                    );
                   },
                   child: const Text('Grant add-on'),
                 ),
@@ -1996,6 +2024,36 @@ class _AnnouncementCard extends StatelessWidget {
 }
 
 // ── Tabs content ──────────────────────────────────────────────────────────────
+/// Collects payment, then grants — in that order.
+///
+/// QA section 12 and section 14 both describe the same sequence: confirm,
+/// take the money, add the chips, update the pool, timestamp it. Granting
+/// first and collecting after would leave a tournament whose chips in play and
+/// prize pool disagree if the payment is declined, and that discrepancy is
+/// exactly what a host cannot reconcile at the end of the night.
+///
+/// A declined or cancelled payment grants nothing (PN-DPAY-011, PN-DPAY-012).
+void _payThenGrant({
+  required BuildContext context,
+  required AppProvider app,
+  required String playerId,
+  required PaymentPurpose purpose,
+  required VoidCallback grant,
+}) {
+  final player = app.currentGame?.players
+      .where((p) => p.id == playerId)
+      .firstOrNull;
+  showDummyPaymentSheet(
+    context: context,
+    playerId: playerId,
+    playerName: player?.name ?? 'Player',
+    purpose: purpose,
+    onSettled: (record) {
+      if (record?.status == PaymentStatus.paid) grant();
+    },
+  );
+}
+
 class _EliminatedTab extends StatelessWidget {
   const _EliminatedTab({
     required this.players,

@@ -1,4 +1,5 @@
 import 'chip_color.dart';
+import 'payment_record.dart';
 import 'game.dart';
 import 'table_settings.dart';
 import 'tournament.dart';
@@ -338,6 +339,7 @@ class LiveGame {
     this.levelEndTime,
     this.startedAt,
     this.changeLog = const [],
+    this.payments = const [],
     this.revision = 0,
     this.lastIdempotencyKey,
     this.editorDeviceId = '',
@@ -452,6 +454,36 @@ class LiveGame {
   /// Combined with [lastIdempotencyKey] this guards against double-applying a
   /// duplicate action after a browser retry or an offline-restore replay
   /// (technical §18.1).
+  /// Simulated payments recorded against this tournament (QA section 12).
+  ///
+  /// No money moves and no provider is contacted. The ledger exists so the
+  /// prize pool, the host's view of who has settled up and the audit trail all
+  /// agree — the part that has to be right whether the money went through the
+  /// app or across the table in cash.
+  final List<PaymentRecord> payments;
+
+  /// Whether [playerId] has a successful payment of [purpose] on file.
+  ///
+  /// Rebuys are deliberately excluded from this shortcut: a player may rebuy
+  /// several times, so "have they paid for a rebuy" is not a yes/no question.
+  bool hasPaid(String playerId, PaymentPurpose purpose) => payments.any(
+        (p) =>
+            p.playerId == playerId &&
+            p.purpose == purpose &&
+            p.status == PaymentStatus.paid,
+      );
+
+  /// Total collected through the app, by purpose. Only successful payments
+  /// count — a failed or cancelled attempt contributes nothing.
+  int collected(PaymentPurpose purpose) => payments
+      .where((p) => p.purpose == purpose && p.status.countsTowardPool)
+      .fold<int>(0, (a, p) => a + p.amount);
+
+  /// Everything collected through the app.
+  int get totalCollected => payments
+      .where((p) => p.status.countsTowardPool)
+      .fold<int>(0, (a, p) => a + p.amount);
+
   final int revision;
 
   /// The idempotency key of the most recently accepted administrator action.
@@ -596,6 +628,7 @@ class LiveGame {
     int? totalChipsInPlay,
     List<Player>? pendingGuests,
     List<String>? finishOrder,
+    List<PaymentRecord>? payments,
     SpeedRecommendation? speedRecommendation,
     TournamentStructure? structure,
     bool? settlementConfirmed,
@@ -637,6 +670,7 @@ class LiveGame {
       totalChipsInPlay: totalChipsInPlay ?? this.totalChipsInPlay,
       pendingGuests: pendingGuests ?? this.pendingGuests,
       finishOrder: finishOrder ?? this.finishOrder,
+      payments: payments ?? this.payments,
       speedRecommendation: clearSpeedRecommendation
           ? null
           : speedRecommendation ?? this.speedRecommendation,

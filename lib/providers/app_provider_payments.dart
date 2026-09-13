@@ -120,6 +120,45 @@ extension AppProviderPayments on AppProvider {
     return !game.hasPaid(playerId, PaymentPurpose.buyIn);
   }
 
+  /// How the app's ledger compares with the tournament's actual money.
+  ///
+  /// These two figures are computed from different things and are MEANT to be
+  /// able to differ:
+  ///
+  ///  * the prize pool counts what is IN PLAY — confirmed players, rebuys
+  ///    taken, add-ons granted — because that is what the payouts are built
+  ///    from and it must be right whether the money arrived through the app or
+  ///    as cash across the table;
+  ///  * [LiveGame.totalCollected] counts only what went through the app.
+  ///
+  /// A host who took three buy-ins in cash will see a gap, and that gap is
+  /// correct. Showing it is the point: it is the difference between "the app
+  /// disagrees with itself" and "I have 60 in my pocket that the app has not
+  /// been told about".
+  ({int inPlay, int collected, int outstanding}) get paymentReconciliation {
+    final game = _currentGame;
+    if (game == null) {
+      return (inPlay: 0, collected: 0, outstanding: 0);
+    }
+    final s = game.settings;
+    final confirmed = game.players.where((p) => p.confirmed).length;
+    final rebuys = game.players.fold<int>(0, (a, p) => a + p.rebuys);
+    final reEntries = game.players.fold<int>(0, (a, p) => a + p.reEntries);
+    final addOns = game.players.where((p) => p.hasAddOn).length;
+
+    final inPlay = confirmed * s.buyIn +
+        rebuys * s.effectiveRebuyCost +
+        reEntries * s.buyIn +
+        (s.addOn ? addOns * s.effectiveAddOnCost : 0);
+
+    final collected = game.totalCollected;
+    return (
+      inPlay: inPlay,
+      collected: collected,
+      outstanding: inPlay - collected,
+    );
+  }
+
   /// Players who have checked in but not settled their entry — the list a host
   /// actually wants before starting.
   List<Player> get unpaidPlayers {

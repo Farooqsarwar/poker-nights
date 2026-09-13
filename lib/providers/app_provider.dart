@@ -286,12 +286,39 @@ class AppProvider extends ChangeNotifier {
   /// goes wrong, not that it cannot be defeated.
   PremiumTier premiumTier = PremiumTier.free;
 
+  /// Resolves the effective Premium tier.
+  ///
+  /// Two sources, deliberately:
+  ///
+  ///  * `entitlements/{uid}` in Firestore — AUTHORITATIVE. Read-only to every
+  ///    client by security rule, so it cannot be forged from the app. This is
+  ///    the enforcement the specification asks for (§7, acceptance 12), and it
+  ///    needs no Cloud Functions: the rule runs on Google's servers and there
+  ///    is no write condition a client request can satisfy.
+  ///
+  ///  * [MockPaymentService] on the device — DEMO ONLY. It is what the
+  ///    dummy checkout screen writes, so the upgrade flow can be shown and
+  ///    reviewed while the commercial terms are unsettled. Trivially
+  ///    bypassed, and never treated as proof of anything.
+  ///
+  /// Either grants Premium, because the demo has to work. When real billing
+  /// arrives, delete the local branch and this becomes enforcement outright.
   Future<void> loadPremiumTier() async {
-    final tier = await MockPaymentService().currentTier();
+    final server = _backendUp ? await _repo.fetchPremiumEntitlement() : false;
+    final local = await MockPaymentService().currentTier();
     if (_disposed) return;
-    premiumTier = tier;
+    premiumTier = (server || local == PremiumTier.premium)
+        ? PremiumTier.premium
+        : PremiumTier.free;
+    premiumIsServerGranted = server;
     notifyListeners();
   }
+
+  /// True when Premium came from the server rather than the local demo flag.
+  ///
+  /// Screens that need to be honest about this — a settings panel, a support
+  /// view — can say "granted" rather than implying a purchase happened.
+  bool premiumIsServerGranted = false;
 
   /// Whether this device may host a field of [players] (addendum §3, §4).
   bool canHostPlayers(int players) =>

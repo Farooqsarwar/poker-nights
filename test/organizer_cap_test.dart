@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/chip_color.dart';
 import 'package:poker_night/models/live_game.dart';
-import 'package:poker_night/models/tournament.dart';
 
 /// Specification §7 and §18: the organizer allocation is "0–20%".
 ///

@@ -19,6 +19,7 @@ class GameSettings {
     required this.koAmount,
     required this.rebuys,
     required this.rebuysCloseLevel,
+    this.rebuyCloseChosenByOrganizer = false,
     this.rebuyLimit,
     this.reEntry = false,
     required this.addOn,
@@ -52,6 +53,7 @@ class GameSettings {
   final int koAmount;
   final bool rebuys;
   final int rebuysCloseLevel;
+  final bool rebuyCloseChosenByOrganizer;
 
   /// Number of rebuys allowed per player when rebuys are limited.
   final int? rebuyLimit;
@@ -167,6 +169,7 @@ class GameSettings {
     int? koAmount,
     bool? rebuys,
     int? rebuysCloseLevel,
+    bool? rebuyCloseChosenByOrganizer,
     int? rebuyLimit,
     bool? reEntry,
     bool? addOn,
@@ -203,6 +206,7 @@ class GameSettings {
       koAmount: koAmount ?? this.koAmount,
       rebuys: rebuys ?? this.rebuys,
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
+      rebuyCloseChosenByOrganizer: rebuyCloseChosenByOrganizer ?? this.rebuyCloseChosenByOrganizer,
       rebuyLimit: rebuyLimit ?? this.rebuyLimit,
       reEntry: reEntry ?? this.reEntry,
       addOn: addOn ?? this.addOn,

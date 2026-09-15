@@ -98,6 +98,30 @@ abstract class PaymentService {
   Future<void> cancel();
 }
 
+/// The one place that decides which [PaymentService] the app uses.
+///
+/// Until this existed, three call sites each constructed [MockPaymentService]
+/// directly, so the interface bought nothing: connecting real billing would
+/// have meant finding and editing every one of them, and missing one would
+/// have left a screen quietly transacting against the mock.
+///
+/// Connecting a real provider is now a single assignment. Write a
+/// [PaymentService] implementation, set [instance] once at startup, and every
+/// screen follows -- no screen imports a concrete implementation.
+///
+/// It stays settable rather than final so a test can substitute a stub and
+/// so the swap needs no rebuild of the widget tree.
+abstract final class Payments {
+  static PaymentService instance = MockPaymentService();
+
+  /// Whether the live implementation actually moves money.
+  ///
+  /// Screens use this to decide whether to show the test-mode banner, so the
+  /// banner cannot be left on a real checkout or off a simulated one -- it
+  /// follows the implementation instead of being remembered.
+  static bool get isSimulated => instance is MockPaymentService;
+}
+
 /// A local, non-transacting implementation of [PaymentService].
 ///
 /// **This takes no money and contacts no payment provider.** It exists so the

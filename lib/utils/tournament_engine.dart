@@ -234,8 +234,41 @@ class TournamentEngine {
   /// shorter duration option, not on its own.
   ///
   /// The ceiling did move: 240 overshot even Deep's ~200.
-  static const int kMinOpeningBBDepth = 80;
-  static const int kMaxOpeningBBDepth = 200;
+  /// The widest depth any tournament may target, spanning the addendum's whole
+  /// style table -- Turbo's ~40 at one end, Deep's ~200+ at the other.
+  ///
+  /// These are NOT a starting-stack rule. Acceptance criterion 1 forbids
+  /// hard-coding one ("no hard 50-100 BB rule"), and an 80 BB floor applied to
+  /// every event was exactly that: it made Turbo and Fast unreachable however
+  /// short the night, which contradicts section 2's own table.
+  ///
+  /// What replaces it is [admissibleDepthBand]: a band derived from the depth
+  /// THIS tournament is targeting, so the constraint follows the event instead
+  /// of being imposed on all of them.
+  static const int kMinTargetBBDepth = 40;
+  static const int kMaxTargetBBDepth = 220;
+
+  /// The depths acceptable for a tournament aiming at [target] big blinds.
+  ///
+  /// The measured failure a universal floor was protecting against is worth
+  /// restating, because this must not reintroduce it: Standard 300 at 9
+  /// players over 4 hours targets ~136 BB, and when any low depth was legal
+  /// the solver took a 65 BB stack that was down to 16 BB by level three.
+  ///
+  /// A band that tracks the target prevents that structurally rather than by
+  /// blanket prohibition. That event targets 136, lands in Deep, and cannot
+  /// take 65 -- while a genuinely short, crowded night targets low, lands in
+  /// Turbo, and may. The old floor could not tell those two apart.
+  ///
+  /// Each band is the addendum's own figure with enough tolerance for the
+  /// chip solver to find a countable stack inside it.
+  static ({double min, double max}) admissibleDepthBand(double target) =>
+      switch (TournamentStyle.fromBigBlinds(target)) {
+        TournamentStyle.turbo => (min: 40, max: 70),
+        TournamentStyle.fast => (min: 55, max: 90),
+        TournamentStyle.standard => (min: 70, max: 140),
+        TournamentStyle.deep => (min: 100, max: 220),
+      };
 
   /// Validates [value] as a legal maxChipsPerPlayer limit. Throws an
   /// [ArgumentError] if out of range [1, 100].
@@ -696,17 +729,33 @@ class TournamentEngine {
   /// returned untouched — only the UI default is optimised.
   static const int _rebuyWorthwhileBB = 20;
 
+  /// Every input acceptance criterion 11 requires the cutoff to weigh.
+  ///
+  /// Named parameters rather than a bundle because the criterion reads as a
+  /// list -- players, duration, level length, blinds, antes, starting stack,
+  /// breaks, chips, add-on -- and a reader should be able to check the
+  /// requirement against this signature without reading the body.
   static int optimiseRebuyCloseLevel({
     required int requested,
     required bool organizerChose,
     required List<List<int>> levelBlinds,
     required int startingStack,
     required int plannedLevels,
+    int players = 0,
+    double durationHours = 0,
+    int levelDurationMins = 0,
+    bool anteEnabled = false,
+    int anteAfterLevel = 0,
+    List<ScheduledBreak> breaks = const [],
+    bool addOnAvailable = false,
+    int minChipValue = 0,
   }) {
     if (organizerChose) return requested;
     if (levelBlinds.isEmpty || startingStack <= 0) return requested;
 
-    // Last level at which a rebuy still buys a playable stack.
+    // ── Blinds + starting stack ──────────────────────────────────────────
+    // The last level at which buying back in still purchases a playable
+    // stack. Past this, a rebuy buys a few orbits and nothing more.
     var viable = 1;
     for (var i = 0; i < levelBlinds.length && i < plannedLevels; i++) {
       final bb = levelBlinds[i][1];
@@ -714,10 +763,69 @@ class TournamentEngine {
       if (startingStack / bb >= _rebuyWorthwhileBB) viable = i + 1;
     }
 
-    // Never past the halfway point -- a rebuy period covering most of the
-    // night removes the pressure the late game depends on.
-    final ceiling = math.max(2, (plannedLevels * 0.55).floor());
-    return viable.clamp(2, ceiling);
+    // ── Chips ────────────────────────────────────────────────────────────
+    // A rebuy has to be payable in physical chips. Once the smallest chip in
+    // the box is a meaningful fraction of the big blind, the rebuy stack can
+    // no longer be built cleanly and the window should already have closed.
+    if (minChipValue > 0) {
+      for (var i = 0; i < levelBlinds.length && i < viable; i++) {
+        if (levelBlinds[i][1] > 0 && minChipValue * 4 > levelBlinds[i][1]) {
+          viable = math.max(1, i);
+          break;
+        }
+      }
+    }
+
+    // ── Antes ────────────────────────────────────────────────────────────
+    // Antes drain every stack every hand, so the same chips buy less time
+    // once they start. Do not let the window run far past their introduction.
+    if (anteEnabled && anteAfterLevel > 0) {
+      viable = math.min(viable, anteAfterLevel + 1);
+    }
+
+    // ── Players ──────────────────────────────────────────────────────────
+    // A bigger field takes longer to reduce, so a slightly later cutoff is
+    // tolerable before the late game loses its pressure.
+    var ceilingFraction = 0.55;
+    if (players >= 18) ceilingFraction = 0.60;
+    if (players >= 40) ceilingFraction = 0.65;
+
+    // ── Level length + duration ──────────────────────────────────────────
+    // Section 6 forbids a fixed clock rule ("rebuys always end after two
+    // hours"), but level LENGTH still matters: eight 10-minute levels and
+    // eight 20-minute levels are not the same tournament. The ceiling stays
+    // expressed in levels, then is sanity-checked against the SHARE of the
+    // night it covers -- a proportion of whatever was asked for, never a
+    // fixed number of minutes.
+    var ceiling = math.max(2, (plannedLevels * ceilingFraction).floor());
+    if (levelDurationMins > 0 && durationHours > 0) {
+      final maxWindowMins = durationHours * 60 * ceilingFraction;
+      final levelsThatFit = (maxWindowMins / levelDurationMins).floor();
+      if (levelsThatFit >= 2) ceiling = math.min(ceiling, levelsThatFit);
+    }
+
+    // ── Breaks ───────────────────────────────────────────────────────────
+    // The default break placement hangs off this cutoff (section 5), so a
+    // cutoff with no level left after it would place a break at the very end
+    // of the tournament -- which is not a break.
+    if (breaks.isNotEmpty) {
+      ceiling = math.min(ceiling, math.max(2, plannedLevels - 1));
+    }
+
+    var result = viable.clamp(2, ceiling);
+
+    // ── Add-on ───────────────────────────────────────────────────────────
+    // If a later top-up exists, the rebuy window does not have to carry the
+    // whole job of keeping people in -- it can close a level earlier and let
+    // the add-on do the rest.
+    //
+    // Applied AFTER the clamp deliberately. Reducing `viable` first does
+    // nothing whenever the blinds alone would allow a later cutoff than the
+    // ceiling permits, which is the common case -- the reduction vanished
+    // into the clamp and the add-on had no effect at all.
+    if (addOnAvailable && result > 2) result -= 1;
+
+    return result;
   }
 
   /// Plain-language explanation of the depth this structure landed on.
@@ -1308,15 +1416,20 @@ class TournamentEngine {
     final plannedLevels = math.max(6, (playingMinutes / levelDuration).ceil());
     final numLevels = plannedLevels + _spareLevels;
 
+    // Duration pushes depth up, field size pulls it down: more players means
+    // more chips on the table and a longer night for the same schedule.
     final targetBBDepth = math.min(
-      kMaxOpeningBBDepth.toDouble(),
+      kMaxTargetBBDepth.toDouble(),
       math.max(
-        kMinOpeningBBDepth.toDouble(),
+        kMinTargetBBDepth.toDouble(),
         125 +
             28 * (params.durationHours - 3.5) -
             2.5 * math.max(0, params.players - 8),
       ),
     );
+
+    // The band this particular tournament must land in. Derived, not imposed.
+    final depthBand = admissibleDepthBand(targetBBDepth);
 
     final sortedChips = [...params.chipSet]..sort((a, b) => a.value - b.value);
     final minChip = sortedChips.isNotEmpty ? sortedChips.first.value : 1;
@@ -1416,10 +1529,9 @@ class TournamentEngine {
         // `stack_aesthetics`). Try a coarse, countable grid first — 10 then 5
         // big blinds — and only fall back to single-blind steps if nothing
         // coarser fits the box.
-        // Addendum section 2 replaced the old hard floor with style bands
-        // reaching down to Turbo (~40 BB). An 80 BB floor made Turbo and Fast
-        // unreachable no matter what the host asked for.
-        final floor = (kMinOpeningBBDepth * bb / sb).ceil() * sb;
+        // The floor is this tournament's band, not a universal constant --
+        // see [admissibleDepthBand].
+        final floor = (depthBand.min * bb / sb).ceil() * sb;
         int? chosen;
         List<ChipPlanEntry>? chosenPlan;
         for (final step in [bb * 10, bb * 5, sb]) {
@@ -1442,7 +1554,7 @@ class TournamentEngine {
         final candidate = chosen;
 
         final depth = candidate / bb;
-        if (depth < kMinOpeningBBDepth || depth > kMaxOpeningBBDepth) {
+        if (depth < depthBand.min || depth > depthBand.max) {
           continue;
         }
 
@@ -1750,6 +1862,14 @@ class TournamentEngine {
             ],
             startingStack: stack,
             plannedLevels: plannedLevels,
+            players: params.players,
+            durationHours: params.durationHours,
+            levelDurationMins: levelDuration,
+            anteEnabled: params.anteEnabled,
+            anteAfterLevel: params.anteAfterLevel,
+            breaks: params.breaks,
+            addOnAvailable: params.addOn,
+            minChipValue: minChip,
           )
         : params.rebuysCloseLevel;
 
@@ -1777,11 +1897,6 @@ class TournamentEngine {
 
     if (params.players < 4) {
       warnings.add('Very small field — consider a shorter structure.');
-    }
-    if (stack < openingBB * 50) {
-      warnings.add(
-        'Short starting depth — players will be short-stacked early.',
-      );
     }
 
     return TournamentStructure(

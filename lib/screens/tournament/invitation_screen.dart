@@ -1330,6 +1330,7 @@ class _EditEventFormState extends State<_EditEventForm> {
   late bool _rebuys;
   late bool _rebuyUnlimited;
   late int _rebuysClose;
+  late bool _rebuyCloseChosen;
   late bool _reEntry;
   late bool _addOn;
   late int _addOnClose;
@@ -1372,6 +1373,7 @@ class _EditEventFormState extends State<_EditEventForm> {
     _rebuys = s.rebuys;
     _rebuyUnlimited = s.rebuysCloseLevel >= 6;
     _rebuysClose = s.rebuysCloseLevel;
+    _rebuyCloseChosen = s.rebuyCloseChosenByOrganizer;
     _reEntry = s.reEntry;
     _addOn = s.addOn;
     _addOnClose = s.addOnCloseLevel;
@@ -1535,6 +1537,7 @@ class _EditEventFormState extends State<_EditEventForm> {
       durationHours: _duration,
       rebuys: _rebuys,
       rebuysCloseLevel: _rebuys ? _rebuysClose : 0,
+      rebuyCloseChosenByOrganizer: _rebuys ? _rebuyCloseChosen : false,
       reEntry: _reEntry,
       addOn: _addOn,
       addOnCloseLevel: _addOnClose,
@@ -1729,10 +1732,10 @@ class _EditEventFormState extends State<_EditEventForm> {
               label: 'Close rebuys',
               options: const ['End L4', 'End L5', 'End L6', 'End L7', 'End L8'],
               selected: 'End L$_rebuysClose',
-              onChanged: (v) => setState(
-                () =>
-                    _rebuysClose = int.tryParse(v.replaceAll('End L', '')) ?? 6,
-              ),
+              onChanged: (v) => setState(() {
+                    _rebuysClose = int.tryParse(v.replaceAll('End L', '')) ?? 6;
+                    _rebuyCloseChosen = true;
+              }),
             ),
           ),
         if (_rebuys && _rebuyUnlimited)

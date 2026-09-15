@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:poker_night/services/payment_service.dart';
 
 /// The guarantee: **this application cannot take money.**
 ///
@@ -103,6 +104,26 @@ void main() {
       // mistake a demo grant for a purchase.
       final source = read('lib/services/payment_service.dart');
       expect(source, contains("'simulated': true"));
+    });
+  });
+
+  group('the live implementation is the simulated one', () {
+    test('Payments.instance is the mock, and says so', () {
+      // The single seam real billing would arrive through. If somebody wires
+      // a provider in, this fails -- which is the point: it should be a
+      // deliberate, visible change, not something that lands unnoticed.
+      expect(Payments.isSimulated, isTrue);
+      expect(Payments.instance, isA<MockPaymentService>());
+    });
+
+    test('the test-mode banner is tied to the implementation', () {
+      final source = read('lib/screens/premium/checkout_screen.dart');
+      expect(
+        source,
+        contains('if (!Payments.isSimulated)'),
+        reason: 'the banner must follow which service is live, not be a '
+            'hardcoded string somebody can forget to remove',
+      );
     });
   });
 

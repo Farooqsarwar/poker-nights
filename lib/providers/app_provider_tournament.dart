@@ -586,6 +586,7 @@ extension AppProviderTournament on AppProvider {
         chipSet: s.chipSet,
         rebuys: s.rebuys,
         rebuysCloseLevel: s.rebuysCloseLevel,
+        rebuyCloseChosenByOrganizer: s.rebuyCloseChosenByOrganizer,
         reEntry: s.reEntry,
         addOn: s.addOn,
         anteEnabled: s.anteEnabled,

@@ -27,7 +27,7 @@ class UpgradeScreen extends StatefulWidget {
 }
 
 class _UpgradeScreenState extends State<UpgradeScreen> {
-  final _payments = MockPaymentService();
+  final _payments = Payments.instance;
   String _selectedPlanId = 'yearly';
   PremiumTier _tier = PremiumTier.free;
   bool _loading = true;

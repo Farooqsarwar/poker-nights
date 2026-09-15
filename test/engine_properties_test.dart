@@ -305,9 +305,15 @@ void main() {
     });
   });
 
-  group('PN-001 — starting depth lands in the 80-240 BB band', () {
-    // Technical section 8.2 clamps starting depth to 80-240 BB. The measured
-    // failures were: Standard 300 / 10 players -> 2 BB, Standard 300 / 8 ->
+  group('PN-001 — starting depth lands in its own style band', () {
+    // Addendum acceptance criterion 1 forbids a hard-coded universal
+    // starting-stack rule. The band is therefore derived from the depth each
+    // tournament targets (TournamentEngine.admissibleDepthBand) rather than
+    // imposed on all of them -- so a genuinely short, crowded night may open
+    // Turbo-shallow while a long one may not.
+    //
+    // The measured failures this group exists to prevent were catastrophic,
+    // not marginal: Standard 300 / 10 players -> 2 BB, Standard 300 / 8 ->
     // 12 BB, Standard 500 / 10 -> 16 BB, Home Set / 10 -> 14 BB.
     test('the four measured regressions are gone', () {
       final cases = [
@@ -328,29 +334,78 @@ void main() {
         final depth = s.startingStack / openingBB;
         expect(
           depth,
-          greaterThanOrEqualTo(80),
+          greaterThanOrEqualTo(TournamentEngine.kMinTargetBBDepth.toDouble()),
           reason: '$preset / $players players opens at '
               '${depth.toStringAsFixed(1)} BB '
               '(stack ${s.startingStack}, BB $openingBB)',
         );
-        expect(depth, lessThanOrEqualTo(240));
+        expect(
+          depth,
+          lessThanOrEqualTo(TournamentEngine.kMaxTargetBBDepth.toDouble()),
+        );
       }
     });
 
-    test('and the whole sweep is in band, or says why not', () {
+    test('a long night can never take a shallow stack', () {
+      // THE regression that the old universal floor was guarding. With any
+      // low depth legal, this event took 65 BB and was down to 16 BB by level
+      // three. It targets ~136, which lands in Deep, whose floor is 100 --
+      // so the structure prevents it rather than a blanket prohibition.
+      final s = TournamentEngine.generate(
+        _params(
+          players: 9,
+          hours: 4,
+          chips: TournamentEngine.getPreset('Standard 300'),
+        ),
+      );
+      final depth = s.startingStack / s.levels.first.bb;
+      expect(
+        depth,
+        greaterThanOrEqualTo(100),
+        reason: 'a 4-hour 9-player night opened at '
+            '${depth.toStringAsFixed(1)} BB -- the 65 BB regression is back',
+      );
+    });
+
+    test('every structure lands inside the band its target implies', () {
       for (final c in _sweep()) {
         final depth = c.s.startingStack / c.s.levels.first.bb;
-        final warned = c.s.warnings.any((w) => w.contains('80 big-blind'));
-        if (!warned) {
-          expect(
-            depth,
-            greaterThanOrEqualTo(80),
-            reason: '${c.preset}/${c.players}p @ ${c.hours}h opens at '
-                '${depth.toStringAsFixed(1)} BB with no shortage warning',
-          );
-          expect(depth, lessThanOrEqualTo(240));
-        }
+        final warned = c.s.warnings.any((w) => w.contains('big-blind'));
+        if (warned) continue;
+
+        // Re-derive the band from what was actually produced: whatever style
+        // the structure landed in, it must be a legal depth FOR that style.
+        final band = TournamentEngine.admissibleDepthBand(depth);
+        expect(
+          depth,
+          greaterThanOrEqualTo(band.min),
+          reason: '${c.preset}/${c.players}p @ ${c.hours}h opens at '
+              '${depth.toStringAsFixed(1)} BB, below its own band',
+        );
+        expect(
+          depth,
+          lessThanOrEqualTo(band.max),
+          reason: '${c.preset}/${c.players}p @ ${c.hours}h opens at '
+              '${depth.toStringAsFixed(1)} BB, above its own band',
+        );
       }
+    });
+
+    test('no universal starting-stack rule survives in the engine', () {
+      // Acceptance criterion 1, as a property rather than a promise: the
+      // reachable depths must span more than one style, or the band is a
+      // universal rule wearing a different name.
+      final styles = <TournamentStyle>{};
+      for (final c in _sweep()) {
+        final depth = c.s.startingStack / c.s.levels.first.bb;
+        styles.add(TournamentStyle.fromBigBlinds(depth));
+      }
+      expect(
+        styles.length,
+        greaterThan(1),
+        reason: 'every generated structure landed in ${styles.first.label}; '
+            'depth is not behaving as an optimisation variable',
+      );
     });
   });
 }

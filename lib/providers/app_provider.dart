@@ -315,12 +315,12 @@ class AppProvider extends ChangeNotifier {
   /// client flag grants nothing, which is what QA cases PN-SEC-003 and
   /// PN-NEG-001 are actually asking for.
   static const bool demoPremiumEnabled =
-      bool.fromEnvironment('DEMO_PREMIUM', defaultValue: true);
+      bool.fromEnvironment('DEMO_PREMIUM', defaultValue: false);
 
   Future<void> loadPremiumTier() async {
     final server = _backendUp ? await _repo.fetchPremiumEntitlement() : false;
     final local = demoPremiumEnabled
-        ? await MockPaymentService().currentTier()
+        ? await Payments.instance.currentTier()
         : PremiumTier.free;
     if (_disposed) return;
     premiumTier = (server || local == PremiumTier.premium)

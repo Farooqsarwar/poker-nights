@@ -35,7 +35,7 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  final _payments = MockPaymentService();
+  final _payments = Payments.instance;
   final _name = TextEditingController();
   final _number = TextEditingController();
   final _expiry = TextEditingController();
@@ -208,6 +208,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _testModeBanner() {
+    // Tied to which implementation is live, so it cannot be left showing on a
+    // real checkout or missing from a simulated one.
+    if (!Payments.isSimulated) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(

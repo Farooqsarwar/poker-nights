@@ -206,6 +206,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   bool _rebuys = true;
   bool _rebuyUnlimited = true;
   int _rebuysClose = 6;
+  bool _rebuyCloseChosen = false;
   final _rebuyLimit = TextEditingController(text: '1');
   final _rebuyCost = TextEditingController();
   /// Moves with [_rebuys] -- sections 7 and 32 make them one toggle. Kept as
@@ -267,9 +268,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   /// Spec 7's 20% cap, raised only far enough to hold a legacy value the form
   /// was loaded with (see `_applyPreset`).
   static const int kOrganizerPctMax = 20;
-  int _orgPctLoadedCeiling = kOrganizerPctMax;
-  int get _orgPctCeiling =>
-      _orgPct > _orgPctLoadedCeiling ? _orgPct : _orgPctLoadedCeiling;
+  int get _orgPctCeiling => kOrganizerPctMax;
 
   // Preset support (checklist §9.1). Tech spec §6.2: before starting from
   // zero, saved presets close to the current base inputs are suggested.
@@ -423,10 +422,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ? AntePreference.bigBlind
         : AntePreference.none;
     _anteAfterLevel = p.anteAfterLevel;
-    _orgPctController.text = p.organizerPct.toString();
-    if (p.organizerPct > kOrganizerPctMax) {
-      _orgPctLoadedCeiling = p.organizerPct;
-    }
+    _orgPctController.text = p.organizerPct.clamp(0, kOrganizerPctMax).toString();
     _chipSet = List.of(p.chipSet);
     if (TournamentEngine.presetNames.contains(p.chipSetName)) {
       _chipMode = _ChipMode.preset;
@@ -745,6 +741,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         koAmount: num.tryParse(_koAmount.text)?.toInt() ?? 5,
         rebuys: _rebuys,
         rebuysCloseLevel: _rebuysClose,
+        rebuyCloseChosenByOrganizer: _rebuyCloseChosen,
         rebuyLimit: _rebuys && !_rebuyUnlimited
             ? (int.tryParse(_rebuyLimit.text) ?? 1)
             : null,
@@ -1865,10 +1862,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   'End L8',
                 ],
                 selected: 'End L$_rebuysClose',
-                onChanged: (v) => setState(
-                  () => _rebuysClose =
-                      int.tryParse(v.replaceAll('End L', '')) ?? 6,
-                ),
+                onChanged: (v) => setState(() {
+                  _rebuysClose = int.tryParse(v.replaceAll('End L', '')) ?? 6;
+                  _rebuyCloseChosen = true;
+                }),
               ),
             ),
               Padding(
@@ -2089,12 +2086,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                                 _SegmentedPicker(
                                   // Section 8's presets, plus Custom — which
                                   // simply hands the stepper below any value.
-                                  options: const ['5', '10', '15', '20'],
+                                  options: const ['5', '10', '15', '20', 'Custom'],
                                   selected: kBreakDurationPresets
                                           .contains(_breaks[i].durationMins)
                                       ? '${_breaks[i].durationMins}'
-                                      : '',
+                                      : 'Custom',
                                   onChanged: (v) => setState(() {
+                                    if (v == 'Custom') return;
                                     final mins = int.parse(v);
                                     _breaks = [
                                       for (var j = 0; j < _breaks.length; j++)

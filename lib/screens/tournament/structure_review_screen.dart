@@ -10,6 +10,8 @@ import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
+import '../../widgets/premium_gate.dart';
+import '../../services/entitlements.dart';
 import '../../utils/formatters.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_alert_banner.dart';
@@ -450,7 +452,10 @@ class StructureReviewScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    AppButton(
+                    PremiumLock(
+                      tier: app.premiumTier,
+                      feature: PremiumFeature.aiOptimisedStructures,
+                      child: AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
                       onPressed: () {
@@ -484,6 +489,7 @@ class StructureReviewScreen extends StatelessWidget {
                         );
                       },
                       child: const Text('Edit'),
+                      ),
                     ),
                   ],
                 ),

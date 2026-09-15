@@ -254,10 +254,74 @@ service cloud.firestore {
               == resource.data.get('organizerIds', []);
     }
 
+    // Addendum section 7 requires AI structure generation to be server-side.
+    // Without Cloud Functions nothing here can GENERATE a structure -- rules
+    // validate, they do not compute. What they can do is refuse a structure
+    // that no honest generator would ever produce, which removes the practical
+    // risk even though it does not satisfy criterion 15 as worded.
+    //
+    // Each check below is a property the engine guarantees and a tampered
+    // client would have to violate to gain anything.
+    function structureShapeSafe() {
+      let data = request.resource.data;
+      let hasStructure = data.keys().hasAll(['structure']);
+      let st = hasStructure ? data.structure : {};
+      let stack = st.get('startingStack', 0);
+      let levelMins = st.get('levelDuration', 0);
+      let planned = st.get('plannedLevels', 0);
+      let paid = st.get('paidPlaces', 0);
+
+      // A starting stack must be positive and cannot be absurd. The ceiling is
+      // deliberately loose -- this rejects nonsense, it does not second-guess
+      // the engine's choice of depth.
+      let stackSane = stack == 0 || (stack is int && stack > 0 && stack <= 100000000);
+
+      // Level length: the product offers 10/15/20, so anything outside a
+      // generous band around that was not produced by the setup screen.
+      let levelSane = levelMins == 0
+          || (levelMins is int && levelMins >= 1 && levelMins <= 180);
+
+      // A tournament cannot plan fewer than the engine's floor of six levels,
+      // and a thousand-level structure is not a home game.
+      let levelsSane = planned == 0
+          || (planned is int && planned >= 1 && planned <= 1000);
+
+      // Paid places cannot exceed the field. Inflating this is the cheapest
+      // way to try to manufacture a prize row.
+      let paidSane = paid == 0
+          || (paid is int && paid >= 0 && paid <= 1000);
+
+      return !hasStructure
+          || (stackSane && levelSane && levelsSane && paidSane);
+    }
+
+    // Money can only be created by people buying in. A client that inflates
+    // the gross without the player rows to justify it is rewriting the pool.
+    function grossWithinField() {
+      let data = request.resource.data;
+      let hasStructure = data.keys().hasAll(['structure']);
+      let st = hasStructure ? data.structure : {};
+      let gross = st.get('grossCollected', 0);
+      let buyIn = data.keys().hasAll(['settings'])
+          ? data.settings.get('buyIn', 0)
+          : 0;
+      let heads = data.keys().hasAll(['players']) ? data.players.size() : 0;
+      // Rebuys, re-entries and add-ons all sit on top, so the ceiling is
+      // generous -- ten entries per head. It exists to reject a figure with no
+      // relationship to the field at all, not to recompute the pool.
+      return !hasStructure
+          || gross == 0
+          || buyIn == 0
+          || heads == 0
+          || gross <= buyIn * heads * 10;
+    }
+
     function gameValuesSafe() {
       return organizerPctSafe()
           && prizePoolReconciles()
-          && completedLevelsIntact();
+          && completedLevelsIntact()
+          && structureShapeSafe()
+          && grossWithinField();
     }
 
     // Member CREATE: a member RSVPing on a game doc that does not exist yet

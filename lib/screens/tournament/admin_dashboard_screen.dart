@@ -11,6 +11,8 @@ import '../../models/game.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
+import '../../widgets/premium_gate.dart';
+import '../../services/entitlements.dart';
 import '../../responsive/responsive.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_alert_banner.dart';
@@ -2965,7 +2967,13 @@ class _PrizeTab extends StatelessWidget {
         ),
         if (structure.colorUpInstructions.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
-          AppCard(
+          // Section 3: "Advanced chip inventory optimization and colour-up
+          // planning" is Premium. The PLAN is gated here; performing the
+          // colour-up during rebuy settlement is operation and stays free.
+          PremiumLock(
+            tier: context.watch<AppProvider>().premiumTier,
+            feature: PremiumFeature.chipOptimisation,
+            child: AppCard(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3002,6 +3010,7 @@ class _PrizeTab extends StatelessWidget {
                   ),
               ],
             ),
+          ),
           ),
         ],
         if (remainingPlayers <= 3 || structureEnded) ...[

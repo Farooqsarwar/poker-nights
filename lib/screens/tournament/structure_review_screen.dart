@@ -10,6 +10,7 @@ import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
+import '../../widgets/ai_insights_panel.dart';
 import '../../widgets/premium_gate.dart';
 import '../../services/entitlements.dart';
 import '../../utils/formatters.dart';
@@ -245,6 +246,16 @@ class StructureReviewScreen extends StatelessWidget {
             message: game.structureConfirmed
                 ? 'Structure confirmed. Starting stacks freeze when the tournament starts; blinds, level durations and the player count stay editable.'
                 : 'AI estimate based on ${settings.players} expected players (from RSVPs) — review, edit or regenerate before the game.',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          // Section 2 requires the depth explanation in plain language; it was
+          // being computed and shown nowhere. Free, because the spec requires
+          // it. The deeper analysis below it is section 3's "Advanced AI
+          // recommendations" and is gated.
+          AiInsightsPanel(
+            structure: structure,
+            settings: settings,
+            tier: app.premiumTier,
           ),
           const SizedBox(height: AppSpacing.lg),
           for (final w in structure.warnings)

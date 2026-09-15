@@ -10,6 +10,10 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
+import '../../services/tv_display_settings.dart';
+import '../../widgets/premium_gate.dart';
+import '../../widgets/app_modal.dart';
+import '../../services/entitlements.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/backgrounds.dart';
@@ -222,13 +226,49 @@ class _CodeEntry extends StatelessWidget {
   }
 }
 
-class _TVLayout extends StatelessWidget {
+class _TVLayout extends StatefulWidget {
   const _TVLayout({required this.game});
 
   final LiveGame game;
 
   @override
+  State<_TVLayout> createState() => _TVLayoutState();
+}
+
+class _TVLayoutState extends State<_TVLayout> {
+  /// Defaults until the stored settings arrive, so the first frame shows the
+  /// tournament rather than a spinner. A TV that is slow to read its own
+  /// preferences should still be readable from across the room meanwhile.
+  TvDisplaySettings _display = const TvDisplaySettings();
+
+  @override
+  void initState() {
+    super.initState();
+    TvDisplayStore.load().then((d) {
+      if (mounted) setState(() => _display = d);
+    });
+  }
+
+  Future<void> _apply(TvDisplaySettings next) async {
+    setState(() => _display = next);
+    await TvDisplayStore.save(next);
+  }
+
+  void _openSettings() {
+    showAppModal(
+      context: context,
+      title: 'Display settings',
+      maxWidth: 420,
+      child: _TvSettingsSheet(
+        initial: _display,
+        onChanged: _apply,
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final game = widget.game;
     final isCompleted = game.status == LiveGameStatus.completed;
 
     if (isCompleted && game.finishOrder.length >= 3) {
@@ -240,6 +280,20 @@ class _TVLayout extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: Opacity(
+        // Deliberately faint. It must be findable by the host standing at the
+        // screen and invisible to players glancing at it from the table.
+        opacity: 0.35,
+        child: FloatingActionButton.small(
+          heroTag: 'tv-display-settings',
+          backgroundColor: AppColors.secondary,
+          foregroundColor: AppColors.foreground,
+          tooltip: 'Display settings',
+          onPressed: _openSettings,
+          child: const Icon(Icons.tune, size: 18),
+        ),
+      ),
       body: Column(
         children: [
           // Reconnection banner for TV mode (tech spec §4.2).
@@ -259,8 +313,11 @@ class _TVLayout extends StatelessWidget {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final s = (constraints.maxWidth / 1536)
-                    .clamp(0.5, 2.0)
+                // Width sets the base scale; the host's multiplier accounts
+                // for how far away the table actually is, which no viewport
+                // measurement can know (section 8: readable at distance).
+                final s = ((constraints.maxWidth / 1536) * _display.textScale)
+                    .clamp(0.5, 3.0)
                     .toDouble();
                 if (constraints.maxWidth >= 900) {
                   return Padding(
@@ -318,7 +375,11 @@ class _TVLayout extends StatelessWidget {
                         const SizedBox(width: 16),
                         Expanded(
                           flex: 3,
-                          child: _RotatingPanel(game: game, scale: s),
+                          child: _RotatingPanel(
+                            game: game,
+                            scale: s,
+                            display: _display,
+                          ),
                         ),
                       ],
                     ),
@@ -487,10 +548,17 @@ class _PodiumStep extends StatelessWidget {
 }
 
 class _RotatingPanel extends StatefulWidget {
-  const _RotatingPanel({required this.game, this.scale = 1.0});
+  const _RotatingPanel({
+    required this.game,
+    this.scale = 1.0,
+    this.display = const TvDisplaySettings(),
+  });
 
   final LiveGame game;
   final double scale;
+
+  /// Which panels this screen shows and how long each holds.
+  final TvDisplaySettings display;
 
   @override
   State<_RotatingPanel> createState() => _RotatingPanelState();
@@ -507,14 +575,45 @@ class _RotatingPanelState extends State<_RotatingPanel> {
   int _panel = 0;
   Timer? _timer;
 
+  /// The panels this screen actually rotates through, in display order.
+  ///
+  /// Announcements are never switchable: they exist because the host needed
+  /// to tell the room something, and a screen that can hide them is worse
+  /// than one that cannot be configured at all.
+  List<int> get _active {
+    final d = widget.display;
+    return [
+      if (d.showLeaderboard || !d.hasAnyPanel) 0,
+      if (d.showPayouts) 1,
+      if (widget.game.announcements.isNotEmpty) 2,
+      if (d.showUpcoming) 3,
+    ];
+  }
+
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 8), (_) {
-      final hasAnnouncements = widget.game.announcements.isNotEmpty;
-      final maxPanels = hasAnnouncements ? 4 : 3;
-      setState(() => _panel = (_panel + 1) % maxPanels);
-    });
+    _restartTimer();
+  }
+
+  @override
+  void didUpdateWidget(_RotatingPanel old) {
+    super.didUpdateWidget(old);
+    if (old.display.rotateSeconds != widget.display.rotateSeconds) {
+      _restartTimer();
+    }
+  }
+
+  void _restartTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(
+      Duration(seconds: widget.display.rotateSeconds),
+      (_) {
+        final n = _active.length;
+        if (n <= 1) return;
+        setState(() => _panel = (_panel + 1) % n);
+      },
+    );
   }
 
   @override
@@ -525,9 +624,10 @@ class _RotatingPanelState extends State<_RotatingPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final hasAnnouncements = widget.game.announcements.isNotEmpty;
-    final maxPanels = hasAnnouncements ? 4 : 3;
-    final effectivePanel = _panel % maxPanels;
+    final active = _active;
+    // Falls back to the leaderboard rather than rendering an empty box if a
+    // screen somehow ends up with nothing selected.
+    final effectivePanel = active.isEmpty ? 0 : active[_panel % active.length];
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -850,6 +950,163 @@ class _AnnouncementsPanel extends StatelessWidget {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// The TV's own display controls (§3 "Advanced TV/display customization",
+/// §8's readability bar).
+///
+/// Gated, but the gate is inside the sheet rather than on the button: a host
+/// who opens this and finds nothing has learned less than one who opens it and
+/// sees what they would get.
+class _TvSettingsSheet extends StatefulWidget {
+  const _TvSettingsSheet({required this.initial, required this.onChanged});
+
+  final TvDisplaySettings initial;
+  final ValueChanged<TvDisplaySettings> onChanged;
+
+  @override
+  State<_TvSettingsSheet> createState() => _TvSettingsSheetState();
+}
+
+class _TvSettingsSheetState extends State<_TvSettingsSheet> {
+  late TvDisplaySettings _d = widget.initial;
+
+  void _set(TvDisplaySettings next) {
+    setState(() => _d = next);
+    widget.onChanged(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tier = context.watch<AppProvider>().premiumTier;
+
+    return PremiumGate(
+      tier: tier,
+      feature: PremiumFeature.tvCustomisation,
+      blurb: 'Set the text size for the room you are actually in, and choose '
+          'what this screen cycles through.',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Text size',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'For how far away the table is, not how big the screen is — that '
+            'part is automatic.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  value: _d.textScale,
+                  min: TvDisplaySettings.minTextScale,
+                  max: TvDisplaySettings.maxTextScale,
+                  divisions: 13,
+                  label: '${(_d.textScale * 100).round()}%',
+                  onChanged: (v) => _set(_d.copyWith(textScale: v)),
+                ),
+              ),
+              SizedBox(
+                width: 52,
+                child: Text(
+                  '${(_d.textScale * 100).round()}%',
+                  textAlign: TextAlign.right,
+                  style: AppTypography.monoXs.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Cycle through',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _PanelToggle(
+            label: 'Leaderboard',
+            value: _d.showLeaderboard,
+            onChanged: (v) => _set(_d.copyWith(showLeaderboard: v)),
+          ),
+          _PanelToggle(
+            label: 'Prize pool',
+            value: _d.showPayouts,
+            onChanged: (v) => _set(_d.copyWith(showPayouts: v)),
+          ),
+          _PanelToggle(
+            label: 'Upcoming levels',
+            value: _d.showUpcoming,
+            onChanged: (v) => _set(_d.copyWith(showUpcoming: v)),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Announcements always show — they are there because the host '
+            'needed to tell the room something.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Hold each for',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.xs,
+            children: [
+              for (final secs in TvDisplaySettings.rotatePresets)
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: secs == _d.rotateSeconds
+                      ? AppButtonVariant.primary
+                      : AppButtonVariant.secondary,
+                  onPressed: () => _set(_d.copyWith(rotateSeconds: secs)),
+                  child: Text('${secs}s'),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Saved on this screen only. Another device keeps its own.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PanelToggle extends StatelessWidget {
+  const _PanelToggle({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: AppTypography.bodySm)),
+        Switch(value: value, onChanged: onChanged),
       ],
     );
   }

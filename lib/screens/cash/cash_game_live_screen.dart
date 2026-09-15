@@ -8,6 +8,7 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/cash_game.dart';
 import '../../providers/app_provider.dart';
+import '../../widgets/cash_settlement_panel.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
@@ -341,6 +342,18 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                         child: const Text('+ Add player'),
                       ),
                     ],
+                  ),
+                ),
+                // Section 3's advanced cash-game functionality: standings,
+                // whether the money reconciles, and who pays whom.
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: CashSettlementPanel(
+                    players: players,
+                    tier: context.watch<AppProvider>().premiumTier,
                   ),
                 ),
                 for (var pi = 0; pi < players.length; pi++)

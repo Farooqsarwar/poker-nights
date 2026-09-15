@@ -9,6 +9,7 @@ import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
+import '../../widgets/structure_audit_banner.dart';
 
 import '../../utils/formatters.dart';
 import '../../widgets/app_alert_banner.dart';
@@ -147,6 +148,12 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
           children: [
             if (isFinalTable)
               Container(height: 4, color: AppColors.destructive),
+            // Criterion 15: this device checks the structure itself rather
+            // than taking the host's word for it. Silent unless it disagrees.
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: StructureAuditBanner(game: game),
+            ),
             // Connection status banner (tech spec §4.2 — stale-state).
             Consumer<AppProvider>(
               builder: (_, app, x) {

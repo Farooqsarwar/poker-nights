@@ -462,6 +462,9 @@ class TournamentStructure {
     int? paidPlaces,
     List<String>? colorUpInstructions,
     List<String>? warnings,
+    List<ScheduledBreak>? breaks,
+    String? styleNote,
+    int? rebuysCloseLevel,
   }) {
     return TournamentStructure(
       startingStack: startingStack ?? this.startingStack,
@@ -481,6 +484,15 @@ class TournamentStructure {
       paidPlaces: paidPlaces ?? this.paidPlaces,
       colorUpInstructions: colorUpInstructions ?? this.colorUpInstructions,
       warnings: warnings ?? this.warnings,
+      // These three were absent, so every copyWith silently reset them to
+      // their defaults. Breaks vanished from every player, guest and TV
+      // projection -- which all go through copyWith -- and a single Speed Up
+      // press wiped them off the tournament entirely. Section 8 calls breaks
+      // "real scheduled states" whose duration counts toward the target; they
+      // cannot survive being dropped by a copy.
+      breaks: breaks ?? this.breaks,
+      styleNote: styleNote ?? this.styleNote,
+      rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
     );
   }
 }

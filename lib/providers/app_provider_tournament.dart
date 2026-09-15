@@ -399,6 +399,12 @@ extension AppProviderTournament on AppProvider {
         bb: l.bb,
         ante: l.ante,
         durationMins: l.level > game.currentLevel ? clamped : l.durationMins,
+        // Rebuilding the level used to drop this flag, which sections 11 and
+        // 29 forbid outright -- "manual future edits need visible markers and
+        // cannot be silently overwritten". A speed change is itself a
+        // deliberate human change to future levels, so those carry the marker
+        // from here on; earlier levels keep whatever they already had.
+        manuallyEdited: l.manuallyEdited || l.level > game.currentLevel,
       );
     }
 

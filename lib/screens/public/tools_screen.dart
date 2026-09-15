@@ -56,7 +56,12 @@ class _ToolScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppPage(
+    // A real Scaffold, like every other public screen. AppPage is a
+    // ColoredBox and provides no Material, so InkWell and friends assert
+    // "No Material widget found" without one.
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: AppPage(
       maxWidth: 640,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -127,6 +132,7 @@ class _ToolScaffold extends StatelessWidget {
           const SizedBox(height: AppSpacing.xxl),
         ],
       ),
+      ),
     );
   }
 }
@@ -161,7 +167,9 @@ class ToolsScreen extends StatelessWidget {
       ),
     ];
 
-    return AppPage(
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: AppPage(
       maxWidth: 640,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -225,6 +233,7 @@ class ToolsScreen extends StatelessWidget {
             ),
           const SizedBox(height: AppSpacing.xxl),
         ],
+      ),
       ),
     );
   }

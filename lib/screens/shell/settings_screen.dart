@@ -343,7 +343,7 @@ class SettingsScreen extends StatelessWidget {
             child: Text(
               'Sign out',
               style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
           ),
@@ -699,7 +699,7 @@ class _GroupSettingsCard extends StatelessWidget {
             child: Text(
               'Leave',
               style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
           ),

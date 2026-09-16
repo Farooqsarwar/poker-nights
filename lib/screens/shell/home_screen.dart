@@ -1196,7 +1196,7 @@ class _AlertsPreview extends StatelessWidget {
               child: Text(
                 'See all',
                 style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.primary,
+                  color: AppColors.primaryText,
                   fontWeight: FontWeight.w500,
                 ),
               ),

@@ -897,7 +897,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     'Seating has been generated but not yet confirmed.',
                     textAlign: TextAlign.center,
                     style: AppTypography.bodySm.copyWith(
-                      color: AppColors.warning,
+                      color: AppColors.warningText,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -937,7 +937,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     child: Text(
                       'Seating confirmed. You can start the game.',
                       style: AppTypography.bodySm.copyWith(
-                        color: AppColors.success,
+                        color: AppColors.successText,
                       ),
                     ),
                   ),

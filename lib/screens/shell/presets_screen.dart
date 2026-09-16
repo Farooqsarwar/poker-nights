@@ -119,7 +119,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
             child: Text(
               'Delete',
               style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
           ),

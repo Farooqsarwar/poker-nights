@@ -219,7 +219,7 @@ class _JoinScreenState extends State<JoinScreen> {
                               child: Text(
                                 'Sign in',
                                 style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.primary,
+                                  color: AppColors.primaryText,
                                   decoration: TextDecoration.underline,
                                   decorationColor: AppColors.primary,
                                 ),

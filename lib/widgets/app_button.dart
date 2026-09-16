@@ -61,7 +61,7 @@ class _AppButtonState extends State<AppButton> {
     final colors = _colorsFor();
     final sizes = _sizesFor();
 
-    final borderRadius = BorderRadius.circular(AppRadius.sm);
+    final borderRadius = BorderRadius.circular(AppRadius.md);
     final decoration = _decorationFor(colors, borderRadius);
 
     return MouseRegion(
@@ -143,11 +143,44 @@ class _AppButtonState extends State<AppButton> {
     );
   }
 
+  /// A top-left highlight to bottom-right shade, composited ONTO [base].
+  ///
+  /// Flutter ignores [BoxDecoration.color] whenever a gradient is also set —
+  /// the gradient's shader replaces the paint colour outright. Every filled
+  /// variant below used to set both, so the fill was silently discarded and
+  /// only the sheen painted: a near-transparent button carrying a near-black
+  /// label, on a near-black page. That is why the primary call to action on
+  /// every screen read as washed out and barely legible.
+  ///
+  /// The sheen is worth keeping — it is what gives the buttons their depth —
+  /// so it is blended into the fill here rather than replacing it.
+  ///
+  /// PASS [base] WITH ITS ALPHA INTACT. The fills are deliberately
+  /// translucent (85–90%) so the page shows through — that translucency IS
+  /// the glassmorphism. [Color.alphaBlend] carries a translucent base
+  /// through to a translucent result, so handing this an opaque colour
+  /// silently flattens the glass into a solid slab.
+  LinearGradient _sheenOn(
+    Color base, {
+    double highlight = 0.12,
+    double shade = 0.08,
+  }) {
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Color.alphaBlend(Colors.white.withValues(alpha: highlight), base),
+        base,
+        Color.alphaBlend(Colors.black.withValues(alpha: shade), base),
+      ],
+      stops: const [0.0, 0.5, 1.0],
+    );
+  }
+
   BoxDecoration _decorationFor(_BtnColors colors, BorderRadius borderRadius) {
     switch (widget.variant) {
       case AppButtonVariant.primary:
         return BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.85),
           borderRadius: borderRadius,
           border: Border.all(
             color: Colors.white.withValues(alpha: 0.12),
@@ -161,36 +194,34 @@ class _AppButtonState extends State<AppButton> {
                     spreadRadius: -1,
                   ),
                 ],
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withValues(alpha: _hovering ? 0.18 : 0.12),
-              Colors.transparent,
-              Colors.black.withValues(alpha: 0.08),
-            ],
-            stops: const [0.0, 0.5, 1.0],
+          gradient: _sheenOn(
+            AppColors.primary.withValues(alpha: 0.85),
+            highlight: _hovering ? 0.18 : 0.12,
           ),
         );
       case AppButtonVariant.gold:
         return BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.85),
           borderRadius: borderRadius,
           border: Border.all(
             color: Colors.white.withValues(alpha: 0.12),
           ),
           boxShadow: Glass.primaryGlow,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withValues(alpha: 0.15),
-              Colors.transparent,
-              Colors.black.withValues(alpha: 0.06),
-            ],
-            stops: const [0.0, 0.5, 1.0],
+          gradient: _sheenOn(
+            AppColors.primary.withValues(alpha: 0.85),
+            highlight: 0.15,
+            shade: 0.06,
           ),
         );
+      // Deliberately NOT converted to _sheenOn. The other filled variants set
+      // `color` AND `gradient`, so their fill was silently dropped and they
+      // rendered as washed-out ghosts of themselves — a bug, because their
+      // labels are near-black and only legible on a filled background.
+      //
+      // This one is different: its label is `secondaryForeground` (light), it
+      // carries a border, and the near-transparent result reads as a proper
+      // outline button. Giving it a solid fill turned all ~117 of them into
+      // filled panels and made the UI look markedly lighter. The rendering is
+      // the intended look here, so it stays as it was.
       case AppButtonVariant.secondary:
         return BoxDecoration(
           color: AppColors.card.withValues(alpha: Glass.surfaceSecondaryOpacity),
@@ -221,7 +252,6 @@ class _AppButtonState extends State<AppButton> {
         );
       case AppButtonVariant.destructive:
         return BoxDecoration(
-          color: AppColors.destructive.withValues(alpha: 0.90),
           borderRadius: borderRadius,
           border: Border.all(
             color: Colors.white.withValues(alpha: 0.10),
@@ -232,13 +262,10 @@ class _AppButtonState extends State<AppButton> {
               blurRadius: 16,
             ),
           ],
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withValues(alpha: 0.10),
-              Colors.transparent,
-            ],
+          gradient: _sheenOn(
+            AppColors.destructive.withValues(alpha: 0.90),
+            highlight: 0.10,
+            shade: 0.06,
           ),
         );
       case AppButtonVariant.ghost:
@@ -253,19 +280,15 @@ class _AppButtonState extends State<AppButton> {
         );
       case AppButtonVariant.light:
         return BoxDecoration(
-          color: AppColors.foreground.withValues(alpha: 0.90),
           borderRadius: borderRadius,
           border: Border.all(
             color: Colors.white.withValues(alpha: 0.15),
           ),
           boxShadow: Glass.neumorphicUp,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withValues(alpha: 0.15),
-              Colors.transparent,
-            ],
+          gradient: _sheenOn(
+            AppColors.foreground.withValues(alpha: 0.90),
+            highlight: 0.15,
+            shade: 0.05,
           ),
         );
     }

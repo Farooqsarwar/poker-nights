@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/app/colors.dart';
 import 'package:poker_night/models/live_game.dart';
 import 'package:poker_night/providers/app_provider.dart';
+import 'package:poker_night/screens/public/landing_screen.dart';
 import 'package:poker_night/screens/public/privacy_screen.dart';
 import 'package:poker_night/screens/public/support_screen.dart';
 import 'package:poker_night/screens/public/terms_screen.dart';
@@ -76,6 +77,7 @@ void main() {
 
   group('public screens open without throwing', () {
     final screens = <String, Widget>{
+      'Landing': const LandingScreen(),
       'Tools index': const ToolsScreen(),
       'Blind Structure Generator': const ToolBlindsScreen(),
       'Tournament Clock': const ToolClockScreen(),
@@ -106,11 +108,20 @@ void main() {
 
   group('public screens survive a phone-width layout', () {
     // §8 asks for one-handed live operation; the floor for that is that the
-    // page renders at all on a phone without overflowing.
+    // page renders at all on a phone without overflowing. Every public
+    // screen is covered now, not just the three that happened to be built
+    // when this group was written — the tools pages that were skipped are
+    // exactly the kind of screen that hid the missing-Scaffold defect above.
     final screens = <String, Widget>{
+      'Landing': const LandingScreen(),
       'Tools index': const ToolsScreen(),
+      'Blind Structure Generator': const ToolBlindsScreen(),
+      'Tournament Clock': const ToolClockScreen(),
       'ICM Calculator': const ToolIcmScreen(),
       'Payout Calculator': const ToolPayoutsScreen(),
+      'Privacy': const PrivacyScreen(),
+      'Terms': const TermsScreen(),
+      'Support': const SupportScreen(),
     };
 
     screens.forEach((name, screen) {
@@ -124,6 +135,69 @@ void main() {
           errors,
           isEmpty,
           reason: '$name threw at phone width: ${errors.join(' | ')}',
+        );
+      });
+    });
+  });
+
+  group('public screens survive the smallest common phone width', () {
+    // 320px (iPhone SE / older Android) is the floor below which nothing
+    // reasonably needs to fit — but this app should not throw even there.
+    // A screen that only breaks between 320 and 400px is exactly what a
+    // single fixed width would miss.
+    final screens = <String, Widget>{
+      'Landing': const LandingScreen(),
+      'Tools index': const ToolsScreen(),
+      'Blind Structure Generator': const ToolBlindsScreen(),
+      'Tournament Clock': const ToolClockScreen(),
+      'ICM Calculator': const ToolIcmScreen(),
+      'Payout Calculator': const ToolPayoutsScreen(),
+      'Privacy': const PrivacyScreen(),
+      'Terms': const TermsScreen(),
+      'Support': const SupportScreen(),
+    };
+
+    screens.forEach((name, screen) {
+      testWidgets('$name at 320px', (t) async {
+        t.view.physicalSize = const Size(320, 720);
+        t.view.devicePixelRatio = 1.0;
+        addTearDown(t.view.reset);
+
+        final errors = await mount(t, screen);
+        expect(
+          errors,
+          isEmpty,
+          reason: '$name threw at 320px: ${errors.join(' | ')}',
+        );
+      });
+    });
+  });
+
+  group('public screens survive a large / desktop layout', () {
+    // The desktop group above uses 1200px; ultra-wide monitors and maximised
+    // browser windows go well past that. This is the width where a fixed
+    // max-width assumption or an un-scrolled Row of many children would
+    // overflow the other way.
+    final screens = <String, Widget>{
+      'Landing': const LandingScreen(),
+      'Tools index': const ToolsScreen(),
+      'Blind Structure Generator': const ToolBlindsScreen(),
+      'Tournament Clock': const ToolClockScreen(),
+      'ICM Calculator': const ToolIcmScreen(),
+      'Payout Calculator': const ToolPayoutsScreen(),
+    };
+
+    screens.forEach((name, screen) {
+      testWidgets('$name at 1920px', (t) async {
+        t.view.physicalSize = const Size(1920, 1080);
+        t.view.devicePixelRatio = 1.0;
+        addTearDown(t.view.reset);
+
+        final errors = await mount(t, screen);
+        expect(
+          errors,
+          isEmpty,
+          reason: '$name threw at 1920px: ${errors.join(' | ')}',
         );
       });
     });

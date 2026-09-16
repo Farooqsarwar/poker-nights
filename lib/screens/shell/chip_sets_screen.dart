@@ -45,7 +45,7 @@ class ChipSetsScreen extends StatelessWidget {
             child: Text(
               'Delete',
               style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
           ),

@@ -76,7 +76,7 @@ class StructureAuditBanner extends StatelessWidget {
                   Text(
                     '• ',
                     style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.destructive,
+                      color: AppColors.destructiveText,
                     ),
                   ),
                   Expanded(

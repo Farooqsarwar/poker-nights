@@ -180,7 +180,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             Text(
               _result!.message ?? 'Payment could not be completed.',
               style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
           ],

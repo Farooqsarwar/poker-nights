@@ -43,6 +43,15 @@ class AppColors {
   static Color get black => Colors.black;
   static Color get onSurfaceHint => currentPalette.onSurfaceHint;
   static Color get surfaceHover => currentPalette.surfaceHover;
+  /// Use these — not [primary] / [destructive] / [success] / [warning] —
+  /// whenever a semantic colour is being applied to TEXT or an ICON on a dark
+  /// surface. The base colours are fill colours and measure under the WCAG AA
+  /// floor as text. See ThemePalette for the reasoning and measurements.
+  static Color get primaryText => currentPalette.primaryText;
+  static Color get destructiveText => currentPalette.destructiveText;
+  static Color get successText => currentPalette.successText;
+  static Color get warningText => currentPalette.warningText;
+
   static Color get primarySoft => currentPalette.primarySoft;
   static Color get primarySoftBorder => currentPalette.primarySoftBorder;
   static Color get primarySoftStrong => currentPalette.primarySoftStrong;

@@ -107,7 +107,7 @@ void showGroupSwitcher(BuildContext context) {
             title: Text(
               'New group',
               style: AppTypography.bodySm.copyWith(
-                color: AppColors.primary,
+                color: AppColors.primaryText,
                 fontWeight: FontWeight.w600,
               ),
             ),

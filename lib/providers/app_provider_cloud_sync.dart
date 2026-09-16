@@ -13,6 +13,10 @@ extension AppProviderCloudSync on AppProvider {
   void _forceClaimEditor() {
     final game = _currentGame;
     if (game == null || _user == null || !isAdmin) return;
+    // A follower tab (see TabLeader) never claims, even optimistically —
+    // otherwise its local copy would show this device as editor while the
+    // leader tab is the only one actually allowed to act on it.
+    if (!(_tabLeader?.isLeader ?? true)) return;
     if (game.editorDeviceId == _repo.deviceId) return; // already authoritative
     _currentGame = game.copyWith(
       editorDeviceId: _repo.deviceId,
@@ -351,18 +355,18 @@ extension AppProviderCloudSync on AppProvider {
   /// from racing whole-document writes (the seating-confirm revert bug).
   ///
   /// Keyed on the PERSISTED device id on purpose, so a reload resumes
-  /// editorship instead of waiting out the staleness window. The consequence
-  /// is that two tabs of the same browser both qualify as authority and will
-  /// both write. That is now merely wasteful rather than harmful: writes are
-  /// stamped with a per-tab `sessionId`, so the tabs see each other's changes
-  /// and converge, where before the echo guard made each discard the other's
-  /// and they diverged silently. Genuinely serialising two tabs would need
-  /// cross-tab coordination (a BroadcastChannel lock) and is not implemented.
+  /// editorship instead of waiting out the staleness window. Two tabs of the
+  /// same browser share that device id, so this alone would let both qualify
+  /// as authority — [TabLeader] closes that gap with a BroadcastChannel
+  /// election scoped to the open game: only the elected tab passes here, and
+  /// the other becomes a genuine read-only follower rather than a second
+  /// writer merely converging via per-tab `sessionId` stamping.
   bool get _isGameAuthority =>
       isAdmin &&
       _currentGame != null &&
       (_currentGame!.editorDeviceId.isNotEmpty &&
-          _currentGame!.editorDeviceId == _repo.deviceId);
+          _currentGame!.editorDeviceId == _repo.deviceId) &&
+      (_tabLeader?.isLeader ?? true);
 
   /// Single-active-editor claim (multi-device save fix). The first admin
   /// device to touch a live game becomes the whole-document writer and
@@ -372,6 +376,10 @@ extension AppProviderCloudSync on AppProvider {
   Future<void> _claimEditorIfNeeded() async {
     final game = _currentGame;
     if (game == null || _user == null || !isAdmin || !_backendUp) return;
+    // A follower tab never claims or heartbeats automatically — only the
+    // browser-elected leader does. An explicit forceEditorClaim (the user's
+    // own "take control" action) is still honoured from any tab.
+    if (!(_tabLeader?.isLeader ?? true) && !forceEditorClaim) return;
     final editor = game.editorDeviceId;
     final now = DateTime.now();
     final claimedAt = game.editorClaimedAt;

@@ -385,7 +385,7 @@ class StructureReviewScreen extends StatelessWidget {
                             Formatters.chips(c.total),
                             textAlign: TextAlign.right,
                             style: AppTypography.monoSm.copyWith(
-                              color: AppColors.primary,
+                              color: AppColors.primaryText,
                             ),
                           ),
                         ),
@@ -765,7 +765,7 @@ class StructureReviewScreen extends StatelessWidget {
                           Text(
                             '${p.amount}',
                             style: AppTypography.monoSm.copyWith(
-                              color: AppColors.primary,
+                              color: AppColors.primaryText,
                               fontWeight: FontWeight.w600,
                             ),
                           ),

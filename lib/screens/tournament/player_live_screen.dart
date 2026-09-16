@@ -435,7 +435,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                 Text(
                                   '${myPlayer.knockouts} knockout${myPlayer.knockouts! > 1 ? 's' : ''}',
                                   style: AppTypography.bodySm.copyWith(
-                                    color: AppColors.primary,
+                                    color: AppColors.primaryText,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -868,7 +868,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         child: Text(
                           'Rebuys remain open until after Level ${game.settings.rebuysCloseLevel}.',
                           style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.primary,
+                            color: AppColors.primaryText,
                             fontWeight: FontWeight.w500,
                           ),
                         ),

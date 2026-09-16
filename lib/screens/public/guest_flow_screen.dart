@@ -561,7 +561,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                 Text(
                   _codeError!,
                   style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.destructive,
+                    color: AppColors.destructiveText,
                   ),
                 ),
               ],
@@ -597,7 +597,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                           child: Text(
                             'FP2608',
                             style: AppTypography.monoSm.copyWith(
-                              color: AppColors.primary,
+                              color: AppColors.primaryText,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -631,7 +631,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                 child: Text(
                   'Sign in',
                   style: AppTypography.bodySm.copyWith(
-                    color: AppColors.primary,
+                    color: AppColors.primaryText,
                     decoration: TextDecoration.underline,
                     decorationColor: AppColors.primary,
                   ),
@@ -1017,7 +1017,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             Text(
               _nameError!,
               style: AppTypography.bodyXs.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
           ],
@@ -1641,7 +1641,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                   child: Text(
                     'Sign up',
                     style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.primary,
+                      color: AppColors.primaryText,
                       decoration: TextDecoration.underline,
                       decorationColor: AppColors.primary,
                     ),

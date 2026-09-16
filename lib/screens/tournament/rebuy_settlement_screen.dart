@@ -526,7 +526,7 @@ class _AddOnsStep extends StatelessWidget {
                     Text(
                       Formatters.chips(addOnChips),
                       style: AppTypography.monoSm.copyWith(
-                        color: AppColors.primary,
+                        color: AppColors.primaryText,
                       ),
                     ),
                   ],
@@ -544,7 +544,7 @@ class _AddOnsStep extends StatelessWidget {
                     Text(
                       Formatters.chips(estPrizePool),
                       style: AppTypography.monoSm.copyWith(
-                        color: AppColors.primary,
+                        color: AppColors.primaryText,
                       ),
                     ),
                   ],
@@ -635,7 +635,7 @@ class _ColorUpStep extends StatelessWidget {
                       Text(
                         '${i + 1}.',
                         style: AppTypography.bodySm.copyWith(
-                          color: AppColors.primary,
+                          color: AppColors.primaryText,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -783,7 +783,7 @@ class _ConfirmStep extends StatelessWidget {
                     Text(
                       Formatters.chips(prizePool),
                       style: AppTypography.monoSm.copyWith(
-                        color: AppColors.primary,
+                        color: AppColors.primaryText,
                       ),
                     ),
                   ],

@@ -922,7 +922,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                         Text(
                           rsvp == null ? 'Tap to respond' : 'Tap to change',
                           style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.primary,
+                            color: AppColors.primaryText,
                           ),
                         ),
                     ],

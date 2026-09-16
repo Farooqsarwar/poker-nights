@@ -142,7 +142,7 @@ class ResultPodiumScreen extends StatelessWidget {
                     child: Text(
                       '${game.settings.name} prize pool',
                       style: AppTypography.monoSm.copyWith(
-                        color: AppColors.primary,
+                        color: AppColors.primaryText,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -220,7 +220,7 @@ class ResultPodiumScreen extends StatelessWidget {
                         Text(
                           Formatters.chips(myResult.prize!.amount),
                           style: AppTypography.monoXl.copyWith(
-                            color: AppColors.primary,
+                            color: AppColors.primaryText,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -592,7 +592,7 @@ class _PodiumSlot extends StatelessWidget {
                     child: Text(
                       Formatters.chips(result.prize!.amount),
                       style: AppTypography.monoSm.copyWith(
-                        color: AppColors.primary,
+                        color: AppColors.primaryText,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

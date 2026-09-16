@@ -352,7 +352,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                         Text(
                           'Danger zone',
                           style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.destructive,
+                            color: AppColors.destructiveText,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -693,7 +693,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                       Text(
                         '$total',
                         style: AppTypography.monoXs.copyWith(
-                          color: AppColors.success,
+                          color: AppColors.successText,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1657,7 +1657,7 @@ class _EditEventFormState extends State<_EditEventForm> {
                 child: Text(
                   'Follow RSVPs instead',
                   style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.primary,
+                    color: AppColors.primaryText,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -2599,10 +2599,17 @@ class _RsvpSectionState extends State<_RsvpSection> {
                 color: AppColors.mutedForeground,
               ),
               const SizedBox(width: AppSpacing.sm),
-              Text(
-                'Bringing guests',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
+              // Flexible, not a bare Text: at a 320px width the icon, this
+              // label and the fixed-width stepper together are tight enough
+              // that the label needs to be the one that gives way, rather
+              // than overflow the row.
+              Flexible(
+                child: Text(
+                  'Bringing guests',
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ),
               const Spacer(),
@@ -2640,7 +2647,7 @@ class _RsvpSectionState extends State<_RsvpSection> {
             child: Text(
               lastError,
               style: AppTypography.bodyXs.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
           ),

@@ -270,7 +270,7 @@ class _EventDayChecklistBodyState extends State<_EventDayChecklistBody> {
                 Text(
                   'Ready to run.',
                   style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.success,
+                    color: AppColors.successText,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

@@ -73,7 +73,7 @@ class ChatBubble extends StatelessWidget {
               child: Text(
                 message.authorName,
                 style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.primary,
+                  color: AppColors.primaryText,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
@@ -231,7 +231,7 @@ class _EventCard extends StatelessWidget {
                   Text(
                     'Pinned event',
                     style: AppTypography.monoXs.copyWith(
-                      color: AppColors.primary,
+                      color: AppColors.primaryText,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

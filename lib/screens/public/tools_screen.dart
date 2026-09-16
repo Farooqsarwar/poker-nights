@@ -15,7 +15,9 @@ import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
+import '../../models/live_game.dart';
 import '../../widgets/count_stepper.dart';
+import '../../widgets/tournament_display_block.dart';
 import '../../widgets/glass_styles.dart';
 
 /// The public tools (§2).
@@ -314,26 +316,54 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
           ),
           if (r != null) ...[
             const SizedBox(height: AppSpacing.xl),
+
+            // The headline figures first, as their own cards. A schedule is
+            // the answer, but "how deep do we start and how long will it run"
+            // is the question people actually arrived with.
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                _StatCard(
+                  label: 'Starting stack',
+                  value: '${r.startingStack}',
+                ),
+                _StatCard(label: 'Levels', value: '${r.plannedLevels}'),
+                _StatCard(
+                  label: 'Level length',
+                  value: '${r.levelDuration}m',
+                ),
+                _StatCard(
+                  label: 'Est. finish',
+                  value: r.expectedFinishMins >= 60
+                      ? '${r.expectedFinishMins ~/ 60}h '
+                            '${(r.expectedFinishMins % 60).toString().padLeft(2, '0')}m'
+                      : '${r.expectedFinishMins}m',
+                ),
+              ],
+            ),
+            if (r.styleNote.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                r.styleNote,
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Starting stack ${r.startingStack}',
+                    'Blind schedule',
                     style: AppTypography.bodySm.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (r.styleNote.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      r.styleNote,
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: AppSpacing.md),
                   for (final l in r.levels.take(r.plannedLevels))
                     Padding(
@@ -513,38 +543,24 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
           for (var i = 0; i < _stacks.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 70,
-                    child: Text(
-                      'Player ${i + 1}',
-                      style: AppTypography.bodyXs,
-                    ),
+              child: _StepperRow(
+                label: Text('Player ${i + 1}', style: AppTypography.bodyXs),
+                stepper: CountStepper(
+                  value: _stacks[i],
+                  min: 0,
+                  max: 1000000,
+                  step: 500,
+                  semanticLabel: 'Player ${i + 1} stack',
+                  onChanged: (v) => setState(() => _stacks[i] = v),
+                ),
+                trailing: Text(
+                  equity[i].toStringAsFixed(2),
+                  textAlign: TextAlign.right,
+                  style: AppTypography.monoXs.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
                   ),
-                  Expanded(
-                    child: CountStepper(
-                      value: _stacks[i],
-                      min: 0,
-                      max: 1000000,
-                      step: 500,
-                      semanticLabel: 'Player ${i + 1} stack',
-                      onChanged: (v) => setState(() => _stacks[i] = v),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  SizedBox(
-                    width: 80,
-                    child: Text(
-                      equity[i].toStringAsFixed(2),
-                      textAlign: TextAlign.right,
-                      style: AppTypography.monoXs.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           Row(
@@ -586,26 +602,19 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
           for (var i = 0; i < _payouts.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 70,
-                    child: Text(
-                      '${i + 1}${i == 0 ? 'st' : i == 1 ? 'nd' : i == 2 ? 'rd' : 'th'}',
-                      style: AppTypography.bodyXs,
-                    ),
-                  ),
-                  Expanded(
-                    child: CountStepper(
-                      value: _payouts[i],
-                      min: 0,
-                      max: 100000,
-                      step: 10,
-                      semanticLabel: 'Prize ${i + 1}',
-                      onChanged: (v) => setState(() => _payouts[i] = v),
-                    ),
-                  ),
-                ],
+              child: _StepperRow(
+                label: Text(
+                  '${i + 1}${i == 0 ? 'st' : i == 1 ? 'nd' : i == 2 ? 'rd' : 'th'}',
+                  style: AppTypography.bodyXs,
+                ),
+                stepper: CountStepper(
+                  value: _payouts[i],
+                  min: 0,
+                  max: 100000,
+                  step: 10,
+                  semanticLabel: 'Prize ${i + 1}',
+                  onChanged: (v) => setState(() => _payouts[i] = v),
+                ),
               ),
             ),
           const SizedBox(height: AppSpacing.lg),
@@ -658,11 +667,52 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                     'Above ${Icm.maxExactPlayers} players this is a '
                     'proportional estimate, not the exact model.',
                     style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.warning,
+                      color: AppColors.warningText,
                     ),
                   ),
                 ],
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One figure from the clock, labelled. Small enough to sit in a row of them
+/// under the countdown without competing with it.
+class _StatCard extends StatelessWidget {
+  const _StatCard({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: Glass.solidTint(AppColors.secondary),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: AppTypography.monoSm.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            label,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
             ),
           ),
         ],
@@ -688,6 +738,57 @@ class _Field extends StatelessWidget {
   }
 }
 
+/// A label, a [CountStepper] and an optional trailing value, laid out in one
+/// row when there is room and stacked when there is not.
+///
+/// [CountStepper] has a hard minimum width — its two 44x44 buttons are a
+/// deliberate touch-target floor, not something to shrink — so a fixed-width
+/// label and trailing column either side of it (the ICM calculator's
+/// stack/prize rows) is exactly the layout that overflows on a 320px phone.
+/// Below [_narrowThreshold] this drops the label/trailing pair onto their own
+/// line above a full-width stepper instead of trying to squeeze all three
+/// into one row that cannot get any narrower.
+class _StepperRow extends StatelessWidget {
+  const _StepperRow({required this.label, required this.stepper, this.trailing});
+
+  final Widget label;
+  final Widget stepper;
+  final Widget? trailing;
+
+  static const double _narrowThreshold = 360;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= _narrowThreshold) {
+          return Row(
+            children: [
+              SizedBox(width: 70, child: label),
+              Expanded(child: stepper),
+              if (trailing != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                SizedBox(width: 80, child: trailing!),
+              ],
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [label, ?trailing],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            stepper,
+          ],
+        );
+      },
+    );
+  }
+}
+
 /// Tournament Clock — a readable clock for a structure, without an account.
 ///
 /// The public tool deliberately does less than the app's live clock: no
@@ -708,6 +809,10 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
   Timer? _ticker;
   List<ClockSegment> _segments = const [];
 
+  /// Kept so the clock can show what the engine actually decided — starting
+  /// stack and the rebuy window are part of reading a structure, not extras.
+  TournamentStructure? _structure;
+
   int _players = 9;
   int _hours = 4;
 
@@ -716,6 +821,31 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
 
   /// Seconds left in the current segment.
   int _left = 0;
+
+  bool get _finished =>
+      _segments.isNotEmpty && _index == _segments.length - 1 && _left == 0;
+
+  /// Seconds still to play across every remaining segment, including this one.
+  int get _remainingTotal {
+    if (_segments.isEmpty) return 0;
+    var total = _left;
+    for (var i = _index + 1; i < _segments.length; i++) {
+      total += _segments[i].seconds;
+    }
+    return total;
+  }
+
+  /// Seconds until the next scheduled break, or null when none remain.
+  int? get _untilBreak {
+    if (_segments.isEmpty) return null;
+    if (_segments[_index].isBreak) return 0;
+    var total = _left;
+    for (var i = _index + 1; i < _segments.length; i++) {
+      if (_segments[i].isBreak) return total;
+      total += _segments[i].seconds;
+    }
+    return null;
+  }
 
   @override
   void dispose() {
@@ -744,6 +874,7 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
     );
     final segments = ClockSequence.build(structure);
     setState(() {
+      _structure = structure;
       _segments = segments;
       _index = 0;
       _running = false;
@@ -752,6 +883,16 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
   }
 
   void _toggle() {
+    // Pressing Start on a finished structure used to arm a ticker that could
+    // never count down — the button looked live and nothing moved. Rewind to
+    // the top instead, which is what "start" means on a clock that has run
+    // its course.
+    if (!_running && _finished) {
+      setState(() {
+        _index = 0;
+        _left = _segments.first.seconds;
+      });
+    }
     setState(() => _running = !_running);
     _ticker?.cancel();
     if (!_running) return;
@@ -784,26 +925,79 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
     _ticker?.cancel();
     setState(() {
       _segments = const [];
+      _structure = null;
       _running = false;
       _index = 0;
       _left = 0;
     });
   }
 
-  String _mmss(int seconds) {
-    final m = seconds ~/ 60;
-    final rest = seconds % 60;
-    return '$m:${rest.toString().padLeft(2, '0')}';
+  /// Longer spans read better as "1h 45m" than as 105 minutes.
+  String _coarse(int seconds) {
+    final mins = (seconds / 60).round();
+    if (mins < 60) return '${mins}m';
+    return '${mins ~/ 60}h ${(mins % 60).toString().padLeft(2, '0')}m';
+  }
+
+  /// Wraps the tool's clock state in a [LiveGame] so the page can render
+  /// [TournamentDisplayBlock] — the SAME widget the TV display and the host
+  /// dashboard use.
+  ///
+  /// The point of the public clock is to be the app's clock, not a lookalike
+  /// of it. Rebuilding the display here would mean two clocks to keep in step
+  /// and a tool that quietly drifts from the product it advertises. This way
+  /// any change to the real display shows up here for free.
+  ///
+  /// `timerRunning` is deliberately false: [LiveGame.currentSecondsRemaining]
+  /// returns the stored `secondsRemaining` verbatim in that case, which lets
+  /// this screen's own ticker drive the count instead of a wall-clock
+  /// `levelEndTime` that a preview has no reason to invent.
+  LiveGame _previewGame() {
+    final structure = _structure!;
+    final level = ClockSequence.levelAt(_segments, _index);
+    final onBreak = _segments[_index].isBreak;
+
+    return LiveGame(
+      id: 'tool-clock',
+      groupId: '',
+      settings: GameSettings(
+        name: 'Tournament Clock',
+        date: '',
+        time: '',
+        location: '',
+        players: _players,
+        durationHours: _hours.toDouble(),
+        buyIn: 20,
+        koEnabled: false,
+        koAmount: 0,
+        rebuys: true,
+        rebuysCloseLevel: 6,
+        addOn: true,
+        anteEnabled: false,
+        anteAfterLevel: 7,
+        organizerPct: 0,
+        chipSet: kToolChipSet,
+        chipSetName: 'Standard 300',
+      ),
+      structure: structure,
+      status: onBreak ? LiveGameStatus.onBreak : LiveGameStatus.running,
+      publicCode: '',
+      tvCode: '',
+      currentLevel: level?.level ?? 1,
+      timerRunning: false,
+      secondsRemaining: _left,
+      players: const [],
+      chat: const [],
+      announcements: const [],
+      totalChipsInPlay: structure.startingStack * _players,
+      pendingGuests: const [],
+      finishOrder: const [],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final started = _segments.isNotEmpty;
-    final segment = started ? _segments[_index] : null;
-    final onBreak = segment?.isBreak ?? false;
-    final current = ClockSequence.levelAt(_segments, _index);
-    final next = ClockSequence.nextLevelAfter(_segments, _index);
-    final accent = onBreak ? AppColors.warning : AppColors.primary;
 
     return _ToolScaffold(
       title: 'Tournament Clock',
@@ -840,49 +1034,56 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
               child: const Text('Start a clock'),
             ),
           ] else ...[
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              decoration: BoxDecoration(
-                color: Glass.solidTint(accent),
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: accent),
+            // The real display block — the same widget driving the TV screen
+            // and the host dashboard, not a reproduction of it.
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              child: TournamentDisplayBlock(
+                game: _previewGame(),
+                showStatusChip: false,
+                showPayoutAmounts: false,
               ),
-              child: Column(
-                children: [
-                  Text(
-                    segment!.label,
-                    style: AppTypography.bodySm.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.mutedForeground,
-                    ),
+            ),
+            if (_finished) ...[
+              const SizedBox(height: AppSpacing.md),
+              Center(
+                child: Text(
+                  'Structure complete',
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.primaryText,
+                    fontWeight: FontWeight.w600,
                   ),
-                  Text(
-                    _mmss(_left),
-                    style: AppTypography.display(
-                      size: 72,
-                      weight: FontWeight.w700,
-                    ),
-                  ),
-                  if (!onBreak && current != null)
-                    Text(
-                      '${current.sb} / ${current.bb}'
-                      '${current.ante != null ? '   ante ${current.ante}' : ''}',
-                      style: AppTypography.display(
-                        size: AppFontSizes.xl,
-                        weight: FontWeight.w600,
-                      ),
-                    ),
-                  if (next != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Next  ${next.sb} / ${next.bb}',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
+            ],
+            const SizedBox(height: AppSpacing.md),
+
+            // The figures a host actually watches for alongside the count:
+            // how much night is left, and when the room next gets a break.
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                _StatCard(
+                  label: 'Time left',
+                  value: _coarse(_remainingTotal),
+                ),
+                if (_untilBreak != null)
+                  _StatCard(
+                    label: 'Next break',
+                    value: _untilBreak == 0 ? 'Now' : _coarse(_untilBreak!),
+                  ),
+                if (_structure != null)
+                  _StatCard(
+                    label: 'Starting stack',
+                    value: '${_structure!.startingStack}',
+                  ),
+                _StatCard(
+                  label: 'Level',
+                  value: '${_index + 1} of ${_segments.length}',
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.lg),
             Row(

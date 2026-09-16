@@ -361,7 +361,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             child: Text(
                               'Forgot Password?',
                               style: AppTypography.bodySm.copyWith(
-                                color: AppColors.primary,
+                                color: AppColors.primaryText,
                               ),
                             ),
                           ),
@@ -373,7 +373,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       Text(
                         _error!,
                         style: AppTypography.bodySm.copyWith(
-                          color: AppColors.destructive,
+                          color: AppColors.destructiveText,
                         ),
                       ),
                     ],
@@ -382,7 +382,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       Text(
                         _success!,
                         style: AppTypography.bodySm.copyWith(
-                          color: AppColors.success,
+                          color: AppColors.successText,
                         ),
                       ),
                     ],
@@ -447,7 +447,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             child: Text(
                               'Back to Sign In',
                               style: AppTypography.bodySm.copyWith(
-                                color: AppColors.primary,
+                                color: AppColors.primaryText,
                               ),
                             ),
                           ),
@@ -488,7 +488,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   child: Text(
                     action,
                     style: AppTypography.bodySm.copyWith(
-                      color: AppColors.primary,
+                      color: AppColors.primaryText,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

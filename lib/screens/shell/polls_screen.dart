@@ -96,7 +96,7 @@ class _PollsScreenState extends State<PollsScreen> {
             Text(
               _pollError!,
               style: AppTypography.bodyXs.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
           ],
@@ -147,7 +147,7 @@ class _PollsScreenState extends State<PollsScreen> {
                 child: Text(
                   '+ Add option',
                   style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.primary,
+                    color: AppColors.primaryText,
                   ),
                 ),
               ),

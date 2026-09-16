@@ -184,7 +184,7 @@ class _ChatSheetState extends State<ChatSheet> {
                     child: Text(
                       _chatError!,
                       style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.destructive,
+                        color: AppColors.destructiveText,
                       ),
                     ),
                   ),

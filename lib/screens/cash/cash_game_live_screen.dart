@@ -886,7 +886,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                       child: Text(
                         '${activePlayers.length} player${activePlayers.length > 1 ? 's' : ''} still active — they should cash out first.',
                         style: AppTypography.bodySm.copyWith(
-                          color: AppColors.warning,
+                          color: AppColors.warningText,
                         ),
                       ),
                     ),
@@ -911,7 +911,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                           Text(
                             'Reconciliation mismatch of ${Formatters.money(currency, session.difference.abs())}',
                             style: AppTypography.bodySm.copyWith(
-                              color: AppColors.destructive,
+                              color: AppColors.destructiveText,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -942,7 +942,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                                   child: Text(
                                     'I understand — end with the mismatch recorded',
                                     style: AppTypography.bodyXs.copyWith(
-                                      color: AppColors.destructive,
+                                      color: AppColors.destructiveText,
                                     ),
                                   ),
                                 ),

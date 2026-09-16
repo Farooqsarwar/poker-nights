@@ -730,7 +730,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       'Structure complete — record final positions',
                       textAlign: TextAlign.center,
                       style: AppTypography.bodySm.copyWith(
-                        color: AppColors.warning,
+                        color: AppColors.warningText,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -3398,7 +3398,7 @@ class _AdminAppTourCard extends StatelessWidget {
                 Text(
                   step.toUpperCase(),
                   style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.primary,
+                    color: AppColors.primaryText,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1,
                   ),

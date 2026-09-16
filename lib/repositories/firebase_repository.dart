@@ -1364,7 +1364,67 @@ class FirebaseRepository {
       debugPrint('saveGame: private sidecar rejected (continuing): $e');
     }
 
+    await _mirrorPlayerIndex(gameRef, written);
+
     return written;
+  }
+
+  /// Number of players occupying a seat right now — the figure addendum §3
+  /// caps at nine for free hosting ("one table / max 9 active players").
+  ///
+  /// Matches `Entitlements.canHost`'s definition exactly: somebody who busted
+  /// out has freed their seat, so they no longer count against the cap.
+  static int activePlayerCount(LiveGame game) =>
+      game.players.where((p) => p.active && !p.eliminated).length;
+
+  /// Stage 1 of the free-tier cap migration: mirror the players map into a
+  /// real subcollection plus a counter document.
+  ///
+  /// Why this exists at all. The cap is enforced today only by
+  /// `Entitlements.canHost` in Dart, which ships to the device and can be
+  /// deleted from a rebuilt client. It cannot be enforced in security rules
+  /// as things stand, because `players` is a MAP FIELD inside the one game
+  /// document and the rules language has no loop — it cannot count how many
+  /// entries have `active == true && eliminated == false`, so it has nothing
+  /// to compare against nine.
+  ///
+  /// A counter alone does not fix that either: a rule still could not tell
+  /// whether a self-reported number matched the map it claims to describe.
+  /// What makes it enforceable is giving each player their OWN document, so
+  /// that ADDING a player becomes its own discrete write with its own rule —
+  /// one that can require, via `getAfter`, that the counter moved up by
+  /// exactly one in the same atomic commit. Player ten then cannot be created
+  /// at all, because the commit that would register them is refused by
+  /// Firestore rather than skipped by app code.
+  ///
+  /// This method is deliberately WRITE-ONLY and best-effort. Nothing reads
+  /// these documents yet and no rule enforces them yet; the live app still
+  /// runs entirely off the `players` map. That is what makes this stage safe
+  /// to ship on its own — if the mirror is wrong or missing, nothing breaks.
+  Future<void> _mirrorPlayerIndex(
+    DocumentReference<Map<String, dynamic>> gameRef,
+    LiveGame game,
+  ) async {
+    try {
+      final batch = _db.batch();
+      for (final p in game.players) {
+        batch.set(gameRef.collection('players').doc(p.id), {
+          ...playerToMap(p),
+          'gameId': game.id,
+          'groupId': game.groupId,
+        }, SetOptions(merge: true));
+      }
+      batch.set(gameRef.collection('meta').doc('playerCount'), {
+        'active': activePlayerCount(game),
+        'total': game.players.length,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+      await batch.commit();
+    } catch (e) {
+      // Stage 1 is a shadow copy. A rejection here must never cost the host
+      // their game state, exactly as with the private sidecar above.
+      debugPrint('saveGame: player index mirror skipped: $e');
+    }
   }
 
   /// Admin-only companion document: everything scrubbed out of the public one.

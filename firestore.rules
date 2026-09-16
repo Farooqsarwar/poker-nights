@@ -53,6 +53,22 @@ service cloud.firestore {
           );
     }
 
+    // Premium, read from the entitlement document the client can never write
+    // (see the `entitlements/{uid}` match at the end of this file). This is
+    // what lets a RULE — not app code — decide whether a paid-tier limit
+    // applies, which addendum §7 and acceptance criterion 12 ask for.
+    function isPremiumUser() {
+      return signedIn()
+          && exists(/databases/$(database)/documents/entitlements/$(request.auth.uid))
+          && get(/databases/$(database)/documents/entitlements/$(request.auth.uid))
+              .data.get('premium', false) == true;
+    }
+
+    // Addendum §3/§4: free hosting is one table, "max 9 active players".
+    function freeSeatLimit() {
+      return 9;
+    }
+
     // Validate that the caller only touched their OWN player rsvp field and
     // not any other player's state (C2 — prevents self check-in / seat /
     // rebuy / add-on / elimination forgery).  diff() on the full players
@@ -324,6 +340,58 @@ service cloud.firestore {
           && grossWithinField();
     }
 
+    // The checks above apply to `games/{gameId}`, but `publicGameDocSafe()`
+    // requires `organizerPct`, `organizerAmount` and `prizes` to be ABSENT
+    // from that very document -- they are scrubbed before every write
+    // (`_publicGameDoc`). The real values live in the admin-only sidecar,
+    // `games/{gameId}/admin/privateData` (`_privateGameDoc`), which had no
+    // value validation at all beyond `isGroupAdmin(gid)` -- so a tampered
+    // admin client could declare a low `organizerPct` on paper while writing
+    // an unrelated `organizerAmount` here, and nothing checked it.
+    //
+    // Rules cannot recompute the engine's exact rounding
+    // (`recalculatePrizes` in tournament_engine.dart snaps the amount to the
+    // nearest multiple of 10 sharing the gross's units digit), so this uses a
+    // tolerance band around the naive percentage instead: wide enough that no
+    // honest write is ever rejected, tight enough to catch the actual attack
+    // -- claiming a small percentage while pocketing a much larger amount.
+    //
+    // NOTE ON SHAPE: a rules function may declare at most TEN `let` bindings
+    // (the deploy validator enforces this; the emulator does not, so a version
+    // of this with twelve passed locally and was rejected on deploy). The
+    // conditions below are therefore inlined rather than named. The tolerance
+    // is 15 units, written as `1500` because the comparison is scaled by 100
+    // to keep the arithmetic in integers and avoid a division.
+    function privateGameDocSafe(gid, gameId) {
+      let data = request.resource.data;
+      let pct = data.get('organizerPct', 0);
+      let amount = data.get('organizerAmount', 0);
+      // grossCollected is not one of the fields the public doc scrubs, so it
+      // is the one place both documents agree on the same figure.
+      let gross = get(/databases/$(database)/documents/groups/$(gid)/games/$(gameId))
+          .data.get('structure', {}).get('grossCollected', 0);
+      // The audit timeline cannot be verified entry-by-entry (rules cannot
+      // walk a list), but a write that makes it SHORTER is exactly what
+      // deleting or rewriting history to hide an action would look like, and
+      // that much is checkable.
+      let auditOld = resource != null
+          ? resource.data.get('auditHistory', []).size() : 0;
+
+      // Percentage in range, or unchanged from what is already stored — the
+      // same legacy escape organizerPctSafe() uses, so a sidecar written by a
+      // build that predates this check keeps saving.
+      return ((pct is int && pct >= 0 && pct <= 20)
+              || (resource != null
+                  && resource.data.get('organizerPct', 0) == pct))
+          && (gross == 0
+              || pct == 0
+              || (amount * 100 <= gross * pct + 1500
+                  && amount * 100 >= gross * pct - 1500)
+              || (resource != null
+                  && resource.data.get('organizerAmount', 0) == amount))
+          && data.get('auditHistory', []).size() >= auditOld;
+    }
+
     // Member CREATE: a member RSVPing on a game doc that does not exist yet
     // (e.g. a legacy game whose document was never persisted) falls back to a
     // merge-set create carrying ONLY their own slice. Gate it so the created
@@ -506,8 +574,83 @@ service cloud.firestore {
           allow write: if false;
         }
 
-        // Private sidecar documents (e.g. undoStack, privateData)
-        match /admin/{document=**} {
+        // Private sidecar documents. `privateData` carries the real
+        // organizer percentage/amount, full player financial fields, audit
+        // history and request queue that the public doc above scrubs (see
+        // `_privateGameDoc`) — that value is now checked by
+        // `privateGameDocSafe()`, not just gated on admin identity. `delete`
+        // stays a plain admin check: `request.resource` is null on delete, so
+        // running the value-check function there would error rather than
+        // deny. `undoStack` is the admin's own personal recovery snapshots,
+        // not a financial claim surface — it is left as a straight admin
+        // check, same as before.
+        match /admin/privateData {
+          allow read: if isGroupAdmin(gid);
+          allow create, update: if isGroupAdmin(gid)
+              && privateGameDocSafe(gid, gameId);
+          allow delete: if isGroupAdmin(gid);
+        }
+
+        // ---------- player index (free-tier seat cap) ----------
+        //
+        // One document per player, plus a counter, mirrored alongside the
+        // `players` map on the game document (see `_mirrorPlayerIndex`).
+        //
+        // The cap could not be expressed against that map: the rules language
+        // has no loop, so it cannot count how many entries are active. Giving
+        // each player their own document makes ADDING one its own discrete
+        // write, which can be paired with the counter through `getAfter` —
+        // and a pairing is something a rule CAN check.
+        //
+        // What this does and does not guarantee, stated plainly. The counter
+        // moves by at most one per write and can never exceed nine without a
+        // premium entitlement, so a free host cannot jump the count or seat a
+        // tenth player in one step. It still cannot prove the counter matches
+        // the seats actually occupied — verifying that needs the same
+        // forbidden iteration — so a determined client that decrements the
+        // counter repeatedly over many writes could walk it down and make
+        // room. Every honest save rewrites the counter from the real field,
+        // which corrects drift immediately, so the lie has to be told
+        // continuously to hold. That is a materially higher bar than deleting
+        // one line of Dart, and it is the ceiling without a server.
+        match /meta/playerCount {
+          allow read: if isMember(gid);
+          allow create: if isGroupAdmin(gid)
+              && request.resource.data.get('active', 0) is int
+              && request.resource.data.get('active', 0) >= 0
+              && (request.resource.data.get('active', 0) <= freeSeatLimit()
+                  || isPremiumUser());
+          allow update: if isGroupAdmin(gid)
+              && request.resource.data.get('active', 0) is int
+              && request.resource.data.get('active', 0) >= 0
+              // At most one seat may change hands per write, so the count can
+              // never be restated wholesale.
+              && request.resource.data.get('active', 0)
+                   <= resource.data.get('active', 0) + 1
+              && request.resource.data.get('active', 0)
+                   >= resource.data.get('active', 0) - 1
+              // The cap itself. Shrinking is always allowed — a bust-out on
+              // an over-cap legacy game must never be blocked.
+              && (request.resource.data.get('active', 0) <= freeSeatLimit()
+                  || isPremiumUser()
+                  || request.resource.data.get('active', 0)
+                       <= resource.data.get('active', 0));
+          allow delete: if isGroupAdmin(gid);
+        }
+
+        // A new seat may only be created while the counter — as it stands
+        // AFTER this same atomic commit — is still within the free limit.
+        // `getAfter` is what ties the two writes together: the create and the
+        // increment must land in one batch or the whole commit is refused.
+        match /players/{playerId} {
+          allow read: if isMember(gid);
+          allow create: if isGroupAdmin(gid)
+              && (isPremiumUser()
+                  || getAfter(/databases/$(database)/documents/groups/$(gid)/games/$(gameId)/meta/playerCount)
+                       .data.get('active', 0) <= freeSeatLimit());
+          allow update, delete: if isGroupAdmin(gid);
+        }
+        match /admin/undoStack {
           allow read, write: if isGroupAdmin(gid);
         }
 

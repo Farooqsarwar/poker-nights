@@ -259,7 +259,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
               child: Text(
                 _dupError!,
                 style: AppTypography.bodySm.copyWith(
-                  color: AppColors.destructive,
+                  color: AppColors.destructiveText,
                 ),
               ),
             ),

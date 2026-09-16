@@ -158,7 +158,7 @@ class ProfileScreen extends StatelessWidget {
                         Text(
                           'Edit',
                           style: AppTypography.bodySm.copyWith(
-                            color: AppColors.primary,
+                            color: AppColors.primaryText,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -358,7 +358,7 @@ class ProfileScreen extends StatelessWidget {
             child: Text(
               'Delete',
               style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
           ),
@@ -398,7 +398,7 @@ class ProfileScreen extends StatelessWidget {
             child: Text(
               'Sign out',
               style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
           ),

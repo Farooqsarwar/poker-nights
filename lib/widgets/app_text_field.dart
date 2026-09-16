@@ -169,7 +169,7 @@ class _AppTextFieldState extends State<AppTextField> {
           Text(
             widget.error!,
             style: AppTypography.bodyXs.copyWith(
-              color: AppColors.destructive,
+              color: AppColors.destructiveText,
             ),
           ),
         ] else if (widget.hint != null) ...[

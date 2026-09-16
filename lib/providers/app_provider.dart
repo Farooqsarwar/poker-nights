@@ -38,6 +38,7 @@ import '../services/onesignal_sender.dart';
 import '../services/projections.dart' as projections;
 import '../services/push_service.dart';
 import '../services/recovery_service.dart';
+import '../services/tab_leader.dart';
 
 part 'app_provider_auth.dart';
 part 'app_provider_cloud_sync.dart';
@@ -635,6 +636,38 @@ class AppProvider extends ChangeNotifier {
   // ── Game ───────────────────────────────────────────────────────────────────
   LiveGame? _currentGame;
 
+  /// Elects a single leader among same-browser tabs viewing [_tabLeaderScope]
+  /// (a live game id), so the editor-authority check below cannot let two
+  /// tabs of one browser both act as the single writer. No-op off the web —
+  /// see `services/tab_leader.dart`. Rebound by [_syncTabLeader] whenever the
+  /// open game changes.
+  TabLeader? _tabLeader;
+  String? _tabLeaderScope;
+
+  /// Keeps [_tabLeader] bound to whichever game is currently open, creating
+  /// or replacing it only when the game id actually changes so the election
+  /// (and its in-flight peer list) survives ordinary re-renders.
+  void _syncTabLeader() {
+    final gameId = _currentGame?.id;
+    if (gameId == _tabLeaderScope) return;
+    try {
+      _tabLeader?.dispose();
+      _tabLeaderScope = gameId;
+      _tabLeader = gameId == null ? null : TabLeader(gameId);
+    } catch (e) {
+      // BroadcastChannel is missing on older Safari and blocked in some
+      // embedded contexts. This runs inside notifyListeners(), so letting it
+      // throw would take the UI update with it — and the cost of losing the
+      // election is only that two tabs of one browser can both write again,
+      // which is exactly the behaviour that shipped before it existed. A null
+      // leader reads as "assume leader" at every call site, so the host keeps
+      // control of their own game rather than being locked out of editing.
+      debugPrint('tab leader election unavailable, continuing without it: $e');
+      _tabLeader = null;
+      _tabLeaderScope = gameId;
+    }
+  }
+
   // Undo stack (checklist 12-042/12-043/12-044, technical §11.3). Before every
   // admin mutation we snapshot the previous game; undo pops and restores it.
   static const int _maxUndoDepth = 30;
@@ -937,6 +970,7 @@ class AppProvider extends ChangeNotifier {
     super.notifyListeners();
     if (_isTickUpdate) return;
     _lastSync = DateTime.now();
+    _syncTabLeader();
     AppProviderCloudSync(this)._syncGameToCloud();
     AppProviderCloudSync(this)._ensureRequestsSubscription();
     final game = _currentGame;
@@ -966,6 +1000,7 @@ class AppProvider extends ChangeNotifier {
     _serverTimeRecalibration?.cancel();
     _authSub?.cancel();
     _connectivitySub?.cancel();
+    _tabLeader?.dispose();
     AppProviderUserData(this)._teardownUserData();
     super.dispose();
   }

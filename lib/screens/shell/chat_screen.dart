@@ -218,7 +218,7 @@ class _Composer extends StatelessWidget {
             Text(
               error!,
               style: AppTypography.bodyXs.copyWith(
-                color: AppColors.destructive,
+                color: AppColors.destructiveText,
               ),
             ),
             const SizedBox(height: AppSpacing.xs),

@@ -168,7 +168,7 @@ class _CodeEntry extends StatelessWidget {
                           Text(
                             error!,
                             style: AppTypography.bodySm.copyWith(
-                              color: AppColors.destructive,
+                              color: AppColors.destructiveText,
                             ),
                           ),
                         ],
@@ -198,7 +198,7 @@ class _CodeEntry extends StatelessWidget {
                                   child: Text(
                                     'TV-FP',
                                     style: AppTypography.monoSm.copyWith(
-                                      color: AppColors.primary,
+                                      color: AppColors.primaryText,
                                     ),
                                   ),
                                 ),

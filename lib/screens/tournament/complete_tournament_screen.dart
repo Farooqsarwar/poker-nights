@@ -279,7 +279,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                           child: Text(
                             'Last player \u2014 tap to set as winner!',
                             style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.success,
+                              color: AppColors.successText,
                             ),
                           ),
                         ),
@@ -320,7 +320,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                               Text(
                                 'Undo last',
                                 style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.destructive,
+                                  color: AppColors.destructiveText,
                                   decoration: TextDecoration.underline,
                                 ),
                               ),
@@ -376,7 +376,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                   Text(
                                     Formatters.chips(r.prize!.amount),
                                     style: AppTypography.monoSm.copyWith(
-                                      color: AppColors.primary,
+                                      color: AppColors.primaryText,
                                     ),
                                   ),
                               ],
@@ -420,7 +420,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                             child: Text(
                               'Edit Deal/Chop',
                               style: AppTypography.bodySm.copyWith(
-                                color: AppColors.primary,
+                                color: AppColors.primaryText,
                                 decoration: TextDecoration.underline,
                               ),
                             ),
@@ -444,7 +444,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                             Text(
                               Formatters.chips(prizes[i].amount),
                               style: AppTypography.monoSm.copyWith(
-                                color: AppColors.primary,
+                                color: AppColors.primaryText,
                               ),
                             ),
                           ],

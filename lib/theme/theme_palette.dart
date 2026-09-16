@@ -63,6 +63,28 @@ class ThemePalette {
   final Color warning;
   final Color warningForeground;
 
+  // ── Text-safe variants of the semantic colours ──────────────────────────
+  //
+  // The base semantic colours are tuned as FILLS, and they are correct for
+  // that: white on `primary` measures 6.6:1, exactly what a button wants.
+  // Used as TEXT on a dark surface the same colour measures 2.6:1 — far under
+  // the 4.5:1 AA floor — which is why links ("Forgot Password?", "Back to
+  // Sign In"), status lines and coloured labels were hard to read against the
+  // card. A fill colour and a text colour are different jobs; these are the
+  // text job.
+  //
+  // Lifting toward white rather than hardcoding per palette means every
+  // theme — red, crimson, yellow, cosmic, orange — gets a correct variant
+  // from its own hue instead of five hand-tuned constants that drift apart.
+  // 0.40 is the point the default red clears AA on both card and background
+  // (5.4:1 and 6.7:1) while still reading as red rather than pink.
+  static const double _textLift = 0.40;
+  Color get primaryText => Color.lerp(primary, Colors.white, _textLift)!;
+  Color get destructiveText =>
+      Color.lerp(destructive, Colors.white, _textLift)!;
+  Color get successText => Color.lerp(success, Colors.white, _textLift)!;
+  Color get warningText => Color.lerp(warning, Colors.white, _textLift)!;
+
   // ── Derived decorative colours ──────────────────────────────────────────
   Color get primarySoft => primary.withValues(alpha: 0.15);
   Color get primarySoftBorder => primary.withValues(alpha: 0.30);
@@ -145,17 +167,33 @@ class ThemePalettes {
     primaryHover: Color(0xFFD32F2F),
     background: Color(0xFF000000),
     foreground: Color(0xFFFFFFFF),
+    // Surfaces and borders are deliberately left exactly as they were. The
+    // near-black card on a black page IS the look; an earlier attempt to lift
+    // it — and then the border — to force separation made the whole UI read
+    // grey and flat, which was worse than the problem it solved.
+    //
+    // The contrast the screens genuinely needed goes entirely into the TEXT
+    // tokens below. Note that what actually made buttons look washed out was
+    // never the surfaces at all: BoxDecoration silently drops `color` when a
+    // `gradient` is present, so every filled button was painting only its
+    // sheen (fixed in widgets/app_button.dart).
     card: Color(0xFF111111),
     cardForeground: Color(0xFFFFFFFF),
     secondary: Color(0xFF222222),
-    secondaryForeground: Color(0xFFE4E4E7),
+    secondaryForeground: Color(0xFFEDEDF0),
     muted: Color(0xFF1A1A1A),
-    mutedForeground: Color(0xFFA1A1AA),
+    // Was A1A1AA (7.4:1 on card). Lifted to B8B8C2 — 9.6:1 — because this is
+    // the workhorse for secondary copy on every screen.
+    mutedForeground: Color(0xFFB8B8C2),
     accent: Color(0xFFB71C1C),
     accentForeground: Color(0xFFFFFFFF),
     border: Color(0xFF333333),
     ring: Color(0xFFB71C1C),
-    onSurfaceHint: Color(0xFF71717A),
+    // Was 71717A, which measured 3.9:1 on a card — under the 4.5:1 WCAG AA
+    // floor for body text, and this token is used for input hints, dropdown
+    // placeholders and chat metadata, i.e. text people actually need to read.
+    // 9A9AA6 measures 6.8:1 on card.
+    onSurfaceHint: Color(0xFF9A9AA6),
     surfaceHover: Color(0xFF27272A),
     icon: Color(0xFFA1A1AA),
     iconMuted: Color(0xFF71717A),
@@ -179,14 +217,14 @@ class ThemePalettes {
     card: Color(0xBF1E1E1E),        // rgba(30,30,30,0.75) — glassmorphism
     cardForeground: Color(0xFFFFFFFF),
     secondary: Color(0x0DFFFFFF),    // rgba(255,255,255,0.05) — frosted surface
-    secondaryForeground: Color(0xFFA1A1AA),
+    secondaryForeground: Color(0xFFB8B8C2),
     muted: Color(0x0DFFFFFF),       // rgba(255,255,255,0.05)
-    mutedForeground: Color(0xFFA1A1AA),
+    mutedForeground: Color(0xFFB8B8C2),
     accent: Color(0xFFFF1744),
     accentForeground: Color(0xFFFFFFFF),
     border: Color(0x1AFFFFFF),      // rgba(255,255,255,0.10) — glass edge
     ring: Color(0xFFDC143C),
-    onSurfaceHint: Color(0xFF71717A),
+    onSurfaceHint: Color(0xFF9A9AA6),
     surfaceHover: Color(0x14FFFFFF), // rgba(255,255,255,0.08)
     icon: Color(0xFFA1A1AA),
     iconMuted: Color(0xFF71717A),
@@ -210,14 +248,14 @@ class ThemePalettes {
     card: Color(0xFF161200),
     cardForeground: Color(0xFFEFEEE8),
     secondary: Color(0xFF242000),
-    secondaryForeground: Color(0xFFD4D0C8),
+    secondaryForeground: Color(0xFFE6E2D8),
     muted: Color(0xFF120F00),
-    mutedForeground: Color(0xFF9E9480),
+    mutedForeground: Color(0xFFBEB49C),
     accent: Color(0xFFF9A825),
     accentForeground: Color(0xFF1A1400),
     border: Color(0xFF383000),
     ring: Color(0xFFF9A825),
-    onSurfaceHint: Color(0xFF6B6350),
+    onSurfaceHint: Color(0xFFA2977E),
     surfaceHover: Color(0xFF2A2400),
     icon: Color(0xFFFFD54F),
     iconMuted: Color(0xFFFFE082),
@@ -241,14 +279,15 @@ class ThemePalettes {
     card: Color(0xFF0F172A),          // slate-900
     cardForeground: Color(0xFFF9FAFB),
     secondary: Color(0xFF0F172A),     // slate-900
-    secondaryForeground: Color(0xFFCBD5E1),
+    secondaryForeground: Color(0xFFDDE5EE),
     muted: Color(0xFF1E293B),         // slate-800
-    mutedForeground: Color(0xFF94A3B8),
+    mutedForeground: Color(0xFFAEBDCE),
     accent: Color(0xFF8B5CF6),        // purple
     accentForeground: Color(0xFFFFFFFF),
     border: Color(0xFF1E293B),        // slate-800
     ring: Color(0xFF3B82F6),
-    onSurfaceHint: Color(0xFF64748B),
+    // Was 64748B (slate-500), 3.75:1 on card — under the AA floor.
+    onSurfaceHint: Color(0xFF94A5BB),
     surfaceHover: Color(0xFF1E293B),
     icon: Color(0xFF06B6D4),          // cyan
     iconMuted: Color(0xFF22D3EE),
@@ -272,14 +311,14 @@ class ThemePalettes {
     card: Color(0xFF180E04),
     cardForeground: Color(0xFFF0ECEA),
     secondary: Color(0xFF281A08),
-    secondaryForeground: Color(0xFFD8C8B0),
+    secondaryForeground: Color(0xFFE8DCC8),
     muted: Color(0xFF120A02),
-    mutedForeground: Color(0xFFA0886E),
+    mutedForeground: Color(0xFFC0A98E),
     accent: Color(0xFFFF6D00),
     accentForeground: Color(0xFFFFFFFF),
     border: Color(0xFF3C2810),
     ring: Color(0xFFFF6D00),
-    onSurfaceHint: Color(0xFF6E5A42),
+    onSurfaceHint: Color(0xFFA68D6E),
     surfaceHover: Color(0xFF301E0A),
     icon: Color(0xFFFFAB40),
     iconMuted: Color(0xFFFFCC80),

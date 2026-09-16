@@ -1225,7 +1225,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   child: Text(
                     'Use RSVP count ($_derivedExpectedPlayers)',
                     style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.primary,
+                      color: AppColors.primaryText,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1315,7 +1315,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                         Text(
                           _matchLabel(m.score),
                           style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.primary,
+                            color: AppColors.primaryText,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -2034,7 +2034,15 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                               ),
                             ),
                             const SizedBox(height: AppSpacing.xs),
-                            Row(
+                            // Wrap, not Row: "After level" + the stepper +
+                            // "Auto" have no fixed budget between them, and a
+                            // Row of unwrapped children here is exactly what
+                            // overflowed on a phone. Wrap can never overflow
+                            // horizontally — it just drops to a second line.
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.xs,
                               children: [
                                 Text(
                                   'After level',
@@ -2042,7 +2050,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                                     color: AppColors.mutedForeground,
                                   ),
                                 ),
-                                const SizedBox(width: AppSpacing.sm),
                                 CountStepper(
                                   // 0 means "you choose" — the engine places
                                   // it after the rebuy window, or at the
@@ -2060,21 +2067,25 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                                     ];
                                   }),
                                 ),
-                                const SizedBox(width: AppSpacing.sm),
                                 if (_breaks[i].afterLevel == 0)
-                                  Expanded(
-                                    child: Text(
-                                      'Auto',
-                                      style: AppTypography.bodyXs.copyWith(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                  Text(
+                                    'Auto',
+                                    style: AppTypography.bodyXs.copyWith(
+                                      color: AppColors.primaryText,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                               ],
                             ),
                             const SizedBox(height: AppSpacing.xs),
-                            Row(
+                            // Same reasoning: the segmented picker alone can
+                            // run wider than a phone screen with all five
+                            // options, so this also wraps instead of forcing
+                            // one line.
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.xs,
                               children: [
                                 Text(
                                   'Minutes',
@@ -2082,7 +2093,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                                     color: AppColors.mutedForeground,
                                   ),
                                 ),
-                                const SizedBox(width: AppSpacing.sm),
                                 _SegmentedPicker(
                                   // Section 8's presets, plus Custom — which
                                   // simply hands the stepper below any value.
@@ -2103,7 +2113,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                                     ];
                                   }),
                                 ),
-                                const SizedBox(width: AppSpacing.sm),
                                 CountStepper(
                                   value: _breaks[i].durationMins,
                                   min: 1,
@@ -2382,7 +2391,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                         child: Text(
                           '${_anteAdvice.label} — ${_anteAdvice.reason}',
                           style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.primary,
+                            color: AppColors.primaryText,
                           ),
                         ),
                       ),
@@ -2524,7 +2533,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 Text(
                   _errors['orgPct']!,
                   style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.destructive,
+                    color: AppColors.destructiveText,
                   ),
                 ),
               ],

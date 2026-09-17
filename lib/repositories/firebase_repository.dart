@@ -358,7 +358,9 @@ class FirebaseRepository {
   /// caller can surface a meaningful message.
   Future<fa.UserCredential?> signInWithGoogle() async {
     if (kIsWeb) {
-      return await _auth.signInWithPopup(fa.GoogleAuthProvider());
+      return await _auth.signInWithPopup(
+        fa.GoogleAuthProvider()..setCustomParameters({'prompt': 'select_account'}),
+      );
     }
     // Clear any stored token first so there's no leftover session.
     try {
@@ -393,7 +395,9 @@ class FirebaseRepository {
       throw StateError('No anonymous session to upgrade.');
     }
     if (kIsWeb) {
-      return await user.linkWithPopup(fa.GoogleAuthProvider());
+      return await user.linkWithPopup(
+        fa.GoogleAuthProvider()..setCustomParameters({'prompt': 'select_account'}),
+      );
     }
     try {
       await googleSignIn.signOut();

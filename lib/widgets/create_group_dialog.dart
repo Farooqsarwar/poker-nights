@@ -133,12 +133,17 @@ Future<void> openCreateGroupDialog(BuildContext context) {
                     await _create(context, controller, selectedIconName, (val) => setState(() => isCreating = val));
                   },
             child: isCreating
-                ? const SizedBox(
+                ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      // The spinner sits on the primary fill, so it takes the
+                      // palette's on-primary colour. Hard-coded white only
+                      // happened to work on the default theme.
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primaryForeground,
+                      ),
                     ),
                   )
                 : const Text('Create group'),

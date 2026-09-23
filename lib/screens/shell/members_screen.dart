@@ -27,6 +27,10 @@ class MembersScreen extends StatelessWidget {
     final app = context.read<AppProvider>();
     final controller = TextEditingController();
     String? error;
+    // Adding a member is a round trip. Without this the button stays live and
+    // idle-looking for its whole duration, so an impatient second tap fires a
+    // second add for the same address.
+    var adding = false;
     showAppModal(
       context: context,
       title: 'Add member',
@@ -57,13 +61,23 @@ class MembersScreen extends StatelessWidget {
             const SizedBox(height: AppSpacing.xl),
             AppButton(
               fullWidth: true,
+              loading: adding,
               onPressed: () async {
+                if (adding) return;
+                setState(() {
+                  adding = true;
+                  error = null;
+                });
                 final result = await app.addMemberByEmail(controller.text);
+                if (!context.mounted) return;
                 if (result != null) {
-                  setState(() => error = result);
+                  setState(() {
+                    adding = false;
+                    error = result;
+                  });
                   return;
                 }
-                if (context.mounted) Navigator.of(context).pop();
+                Navigator.of(context).pop();
               },
               child: const Text('Add to group'),
             ),

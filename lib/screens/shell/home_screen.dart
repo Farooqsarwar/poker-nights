@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -38,6 +39,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final _groupNameController = TextEditingController();
   String _createError = '';
   bool _showCreate = false;
+
+  /// True while `createGroup` is in flight. Creating a group writes a document
+  /// and cannot be undone from this screen, so the button has to stop
+  /// accepting taps for the duration rather than just look busy.
+  bool _creatingGroup = false;
   bool _showRestoreModal = false;
 
   void _openJoin() => context.go(RoutePaths.join);
@@ -309,20 +315,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 fullWidth: true,
                 size: AppButtonSize.lg,
                 disabled: _groupNameController.text.trim().length < 2,
+                loading: _creatingGroup,
                 onPressed: () async {
+                  if (_creatingGroup) return;
                   if (_groupNameController.text.trim().length < 2) return;
+                  setState(() {
+                    _creatingGroup = true;
+                    _createError = '';
+                  });
                   final created = await app.createGroup(
                     _groupNameController.text.trim(),
                   );
                   if (!context.mounted) return;
                   if (created == null) {
-                    setState(
-                      () => _createError =
-                          'Could not create the group. Please try again.',
-                    );
+                    setState(() {
+                      _creatingGroup = false;
+                      _createError =
+                          'Could not create the group. Please try again.';
+                    });
                     return;
                   }
-                  setState(() => _showCreate = false);
+                  setState(() {
+                    _creatingGroup = false;
+                    _showCreate = false;
+                  });
                   context.go(RoutePaths.group);
                 },
                 child: const Text('Create Group'),
@@ -575,7 +591,7 @@ class _NextActionCard extends StatelessWidget {
                     letterSpacing: 1,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   title,
                   style: AppTypography.bodyLg.copyWith(
@@ -636,11 +652,19 @@ class _UpcomingGames extends StatelessWidget {
                     size: 24,
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    'Upcoming Games',
-                    style: AppTypography.display(
-                      size: AppFontSizes.xl,
-                      weight: FontWeight.w600,
+                  // Flexible, not bare: at 320px the icon, the gap and this
+                  // heading at 20pt are wider than the row once the admin's
+                  // "+ New game" button takes its share, and an unconstrained
+                  // Text in a Row overflows rather than wrapping.
+                  Flexible(
+                    child: Text(
+                      'Upcoming Games',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.display(
+                        size: AppFontSizes.xl,
+                        weight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -1044,11 +1068,10 @@ class _GroupCard extends StatelessWidget {
                                     g.members[i].name.isNotEmpty
                                         ? g.members[i].name[0].toUpperCase()
                                         : '?',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.foreground,
-                                    ),
+                                    style: AppTypography.body(
+                                      size: 12,
+                                      weight: FontWeight.w700,
+                                    ).copyWith(color: AppColors.foreground),
                                   ),
                                 ),
                               ),
@@ -1238,7 +1261,7 @@ class _AlertsPreview extends StatelessWidget {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: AppSpacing.xxs),
                               Row(
                                 children: [
                                   Expanded(
@@ -1427,6 +1450,11 @@ class _FloatCardState extends State<_FloatCard>
   late final bool isRed;
   late final double _rotationOffset;
 
+  /// Cancelled in [dispose] — see the note on `_FloatChipState._start`. An
+  /// uncancellable `Future.delayed` here kept a timer alive past the screen's
+  /// life for as long as this card's stagger.
+  Timer? _start;
+
   @override
   void initState() {
     super.initState();
@@ -1442,13 +1470,14 @@ class _FloatCardState extends State<_FloatCard>
         )..addStatusListener((status) {
           if (status == AnimationStatus.completed) _controller.repeat();
         });
-    Future.delayed(widget.delay, () {
+    _start = Timer(widget.delay, () {
       if (mounted) _controller.forward();
     });
   }
 
   @override
   void dispose() {
+    _start?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -1500,9 +1529,10 @@ class _FloatCardState extends State<_FloatCard>
             alignment: Alignment.center,
             child: Text(
               suit,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+              style: AppTypography.body(
+                size: 18,
+                weight: FontWeight.bold,
+              ).copyWith(
                 color: isRed ? AppColors.destructive : AppColors.foreground,
               ),
             ),
@@ -1527,6 +1557,14 @@ class _FloatChipState extends State<_FloatChip>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
+  /// Held so [dispose] can cancel it. A bare `Future.delayed` cannot be
+  /// cancelled: leaving this chip's staggered start running after the screen
+  /// closes keeps a timer alive for up to [widget.delay], which is why every
+  /// Home smoke test failed with "A Timer is still pending after the widget
+  /// tree was disposed". The `mounted` check below made it harmless, not
+  /// absent.
+  Timer? _start;
+
   @override
   void initState() {
     super.initState();
@@ -1535,13 +1573,14 @@ class _FloatChipState extends State<_FloatChip>
           ..addStatusListener((status) {
             if (status == AnimationStatus.completed) _controller.repeat();
           });
-    Future.delayed(widget.delay, () {
+    _start = Timer(widget.delay, () {
       if (mounted) _controller.forward();
     });
   }
 
   @override
   void dispose() {
+    _start?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -1619,7 +1658,7 @@ class _InfoChip extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 14, color: AppColors.mutedForeground),
-        const SizedBox(width: 4),
+        const SizedBox(width: AppSpacing.xs),
         Text(
           text,
           style: AppTypography.bodyXs.copyWith(

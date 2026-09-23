@@ -102,9 +102,15 @@ class _TabItemState extends State<_TabItem> {
         ),
       Text(
         widget.tab.label,
-        style: AppTypography.bodySm.copyWith(
+        // Sized through AppTypography, never via a raw `fontSize:` override —
+        // copyWith(fontSize: 12) replaces the value AppScale.sp() already
+        // computed, so the label would ignore the scale floor and render tiny
+        // on short viewports. Pick the style, not the number.
+        style: (widget.stacked
+                ? AppTypography.bodyXs
+                : AppTypography.bodySm)
+            .copyWith(
           fontWeight: FontWeight.w500,
-          fontSize: widget.stacked ? 12 : 14,
           color: isActive
               ? AppColors.primary
               : _hovering
@@ -136,8 +142,10 @@ class _TabItemState extends State<_TabItem> {
           ),
           child: Text(
             '${widget.tab.count}',
-            style: AppTypography.bodyXs.copyWith(
-              fontSize: widget.stacked ? 10 : 12,
+            // Was a raw `fontSize: 10` in stacked mode, which bypassed the
+            // scale entirely. AppTypography.body(size: 10) goes through
+            // AppScale.sp(), so 10 is now a floor rather than a fixed value.
+            style: AppTypography.body(size: widget.stacked ? 10 : 12).copyWith(
               color: isActive ? AppColors.primary : AppColors.mutedForeground,
             ),
           ),

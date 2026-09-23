@@ -111,46 +111,59 @@ class PremiumLock extends StatelessWidget {
 
     return Tooltip(
       message: '${feature.label} — Premium',
-      child: Stack(
-        children: [
-          Opacity(opacity: 0.45, child: IgnorePointer(child: child)),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: GestureDetector(
-              onTap: () => context.push(RoutePaths.upgrade),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: 1,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.lock_outline,
-                      size: 10,
-                      color: AppColors.background,
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      'Premium',
-                      style: AppTypography.bodyXs.copyWith(
+      child: Semantics(
+        button: true,
+        label: '${feature.label}, Premium feature. Tap to upgrade.',
+        excludeSemantics: true,
+        // The WHOLE gate is the tap target, not just the badge.
+        //
+        // The badge is an 18px pill in a corner — well under the 48px floor,
+        // and it cannot be padded out to reach it without shifting off the
+        // corner it is anchored to. Since the gated control underneath is
+        // already `IgnorePointer`ed, the entire dimmed area is inert space
+        // that has nothing else to do, so it becomes the target and the badge
+        // goes back to being what it looks like: a label.
+        child: GestureDetector(
+          onTap: () => context.push(RoutePaths.upgrade),
+          child: Stack(
+            children: [
+              Opacity(opacity: 0.45, child: IgnorePointer(child: child)),
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.lock_outline,
+                        size: 10,
                         color: AppColors.background,
-                        fontWeight: FontWeight.w700,
-                        height: 1.4,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: AppSpacing.xxs),
+                      Text(
+                        'Premium',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.background,
+                          fontWeight: FontWeight.w700,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

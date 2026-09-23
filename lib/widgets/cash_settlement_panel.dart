@@ -139,7 +139,7 @@ class _Body extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: AppSpacing.xxs),
               Text(
                 transfers.isEmpty
                     ? 'Nobody owes anybody — the table is square.'

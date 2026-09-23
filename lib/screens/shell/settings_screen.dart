@@ -239,7 +239,7 @@ class SettingsScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Send Test Push (Debug)', style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: AppSpacing.xxs),
                           Text('Fires a real push to this device.', style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground)),
                         ],
                       ),
@@ -276,7 +276,7 @@ class SettingsScreen extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: AppSpacing.xxs),
                       Text(
                         user?.email ?? 'Not signed in',
                         style: AppTypography.bodyXs.copyWith(
@@ -362,35 +362,63 @@ class _ThemeGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = <List<ThemePalette>>[];
-    for (var i = 0; i < ThemePalettes.all.length; i += 3) {
-      final end = (i + 3 < ThemePalettes.all.length) ? i + 3 : ThemePalettes.all.length;
-      rows.add(ThemePalettes.all.sublist(i, end));
-    }
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        children: [
-          for (final entry in rows.asMap().entries) ...[
-            Row(
-              children: [
-                for (final p in entry.value) ...[
-                  Expanded(
-                    child: _ThemeCard(
-                      palette: p,
-                      selected: p.id == activeId,
-                      onTap: () => onSelect(p.id),
-                    ),
-                  ),
-                  if (p != entry.value.last)
-                    const SizedBox(width: AppSpacing.sm),
-                ],
+      // The number of cards per row used to be hardcoded at 3. A card's
+      // contents have a hard floor — four 16px swatches, three 4px gaps and,
+      // when selected, a 16px check — so it cannot render below
+      // [_ThemeCard.minWidth]. On a 400px phone a third of the row came out
+      // under that and the swatch strip overflowed; on a 320px phone it
+      // overflowed on several rows at once. Deriving the count from the width
+      // we are actually given fixes it at every size instead of at the two we
+      // happened to test.
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const gap = AppSpacing.sm;
+          final available = constraints.maxWidth;
+          var perRow = ((available + gap) / (_ThemeCard.minWidth + gap))
+              .floor();
+          perRow = perRow.clamp(1, 3);
+
+          final rows = <List<ThemePalette>>[];
+          for (var i = 0; i < ThemePalettes.all.length; i += perRow) {
+            final end = (i + perRow < ThemePalettes.all.length)
+                ? i + perRow
+                : ThemePalettes.all.length;
+            rows.add(ThemePalettes.all.sublist(i, end));
+          }
+
+          return Column(
+            children: [
+              for (final entry in rows.asMap().entries) ...[
+                Row(
+                  children: [
+                    for (final p in entry.value) ...[
+                      Expanded(
+                        child: _ThemeCard(
+                          palette: p,
+                          selected: p.id == activeId,
+                          onTap: () => onSelect(p.id),
+                        ),
+                      ),
+                      if (p != entry.value.last)
+                        const SizedBox(width: gap),
+                    ],
+                    // A short last row (5 palettes over rows of 3 leaves 2)
+                    // keeps its cards the same size as the full rows above
+                    // rather than stretching them across the gap.
+                    for (var i = entry.value.length; i < perRow; i++) ...[
+                      const SizedBox(width: gap),
+                      const Expanded(child: SizedBox.shrink()),
+                    ],
+                  ],
+                ),
+                if (entry.key < rows.length - 1)
+                  const SizedBox(height: AppSpacing.sm),
               ],
-            ),
-            if (entry.key < rows.length - 1)
-              const SizedBox(height: AppSpacing.sm),
-          ],
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -408,6 +436,12 @@ class _ThemeCard extends StatelessWidget {
   final ThemePalette palette;
   final bool selected;
   final VoidCallback onTap;
+
+  /// The narrowest this card can be drawn without its swatch strip
+  /// overflowing: four 16px swatches, three 4px gaps and a 16px check mark
+  /// when selected, plus [AppSpacing.sm] of padding on each side.
+  /// [_ThemeSection] uses it to decide how many cards fit on a row.
+  static const double minWidth = (16 * 4) + (4 * 3) + 16 + (AppSpacing.sm * 2);
 
   @override
   Widget build(BuildContext context) {
@@ -435,11 +469,11 @@ class _ThemeCard extends StatelessWidget {
             Row(
               children: [
                 _swatch(palette.primary),
-                const SizedBox(width: 4),
+                const SizedBox(width: AppSpacing.xs),
                 _swatch(palette.background),
-                const SizedBox(width: 4),
+                const SizedBox(width: AppSpacing.xs),
                 _swatch(palette.card),
-                const SizedBox(width: 4),
+                const SizedBox(width: AppSpacing.xs),
                 _swatch(palette.border),
                 if (selected) ...[
                   const Spacer(),
@@ -523,7 +557,7 @@ class _SettingRow extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpacing.xxs),
                   Text(
                     subtitle,
                     style: AppTypography.bodyXs.copyWith(
@@ -630,7 +664,7 @@ class _GroupSettingsCard extends StatelessWidget {
                       Icon(
                         Icons.exit_to_app_outlined,
                         size: 20,
-                        color: AppColors.destructive,
+                        color: AppColors.destructiveText,
                       ),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
@@ -644,7 +678,7 @@ class _GroupSettingsCard extends StatelessWidget {
                                 color: AppColors.destructive,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: AppSpacing.xxs),
                             Text(
                               'You can rejoin with the group code',
                               style: AppTypography.bodyXs.copyWith(
@@ -732,12 +766,21 @@ class _GroupSettingsCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              ...members.map(
-                (m) => RadioListTile<String>(
-                  value: m.id,
-                  groupValue: selectedId,
-                  onChanged: (v) => setState(() => selectedId = v),
-                  title: Text(m.name, style: AppTypography.bodySm),
+              // Selection moved to the RadioGroup ancestor — same migration as
+              // the identical dialog in `group_screen.dart`.
+              RadioGroup<String>(
+                groupValue: selectedId,
+                onChanged: (v) => setState(() => selectedId = v),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ...members.map(
+                      (m) => RadioListTile<String>(
+                        value: m.id,
+                        title: Text(m.name, style: AppTypography.bodySm),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

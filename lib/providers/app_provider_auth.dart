@@ -362,12 +362,33 @@ extension AppProviderAuth on AppProvider {
   /// using a stale live game (checklist 05-014). Returns a friendly error
   /// message on failure — notably `requires-recent-login`, where the caller
   /// must re-authenticate first.
-  Future<String?> deleteAccount() async {
+  /// True when [deleteAccount] needs the account password to re-authenticate.
+  bool get deleteNeedsPassword => _repo.deleteNeedsPassword;
+
+  Future<String?> deleteAccount({String? password}) async {
     try {
-      await _repo.deleteAccount();
+      await _repo.deleteAccount(password: password);
     } on fa.FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
         return 'For security please sign in again before deleting your account.';
+      }
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        return 'That password is not correct. Nothing was deleted.';
+      }
+      if (e.code == 'user-cancelled' || e.code == 'missing-password') {
+        return e.message ?? 'Deletion cancelled. Nothing was deleted.';
+      }
+      return e.message ?? 'Could not delete the account. Please try again.';
+    } on FirebaseException catch (e) {
+      // The Firestore cleanup is a single atomic batch, so one rejected write
+      // rejects all of them and surfaces here as `permission-denied` -- NOT as
+      // a FirebaseAuthException. Without this clause that exception escaped
+      // `deleteAccount` entirely; the caller never awaited it, so it became an
+      // unhandled async error and the user was shown a successful deletion
+      // that had deleted nothing.
+      if (e.code == 'permission-denied') {
+        return 'Could not delete every part of the account, so nothing was '
+            'removed. Please try again or contact support.';
       }
       return e.message ?? 'Could not delete the account. Please try again.';
     }

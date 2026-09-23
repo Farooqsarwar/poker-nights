@@ -118,6 +118,22 @@ abstract final class StructureVerification {
           rebuyCost: s.rebuyCost,
           addOnCost: s.addOnCost,
           breaks: s.breaks,
+          // Generation inputs, so they belong in the recomputation. Unlike the
+          // organizer cut above these are not private — they are printed on
+          // the structure sheet every player can see — and leaving them out
+          // would make an honest custom structure fail its own audit.
+          expectedRebuys: s.expectedRebuys,
+          expectedReEntries: s.expectedReEntries,
+          expectedAddOns: s.expectedAddOns,
+          rebuyChips: s.rebuyChips,
+          reEntryChips: s.reEntryChips,
+          addOnChips: s.addOnChips,
+          levelDurationMins: s.levelDurationMins,
+          // Costs nothing here — the audit below compares stacks, blinds and
+          // breaks, never the prize split — but the engine consumes it, so
+          // leaving it out would make this the one call that reruns the
+          // generator on settings the host did not choose.
+          payoutShape: s.payoutShape,
         ),
       );
     } catch (e) {

@@ -153,7 +153,7 @@ class _PokerTableHeroState extends State<PokerTableHero>
                           phase: t,
                           index: i,
                         ),
-                        if (i < 4) const SizedBox(width: 8),
+                        if (i < 4) const SizedBox(width: AppSpacing.sm),
                       ],
                     ],
                   ),

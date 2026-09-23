@@ -769,7 +769,7 @@ class _FieldToggle extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   subtitle,
                   style: AppTypography.bodyXs.copyWith(

@@ -15,6 +15,7 @@ import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_select.dart';
 import '../../models/live_game.dart';
 import '../../widgets/count_stepper.dart';
 import '../../widgets/tournament_display_block.dart';
@@ -44,6 +45,27 @@ const kToolChipSet = [
   ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 500, quantity: 20),
 ];
 
+/// The boxes worth offering a stranger. The chip denominations decide the
+/// starting stack and the whole blind ladder, so a tool that assumes one box
+/// gives a confidently wrong answer to anybody who owns a different one — and
+/// "which chips do you have" is a question people can answer without thinking.
+const kToolChipSets = <String, List<ChipColor>>{
+  'Standard 300 (1/5/25/100/500)': kToolChipSet,
+  'No ones (5/25/100/500/1000)': [
+    ChipColor(color: 'Red', hex: 0xFFC0392B, value: 5, quantity: 100),
+    ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 25, quantity: 100),
+    ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 100, quantity: 50),
+    ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 500, quantity: 30),
+    ChipColor(color: 'Yellow', hex: 0xFFF1C40F, value: 1000, quantity: 20),
+  ],
+  'Four colours (25/100/500/1000)': [
+    ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 25, quantity: 100),
+    ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 100, quantity: 100),
+    ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 500, quantity: 50),
+    ChipColor(color: 'Yellow', hex: 0xFFF1C40F, value: 1000, quantity: 30),
+  ],
+};
+
 /// Shared chrome: a title, the tool, and one quiet line about the app.
 class _ToolScaffold extends StatelessWidget {
   const _ToolScaffold({
@@ -64,6 +86,9 @@ class _ToolScaffold extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: AppPage(
+      // Public route: no ScreenShell, so no top bar owns the status-bar
+      // inset. Without this the first row renders under the notch.
+      topInset: true,
       maxWidth: 640,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -114,7 +139,7 @@ class _ToolScaffold extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   'Poker Night handles invites, check-in, the clock, rebuys '
                   'and payouts. Free for one table.',
@@ -172,6 +197,8 @@ class ToolsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: AppPage(
+      // Public route — see _ToolScaffold.
+      topInset: true,
       maxWidth: 640,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -213,7 +240,7 @@ class ToolsScreen extends StatelessWidget {
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: AppSpacing.xxs),
                             Text(
                               t.blurb,
                               style: AppTypography.bodyXs.copyWith(
@@ -252,6 +279,19 @@ class ToolBlindsScreen extends StatefulWidget {
 class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
   int _players = 9;
   double _hours = 4;
+
+  /// 0 means "let the engine pick from the duration", which is what it does
+  /// for every tournament in the app. Offering only fixed lengths would make
+  /// the tool answer a narrower question than the product does.
+  int _levelMins = 0;
+  bool _antes = false;
+  String _chipSetName = kToolChipSets.keys.first;
+
+  /// Wall-clock start, so the schedule reads as a plan for an evening rather
+  /// than a list of offsets. Presentation only — the engine has no idea what
+  /// time it is and should not.
+  TimeOfDay _startAt = const TimeOfDay(hour: 19, minute: 0);
+
   TournamentStructure? _result;
 
   void _generate() {
@@ -261,20 +301,34 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
           players: _players,
           durationHours: _hours,
           buyIn: 20,
-          chipSet: kToolChipSet,
+          chipSet: kToolChipSets[_chipSetName] ?? kToolChipSet,
           rebuys: true,
           rebuysCloseLevel: 6,
           reEntry: false,
           addOn: true,
-          anteEnabled: false,
+          anteEnabled: _antes,
           anteAfterLevel: 7,
           anteStyle: AnteStyle.bigBlind,
           koEnabled: false,
           koAmount: 0,
           organizerPct: 0,
+          levelDurationMins: _levelMins == 0 ? null : _levelMins,
         ),
       );
     });
+  }
+
+  /// [_startAt] advanced by [mins], wrapped over midnight.
+  String _clockAt(int mins) {
+    final total = (_startAt.hour * 60 + _startAt.minute + mins) % (24 * 60);
+    final h = total ~/ 60;
+    final m = total % 60;
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _pickStart() async {
+    final picked = await showTimePicker(context: context, initialTime: _startAt);
+    if (picked != null && mounted) setState(() => _startAt = picked);
   }
 
   @override
@@ -282,8 +336,8 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
     final r = _result;
     return _ToolScaffold(
       title: 'Blind Structure Generator',
-      blurb: 'Built with a standard 300-chip set. The app uses the chips you '
-          'actually own.',
+      blurb: 'Pick the box of chips you actually own — the denominations decide '
+          'the starting stack and the whole ladder.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -306,6 +360,47 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
               max: 6,
               semanticLabel: 'Hours',
               onChanged: (v) => setState(() => _hours = v.toDouble()),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppSelect<int>(
+            label: 'Level length',
+            value: _levelMins,
+            items: const [
+              DropdownMenuItem<int>(value: 0, child: Text('Auto')),
+              DropdownMenuItem<int>(value: 10, child: Text('10 minutes')),
+              DropdownMenuItem<int>(value: 15, child: Text('15 minutes')),
+              DropdownMenuItem<int>(value: 20, child: Text('20 minutes')),
+              DropdownMenuItem<int>(value: 30, child: Text('30 minutes')),
+            ],
+            onChanged: (v) => setState(() => _levelMins = v ?? _levelMins),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppSelect<String>(
+            label: 'Chips',
+            value: _chipSetName,
+            items: [
+              for (final name in kToolChipSets.keys)
+                DropdownMenuItem<String>(value: name, child: Text(name)),
+            ],
+            onChanged: (v) => setState(() => _chipSetName = v ?? _chipSetName),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _Field(
+            label: 'Start time',
+            child: AppButton(
+              size: AppButtonSize.sm,
+              variant: AppButtonVariant.secondary,
+              onPressed: _pickStart,
+              child: Text(_clockAt(0)),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _Field(
+            label: 'Antes from level 7',
+            child: Switch(
+              value: _antes,
+              onChanged: (v) => setState(() => _antes = v),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -340,6 +435,10 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
                             '${(r.expectedFinishMins % 60).toString().padLeft(2, '0')}m'
                       : '${r.expectedFinishMins}m',
                 ),
+                _StatCard(
+                  label: 'Finishes around',
+                  value: _clockAt(r.expectedFinishMins),
+                ),
               ],
             ),
             if (r.styleNote.isNotEmpty) ...[
@@ -365,36 +464,72 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  for (final l in r.levels.take(r.plannedLevels))
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 40,
-                            child: Text(
-                              'L${l.level}',
-                              style: AppTypography.monoXs.copyWith(
-                                color: AppColors.mutedForeground,
-                              ),
+                  // Breaks are segments of the clock, not footnotes on the
+                  // level before them, so the schedule prints them in place
+                  // and the wall-clock column carries their length through.
+                  Builder(
+                    builder: (context) {
+                      var at = 0;
+                      final rows = <Widget>[];
+                      for (final seg in ClockSequence.build(r)) {
+                        final startedAt = at;
+                        at += seg.seconds ~/ 60;
+                        rows.add(
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 44,
+                                  child: Text(
+                                    _clockAt(startedAt),
+                                    style: AppTypography.monoXs.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 34,
+                                  child: Text(
+                                    seg.isBreak ? '—' : 'L${seg.level!.level}',
+                                    style: AppTypography.monoXs.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    seg.isBreak
+                                        ? 'Break'
+                                        : '${seg.level!.sb} / ${seg.level!.bb}'
+                                            '${seg.level!.ante != null ? '  ante ${seg.level!.ante}' : ''}',
+                                    style: AppTypography.monoXs.copyWith(
+                                      fontWeight: seg.isBreak
+                                          ? FontWeight.w700
+                                          : FontWeight.w400,
+                                      color: seg.isBreak
+                                          ? AppColors.mutedForeground
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${seg.seconds ~/ 60}m',
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          Expanded(
-                            child: Text(
-                              '${l.sb} / ${l.bb}'
-                              '${l.ante != null ? '  ante ${l.ante}' : ''}',
-                              style: AppTypography.monoXs,
-                            ),
-                          ),
-                          Text(
-                            '${l.durationMins}m',
-                            style: AppTypography.monoXs.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                        );
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: rows,
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -520,13 +655,42 @@ class ToolIcmScreen extends StatefulWidget {
 
 class _ToolIcmScreenState extends State<ToolIcmScreen> {
   List<int> _stacks = [5000, 3000, 2000];
-  final List<int> _payouts = [50, 30, 20];
+  List<int> _payouts = [50, 30, 20];
+
+  /// Inputs for the prize generator below the prize list. Typing three
+  /// amounts by hand is fine for a final table you already have a sheet for;
+  /// it is not fine when the argument at the table is "what *should* we be
+  /// paying?", which is the other half of every chop discussion.
+  int _pool = 100;
+  int _places = 3;
+  PayoutShape _shape = PayoutShape.standard;
+
+  /// Replaces the prize list with the engine's own split of [_pool]. The
+  /// amounts stay editable afterwards — a house that pays odd numbers should
+  /// not have to choose between the generator and the truth.
+  void _fillFromPool() {
+    final prizes = TournamentEngine.recalculatePrizes(
+      _pool,
+      // Only used to cap the paid places against the field, and the field
+      // here is whoever is left at the table.
+      _stacks.length < _places ? _places : _stacks.length,
+      0,
+      forcePaidPlaces: _places,
+      shape: _shape,
+    ).prizes;
+    if (prizes.isEmpty) return;
+    setState(() => _payouts = [for (final p in prizes) p.amount]);
+  }
 
   @override
   Widget build(BuildContext context) {
     final equity = Icm.equity(stacks: _stacks, payouts: _payouts);
     final pool = _payouts.fold<int>(0, (a, p) => a + p);
     final chips = _stacks.fold<int>(0, (a, s) => a + s);
+    // What each player actually gets handed if the table chops on ICM: whole
+    // units that still add up to the pool, rather than three numbers with
+    // decimals that nobody can pay out in chips or notes.
+    final settlement = Icm.roundPreservingTotal(equity, pool);
 
     return _ToolScaffold(
       title: 'ICM Calculator',
@@ -617,6 +781,57 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                 ),
               ),
             ),
+          const SizedBox(height: AppSpacing.sm),
+          _StepperRow(
+            label: Text('Pool', style: AppTypography.bodyXs),
+            stepper: CountStepper(
+              value: _pool,
+              min: 0,
+              max: 1000000,
+              step: 50,
+              semanticLabel: 'Prize pool',
+              onChanged: (v) => setState(() => _pool = v),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: AppSelect<int>(
+                  value: _places,
+                  items: [
+                    for (var i = 1; i <= 5; i++)
+                      DropdownMenuItem<int>(
+                        value: i,
+                        child: Text('$i paid'),
+                      ),
+                  ],
+                  onChanged: (v) => setState(() => _places = v ?? _places),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: AppSelect<PayoutShape>(
+                  value: _shape,
+                  items: [
+                    for (final shape in PayoutShape.values)
+                      DropdownMenuItem<PayoutShape>(
+                        value: shape,
+                        child: Text(shape.label),
+                      ),
+                  ],
+                  onChanged: (v) => setState(() => _shape = v ?? _shape),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            size: AppButtonSize.sm,
+            variant: AppButtonVariant.secondary,
+            onPressed: _fillFromPool,
+            child: const Text('Fill prizes from pool'),
+          ),
           const SizedBox(height: AppSpacing.lg),
           // The comparison IS the tool. Showing equity without the chip share
           // beside it leaves the reader with a number and no insight.
@@ -632,6 +847,103 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 56,
+                      child: Text(
+                        '',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ),
+                    for (final h in const ['Chips', 'ICM', 'Diff'])
+                      Expanded(
+                        child: Text(
+                          h,
+                          textAlign: TextAlign.right,
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                for (var i = 0; i < _stacks.length; i++)
+                  Builder(
+                    builder: (context) {
+                      final share = chips == 0 ? null : pool * _stacks[i] / chips;
+                      // The whole point of the tool, in one number: what the
+                      // chip count over- or under-states your stack by. A big
+                      // stack reads negative, a short stack positive.
+                      final diff = share == null ? null : equity[i] - share;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 56,
+                              child: Text(
+                                'P${i + 1}',
+                                style: AppTypography.bodyXs,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                share == null ? '—' : share.toStringAsFixed(2),
+                                textAlign: TextAlign.right,
+                                style: AppTypography.monoXs.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                equity[i].toStringAsFixed(2),
+                                textAlign: TextAlign.right,
+                                style: AppTypography.monoXs.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                diff == null
+                                    ? '—'
+                                    : '${diff >= 0 ? '+' : '−'}'
+                                        '${diff.abs().toStringAsFixed(2)}',
+                                textAlign: TextAlign.right,
+                                style: AppTypography.monoXs.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: diff == null || diff.abs() < 0.005
+                                      ? AppColors.mutedForeground
+                                      : diff > 0
+                                          ? AppColors.successText
+                                          : AppColors.destructiveText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                const Divider(height: AppSpacing.lg),
+                Text(
+                  'Chop payout',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  'ICM equity in whole units, adjusted so the payouts add up '
+                  'to the $pool pool exactly.',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
                 for (var i = 0; i < _stacks.length; i++)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 2),
@@ -644,18 +956,10 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                           ),
                         ),
                         Text(
-                          chips == 0
-                              ? '—'
-                              : (pool * _stacks[i] / chips).toStringAsFixed(2),
-                          style: AppTypography.monoXs.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Text(
-                          equity[i].toStringAsFixed(2),
-                          style: AppTypography.monoXs.copyWith(
+                          '${settlement[i]}',
+                          style: AppTypography.monoSm.copyWith(
                             fontWeight: FontWeight.w700,
+                            color: AppColors.primaryText,
                           ),
                         ),
                       ],

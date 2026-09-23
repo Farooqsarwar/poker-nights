@@ -34,7 +34,7 @@ class StatCard extends StatelessWidget {
               letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             value,
             style: AppTypography.mono(
@@ -44,7 +44,7 @@ class StatCard extends StatelessWidget {
             ),
           ),
           if (sub != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               sub!,
               style: AppTypography.bodyXs.copyWith(

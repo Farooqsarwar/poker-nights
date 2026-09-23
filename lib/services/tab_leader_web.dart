@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html' as html;
+import 'dart:js_interop';
 import 'dart:math';
+
+import 'package:web/web.dart' as web;
 
 /// Elects a single leader among the browser tabs of this origin that are
 /// looking at the SAME live game, using `BroadcastChannel` — no server
@@ -24,8 +26,11 @@ import 'dart:math';
 /// leadership always fails over rather than being lost permanently.
 class TabLeader {
   TabLeader(String scope)
-    : _channel = html.BroadcastChannel('poker_night_editor_lock:$scope') {
-    _sub = _channel.onMessage.listen(_onMessage);
+    : _channel = web.BroadcastChannel('poker_night_editor_lock:$scope') {
+    // `package:web` exposes the raw `onmessage` handler slot rather than
+    // `dart:html`'s `onMessage` stream, so there is no subscription to hold:
+    // [dispose] clears the slot instead of cancelling.
+    _channel.onmessage = ((web.MessageEvent event) => _onMessage(event)).toJS;
     _announce('hello');
     _heartbeat = Timer.periodic(_beatInterval, (_) => _announce('beat'));
     _prune = Timer.periodic(const Duration(seconds: 2), (_) => _pruneStale());
@@ -37,8 +42,7 @@ class TabLeader {
   /// falsely evicts a live peer.
   static const _staleAfter = Duration(seconds: 9);
 
-  final html.BroadcastChannel _channel;
-  late final StreamSubscription<html.MessageEvent> _sub;
+  final web.BroadcastChannel _channel;
   late final Timer _heartbeat;
   late final Timer _prune;
   bool _disposed = false;
@@ -69,12 +73,18 @@ class TabLeader {
 
   void _announce(String type) {
     if (_disposed) return;
-    _channel.postMessage(jsonEncode({'t': type, 'id': _id, 'start': _start}));
+    _channel.postMessage(
+      jsonEncode({'t': type, 'id': _id, 'start': _start}).toJS,
+    );
   }
 
-  void _onMessage(html.MessageEvent event) {
+  void _onMessage(web.MessageEvent event) {
     try {
-      final msg = jsonDecode(event.data as String) as Map<String, dynamic>;
+      // `data` is `JSAny?` here, not a Dart `String` — every tab on this origin
+      // shares the channel name, so a payload that is not our JSON falls
+      // through to the catch below and is ignored, exactly as before.
+      final msg =
+          jsonDecode((event.data as JSString).toDart) as Map<String, dynamic>;
       final id = msg['id'] as String?;
       if (id == null || id == _id) return;
       if (msg['t'] == 'bye') {
@@ -106,7 +116,7 @@ class TabLeader {
     _disposed = true;
     _heartbeat.cancel();
     _prune.cancel();
-    _sub.cancel();
+    _channel.onmessage = null;
     _channel.close();
   }
 }

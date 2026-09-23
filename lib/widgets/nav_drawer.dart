@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -317,6 +315,7 @@ class NavDrawer extends StatelessWidget {
                 ),
                 const Spacer(),
                 IconButton(
+                  tooltip: 'Close menu',
                   onPressed: app.closeDrawer,
                   icon: Icon(
                     Icons.close,

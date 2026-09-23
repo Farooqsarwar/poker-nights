@@ -120,11 +120,13 @@ class _PollsScreenState extends State<PollsScreen> {
                 ),
                 if (i >= 2)
                   IconButton(
+                    tooltip: 'Remove option ${i + 1}',
                     onPressed: () => setState(() {
                       _pollOptions.removeAt(i).dispose();
                     }),
                     icon: Text(
                       '×',
+                      semanticsLabel: '',
                       style: TextStyle(
                         color: AppColors.mutedForeground,
                         fontSize: AppFontSizes.lg,

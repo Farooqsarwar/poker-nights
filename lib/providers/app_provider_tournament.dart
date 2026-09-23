@@ -604,6 +604,14 @@ extension AppProviderTournament on AppProvider {
         rebuyCost: s.rebuyCost,
         addOnCost: s.addOnCost,
         breaks: s.breaks,
+        expectedRebuys: s.expectedRebuys,
+        expectedReEntries: s.expectedReEntries,
+        expectedAddOns: s.expectedAddOns,
+        rebuyChips: s.rebuyChips,
+        reEntryChips: s.reEntryChips,
+        addOnChips: s.addOnChips,
+        levelDurationMins: s.levelDurationMins,
+        payoutShape: s.payoutShape,
       ),
     );
     // Addendum acceptance criterion 10: the engine may move the rebuy cutoff
@@ -834,6 +842,60 @@ extension AppProviderTournament on AppProvider {
     _recalculateWithPlayers(players);
   }
 
+  /// Applies the host's generation overrides and rebuilds the structure.
+  ///
+  /// Every one of these feeds `expectedTotalChips`, which sets the final blind
+  /// target, which sets the growth rate — so there is no way to change one
+  /// without regenerating. Passing null for a field leaves it alone;
+  /// [reset] returns all of them to the engine's own defaults.
+  ///
+  /// The settings are written BEFORE the regeneration so the structure and the
+  /// inputs that produced it are stored together — otherwise another device
+  /// would re-derive from stale settings and [StructureVerification] would
+  /// report the honest structure as a mismatch.
+  void updateGenerationParams({
+    int? expectedRebuys,
+    int? expectedReEntries,
+    int? expectedAddOns,
+    int? rebuyChips,
+    int? reEntryChips,
+    int? addOnChips,
+    int? levelDurationMins,
+    bool reset = false,
+  }) {
+    final game = _currentGame;
+    if (game == null) return;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(
+        expectedRebuys: expectedRebuys,
+        expectedReEntries: expectedReEntries,
+        expectedAddOns: expectedAddOns,
+        rebuyChips: rebuyChips,
+        reEntryChips: reEntryChips,
+        addOnChips: addOnChips,
+        levelDurationMins: levelDurationMins,
+        clearGenerationOverrides: reset,
+      ),
+    );
+    _recalculateWithPlayers(_currentGame!.settings.players);
+  }
+
+  /// Re-splits the prize pool on a different curve. Kept out of
+  /// [updateGenerationParams] on purpose: that method's Reset clears its whole
+  /// group, and a host resetting the blind curve should not silently lose the
+  /// payout decision they made on a different card.
+  void setPayoutShape(PayoutShape shape) {
+    final game = _currentGame;
+    if (game == null) return;
+    if (game.settings.payoutShape == shape) return;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(payoutShape: shape),
+    );
+    _recalculateWithPlayers(_currentGame!.settings.players);
+  }
+
   void _recalculateWithPlayers(int count) {
     final game = _currentGame!;
     final s = game.settings;
@@ -857,6 +919,14 @@ extension AppProviderTournament on AppProvider {
         rebuyCost: newSettings.rebuyCost,
         addOnCost: newSettings.addOnCost,
         breaks: newSettings.breaks,
+        expectedRebuys: newSettings.expectedRebuys,
+        expectedReEntries: newSettings.expectedReEntries,
+        expectedAddOns: newSettings.expectedAddOns,
+        rebuyChips: newSettings.rebuyChips,
+        reEntryChips: newSettings.reEntryChips,
+        addOnChips: newSettings.addOnChips,
+        levelDurationMins: newSettings.levelDurationMins,
+        payoutShape: newSettings.payoutShape,
       ),
     );
     // Once play has started the starting stacks are frozen — blinds, levels
@@ -889,11 +959,19 @@ extension AppProviderTournament on AppProvider {
 
   /// Applies admin edits to future levels (the structure editor modal).
   /// The active and already-finished levels are left untouched.
-  /// Shared validation for blind-level durations (allowed: 10/15/20 min).
-  /// Returns null when valid, otherwise the rejection message.
+  /// Shared validation for blind-level durations.
+  ///
+  /// Was 10/15/20 only. Those three are still the presets, but the host now
+  /// chooses the level length outright, and a structure generated at 12 minutes
+  /// could not have a single one of its levels edited afterwards — the editor
+  /// rejected the value the generator had just produced. The real bound is the
+  /// engine's.
   String? _validateLevelDuration(int durationMins) {
-    if (durationMins != 10 && durationMins != 15 && durationMins != 20) {
-      return 'Level duration must be 10, 15 or 20 minutes.';
+    if (durationMins < TournamentEngine.kMinLevelDurationMins ||
+        durationMins > TournamentEngine.kMaxLevelDurationMins) {
+      return 'Level duration must be between '
+          '${TournamentEngine.kMinLevelDurationMins} and '
+          '${TournamentEngine.kMaxLevelDurationMins} minutes.';
     }
     return null;
   }

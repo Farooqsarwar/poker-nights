@@ -22,6 +22,7 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/event_day_checklist.dart';
+import '../../widgets/journey_progress.dart';
 import '../../widgets/premium_gate.dart';
 import '../../models/payment_record.dart';
 import '../../models/live_game.dart';
@@ -72,6 +73,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
   /// this count.
   int? _splitPromptRespondedAtCount;
   bool _splitPromptShowing = false;
+
+  /// True while [AppProvider.startTournament] is in flight.
+  ///
+  /// Starting freezes the head-count and starts the clock — the single most
+  /// consequential action in the app, and the one the host is most likely to
+  /// tap twice, because they are standing at a table with everyone waiting.
+  bool _starting = false;
 
   /// Once seating is generated the count naturally sits at/above the
   /// threshold on every rebuild; only prompt before that first generation.
@@ -258,13 +266,6 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final confirmedGuests = players
         .where((p) => p.isGuest && p.confirmed)
         .toList();
-    // Every guest who asked for a seat must be accepted or declined before the
-    // tournament can start (admin RSVP review gate).
-    final pendingGuestRequests = players
-        .where((p) => p.isGuest && !p.confirmed && p.name.trim().isNotEmpty)
-        .toList();
-    final canStart =
-        checkedIn.length >= 2 && pendingGuestRequests.isEmpty;
     final seatedYet = checkedIn.any((p) => p.table > 0 && p.seat > 0);
     final seatingConfirmed = game.seatingConfirmed;
     // Event-day preparation checklist (user-flow spec §4.6): admin-only and
@@ -293,6 +294,12 @@ class _CheckInScreenState extends State<CheckInScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          JourneyProgress(
+            game: game,
+            currentRoute: RoutePaths.checkIn,
+            onStepTap: (step) => context.go(step.route),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
               AppBackButton(onTap: () => context.go(RoutePaths.invitation)),
@@ -781,7 +788,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                                       : null,
                                                 ),
                                           ),
-                                          const SizedBox(height: 2),
+                                          const SizedBox(height: AppSpacing.xxs),
                                           Text(
                                             p.name,
                                             style: AppTypography.bodySm
@@ -964,13 +971,22 @@ class _CheckInScreenState extends State<CheckInScreen> {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: AppButton(
-                  onPressed: canStart && seatingConfirmed
-                      ? () {
-                          app.updateEventSettings(
-                            game.settings.copyWith(players: checkedIn.length),
-                          );
-                          app.startTimer();
-                          context.go(RoutePaths.adminDashboard);
+                  // The real start action: [AppProvider.startBlockedReason]
+                  // is the single precondition gate, [startTournament] freezes
+                  // the head-count and starts the timer, then the host lands
+                  // on the live dashboard so they are not left staring at the
+                  // check-in desk.
+                  loading: _starting,
+                  onPressed: app.startBlockedReason == null
+                      ? () async {
+                          if (_starting) return;
+                          setState(() => _starting = true);
+                          await app.startTournament();
+                          if (!mounted) return;
+                          setState(() => _starting = false);
+                          if (context.mounted) {
+                            context.go(RoutePaths.adminDashboard);
+                          }
                         }
                       : null,
                   child: FittedBox(
@@ -979,15 +995,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          pendingGuestRequests.isNotEmpty
-                              ? 'Review ${pendingGuestRequests.length} guest request${pendingGuestRequests.length == 1 ? '' : 's'} first'
-                              : !canStart
-                              ? 'Need at least 2 checked in'
-                              : !seatingConfirmed
-                              ? 'Confirm seating first'
-                              : 'Start with ${checkedIn.length} players',
+                          app.startBlockedReason ??
+                              'Start with ${checkedIn.length} players',
                         ),
-                        if (canStart && seatingConfirmed) ...[
+                        if (app.startBlockedReason == null) ...[
                           const SizedBox(width: 6),
                           Icon(
                             Icons.arrow_forward,
@@ -1031,7 +1042,7 @@ class _InlineStat extends StatelessWidget {
             color: color,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: AppSpacing.xxs),
         Text(
           label.toUpperCase(),
           style: AppTypography.bodyXs.copyWith(

@@ -189,6 +189,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
           Row(
             children: [
               IconButton(
+                tooltip: 'Back',
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => context.pop(),
               ),
@@ -376,7 +377,12 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: _chips.length,
-      onReorder: (oldIndex, newIndex) {
+      // `onReorderItem`, not the deprecated `onReorder`: it hands back a
+      // newIndex already adjusted for the item being removed at oldIndex,
+      // which is what the body below assumes. Under `onReorder` the index is
+      // the one *before* removal, so dragging a chip downward dropped it one
+      // slot past where it was released.
+      onReorderItem: (oldIndex, newIndex) {
         setState(() {
           final chip = _chips.removeAt(oldIndex);
           _chips.insert(newIndex, chip);
@@ -665,7 +671,7 @@ class _ChipRowState extends State<_ChipRow> {
                         shape: BoxShape.circle,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
                         chip.color,
@@ -735,7 +741,8 @@ class _ChipRowState extends State<_ChipRow> {
             ),
           ],
           IconButton(
-            icon: Icon(Icons.delete, color: AppColors.destructive),
+            tooltip: 'Remove this chip colour',
+            icon: Icon(Icons.delete, color: AppColors.destructiveText),
             onPressed: widget.onDelete,
           ),
         ],

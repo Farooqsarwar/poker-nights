@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app/colors.dart';
 import '../app/typography.dart';
+import '../constants/app_constants.dart';
 
 /// Poker chip mirroring the web `Chip` component.
 class ChipToken extends StatelessWidget {
@@ -66,7 +67,7 @@ class ChipToken extends StatelessWidget {
                     ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sm),
             Text(
               colorName,
               style: AppTypography.bodyXs.copyWith(

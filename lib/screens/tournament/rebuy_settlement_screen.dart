@@ -513,7 +513,7 @@ class _AddOnsStep extends StatelessWidget {
                     Text('$totalAddOns', style: AppTypography.monoSm),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
                     Text(
@@ -531,7 +531,7 @@ class _AddOnsStep extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
                     Text(
@@ -687,7 +687,7 @@ class _ColorUpStep extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   anteEnabled
                       ? (anteStyle == AnteStyle.individual
@@ -763,9 +763,9 @@ class _ConfirmStep extends StatelessWidget {
             child: Column(
               children: [
                 _ConfirmRow(label: 'Active players', value: '$activeCount'),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 _ConfirmRow(label: 'Add-ons taken', value: '$addOnsTaken'),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 _ConfirmRow(
                   label: 'Ante',
                   value: anteEnabled ? 'Active from next level' : 'Not enabled',
@@ -788,7 +788,7 @@ class _ConfirmStep extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 _ConfirmRow(
                   label: 'Organizational costs · $organizerPct%',
                   value: Formatters.chips(organizerAmount),
@@ -960,14 +960,19 @@ class _ConfirmPlayersStep extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
+                    // Glyphs as well as colour, matching the sheet's
+                    // Busted pill — this list is scanned quickly and the two
+                    // states sit in the same column.
                     p.rebuys > 0
                         ? const AppBadge(
                             label: 'Rebought',
                             variant: AppBadgeVariant.green,
+                            icon: Icons.refresh,
                           )
                         : const AppBadge(
                             label: 'Out',
                             variant: AppBadgeVariant.red,
+                            icon: Icons.close,
                           ),
                     // User Flow section 4.13 / 12-056: "the administrator
                     // records any final valid rebuy from a hand that began

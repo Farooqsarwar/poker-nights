@@ -21,11 +21,19 @@ class AppSpacing {
     vertical: xxl,
   );
 
+  /// Compact-layout page padding.
+  ///
+  /// Deliberately carries NO extra bottom clearance for the floating bottom
+  /// nav. The nav belongs to `ScreenShell`, so the shell pads for it exactly
+  /// once, using the nav's own height. This used to add a hardcoded `bottom:
+  /// 96` on top of the shell's own `64 + inset`, so compact screens paid for
+  /// the nav twice (~160px of dead space) while tablet-width screens — which
+  /// took the desktop padding — did not pay for it at all.
   static const EdgeInsets mobileContentPadding = EdgeInsets.only(
     left: xl,
     right: xl,
     top: xl,
-    bottom: 96,
+    bottom: xl,
   );
 
   static const EdgeInsets desktopContentPadding = EdgeInsets.only(

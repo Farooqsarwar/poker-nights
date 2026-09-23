@@ -26,7 +26,6 @@ import '../../widgets/code_display.dart';
 import '../../widgets/rsvp_badge.dart';
 
 /// Group games hub. Games is the group's landing screen; chat, members, polls
-/// Group games hub. Games is the group's landing screen; chat, members, polls
 /// and history are dedicated top-level screens (single navigation layer).
 class GroupScreen extends StatefulWidget {
   const GroupScreen({super.key});
@@ -94,12 +93,22 @@ class _GroupScreenState extends State<GroupScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              ...members.map(
-                (m) => RadioListTile<String>(
-                  value: m.id,
-                  groupValue: selectedId,
-                  onChanged: (v) => setState(() => selectedId = v),
-                  title: Text(m.name, style: AppTypography.bodySm),
+              // The selection now lives on the RadioGroup ancestor rather than
+              // on each tile: `RadioListTile.groupValue`/`onChanged` are
+              // deprecated.
+              RadioGroup<String>(
+                groupValue: selectedId,
+                onChanged: (v) => setState(() => selectedId = v),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ...members.map(
+                      (m) => RadioListTile<String>(
+                        value: m.id,
+                        title: Text(m.name, style: AppTypography.bodySm),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -387,6 +396,9 @@ class _GroupScreenState extends State<GroupScreen> {
               child: Container(
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 decoration: BoxDecoration(
+                  // Literal white, deliberately: a QR code needs a light quiet
+                  // zone and maximum contrast to scan. Theming this card would
+                  // make the code unreadable on the dark palettes.
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                   border: Border.all(
@@ -500,13 +512,21 @@ class _GroupScreenState extends State<GroupScreen> {
                   ),
                 ),
                 IconButton(
+                  tooltip: 'Fewer players per table',
                   onPressed: maxPerTable <= 6
                       ? null
                       : () => setState(() => maxPerTable--),
                   icon: const Icon(Icons.remove_circle_outline),
                 ),
-                Text('$maxPerTable', style: AppTypography.bodySm),
+                // The bare number means nothing out of context to a screen
+                // reader sitting between two steppers.
+                Semantics(
+                  label: '$maxPerTable players per table',
+                  excludeSemantics: true,
+                  child: Text('$maxPerTable', style: AppTypography.bodySm),
+                ),
                 IconButton(
+                  tooltip: 'More players per table',
                   onPressed: maxPerTable >= 12
                       ? null
                       : () => setState(() => maxPerTable++),
@@ -829,6 +849,12 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                       variant: game.status.isActiveLive
                           ? AppBadgeVariant.accent
                           : AppBadgeVariant.muted,
+                      // The sheet marks a running game with a leading dot, not
+                      // a glyph. Only when it is actually live — a dot on a
+                      // finished game would read as "still going".
+                      dotColor: game.status.isActiveLive
+                          ? AppColors.primary
+                          : null,
                     ),
                     Icon(Icons.chevron_right, color: AppColors.mutedForeground),
                   ],
@@ -849,7 +875,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                       size: 14,
                       color: AppColors.mutedForeground,
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.xs),
                     Text(
                       game.settings.date,
                       style: AppTypography.bodySm.copyWith(
@@ -858,7 +884,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
                     Icon(
@@ -866,7 +892,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                       size: 14,
                       color: AppColors.mutedForeground,
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.xs),
                     Text(
                       game.settings.time,
                       style: AppTypography.bodySm.copyWith(
@@ -875,7 +901,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
                     Icon(
@@ -883,7 +909,7 @@ class _PremiumGameCardState extends State<_PremiumGameCard> {
                       size: 14,
                       color: AppColors.mutedForeground,
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.xs),
                     Text(
                       game.settings.locationPrivate
                           ? 'Address shared at check-in'

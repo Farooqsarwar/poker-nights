@@ -14,6 +14,7 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/back_nav_button.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/glass_styles.dart';
 
@@ -126,17 +127,9 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
         children: [
           Row(
             children: [
-              InkWell(
-                onTap: () => context.go(RoutePaths.adminDashboard),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(
-                    Icons.arrow_back,
-                    size: AppFontSizes.xl,
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
+              BackNavButton(
+                label: 'Back to dashboard',
+                onPressed: () => context.go(RoutePaths.adminDashboard),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -259,7 +252,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                         color: AppColors.mutedForeground,
                                       ),
                                     ),
-                                    const SizedBox(width: 4),
+                                    const SizedBox(width: AppSpacing.xs),
                                     Icon(
                                       Icons.arrow_forward,
                                       size: 12,
@@ -316,7 +309,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                 size: 14,
                                 color: AppColors.destructive,
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: AppSpacing.xs),
                               Text(
                                 'Undo last',
                                 style: AppTypography.bodyXs.copyWith(

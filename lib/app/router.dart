@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
+import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
+import 'typography.dart';
 
 import '../screens/cash/cash_game_live_screen.dart';
 import '../screens/cash/cash_game_screen.dart';
@@ -245,21 +247,23 @@ GoRouter buildAppRouter(AppProvider app) {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.error_outline, color: AppColors.mutedForeground, size: 48),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             'Page not found',
-            style: TextStyle(
-              color: AppColors.foreground,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTypography.body(
+              size: 20,
+              weight: FontWeight.w600,
+            ).copyWith(color: AppColors.foreground),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             state.uri.toString(),
-            style: TextStyle(color: AppColors.mutedForeground, fontSize: 12),
+            textAlign: TextAlign.center,
+            style: AppTypography.body(size: 12).copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xl),
           TextButton(
             onPressed: () => context.go(RoutePaths.home),
             child: const Text('Go to Home'),
@@ -498,7 +502,7 @@ Widget shell(Widget child, {required String path}) => ScreenShell(
   requiredPath: path,
   child: child
       .animate(key: ValueKey(child.runtimeType))
-      .fadeIn(duration: 300.ms, curve: Curves.easeOut)
+      .fadeIn(duration: AppDurations.normal, curve: Curves.easeOut)
       .slideY(begin: 0.05),
 );
 

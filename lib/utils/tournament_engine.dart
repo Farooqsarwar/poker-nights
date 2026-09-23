@@ -120,8 +120,20 @@ class TournamentEngine {
     [3000, 6000],
   ];
 
-  /// Valid level durations in minutes.
+  /// Level durations offered as one-tap presets.
+  ///
+  /// No longer the only values a structure may use — [TournamentParams
+  /// .levelDurationMins] accepts anything in [kMinLevelDurationMins] ..
+  /// [kMaxLevelDurationMins]. Bucketing to 10/15/20 meant the level LENGTH was
+  /// fixed before the level COUNT was known, so a 4-hour target could only ever
+  /// be approximated: 16 levels of 15 is 4h00 by luck, 3h30 is not reachable at
+  /// all. Choosing the length directly is what lets the two line up.
   static const List<int> validLevelDurations = [10, 15, 20];
+
+  /// Bounds on a host-chosen level length. Below 3 minutes the blinds move
+  /// faster than a hand plays out; above an hour the structure stops being one.
+  static const int kMinLevelDurationMins = 3;
+  static const int kMaxLevelDurationMins = 60;
 
   /// Extra levels generated past the target duration so a slow field never
   /// plays off the end of the structure (11-014). They are deliberately
@@ -1079,10 +1091,11 @@ class TournamentEngine {
 
   static List<Prize> _calcPrizes(
     int prizePool,
-    int players, [
+    int players, {
     int? forcePaidPlaces,
     int roundingUnit = 10,
-  ]) {
+    PayoutShape shape = PayoutShape.standard,
+  }) {
     if (prizePool <= 0) return const [];
 
     var paidPlaces = forcePaidPlaces ?? _paidPlacesFor(prizePool, players);
@@ -1091,8 +1104,12 @@ class TournamentEngine {
     }
 
     // Reference style wins whenever the field size allows the same number of
-    // places the schedule intends for this pool (14-028).
-    final reference = _referencePayouts[prizePool];
+    // places the schedule intends for this pool (14-028). It is the STANDARD
+    // shape written out longhand, so a host who asked for a different curve
+    // must not be handed it — that would silently ignore their choice.
+    final reference = shape == PayoutShape.standard
+        ? _referencePayouts[prizePool]
+        : null;
     if (forcePaidPlaces == null &&
         reference != null &&
         reference.length == paidPlaces) {
@@ -1117,7 +1134,20 @@ class TournamentEngine {
     /// 1-10 dropdowns (14-027, 12-087). Beyond 4 places we fall back to the
     /// spec's own curve: Technical section 9.4, `weight_i = exp(-lambda * i)`,
     /// normalised to the pool.
+    ///
+    /// A non-standard [shape] replaces all of it with a plain geometric curve
+    /// — each place takes `ratio` times the one above, normalised to the pool.
+    /// The rounding, the per-place minimum and the descending check below are
+    /// shared, so every guarantee the standard shape carries holds for the
+    /// other two as well; only the starting proportions differ.
     List<double> weightsFor(int n) {
+      if (shape != PayoutShape.standard) {
+        final raw = [
+          for (var i = 0; i < n; i++) math.pow(shape.ratio, i).toDouble(),
+        ];
+        final total = raw.reduce((a, b) => a + b);
+        return [for (final w in raw) w / total];
+      }
       switch (n) {
         case 2:
           return [0.73, 0.27];
@@ -1198,8 +1228,12 @@ class TournamentEngine {
 
   /// Test-only wrapper exposing [_calcPrizes] for the payout acceptance tests.
   @visibleForTesting
-  static List<Prize> calcPrizesForTest(int prizePool, int players) =>
-      _calcPrizes(prizePool, players, null, 10);
+  static List<Prize> calcPrizesForTest(
+    int prizePool,
+    int players, {
+    PayoutShape shape = PayoutShape.standard,
+  }) =>
+      _calcPrizes(prizePool, players, roundingUnit: 10, shape: shape);
 
   /// Recalculates the organizer amount, final prize pool, and prize distribution.
   /// This is used dynamically when late players join or rebuys/add-ons are taken.
@@ -1253,12 +1287,14 @@ class TournamentEngine {
     int players,
     int organizerPct, {
     int roundingUnit = 10,
+    PayoutShape shape = PayoutShape.standard,
   }) {
     final recommended = recalculatePrizes(
       grossEligible,
       players,
       organizerPct,
       roundingUnit: roundingUnit,
+      shape: shape,
     );
     final defaultPlaces = recommended.prizes.length;
     if (defaultPlaces == 0) return const [];
@@ -1281,6 +1317,7 @@ class TournamentEngine {
         organizerPct,
         forcePaidPlaces: places,
         roundingUnit: roundingUnit,
+        shape: shape,
       );
       if (r.prizes.length != places) continue;
       if (r.prizes.any((p) => p.amount <= 0)) continue;
@@ -1325,6 +1362,7 @@ class TournamentEngine {
     num organizerPct, {
     int? forcePaidPlaces,
     int roundingUnit = 10,
+    PayoutShape shape = PayoutShape.standard,
   }) {
     // Organizer cut: computed in integer cents to avoid floating-point drift.
     // targetOrganizer = grossEligible * organizerPct / 100, rounded half-up.
@@ -1377,8 +1415,9 @@ class TournamentEngine {
     final prizes = _calcPrizes(
       prizePool,
       players,
-      forcePaidPlaces,
-      roundingUnit,
+      forcePaidPlaces: forcePaidPlaces,
+      roundingUnit: roundingUnit,
+      shape: shape,
     );
     return (
       organizerAmount: organizerAmount,
@@ -1397,7 +1436,11 @@ class TournamentEngine {
     }
 
     final warnings = <String>[];
-    final levelDuration = _levelDurationFor(params.durationHours);
+    // The host's choice wins; the duration-derived bucket is the fallback for
+    // every tournament that never made one.
+    final levelDuration = params.levelDurationMins
+            ?.clamp(kMinLevelDurationMins, kMaxLevelDurationMins) ??
+        _levelDurationFor(params.durationHours);
     // Full target, not 90% of it. The old 0.9 factor meant a 3.5 h event only
     // ever generated ~3 h 09 m of levels, which both understated the finish
     // (11-030) and made play run off the end of the structure — the trigger
@@ -1451,10 +1494,8 @@ class TournamentEngine {
 
     // Real expected entries rather than a flat `players x 1.2 x 2` buffer —
     // the same figures Technical section 6.3 step 4 uses for the blind curve.
-    final expectedRebuysForChips =
-        params.rebuys ? (params.players * 0.35).round() : 0;
-    final expectedAddOnsForChips =
-        params.addOn ? (params.players * 0.65).round() : 0;
+    final expectedRebuysForChips = params.effectiveExpectedRebuys;
+    final expectedAddOnsForChips = params.effectiveExpectedAddOns;
 
     // How many stacks the inventory is divided across when building ONE
     // player's starting stack. Tried from most conservative to least: hold
@@ -1647,30 +1688,33 @@ class TournamentEngine {
     final stack = best.stack;
     final chipPlan = planFor(stack, best.divisor, validBlindLevels[startIndex][0]);
 
-    final addOnStack = params.addOn ? stack : 0;
-    final rebuyStack = stack;
+    // Chips handed over for each entry type. The solved starting stack is the
+    // default for all three — it is what the engine always used — but a host
+    // who runs a bigger add-on than a starting stack can now say so, and the
+    // blind curve below sees it.
+    final rebuyStack = params.rebuyChips ?? stack;
+    final addOnStack = params.addOn ? (params.addOnChips ?? stack) : 0;
+    final reEntryStack = params.reEntryChips ?? stack;
 
     // Expected additional money-chip volume (tech spec §6.3 step 4): rebuys,
     // re-entries and add-ons inflate total chips in play and therefore the
     // final blind target. Computed here so the blind curve can use them.
-    final expectedRebuysTotal = params.rebuys
-        ? (params.players * 0.35).round()
-        : 0;
-    final expectedReEntriesTotal = params.reEntry
-        ? (params.players * 0.20).round()
-        : 0;
-    final expectedAddOnsTotal = params.addOn
-        ? (params.players * 0.65).round()
-        : 0;
+    final expectedRebuysTotal = params.effectiveExpectedRebuys;
+    final expectedReEntriesTotal = params.effectiveExpectedReEntries;
+    final expectedAddOnsTotal = params.effectiveExpectedAddOns;
 
     // ── Blind curve (tech spec §8.3 / §8.4) ─────────────────────────────────
     // The final big blind is derived from the total chips that will actually
     // be in play: starting stacks plus expected rebuys and add-ons, per the
-    // spec formula. Re-entry stacks are deliberately NOT added here — the
-    // spec's expectedTotalChips (§8.3) only counts starting, rebuy and add-on
-    // stacks, and a re-entry stack simply replaces a busted stack already
-    // counted as in play. (Re-entries do still count toward the prize pool
-    // in §9.1, where behaviour matches the spec.) Heads-up should begin with
+    // spec formula. A re-entry stack is NOT added whole — the spec's
+    // expectedTotalChips (§8.3) counts starting, rebuy and add-on stacks, on
+    // the reasoning that a re-entry simply replaces a busted stack already
+    // counted as in play. That reasoning holds exactly while a re-entry IS a
+    // starting stack. Now that the host can set it larger, only the SURPLUS is
+    // genuinely new chips, so that is what goes in: zero when the two match,
+    // which is every tournament generated before the field existed.
+    // (Re-entries do still count toward the prize pool in §9.1, where
+    // behaviour matches the spec.) Heads-up should begin with
     // the average stack around [targetHeadsUpAverageBB] big blinds, so:
     //   targetFinalBB = expectedTotalChips / (2 × targetHeadsUpAverageBB)
     //   rawBB(i)      = openingBB × growthFactor^i
@@ -1681,7 +1725,8 @@ class TournamentEngine {
     // field needs blinds beyond its printed end.
     final expectedTotalChips =
         stack * params.players +
-        stack * expectedRebuysTotal +
+        rebuyStack * expectedRebuysTotal +
+        math.max(0, reEntryStack - stack) * expectedReEntriesTotal +
         addOnStack * expectedAddOnsTotal;
     final targetFinalBB = expectedTotalChips / (2 * targetHeadsUpAverageBB);
     // Technical section 8.4: the exponent is `1 / max(1, plannedLevels - 1)`.
@@ -1825,6 +1870,7 @@ class TournamentEngine {
       params.players,
       params.organizerPct,
       roundingUnit: roundingUnit,
+      shape: params.payoutShape,
     );
     final organizerAmount = recalculated.organizerAmount;
     final prizePool = recalculated.prizePool;

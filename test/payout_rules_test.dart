@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:poker_night/models/tournament.dart';
 import 'package:poker_night/utils/tournament_engine.dart';
 
 /// Acceptance coverage for the payout rules (14-022, 14-023, 14-027, 14-016,
@@ -179,6 +180,91 @@ void main() {
       // Target lands exactly between two valid candidates.
       final r = TournamentEngine.recalculatePrizes(100, 8, 5);
       expect(r.organizerAmount, lessThanOrEqualTo(10));
+    });
+  });
+
+  group('payout shape', () {
+    // The shape selector is the only payout input a host can set that is not
+    // a place count. It has to change the curve, keep every rule above, and —
+    // critically — leave `standard` byte-identical, because every structure
+    // already stored was generated on it and Criterion 15 reruns the engine.
+    test('standard is unchanged by the shape parameter existing', () {
+      for (final places in [2, 3, 4, 5, 6]) {
+        final withDefault = TournamentEngine.recalculatePrizes(
+          1000,
+          20,
+          0,
+          forcePaidPlaces: places,
+        );
+        final explicit = TournamentEngine.recalculatePrizes(
+          1000,
+          20,
+          0,
+          forcePaidPlaces: places,
+          shape: PayoutShape.standard,
+        );
+        expect(
+          [for (final p in explicit.prizes) p.amount],
+          [for (final p in withDefault.prizes) p.amount],
+          reason: '$places places must not move',
+        );
+      }
+    });
+
+    test('top-heavy pays the winner more than flat does', () {
+      for (final places in [3, 4, 5]) {
+        final top = TournamentEngine.recalculatePrizes(
+          1000,
+          20,
+          0,
+          forcePaidPlaces: places,
+          shape: PayoutShape.topHeavy,
+        );
+        final flat = TournamentEngine.recalculatePrizes(
+          1000,
+          20,
+          0,
+          forcePaidPlaces: places,
+          shape: PayoutShape.flat,
+        );
+        expect(
+          top.prizes.first.amount,
+          greaterThan(flat.prizes.first.amount),
+          reason: 'at $places places',
+        );
+        expect(
+          top.prizes.last.amount,
+          lessThan(flat.prizes.last.amount),
+          reason: 'at $places places the tail must move the other way',
+        );
+      }
+    });
+
+    test('every shape still totals the pool in clean multiples of 10', () {
+      for (final shape in PayoutShape.values) {
+        for (var places = 2; places <= 6; places++) {
+          final r = TournamentEngine.recalculatePrizes(
+            1000,
+            20,
+            0,
+            forcePaidPlaces: places,
+            shape: shape,
+          );
+          final total = r.prizes.fold<int>(0, (a, p) => a + p.amount);
+          expect(total, r.prizePool, reason: '${shape.name} at $places places');
+          for (final p in r.prizes) {
+            expect(p.amount % 10, 0, reason: '${shape.name}: ${p.amount}');
+            expect(p.amount, greaterThan(0));
+          }
+          for (var i = 0; i + 1 < r.prizes.length; i++) {
+            expect(
+              r.prizes[i].amount,
+              greaterThanOrEqualTo(r.prizes[i + 1].amount),
+              reason: '${shape.name} must still descend',
+            );
+          }
+        }
+      }
     });
   });
 }

@@ -68,6 +68,7 @@ class ChipSetsScreen extends StatelessWidget {
           Row(
             children: [
               IconButton(
+                tooltip: 'Back to settings',
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => context.go(RoutePaths.settings),
               ),
@@ -140,6 +141,9 @@ class ChipSetsScreen extends StatelessWidget {
                         ),
                       ),
                       IconButton(
+                        // Names the row: a screen reader moving down the
+                        // list otherwise hears "edit, edit, edit".
+                        tooltip: 'Edit ${cs.name}',
                         icon: Icon(
                           Icons.edit,
                           color: AppColors.mutedForeground,
@@ -149,9 +153,13 @@ class ChipSetsScreen extends StatelessWidget {
                       ),
                       if (cs.id != 'cs-default')
                         IconButton(
+                          tooltip: 'Delete ${cs.name}',
                           icon: Icon(
                             Icons.delete,
-                            color: AppColors.destructive,
+                            // `destructiveText`, not `destructive` — the base
+                            // colour is a FILL and measures under WCAG AA as
+                            // a glyph on a dark surface.
+                            color: AppColors.destructiveText,
                           ),
                           onPressed: () => _confirmDelete(context, app, cs),
                         ),

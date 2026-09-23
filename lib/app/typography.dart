@@ -7,17 +7,33 @@ import 'colors.dart';
 
 /// Centralized typography for the Poker Night app.
 ///
-/// Three families (mirroring the web app):
-///  - Display: Space Grotesk (sans)  — headings & brand
-///  - Body:    Space Grotesk (sans)  — general UI
-///  - Mono:    Space Mono (mono)     — numbers, codes, timers
+/// ONE family everywhere — Space Grotesk — for headings, brand, body, labels
+/// and numerals alike. The client's product system states it flatly: "one
+/// typeface everywhere — numerals, wordmark, labels, and body copy. No second
+/// typeface."
+///
+/// [mono] used to be Space Mono, a genuinely different face. What a second
+/// family was buying us was column alignment on the timer and the chip counts,
+/// and that is what [numericFeatures] does instead: `tnum` gives every digit
+/// the same advance width, so a clock ticking 19:59 -> 20:00 does not shuffle
+/// sideways, and `zero` slashes the zero so it cannot be misread as an O. Both
+/// are named in the product system. Keep calling [mono] for numbers, codes and
+/// timers — it is still the right style, it is just no longer a second face.
 class AppTypography {
   AppTypography._();
 
   // ── Font family names ──────────────────────────────────────────────────────
   static const String displayFamily = 'Space Grotesk';
   static const String bodyFamily = 'Space Grotesk';
-  static const String monoFamily = 'Space Mono';
+  static const String monoFamily = 'Space Grotesk';
+
+  /// Tabular (fixed-advance) figures plus a slashed zero — the product
+  /// system's stated substitute for a monospaced face. A font that lacks
+  /// either feature simply ignores it, so this is safe on the fallbacks too.
+  static const List<FontFeature> numericFeatures = [
+    FontFeature.tabularFigures(),
+    FontFeature.slashedZero(),
+  ];
 
   static TextStyle display({
     double size = AppFontSizes.lg,
@@ -72,13 +88,14 @@ class AppTypography {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.spaceMono(
+    return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       color: color ?? AppColors.foreground,
       height: height,
       letterSpacing: letterSpacing,
     ).copyWith(
+      fontFeatures: numericFeatures,
       fontFamilyFallback: const [
         'Noto Color Emoji',
         'Apple Color Emoji',
@@ -111,7 +128,7 @@ class AppTypography {
     double size = AppFontSizes.lg,
     FontWeight weight = FontWeight.w700,
   }) {
-    return GoogleFonts.spaceMono(
+    return GoogleFonts.spaceGrotesk(
       fontSize: AppScale.sp(size),
       fontWeight: weight,
       foreground: Paint()
@@ -161,7 +178,6 @@ class AppTypography {
         .copyWith(
           bodyLarge: base.bodyLarge!.copyWith(
             fontFamily: bodyFamily,
-            fontFamilyFallback: ['Space Mono', 'monospace'],
           ),
         );
   }

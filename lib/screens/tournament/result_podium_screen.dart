@@ -118,7 +118,7 @@ class ResultPodiumScreen extends StatelessWidget {
                     size: AppFontSizes.display,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   '${game.settings.date} · ${game.settings.location}',
                   textAlign: TextAlign.center,
@@ -551,7 +551,7 @@ class _PodiumSlot extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           MedalIcon(result.pos, size: AppFontSizes.xxxl),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -579,7 +579,7 @@ class _PodiumSlot extends StatelessWidget {
                     weight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   labels[result.pos - 1],
                   style: AppTypography.bodyXs.copyWith(
@@ -626,7 +626,7 @@ class _StatCard extends StatelessWidget {
               color: valueColor ?? AppColors.foreground,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             label,
             style: AppTypography.bodyXs.copyWith(

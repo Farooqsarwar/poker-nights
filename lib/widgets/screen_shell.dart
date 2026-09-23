@@ -15,6 +15,8 @@ import 'app_avatar.dart';
 import 'app_button.dart';
 import 'bottom_nav.dart';
 import 'brand_lockup.dart';
+import 'connection_banner.dart';
+import 'min_tap_target.dart';
 import 'nav_drawer.dart';
 import 'shell_insets.dart';
 import 'sidebar.dart';
@@ -78,7 +80,7 @@ class ScreenShell extends StatelessWidget {
 
     return ResponsiveBuilder(
       builder: (context, device) {
-        if (device.isMobile || device.isTablet) {
+        if (device.isCompact) {
           return _MobileShell(child: child);
         }
         return Scaffold(
@@ -94,7 +96,19 @@ class ScreenShell extends StatelessWidget {
                 Expanded(
                   child: ShellInsets(
                     left: kSidebarWidth + 1,
-                    child: child,
+                    child: Column(
+                      children: [
+                        const ConnectionBanner(
+                          padding: EdgeInsets.fromLTRB(
+                            AppSpacing.lg,
+                            AppSpacing.lg,
+                            AppSpacing.lg,
+                            0,
+                          ),
+                        ),
+                        Expanded(child: child),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -185,12 +199,25 @@ class _MobileShell extends StatelessWidget {
             Column(
               children: [
                 _MobileTopBar(onMenu: app.toggleDrawer),
+                const ConnectionBanner(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    0,
+                  ),
+                ),
                 Expanded(
                   // The bottom nav floats over the content, so give every
-                  // screen clearance equal to the nav's height (64 + inset)
-                  // and nothing — like a chat composer — hides behind it.
+                  // screen clearance equal to the nav's own height plus the
+                  // device inset, and nothing — like a chat composer — hides
+                  // behind it. This is the ONLY place that clearance is
+                  // added; `AppSpacing.mobileContentPadding` deliberately
+                  // stays a plain page padding.
                   child: Padding(
-                    padding: EdgeInsets.only(bottom: 64 + bottomInset),
+                    padding: EdgeInsets.only(
+                      bottom: kBottomNavHeight + bottomInset,
+                    ),
                     child: child,
                   ),
                 ),
@@ -230,15 +257,19 @@ class _MobileTopBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Row(
                 children: [
-                  InkWell(
-                    onTap: onMenu,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.xs,
-                        vertical: AppSpacing.xs,
+                  Semantics(
+                    label: 'Open navigation menu',
+                    button: true,
+                    child: InkWell(
+                      onTap: onMenu,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      child: MinTapTarget(
+                        child: Icon(
+                          Icons.menu,
+                          color: AppColors.foreground,
+                          size: 22,
+                        ),
                       ),
-                      child: Icon(Icons.menu, color: AppColors.foreground, size: 22),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -254,13 +285,19 @@ class _MobileTopBar extends StatelessWidget {
                   const Spacer(),
                   const SizedBox(width: AppSpacing.sm),
                   if (user != null)
-                    InkWell(
-                      onTap: () => context.go(RoutePaths.profile),
-                      borderRadius: BorderRadius.circular(28),
-                      child: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: AppAvatar(name: user.name),
+                    Semantics(
+                      label: 'Your profile, ${user.name}',
+                      button: true,
+                      child: InkWell(
+                        onTap: () => context.go(RoutePaths.profile),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        child: MinTapTarget(
+                          child: SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: AppAvatar(name: user.name),
+                          ),
+                        ),
                       ),
                     ),
                 ],

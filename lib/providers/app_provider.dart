@@ -4,7 +4,7 @@ import 'dart:math';
 
 import '../app/route_paths.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'
-    show DocumentSnapshot, FieldValue;
+    show DocumentSnapshot, FieldValue, FirebaseException;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:flutter/foundation.dart';
@@ -319,6 +319,15 @@ class AppProvider extends ChangeNotifier {
       bool.fromEnvironment('DEMO_PREMIUM', defaultValue: false);
 
   Future<void> loadPremiumTier() async {
+    // Both awaits below sit behind a ternary: with the backend down and
+    // DEMO_PREMIUM off, neither is taken and this method runs start to finish
+    // synchronously — `notifyListeners()` included. UpgradeScreen calls it
+    // from `initState`, so that notification landed mid-build and the
+    // framework threw "setState() or markNeedsBuild() called during build",
+    // blanking the screen. `await null` yields to the microtask queue, which
+    // cannot run until the build phase has finished, so the notification is
+    // always delivered from outside a build no matter which branch is taken.
+    await null;
     final server = _backendUp ? await _repo.fetchPremiumEntitlement() : false;
     final local = demoPremiumEnabled
         ? await Payments.instance.currentTier()

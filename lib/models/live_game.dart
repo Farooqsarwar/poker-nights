@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'chip_color.dart';
 import 'payment_record.dart';
 import 'shot_clock.dart';
@@ -40,6 +42,14 @@ class GameSettings {
     this.expectedPlayersOverride,
     this.lockedExpectedPlayers,
     this.breaks = const [],
+    this.expectedRebuys,
+    this.expectedReEntries,
+    this.expectedAddOns,
+    this.rebuyChips,
+    this.reEntryChips,
+    this.addOnChips,
+    this.levelDurationMins,
+    this.payoutShape = PayoutShape.standard,
   });
 
   final String name;
@@ -137,6 +147,30 @@ class GameSettings {
   /// case the client raised. Null means "trust the RSVPs".
   final int? expectedPlayersOverride;
 
+  /// Host overrides for expected take-up and the chips each entry type hands
+  /// over, plus the chosen level length.
+  ///
+  /// These live on the settings rather than only on the generation call because
+  /// [StructureVerification] regenerates from exactly these fields on every
+  /// device. An input the host can change but the settings do not record would
+  /// make every other phone in the room recompute a different structure and
+  /// report the honest one as tampering.
+  ///
+  /// Null throughout means "engine default", which is what every tournament
+  /// created before these fields existed reads as.
+  final int? expectedRebuys;
+  final int? expectedReEntries;
+  final int? expectedAddOns;
+  final int? rebuyChips;
+  final int? reEntryChips;
+  final int? addOnChips;
+  final int? levelDurationMins;
+
+  /// How steeply the prize pool falls away from first place. Not part of the
+  /// generation-override group above — a Reset there must not quietly undo a
+  /// payout decision that has nothing to do with the blind curve.
+  final PayoutShape payoutShape;
+
   /// Ceiling on the organizer allocation (specification §7 and §18:
   /// "0-20%").
   static const int maxOrganizerPct = 20;
@@ -156,6 +190,24 @@ class GameSettings {
 
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
+
+  /// Expected take-up per entry type, override first and the shared rate as the
+  /// fallback — the same resolution [TournamentParams] performs, so the screens
+  /// that display these totals and the engine that generates against them can
+  /// never disagree. A format that is off contributes nothing regardless of a
+  /// number left behind by toggling it.
+  int get effectiveExpectedRebuys => rebuys
+      ? math.max(0, expectedRebuys ?? (players * kExpectedRebuyRate).round())
+      : 0;
+
+  int get effectiveExpectedReEntries => reEntry
+      ? math.max(
+          0, expectedReEntries ?? (players * kExpectedReEntryRate).round())
+      : 0;
+
+  int get effectiveExpectedAddOns => addOn
+      ? math.max(0, expectedAddOns ?? (players * kExpectedAddOnRate).round())
+      : 0;
 
   GameSettings copyWith({
     String? name,
@@ -193,6 +245,18 @@ class GameSettings {
     int? lockedExpectedPlayers,
     bool clearLockedExpectedPlayers = false,
     List<ScheduledBreak>? breaks,
+    int? expectedRebuys,
+    int? expectedReEntries,
+    int? expectedAddOns,
+    int? rebuyChips,
+    int? reEntryChips,
+    int? addOnChips,
+    int? levelDurationMins,
+    PayoutShape? payoutShape,
+    /// Sends every generation override back to the engine default in one call,
+    /// which is what the Parameters tab's "Reset" does. Individual nulls above
+    /// mean "unchanged", so without this there is no way to clear one.
+    bool clearGenerationOverrides = false,
   }) {
     return GameSettings(
       name: name ?? this.name,
@@ -233,6 +297,25 @@ class GameSettings {
           ? null
           : (lockedExpectedPlayers ?? this.lockedExpectedPlayers),
       breaks: breaks ?? this.breaks,
+      expectedRebuys: clearGenerationOverrides
+          ? null
+          : expectedRebuys ?? this.expectedRebuys,
+      expectedReEntries: clearGenerationOverrides
+          ? null
+          : expectedReEntries ?? this.expectedReEntries,
+      expectedAddOns: clearGenerationOverrides
+          ? null
+          : expectedAddOns ?? this.expectedAddOns,
+      rebuyChips:
+          clearGenerationOverrides ? null : rebuyChips ?? this.rebuyChips,
+      reEntryChips:
+          clearGenerationOverrides ? null : reEntryChips ?? this.reEntryChips,
+      addOnChips:
+          clearGenerationOverrides ? null : addOnChips ?? this.addOnChips,
+      levelDurationMins: clearGenerationOverrides
+          ? null
+          : levelDurationMins ?? this.levelDurationMins,
+      payoutShape: payoutShape ?? this.payoutShape,
     );
   }
 

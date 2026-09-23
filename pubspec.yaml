@@ -9,6 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # `main.dart` imports url_strategy.dart from this to drop the '#' from web
+  # URLs. It ships with the SDK, so it resolved without being declared -- but
+  # relying on that is what `depend_on_referenced_packages` warns about.
+  flutter_web_plugins:
+    sdk: flutter
   # Hashes the emailIndex key so the collection stores no plaintext address
   # and cannot be used as an account-existence oracle (19-005 / 19-023).
   crypto: ^3.0.3
@@ -36,6 +41,9 @@ dependencies:
   # the free-plan replacement for the Cloud Function fan-out (no Blaze plan).
   onesignal_flutter: ^5.6.8
   http: ^1.2.0
+  # Replaces `dart:html`, which is deprecated and unavailable under Wasm.
+  # Used by the two *_web.dart services (Notification API, BroadcastChannel).
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

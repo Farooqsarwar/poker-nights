@@ -13,6 +13,7 @@ import 'app_avatar.dart';
 import 'app_badge.dart';
 import 'app_button.dart';
 import 'app_modal.dart';
+import 'min_tap_target.dart';
 import 'rsvp_badge.dart';
 import 'glass_styles.dart';
 
@@ -72,11 +73,10 @@ class ChatBubble extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 2),
               child: Text(
                 message.authorName,
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.primaryText,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: AppTypography.body(
+                  size: 11,
+                  weight: FontWeight.w700,
+                ).copyWith(color: AppColors.primaryText),
               ),
             ),
           Text(
@@ -88,11 +88,10 @@ class ChatBubble extends StatelessWidget {
           const SizedBox(height: 3),
           Text(
             Formatters.relativeTime(message.timestamp),
-            style: AppTypography.bodyXs.copyWith(
+            style: AppTypography.body(size: 10).copyWith(
               color: mine
                   ? AppColors.primaryForeground.withValues(alpha: 0.75)
                   : AppColors.mutedForeground,
-              fontSize: 10,
             ),
           ),
         ],
@@ -119,15 +118,25 @@ class ChatBubble extends StatelessWidget {
               children: [
                 bubble,
                 if (canDelete)
-                  InkWell(
-                    onTap: onDelete,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2, right: 4, left: 4),
-                      child: Text(
-                        'delete',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                          fontSize: 10,
+                  Semantics(
+                    button: true,
+                    label: 'Delete this message',
+                    excludeSemantics: true,
+                    child: InkWell(
+                      onTap: onDelete,
+                      child: MinTapTarget(
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            top: 2,
+                            right: 4,
+                            left: 4,
+                          ),
+                          child: Text(
+                            'delete',
+                            style: AppTypography.body(size: 10).copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -292,9 +301,8 @@ class _EventCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'Posted by ${message.authorName} · ${Formatters.relativeTime(message.timestamp)}',
-                style: AppTypography.bodyXs.copyWith(
+                style: AppTypography.body(size: 10).copyWith(
                   color: AppColors.mutedForeground,
-                  fontSize: 10,
                 ),
               ),
               // RSVP is set on the game screen (tap this card) — shown here

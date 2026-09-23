@@ -44,93 +44,103 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final myStats = _computeMyStats(myGames, userId);
     final isMobile = AppBreakpoints.deviceOf(context).isMobile;
 
-    return AppPage(
+    return AppPage.slivers(
       maxWidth: 760,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const GroupContextHeader(title: 'History'),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            group.name.isNotEmpty
-                ? '${group.name} · all past games'
-                : 'All past games',
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          // Personal stats — the FIVE basic aggregate statistics (Tech §15.2:
-          // "No ROI, profit, investment, winnings, rebuy/add-on history,
-          // graphs, streaks or advanced filters").
-          GridView.count(
-            crossAxisCount: isMobile ? 3 : 5,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: AppSpacing.sm,
-            crossAxisSpacing: AppSpacing.sm,
-            childAspectRatio: isMobile ? 1.4 : 1.1,
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _MiniStat(label: 'Played', value: '${myStats.played}'),
-              _MiniStat(label: 'Wins', value: '${myStats.wins}'),
-              _MiniStat(label: 'Podium', value: '${myStats.podium}'),
-              _MiniStat(
-                label: 'Avg finish',
-                value: myStats.played == 0
-                    ? '—'
-                    : myStats.avgFinish.toStringAsFixed(1),
+              const GroupContextHeader(title: 'History'),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                group.name.isNotEmpty
+                    ? '${group.name} · all past games'
+                    : 'All past games',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
-              _MiniStat(label: 'KOs', value: '${myStats.knockouts}'),
-            ],
-          ),
-          // Admin P&L row — only organisers see financial totals (spec §2.4).
-          if (isAdmin) ...[
-            const SizedBox(height: AppSpacing.sm),
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              borderColor: AppColors.primary.withValues(alpha: 0.2),
-              child: Row(
+              const SizedBox(height: AppSpacing.xl),
+              // Personal stats — the FIVE basic aggregate statistics (Tech §15.2:
+              // "No ROI, profit, investment, winnings, rebuy/add-on history,
+              // graphs, streaks or advanced filters").
+              GridView.count(
+                crossAxisCount: isMobile ? 3 : 5,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: AppSpacing.sm,
+                crossAxisSpacing: AppSpacing.sm,
+                childAspectRatio: isMobile ? 1.4 : 1.1,
                 children: [
-                  Icon(Icons.account_balance_wallet_outlined, size: 16, color: AppColors.primary),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    'Organizer P&L',
-                    style: AppTypography.bodySm.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
+                  _MiniStat(label: 'Played', value: '${myStats.played}'),
+                  _MiniStat(label: 'Wins', value: '${myStats.wins}'),
+                  _MiniStat(label: 'Podium', value: '${myStats.podium}'),
+                  _MiniStat(
+                    label: 'Avg finish',
+                    value: myStats.played == 0
+                        ? '—'
+                        : myStats.avgFinish.toStringAsFixed(1),
                   ),
-                  const Spacer(),
-                  Text(
-                    Formatters.money('', myStats.totalPnl),
-                    style: AppTypography.monoSm.copyWith(
-                      color: myStats.totalPnl >= 0 ? AppColors.success : AppColors.destructive,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  _MiniStat(label: 'KOs', value: '${myStats.knockouts}'),
                 ],
               ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.xl),
-          AppTabs(
-            tabs: const [
-              AppTabItem(id: 'games', label: 'Games'),
-              AppTabItem(id: 'leaderboard', label: 'Leaderboard'),
-              AppTabItem(id: 'cash', label: 'Cash games'),
+              // Admin P&L row — only organisers see financial totals (spec §2.4).
+              if (isAdmin) ...[
+                const SizedBox(height: AppSpacing.sm),
+                AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  borderColor: AppColors.primary.withValues(alpha: 0.2),
+                  child: Row(
+                    children: [
+                      Icon(Icons.account_balance_wallet_outlined, size: 16, color: AppColors.primary),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        'Organizer P&L',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        Formatters.money('', myStats.totalPnl),
+                        style: AppTypography.monoSm.copyWith(
+                          // *Text variants: `success`/`destructive` are fill
+                          // colours and fail AA as text on this surface.
+                          color: myStats.totalPnl >= 0
+                              ? AppColors.successText
+                              : AppColors.destructiveText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.xl),
+              AppTabs(
+                tabs: const [
+                  AppTabItem(id: 'games', label: 'Games'),
+                  AppTabItem(id: 'leaderboard', label: 'Leaderboard'),
+                  AppTabItem(id: 'cash', label: 'Cash games'),
+                ],
+                active: _tab,
+                onChanged: (t) => setState(() => _tab = t),
+              ),
+              const SizedBox(height: AppSpacing.lg),
             ],
-            active: _tab,
-            onChanged: (t) => setState(() => _tab = t),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          if (_tab == 'games')
-            _buildGames(pastGames, userId, isAdmin)
-          else if (_tab == 'leaderboard')
-            _buildLeaderboard(pastGames, userId)
-          else
-            _buildCash(app.cashHistory, isAdmin),
-        ],
-      ),
+        ),
+        // The tab bodies are slivers, not boxes: `games` and `cash` are both
+        // unbounded lists, so their rows build only as they scroll into view.
+        if (_tab == 'games')
+          _buildGames(pastGames, userId, isAdmin)
+        else if (_tab == 'leaderboard')
+          SliverToBoxAdapter(child: _buildLeaderboard(pastGames, userId))
+        else
+          _buildCash(app.cashHistory, isAdmin),
+      ],
     );
   }
 
@@ -178,65 +188,59 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _buildGames(List<LiveGame> pastGames, String? userId, bool isAdmin) {
     if (pastGames.isEmpty) {
-      return AppCard(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          children: [
-            Icon(
-              Icons.style_outlined,
-              size: AppFontSizes.xxxl,
-              color: AppColors.icon,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'No completed games yet.',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ],
+      return SliverToBoxAdapter(
+        child: _emptyCard(
+          icon: Icons.style_outlined,
+          message: 'No completed games yet.',
         ),
       );
     }
-    return Column(
-      children: [
-        for (final game in pastGames) ...[
-          _HistoryRow(game: game, userId: userId, showAmounts: isAdmin),
-          const SizedBox(height: AppSpacing.sm),
-        ],
-      ],
+    return SliverList.builder(
+      itemCount: pastGames.length,
+      itemBuilder: (context, i) => Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+        child: _HistoryRow(
+          game: pastGames[i],
+          userId: userId,
+          showAmounts: isAdmin,
+        ),
+      ),
     );
   }
 
   Widget _buildCash(List<CashSession> sessions, bool isAdmin) {
     if (sessions.isEmpty) {
-      return AppCard(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          children: [
-            Icon(
-              Icons.payments_outlined,
-              size: AppFontSizes.xxxl,
-              color: AppColors.icon,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'No completed cash games yet.',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ],
+      return SliverToBoxAdapter(
+        child: _emptyCard(
+          icon: Icons.payments_outlined,
+          message: 'No completed cash games yet.',
         ),
       );
     }
-    return Column(
-      children: [
-        for (final session in sessions) ...[
-          _CashHistoryRow(session: session, showAmounts: isAdmin),
+    return SliverList.builder(
+      itemCount: sessions.length,
+      itemBuilder: (context, i) => Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+        child: _CashHistoryRow(session: sessions[i], showAmounts: isAdmin),
+      ),
+    );
+  }
+
+  Widget _emptyCard({required IconData icon, required String message}) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.xxl),
+      child: Column(
+        children: [
+          Icon(icon, size: AppFontSizes.xxxl, color: AppColors.icon),
           const SizedBox(height: AppSpacing.sm),
+          Text(
+            message,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
         ],
-      ],
+      ),
     );
   }
 
@@ -430,7 +434,7 @@ class _MiniStat extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xxs),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
@@ -466,9 +470,8 @@ class _LbStat extends StatelessWidget {
         ),
         Text(
           label,
-          style: AppTypography.bodyXs.copyWith(
+          style: AppTypography.body(size: 10).copyWith(
             color: AppColors.mutedForeground,
-            fontSize: 10,
           ),
         ),
       ],

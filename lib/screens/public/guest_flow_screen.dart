@@ -20,6 +20,7 @@ import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_timer.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/brand_lockup.dart';
+import '../../widgets/min_tap_target.dart';
 
 enum _GuestStep {
   enterCode,
@@ -612,8 +613,12 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        // Wrap, not Row — same reason as the identical block in JoinScreen:
+        // two unbounded Texts that together exceed a 320px phone's content
+        // width. "Sign in" moves to its own line rather than overflowing.
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
               'Have an account? ',
@@ -1689,18 +1694,20 @@ class _BackLink extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
-          const SizedBox(width: 4),
-          Text(
-            'Back',
-            style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
+      child: MinTapTarget(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              'Back',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -13,6 +13,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/min_tap_target.dart';
 
 /// User profile mirroring the account area of the web app.
 class ProfileScreen extends StatelessWidget {
@@ -76,11 +77,20 @@ class ProfileScreen extends StatelessWidget {
                     Positioned(
                       right: -2,
                       bottom: -2,
-                      child: InkWell(
+                      child: Tooltip(
+                        message: 'Change avatar colour',
+                        child: Semantics(
+                        button: true,
+                        label: 'Change avatar colour',
+                        child: InkWell(
                         onTap: () => _chooseAvatarColor(context, app),
                         customBorder: const CircleBorder(),
                         child: Container(
-                          padding: const EdgeInsets.all(14),
+                          // 17, not 14: 17 + 14 + 17 is exactly the 48px
+                          // minimum touch target. The badge is a visible
+                          // circle, so it grows to the floor rather than
+                          // hiding a transparent margin behind the avatar.
+                          padding: const EdgeInsets.all(17),
                           decoration: BoxDecoration(
                             color: AppColors.card,
                             shape: BoxShape.circle,
@@ -93,6 +103,8 @@ class ProfileScreen extends StatelessWidget {
                             size: 14,
                             color: AppColors.primary,
                           ),
+                        ),
+                        ),
                         ),
                       ),
                     ),
@@ -124,7 +136,7 @@ class ProfileScreen extends StatelessWidget {
                           ],
                         ],
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: AppSpacing.xxs),
                       Text(
                         user.email,
                         style: AppTypography.bodySm.copyWith(
@@ -141,28 +153,35 @@ class ProfileScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                InkWell(
-                  onTap: () => _editProfile(context, app),
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.edit_outlined,
-                          size: 16,
-                          color: AppColors.primary,
+                Semantics(
+                  button: true,
+                  label: 'Edit your profile',
+                  excludeSemantics: true,
+                  child: InkWell(
+                    onTap: () => _editProfile(context, app),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: MinTapTarget(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.edit_outlined,
+                              size: 16,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            Text(
+                              'Edit',
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.primaryText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Edit',
-                          style: AppTypography.bodySm.copyWith(
-                            color: AppColors.primaryText,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -327,17 +346,99 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _confirmDeleteAccount(BuildContext context, AppProvider app) {
-    showDialog<void>(
+  Future<void> _confirmDeleteAccount(
+    BuildContext context,
+    AppProvider app,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.card,
         title: const Text('Delete account?'),
         content: Text(
-          'This permanently removes your account and invalidates any live session. This cannot be undone.',
+          'This permanently removes your account and invalidates any live '
+          'session. This cannot be undone.',
           style: AppTypography.bodySm.copyWith(
             color: AppColors.mutedForeground,
           ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'Yes, delete my account',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.destructiveText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    // Firebase refuses `user.delete()` unless the sign-in is minutes old, so an
+    // email/password account has to re-present its password. Google and guest
+    // accounts re-authenticate without one (popup / no credential), so they
+    // skip straight through.
+    String? password;
+    if (app.deleteNeedsPassword) {
+      // The confirm dialog above was awaited, so this context may have gone
+      // away while it was open.
+      if (!context.mounted) return;
+      password = await _askPassword(context);
+      if (password == null) return;
+    }
+
+    final error = await app.deleteAccount(password: password);
+    if (error != null) {
+      messenger.showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    router.go(RoutePaths.landing);
+  }
+
+  /// Second step of deletion for password accounts. Returns null if dismissed.
+  Future<String?> _askPassword(BuildContext context) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Confirm your password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'For security, please re-enter your password to delete your '
+              'account.',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Password'),
+              onSubmitted: (v) => Navigator.of(dialogContext).pop(v),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -350,15 +451,12 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              app.deleteAccount();
-              context.go(RoutePaths.landing);
-            },
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
             child: Text(
-              'Delete',
+              'Delete account',
               style: AppTypography.bodySm.copyWith(
                 color: AppColors.destructiveText,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -448,7 +546,7 @@ class _ProfileRow extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpacing.xxs),
                   Text(
                     subtitle,
                     style: AppTypography.bodyXs.copyWith(
@@ -530,7 +628,7 @@ class _ProfileStat extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             label,
             style: AppTypography.bodyXs.copyWith(

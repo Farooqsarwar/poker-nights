@@ -16,6 +16,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/min_tap_target.dart';
 
 enum _CashActionType { buyIn, cashOut }
 
@@ -231,7 +232,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                         weight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: AppSpacing.xxs),
                     Row(
                       children: [
                         Container(
@@ -420,7 +421,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                                   label: 'Cashed out',
                                   variant: AppBadgeVariant.muted,
                                 ),
-                                const SizedBox(height: 2),
+                                const SizedBox(height: AppSpacing.xxs),
                                 Text(
                                   Formatters.signedMoney(
                                     currency,
@@ -645,23 +646,28 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      InkWell(
-                        onTap: () => setState(
-                          () => _editHasCashedOut = !_editHasCashedOut,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              _editHasCashedOut
-                                  ? Icons.check_box
-                                  : Icons.check_box_outline_blank,
-                              color: _editHasCashedOut
-                                  ? AppColors.primary
-                                  : AppColors.mutedForeground,
+                      Semantics(
+                        toggled: _editHasCashedOut,
+                        child: InkWell(
+                          onTap: () => setState(
+                            () => _editHasCashedOut = !_editHasCashedOut,
+                          ),
+                          child: MinTapTarget(
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _editHasCashedOut
+                                      ? Icons.check_box
+                                      : Icons.check_box_outline_blank,
+                                  color: _editHasCashedOut
+                                      ? AppColors.primary
+                                      : AppColors.mutedForeground,
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                const Text('Player has cashed out'),
+                              ],
                             ),
-                            const SizedBox(width: AppSpacing.sm),
-                            const Text('Player has cashed out'),
-                          ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
@@ -915,7 +921,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: AppSpacing.xxs),
                           Text(
                             'Chips in play do not equal buy-ins minus cash-outs. Resolve it in the reconciliation screen, or explicitly confirm ending with the mismatch.',
                             style: AppTypography.bodyXs.copyWith(
@@ -923,8 +929,11 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                             ),
                           ),
                           const SizedBox(height: AppSpacing.sm),
-                          InkWell(
+                          Semantics(
+                            toggled: _forceEnd,
+                            child: InkWell(
                             onTap: () => setState(() => _forceEnd = !_forceEnd),
+                            child: MinTapTarget(
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -934,7 +943,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                                       : Icons.check_box_outline_blank,
                                   size: 18,
                                   color: _forceEnd
-                                      ? AppColors.destructive
+                                      ? AppColors.destructiveText
                                       : AppColors.mutedForeground,
                                 ),
                                 const SizedBox(width: AppSpacing.xs),
@@ -947,6 +956,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                                   ),
                                 ),
                               ],
+                            ),
+                            ),
                             ),
                           ),
                           if (_forceEnd) ...[
@@ -1025,7 +1036,7 @@ class _CashStatCard extends StatelessWidget {
               color: valueColor ?? AppColors.foreground,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             label,
             style: AppTypography.bodyXs.copyWith(

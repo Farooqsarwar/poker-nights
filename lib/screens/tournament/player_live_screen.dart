@@ -154,28 +154,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: StructureAuditBanner(game: game),
             ),
-            // Connection status banner (tech spec §4.2 — stale-state).
-            Consumer<AppProvider>(
-              builder: (_, app, x) {
-                if (app.isOffline) {
-                  return AppAlertBanner(
-                    type: AppAlertType.warning,
-                    message:
-                        'Connection interrupted — showing last known state.',
-                    onDismiss: null,
-                  );
-                }
-                if (app.hasReconnected) {
-                  return AppAlertBanner(
-                    type: AppAlertType.success,
-                    message: 'Back online — data is live.',
-                    actionLabel: 'Dismiss',
-                    onAction: () => app.clearReconnectedBanner(),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
+            // Connection status (tech spec §4.2 — stale-state) now comes
+            // from ConnectionBanner in ScreenShell, which covers every route
+            // rather than only this one.
             if (game.status == LiveGameStatus.paused)
               const AppAlertBanner(
                 type: AppAlertType.warning,
@@ -206,7 +187,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                           weight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: AppSpacing.xxs),
                       Row(
                         children: [
                           Container(
@@ -263,7 +244,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                               icon: Icons.chat_bubble_outline,
                             ),
                             if (app.unreadGameChatCount(game.id) > 0) ...[
-                              const SizedBox(width: 4),
+                              const SizedBox(width: AppSpacing.xs),
                               ChatUnreadBadge(
                                 count: app.unreadGameChatCount(game.id),
                               ),
@@ -416,7 +397,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                           color: AppColors.mutedForeground,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: AppSpacing.xxs),
                       Row(
                         children: [
                           Column(
@@ -431,9 +412,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              if ((myPlayer.knockouts ?? 0) > 0)
+                              if (myPlayer.knockouts > 0)
                                 Text(
-                                  '${myPlayer.knockouts} knockout${myPlayer.knockouts! > 1 ? 's' : ''}',
+                                  '${myPlayer.knockouts} knockout${myPlayer.knockouts > 1 ? 's' : ''}',
                                   style: AppTypography.bodySm.copyWith(
                                     color: AppColors.primaryText,
                                     fontWeight: FontWeight.w600,
@@ -445,14 +426,20 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
+                              // The sheet's Busted/All-in pills carry a leading
+                              // glyph; "Active" gets the live dot instead, so
+                              // the two states differ by more than colour for
+                              // anyone who cannot distinguish red from green.
                               myPlayer.eliminated
                                   ? const AppBadge(
                                       label: 'Eliminated',
                                       variant: AppBadgeVariant.red,
+                                      icon: Icons.close,
                                     )
-                                  : const AppBadge(
+                                  : AppBadge(
                                       label: 'Active',
                                       variant: AppBadgeVariant.green,
+                                      dotColor: AppColors.success,
                                     ),
                               if (myPlayer.rebuys > 0)
                                 Padding(
@@ -562,7 +549,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                           color: AppColors.mutedForeground,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: AppSpacing.xxs),
                       Text(
                         latestAnn.text,
                         style: AppTypography.bodySm.copyWith(
@@ -1066,7 +1053,7 @@ class _StatCard extends StatelessWidget {
               color: valueColor ?? AppColors.foreground,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             label,
             textAlign: TextAlign.center,

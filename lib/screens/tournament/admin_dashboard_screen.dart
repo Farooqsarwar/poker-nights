@@ -48,10 +48,6 @@ class AdminDashboardScreen extends StatefulWidget {
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String _tab = 'players';
   final _announcementController = TextEditingController();
-  bool _showStructureModal = false;
-  bool _showRestartModal = false;
-  bool _showCancelModal = false;
-  bool _showUndoModal = false;
   bool _showedFinalTablePrompt = false;
   // Pending speed change shown in the preview modal (audit fix B4: the admin
   // must see old vs. proposed structure + both finish estimates BEFORE
@@ -123,7 +119,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     // with multiple tables. Single-table games must NOT trigger the redraw.
     final hadMultipleTables = game != null && game.players.any((p) => p.table > 1);
     final isNinePlayers = game != null && hadMultipleTables && game.activePlayers.length == 9;
-    if (isNinePlayers && game.status == LiveGameStatus.running && !_showStructureModal && !_showRestartModal && !_showCancelModal && !_showUndoModal && !_showedFinalTablePrompt) {
+    // The `!_show*Modal` flags that used to guard this condition were removed:
+    // they dated from when the structure/restart/cancel/undo modals were inline
+    // state, and once those moved to `showAppModal` (pushed routes) nothing set
+    // them again, so they had been reading `false` ever since. The check that
+    // actually keeps this prompt from stacking on top of an open modal is
+    // `ModalRoute.of(context)?.isCurrent` below.
+    if (isNinePlayers && game.status == LiveGameStatus.running && !_showedFinalTablePrompt) {
       _showedFinalTablePrompt = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && ModalRoute.of(context)?.isCurrent == true) {
@@ -213,6 +215,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               .clamp(0, 100)
               .toDouble();
 
+    // The money bubble, derived rather than stored. It is a fact about two
+    // numbers that already exist — how many players are left and how many get
+    // paid — so giving it a LiveGameStatus of its own would add persisted
+    // state that can disagree with them and a codec migration to go with it.
+    final paidPlaces = structure.prizes.length;
+    final playersLeft = activePlayers.length;
+    final liveNow = const {
+      LiveGameStatus.running,
+      LiveGameStatus.paused,
+      LiveGameStatus.rebuypause,
+      LiveGameStatus.finaltable,
+      LiveGameStatus.onBreak,
+    }.contains(status);
+    final onBubble = liveNow && paidPlaces > 0 && playersLeft == paidPlaces + 1;
+    final inTheMoney = liveNow && paidPlaces > 0 && playersLeft == paidPlaces;
+
     final device = AppBreakpoints.deviceOf(context);
     final timerSize = device.isMobile ? 54.0 : 64.0;
 
@@ -291,7 +309,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               icon: Icons.chat_bubble_outline,
                             ),
                             if (app.unreadGameChatCount(game.id) > 0) ...[
-                              const SizedBox(width: 4),
+                              const SizedBox(width: AppSpacing.xs),
                               ChatUnreadBadge(
                                 count: app.unreadGameChatCount(game.id),
                               ),
@@ -436,7 +454,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             icon: Icons.chat_bubble_outline,
                           ),
                           if (app.unreadGameChatCount(game.id) > 0) ...[
-                            const SizedBox(width: 4),
+                            const SizedBox(width: AppSpacing.xs),
                             ChatUnreadBadge(
                               count: app.unreadGameChatCount(game.id),
                             ),
@@ -533,6 +551,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 type: AppAlertType.error,
                 message:
                     'This tournament has been cancelled. Live controls are disabled.',
+              ),
+            ),
+          // The bubble is the loudest moment of the night and the one a host
+          // most often misses while running the clock. Announcing it is the
+          // whole feature — there is nothing to action, so no button.
+          if (onBubble)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: AppAlertBanner(
+                type: AppAlertType.warning,
+                message: 'On the bubble — $playersLeft left, $paidPlaces paid. '
+                    'The next player out wins nothing.',
+              ),
+            )
+          else if (inTheMoney)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: AppAlertBanner(
+                type: AppAlertType.success,
+                message: 'Bubble burst — everyone still playing is in the '
+                    'money.',
               ),
             ),
           // Speed recommendation — always previewed before applying
@@ -1380,7 +1419,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             color: AppColors.destructive,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpacing.xxs),
                         Text(
                           'Requires confirmation and a reason, which is recorded in the audit log and shared with members.',
                           style: AppTypography.bodyXs.copyWith(
@@ -1507,7 +1546,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ),
                         ],
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: AppSpacing.xxs),
                       Text(
                         'Table ${p.table} · Seat ${p.seat}',
                         style: AppTypography.bodyXs.copyWith(
@@ -2692,7 +2731,7 @@ class _TableCard extends StatelessWidget {
                         fontWeight: isDealer ? FontWeight.w700 : null,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: AppSpacing.xxs),
                     Text(
                       p.name,
                       maxLines: 1,
@@ -2770,7 +2809,7 @@ class _PrizeTab extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   'Payouts are calculated at the end of Level ${settings.rebuysCloseLevel}, '
                   'when the exact number of players, actual rebuys and selected add-ons are known.',
@@ -3095,9 +3134,9 @@ class _AuditTab extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpacing.xxs),
                         Text(record.details, style: AppTypography.bodySm),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpacing.xxs),
                         Text(
                           'by ${record.actor}',
                           style: AppTypography.bodyXs.copyWith(
@@ -3248,7 +3287,7 @@ class _PreviewCol extends StatelessWidget {
             duration,
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             'Est. finish ≈ $finish',
             style: AppTypography.monoSm.copyWith(color: AppColors.foreground),
@@ -3403,7 +3442,7 @@ class _AdminAppTourCard extends StatelessWidget {
                     letterSpacing: 1,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Text(
                   title,
                   style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
@@ -3427,4 +3466,3 @@ class _AdminAppTourCard extends StatelessWidget {
     );
   }
 }
-

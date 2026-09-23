@@ -38,6 +38,7 @@ class SearchBar extends StatelessWidget {
         suffixIcon: controller.text.isEmpty
             ? null
             : IconButton(
+                tooltip: 'Clear search',
                 icon: Icon(
                   Icons.close,
                   color: AppColors.mutedForeground,

@@ -439,7 +439,13 @@ service cloud.firestore {
         allow update: if signedIn()
             && request.auth.uid == uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-        allow delete: if false;
+        // The owner may delete their OWN inbox rows. This was `if false`, which
+        // silently broke account deletion: deleteAccount() batches these rows
+        // in with the rest of the profile, and one denied write rejects the
+        // WHOLE batch, so nothing was deleted at all. Nobody but the owner can
+        // reach this path -- `request.auth.uid == uid` is the same check that
+        // already gates read/create.
+        allow delete: if signedIn() && request.auth.uid == uid;
       }
 
       // Membership index mirror (one doc per joined group). The user manages
@@ -460,13 +466,20 @@ service cloud.firestore {
       // so a player can only ever record their own finish for that specific
       // game. The authoritative finish order / knockouts themselves remain
       // admin-gated on the game document — this row is the player's private
-      // mirror derived from it. Deletes are forbidden (history is immutable).
+      // mirror derived from it.
+      //
+      // Delete is the owner's, same as create/update. It used to be `if false`
+      // "because history is immutable", but `update` was already open to the
+      // owner, so the row was never immutable — the rule only succeeded in
+      // making the rows undeletable during account deletion, which left every
+      // departed user's results stranded in the database, readable by nobody
+      // and erasable by nobody. See `deleteAccount`, which now clears them.
       match /results/{resultId} {
         allow read: if signedIn() && request.auth.uid == uid;
         allow create, update: if signedIn()
             && request.auth.uid == uid
             && resultId == request.resource.data.get('gameId', '');
-        allow delete: if false;
+        allow delete: if signedIn() && request.auth.uid == uid;
       }
     }
 
@@ -791,7 +804,12 @@ service cloud.firestore {
           && request.resource.data.uid == request.auth.uid
           && resource.data.uid == request.auth.uid
           && request.resource.data.keys().hasOnly(['uid', 'name']);
-      allow delete: if false;
+      // The owner may remove their own row when deleting their account. Left at
+      // `if false`, a deleted account's address stayed resolvable forever and
+      // the admin "add member by email" flow would still find the dead uid.
+      // The row stores `uid`, so ownership is checkable exactly as `update`
+      // already does.
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     // ---------- pending member invites (free-plan replacement) ----------

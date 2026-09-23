@@ -51,6 +51,7 @@ class SupportScreen extends StatelessWidget {
         elevation: 0,
         title: Text('Support', style: AppTypography.displaySm),
         leading: IconButton(
+          tooltip: 'Back',
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
             if (GoRouter.of(context).canPop()) {

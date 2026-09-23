@@ -1,5 +1,7 @@
-import 'package:flutter/foundation.dart';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -23,15 +25,34 @@ import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
-import '../../widgets/glass_styles.dart';
+import '../../widgets/app_tabs.dart';
+import '../../widgets/app_text_field.dart';
+import '../../widgets/back_nav_button.dart';
+import '../../widgets/journey_progress.dart';
 import '../../widgets/medal_icon.dart';
-import '../../widgets/screen_shell.dart';
 import '../../widgets/structure_editor.dart';
 import '../../widgets/count_stepper.dart';
+import '../../widgets/min_tap_target.dart';
 
 /// Structure review mirroring the web `StructureReviewPage`.
-class StructureReviewScreen extends StatelessWidget {
+///
+/// Split into two tabs, Parameters and Blind Structure. Everything that FEEDS
+/// the generator sits on the first; everything the generator PRODUCED sits on
+/// the second. Before the split this was one scroll long enough that the
+/// numbers driving the blind curve and the curve itself could not be seen
+/// together, and the inputs were the part that lost.
+class StructureReviewScreen extends StatefulWidget {
   const StructureReviewScreen({super.key});
+
+  @override
+  State<StructureReviewScreen> createState() => _StructureReviewScreenState();
+}
+
+class _StructureReviewScreenState extends State<StructureReviewScreen> {
+  static const _tabParams = 'params';
+  static const _tabStructure = 'structure';
+
+  String _tab = _tabParams;
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +78,12 @@ class StructureReviewScreen extends StatelessWidget {
       );
     }
 
+    // Back honours the `?from=` query param so a host arriving from check-in
+    // returns there; a bare link falls back to the invitation default.
+    final backTo =
+        RoutePaths.structureReviewFrom(GoRouterState.of(context).uri) ??
+            RoutePaths.invitation;
+
     final structure = game.structure;
     final settings = game.settings;
     // Playing time the structure is PLANNED to take, not the length of every
@@ -76,17 +103,72 @@ class StructureReviewScreen extends StatelessWidget {
         : plannedMins + TournamentEngine.settlementBreakMins;
     final anteStartLevel =
         structure.levels.indexWhere((l) => l.ante != null) + 1;
-    final expectedRebuys = settings.rebuys
-        ? (settings.players * 0.35).round()
-        : 0;
-    final expectedAddOns = settings.addOn
-        ? (settings.players * 0.65).round()
-        : 0;
+    // The host's own figures when they set them, the engine's rates when they
+    // did not. This used to inline `players * 0.35` and `players * 0.65`, a
+    // third copy of constants that live in the model — so a host who raised
+    // expected rebuys saw the blind curve move but this total stay put.
+    final expectedRebuys = settings.effectiveExpectedRebuys;
+    final expectedReEntries = settings.effectiveExpectedReEntries;
+    final expectedAddOns = settings.effectiveExpectedAddOns;
+    // A re-entry replaces a stack already counted, so only a re-entry stack
+    // LARGER than the starting stack adds chips — the same rule the engine
+    // applies when it sizes the final blind.
+    final reEntryStack = settings.reEntryChips ?? structure.startingStack;
     final totalChips =
         settings.players * structure.startingStack +
         expectedRebuys * structure.rebuyStack +
+        expectedReEntries *
+            (reEntryStack - structure.startingStack).clamp(0, reEntryStack) +
         expectedAddOns * structure.addOnStack;
     final hasStructure = structure.levels.isNotEmpty;
+
+    // The schedule in the order the clock plays it: every level with the
+    // elapsed time it starts at, and the breaks sitting between them. Built
+    // here rather than taken from ClockSequence because this table shows the
+    // spare tail levels too — a host approving a structure should see the
+    // headroom the engine left them, even though the clock plans to stop
+    // before reaching it.
+    final schedule = <_ScheduleRow>[];
+    var elapsed = 0;
+    for (var i = 0; i < structure.levels.length; i++) {
+      final l = structure.levels[i];
+      schedule.add(
+        _ScheduleRow.level(index: i, startMins: elapsed),
+      );
+      elapsed += l.durationMins;
+      for (final b in structure.breaks) {
+        if (b.afterLevel == l.level && b.durationMins > 0) {
+          schedule.add(
+            _ScheduleRow.breakAfter(
+              breakMins: b.durationMins,
+              startMins: elapsed,
+            ),
+          );
+          elapsed += b.durationMins;
+        }
+      }
+    }
+
+    // What the blind curve actually does, per level. Measured on the levels
+    // the engine produced rather than re-derived from its target, so a
+    // hand-edited structure reports the curve it now has instead of the one it
+    // was generated as. Read-only: the growth factor is solved from the
+    // starting stack, the level length and the finish target, and offering it
+    // as an input would let a host contradict all three at once.
+    final plannedLadder =
+        structure.levels.take(structure.effectivePlannedLevels).toList();
+    final growthPerLevel = plannedLadder.length >= 2 && plannedLadder.first.bb > 0
+        ? math
+            .pow(
+              plannedLadder.last.bb / plannedLadder.first.bb,
+              1 / (plannedLadder.length - 1),
+            )
+            .toDouble()
+        : null;
+
+    /// Elapsed playing time as h:mm — a stopwatch reading, not a wall clock.
+    String elapsedClock(int mins) =>
+        '${mins ~/ 60}:${(mins % 60).toString().padLeft(2, '0')}';
 
     String hhmm(DateTime dt) =>
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
@@ -98,20 +180,18 @@ class StructureReviewScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Same journey strip the invitation and check-in screens carry
+            // (Task C), so the host keeps one fixed sense of where they are
+            // across all three pre-live screens.
+            JourneyProgress(
+              game: game,
+              currentRoute: RoutePaths.structureReview,
+              onStepTap: (step) => context.go(step.route),
+            ),
+            const SizedBox(height: AppSpacing.lg),
             Row(
               children: [
-                InkWell(
-                  onTap: () => context.go(RoutePaths.invitation),
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  child: Padding(
-                    padding: EdgeInsets.all(AppSpacing.xs),
-                    child: Icon(
-                      Icons.arrow_back,
-                      size: AppFontSizes.xl,
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ),
+                BackNavButton(onPressed: () => context.go(backTo)),
                 const SizedBox(width: AppSpacing.md),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -203,20 +283,15 @@ class StructureReviewScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          JourneyProgress(
+            game: game,
+            currentRoute: RoutePaths.structureReview,
+            onStepTap: (step) => context.go(step.route),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
-              InkWell(
-                onTap: () => context.go(RoutePaths.invitation),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(
-                    Icons.arrow_back,
-                    size: AppFontSizes.xl,
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-              ),
+              BackNavButton(onPressed: () => context.go(backTo)),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -241,6 +316,19 @@ class StructureReviewScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          AppTabs(
+            tabs: const [
+              AppTabItem(id: _tabParams, label: 'Parameters'),
+              AppTabItem(id: _tabStructure, label: 'Blind Structure'),
+            ],
+            active: _tab,
+            onChanged: (id) => setState(() => _tab = id),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          // ── Parameters tab ── everything that feeds the generator. The
+          // sections below keep their original indentation; re-indenting six
+          // hundred lines to sit under this guard would bury the change.
+          if (_tab == _tabParams) ...[
           AppAlertBanner(
             type: AppAlertType.info,
             message: game.structureConfirmed
@@ -258,19 +346,13 @@ class StructureReviewScreen extends StatelessWidget {
             tier: app.premiumTier,
           ),
           const SizedBox(height: AppSpacing.lg),
-          for (final w in structure.warnings)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: AppAlertBanner(type: AppAlertType.warning, message: w),
-            ),
-          // Chip inventory check (§4.5): compare the plan's total chip demand
-          // (starting stacks + expected rebuys + expected add-ons) against the
-          // physical chips the host owns. Shortages are flagged before publish.
-          ..._chipShortages(structure, settings).map(
-            (s) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: AppAlertBanner(type: AppAlertType.error, message: s),
-            ),
+          // Structure warnings and chip shortages (§4.5) share one expandable
+          // alert row so a bad config reads as a single "N issues" line above
+          // the parameters instead of a stack of banners. Display-only: every
+          // item renders in full when expanded — nothing is dropped.
+          _StructureReviewIssues(
+            warnings: structure.warnings,
+            shortages: _chipShortages(structure, settings),
           ),
           // Summary cards — use responsive widths so they don't overflow
           // on screens narrower than 360px.
@@ -329,6 +411,12 @@ class StructureReviewScreen extends StatelessWidget {
             ],
               );
             },
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _GenerationParamsCard(
+            settings: settings,
+            startingStack: structure.startingStack,
+            defaultLevelDuration: structure.levelDuration,
           ),
           const SizedBox(height: AppSpacing.lg),
           // Starting chip plan
@@ -446,6 +534,9 @@ class StructureReviewScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
+          ],
+          // ── Blind Structure tab ── everything the generator produced.
+          if (_tab == _tabStructure) ...[
           // Blind schedule
           AppCard(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -504,6 +595,18 @@ class StructureReviewScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (growthPerLevel != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Blinds grow ×${growthPerLevel.toStringAsFixed(2)} a level '
+                    'across the ${plannedLadder.length} planned levels — solved '
+                    'from the starting stack, the level length and your finish '
+                    'target.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.sm),
                 // Header
                 Padding(
@@ -511,29 +614,51 @@ class StructureReviewScreen extends StatelessWidget {
                   child: Row(
                     children: const [
                       Expanded(
+                        flex: 2,
                         child: _LevelCell(
                           label: 'Level',
                           align: TextAlign.left,
                         ),
                       ),
+                      // Elapsed playing time at the moment this level starts,
+                      // breaks included. "Level 9" tells a host nothing about
+                      // when they will be eating; "2:05" tells them exactly.
                       Expanded(
+                        flex: 3,
+                        child: _LevelCell(
+                          label: 'Start',
+                          align: TextAlign.right,
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: _LevelCell(
+                          label: 'Min',
+                          align: TextAlign.right,
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
                         child: _LevelCell(
                           label: 'Small',
                           align: TextAlign.right,
                         ),
                       ),
                       Expanded(
+                        flex: 3,
                         child: _LevelCell(label: 'Big', align: TextAlign.right),
                       ),
                       Expanded(
+                        flex: 3,
                         child: _LevelCell(
                           label: 'Ante',
                           align: TextAlign.right,
                         ),
                       ),
                       Expanded(
+                        flex: 3,
                         child: _LevelCell(
-                          label: 'BB Depth',
+                          label: 'BB',
                           align: TextAlign.right,
                         ),
                       ),
@@ -541,109 +666,189 @@ class StructureReviewScreen extends StatelessWidget {
                   ),
                 ),
                 Divider(color: AppColors.border, height: 1),
-                for (var i = 0; i < structure.levels.length; i++)
-                  Builder(
-                    builder: (context) {
-                      final l = structure.levels[i];
-                      final isRebuyClose =
-                          settings.rebuys &&
-                          l.level == settings.rebuysCloseLevel;
-                      final isAnteStart =
-                          l.ante != null &&
-                          (i == 0 || structure.levels[i - 1].ante == null);
-                      final bbDepth = (structure.startingStack / l.bb).round();
-                      return Container(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isAnteStart
-                              ? AppColors.primarySoft.withValues(alpha: 0.15)
-                              : null,
-                          border: isRebuyClose
-                              ? Border(
-                                  bottom: BorderSide(
-                                    color: AppColors.primary,
-                                    width: 2,
-                                  ),
-                                )
-                              : Border(
-                                  bottom: BorderSide(
-                                    color: AppColors.hairlineBorder,
-                                  ),
-                                ),
+                for (final row in schedule)
+                  if (row.isBreak)
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.secondary.withValues(alpha: 0.35),
+                        border: Border(
+                          bottom: BorderSide(color: AppColors.hairlineBorder),
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  Text(
-                                    '${l.level}',
-                                    style: AppTypography.monoXs.copyWith(
-                                      color: AppColors.mutedForeground,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: Icon(
+                              Icons.free_breakfast_outlined,
+                              size: 12,
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              elapsedClock(row.startMins),
+                              textAlign: TextAlign.right,
+                              style: AppTypography.monoXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              '${row.breakMins}',
+                              textAlign: TextAlign.right,
+                              style: AppTypography.monoXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 12,
+                            child: Text(
+                              'Break',
+                              textAlign: TextAlign.right,
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Builder(
+                      builder: (context) {
+                        final i = row.index;
+                        final l = structure.levels[i];
+                        final isRebuyClose = settings.rebuys &&
+                            l.level == settings.rebuysCloseLevel;
+                        final isAnteStart = l.ante != null &&
+                            (i == 0 || structure.levels[i - 1].ante == null);
+                        final bbDepth =
+                            (structure.startingStack / l.bb).round();
+                        return Container(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isAnteStart
+                                ? AppColors.primarySoft.withValues(alpha: 0.15)
+                                : null,
+                            border: isRebuyClose
+                                ? Border(
+                                    bottom: BorderSide(
+                                      color: AppColors.primary,
+                                      width: 2,
+                                    ),
+                                  )
+                                : Border(
+                                    bottom: BorderSide(
+                                      color: AppColors.hairlineBorder,
                                     ),
                                   ),
-                                  // Section 11 requires manual edits to carry
-                                  // a visible marker, so the host can see
-                                  // which rows are theirs before recalculating
-                                  // rather than finding out afterwards.
-                                  if (l.manuallyEdited) ...[
-                                    const SizedBox(width: 4),
-                                    Tooltip(
-                                      message: 'Edited by hand',
-                                      child: Icon(
-                                        Icons.edit_outlined,
-                                        size: 11,
-                                        color: AppColors.primary,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      '${l.level}',
+                                      style: AppTypography.monoXs.copyWith(
+                                        color: AppColors.mutedForeground,
                                       ),
                                     ),
+                                    // Section 11 requires manual edits to carry
+                                    // a visible marker, so the host can see
+                                    // which rows are theirs before
+                                    // recalculating rather than finding out
+                                    // afterwards.
+                                    if (l.manuallyEdited) ...[
+                                      const SizedBox(width: AppSpacing.xs),
+                                      Tooltip(
+                                        message: 'Edited by hand',
+                                        child: Icon(
+                                          Icons.edit_outlined,
+                                          size: 11,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ],
                                   ],
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                Formatters.chips(l.sb),
-                                textAlign: TextAlign.right,
-                                style: AppTypography.monoXs,
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                Formatters.chips(l.bb),
-                                textAlign: TextAlign.right,
-                                style: AppTypography.monoXs.copyWith(
-                                  color: AppColors.foreground,
-                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                l.ante != null
-                                    ? Formatters.chips(l.ante!)
-                                    : '—',
-                                textAlign: TextAlign.right,
-                                style: AppTypography.monoXs.copyWith(
-                                  color: l.ante != null
-                                      ? AppColors.accent
-                                      : AppColors.mutedForeground,
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  elapsedClock(row.startMins),
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
                                 ),
                               ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                '$bbDepth',
-                                textAlign: TextAlign.right,
-                                style: AppTypography.monoXs.copyWith(
-                                  color: AppColors.mutedForeground,
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  '${l.durationMins}',
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  Formatters.chips(l.sb),
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.monoXs,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  Formatters.chips(l.bb),
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: AppColors.foreground,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  l.ante != null
+                                      ? Formatters.chips(l.ante!)
+                                      : '—',
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: l.ante != null
+                                        ? AppColors.accent
+                                        : AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  '$bbDepth',
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                 if (settings.rebuys)
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -697,6 +902,39 @@ class StructureReviewScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Payout curve',
+                        style: AppTypography.bodySm,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 140,
+                      child: AppSelect<PayoutShape>(
+                        value: settings.payoutShape,
+                        items: [
+                          for (final shape in PayoutShape.values)
+                            DropdownMenuItem<PayoutShape>(
+                              value: shape,
+                              child: Text(shape.label),
+                            ),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) app.setPayoutShape(v);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  settings.payoutShape.blurb,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.xs),
                 if (!game.settlementConfirmed) ...[
                   const SizedBox(height: AppSpacing.md),
@@ -712,7 +950,7 @@ class StructureReviewScreen extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpacing.xxs),
                   Text(
                     'Prices are calculated at the end of Level ${settings.rebuysCloseLevel}, '
                     'when the exact number of players, actual rebuys and selected add-ons are known.',
@@ -767,6 +1005,38 @@ class StructureReviewScreen extends StatelessWidget {
                             style: AppTypography.monoSm.copyWith(
                               color: AppColors.primaryText,
                               fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  // A last place that pays back less than it cost to enter is
+                  // legal but rarely intended — it means the bubble is worth
+                  // more than the min-cash. Shown, not blocked: the host may
+                  // have chosen a deep flat curve on purpose.
+                  if (structure.prizes.isNotEmpty &&
+                      structure.prizes.last.amount < settings.buyIn)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: AppFontSizes.md,
+                            color: AppColors.warningText,
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              '${_placeName(structure.prizes.last.place)} pays '
+                              '${structure.prizes.last.amount}, less than the '
+                              '${settings.buyIn} buy-in. Pay fewer places, or '
+                              'use a flatter curve, if you want the last paid '
+                              'player to leave even.',
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
                             ),
                           ),
                         ],
@@ -887,7 +1157,9 @@ class StructureReviewScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
           ],
-          // Actions
+          ],
+          // Actions — outside both tabs: confirming, regenerating and sharing
+          // apply to the whole tournament, not to whichever tab is open.
           Row(
             children: [
               Expanded(
@@ -1203,6 +1475,284 @@ void _showAdjustModal(
   );
 }
 
+/// The numbers that drive the generator, as inputs instead of constants.
+///
+/// Expected rebuys, re-entries and add-ons were fixed rates — 35 %, 20 % and
+/// 65 % of the field — and every entry handed over exactly one starting stack.
+/// Both are guesses about a room the app has never seen, and they are not idle
+/// guesses: all four feed `expectedTotalChips`, which sets the final blind,
+/// which sets the growth rate of the whole schedule. A host whose group always
+/// rebuys had no way to say so.
+///
+/// Level length was likewise one of three presets chosen from the tournament's
+/// duration. Any length the engine will accept is now allowed.
+///
+/// Nothing here is required. Each box is prefilled with the figure the engine
+/// would have used, so a host who opens this card and changes nothing gets
+/// exactly the structure they got before — and Reset puts every box back.
+class _GenerationParamsCard extends StatefulWidget {
+  const _GenerationParamsCard({
+    required this.settings,
+    required this.startingStack,
+    required this.defaultLevelDuration,
+  });
+
+  final GameSettings settings;
+
+  /// The generated starting stack — the default chip amount for a rebuy, a
+  /// re-entry and an add-on alike.
+  final int startingStack;
+
+  /// The level length the engine picked, shown when the host has not set one.
+  final int defaultLevelDuration;
+
+  @override
+  State<_GenerationParamsCard> createState() => _GenerationParamsCardState();
+}
+
+class _GenerationParamsCardState extends State<_GenerationParamsCard> {
+  final _rebuys = TextEditingController();
+  final _reEntries = TextEditingController();
+  final _addOns = TextEditingController();
+  final _rebuyChips = TextEditingController();
+  final _reEntryChips = TextEditingController();
+  final _addOnChips = TextEditingController();
+  final _levelMins = TextEditingController();
+
+  /// Set by [_reset] so the next rebuild adopts the engine's figures outright
+  /// instead of trying to preserve what the host had typed.
+  bool _resetting = false;
+
+  static int _rebuysOf(_GenerationParamsCard w) =>
+      w.settings.effectiveExpectedRebuys;
+  static int _reEntriesOf(_GenerationParamsCard w) =>
+      w.settings.effectiveExpectedReEntries;
+  static int _addOnsOf(_GenerationParamsCard w) =>
+      w.settings.effectiveExpectedAddOns;
+  static int _rebuyChipsOf(_GenerationParamsCard w) =>
+      w.settings.rebuyChips ?? w.startingStack;
+  static int _reEntryChipsOf(_GenerationParamsCard w) =>
+      w.settings.reEntryChips ?? w.startingStack;
+  static int _addOnChipsOf(_GenerationParamsCard w) =>
+      w.settings.addOnChips ?? w.startingStack;
+  static int _levelMinsOf(_GenerationParamsCard w) =>
+      w.settings.levelDurationMins ?? w.defaultLevelDuration;
+
+  @override
+  void initState() {
+    super.initState();
+    _fillFrom(widget);
+  }
+
+  @override
+  void didUpdateWidget(covariant _GenerationParamsCard old) {
+    super.didUpdateWidget(old);
+    if (_resetting) {
+      _resetting = false;
+      _fillFrom(widget);
+      return;
+    }
+    // Resync only the boxes the host has not touched. Changing the player
+    // count moves the engine's own estimate, and a stale number left sitting
+    // in a box would be written back as a deliberate override on the next
+    // Apply — silently pinning the field to a figure nobody chose.
+    _resync(_rebuys, _rebuysOf(old), _rebuysOf(widget));
+    _resync(_reEntries, _reEntriesOf(old), _reEntriesOf(widget));
+    _resync(_addOns, _addOnsOf(old), _addOnsOf(widget));
+    _resync(_rebuyChips, _rebuyChipsOf(old), _rebuyChipsOf(widget));
+    _resync(_reEntryChips, _reEntryChipsOf(old), _reEntryChipsOf(widget));
+    _resync(_addOnChips, _addOnChipsOf(old), _addOnChipsOf(widget));
+    _resync(_levelMins, _levelMinsOf(old), _levelMinsOf(widget));
+  }
+
+  void _fillFrom(_GenerationParamsCard w) {
+    _rebuys.text = '${_rebuysOf(w)}';
+    _reEntries.text = '${_reEntriesOf(w)}';
+    _addOns.text = '${_addOnsOf(w)}';
+    _rebuyChips.text = '${_rebuyChipsOf(w)}';
+    _reEntryChips.text = '${_reEntryChipsOf(w)}';
+    _addOnChips.text = '${_addOnChipsOf(w)}';
+    _levelMins.text = '${_levelMinsOf(w)}';
+  }
+
+  void _resync(TextEditingController c, int was, int now) {
+    if (was == now) return;
+    if (c.text.trim() == '$was') c.text = '$now';
+  }
+
+  @override
+  void dispose() {
+    _rebuys.dispose();
+    _reEntries.dispose();
+    _addOns.dispose();
+    _rebuyChips.dispose();
+    _reEntryChips.dispose();
+    _addOnChips.dispose();
+    _levelMins.dispose();
+    super.dispose();
+  }
+
+  int _read(TextEditingController c, int fallback, {required int min, required int max}) {
+    final v = int.tryParse(c.text.trim()) ?? fallback;
+    return v.clamp(min, max);
+  }
+
+  void _apply() {
+    final s = widget.settings;
+    // An unreadable or out-of-range box is corrected rather than refused: the
+    // clamped figure is written straight back, so the host sees the number
+    // that was actually used instead of a rejection they have to decode.
+    final levelMins = _read(
+      _levelMins,
+      _levelMinsOf(widget),
+      min: TournamentEngine.kMinLevelDurationMins,
+      max: TournamentEngine.kMaxLevelDurationMins,
+    );
+    final rebuys = _read(_rebuys, _rebuysOf(widget), min: 0, max: 9999);
+    final reEntries =
+        _read(_reEntries, _reEntriesOf(widget), min: 0, max: 9999);
+    final addOns = _read(_addOns, _addOnsOf(widget), min: 0, max: 9999);
+    final rebuyChips =
+        _read(_rebuyChips, _rebuyChipsOf(widget), min: 1, max: 100000000);
+    final reEntryChips =
+        _read(_reEntryChips, _reEntryChipsOf(widget), min: 1, max: 100000000);
+    final addOnChips =
+        _read(_addOnChips, _addOnChipsOf(widget), min: 1, max: 100000000);
+
+    _levelMins.text = '$levelMins';
+    _rebuys.text = '$rebuys';
+    _reEntries.text = '$reEntries';
+    _addOns.text = '$addOns';
+    _rebuyChips.text = '$rebuyChips';
+    _reEntryChips.text = '$reEntryChips';
+    _addOnChips.text = '$addOnChips';
+
+    // A disabled entry type's boxes are not shown, so they are not sent —
+    // passing null leaves whatever was stored alone rather than writing a
+    // figure for something the tournament does not offer.
+    context.read<AppProvider>().updateGenerationParams(
+          levelDurationMins: levelMins,
+          expectedRebuys: s.rebuys ? rebuys : null,
+          rebuyChips: s.rebuys ? rebuyChips : null,
+          expectedReEntries: s.reEntry ? reEntries : null,
+          reEntryChips: s.reEntry ? reEntryChips : null,
+          expectedAddOns: s.addOn ? addOns : null,
+          addOnChips: s.addOn ? addOnChips : null,
+        );
+    FocusScope.of(context).unfocus();
+  }
+
+  void _reset() {
+    _resetting = true;
+    context.read<AppProvider>().updateGenerationParams(reset: true);
+    FocusScope.of(context).unfocus();
+  }
+
+  Widget _numberField(
+    TextEditingController controller,
+    String label, {
+    String? hint,
+  }) {
+    return AppTextField(
+      controller: controller,
+      label: label,
+      hint: hint,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      onSubmitted: (_) => _apply(),
+    );
+  }
+
+  Widget _pair(Widget left, Widget? right) {
+    if (right == null) return left;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: left),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(child: right),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.settings;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Generation parameters',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'What you expect to happen on the night. These set the total chips '
+            'in play, which sets how fast the blinds have to climb.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _numberField(
+            _levelMins,
+            'Level length (minutes)',
+            hint: '${TournamentEngine.kMinLevelDurationMins}–'
+                '${TournamentEngine.kMaxLevelDurationMins} minutes',
+          ),
+          if (s.rebuys) ...[
+            const SizedBox(height: AppSpacing.md),
+            _pair(
+              _numberField(_rebuys, 'Expected rebuys'),
+              _numberField(_rebuyChips, 'Rebuy chips'),
+            ),
+          ],
+          if (s.reEntry) ...[
+            const SizedBox(height: AppSpacing.md),
+            _pair(
+              _numberField(_reEntries, 'Expected re-entries'),
+              _numberField(
+                _reEntryChips,
+                'Re-entry chips',
+                hint: 'Only chips above the starting stack are new chips.',
+              ),
+            ),
+          ],
+          if (s.addOn) ...[
+            const SizedBox(height: AppSpacing.md),
+            _pair(
+              _numberField(_addOns, 'Expected add-ons'),
+              _numberField(_addOnChips, 'Add-on chips'),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  onPressed: _apply,
+                  child: const AppIconLabel(
+                    label: 'Apply & rebuild',
+                    trailing: Icons.auto_awesome,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AppButton(
+                variant: AppButtonVariant.secondary,
+                onPressed: _reset,
+                child: const Text('Reset'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({required this.label, required this.value});
 
@@ -1221,7 +1771,7 @@ class _SummaryCard extends StatelessWidget {
               color: AppColors.mutedForeground,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             value,
             style: AppTypography.mono(
@@ -1265,18 +1815,20 @@ class _PlayerCountCard extends StatelessWidget {
               color: AppColors.mutedForeground,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xxs),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              InkWell(
-                onTap: players > 2 ? () => onChanged(players - 1) : null,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: Icon(
-                    Icons.remove,
-                    size: 20,
-                    color: players > 2 ? AppColors.primary : AppColors.muted,
+              Tooltip(
+                message: 'One fewer player',
+                child: InkWell(
+                  onTap: players > 2 ? () => onChanged(players - 1) : null,
+                  child: MinTapTarget(
+                    child: Icon(
+                      Icons.remove,
+                      size: 20,
+                      color: players > 2 ? AppColors.primary : AppColors.muted,
+                    ),
                   ),
                 ),
               ),
@@ -1290,11 +1842,17 @@ class _PlayerCountCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              InkWell(
-                onTap: () => onChanged(players + 1),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4.0),
-                  child: Icon(Icons.add, size: 20, color: AppColors.primary),
+              Tooltip(
+                message: 'One more player',
+                child: InkWell(
+                  onTap: () => onChanged(players + 1),
+                  child: MinTapTarget(
+                    child: Icon(
+                      Icons.add,
+                      size: 20,
+                      color: AppColors.primary,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1361,6 +1919,29 @@ String _placeName(int place) {
   };
 }
 
+/// One row of the blind schedule table: a level, or a break between two.
+///
+/// Levels are held by index rather than by value so the row can still reach
+/// the level before it — the ante-start highlight needs the neighbour, and a
+/// break row sitting in between must not shift what "before" means.
+class _ScheduleRow {
+  const _ScheduleRow.level({required this.index, required this.startMins})
+      : breakMins = null;
+
+  const _ScheduleRow.breakAfter({
+    required int this.breakMins,
+    required this.startMins,
+  }) : index = -1;
+
+  final int index;
+  final int? breakMins;
+
+  /// Elapsed playing time, in minutes, when this row begins.
+  final int startMins;
+
+  bool get isBreak => breakMins != null;
+}
+
 class _LevelCell extends StatelessWidget {
   const _LevelCell({required this.label, required this.align});
 
@@ -1415,6 +1996,165 @@ class _ChipDot extends StatelessWidget {
                 Shadow(color: AppColors.shadowDeep, blurRadius: 2),
               ],
             ),
+      ),
+    );
+  }
+}
+
+/// Collapses the structure warnings and chip shortages (§4.5) into one
+/// expandable alert row. A bad config used to stack five or six full banners
+/// above the parameters; now it reads `⚠ N issues — tap to review`, and every
+/// warning and shortage arrives as its own row when expanded. The banner
+/// follows [AppAlertBanner]'s colour scheme — error when a shortage is present,
+/// warning otherwise.
+class _StructureReviewIssues extends StatefulWidget {
+  const _StructureReviewIssues({
+    required this.warnings,
+    required this.shortages,
+  });
+
+  final List<String> warnings;
+  final List<String> shortages;
+
+  @override
+  State<_StructureReviewIssues> createState() => _StructureReviewIssuesState();
+}
+
+class _StructureReviewIssuesState extends State<_StructureReviewIssues> {
+  /// Unpayable chip denominations block the night physically, so any shortage
+  /// opens the row expanded by default; a config raising only warnings starts
+  /// collapsed.
+  late bool _expanded = widget.shortages.isNotEmpty;
+
+  @override
+  void didUpdateWidget(covariant _StructureReviewIssues old) {
+    super.didUpdateWidget(old);
+    // Newly-appeared shortages (e.g. the player count was raised and the plan
+    // rebuilt) must not hide under a collapsed row.
+    if (widget.shortages.isNotEmpty && old.shortages.isEmpty) {
+      _expanded = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <({String message, IconData icon, Color color})>[
+      for (final w in widget.warnings)
+        (
+          message: w,
+          icon: Icons.warning_amber_rounded,
+          color: AppColors.warningText,
+        ),
+      for (final s in widget.shortages)
+        (
+          message: s,
+          icon: Icons.error_outline,
+          color: AppColors.destructiveText,
+        ),
+    ];
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    final hasShortages = widget.shortages.isNotEmpty;
+    final (background, border, foreground) = hasShortages
+        ? (
+            AppColors.destructiveSoft,
+            AppColors.destructive,
+            AppColors.destructiveForeground,
+          )
+        : (
+            AppColors.warningSoft,
+            AppColors.warning,
+            AppColors.warningForeground,
+          );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: background,
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: 10,
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    '⚠',
+                    style: AppTypography.bodySm.copyWith(color: foreground),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      '${rows.length} issue${rows.length == 1 ? '' : 's'} '
+                      '— tap to review',
+                      style: AppTypography.bodySm.copyWith(color: foreground),
+                    ),
+                  ),
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: AppFontSizes.md,
+                    color: foreground.withValues(alpha: 0.7),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: AppDurations.fast,
+            curve: Curves.easeOut,
+            child: _expanded
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Divider(color: AppColors.border, height: 1),
+                      for (var i = 0; i < rows.length; i++) ...[
+                        if (i > 0)
+                          Divider(
+                            color: AppColors.hairlineBorder,
+                            height: 1,
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: Icon(
+                                  rows[i].icon,
+                                  size: 14,
+                                  color: rows[i].color,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  rows[i].message,
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: AppColors.mutedForeground,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ],
       ),
     );
   }

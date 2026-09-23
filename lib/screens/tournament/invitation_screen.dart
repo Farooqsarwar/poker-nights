@@ -8,13 +8,12 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
-import '../../models/chip_color.dart';
 import '../../models/game.dart';
 import '../../models/group.dart';
 import '../../models/live_game.dart';
-import '../../models/tournament.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/event_settings_validation.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badge.dart';
@@ -24,14 +23,15 @@ import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
-import '../../widgets/app_toggle.dart';
 import '../../widgets/code_display.dart';
 import '../../widgets/rsvp_badge.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/glass_styles.dart';
-import '../../widgets/chip_set_editor.dart';
-import '../../widgets/count_stepper.dart';
+import '../../widgets/event_day_checklist.dart';
+import '../../widgets/event_settings_form.dart';
+import '../../widgets/journey_progress.dart';
+import '../../widgets/min_tap_target.dart';
 
 /// Invitation / RSVP page mirroring the web `InvitationPage`.
 class InvitationScreen extends StatefulWidget {
@@ -179,6 +179,14 @@ class _InvitationScreenState extends State<InvitationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Pre-live journey — persistent header shown across the invitation,
+          // structure and check-in screens (Task C). Tapping a step navigates
+          // to the screen that owns it.
+          JourneyProgress(
+            game: game,
+            currentRoute: RoutePaths.invitation,
+            onStepTap: (step) => context.go(step.route),
+          ),
           _PremiumEventHeader(
             game: game,
             showAddress: showAddress,
@@ -356,7 +364,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpacing.xxs),
                         Text(
                           'Cancel this game — requires a reason.',
                           style: AppTypography.bodyXs.copyWith(
@@ -449,71 +457,56 @@ class _InvitationScreenState extends State<InvitationScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           // Event-day preparation checklist (spec §4.6) — admin only, pre-live.
+          // Uses the shared [EventDayChecklist]; step 2 ("Open check-in")
+          // auto-derives through the [onOpenCheckIn] action.
           if (app.isAdmin &&
               game.status != LiveGameStatus.running &&
               game.status != LiveGameStatus.paused &&
               game.status != LiveGameStatus.finaltable &&
               game.status != LiveGameStatus.completed &&
               game.status != LiveGameStatus.cancelled) ...[
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              borderColor: AppColors.primary.withValues(alpha: 0.2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            EventDayChecklist(
+              game: game,
+              onOpenCheckIn: () {
+                if (game.status == LiveGameStatus.draft ||
+                    game.status == LiveGameStatus.published) {
+                  app.updateGameStatus(LiveGameStatus.checkin);
+                }
+                context.go(RoutePaths.checkIn);
+              },
+              onOpenTvMode: null,
+              onTestVoice: null,
+            ),
+            // Start status (B4) — the old "Start the tournament" checklist row
+            // only navigated; this is a status, not a button.
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Row(
                 children: [
-                  Text(
-                    'Event-day checklist',
-                    style: AppTypography.bodySm.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
+                  Icon(
+                    app.startBlockedReason == null
+                        ? Icons.check_circle_outline
+                        : Icons.info_outline,
+                    size: 16,
+                    color: app.startBlockedReason == null
+                        ? AppColors.success
+                        : AppColors.mutedForeground,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      app.startBlockedReason == null
+                          ? 'Ready to start the tournament.'
+                          : app.startBlockedReason!,
+                      style: AppTypography.bodyXs.copyWith(
+                        color: app.startBlockedReason == null
+                            ? AppColors.success
+                            : AppColors.foreground,
+                        fontWeight: app.startBlockedReason == null
+                            ? FontWeight.w600
+                            : null,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Walk through preparation in order — no need to remember the sequence.',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  _ChecklistRow(
-                    label: 'Open check-in',
-                    done:
-                        (game.status == LiveGameStatus.checkin ||
-                            game.status == LiveGameStatus.ready) ||
-                        game.players.any((p) => p.checkedIn),
-                    actionLabel: 'Open',
-                    onAction: () {
-                      if (game.status == LiveGameStatus.draft ||
-                          game.status == LiveGameStatus.published) {
-                        app.updateGameStatus(LiveGameStatus.checkin);
-                      }
-                      context.go(RoutePaths.checkIn);
-                    },
-                  ),
-                  _ChecklistRow(
-                    label: 'Generate structure estimate',
-                    done:
-                        game.structure.levels.isNotEmpty &&
-                        game.structureConfirmed,
-                    actionLabel: game.structure.levels.isNotEmpty
-                        ? 'Review'
-                        : 'Generate',
-                    onAction: () => context.go(RoutePaths.structureReview),
-                  ),
-                  _ChecklistRow(
-                    label: 'Confirm seating (at check-in)',
-                    done: game.seatingConfirmed,
-                    actionLabel: 'Seating',
-                    onAction: () => context.go(RoutePaths.checkIn),
-                  ),
-                  _ChecklistRow(
-                    label: 'Start the tournament',
-                    done:
-                        game.status == LiveGameStatus.running ||
-                        game.status == LiveGameStatus.paused,
-                    actionLabel: 'Dashboard',
-                    onAction: () => context.go(RoutePaths.adminDashboard),
                   ),
                 ],
               ),
@@ -946,6 +939,7 @@ class _Detail extends StatelessWidget {
   final Color? valueColor;
   final bool mono;
 
+  @override
   Widget build(BuildContext context) {
     return Container(
       width: 160,
@@ -1044,7 +1038,7 @@ class _StructureStatusCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   hasStructure
                       ? 'Stacks, blinds, levels and chips are set. Review or edit any time before the game; stacks freeze when play starts.'
@@ -1252,7 +1246,7 @@ void _showAdminRsvpOverride(
             'Tournament organizer',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             game.isOrganizer(p.id)
                 ? '${p.name} can run this tournament — rebuys, add-ons, '
@@ -1294,7 +1288,7 @@ void _openEditModal(BuildContext context, AppProvider app, LiveGame game) {
     context: context,
     title: 'Edit event details',
     maxWidth: 520,
-    child: _EditEventForm(
+    child: _EditEventModalBody(
       settings: game.settings,
       onSave: (next, {bool clearRsvps = false}) {
         app.updateEventSettings(next, clearRsvps: clearRsvps);
@@ -1304,258 +1298,67 @@ void _openEditModal(BuildContext context, AppProvider app, LiveGame game) {
   );
 }
 
-/// Admin form to edit an existing event's details. Changes are audited and
-/// members are notified via [AppProvider.updateEventSettings] (checklist §10.4).
-class _EditEventForm extends StatefulWidget {
-  const _EditEventForm({required this.settings, required this.onSave});
+/// Modal body for editing an existing event's details. Mounts the shared
+/// [EventSettingsForm] (all four sections, organizational costs shown) and
+/// owns the two things that form deliberately does not: the confirmation
+/// prompt that clears RSVPs when the scheduled date or time changed, and the
+/// legacy org-% ceiling for games saved under the old 0-100 rule.
+///
+/// The [initial] seeded into [EventSettingsForm] is the untouched
+/// [GameSettings], never a draft; the parent tracks the draft via [onChanged].
+class _EditEventModalBody extends StatefulWidget {
+  const _EditEventModalBody({required this.settings, required this.onSave});
 
   final GameSettings settings;
   final void Function(GameSettings, {bool clearRsvps}) onSave;
 
   @override
-  State<_EditEventForm> createState() => _EditEventFormState();
+  State<_EditEventModalBody> createState() => _EditEventModalBodyState();
 }
 
-class _EditEventFormState extends State<_EditEventForm> {
-  late final TextEditingController _name;
-  late final TextEditingController _date;
-  late final TextEditingController _time;
-  late final TextEditingController _location;
-  late final TextEditingController _buyIn;
-  late final TextEditingController _rebuyCost;
-  late final TextEditingController _addOnCost;
-  late final TextEditingController _koAmount;
-  late bool _locationPrivate;
-  late double _duration;
-  late bool _rebuys;
-  late bool _rebuyUnlimited;
-  late int _rebuysClose;
-  late bool _rebuyCloseChosen;
-  late bool _reEntry;
-  late bool _addOn;
-  late int _addOnClose;
-  late bool _koEnabled;
-  late AntePreference _antePreference;
-  late int _anteAfterLevel;
-  late final TextEditingController _orgPct;
-
-  /// Spec 7 caps organizer cost at 20%. This form edits games that already
-  /// exist, some created under the old 0-100 rule, so the ceiling is raised to
-  /// whatever the game was saved with when that is higher. An existing figure
-  /// is never silently rewritten — it can only be reduced.
-  late final int _orgPctCeiling;
-
-  /// User Flow 4.5: chips may be configured "before the event or shortly
-  /// before check-in closes". Until now the set was frozen at publish, so a
-  /// host who found a different tray on the night had no way to tell the app.
-  late List<ChipColor> _chipSet;
-  late String _chipSetName;
-  bool _chipsEdited = false;
-
-  /// Tech 6.1 admin override of the expected head-count.
-  late int _expectedPlayers;
-  late bool _expectedOverridden;
+class _EditEventModalBodyState extends State<_EditEventModalBody> {
+  late GameSettings _draft;
+  final DateTime _now = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    final s = widget.settings;
-    _name = TextEditingController(text: s.name);
-    _date = TextEditingController(text: s.date);
-    _time = TextEditingController(text: s.time);
-    _location = TextEditingController(text: s.location);
-    _buyIn = TextEditingController(text: '${s.buyIn}');
-    _rebuyCost = TextEditingController(text: s.rebuyCost?.toString() ?? '');
-    _addOnCost = TextEditingController(text: s.addOnCost?.toString() ?? '');
-    _koAmount = TextEditingController(text: '${s.koAmount}');
-    _locationPrivate = s.locationPrivate;
-    _duration = s.durationHours;
-    _rebuys = s.rebuys;
-    _rebuyUnlimited = s.rebuysCloseLevel >= 6;
-    _rebuysClose = s.rebuysCloseLevel;
-    _rebuyCloseChosen = s.rebuyCloseChosenByOrganizer;
-    _reEntry = s.reEntry;
-    _addOn = s.addOn;
-    _addOnClose = s.addOnCloseLevel;
-    _koEnabled = s.koEnabled;
-    _antePreference = s.antePreference;
-    _anteAfterLevel = s.anteAfterLevel;
-    _orgPct = TextEditingController(text: '${s.organizerPct}');
-    _orgPctCeiling = s.organizerPct > 20 ? s.organizerPct : 20;
-    _chipSet = List.of(s.chipSet);
-    _chipSetName = s.chipSetName;
-    _expectedOverridden = s.expectedPlayersOverride != null;
-    _expectedPlayers = s.expectedPlayersOverride ?? s.players;
+    _draft = widget.settings;
   }
 
-  @override
-  void dispose() {
-    for (final c in [
-      _name,
-      _date,
-      _time,
-      _location,
-      _buyIn,
-      _rebuyCost,
-      _addOnCost,
-      _koAmount,
-      _orgPct,
-    ]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
+  /// Mirrors the old `_EditEventForm._save()` RSVP-clearing rule: a changed
+  /// date or time asks the host whether to clear existing RSVPs. Reads the
+  /// incoming draft as emitted through [EventSettingsForm.onChanged].
+  bool get _dateOrTimeChanged =>
+      _draft.date != widget.settings.date ||
+      _draft.time != widget.settings.time;
 
-  /// Opens the shared [ChipSetEditor] over this form. The edit is staged in
-  /// local state and only committed by the form's own Save, so backing out of
-  /// the sheet leaves the published event alone.
-  void _openChipEditor(BuildContext context) {
-    var chips = List.of(_chipSet);
-    var name = _chipSetName;
-    showAppModal(
-      context: context,
-      title: 'Chip set',
-      maxWidth: 520,
-      child: StatefulBuilder(
-        builder: (modalContext, setModalState) {
-          // Two colours on the same denomination make the blind ladder
-          // ambiguous, so the commit button is disabled rather than silently
-          // doing nothing — the editor shows why inline.
-          final values = chips.map((c) => c.value).toList();
-          final valid =
-              chips.isNotEmpty && values.toSet().length == values.length;
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ChipSetEditor(
-                initial: chips,
-                initialName: name,
-                onChanged: (next, nextName) => setModalState(() {
-                  chips = next;
-                  name = nextName;
-                }),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              AppButton(
-                fullWidth: true,
-                onPressed: valid
-                    ? () {
-                        setState(() {
-                          _chipSet = chips;
-                          _chipSetName = name;
-                          _chipsEdited = true;
-                        });
-                        Navigator.of(modalContext).pop();
-                      }
-                    : null,
-                child: const Text('Use these chips'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
+  /// Spec 7 caps organizer cost at 20%. This modal edits games that already
+  /// exist, some created under the old 0-100 rule, so the ceiling is raised
+  /// to whatever the game was saved with when that is higher. An existing
+  /// figure is never silently rewritten — it can only be reduced.
+  int get _orgPctCeiling =>
+      widget.settings.organizerPct > GameSettings.maxOrganizerPct
+          ? widget.settings.organizerPct
+          : GameSettings.maxOrganizerPct;
 
   void _save() {
-    final s = widget.settings;
-    // Validate required fields before saving.
-    final name = _name.text.trim();
-    if (name.isEmpty) {
+    // Gate on everything except the org %. A legacy game stored above 20 is
+    // legal (it may only be reduced, see [_orgPctCeiling]), so flagging it
+    // here would lock the host out of every other edit on that game.
+    final blockers = {
+      for (final entry in validateEventSettings(_draft, now: _now).entries)
+        if (entry.key != 'orgPct') entry.key: entry.value,
+    };
+    if (blockers.isNotEmpty) {
       showAppModal(
         context: context,
         title: 'Validation Error',
-        child: const Text('Event name cannot be empty.'),
+        child: Text(blockers.values.first),
       );
       return;
     }
-    final buyInVal = num.tryParse(_buyIn.text) ?? 0;
-    if (buyInVal <= 0) {
-      showAppModal(
-        context: context,
-        title: 'Validation Error',
-        child: const Text('Buy-in must be a positive number.'),
-      );
-      return;
-    }
-    final newDate = _date.text.trim().isEmpty ? s.date : _date.text.trim();
-    final newTime = _time.text.trim().isEmpty ? s.time : _time.text.trim();
-    // Validate date format if changed.
-    if (newDate != s.date) {
-      final parsed = DateTime.tryParse(newDate);
-      if (parsed == null) {
-        showAppModal(
-          context: context,
-          title: 'Validation Error',
-          child: const Text('Invalid date format (YYYY-MM-DD).'),
-        );
-        return;
-      }
-    }
-    // Spec §12.2: reject a past date AND a past time on today's date — the
-    // same rule the creation wizard enforces in its step-1 validation.
-    if (newDate != s.date || newTime != s.time) {
-      final parsed = DateTime.tryParse(newDate);
-      if (parsed != null) {
-        final parts = newTime.split(':');
-        final h = int.tryParse(parts.isNotEmpty ? parts[0] : '');
-        final m = int.tryParse(parts.length > 1 ? parts[1] : '');
-        if (h != null && m != null && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-          final scheduled = DateTime(
-            parsed.year,
-            parsed.month,
-            parsed.day,
-            h,
-            m,
-          );
-          if (scheduled.isBefore(DateTime.now())) {
-            showAppModal(
-              context: context,
-              title: 'Validation Error',
-              child: const Text('Start time must be in the future.'),
-            );
-            return;
-          }
-        }
-      }
-    }
-    // `players` itself stays derived from RSVPs and check-in; what the host
-    // edits here is the OVERRIDE, which the structure generator prefers when
-    // it is set (Tech 6.1).
-    final newS = s.copyWith(
-      chipSet: _chipsEdited ? _chipSet : null,
-      chipSetName: _chipsEdited ? _chipSetName : null,
-      expectedPlayersOverride: _expectedOverridden ? _expectedPlayers : null,
-      clearExpectedPlayersOverride: !_expectedOverridden,
-      name: name,
-      date: newDate,
-      time: newTime,
-      location: _location.text.trim(),
-      buyIn: num.tryParse(_buyIn.text)?.toInt() ?? s.buyIn,
-      locationPrivate: _locationPrivate,
-      durationHours: _duration,
-      rebuys: _rebuys,
-      rebuysCloseLevel: _rebuys ? _rebuysClose : 0,
-      rebuyCloseChosenByOrganizer: _rebuys ? _rebuyCloseChosen : false,
-      reEntry: _reEntry,
-      addOn: _addOn,
-      addOnCloseLevel: _addOnClose,
-      koEnabled: _koEnabled,
-      koAmount: num.tryParse(_koAmount.text)?.toInt() ?? s.koAmount,
-      rebuyCost: _rebuys ? (num.tryParse(_rebuyCost.text)?.toInt()) : null,
-      addOnCost: _addOn ? (num.tryParse(_addOnCost.text)?.toInt()) : null,
-      antePreference: _antePreference,
-      anteAfterLevel: _anteAfterLevel,
-      anteEnabled: _antePreference != AntePreference.none,
-      anteStyle: _antePreference == AntePreference.individual
-          ? AnteStyle.individual
-          : AnteStyle.bigBlind,
-      organizerPct: (int.tryParse(_orgPct.text.trim()) ?? s.organizerPct)
-          .clamp(0, _orgPctCeiling),
-    );
-
-    if (s.date != newDate || s.time != newTime) {
+    if (_dateOrTimeChanged) {
       showAppModal(
         context: context,
         title: 'Date or Time Changed',
@@ -1570,7 +1373,7 @@ class _EditEventFormState extends State<_EditEventForm> {
               variant: AppButtonVariant.destructive,
               onPressed: () {
                 Navigator.pop(context);
-                widget.onSave(newS, clearRsvps: true);
+                widget.onSave(_draft, clearRsvps: true);
               },
               child: const Text('Clear RSVPs'),
             ),
@@ -1579,330 +1382,40 @@ class _EditEventFormState extends State<_EditEventForm> {
               variant: AppButtonVariant.secondary,
               onPressed: () {
                 Navigator.pop(context);
-                widget.onSave(newS, clearRsvps: false);
+                widget.onSave(_draft, clearRsvps: false);
               },
               child: const Text('Keep RSVPs'),
             ),
           ],
         ),
       );
-    } else {
-      widget.onSave(newS);
+      return;
     }
+    widget.onSave(_draft);
   }
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppTextField(controller: _name, label: 'Name'),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            Expanded(
-              child: AppTextField(controller: _date, label: 'Date'),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: AppTextField(controller: _time, label: 'Start time'),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        AppTextField(controller: _location, label: 'Location (optional)'),
-        const SizedBox(height: AppSpacing.sm),
-        _ToggleRow(
-          title: 'Keep address private',
-          subtitle: 'Hidden on public views until check-in',
-          value: _locationPrivate,
-          onChanged: (v) => setState(() => _locationPrivate = v),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        AppTextField(
-          controller: _buyIn,
-          label: 'Buy-in',
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Divider(color: AppColors.border),
-        const SizedBox(height: AppSpacing.sm),
-        // Tech 6.1 — admin override of the expected head-count.
-        _EditRow(
-          title: 'Expected players',
-          subtitle: _expectedOverridden
-              ? 'Planning for this many, whatever the RSVPs say'
-              : 'Following RSVPs. Set a number to plan for more.',
-          trailing: CountStepper(
-            value: _expectedPlayers,
-            min: 2,
-            max: 200,
-            semanticLabel: 'Expected players',
-            onChanged: (v) => setState(() {
-              _expectedPlayers = v;
-              _expectedOverridden = true;
-            }),
-          ),
-        ),
-        if (_expectedOverridden)
-          Align(
-            alignment: Alignment.centerRight,
-            child: InkWell(
-              onTap: () => setState(() {
-                _expectedOverridden = false;
-                _expectedPlayers = widget.settings.players;
-              }),
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.xs),
-                child: Text(
-                  'Follow RSVPs instead',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.primaryText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        const SizedBox(height: AppSpacing.sm),
-        // User Flow 4.5 — chips stay editable right up to check-in closing.
-        _EditRow(
-          title: 'Chip set',
-          subtitle: _chipsEdited
-              ? '${_chipSet.length} colours (edited)'
-              : (_chipSetName.isEmpty ? 'Custom' : _chipSetName),
-          trailing: AppButton(
-            variant: AppButtonVariant.secondary,
-            onPressed: () => _openChipEditor(context),
-            child: const Text('Change chips'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Divider(color: AppColors.border),
-        const SizedBox(height: AppSpacing.sm),
-        _SegmentedPicker(
-          label: 'Duration',
-          options: const ['3h', '3.5h', '4h', '4.5h', '5h', '5.5h', '6h'],
-          selected:
-              '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h',
-          onChanged: (v) {
-            final val = v.replaceAll('h', '');
-            setState(() => _duration = double.tryParse(val) ?? 4.0);
+        EventSettingsForm(
+          initial: widget.settings,
+          // The four-section mount: details/chips/rules/money. `rules` is the
+          // monolithic section covering rebuys+add-ons AND format, so this
+          // paints every field exactly once. A plain `values.toSet()` would
+          // also pull in the fine-grained `rebuys`/`format` section values
+          // the creation wizard mounts, rendering the rules fields twice.
+          sections: const {
+            EventFormSection.details,
+            EventFormSection.chips,
+            EventFormSection.rules,
+            EventFormSection.money,
           },
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        _EditRow(
-          title: 'Rebuys & re-entry',
-          subtitle: 'Players can buy back in after elimination',
-          trailing: _SegmentedPicker(
-            options: const ['Off', 'Limited', 'Unlimited'],
-            selected: _rebuys
-                ? (_rebuyUnlimited ? 'Unlimited' : 'Limited')
-                : 'Off',
-            onChanged: (v) => setState(() {
-              if (v == 'Off') {
-                _rebuys = false;
-                _rebuyUnlimited = false;
-              } else if (v == 'Limited') {
-                _rebuys = true;
-                _rebuyUnlimited = false;
-              } else {
-                _rebuys = true;
-                _rebuyUnlimited = true;
-                _rebuysClose = 6;
-              }
-              // Sections 7 and 32 make these one toggle, but this form edits
-              // games that ALREADY EXIST. Turning the pair off turns both off;
-              // turning it on does NOT retroactively enable re-entry on a game
-              // that was deliberately created without it, because that would
-              // change the engine's chip projection and unlock a live action
-              // the host never agreed to. Re-entry follows only when it is
-              // being switched off, or when it was already on.
-              if (!_rebuys) _reEntry = false;
-            }),
-          ),
-        ),
-        if (_rebuys && !_rebuyUnlimited)
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpacing.lg,
-              top: AppSpacing.sm,
-            ),
-            child: _SegmentedPicker(
-              label: 'Close rebuys',
-              options: const ['End L4', 'End L5', 'End L6', 'End L7', 'End L8'],
-              selected: 'End L$_rebuysClose',
-              onChanged: (v) => setState(() {
-                    _rebuysClose = int.tryParse(v.replaceAll('End L', '')) ?? 6;
-                    _rebuyCloseChosen = true;
-              }),
-            ),
-          ),
-        if (_rebuys && _rebuyUnlimited)
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpacing.lg,
-              top: AppSpacing.sm,
-            ),
-            child: Text(
-              'Unlimited rebuys until the end of Level 6.',
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ),
-        if (_rebuys)
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpacing.lg,
-              top: AppSpacing.sm,
-            ),
-            child: AppTextField(
-              controller: _rebuyCost,
-              label: 'Rebuy price (optional)',
-              keyboardType: TextInputType.number,
-              placeholder: 'Default (${_buyIn.text})',
-            ),
-          ),
-        const SizedBox(height: AppSpacing.sm),
-        // The standalone "Re-entry" switch was removed: sections 7 and 32 make
-        // rebuy and re-entry a single ON/OFF. A game created before that
-        // change keeps whatever it was stored with -- the control above only
-        // clears re-entry when the pair is switched off.
-        if (_rebuys && !_reEntry)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Text(
-              'This game was set up with rebuys but without re-entry. '
-              'That is kept as it is.',
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ),
-        _EditRow(
-          title: 'Add-on',
-          subtitle: 'One per active player at rebuy close',
-          trailing: _SegmentedPicker(
-            options: const ['Yes', 'No'],
-            selected: _addOn ? 'Yes' : 'No',
-            onChanged: (v) => setState(() => _addOn = v == 'Yes'),
-          ),
-        ),
-        if (_addOn) ...[
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpacing.lg,
-              top: AppSpacing.sm,
-            ),
-            child: AppTextField(
-              controller: _addOnCost,
-              label: 'Add-on price (optional)',
-              keyboardType: TextInputType.number,
-              placeholder: 'Default (${_buyIn.text})',
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpacing.lg,
-              top: AppSpacing.sm,
-            ),
-            child: _SegmentedPicker(
-              label: 'Add-on available until',
-              options: const ['End L4', 'End L5', 'End L6', 'End L7', 'End L8'],
-              selected: 'End L$_addOnClose',
-              onChanged: (v) => setState(
-                () =>
-                    _addOnClose = int.tryParse(v.replaceAll('End L', '')) ?? 6,
-              ),
-            ),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sm),
-        _EditRow(
-          title: 'KO bounty',
-          subtitle: 'Side payment for eliminating a player',
-          trailing: _SegmentedPicker(
-            options: const ['Yes', 'No'],
-            selected: _koEnabled ? 'Yes' : 'No',
-            onChanged: (v) => setState(() => _koEnabled = v == 'Yes'),
-          ),
-        ),
-        if (_koEnabled)
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpacing.lg,
-              top: AppSpacing.sm,
-            ),
-            child: AppTextField(
-              controller: _koAmount,
-              label: 'Bounty amount',
-              keyboardType: TextInputType.number,
-            ),
-          ),
-        const SizedBox(height: AppSpacing.sm),
-        _EditRow(
-          title: 'Ante',
-          subtitle: 'How the ante is posted',
-          trailing: _SegmentedPicker(
-            options: const [
-              'Recommended',
-              'No ante',
-              'Big blind',
-              'Individual',
-            ],
-            selected: switch (_antePreference) {
-              AntePreference.recommend => 'Recommended',
-              AntePreference.none => 'No ante',
-              AntePreference.bigBlind => 'Big blind',
-              AntePreference.individual => 'Individual',
-            },
-            onChanged: (v) => setState(
-              () => _antePreference = switch (v) {
-                'No ante' => AntePreference.none,
-                'Big blind' => AntePreference.bigBlind,
-                'Individual' => AntePreference.individual,
-                _ => AntePreference.recommend,
-              },
-            ),
-          ),
-        ),
-        if (_antePreference != AntePreference.none)
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpacing.lg,
-              top: AppSpacing.sm,
-            ),
-            child: _SegmentedPicker(
-              label: 'Activate ante',
-              options: const [
-                'After L4',
-                'After L5',
-                'After L6',
-                'After L7',
-                'After L8',
-              ],
-              selected: 'After L$_anteAfterLevel',
-              onChanged: (v) => setState(
-                () => _anteAfterLevel =
-                    int.tryParse(v.replaceAll('After L', '')) ?? 6,
-              ),
-            ),
-          ),
-        const SizedBox(height: AppSpacing.sm),
-        _EditRow(
-          title: 'Organizational costs',
-          // Spec 7 and 18 fix this wording; spec 32 forbids calling it a rake.
-          subtitle: 'Percentage retained for equipment, drinks & snacks — '
-              'admin only, never shown to players',
-          trailing: CountStepper(
-            value: int.tryParse(_orgPct.text.trim()) ?? 0,
-            min: 0,
-            max: _orgPctCeiling,
-            suffix: '%',
-            semanticLabel: 'Organizational costs percentage',
-            onChanged: (v) => setState(() => _orgPct.text = '$v'),
-          ),
+          showOrganizerPct: true,
+          orgPctCeiling: _orgPctCeiling,
+          onChanged: (draft) => _draft = draft,
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
@@ -1919,161 +1432,6 @@ class _EditEventFormState extends State<_EditEventForm> {
           child: const Text('Save changes'),
         ),
       ],
-    );
-  }
-}
-
-class _EditRow extends StatelessWidget {
-  const _EditRow({
-    required this.title,
-    required this.subtitle,
-    required this.trailing,
-  });
-
-  final String title;
-  final String subtitle;
-  final Widget trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          trailing,
-        ],
-      ),
-    );
-  }
-}
-
-class _SegmentedPicker extends StatelessWidget {
-  const _SegmentedPicker({
-    required this.options,
-    required this.selected,
-    required this.onChanged,
-    this.label,
-  });
-
-  final List<String> options;
-  final String selected;
-  final ValueChanged<String> onChanged;
-  final String? label;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget picker = Wrap(
-      spacing: AppSpacing.xs,
-      runSpacing: AppSpacing.xs,
-      children: [
-        for (final o in options)
-          GestureDetector(
-            onTap: () => onChanged(o),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: AppSpacing.sm,
-              ),
-              decoration: BoxDecoration(
-                color: o == selected ? AppColors.primary : AppColors.secondary,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-              ),
-              child: Text(
-                o,
-                style: AppTypography.bodyXs.copyWith(
-                  color: o == selected
-                      ? AppColors.foreground
-                      : AppColors.mutedForeground,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-
-    if (label != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label!,
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          picker,
-        ],
-      );
-    }
-    return picker;
-  }
-}
-
-class _ToggleRow extends StatelessWidget {
-  const _ToggleRow({
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AppToggle(value: value, onChanged: onChanged),
-        ],
-      ),
     );
   }
 }
@@ -2103,6 +1461,8 @@ void showAppLinkModal(BuildContext context, LiveGame game) {
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
+                // Literal white, deliberately: a QR code needs a light quiet
+                // zone and maximum contrast to scan.
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
@@ -2186,54 +1546,6 @@ class _AttendanceRow extends StatelessWidget {
   }
 }
 
-class _ChecklistRow extends StatelessWidget {
-  const _ChecklistRow({
-    required this.label,
-    required this.done,
-    this.actionLabel,
-    this.onAction,
-  });
-
-  final String label;
-  final bool done;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Row(
-        children: [
-          Icon(
-            done ? Icons.check_circle : Icons.radio_button_unchecked,
-            size: 18,
-            color: done ? AppColors.success : AppColors.mutedForeground,
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              label,
-              style: AppTypography.bodySm.copyWith(
-                color: done ? AppColors.foreground : AppColors.mutedForeground,
-                fontWeight: done ? FontWeight.w500 : null,
-              ),
-            ),
-          ),
-          if (actionLabel != null && onAction != null && !done) ...[
-            AppButton(
-              size: AppButtonSize.sm,
-              variant: AppButtonVariant.secondary,
-              onPressed: onAction,
-              child: Text(actionLabel!),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _ContextualMainButton extends StatelessWidget {
   const _ContextualMainButton({
     required this.game,
@@ -2271,48 +1583,17 @@ class _ContextualMainButton extends StatelessWidget {
           );
         case LiveGameStatus.checkin:
         case LiveGameStatus.ready:
-          final checkedInCount = game.players
-              .where((p) => p.checkedIn && p.confirmed)
-              .length;
-          final seatingConfirmed = game.seatingConfirmed;
-          final pendingGuestCount = game.players
-              .where(
-                (p) => p.isGuest && !p.confirmed && p.name.trim().isNotEmpty,
-              )
-              .length;
-          if (pendingGuestCount > 0) {
-            // Spec: the admin reviews every attendee — accept/decline each
-            // guest — before the event can move forward.
-            return AppButton(
-              fullWidth: true,
-              size: AppButtonSize.xl,
-              onPressed: null,
-              child: Text(
-                'Review $pendingGuestCount guest request${pendingGuestCount == 1 ? '' : 's'} first',
-              ),
-            );
-          }
-          if (checkedInCount >= 2 && seatingConfirmed) {
-            return AppButton(
-              fullWidth: true,
-              size: AppButtonSize.xl,
-              onPressed: () {
-                app.updateEventSettings(
-                  game.settings.copyWith(players: checkedInCount),
-                );
-                app.startTimer();
-                context.go(RoutePaths.adminDashboard);
-              },
-              child: const Text('Start Tournament'),
-            );
-          } else {
-            return AppButton(
-              fullWidth: true,
-              size: AppButtonSize.xl,
-              onPressed: () => context.go(RoutePaths.checkIn),
-              child: const Text('Open Check-in'),
-            );
-          }
+          // One start precondition (B5): [AppProvider.startBlockedReason] is
+          // the single source of truth for why the tournament cannot start.
+          // It doubles as the disabled label; when null the button folds the
+          // final confirmed head-count in and starts the timer.
+          final blocked = app.startBlockedReason;
+          return AppButton(
+            fullWidth: true,
+            size: AppButtonSize.xl,
+            onPressed: blocked == null ? app.startTournament : null,
+            child: Text(blocked ?? 'Start Tournament'),
+          );
         case LiveGameStatus.running:
         case LiveGameStatus.paused:
         case LiveGameStatus.finaltable:
@@ -2675,6 +1956,7 @@ class _GuestCountStepper extends StatelessWidget {
       children: [
         _StepButton(
           icon: Icons.remove,
+          tooltip: 'One fewer guest',
           enabled: value > 0,
           onTap: () => onChanged(value - 1),
         ),
@@ -2692,6 +1974,7 @@ class _GuestCountStepper extends StatelessWidget {
         ),
         _StepButton(
           icon: Icons.add,
+          tooltip: 'One more guest',
           enabled: value < max,
           onTap: () => onChanged(value + 1),
         ),
@@ -2705,29 +1988,45 @@ class _StepButton extends StatelessWidget {
     required this.icon,
     required this.enabled,
     required this.onTap,
+    required this.tooltip,
   });
 
   final IconData icon;
   final bool enabled;
   final VoidCallback onTap;
 
+  /// What this button does. Both halves of the stepper are icon-only, so
+  /// without it a screen reader announces the guest count as two unnamed
+  /// buttons either side of a number.
+  final String tooltip;
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: enabled ? AppColors.primary : AppColors.muted,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-        ),
-        child: Icon(
-          icon,
-          size: 16,
-          color: enabled
-              ? AppColors.primaryForeground
-              : AppColors.mutedForeground,
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: tooltip,
+        child: GestureDetector(
+          onTap: enabled ? onTap : null,
+          child: Container(
+            // kMinTapTarget, not 44: 44 is Apple's floor, and this is
+            // operated one-handed at a table. Take the larger of the two.
+            width: kMinTapTarget,
+            height: kMinTapTarget,
+            decoration: BoxDecoration(
+              color: enabled ? AppColors.primary : AppColors.muted,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Icon(
+              icon,
+              size: 16,
+              color: enabled
+                  ? AppColors.primaryForeground
+                  : AppColors.mutedForeground,
+            ),
+          ),
         ),
       ),
     );

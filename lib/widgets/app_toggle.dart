@@ -41,7 +41,7 @@ class AppToggle extends StatelessWidget {
               curve: Curves.easeInOut,
               width: 44,
               height: 24,
-              padding: const EdgeInsets.all(2),
+              padding: const EdgeInsets.all(AppSpacing.xxs),
               decoration: Glass.glassToggle(active: value),
               child: AnimatedAlign(
                 duration: AppDurations.normal,

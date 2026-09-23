@@ -12,6 +12,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/back_nav_button.dart';
 import '../../widgets/group_switcher.dart';
 
 enum _CashStep { setup, players }
@@ -133,17 +134,9 @@ class _CashGameScreenState extends State<CashGameScreen> {
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
-              InkWell(
-                onTap: () => context.go(RoutePaths.home),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(
-                    Icons.arrow_back,
-                    size: AppFontSizes.xl,
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
+              BackNavButton(
+                label: 'Back to home',
+                onPressed: () => context.go(RoutePaths.home),
               ),
               const SizedBox(width: AppSpacing.md),
               Column(
@@ -441,7 +434,7 @@ class _PlayersForm extends StatelessWidget {
             'Starting players',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             'Add players now — you can add more once the game starts.',
             style: AppTypography.bodySm.copyWith(
@@ -492,12 +485,12 @@ class _PlayersForm extends StatelessWidget {
             child: Column(
               children: [
                 _SummaryRow(label: 'Blinds', value: '$smallBlind/$bigBlind'),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 _SummaryRow(
                   label: 'Buy-in range',
                   value: '$minBuyIn–$maxBuyIn',
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 _SummaryRow(label: 'Starting players', value: '$validCount'),
               ],
             ),

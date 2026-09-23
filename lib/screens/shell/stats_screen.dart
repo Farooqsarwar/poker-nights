@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/colors.dart';
+import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_page.dart';
 import '../../services/entitlements.dart';
 import '../../widgets/premium_gate.dart';
@@ -77,6 +81,21 @@ class StatsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
+          // Before the first game the grid is six zeros and an "Avg finish"
+          // of #0.0, which reads as a broken screen rather than a new one.
+          if (user.stats.played == 0)
+            AppEmptyState(
+              icon: Icons.insights_outlined,
+              title: 'No results yet',
+              description:
+                  'Your stats fill in automatically once you finish your '
+                  'first game.',
+              action: AppButton(
+                onPressed: () => context.go(RoutePaths.group),
+                child: const Text('Go to your group'),
+              ),
+            )
+          else
           // The SIX basic player statistics (Tech §15.2 — "no ROI,
           // profit …, graphs, streaks or advanced filters"; no separate
           // personal game-history page).
@@ -153,7 +172,7 @@ class _HeadlineStat extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             label,
             style: AppTypography.bodyXs.copyWith(

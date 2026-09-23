@@ -248,8 +248,9 @@ extension AppProviderGame on AppProvider {
     _currentGame = _currentGame!.copyWith(status: status);
     // Client feedback (07-018): inside the 30-minute window before start the
     // AI refreshes the stacks/blinds/levels estimate from the expected count.
-    if (status == LiveGameStatus.checkin)
+    if (status == LiveGameStatus.checkin) {
       generateFinalStructure(currentGame!.confirmedCount);
+    }
     if (status == LiveGameStatus.checkin && wasPublished) {
       pushNotification(
         AppNotification(
@@ -511,6 +512,14 @@ extension AppProviderGame on AppProvider {
             rebuyCost: s.rebuyCost,
             addOnCost: s.addOnCost,
             breaks: s.breaks,
+            expectedRebuys: s.expectedRebuys,
+            expectedReEntries: s.expectedReEntries,
+            expectedAddOns: s.expectedAddOns,
+            rebuyChips: s.rebuyChips,
+            reEntryChips: s.reEntryChips,
+            addOnChips: s.addOnChips,
+            levelDurationMins: s.levelDurationMins,
+            payoutShape: s.payoutShape,
           ),
         );
         // After play starts the starting stacks are frozen (client rule).
@@ -572,6 +581,31 @@ extension AppProviderGame on AppProvider {
     }
     addAnnouncement('Event details updated.', false);
     if (!_disposed) notifyListeners();
+  }
+
+  /// Why the tournament cannot start yet, or null when it can.
+  String? get startBlockedReason {
+    final g = currentGame;
+    if (g == null) return 'No game loaded.';
+    final pending = g.players.where((p) => p.isGuest && !p.confirmed
+        && p.name.trim().isNotEmpty).length;
+    if (pending > 0) return 'Review $pending guest request${pending == 1 ? '' : 's'} first';
+    final checkedIn = g.players.where((p) => p.checkedIn && p.confirmed).length;
+    if (checkedIn < 2) return 'Need at least 2 checked in';
+    if (!g.seatingConfirmed) return 'Confirm seating first';
+    return null;
+  }
+
+  /// Single start fold: freezes the final checked-in headcount into the
+  /// settings, then begins the level timer. Thin by design — callers decide
+  /// whether the game may start (see [startBlockedReason]).
+  Future<void> startTournament() async {
+    final game = currentGame;
+    if (game == null) return;
+    final checkedInCount =
+        game.players.where((p) => p.checkedIn && p.confirmed).length;
+    updateEventSettings(game.settings.copyWith(players: checkedInCount));
+    startTimer();
   }
 
   /// Reposts the pinned event card after a published-event edit (User Flow

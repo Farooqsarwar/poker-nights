@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../app/colors.dart';
 import '../constants/app_constants.dart';
 import '../app/typography.dart';
+import 'min_tap_target.dart';
 
 /// Code display with copy button mirroring the web `CodeDisplay` component.
 class CodeDisplay extends StatefulWidget {
@@ -69,31 +70,33 @@ class _CodeDisplayState extends State<CodeDisplay> {
             child: InkWell(
               onTap: _copy,
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.xs,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_copied) ...[
-                      Icon(
-                        Icons.check_circle,
-                        size: AppFontSizes.sm,
-                        color: AppColors.success,
+              child: MinTapTarget(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_copied) ...[
+                        Icon(
+                          Icons.check_circle,
+                          size: AppFontSizes.sm,
+                          color: AppColors.successText,
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                      ],
+                      Text(
+                        _copied ? 'Copied' : 'Copy',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: _copied
+                              ? AppColors.successText
+                              : AppColors.mutedForeground,
+                        ),
                       ),
-                      const SizedBox(width: AppSpacing.xs),
                     ],
-                    Text(
-                      _copied ? 'Copied' : 'Copy',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: _copied
-                            ? AppColors.success
-                            : AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

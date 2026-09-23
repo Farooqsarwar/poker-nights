@@ -7,6 +7,7 @@ import '../constants/app_constants.dart';
 import '../app/typography.dart';
 import 'coin_shuffle_animation.dart';
 import 'glass_styles.dart';
+import 'min_tap_target.dart';
 import 'shell_insets.dart';
 
 /// Modal dialog mirroring the web `Modal` component with premium glassmorphism.
@@ -108,15 +109,25 @@ class AppModal extends StatelessWidget {
                               Material(
                                 color: Colors.transparent,
                                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                                child: InkWell(
-                                  onTap: onClose,
-                                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(6),
-                                    child: Icon(
-                                      Icons.close,
-                                      color: AppColors.mutedForeground,
-                                      size: 20,
+                                child: Tooltip(
+                                  message: 'Close',
+                                  child: Semantics(
+                                    button: true,
+                                    label: title != null
+                                        ? 'Close $title'
+                                        : 'Close',
+                                    child: InkWell(
+                                      onTap: onClose,
+                                      borderRadius: BorderRadius.circular(
+                                        AppRadius.sm,
+                                      ),
+                                      child: MinTapTarget(
+                                        child: Icon(
+                                          Icons.close,
+                                          color: AppColors.mutedForeground,
+                                          size: 20,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),

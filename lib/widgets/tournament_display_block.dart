@@ -10,6 +10,7 @@ import '../models/live_game.dart';
 import '../models/tournament.dart';
 import '../responsive/responsive.dart';
 import '../utils/formatters.dart';
+import '../constants/app_constants.dart';
 
 /// Responsive tournament display.
 ///
@@ -77,9 +78,17 @@ class TournamentDisplayBlock extends StatelessWidget {
 
 /// Number-only style used for every numeric value.
 ///
-/// Do not use AppTypography.mono for numbers: the configured mono font has a
-/// dotted-zero glyph. This style guarantees a regular empty zero everywhere,
-/// not only in the main timer.
+/// The big-glass numerals: clock, blinds, level.
+///
+/// This stays a hand-rolled [TextStyle] rather than [AppTypography.mono]
+/// because the display block needs weights and line heights (w300, height 1)
+/// that no shared style carries. It does take the same
+/// [AppTypography.numericFeatures] though — `tnum` is the whole point here, so
+/// the clock's digits keep a fixed advance and the readout does not jitter as
+/// it counts down.
+///
+/// (The old note here said to avoid mono because of its dotted zero. That was
+/// about Space Mono; the app is one typeface now and `zero` slashes it.)
 TextStyle _numberStyle({
   required double size,
   required Color color,
@@ -94,6 +103,7 @@ TextStyle _numberStyle({
     color: color,
     height: height,
     letterSpacing: letterSpacing,
+    fontFeatures: AppTypography.numericFeatures,
   );
 }
 
@@ -818,7 +828,7 @@ class _CompactLayout extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               const _HorizontalLine(),
               const SizedBox(height: 18),
             ],
@@ -831,7 +841,7 @@ class _CompactLayout extends StatelessWidget {
                 letterSpacing: 3,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             SizedBox(
               height: 92, // <-- FIX: Increased from 82 to give safety room
               child: LiveTimerBuilder(
@@ -1057,7 +1067,7 @@ class _CompactNext extends StatelessWidget {
               letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           if (next == null)
             Text(
               'END',

@@ -284,6 +284,14 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'expectedPlayersOverride': s.expectedPlayersOverride,
       'lockedExpectedPlayers': s.lockedExpectedPlayers,
       'breaks': s.breaks.map(scheduledBreakToMap).toList(),
+      'expectedRebuys': s.expectedRebuys,
+      'expectedReEntries': s.expectedReEntries,
+      'expectedAddOns': s.expectedAddOns,
+      'rebuyChips': s.rebuyChips,
+      'reEntryChips': s.reEntryChips,
+      'addOnChips': s.addOnChips,
+      'levelDurationMins': s.levelDurationMins,
+      'payoutShape': s.payoutShape.name,
     };
 
 GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
@@ -333,6 +341,22 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
       breaks: _mapList(m['breaks'] as List? ?? const [])
           .map(scheduledBreakFromMap)
           .toList(),
+      // All absent on anything written before the host could override them,
+      // and null is exactly "use the engine default" — so an old document
+      // regenerates to the same structure it always did.
+      expectedRebuys: (m['expectedRebuys'] as num?)?.toInt(),
+      expectedReEntries: (m['expectedReEntries'] as num?)?.toInt(),
+      expectedAddOns: (m['expectedAddOns'] as num?)?.toInt(),
+      rebuyChips: (m['rebuyChips'] as num?)?.toInt(),
+      reEntryChips: (m['reEntryChips'] as num?)?.toInt(),
+      addOnChips: (m['addOnChips'] as num?)?.toInt(),
+      levelDurationMins: (m['levelDurationMins'] as num?)?.toInt(),
+      payoutShape: PayoutShape.values.firstWhere(
+        (v) => v.name == m['payoutShape'],
+        // Every tournament created before the selector existed stored no shape
+        // at all, and every one of them was generated on the standard curve.
+        orElse: () => PayoutShape.standard,
+      ),
     );
 
 // ─────────────────────────────────────────────────────────────────────────────

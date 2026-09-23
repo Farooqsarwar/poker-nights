@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -9,28 +8,21 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
 import '../../models/live_game.dart';
-import '../../models/table_settings.dart';
 import '../../models/tournament.dart';
 import '../../models/tournament_preset.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/event_settings_validation.dart';
 import '../../utils/sanitization.dart';
 import '../../utils/tournament_engine.dart';
+import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/app_page.dart';
-import '../../widgets/app_modal.dart';
-import '../../widgets/app_select.dart';
-import '../../widgets/app_text_field.dart';
-import '../../widgets/app_toggle.dart';
-import '../../widgets/app_badge.dart';
 import '../../widgets/app_icon_label.dart';
-import '../../widgets/chip_token.dart';
-import '../../services/entitlements.dart';
-import '../../widgets/count_stepper.dart';
-import '../../widgets/glass_styles.dart';
-import '../../widgets/premium_gate.dart';
-
-enum _ChipMode { preset, quick, exact }
+import '../../widgets/app_modal.dart';
+import '../../widgets/app_page.dart';
+import '../../widgets/back_nav_button.dart';
+import '../../widgets/chip_pill.dart';
+import '../../widgets/event_settings_form.dart';
 
 /// Minimum normalized score for a preset to qualify as a suggestion
 /// (tech spec §6.2).
@@ -160,7 +152,7 @@ String _hoursLabel(double hours) =>
   return (score: score, diffs: diffs);
 }
 
-/// 4-step tournament creation wizard mirroring the web `CreateTournamentPage`.
+/// 5-step tournament creation wizard mirroring the web `CreateTournamentPage`.
 class CreateTournamentScreen extends StatefulWidget {
   const CreateTournamentScreen({super.key, this.presetId});
 
@@ -176,115 +168,48 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   static const _steps = [
     'Event details',
     'Chip set',
-    'Rules',
+    'Rebuys & add-ons',
+    'Format',
     'Review & create',
   ];
 
   int _step = 1;
 
-  // Step 1
-  final _name = TextEditingController();
-  final _date = TextEditingController(text: _todayIso);
-  final _time = TextEditingController(text: '20:00');
-  final _location = TextEditingController();
-  final _buyIn = TextEditingController();
-  bool _locationPrivate = false;
-  double _duration = 3.5; // Spec §4.3: default target duration is 3.5 hours.
+  /// Working draft of the whole event. The shared [EventSettingsForm] owns the
+  /// field widgets; it seeds itself once from [_draft] and reports every edit
+  /// back through its `onChanged`, so [_draft] (never the widget tree) is the
+  /// single source of truth for validation, presets, the review step and
+  /// `_generate`.
+  late GameSettings _draft;
+
+  /// Bumped whenever the mounted form must be re-seeded from [_draft] — the
+  /// group-derived player count landing after load, or a preset applied.
+  int _seedTick = 0;
+
+  /// Key for the shared form on every step. A change remounts it fresh from
+  /// [_draft]; while unchanged, edits stay live and are never clobbered.
+  Key get _formKey =>
+      ValueKey('wizard-form-$_seedTick-${_appliedPresetId ?? 'none'}');
+
+  /// Latest validation misses, keyed by field (name/date/time/location/buyIn/
+  /// rebuyLimit/koAmount). The shared form renders the same errors inline
+  /// against the matching field; this map only gates advancing.
   final Map<String, String> _errors = {};
 
-  // Player count is derived from the group + RSVP signals, never asked as an
-  // input (the guest/going +N counts determine who actually shows up).
+  /// The head-count derived from the group + RSVP signals, kept for the
+  /// step-1 estimate caption ("from your group") and the reset-to-RSVP path.
+  int _derivedExpectedPlayers = 2;
 
-  // Step 2
-  _ChipMode _chipMode = _ChipMode.preset;
-  String _presetName = '';
-  late List<ChipColor> _chipSet;
-
-  // Step 3 — defaults follow the client's "generally" list:
-  // KO bounty off, add-on on (buy-in price, end of L6), rebuys unlimited
-  // until end of L6, re-entry off.
-  bool _rebuys = true;
-  bool _rebuyUnlimited = true;
-  int _rebuysClose = 6;
-  bool _rebuyCloseChosen = false;
-  final _rebuyLimit = TextEditingController(text: '1');
-  final _rebuyCost = TextEditingController();
-  /// Moves with [_rebuys] -- sections 7 and 32 make them one toggle. Kept as
-  /// its own field because it is still stored, still gates the re-entry live
-  /// action, and still feeds the engine's expected-chip projection.
-  bool _reEntry = true;
-  bool _addOn = true;
-  int _addOnClose = 6;
-
-  /// Scheduled breaks (specification section 8; v11 addendum raised the
-  /// maximum to 3). Empty means OFF. `afterLevel: 0` means "you choose" —
-  /// the engine places it after the rebuy window, or at the structural
-  /// midpoint when rebuys are off.
-  /// Addendum section 3: free hosting covers one table, up to nine players.
-  /// Read once on load; the gate below is a visible limit and an upgrade
-  /// path, NOT enforcement -- section 7 and acceptance criterion 12 put real
-  /// Premium authorization on the server, which does not exist yet.
-
-  List<ScheduledBreak> _breaks = const [];
-  bool get _breaksOn => _breaks.isNotEmpty;
-  final _addOnCost = TextEditingController();
-  bool _koEnabled = false;
-  final _koAmount = TextEditingController(text: '5');
-  AntePreference _antePreference = AntePreference.none;
-  int _anteAfterLevel = 6;
-
-  // Table-capacity/randomization — defaults to the group's setting; the host
-  // may override it for just this tournament.
-  bool _overrideTableSettings = false;
-  int _maxPerTable = 9; // Spec §12.1: default table capacity is 9.
-  bool _randomizeSeating = false;
-  // Spec §4.3 Step 2: 'none' means no ante at all; 'individual' means a
-  // fixed chip per player; 'recommend'/'bigBlind' means BB-ante style.
-  /// §7's "system recommendation", resolved from the actual tournament.
-  ///
-  /// This used to map straight to Big Blind Ante, which made "Recommended" a
-  /// third label for the same choice rather than a recommendation.
-  AnteRecommendation get _anteAdvice => TournamentEngine.recommendAnte(
-        players: _expectedPlayers,
-        durationHours: _duration,
-      );
-
-  AnteStyle get _anteStyle => switch (_antePreference) {
-    AntePreference.recommend => _anteAdvice.style,
-    AntePreference.bigBlind => AnteStyle.bigBlind,
-    AntePreference.individual => AnteStyle.individual,
-    AntePreference.none => AnteStyle.individual, // disabled by _anteEnabled=false
-  };
-  bool get _anteEnabled => _antePreference == AntePreference.recommend
-      ? _anteAdvice.enabled
-      : _antePreference != AntePreference.none;
-  // Spec 7 and 18: organizer cost defaults to 10%, is capped at 20%, and is
-  // adjusted with a +/- stepper rather than typed. The controller stays the
-  // source of truth so `_applyPreset`, validation and dispose are unchanged;
-  // the stepper just writes through it.
-  final _orgPctController = TextEditingController(text: '10');
-  int get _orgPct => int.tryParse(_orgPctController.text.trim()) ?? 0;
-
-  /// Spec 7's 20% cap, raised only far enough to hold a legacy value the form
-  /// was loaded with (see `_applyPreset`).
-  static const int kOrganizerPctMax = 20;
-  int get _orgPctCeiling => kOrganizerPctMax;
+  // Expected players — the estimate the host can override. RSVPs stay the real
+  // source: an untouched stepper keeps tracking them (override stays null),
+  // and `_generate` only writes the edited number once the host moves it.
+  bool get _expectedOverridden => _draft.expectedPlayersOverride != null;
+  int get _expectedPlayers =>
+      _draft.expectedPlayersOverride ?? _draft.players;
+  bool get _breaksOn => _draft.breaks.isNotEmpty;
 
   // Preset support (checklist §9.1). Tech spec §6.2: before starting from
   // zero, saved presets close to the current base inputs are suggested.
-  int _expectedPlayers = 2;
-
-  /// The RSVP/roster figure the stepper started from, kept so "Use RSVP
-  /// count" can put it back.
-  int _derivedExpectedPlayers = 2;
-
-  /// True once the host has moved the stepper. Only then is
-  /// [GameSettings.expectedPlayersOverride] written — an untouched stepper
-  /// must keep tracking RSVPs as they come in.
-  bool _expectedOverridden = false;
-
-  /// Top §6.2 matches (at most two, best score first), recomputed while the
-  /// admin edits the base inputs.
   final List<({TournamentPreset preset, double score, List<String> diffs})>
       _presetMatches = [];
   bool _suggestionsDismissed = false;
@@ -301,21 +226,24 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     return '${now.year}-$m-$d';
   }
 
+  String get _durationLabel {
+    final h = _draft.durationHours;
+    return '${h == h.roundToDouble() ? h.round() : h}h';
+  }
+
   @override
   void initState() {
     super.initState();
-    _presetName = TournamentEngine.presetNames.isNotEmpty
+    final presetName = TournamentEngine.presetNames.isNotEmpty
         ? TournamentEngine.presetNames[2]
         : TournamentEngine.presetNames.firstOrNull ?? '';
-    _chipSet = List.of(TournamentEngine.getPreset(_presetName));
+    _draft = _initialDraft(presetName, expectedPlayers: 2);
 
     // Auto-fill players from group + apply preset / suggestions
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final app = context.read<AppProvider>();
       final group = app.currentGroup;
-      _maxPerTable = group.tableSettings.maxPerTable;
-      _randomizeSeating = group.tableSettings.randomizeByDefault;
 
       int expected = group.members.length;
       for (final poll in group.polls) {
@@ -339,8 +267,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       }
 
       _derivedExpectedPlayers = expected < 2 ? 2 : expected;
-      if (!_expectedOverridden) _expectedPlayers = _derivedExpectedPlayers;
-
+      if (!_expectedOverridden) {
+        setState(() {
+          _draft = _draft.copyWith(players: _derivedExpectedPlayers);
+          _seedTick++;
+        });
+      }
 
       if (widget.presetId != null) {
         final preset = app.presetById(widget.presetId);
@@ -352,6 +284,45 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
       _refreshPresetMatches(app);
     });
+  }
+
+  /// The wizard's opening draft. Numeric fields the host is expected to fill
+  /// (buy-in) start invalid so the shared validator flags them until entered.
+  GameSettings _initialDraft(String chipSetName, {required int expectedPlayers}) {
+    return GameSettings(
+      name: '',
+      date: _todayIso,
+      time: '20:00',
+      location: '',
+      players: expectedPlayers,
+      durationHours: 3.5, // Spec §4.3: default target duration is 3.5 hours.
+      buyIn: 0,
+      koEnabled: false,
+      koAmount: 5,
+      rebuys: true,
+      rebuysCloseLevel: 6,
+      rebuyLimit: null, // null = unlimited (see GameSettings.rebuyLimit).
+      reEntry: true,
+      addOn: true,
+      addOnCloseLevel: 6,
+      anteEnabled: false,
+      anteAfterLevel: 6,
+      anteStyle: AnteStyle.individual,
+      antePreference: AntePreference.none,
+      organizerPct: 10,
+      chipSet: List.of(TournamentEngine.getPreset(chipSetName)),
+      chipSetName: chipSetName,
+      locationPrivate: false,
+      breaks: const [],
+    );
+  }
+
+  /// Any shared-form edit lands here: the draft is updated (the form keeps its
+  /// own field state, so nothing needs re-seeding) and the §6.2 preset
+  /// suggestions are recomputed from the new base inputs.
+  void _onDraftChanged(GameSettings next) {
+    setState(() => _draft = next);
+    _refreshPresetMatches(context.read<AppProvider>());
   }
 
   /// Tech spec §6.2 — recomputes which of the administrator's saved presets
@@ -368,23 +339,25 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       setState(() {});
       return;
     }
-    final buyIn = num.tryParse(_buyIn.text)?.toInt() ?? 0;
-    final koAmount = num.tryParse(_koAmount.text)?.toInt() ?? 0;
+    final s = _draft;
+    final chipSetName = TournamentEngine.presetNames.contains(s.chipSetName)
+        ? s.chipSetName
+        : '';
     final scored =
         <({TournamentPreset preset, double score, List<String> diffs})>[];
     for (final p in app.presets) {
       final match = _matchPreset(
         p,
-        buyIn: buyIn,
-        koEnabled: _koEnabled,
-        koAmount: koAmount,
-        durationHours: _duration,
-        expectedPlayers: _expectedPlayers,
-        rebuys: _rebuys,
-        rebuysCloseLevel: _rebuysClose,
-        addOn: _addOn,
-        chipSetName: _chipMode == _ChipMode.preset ? _presetName : '',
-        chipColorCount: _chipSet.length,
+        buyIn: s.buyIn,
+        koEnabled: s.koEnabled,
+        koAmount: s.koAmount,
+        durationHours: s.durationHours,
+        expectedPlayers: s.expectedPlayersOverride ?? s.players,
+        rebuys: s.rebuys,
+        rebuysCloseLevel: s.rebuysCloseLevel,
+        addOn: s.addOn,
+        chipSetName: chipSetName,
+        chipColorCount: s.chipSet.length,
       );
       if (match.score >= _presetMatchMinScore) {
         scored.add((preset: p, score: match.score, diffs: match.diffs));
@@ -401,159 +374,68 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   String _matchLabel(double score) =>
       score >= 0.85 ? 'Very close match' : 'Close match';
 
-  /// Fills every field of the wizard from a saved preset (09-006).
+  /// Fills the wizard draft from a saved preset (09-006). Date/time/location,
+  /// the RSVP-derived player figure and any expected-player override are kept
+  /// — presets store none of those. Changing [_appliedPresetId] remounts the
+  /// mounted step's shared form so it re-seeds from the updated draft.
   void _applyPreset(TournamentPreset p) {
-    _name.text = p.name;
-    _buyIn.text = p.buyIn.toString();
-    _duration = p.durationHours;
-    _rebuys = p.rebuys;
-    _rebuysClose = p.rebuysCloseLevel;
-    _rebuyUnlimited = p.rebuyLimit == null;
-    if (p.rebuyLimit != null) _rebuyLimit.text = p.rebuyLimit.toString();
-    _rebuyCost.text = p.rebuyCost?.toString() ?? '';
-    _reEntry = p.reEntry;
-    _addOn = p.addOn;
-    _addOnClose = p.addOnCloseLevel;
-    _breaks = List.of(p.breaks);
-    _addOnCost.text = p.addOnCost?.toString() ?? '';
-    _koEnabled = p.koEnabled;
-    _koAmount.text = p.koAmount.toString();
-    _antePreference = p.anteEnabled
-        ? AntePreference.bigBlind
-        : AntePreference.none;
-    _anteAfterLevel = p.anteAfterLevel;
-    _orgPctController.text = p.organizerPct.clamp(0, kOrganizerPctMax).toString();
-    _chipSet = List.of(p.chipSet);
-    if (TournamentEngine.presetNames.contains(p.chipSetName)) {
-      _chipMode = _ChipMode.preset;
-      _presetName = p.chipSetName;
-    } else {
-      _chipMode = _ChipMode.exact;
-    }
+    _draft = _draft.copyWith(
+      name: p.name,
+      buyIn: p.buyIn,
+      durationHours: p.durationHours,
+      rebuys: p.rebuys,
+      rebuysCloseLevel: p.rebuysCloseLevel,
+      rebuyLimit: p.rebuyLimit,
+      rebuyCost: p.rebuyCost,
+      reEntry: p.reEntry,
+      addOn: p.addOn,
+      addOnCloseLevel: p.addOnCloseLevel,
+      breaks: List.of(p.breaks),
+      addOnCost: p.addOnCost,
+      koEnabled: p.koEnabled,
+      koAmount: p.koAmount,
+      antePreference: p.anteEnabled
+          ? AntePreference.bigBlind
+          : AntePreference.none,
+      anteEnabled: p.anteEnabled,
+      anteAfterLevel: p.anteAfterLevel,
+      anteStyle: p.anteEnabled ? AnteStyle.bigBlind : AnteStyle.individual,
+      organizerPct: p.organizerPct.clamp(0, GameSettings.maxOrganizerPct),
+      chipSet: List.of(p.chipSet),
+      chipSetName: p.chipSetName,
+    );
     _appliedPresetId = p.id;
   }
 
-  @override
-  void dispose() {
-    for (final c in [
-      _name,
-      _date,
-      _time,
-      _location,
-      _buyIn,
-      _koAmount,
-      _rebuyLimit,
-      _rebuyCost,
-      _addOnCost,
-      _orgPctController,
-    ]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  bool _validateStep1() {
-    _errors.clear();
-    if (_name.text.trim().isEmpty) {
-      _errors['name'] = 'Required';
-    } else if (_name.text.trim().length > Sanitization.maxTournamentNameLength) {
-      _errors['name'] = 'Max ${Sanitization.maxTournamentNameLength} characters';
-    }
-
-    if (_location.text.trim().length > Sanitization.maxLocationLength) {
-      _errors['location'] = 'Max ${Sanitization.maxLocationLength} characters';
-    }
-
-    if (_date.text.trim().isEmpty) {
-      _errors['date'] = 'Required';
-    } else {
-      final parsed = DateTime.tryParse(_date.text.trim());
-      if (parsed == null) {
-        _errors['date'] = 'Invalid date format (YYYY-MM-DD)';
-      } else {
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
-        if (parsed.isBefore(today)) {
-          _errors['date'] = 'Date must be today or in the future';
-        }
-      }
-    }
-    if (_time.text.trim().isEmpty) {
-      _errors['time'] = 'Required';
-    } else {
-      final parts = _time.text.trim().split(':');
-      if (parts.length != 2) {
-        _errors['time'] = 'Invalid time format (HH:MM)';
-      } else {
-        final h = int.tryParse(parts[0]);
-        final m = int.tryParse(parts[1]);
-        if (h == null || m == null || h < 0 || h > 23 || m < 0 || m > 59) {
-          _errors['time'] = 'Invalid time (HH:MM)';
-        } else if (!_errors.containsKey('date')) {
-          // Spec §12.2: reject past date AND past time on today's date.
-          final parsed = DateTime.tryParse(_date.text.trim());
-          if (parsed != null) {
-            final scheduled = DateTime(
-                parsed.year, parsed.month, parsed.day, h, m);
-            if (scheduled.isBefore(DateTime.now())) {
-              _errors['time'] = 'Start time must be in the future';
-            }
-          }
-        }
-      }
-    }
-    final b = num.tryParse(_buyIn.text);
-    if (b == null || b <= 0) _errors['buyIn'] = 'Must be positive';
-    setState(() {});
-    return _errors.isEmpty;
-  }
-
-  bool _validateStep3() {
-    _errors.clear();
-
-    if (_rebuys && !_rebuyUnlimited) {
-      final rbLimit = num.tryParse(_rebuyLimit.text)?.toInt();
-      if (rbLimit == null || rbLimit < 0) {
-        _errors['rebuyLimit'] = 'Must be >= 0';
-      }
-    }
-
-    if (_koEnabled) {
-      final koAmount = num.tryParse(_koAmount.text)?.toInt();
-      if (koAmount == null || koAmount < 0) {
-        _errors['koAmount'] = 'Must be >= 0';
-      }
-    }
-
-    final orgPct = num.tryParse(_orgPctController.text)?.toInt();
-    // Spec 7 caps this at 20%. A preset created under the old 0-100 rule may
-    // still carry a higher figure, so the ceiling is whatever the form was
-    // loaded with when that exceeds 20 — an existing value is never silently
-    // rewritten, it can only be reduced.
-    if (orgPct == null || orgPct < 0 || orgPct > _orgPctCeiling) {
-      _errors['orgPct'] = 'Must be 0-$_orgPctCeiling';
-    }
-
-    setState(() {});
-    return _errors.isEmpty;
-  }
-
   void _next() {
-    if (_step == 1 && !_validateStep1()) return;
-    if (_step == 3 && !_validateStep3()) return;
+    // Only the steps whose fields carry validation keys gate on the shared
+    // validator. Chips (step 2) and Format (step 4) have no keys of their own.
+    const stepKeys = <int, Set<String>>{
+      1: {'name', 'date', 'time', 'location', 'buyIn'},
+      3: {'rebuyLimit', 'koAmount'},
+    };
+    final keys = stepKeys[_step] ?? const <String>{};
+    final hit = keys.isEmpty
+        ? const <String, String>{}
+        : {
+            for (final e in validateEventSettings(_draft).entries)
+              if (keys.contains(e.key)) e.key: e.value,
+          };
     setState(() {
-      _step++;
-      if (_step >= _steps.length) {
-        // Tech spec §6.2 guard: reaching the review step stops suggesting,
-        // even when the admin goes back to edit afterwards.
-        _reachedReview = true;
-        _presetMatches.clear();
+      _errors
+        ..clear()
+        ..addAll(hit);
+      if (hit.isEmpty) {
+        _step++;
+        if (_step >= _steps.length) {
+          // Tech spec §6.2 guard: reaching the review step stops suggesting,
+          // even when the admin goes back to edit afterwards.
+          _reachedReview = true;
+          _presetMatches.clear();
+        }
       }
     });
   }
-
-  String get _durationLabel =>
-      '${_duration == _duration.roundToDouble() ? _duration.round() : _duration}h';
 
   /// Global rect of this screen's content area.
   ///
@@ -567,27 +449,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     return ro.localToGlobal(Offset.zero) & ro.size;
   }
 
-  Widget _centerDialog(BuildContext context, Widget? child) {
-    return Builder(
-      builder: (ctx) {
-        final Size screen = MediaQuery.sizeOf(ctx);
-        final bool isCompact = screen.width < 480;
-        final Rect? a = _contentRect;
-        if (!isCompact && a != null && a.width > 360) {
-          final double left = a.left;
-          final double right = (screen.width - a.right);
-          return Padding(
-            padding: EdgeInsets.only(left: left, right: right),
-            child: child,
-          );
-        }
-        return child ?? const SizedBox();
-      },
-    );
-  }
-
   /// Centered, width-capped review dialog (07-018).
   Future<bool?> _showConfirmDialog() {
+    final s = _draft;
     final Rect? anchor = _contentRect;
     return showDialog<bool>(
       context: context,
@@ -596,58 +460,61 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       builder: (context) => _ConfirmDetailsDialog(
         anchorRect: anchor,
         gameRows: <_ConfirmItem>[
-          _ConfirmItem('Name', _name.text.trim()),
-          _ConfirmItem('When', '${_date.text} at ${_time.text}'),
-          if (_location.text.trim().isNotEmpty)
+          _ConfirmItem('Name', s.name.trim()),
+          _ConfirmItem('When', '${s.date} at ${s.time}'),
+          if (s.location.trim().isNotEmpty)
             _ConfirmItem(
               'Where',
-              _location.text.trim() + (_locationPrivate ? '  (private)' : ''),
+              s.location.trim() + (s.locationPrivate ? '  (private)' : ''),
             ),
-          // Player count is not an input — it comes from the Going /
-          // Going +N RSVPs (client rule).
+          // The count the host is planning for is an estimate on top of the
+          // Going / Going +N RSVPs (Tech 6.1); RSVPs remain the real source.
           _ConfirmItem(
             'Players',
             _expectedOverridden
                 ? '$_expectedPlayers (your override)'
                 : 'From RSVPs',
           ),
-          _ConfirmItem('Buy-in', _buyIn.text.trim()),
+          _ConfirmItem('Buy-in', '${s.buyIn}'),
           _ConfirmItem('Duration', _durationLabel),
         ],
         ruleRows: <_ConfirmItem>[
           _ConfirmItem(
             'Rebuys & re-entry',
-            _rebuys
-                ? (_rebuyUnlimited
-                      ? 'Unlimited to L$_rebuysClose'
-                      : 'Limited to L$_rebuysClose')
+            s.rebuys
+                ? (s.rebuyLimit == null
+                      ? 'Unlimited to L${s.rebuysCloseLevel}'
+                      : 'Limited to L${s.rebuysCloseLevel}')
                 : 'Off',
           ),
-
-          _ConfirmItem('Add-on', _addOn ? 'Yes, to L$_addOnClose' : 'No'),
+          _ConfirmItem(
+            'Add-on',
+            s.addOn ? 'Yes, to L${s.addOnCloseLevel}' : 'No',
+          ),
           _ConfirmItem(
             'Breaks',
             _breaksOn
-                ? '${_breaks.length} x ${_breaks.first.durationMins} min'
+                ? '${s.breaks.length} x ${s.breaks.first.durationMins} min'
                 : 'None',
           ),
-          _ConfirmItem('Bounty', _koEnabled ? 'Yes (${_koAmount.text})' : 'No'),
+          _ConfirmItem('Bounty', s.koEnabled ? 'Yes (${s.koAmount})' : 'No'),
           _ConfirmItem(
             'Ante',
-            _antePreference == AntePreference.none
+            s.antePreference == AntePreference.none
                 ? 'No'
-                : 'From L$_anteAfterLevel',
+                : 'From L${s.anteAfterLevel}',
           ),
-          _ConfirmItem('Organizational costs', '$_orgPct%'),
+          _ConfirmItem('Organizational costs', '${s.organizerPct}%'),
         ],
-        chipSet: _chipSet,
-        chipSetName: _chipMode == _ChipMode.preset ? _presetName : 'Custom',
+        chipSet: s.chipSet,
+        chipSetName: s.chipSetName,
       ),
     );
   }
 
   void _generate(AppProvider app) async {
-    if (_chipSet.isEmpty) {
+    final s = _draft;
+    if (s.chipSet.isEmpty) {
       await showAppModal(
         context: context,
         title: 'Set chip colours first',
@@ -676,7 +543,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       return;
     }
 
-    final values = _chipSet.map((c) => c.value).toList();
+    final values = s.chipSet.map((c) => c.value).toList();
     if (values.toSet().length != values.length) {
       await showAppModal(
         context: context,
@@ -711,13 +578,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     final confirmed = await _showConfirmDialog();
     if (confirmed != true || !mounted) return;
 
-    // Persist a custom chip set once so it can be reused next time.
-    if (_chipMode != _ChipMode.preset) {
-      final customName = '${_name.text.trim()} set';
+    // Persist a custom chip set once so it can be reused next time. A set that
+    // still matches a named preset is not custom.
+    if (!TournamentEngine.presetNames.contains(s.chipSetName)) {
+      final customName = '${s.name.trim()} set';
       app.saveChipSet(
-        'cs-${_name.text.trim().replaceAll(' ', '-').toLowerCase()}',
+        'cs-${s.name.trim().replaceAll(' ', '-').toLowerCase()}',
         customName,
-        _chipSet,
+        s.chipSet,
       );
     }
 
@@ -726,57 +594,42 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     // by the Admin during check-in from confirmed actual attendance.
     final game = app.createGame(
       GameSettings(
-        name: Sanitization.sanitizeTournamentName(_name.text.trim()),
-        date: _date.text.trim(),
-        time: _time.text.trim(),
-        location: Sanitization.sanitizeLocation(_location.text.trim()),
+        name: Sanitization.sanitizeTournamentName(s.name.trim()),
+        date: s.date.trim(),
+        time: s.time.trim(),
+        location: Sanitization.sanitizeLocation(s.location.trim()),
         // Roster size — the working head-count still comes from RSVPs and
         // check-in; `expectedPlayersOverride` below is what lets the host say
         // "plan for more than replied" (Tech 6.1).
         players: app.currentGroup.members.length,
-        expectedPlayersOverride: _expectedOverridden ? _expectedPlayers : null,
-        durationHours: _duration,
-        buyIn: num.tryParse(_buyIn.text)?.toInt() ?? 0,
-        koEnabled: _koEnabled,
-        koAmount: num.tryParse(_koAmount.text)?.toInt() ?? 5,
-        rebuys: _rebuys,
-        rebuysCloseLevel: _rebuysClose,
-        rebuyCloseChosenByOrganizer: _rebuyCloseChosen,
-        rebuyLimit: _rebuys && !_rebuyUnlimited
-            ? (int.tryParse(_rebuyLimit.text) ?? 1)
-            : null,
-        rebuyCost: num.tryParse(_rebuyCost.text)?.toInt(),
-        reEntry: _reEntry,
-        addOn: _addOn,
-        addOnCloseLevel: _addOnClose,
-        breaks: _breaks,
-        addOnCost: num.tryParse(_addOnCost.text)?.toInt(),
-        anteEnabled: _anteEnabled,
-        anteAfterLevel: _anteAfterLevel,
-        anteStyle: _anteStyle,
-        antePreference: _antePreference,
-        organizerPct: _orgPct.clamp(0, 100),
-        chipSet: _chipSet,
-        chipSetName: _chipMode == _ChipMode.preset ? _presetName : 'Custom',
-        locationPrivate: _locationPrivate,
-        tableSettingsOverride: _overrideTableSettings
-            ? TableSettings(
-                maxPerTable: _maxPerTable,
-                randomizeByDefault: _randomizeSeating,
-              )
-            : null,
+        expectedPlayersOverride: s.expectedPlayersOverride,
+        durationHours: s.durationHours,
+        buyIn: s.buyIn,
+        koEnabled: s.koEnabled,
+        koAmount: s.koAmount,
+        rebuys: s.rebuys,
+        rebuysCloseLevel: s.rebuysCloseLevel,
+        rebuyCloseChosenByOrganizer: s.rebuyCloseChosenByOrganizer,
+        rebuyLimit: s.rebuys ? s.rebuyLimit : null,
+        rebuyCost: s.rebuyCost,
+        reEntry: s.reEntry,
+        addOn: s.addOn,
+        addOnCloseLevel: s.addOnCloseLevel,
+        breaks: List.of(s.breaks),
+        addOnCost: s.addOnCost,
+        anteEnabled: s.anteEnabled,
+        anteAfterLevel: s.anteAfterLevel,
+        anteStyle: s.anteStyle,
+        antePreference: s.antePreference,
+        organizerPct: s.organizerPct.clamp(0, 100),
+        chipSet: s.chipSet,
+        chipSetName: s.chipSetName,
+        locationPrivate: s.locationPrivate,
+        tableSettingsOverride: s.tableSettingsOverride,
       ),
     );
     app.setCurrentGame(game);
     app.publishGame();
-
-    showGeneratingModal(
-      context: context,
-      message: 'AI is generating tournament...',
-    );
-    await Future.delayed(const Duration(seconds: 6));
-    if (!mounted) return;
-    Navigator.of(context).pop();
 
     context.go(RoutePaths.invitation);
   }
@@ -801,19 +654,11 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           // Header
           Row(
             children: [
-              InkWell(
-                onTap: () => _step == 1
+              BackNavButton(
+                label: _step == 1 ? 'Back to games' : 'Back to the previous step',
+                onPressed: () => _step == 1
                     ? context.go(RoutePaths.group)
                     : setState(() => _step--),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(
-                    Icons.arrow_back,
-                    size: AppFontSizes.xl,
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -868,6 +713,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           if (_step == 2) _buildStep2(app),
           if (_step == 3) _buildStep3(app),
           if (_step == 4) _buildStep4(app),
+          if (_step == 5) _buildStep5(app),
           const SizedBox(height: AppSpacing.lg),
           // Nav buttons
           Row(
@@ -893,7 +739,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                         ],
                       ),
               ),
-              if (_step < 4)
+              if (_step < 5)
                 AppButton(
                   onPressed: _next,
                   child: Row(
@@ -916,338 +762,43 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     );
   }
 
-  /// Reads the start time, falling back to a sensible evening default when
-  /// the field is empty or malformed.
-  TimeOfDay get _startTime {
-    final parts = _time.text.split(':');
-    if (parts.length == 2) {
-      final h = int.tryParse(parts[0]);
-      final m = int.tryParse(parts[1]);
-      if (h != null && m != null && h >= 0 && h < 24 && m >= 0 && m < 60) {
-        return TimeOfDay(hour: h, minute: m);
-      }
-    }
-    return const TimeOfDay(hour: 20, minute: 0);
-  }
-
-  void _setStartTime(AppProvider app, TimeOfDay t) {
-    final h = t.hour.toString().padLeft(2, '0');
-    final m = t.minute.toString().padLeft(2, '0');
-    setState(() => _time.text = '$h:$m');
-    _refreshPresetMatches(app);
-  }
-
-  /// Section 7's +/- 30 minute stepper.
-  ///
-  /// Moving from an odd minute snaps to the half hour first, so a time typed
-  /// as 20:12 becomes 20:30 rather than 20:42 — the stepper is there to land
-  /// on round times, not to preserve arbitrary ones.
-  void _nudgeStartTime(AppProvider app, int deltaMins) {
-    final now = _startTime;
-    final total = now.hour * 60 + now.minute;
-    final snapped = deltaMins > 0
-        ? ((total ~/ 30) + 1) * 30
-        : ((total + 29) ~/ 30 - 1) * 30;
-    final wrapped = ((snapped % (24 * 60)) + 24 * 60) % (24 * 60);
-    _setStartTime(
-      app,
-      TimeOfDay(hour: wrapped ~/ 60, minute: wrapped % 60),
-    );
-  }
-
-  Future<void> _pickStartTime(AppProvider app) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _startTime,
-      builder: _centerDialog,
-    );
-    if (picked != null && mounted) _setStartTime(app, picked);
-  }
-
   Widget _buildStep1(AppProvider app) {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AppTextField(
-            controller: _name,
-            label: 'Tournament name',
-            placeholder: 'e.g. Friday Poker',
-            error: _errors['name'],
-          ),
-          const SizedBox(height: AppSpacing.lg),
+          // E — expected players surfaced as an editable estimate. The shared
+          // details section owns the stepper; RSVPs stay the real source and
+          // the figure only becomes an override the moment the host moves it.
           Row(
             children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () async {
-                    final initialDate = DateTime.tryParse(_date.text) ?? DateTime.now();
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: initialDate,
-                      firstDate: DateTime.now().subtract(const Duration(days: 1)),
-                      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-                      builder: _centerDialog,
-                    );
-                    if (picked != null) {
-                      final y = picked.year;
-                      final m = picked.month.toString().padLeft(2, '0');
-                      final d = picked.day.toString().padLeft(2, '0');
-                      setState(() => _date.text = '$y-$m-$d');
-                      _refreshPresetMatches(app);
-                    }
-                  },
-                  child: AbsorbPointer(
-                    child: AppTextField(
-                      controller: _date,
-                      label: 'Date',
-                      error: _errors['date'],
-                      readOnly: true,
-                    ),
-                  ),
-                ),
+              Icon(
+                Icons.groups_outlined,
+                size: 18,
+                color: AppColors.primary,
               ),
-              const SizedBox(width: AppSpacing.md),
-              // Section 7: "Start time — centered premium control; +/- 30
-              // minute stepper." A clock picker makes the host set minutes
-              // nobody uses; home games start on the hour or the half hour.
-              // Tapping the time still opens the full picker for the rare
-              // 20:15 start, so nothing is lost.
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Start time',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Glass.solidTint(AppColors.secondary),
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          IconButton(
-                            tooltip: '30 minutes earlier',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => _nudgeStartTime(app, -30),
-                            icon: Icon(
-                              Icons.remove,
-                              size: 18,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                          Expanded(
-                            child: InkWell(
-                              onTap: () => _pickStartTime(app),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: AppSpacing.sm,
-                                ),
-                                child: Text(
-                                  _time.text.isEmpty ? '--:--' : _time.text,
-                                  textAlign: TextAlign.center,
-                                  style: AppTypography.display(
-                                    size: AppFontSizes.lg,
-                                    weight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: '30 minutes later',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => _nudgeStartTime(app, 30),
-                            icon: Icon(
-                              Icons.add,
-                              size: 18,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  _expectedOverridden
+                      ? 'Expecting ~$_expectedPlayers — you overrode the group estimate. Change if you know better.'
+                      : 'Expecting ~$_expectedPlayers — from your group. Change if you know better.',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: _expectedOverridden
+                        ? AppColors.primary
+                        : AppColors.mutedForeground,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          AppTextField(
-            controller: _location,
-            label: 'Location (optional)',
-            placeholder: "e.g. Daniel's place",
-            error: _errors['location'],
-          ),
-          if (_location.text.trim().isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _ToggleRow(
-              title: 'Keep address private',
-              subtitle: 'Guests see the address only after check-in',
-              value: _locationPrivate,
-              onChanged: (v) => setState(() => _locationPrivate = v),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AppTextField(
-                      controller: _buyIn,
-                      label: 'Buy-in amount',
-                      error: _errors['buyIn'],
-                      keyboardType: TextInputType.number,
-                      onChanged: (_) => _refreshPresetMatches(app),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          // Tech spec 6.1: "Expected players: from RSVP **or admin override**".
-          // The derived figure is only ever as good as the RSVPs, and the host
-          // routinely knows better ("15 said yes, but prepare for 20"). The
-          // stepper seeds itself from the derived count and marks itself
-          // overridden the moment it is touched.
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Expected players',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _expectedOverridden
-                          ? 'Your override — chips and blinds are planned for this many'
-                          : 'From RSVPs. Adjust if you expect more.',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: _expectedOverridden
-                            ? AppColors.primary
-                            : AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              CountStepper(
-                value: _expectedPlayers,
-                min: 2,
-                max: 200,
-                semanticLabel: 'Expected players',
-                onChanged: (v) {
-                  setState(() {
-                    _expectedPlayers = v;
-                    _expectedOverridden = true;
-                  });
-                  _refreshPresetMatches(app);
-                },
-              ),
-            ],
-          ),
-          // Live, not cached -- see check_in_screen.
-          if (Entitlements.hostingBlockedReason(
-                    context.watch<AppProvider>().premiumTier,
-                    _expectedPlayers,
-                  )
-              case final blocked?) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.workspace_premium,
-                    size: 18,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      blocked,
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.foreground,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  AppButton(
-                    size: AppButtonSize.sm,
-                    onPressed: () => context.push(RoutePaths.upgrade),
-                    child: const Text('See Premium'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (_expectedOverridden) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Align(
-              alignment: Alignment.centerRight,
-              child: InkWell(
-                onTap: () {
-                  setState(() {
-                    _expectedOverridden = false;
-                    _expectedPlayers = _derivedExpectedPlayers;
-                  });
-                  _refreshPresetMatches(app);
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.xs),
-                  child: Text(
-                    'Use RSVP count ($_derivedExpectedPlayers)',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.primaryText,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          // Tech spec 6.1 / User Flow 4.3 list these as an ascending ladder.
-          // 4h is the default (see `_duration = 4.0`) but NOT the first
-          // option: hoisting it out of order made the row read
-          // "3, 3.5, 4.5" and the client reported 4h as missing.
-          _SegmentedPicker(
-            label: 'Target duration',
-            options: const ['3h', '3.5h', '4h', '4.5h', '5h', '5.5h', '6h'],
-            selected: _durationLabel,
-            onChanged: (v) {
-              final val = v.replaceAll('h', '');
-              setState(() => _duration = double.tryParse(val) ?? 4.0);
-              // §6.2: base-input edits refresh the suggested presets.
-              _refreshPresetMatches(app);
-            },
+          const SizedBox(height: AppSpacing.md),
+          EventSettingsForm(
+            key: _formKey,
+            initial: _draft,
+            sections: const {EventFormSection.details},
+            onChanged: _onDraftChanged,
           ),
         ],
       ),
@@ -1311,7 +862,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpacing.xxs),
                         Text(
                           _matchLabel(m.score),
                           style: AppTypography.bodyXs.copyWith(
@@ -1319,7 +870,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpacing.xxs),
                         Text(
                           m.diffs.isEmpty
                               ? 'Matches your current settings'
@@ -1351,435 +902,11 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   Widget _buildStep2(AppProvider app) {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Client rule: chip colours + values should be presettable and
-          // reusable. If the host has no saved chip set yet, point them at the
-          // quick setup instead of silently defaulting.
-          if (app.savedChipSets.isEmpty) ...[
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.style_outlined,
-                    size: 18,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      'No saved chip set yet. Use "Quick setup" to pick your colours and '
-                      'availability — it will be saved so you can reuse it next game.',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.foreground,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-          ],
-          // User Flow 4.5 / Tech 7.1 require all three ways in. They were all
-          // here, but as three unlabelled pills above a pre-filled preset, so
-          // the client read the screen as "these are the chips, take them or
-          // leave them" and never tried the other two. Naming the question and
-          // saying what each mode is for is the whole fix.
-          Text(
-            'Which chips are you using?',
-            style: AppTypography.display(
-              size: AppFontSizes.md,
-              weight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'These are your physical chips. Pick a saved set, or set up your '
-            'own — the starting stack is built out of whatever you choose.',
-            style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              for (int i = 0; i < _ChipMode.values.length; i++) ...[
-                Expanded(
-                  child: _ModeButton(
-                    label: switch (_ChipMode.values[i]) {
-                      _ChipMode.preset => 'Saved preset',
-                      _ChipMode.quick => 'Quick setup',
-                      _ChipMode.exact => 'Exact count',
-                    },
-                    active: _chipMode == _ChipMode.values[i],
-                    onTap: () =>
-                        setState(() => _chipMode = _ChipMode.values[i]),
-                  ),
-                ),
-                if (i < _ChipMode.values.length - 1)
-                  const SizedBox(width: AppSpacing.sm),
-              ],
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            switch (_chipMode) {
-              _ChipMode.preset =>
-                'Use a chip set you have already saved, or one of the standard sets.',
-              _ChipMode.quick =>
-                'Tell us which colours you own and how common each is — we suggest the values.',
-              _ChipMode.exact =>
-                'Enter each colour, its value and exactly how many you have.',
-            },
-            style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          if (_chipMode == _ChipMode.preset) ...[
-            AppSelect(
-              label: 'Select chip preset',
-              value: _presetName,
-              onChanged: (v) {
-                if (v == null) return;
-                setState(() {
-                  _presetName = v;
-                  _chipSet = List.of(TournamentEngine.getPreset(v));
-                });
-                // §6.2: the chip set facet feeds preset matching.
-                _refreshPresetMatches(app);
-              },
-              items: [
-                for (final name in TournamentEngine.presetNames)
-                  DropdownMenuItem(value: name, child: Text(name)),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            for (final c in _chipSet)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: AppColors.secondary,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: ChipToken(
-                    colorName: c.color,
-                    hex: c.colorValue,
-                    value: c.value,
-                    count: c.quantity,
-                  ),
-                ),
-              ),
-          ] else if (_chipMode == _ChipMode.quick) ...[
-            Text(
-              'Select available colours and rank them from most to least available. Poker Night will suggest values.',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            for (var i = 0; i < _chipSet.length; i++)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.sm,
-                ),
-                margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                decoration: BoxDecoration(
-                  color: AppColors.secondary,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  children: [
-                    ChipToken(
-                      colorName: _chipSet[i].color,
-                      hex: _chipSet[i].colorValue,
-                      value: _chipSet[i].value,
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        'Rank ${i + 1}',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: i == 0
-                          ? null
-                          : () => setState(() {
-                              final tmp = _chipSet[i - 1];
-                              _chipSet[i - 1] = _chipSet[i];
-                              _chipSet[i] = tmp;
-                            }),
-                      icon: Icon(
-                        Icons.arrow_upward,
-                        size: 14,
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: i == _chipSet.length - 1
-                          ? null
-                          : () => setState(() {
-                              final tmp = _chipSet[i + 1];
-                              _chipSet[i + 1] = _chipSet[i];
-                              _chipSet[i] = tmp;
-                            }),
-                      icon: Icon(
-                        Icons.arrow_downward,
-                        size: 14,
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ] else ...[
-            Text(
-              'Enter exact chip counts and values.',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            for (var i = 0; i < _chipSet.length; i++)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.sm,
-                ),
-                margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                decoration: BoxDecoration(
-                  color: AppColors.secondary,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  children: [
-                    ChipToken(
-                      colorName: _chipSet[i].color,
-                      hex: _chipSet[i].colorValue,
-                      value: _chipSet[i].value,
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        _chipSet[i].color,
-                        style: AppTypography.bodyXs,
-                      ),
-                    ),
-                    _ExactInput(
-                      label: 'Value',
-                      value: '${_chipSet[i].value}',
-                      onChanged: (v) => setState(() {
-                        _chipSet[i] = _chipSet[i].copyWith(
-                          value: int.tryParse(v) ?? 1,
-                        );
-                      }),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    _ExactInput(
-                      label: '×',
-                      value: '${_chipSet[i].quantity}',
-                      onChanged: (v) => setState(() {
-                        _chipSet[i] = _chipSet[i].copyWith(
-                          quantity: int.tryParse(v) ?? 0,
-                        );
-                      }),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: AppButton(
-              size: AppButtonSize.sm,
-              variant: AppButtonVariant.secondary,
-              onPressed: _showAddChipDialog,
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add, size: 14),
-                  SizedBox(width: 4),
-                  Text('Add Chip Color'),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddChipDialog() {
-    Color pickerColor = AppColors.mutedForeground;
-    final nameController = TextEditingController(text: 'Custom');
-    final valueController = TextEditingController(text: '100');
-    final qtyController = TextEditingController(text: '50');
-
-    final dialogInsets = appDialogInsets(context);
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.72),
-      builder: (context) => Dialog(
-        insetPadding: dialogInsets,
-        backgroundColor: AppColors.card,
-        surfaceTintColor: Colors.transparent,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          side: BorderSide(color: AppColors.border),
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 420,
-            maxHeight: MediaQuery.sizeOf(context).height * 0.85,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.xl,
-                  AppSpacing.lg,
-                  AppSpacing.md,
-                  AppSpacing.lg,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Add custom colour',
-                        style: AppTypography.display(
-                          size: AppFontSizes.lg,
-                          weight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => Navigator.pop(context),
-                      icon: Icon(
-                        Icons.close,
-                        size: 18,
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Divider(height: 1, color: AppColors.border),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(AppSpacing.xl),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ColorPicker(
-                        pickerColor: pickerColor,
-                        onColorChanged: (color) {
-                          pickerColor = color;
-                        },
-                        enableAlpha: false,
-                        labelTypes: const [],
-                        portraitOnly: true,
-                        pickerAreaBorderRadius: BorderRadius.circular(
-                          AppRadius.md,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      AppTextField(
-                        controller: nameController,
-                        label: 'Colour name',
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: AppTextField(
-                              controller: valueController,
-                              label: 'Value',
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: AppTextField(
-                              controller: qtyController,
-                              label: 'Quantity',
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Divider(height: 1, color: AppColors.border),
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    AppButton(
-                      variant: AppButtonVariant.secondary,
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    AppButton(
-                      onPressed: () {
-                        final hexName =
-                            '#${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-                        final inputName = nameController.text.trim();
-                        final val =
-                            int.tryParse(valueController.text.trim()) ?? 100;
-                        final qty =
-                            int.tryParse(qtyController.text.trim()) ?? 50;
-                        setState(() {
-                          _chipSet.add(
-                            ChipColor(
-                              color: inputName.isEmpty ? hexName : inputName,
-                              hex: pickerColor.toARGB32(),
-                              value: val,
-                              quantity: qty,
-                            ),
-                          );
-                          _chipMode = _ChipMode.exact;
-                        });
-                        // §6.2: a custom set changes the chip facet.
-                        _refreshPresetMatches(context.read<AppProvider>());
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Add colour'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+      child: EventSettingsForm(
+        key: _formKey,
+        initial: _draft,
+        sections: const {EventFormSection.chips},
+        onChanged: _onDraftChanged,
       ),
     );
   }
@@ -1787,771 +914,36 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   Widget _buildStep3(AppProvider app) {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Rebuys',
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Players can buy back in after elimination',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                _SegmentedPicker(
-                  options: const ['Off', 'Limited', 'Unlimited'],
-                  selected: _rebuys
-                      ? (_rebuyUnlimited ? 'Unlimited' : 'Limited')
-                      : 'Off',
-                onChanged: (v) => setState(() {
-                  if (v == 'Off') {
-                    _rebuys = false;
-                    _rebuyUnlimited = false;
-                  } else if (v == 'Limited') {
-                    _rebuys = true;
-                    _rebuyUnlimited = false;
-                  } else {
-                    // Unlimited rebuys default to closing at the end of L6.
-                    _rebuys = true;
-                    _rebuyUnlimited = true;
-                    _rebuysClose = 6;
-                  }
-                  // Specification sections 7 and 32: "Rebuy/re-entry is one
-                  // toggle." They were two independent switches, so a host
-                  // could enable rebuys and be surprised that re-entry was a
-                  // separate thing they had missed. `reEntry` stays a stored
-                  // field -- it still gates its own live action and feeds the
-                  // engine's chip projection -- it just no longer has a
-                  // control of its own.
-                  _reEntry = _rebuys;
-                  // §6.2: rule edits refresh the suggested presets.
-                  _refreshPresetMatches(app);
-                }),
-                ),
-              ],
-            ),
-          ),
-          if (_rebuys) ...[
-            // Both limited and unlimited rebuys close at the end of a chosen
-            // level (client rule: "if unlimited — until when, end of L6").
-            Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.lg,
-                top: AppSpacing.md,
-              ),
-              child: _SegmentedPicker(
-                label: _rebuyUnlimited
-                    ? 'Unlimited rebuys until'
-                    : 'Close rebuys',
-                options: const [
-                  'End L4',
-                  'End L5',
-                  'End L6',
-                  'End L7',
-                  'End L8',
-                ],
-                selected: 'End L$_rebuysClose',
-                onChanged: (v) => setState(() {
-                  _rebuysClose = int.tryParse(v.replaceAll('End L', '')) ?? 6;
-                  _rebuyCloseChosen = true;
-                }),
-              ),
-            ),
-              Padding(
-                padding: const EdgeInsets.only(
-                  left: AppSpacing.lg,
-                  top: AppSpacing.md,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Max rebuys per player',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    SizedBox(
-                      width: 130,
-                      child: AppTextField(
-                        controller: _rebuyLimit,
-                        keyboardType: TextInputType.number,
-                        error: _errors['rebuyLimit'],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.lg,
-                top: AppSpacing.md,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Rebuy price',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  SizedBox(
-                    width: 130,
-                    child: AppTextField(
-                      controller: _rebuyCost,
-                      keyboardType: TextInputType.number,
-                      placeholder: 'Default (${_buyIn.text})',
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Unlimited rebuys per player until they close.',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          Divider(color: AppColors.border),
-          // The standalone "Re-entry" switch was removed here: sections 7 and
-          // 32 make rebuy and re-entry a single ON/OFF, and the control above
-          // now sets both.
-          if (_reEntry)
-            Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.lg,
-                top: AppSpacing.sm,
-                bottom: AppSpacing.sm,
-              ),
-              child: Text(
-                'Closes with late registration and rebuys.',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ),
-          Divider(color: AppColors.border),
-          // Section 8 — breaks are a dedicated setup section, and their
-          // minutes come out of the target duration rather than being added
-          // on top of it.
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Breaks',
-                            style: AppTypography.bodySm.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _breaksOn
-                                ? 'Break time comes out of your $_durationLabel '
-                                      'target, not on top of it.'
-                                : 'Scheduled pauses built into the structure.',
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    _SegmentedPicker(
-                      options: const ['Off', '1', '2', '3'],
-                      selected: _breaksOn ? '${_breaks.length}' : 'Off',
-                      onChanged: (v) => setState(() {
-                        if (v == 'Off') {
-                          _breaks = const [];
-                          return;
-                        }
-                        final count = int.parse(v);
-                        final mins = _breaksOn
-                            ? _breaks.first.durationMins
-                            : 10;
-                        // afterLevel 0 asks the engine to place it: after the
-                        // rebuy window, or the midpoint when rebuys are off.
-                        _breaks = List.generate(
-                          count,
-                          (i) => i < _breaks.length
-                              ? _breaks[i]
-                              : ScheduledBreak(
-                                  afterLevel: 0,
-                                  durationMins: mins,
-                                ),
-                        );
-                      }),
-                    ),
-                  ],
-                ),
-                if (_breaksOn) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  // Section 8: each break carries its own placement and
-                  // duration, presets PLUS custom. One row per break so a
-                  // three-break night can put them where it wants.
-                  for (var i = 0; i < _breaks.length; i++) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: Container(
-                        padding: const EdgeInsets.all(AppSpacing.sm),
-                        decoration: BoxDecoration(
-                          color: Glass.solidTint(AppColors.secondary),
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Break ${i + 1}',
-                              style: AppTypography.bodyXs.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.foreground,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            // Wrap, not Row: "After level" + the stepper +
-                            // "Auto" have no fixed budget between them, and a
-                            // Row of unwrapped children here is exactly what
-                            // overflowed on a phone. Wrap can never overflow
-                            // horizontally — it just drops to a second line.
-                            Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: AppSpacing.sm,
-                              runSpacing: AppSpacing.xs,
-                              children: [
-                                Text(
-                                  'After level',
-                                  style: AppTypography.bodyXs.copyWith(
-                                    color: AppColors.mutedForeground,
-                                  ),
-                                ),
-                                CountStepper(
-                                  // 0 means "you choose" — the engine places
-                                  // it after the rebuy window, or at the
-                                  // midpoint when rebuys are off.
-                                  value: _breaks[i].afterLevel,
-                                  min: 0,
-                                  max: 30,
-                                  semanticLabel: 'Break ${i + 1} after level',
-                                  onChanged: (v) => setState(() {
-                                    _breaks = [
-                                      for (var j = 0; j < _breaks.length; j++)
-                                        j == i
-                                            ? _breaks[j].copyWith(afterLevel: v)
-                                            : _breaks[j],
-                                    ];
-                                  }),
-                                ),
-                                if (_breaks[i].afterLevel == 0)
-                                  Text(
-                                    'Auto',
-                                    style: AppTypography.bodyXs.copyWith(
-                                      color: AppColors.primaryText,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            // Same reasoning: the segmented picker alone can
-                            // run wider than a phone screen with all five
-                            // options, so this also wraps instead of forcing
-                            // one line.
-                            Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: AppSpacing.sm,
-                              runSpacing: AppSpacing.xs,
-                              children: [
-                                Text(
-                                  'Minutes',
-                                  style: AppTypography.bodyXs.copyWith(
-                                    color: AppColors.mutedForeground,
-                                  ),
-                                ),
-                                _SegmentedPicker(
-                                  // Section 8's presets, plus Custom — which
-                                  // simply hands the stepper below any value.
-                                  options: const ['5', '10', '15', '20', 'Custom'],
-                                  selected: kBreakDurationPresets
-                                          .contains(_breaks[i].durationMins)
-                                      ? '${_breaks[i].durationMins}'
-                                      : 'Custom',
-                                  onChanged: (v) => setState(() {
-                                    if (v == 'Custom') return;
-                                    final mins = int.parse(v);
-                                    _breaks = [
-                                      for (var j = 0; j < _breaks.length; j++)
-                                        j == i
-                                            ? _breaks[j]
-                                                .copyWith(durationMins: mins)
-                                            : _breaks[j],
-                                    ];
-                                  }),
-                                ),
-                                CountStepper(
-                                  value: _breaks[i].durationMins,
-                                  min: 1,
-                                  max: 60,
-                                  step: 1,
-                                  semanticLabel: 'Break ${i + 1} minutes',
-                                  onChanged: (v) => setState(() {
-                                    _breaks = [
-                                      for (var j = 0; j < _breaks.length; j++)
-                                        j == i
-                                            ? _breaks[j]
-                                                .copyWith(durationMins: v)
-                                            : _breaks[j],
-                                    ];
-                                  }),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                  Text(
-                    _breaks.every((b) => b.afterLevel > 0)
-                        ? 'Placed exactly where you have chosen.'
-                        : _rebuys
-                            ? 'Anything left on Auto goes after the rebuy '
-                                  'window closes (around L$_rebuysClose).'
-                            : 'Anything left on Auto goes around the middle '
-                                  'of the tournament.',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Divider(color: AppColors.border),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Add-on',
-                        style: AppTypography.bodySm.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'One per active player at rebuy close',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                _SegmentedPicker(
-                  options: const ['Yes', 'No'],
-                  selected: _addOn ? 'Yes' : 'No',
-                  onChanged: (v) => setState(() => _addOn = v == 'Yes'),
-                ),
-              ],
-            ),
-          ),
-          if (_addOn)
-            Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.lg,
-                top: AppSpacing.md,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Add-on price',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  SizedBox(
-                    width: 130,
-                    child: AppTextField(
-                      controller: _addOnCost,
-                      keyboardType: TextInputType.number,
-                      placeholder: 'Default (${_buyIn.text})',
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Add-on matches the starting stack.',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _SegmentedPicker(
-                    label: 'Add-on available until',
-                    options: const [
-                      'End L4',
-                      'End L5',
-                      'End L6',
-                      'End L7',
-                      'End L8',
-                    ],
-                    selected: 'End L$_addOnClose',
-                    onChanged: (v) => setState(
-                      () => _addOnClose =
-                          int.tryParse(v.replaceAll('End L', '')) ?? 6,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          Divider(color: AppColors.border),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'KO bounty',
-                        style: AppTypography.bodySm.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Side payment for eliminating a player',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Addendum §3 lists "Advanced payout/ICM functionality and
-                // KO/PKO" under Premium. Locked rather than hidden -- a host
-                // should see the setting exists, otherwise the product looks
-                // smaller than it is and the upgrade is harder to want.
-                PremiumLock(
-                  tier: context.watch<AppProvider>().premiumTier,
-                  feature: PremiumFeature.advancedPayoutsAndIcm,
-                  child: _SegmentedPicker(
-                    options: const ['Yes', 'No'],
-                    selected: _koEnabled ? 'Yes' : 'No',
-                    onChanged: (v) => setState(() => _koEnabled = v == 'Yes'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_koEnabled)
-            Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.lg,
-                top: AppSpacing.md,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Bounty amount',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  SizedBox(
-                    width: 130,
-                    child: AppTextField(
-                      controller: _koAmount,
-                      keyboardType: TextInputType.number,
-                      error: _errors['koAmount'],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Shown as "${_buyIn.text} + ${_koAmount.text}". Bounty does not enter prize pool.',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          Divider(color: AppColors.border),
-          _ToggleRow(
-            title: 'Override table settings',
-            subtitle:
-                'Group default: $_maxPerTable per table, randomize '
-                '${_randomizeSeating ? 'on' : 'off'}',
-            value: _overrideTableSettings,
-            onChanged: (v) => setState(() => _overrideTableSettings = v),
-          ),
-          if (_overrideTableSettings)
-            Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.lg,
-                top: AppSpacing.sm,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Players per table before splitting',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _maxPerTable <= 6
-                            ? null
-                            : () => setState(() => _maxPerTable--),
-                        icon: const Icon(Icons.remove_circle_outline),
-                      ),
-                      Text('$_maxPerTable', style: AppTypography.bodySm),
-                      IconButton(
-                        onPressed: _maxPerTable >= 12
-                            ? null
-                            : () => setState(() => _maxPerTable++),
-                        icon: const Icon(Icons.add_circle_outline),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  _ToggleRow(
-                    title: 'Randomize seating',
-                    subtitle: 'Defaults seating generation to fully random',
-                    value: _randomizeSeating,
-                    onChanged: (v) => setState(() => _randomizeSeating = v),
-                  ),
-                ],
-              ),
-            ),
-          Divider(color: AppColors.border),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Ante',
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Choose how the ante is posted',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Column(
-                  children: [
-                    if (_antePreference == AntePreference.recommend) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: Text(
-                          '${_anteAdvice.label} — ${_anteAdvice.reason}',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.primaryText,
-                          ),
-                        ),
-                      ),
-                    ],
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _ModeButton(
-                            label: 'Recommended',
-                            active: _antePreference == AntePreference.recommend,
-                            onTap: () => setState(
-                              () => _antePreference = AntePreference.recommend,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: _ModeButton(
-                            label: 'No ante',
-                            active: _antePreference == AntePreference.none,
-                            onTap: () => setState(
-                              () => _antePreference = AntePreference.none,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _ModeButton(
-                            label: 'Big blind',
-                            active: _antePreference == AntePreference.bigBlind,
-                            onTap: () => setState(
-                              () => _antePreference = AntePreference.bigBlind,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: _ModeButton(
-                            label: 'Individual',
-                            active:
-                                _antePreference == AntePreference.individual,
-                            onTap: () => setState(
-                              () => _antePreference = AntePreference.individual,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  switch (_antePreference) {
-                    AntePreference.recommend =>
-                      'One ante per table equal to the big blind, starting at a fixed level. Recommended.',
-                    AntePreference.none => 'No antes during the tournament.',
-                    AntePreference.bigBlind =>
-                      'One ante per table, equal to the big blind.',
-                    AntePreference.individual =>
-                      'Every player posts an ante (half the big blind) each hand.',
-                  },
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                if (_antePreference != AntePreference.none) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  _SegmentedPicker(
-                    label: 'Activate ante',
-                    options: const [
-                      'After L4',
-                      'After L5',
-                      'After L6',
-                      'After L7',
-                      'After L8',
-                    ],
-                    selected: 'After L$_anteAfterLevel',
-                    onChanged: (v) => setState(
-                      () => _anteAfterLevel =
-                          int.tryParse(v.replaceAll('After L', '')) ?? 6,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Divider(color: AppColors.border),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Organizational costs',
-                style: AppTypography.bodySm.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 2),
-              // Spec 7 and 18 fix this wording exactly, and spec 32 lists it
-              // as a term that must not drift — it is never called a rake.
-              Text(
-                'Percentage retained for equipment, drinks & snacks. '
-                'Admin only — never shown to players.',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  CountStepper(
-                    value: _orgPct,
-                    min: 0,
-                    max: _orgPctCeiling,
-                    suffix: '%',
-                    semanticLabel: 'Organizational costs percentage',
-                    onChanged: (v) => setState(() {
-                      _orgPctController.text = '$v';
-                      _errors.remove('orgPct');
-                    }),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  if (_orgPct == 0)
-                    Expanded(
-                      child: Text(
-                        'Off — the whole pool goes to the players.',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              if (_errors['orgPct'] != null) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  _errors['orgPct']!,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.destructiveText,
-                  ),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Private — the prize pool keeps the remaining percentage of gross.',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ],
-          ),
-        ],
+      child: EventSettingsForm(
+        key: _formKey,
+        initial: _draft,
+        // Rebuys & add-ons only (D1): the fine-grained rebuys section owns
+        // the rebuys/re-entry/limit/close and add-on decisions; the money
+        // section carries their prices. Format decisions (KO, ante, breaks)
+        // live on the Format step, so nothing here is shown twice.
+        sections: const {EventFormSection.rebuys, EventFormSection.money},
+        onChanged: _onDraftChanged,
       ),
     );
   }
 
   Widget _buildStep4(AppProvider app) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: EventSettingsForm(
+        key: _formKey,
+        initial: _draft,
+        // Format only (D1): KO bounty, ante, breaks and the seating override.
+        // Rebuys/add-ons fields have their own step (EventFormSection.rebuys),
+        // so this step renders none of them.
+        sections: const {EventFormSection.format},
+        onChanged: _onDraftChanged,
+      ),
+    );
+  }
+
+  Widget _buildStep5(AppProvider app) {
+    final s = _draft;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xxl),
       child: Column(
@@ -2573,13 +965,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '${_name.text.trim()} · ${_date.text} at ${_time.text}',
+            '${s.name.trim()} · ${s.date} at ${s.time}',
             textAlign: TextAlign.center,
             style: AppTypography.bodySm.copyWith(color: AppColors.primary),
           ),
           const SizedBox(height: AppSpacing.lg),
-          // No "expected players" card — the field size comes from RSVPs
-          // (Going + Going +N), never from an input (client rule).
+          // The head-count card reflects the host's step-1 estimate when one
+          // is set; otherwise the real source (RSVPs) is quoted.
           Row(
             children: [
               Expanded(
@@ -2594,7 +986,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 child: _SummaryStatCard(
                   icon: Icons.attach_money,
                   label: 'Buy-in',
-                  value: _buyIn.text,
+                  value: '${s.buyIn}',
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -2602,7 +994,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 child: _SummaryStatCard(
                   icon: Icons.groups_outlined,
                   label: 'Players',
-                  value: 'from RSVPs',
+                  value: _expectedOverridden
+                      ? '$_expectedPlayers'
+                      : 'from RSVPs',
                 ),
               ),
             ],
@@ -2614,37 +1008,36 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             alignment: WrapAlignment.center,
             children: [
               AppBadge(
-                label: _rebuys
-                    ? (_rebuyUnlimited
-                          ? 'Unlimited rebuys to L$_rebuysClose'
-                          : '${_rebuyLimit.text.trim().isNotEmpty ? _rebuyLimit.text : '1'} rebuys to L$_rebuysClose${_rebuyCost.text.trim().isNotEmpty ? ' @ ${_rebuyCost.text}' : ''}')
+                label: s.rebuys
+                    ? (s.rebuyLimit == null
+                          ? 'Unlimited rebuys to L${s.rebuysCloseLevel}'
+                          : '${s.rebuyLimit} rebuys to L${s.rebuysCloseLevel}${s.rebuyCost != null ? ' @ ${s.rebuyCost}' : ''}')
                     : 'No rebuys',
-                variant: _rebuys ? AppBadgeVariant.gold : AppBadgeVariant.muted,
+                variant: s.rebuys ? AppBadgeVariant.gold : AppBadgeVariant.muted,
               ),
               AppBadge(
-                label: _reEntry ? 'Re-entry' : 'No re-entry',
-                variant: _reEntry
+                label: s.reEntry ? 'Re-entry' : 'No re-entry',
+                variant: s.reEntry
                     ? AppBadgeVariant.gold
                     : AppBadgeVariant.muted,
               ),
               AppBadge(
-                label: _addOn ? 'Add-on to L$_addOnClose' : 'No add-on',
-                variant: _addOn ? AppBadgeVariant.gold : AppBadgeVariant.muted,
+                label: s.addOn ? 'Add-on to L${s.addOnCloseLevel}' : 'No add-on',
+                variant: s.addOn ? AppBadgeVariant.gold : AppBadgeVariant.muted,
               ),
               AppBadge(
-                label: _antePreference == AntePreference.none
+                label: s.antePreference == AntePreference.none
                     ? 'No ante'
-                    : 'Ante L$_anteAfterLevel (${_antePreference == AntePreference.individual ? 'Ind' : 'BB'})',
-                variant: _antePreference != AntePreference.none
+                    : 'Ante L${s.anteAfterLevel} (${s.antePreference == AntePreference.individual ? 'Ind' : 'BB'})',
+                variant: s.antePreference != AntePreference.none
                     ? AppBadgeVariant.gold
                     : AppBadgeVariant.muted,
               ),
               AppBadge(
-                label:
-                    'Chips: ${_chipMode == _ChipMode.preset ? _presetName : 'Custom'}',
+                label: 'Chips: ${s.chipSetName}',
                 variant: AppBadgeVariant.default_,
               ),
-              if (_locationPrivate)
+              if (s.locationPrivate)
                 const AppBadge(
                   label: 'Private Address',
                   variant: AppBadgeVariant.accent,
@@ -2821,7 +1214,15 @@ class _ConfirmDetailsDialog extends StatelessWidget {
                     Wrap(
                       spacing: AppSpacing.sm,
                       runSpacing: AppSpacing.sm,
-                      children: [for (final c in chipSet) _ChipPill(chip: c)],
+                      children: [
+                        for (final c in chipSet)
+                          ChipPill(
+                            colorName: c.color,
+                            hex: c.colorValue,
+                            value: c.value,
+                            count: c.quantity,
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -2872,7 +1273,7 @@ class _ConfirmDetailsDialog extends StatelessWidget {
                     weight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   'Check everything before the structure is generated.',
                   style: AppTypography.bodyXs.copyWith(
@@ -3024,196 +1425,6 @@ class _ConfirmRow extends StatelessWidget {
   }
 }
 
-class _ChipPill extends StatelessWidget {
-  const _ChipPill({required this.chip});
-
-  final ChipColor chip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 13,
-            height: 13,
-            decoration: BoxDecoration(
-              color: chip.colorValue,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.foreground.withValues(alpha: 0.22)),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Text(
-            '${chip.value}',
-            style: AppTypography.monoXs.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '×${chip.quantity}',
-            style: AppTypography.monoXs.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModeButton extends StatelessWidget {
-  const _ModeButton({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? AppColors.primarySoft : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-            color: active ? AppColors.primary : AppColors.border,
-          ),
-        ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: AppTypography.bodySm.copyWith(
-              color: active ? AppColors.primary : AppColors.mutedForeground,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ToggleRow extends StatelessWidget {
-  const _ToggleRow({
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AppToggle(value: value, onChanged: onChanged),
-        ],
-      ),
-    );
-  }
-}
-
-class _ExactInput extends StatelessWidget {
-  const _ExactInput({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final String value;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: AppTypography.bodyXs.copyWith(
-            color: AppColors.mutedForeground,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        SizedBox(
-          width: 56,
-          child: TextField(
-            controller: TextEditingController(text: value),
-            textAlign: TextAlign.center,
-            keyboardType: TextInputType.number,
-            style: AppTypography.bodySm,
-            onChanged: onChanged,
-            decoration: InputDecoration(
-              isDense: true,
-              filled: true,
-              fillColor: AppColors.card,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 6,
-                vertical: 8,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                borderSide: BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                borderSide: BorderSide(color: AppColors.ring),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _SummaryStatCard extends StatelessWidget {
   const _SummaryStatCard({
     required this.icon,
@@ -3246,7 +1457,7 @@ class _SummaryStatCard extends StatelessWidget {
               color: AppColors.mutedForeground,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             value,
             style: AppTypography.display(
@@ -3257,73 +1468,5 @@ class _SummaryStatCard extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _SegmentedPicker extends StatelessWidget {
-  const _SegmentedPicker({
-    required this.options,
-    required this.selected,
-    required this.onChanged,
-    this.label,
-  });
-
-  final List<String> options;
-  final String selected;
-  final ValueChanged<String> onChanged;
-  final String? label;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget picker = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (int i = 0; i < options.length; i++) ...[
-          GestureDetector(
-            onTap: () => onChanged(options[i]),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
-              ),
-              decoration: BoxDecoration(
-                color: options[i] == selected
-                    ? AppColors.primary
-                    : AppColors.secondary,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-              ),
-              child: Text(
-                options[i],
-                style: AppTypography.bodyXs.copyWith(
-                  color: options[i] == selected
-                      ? AppColors.foreground
-                      : AppColors.mutedForeground,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          if (i < options.length - 1) const SizedBox(width: AppSpacing.xs),
-        ],
-      ],
-    );
-
-    if (label != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label!,
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          picker,
-        ],
-      );
-    }
-
-    return picker;
   }
 }

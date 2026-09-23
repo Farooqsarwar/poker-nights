@@ -162,10 +162,18 @@ class ThemePalettes {
   static const red = ThemePalette(
     id: 'red',
     name: 'Red',
-    primary: Color(0xFFB71C1C),
+    // The three hexes below are the only colours the client's product system
+    // ("PokerNightTools — Product System") actually declares: ground #0A0A0A,
+    // accent/action #D53032, ink #FFFFFF. They were previously B71C1C on pure
+    // black — eyeballed, and noticeably darker and more muted than the spec.
+    // Everything else in this palette is ours and stays as tuned below.
+    primary: Color(0xFFD53032),
     onPrimary: Color(0xFFFFFFFF),
-    primaryHover: Color(0xFFD32F2F),
-    background: Color(0xFF000000),
+    // Not in the spec. The old D32F2F is now within a hair of the accent
+    // itself, so hover would read as no change at all; this is a ~7% lightness
+    // step up from D53032, the smallest lift that is visibly a hover state.
+    primaryHover: Color(0xFFE24446),
+    background: Color(0xFF0A0A0A),
     foreground: Color(0xFFFFFFFF),
     // Surfaces and borders are deliberately left exactly as they were. The
     // near-black card on a black page IS the look; an earlier attempt to lift
@@ -185,10 +193,10 @@ class ThemePalettes {
     // Was A1A1AA (7.4:1 on card). Lifted to B8B8C2 — 9.6:1 — because this is
     // the workhorse for secondary copy on every screen.
     mutedForeground: Color(0xFFB8B8C2),
-    accent: Color(0xFFB71C1C),
+    accent: Color(0xFFD53032),
     accentForeground: Color(0xFFFFFFFF),
     border: Color(0xFF333333),
-    ring: Color(0xFFB71C1C),
+    ring: Color(0xFFD53032),
     // Was 71717A, which measured 3.9:1 on a card — under the 4.5:1 WCAG AA
     // floor for body text, and this token is used for input hints, dropdown
     // placeholders and chat metadata, i.e. text people actually need to read.

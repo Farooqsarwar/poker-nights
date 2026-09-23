@@ -93,19 +93,29 @@ class _CodeEntry extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.style, size: 60, color: AppColors.primary),
-                      const SizedBox(width: AppSpacing.md),
-                      Text(
-                        'POKER NIGHT',
-                        style: AppTypography.crimsonShimmer(
-                          size: 36,
-                          weight: FontWeight.w700,
+                  // The lockup is a fixed 60px glyph next to "POKER NIGHT" at
+                  // 36pt — about 471px wide, inside a 384px box. That is a
+                  // constant 87px overflow at every width from tablet up, and
+                  // 231px on a 320px phone. FittedBox scales the whole lockup
+                  // down as one unit so the icon and the wordmark keep their
+                  // relative size; scaleDown means it never grows past its
+                  // designed 36pt when there is room.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.style, size: 60, color: AppColors.primary),
+                        const SizedBox(width: AppSpacing.md),
+                        Text(
+                          'POKER NIGHT',
+                          style: AppTypography.crimsonShimmer(
+                            size: 36,
+                            weight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.xxl),
                   Container(
@@ -274,7 +284,7 @@ class _TVLayoutState extends State<_TVLayout> {
     if (isCompleted && game.finishOrder.length >= 3) {
       return Scaffold(
         backgroundColor: AppColors.background,
-        body: _Podium(game: game),
+        body: SafeArea(child: _Podium(game: game)),
       );
     }
 
@@ -294,7 +304,11 @@ class _TVLayoutState extends State<_TVLayout> {
           child: const Icon(Icons.tune, size: 18),
         ),
       ),
-      body: Column(
+      // TV mode usually runs on a real display with no insets, but it is
+      // reachable on a tablet — where the banner and the clock would
+      // otherwise sit under the status bar / camera cutout.
+      body: SafeArea(
+        child: Column(
         children: [
           // Reconnection banner for TV mode (tech spec §4.2).
           Consumer<AppProvider>(
@@ -321,7 +335,7 @@ class _TVLayoutState extends State<_TVLayout> {
                     .toDouble();
                 if (constraints.maxWidth >= 900) {
                   return Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(AppSpacing.lg),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -340,8 +354,9 @@ class _TVLayoutState extends State<_TVLayout> {
                               Consumer<AppProvider>(
                                 builder: (_, app, x) {
                                   final lastSync = app.lastGameUpdate;
-                                  if (lastSync == null)
+                                  if (lastSync == null) {
                                     return const SizedBox.shrink();
+                                  }
                                   final stale =
                                       DateTime.now()
                                           .difference(lastSync)
@@ -372,7 +387,7 @@ class _TVLayoutState extends State<_TVLayout> {
                             ],
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: AppSpacing.lg),
                         Expanded(
                           flex: 3,
                           child: _RotatingPanel(
@@ -392,7 +407,7 @@ class _TVLayoutState extends State<_TVLayout> {
                         game: game,
                         showPayoutAmounts: false,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpacing.md),
                       Consumer<AppProvider>(
                         builder: (_, app, x) {
                           final lastSync = app.lastGameUpdate;
@@ -422,6 +437,7 @@ class _TVLayoutState extends State<_TVLayout> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -629,7 +645,7 @@ class _RotatingPanelState extends State<_RotatingPanel> {
     // screen somehow ends up with nothing selected.
     final effectivePanel = active.isEmpty ? 0 : active[_panel % active.length];
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: AppColors.background,
         border: Border.all(color: AppColors.border),
@@ -699,7 +715,7 @@ class _LeaderboardPanel extends StatelessWidget {
         return t != 0 ? t : a.seat.compareTo(b.seat);
       });
 
-    String _ordinalPlace(int n) {
+    String ordinalPlace(int n) {
       if (n % 100 >= 11 && n % 100 <= 13) return '${n}th';
       return switch (n % 10) {
         1 => '${n}st',
@@ -729,12 +745,12 @@ class _LeaderboardPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.sm),
                 Text(
                   p.active
                       ? 'T${p.table} · S${p.seat}'
                       : p.eliminationPos != null
-                      ? '${_ordinalPlace(p.eliminationPos!)} place'
+                      ? '${ordinalPlace(p.eliminationPos!)} place'
                       : 'Out',
                   style: AppTypography.mono(
                     size: 11 * scale,
@@ -767,7 +783,7 @@ class _PayoutsPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
           // 14-043 / 15-034: the pool total is a LIVE figure. Once the
           // tournament is finished, public and player results show the paid
           // positions only — no money. The podium and history screens already
@@ -802,9 +818,9 @@ class _PayoutsPanel extends StatelessWidget {
               ),
             ),
           if (game.status == LiveGameStatus.completed) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             Divider(height: 1, color: AppColors.border),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             for (var i = 0; i < paidPlaces; i++)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),

@@ -486,7 +486,7 @@ extension AppProviderTimer on AppProvider {
         status: LiveGameStatus.onBreak,
         timerRunning: true,
         secondsRemaining: scheduled.durationMins * 60,
-        levelEndTime: DateTime.now().add(
+        levelEndTime: _serverNow.add(
           Duration(minutes: scheduled.durationMins),
         ),
         speedRecommendation: null,

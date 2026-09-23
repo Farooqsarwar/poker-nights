@@ -306,7 +306,7 @@ class _NotificationRow extends StatelessWidget {
                       ],
                     ],
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpacing.xxs),
                   Text(
                     notification.body,
                     maxLines: 2,
@@ -315,7 +315,7 @@ class _NotificationRow extends StatelessWidget {
                       color: AppColors.mutedForeground,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpacing.xxs),
                   Text(
                     Formatters.relativeTime(notification.timestamp),
                     style: AppTypography.bodyXs.copyWith(

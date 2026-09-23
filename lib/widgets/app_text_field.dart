@@ -165,7 +165,7 @@ class _AppTextFieldState extends State<AppTextField> {
           ),
         ),
         if (widget.error != null) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             widget.error!,
             style: AppTypography.bodyXs.copyWith(

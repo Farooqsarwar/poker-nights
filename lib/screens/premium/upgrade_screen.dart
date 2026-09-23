@@ -32,6 +32,10 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
   PremiumTier _tier = PremiumTier.free;
   bool _loading = true;
 
+  /// True while the downgrade is in flight. Changing plan is a billing
+  /// action — it must never be possible to fire it twice by tapping twice.
+  bool _cancelling = false;
+
   @override
   void initState() {
     super.initState();
@@ -150,21 +154,54 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     );
   }
 
+  /// The narrowest a plan card can be drawn: its name and its "saving" pill
+  /// share one row, and the pill alone is about 114px.
+  static const double _minPlanCardWidth = 150;
+
   Widget _planPicker() {
-    return Row(
-      children: [
-        for (final plan in PremiumPlan.placeholders) ...[
-          Expanded(
-            child: _PlanCard(
-              plan: plan,
-              selected: plan.id == _selectedPlanId,
-              onTap: () => setState(() => _selectedPlanId = plan.id),
-            ),
-          ),
-          if (plan != PremiumPlan.placeholders.last)
-            const SizedBox(width: AppSpacing.md),
-        ],
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = AppSpacing.md;
+        final plans = PremiumPlan.placeholders;
+        final sideBySideWidth =
+            (_minPlanCardWidth * plans.length) + (gap * (plans.length - 1));
+
+        // On a 320px phone three cards in a row left each one 94px — less than
+        // the "Save 20%" pill needs on its own, so the card's top row
+        // overflowed. Below the width where they genuinely fit, the plans
+        // stack instead. Three pricing cards squeezed onto a 320px screen were
+        // not readable anyway.
+        if (constraints.maxWidth < sideBySideWidth) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final plan in plans) ...[
+                _PlanCard(
+                  plan: plan,
+                  selected: plan.id == _selectedPlanId,
+                  onTap: () => setState(() => _selectedPlanId = plan.id),
+                ),
+                if (plan != plans.last) const SizedBox(height: gap),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            for (final plan in plans) ...[
+              Expanded(
+                child: _PlanCard(
+                  plan: plan,
+                  selected: plan.id == _selectedPlanId,
+                  onTap: () => setState(() => _selectedPlanId = plan.id),
+                ),
+              ),
+              if (plan != plans.last) const SizedBox(width: gap),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -291,10 +328,15 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
           AppButton(
             fullWidth: true,
             variant: AppButtonVariant.secondary,
+            loading: _cancelling,
             onPressed: () async {
+              if (_cancelling) return;
+              setState(() => _cancelling = true);
               await _payments.cancel();
               if (!mounted) return;
               await _load();
+              if (!mounted) return;
+              setState(() => _cancelling = false);
             },
             child: const Text('Switch back to Free'),
           ),

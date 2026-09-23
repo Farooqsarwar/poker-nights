@@ -392,12 +392,19 @@ class _EmptyChat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+    // Scrollable, not a bare Center. This placeholder is ~190px tall and on a
+    // phone held landscape the message area between the header and the
+    // composer is about 51px, so it overflowed by 140. Nothing here can
+    // usefully shrink — the icon, three lines and a button are the whole
+    // point — so the honest answer is to let it scroll in a short viewport.
+    // `Center` still centres it whenever there is room.
+    return SingleChildScrollView(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             Container(
               width: 72,
               height: 72,
@@ -432,7 +439,8 @@ class _EmptyChat extends StatelessWidget {
               onPressed: onStart,
               child: const Text('Start chatting'),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );

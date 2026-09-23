@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../app/colors.dart';
 import '../app/typography.dart';
+import '../constants/app_constants.dart';
 import 'chip_token.dart';
 
 class ChipLoadingAnimation extends StatelessWidget {
@@ -64,7 +65,7 @@ class ChipLoadingAnimation extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         Text(
               message,
               style: AppTypography.bodySm.copyWith(

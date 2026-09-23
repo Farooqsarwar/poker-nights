@@ -63,7 +63,7 @@ class AiInsightsPanel extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: AppSpacing.xxs),
                       Text(
                         note,
                         style: AppTypography.bodyXs.copyWith(
@@ -210,7 +210,7 @@ class _Analysis extends StatelessWidget {
                         ),
                       ),
                       if (rows[i].note != null) ...[
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpacing.xxs),
                         Text(
                           rows[i].note!,
                           style: AppTypography.bodyXs.copyWith(

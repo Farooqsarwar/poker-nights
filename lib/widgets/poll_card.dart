@@ -49,10 +49,15 @@ class _PollCardState extends State<PollCard> {
         ? widget.poll.votes[widget.userId!]
         : null;
     bool changed = false;
-    if (oldMine == null && newMine != null) changed = true;
-    else if (oldMine != null && newMine == null) changed = true;
-    else if (oldMine != null && newMine != null && oldMine.length != newMine.length) changed = true;
-    else if (oldMine != null && newMine != null) {
+    if (oldMine == null && newMine != null) {
+      changed = true;
+    } else if (oldMine != null && newMine == null) {
+      changed = true;
+    } else if (oldMine != null &&
+        newMine != null &&
+        oldMine.length != newMine.length) {
+      changed = true;
+    } else if (oldMine != null && newMine != null) {
       for (var i = 0; i < oldMine.length; i++) {
         if (oldMine[i] != newMine[i]) changed = true;
       }

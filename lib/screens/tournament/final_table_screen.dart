@@ -14,6 +14,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/back_nav_button.dart';
 
 class _SeatEntry {
   _SeatEntry({required this.id, required this.name, required this.seat});
@@ -124,17 +125,9 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
         children: [
           Row(
             children: [
-              InkWell(
-                onTap: () => context.go(RoutePaths.adminDashboard),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(
-                    Icons.arrow_back,
-                    color: AppColors.mutedForeground,
-                    size: AppFontSizes.xl,
-                  ),
-                ),
+              BackNavButton(
+                label: 'Back to dashboard',
+                onPressed: () => context.go(RoutePaths.adminDashboard),
               ),
               const SizedBox(width: AppSpacing.md),
               Column(
@@ -301,7 +294,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                                     size: 14,
                                     color: AppColors.primary,
                                   ),
-                                  const SizedBox(width: 4),
+                                  const SizedBox(width: AppSpacing.xs),
                                 ],
                                 Text(
                                   'Seat ${s.seat} · ${s.name}',
@@ -390,7 +383,7 @@ class _DraggableSeatTileState extends State<_DraggableSeatTile> {
                 color: AppColors.mutedForeground,
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: AppSpacing.xxs),
             Text(
               s.name,
               maxLines: 1,
@@ -428,7 +421,7 @@ class _DraggableSeatTileState extends State<_DraggableSeatTile> {
                   color: AppColors.mutedForeground,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: AppSpacing.xxs),
               Text(
                 s.name,
                 maxLines: 1,

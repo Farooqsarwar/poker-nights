@@ -113,14 +113,16 @@ class _StepperButton extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.md),
         onTap: enabled ? onTap : null,
-        // 44x44 is the smallest comfortable touch target; the client is using
-        // this one-handed at a poker table.
+        // 48x48 is Material's minimum touch target (Apple's is 44pt). The
+        // client operates this one-handed at a poker table, often standing,
+        // and Addendum §8 calls for exactly that — so take the larger of the
+        // two floors rather than the smaller.
         child: SizedBox(
-          width: 44,
-          height: 44,
+          width: 48,
+          height: 48,
           child: Icon(
             icon,
-            size: 18,
+            size: 20,
             color: enabled ? AppColors.primary : AppColors.mutedForeground,
           ),
         ),

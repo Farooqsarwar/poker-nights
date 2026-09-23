@@ -13,6 +13,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/backgrounds.dart';
 import '../../widgets/brand_lockup.dart';
+import '../../widgets/min_tap_target.dart';
 
 /// Unified join screen: enter an invite **code**, paste an invite **link**, or
 /// scan a **QR code** — for games *and* groups, as a guest *or* signed in.
@@ -203,8 +204,15 @@ class _JoinScreenState extends State<JoinScreen> {
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     if (!hasAccount && _groupSignInCode == null)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      // Wrap, not Row. Both halves are unbounded text and the
+                      // pair is wider than a 320px phone once the page padding
+                      // is taken off, so a Row overflowed by 101px there and
+                      // 21px at 400px. Wrapping puts "Sign in" on its own line
+                      // instead — an ellipsis would be wrong here, the link is
+                      // the point of the sentence.
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
                             'Have an account? ',
@@ -323,13 +331,20 @@ class _JoinScreenState extends State<JoinScreen> {
           size: AppButtonSize.lg,
           variant: AppButtonVariant.secondary,
           onPressed: _busy ? null : _scan,
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.qr_code_scanner, size: 18),
-              SizedBox(width: AppSpacing.sm),
-              Text('Scan QR code'),
-            ],
+          // The icon and label together want 220px; a 320px phone leaves the
+          // button 164px inside its own padding. scaleDown shrinks the pair
+          // to fit rather than clipping the label to "Scan QR c…", and does
+          // nothing at any width where the label already fits.
+          child: const FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.qr_code_scanner, size: 18),
+                SizedBox(width: AppSpacing.sm),
+                Text('Scan QR code'),
+              ],
+            ),
           ),
         ),
       ],
@@ -408,7 +423,8 @@ class _BackLink extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: Padding(
+      child: MinTapTarget(
+        child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -423,6 +439,7 @@ class _BackLink extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -480,7 +497,16 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
             child: Text(
               'Point your camera at the invite QR code',
               textAlign: TextAlign.center,
-              style: AppTypography.bodySm.copyWith(color: Colors.white70),
+              // This sits over the live camera feed, not over a themed
+              // surface, so it cannot use a palette colour — the backdrop is
+              // whatever the room looks like. Full white plus a drop shadow
+              // instead of white70: 70% white vanishes against a bright wall.
+              style: AppTypography.bodySm.copyWith(
+                color: Colors.white,
+                shadows: const [
+                  Shadow(blurRadius: 4, color: Colors.black87),
+                ],
+              ),
             ),
           ),
         ],

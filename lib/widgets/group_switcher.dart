@@ -164,10 +164,20 @@ class GroupContextHeader extends StatelessWidget {
               color: AppColors.primary,
             ),
             const SizedBox(width: AppSpacing.sm),
-            Text(
-              app.hasCurrentGroup ? group.name : 'No group selected',
-              style: AppTypography.bodySm.copyWith(
-                fontWeight: FontWeight.w600,
+            // Flexible: the group name is user-supplied and unbounded, and the
+            // placeholder ("No group selected") is already 17 characters. On a
+            // 320px phone the icon, this label and the caret came to 41px more
+            // than the row had. `mainAxisSize.min` still lets the pill hug its
+            // content when there is room — Flexible only bites once there is
+            // not.
+            Flexible(
+              child: Text(
+                app.hasCurrentGroup ? group.name : 'No group selected',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             const SizedBox(width: AppSpacing.xs),
@@ -200,7 +210,10 @@ class GroupContextHeader extends StatelessWidget {
 
     return Row(
       children: [
-        pill,
+        // Flexible, not bare: the pill sizes to its content, and its content
+        // is a group name nobody here controls. Without this the Row hands it
+        // an unbounded width and it overflows instead of eliding.
+        Flexible(child: pill),
         if (trailing != null) ...[
           const SizedBox(width: AppSpacing.sm),
           Expanded(child: trailing!),
@@ -209,6 +222,8 @@ class GroupContextHeader extends StatelessWidget {
           Expanded(
             child: Text(
               '${group.members.length} member${group.members.length == 1 ? '' : 's'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTypography.bodyXs.copyWith(
                 color: AppColors.mutedForeground,
               ),

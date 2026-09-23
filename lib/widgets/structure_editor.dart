@@ -8,9 +8,14 @@ import '../utils/formatters.dart';
 import '../utils/tournament_engine.dart';
 import 'app_button.dart';
 import 'app_select.dart';
+import 'min_tap_target.dart';
 
-/// Level durations allowed when editing the structure (checklist §12.4:
-/// future levels may only be 10, 15 or 20 minutes).
+/// The level durations offered as presets when editing the structure
+/// (checklist §12.4). They are no longer the only permitted values — the host
+/// now sets the level length on the Parameters tab and the engine accepts
+/// anything between [TournamentEngine.kMinLevelDurationMins] and
+/// [TournamentEngine.kMaxLevelDurationMins] — but they remain the three
+/// lengths almost everyone picks, so they stay at the top of the list.
 const List<int> kAllowedLevelDurations = [10, 15, 20];
 
 // ── Structure editor modal ────────────────────────────────────────────────────
@@ -59,6 +64,16 @@ class _StructureEditorState extends State<StructureEditor> {
     super.dispose();
   }
 
+  /// The presets, plus every length this structure actually uses. A host who
+  /// generated 12-minute levels has to see 12 in the list — offering only the
+  /// presets would make opening the editor cost them the length they chose,
+  /// and would crash the dropdown, whose value must be one of its items.
+  List<int> get _durationOptions => <int>{
+        ...kAllowedLevelDurations,
+        ..._levels.map((l) => l.durationMins),
+      }.toList()
+        ..sort();
+
   void _insertAfter(int index) {
     setState(() {
       final copy = _EditableLevel.copyOf(_levels[index]);
@@ -106,8 +121,9 @@ class _StructureEditorState extends State<StructureEditor> {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Durations are limited to ${kAllowedLevelDurations.join(' / ')} minutes '
-          'and new levels can be inserted at any point.',
+          'Durations offer ${kAllowedLevelDurations.join(' / ')} minutes plus '
+          'whatever this structure already uses, and new levels can be '
+          'inserted at any point.',
           style: AppTypography.bodyXs.copyWith(
             color: AppColors.mutedForeground,
           ),
@@ -206,7 +222,7 @@ class _StructureEditorState extends State<StructureEditor> {
                     l.durationMins = int.tryParse(v ?? '') ?? 15;
                   }),
                   items: [
-                    for (final d in kAllowedLevelDurations)
+                    for (final d in _durationOptions)
                       DropdownMenuItem(value: '$d', child: Text('$d min')),
                   ],
                 ),
@@ -226,30 +242,35 @@ class _StructureEditorState extends State<StructureEditor> {
           Row(
             children: [
               SizedBox(width: 48, child: const SizedBox()),
-              InkWell(
-                onTap: () => setState(() => l.anteOn = !l.anteOn),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      l.anteOn
-                          ? Icons.check_box
-                          : Icons.check_box_outline_blank,
-                      size: 18,
-                      color: l.anteOn
-                          ? AppColors.primary
-                          : AppColors.mutedForeground,
+              Semantics(
+                toggled: l.anteOn,
+                child: InkWell(
+                  onTap: () => setState(() => l.anteOn = !l.anteOn),
+                  child: MinTapTarget(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          l.anteOn
+                              ? Icons.check_box
+                              : Icons.check_box_outline_blank,
+                          size: 18,
+                          color: l.anteOn
+                              ? AppColors.primary
+                              : AppColors.mutedForeground,
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          widget.anteStyle == AnteStyle.individual
+                              ? 'Ante (individual, half BB)'
+                              : 'Ante (big blind ante)',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      widget.anteStyle == AnteStyle.individual
-                          ? 'Ante (individual, half BB)'
-                          : 'Ante (big blind ante)',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -282,17 +303,13 @@ class _EditableLevel {
   late bool anteOn = level.ante != null;
 
   void dispose() {}
-  static int _snapDuration(int d) {
-    if (kAllowedLevelDurations.contains(d)) return d;
-    int best = 15;
-    var bestDiff = 1000;
-    for (final candidate in kAllowedLevelDurations) {
-      final diff = (candidate - d).abs();
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        best = candidate;
-      }
-    }
-    return best;
-  }
+
+  /// Was: snap to the nearest of 10 / 15 / 20. Now that the host sets the
+  /// level length themselves, snapping would quietly rewrite a 12-minute
+  /// structure to 10 the moment its owner opened the editor to change one
+  /// blind. The only limits left are the engine's own.
+  static int _snapDuration(int d) => d.clamp(
+        TournamentEngine.kMinLevelDurationMins,
+        TournamentEngine.kMaxLevelDurationMins,
+      );
 }

@@ -43,6 +43,28 @@ abstract final class RoutePaths {
   // ── Tournament flow ────────────────────────────────────────────────────────
   static const String createTournament = '/create-tournament';
   static const String structureReview = '/structure-review';
+
+  /// The `?from=` query parameter [structureReview] accepts so the back arrow
+  /// returns wherever a host came from (e.g. check-in) instead of always
+  /// landing on invitation.
+  static const String structureReviewFromParam = 'from';
+
+  /// [structureReview] tagged with `?from=` for callers that know where they
+  /// are coming from. Omitted when [from] is empty so a bare link keeps a
+  /// clean URL.
+  static String structureReviewWith(String? from) {
+    if (from == null || from.isEmpty) return structureReview;
+    return '$structureReview?$structureReviewFromParam='
+        '${Uri.encodeComponent(from)}';
+  }
+
+  /// Resolves a structure-review location's `?from=` value, or null when the
+  /// host arrived bare. Used by the review screen's back arrow.
+  static String? structureReviewFrom(Uri uri) {
+    final from = uri.queryParameters[structureReviewFromParam];
+    return (from == null || from.isEmpty) ? null : from;
+  }
+
   static const String invitation = '/invitation';
   static const String checkIn = '/check-in';
   static const String adminDashboard = '/admin-dashboard';

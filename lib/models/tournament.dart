@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'chip_color.dart';
 
 /// A single blind level within the tournament structure.
@@ -77,6 +79,63 @@ enum AnteStyle { bigBlind, individual }
 /// while the other values override it explicitly.
 enum AntePreference { recommend, none, bigBlind, individual }
 
+/// How many of the field are expected to take a rebuy, a re-entry or an add-on.
+///
+/// These were hard-coded inside the engine, which meant the single biggest
+/// input to the blind curve — how many chips end up on the table — could not be
+/// changed by the one person who actually knows the answer. A host who runs the
+/// same twelve people every month knows whether they all rebuy or none of them
+/// do; a constant does not. They survive as the DEFAULTS the fields are
+/// prefilled with, so a host who touches nothing gets exactly what they got
+/// before.
+const double kExpectedRebuyRate = 0.35;
+const double kExpectedReEntryRate = 0.20;
+const double kExpectedAddOnRate = 0.65;
+
+/// How steeply the prize pool falls away from first place.
+///
+/// The engine already offered a choice of how MANY places to pay. It offered no
+/// choice of how the money is spread across them, so a host who wanted three
+/// paid places but a flatter split had nowhere to say it — their only lever was
+/// to pay a fourth place they did not want to pay.
+///
+/// [standard] is the client's own section-25 reference style and is left
+/// untouched: same weights, same reference table, same figures as before. The
+/// other two are geometric curves — each place gets [ratio] times the one above
+/// — which is the shape every other tournament tool uses and the one the
+/// client's spec names.
+enum PayoutShape {
+  /// The reference style (73/27, 57/30/13, 56/30/10/4). The default, and the
+  /// only shape that consults the section-25 reference table.
+  standard,
+
+  /// Steeper than standard: a bigger first prize, a thinner tail.
+  topHeavy,
+
+  /// Shallower than standard: the min-cash is worth collecting.
+  flat;
+
+  /// Decay per place for the geometric shapes. Unused by [standard], which
+  /// carries explicit per-count weights instead.
+  double get ratio => switch (this) {
+        PayoutShape.standard => 0.65,
+        PayoutShape.topHeavy => 0.50,
+        PayoutShape.flat => 0.90,
+      };
+
+  String get label => switch (this) {
+        PayoutShape.standard => 'Standard',
+        PayoutShape.topHeavy => 'Top heavy',
+        PayoutShape.flat => 'Flat',
+      };
+
+  String get blurb => switch (this) {
+        PayoutShape.standard => 'The recommended split for this field and pool.',
+        PayoutShape.topHeavy => 'More to the winner, less down the list.',
+        PayoutShape.flat => 'Closer together — the last paid place still earns.',
+      };
+}
+
 /// Parameters used to generate a tournament structure.
 class TournamentParams {
   const TournamentParams({
@@ -99,6 +158,14 @@ class TournamentParams {
     this.addOnCost,
     this.breaks = const [],
     this.rebuyCloseChosenByOrganizer = false,
+    this.expectedRebuys,
+    this.expectedReEntries,
+    this.expectedAddOns,
+    this.rebuyChips,
+    this.reEntryChips,
+    this.addOnChips,
+    this.levelDurationMins,
+    this.payoutShape = PayoutShape.standard,
   });
 
   final int players;
@@ -141,8 +208,106 @@ class TournamentParams {
   /// midpoint (v11 addendum section 5).
   final List<ScheduledBreak> breaks;
 
+  /// Host overrides for the expected take-up of each entry type. Null means
+  /// "use the rate", which is what every tournament created before these
+  /// existed does.
+  final int? expectedRebuys;
+  final int? expectedReEntries;
+  final int? expectedAddOns;
+
+  /// Chips handed out for a rebuy, a re-entry and an add-on. Null means "the
+  /// starting stack", the engine's long-standing behaviour.
+  final int? rebuyChips;
+  final int? reEntryChips;
+  final int? addOnChips;
+
+  /// Minutes per level, when the host has chosen one. Null leaves the engine
+  /// to pick from the duration, which is what it did exclusively before.
+  final int? levelDurationMins;
+
+  /// How steeply the prize pool falls away from first place. Defaults to the
+  /// reference style, so every tournament that predates the choice splits its
+  /// pool exactly as it always did.
+  final PayoutShape payoutShape;
+
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
+
+  /// Expected take-up, override first and the rate as the fallback. A format
+  /// that is switched off contributes nothing however the field is filled in —
+  /// a stale number left behind by toggling rebuys off must not keep inflating
+  /// the chip count.
+  int get effectiveExpectedRebuys => rebuys
+      ? math.max(0, expectedRebuys ?? (players * kExpectedRebuyRate).round())
+      : 0;
+
+  int get effectiveExpectedReEntries => reEntry
+      ? math.max(0, expectedReEntries ?? (players * kExpectedReEntryRate).round())
+      : 0;
+
+  int get effectiveExpectedAddOns => addOn
+      ? math.max(0, expectedAddOns ?? (players * kExpectedAddOnRate).round())
+      : 0;
+
+  TournamentParams copyWith({
+    int? players,
+    double? durationHours,
+    int? buyIn,
+    List<ChipColor>? chipSet,
+    bool? rebuys,
+    int? rebuysCloseLevel,
+    int? rebuyLimit,
+    bool? reEntry,
+    bool? addOn,
+    bool? anteEnabled,
+    int? anteAfterLevel,
+    AnteStyle? anteStyle,
+    bool? koEnabled,
+    int? koAmount,
+    int? organizerPct,
+    int? rebuyCost,
+    int? addOnCost,
+    List<ScheduledBreak>? breaks,
+    bool? rebuyCloseChosenByOrganizer,
+    int? expectedRebuys,
+    int? expectedReEntries,
+    int? expectedAddOns,
+    int? rebuyChips,
+    int? reEntryChips,
+    int? addOnChips,
+    int? levelDurationMins,
+    PayoutShape? payoutShape,
+  }) =>
+      TournamentParams(
+        players: players ?? this.players,
+        durationHours: durationHours ?? this.durationHours,
+        buyIn: buyIn ?? this.buyIn,
+        chipSet: chipSet ?? this.chipSet,
+        rebuys: rebuys ?? this.rebuys,
+        rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
+        rebuyLimit: rebuyLimit ?? this.rebuyLimit,
+        reEntry: reEntry ?? this.reEntry,
+        addOn: addOn ?? this.addOn,
+        anteEnabled: anteEnabled ?? this.anteEnabled,
+        anteAfterLevel: anteAfterLevel ?? this.anteAfterLevel,
+        anteStyle: anteStyle ?? this.anteStyle,
+        koEnabled: koEnabled ?? this.koEnabled,
+        koAmount: koAmount ?? this.koAmount,
+        organizerPct: organizerPct ?? this.organizerPct,
+        rebuyCost: rebuyCost ?? this.rebuyCost,
+        addOnCost: addOnCost ?? this.addOnCost,
+        breaks: breaks ?? this.breaks,
+        rebuyCloseChosenByOrganizer:
+            rebuyCloseChosenByOrganizer ?? this.rebuyCloseChosenByOrganizer,
+        expectedRebuys: expectedRebuys ?? this.expectedRebuys,
+        expectedReEntries: expectedReEntries ?? this.expectedReEntries,
+        expectedAddOns: expectedAddOns ?? this.expectedAddOns,
+        rebuyChips: rebuyChips ?? this.rebuyChips,
+        reEntryChips: reEntryChips ?? this.reEntryChips,
+        addOnChips: addOnChips ?? this.addOnChips,
+        levelDurationMins: levelDurationMins ?? this.levelDurationMins,
+        payoutShape: payoutShape ?? this.payoutShape,
+      );
 }
 
 /// A scheduled break in the tournament structure (specification section 8).

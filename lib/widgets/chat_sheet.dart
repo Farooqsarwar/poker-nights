@@ -10,6 +10,7 @@ import 'app_avatar.dart';
 import 'app_button.dart';
 import 'app_text_field.dart';
 import 'glass_styles.dart';
+import 'min_tap_target.dart';
 
 class ChatSheet extends StatefulWidget {
   const ChatSheet({super.key, required this.gameId});
@@ -128,6 +129,7 @@ class _ChatSheetState extends State<ChatSheet> {
                 style: AppTypography.display(size: AppFontSizes.lg),
               ),
               IconButton(
+                tooltip: 'Close chat',
                 icon: Icon(Icons.close, color: AppColors.foreground),
                 onPressed: () => Navigator.pop(context),
               ),
@@ -136,11 +138,10 @@ class _ChatSheetState extends State<ChatSheet> {
         ),
         Divider(height: 1, color: AppColors.border),
         Expanded(
-          child: SingleChildScrollView(
-            reverse: true,
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: messages.isEmpty
-                ? Padding(
+          child: messages.isEmpty
+              ? SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Padding(
                     padding: const EdgeInsets.all(AppSpacing.xxl),
                     child: Text(
                       'No messages yet. Start the conversation!',
@@ -149,21 +150,27 @@ class _ChatSheetState extends State<ChatSheet> {
                         color: AppColors.mutedForeground,
                       ),
                     ),
-                  )
-                : Column(
-                    children: [
-                      for (final msg in messages)
-                        _ChatBubble(
-                          message: msg,
-                          isMine: msg.authorId == userId,
-                          canDelete:
-                              (app.isAdmin) &&
-                              msg.authorId != userId,
-                          onDelete: () => app.deleteMessage(msg.id),
-                        ),
-                    ],
                   ),
-          ),
+                )
+              // The chat collection streams unbounded — a group that has been
+              // running for a year has every message in it. `reverse: true`
+              // keeps the newest at the bottom AND makes that end index 0, so
+              // the rows that build first are the ones actually on screen;
+              // hence the walk backwards through `messages`.
+              : ListView.builder(
+                  reverse: true,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  itemCount: messages.length,
+                  itemBuilder: (context, i) {
+                    final msg = messages[messages.length - 1 - i];
+                    return _ChatBubble(
+                      message: msg,
+                      isMine: msg.authorId == userId,
+                      canDelete: (app.isAdmin) && msg.authorId != userId,
+                      onDelete: () => app.deleteMessage(msg.id),
+                    );
+                  },
+                ),
         ),
         if (userId != null)
           Container(
@@ -258,9 +265,8 @@ class ChatUnreadBadge extends StatelessWidget {
       ),
       child: Text(
         '$count',
-        style: AppTypography.bodyXs.copyWith(
+        style: AppTypography.body(size: 10).copyWith(
           color: AppColors.destructiveForeground,
-          fontSize: 10,
         ),
       ),
     );
@@ -303,12 +309,11 @@ class _ChatBubble extends StatelessWidget {
               children: [
                 Text(
                   isMine ? 'You' : message.authorName,
-                  style: AppTypography.bodyXs.copyWith(
+                  style: AppTypography.body(size: 10).copyWith(
                     color: AppColors.mutedForeground,
-                    fontSize: 10,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.md,
@@ -347,7 +352,11 @@ class _ChatBubble extends StatelessWidget {
                   ),
                 ),
                 if (canDelete)
-                  InkWell(
+                  Semantics(
+                    button: true,
+                    label: 'Delete this message',
+                    excludeSemantics: true,
+                    child: InkWell(
                     onTap: () async {
                       final confirmed = await showDialog<bool>(
                         context: context,
@@ -376,15 +385,17 @@ class _ChatBubble extends StatelessWidget {
                       );
                       if (confirmed == true) onDelete();
                     },
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        'delete',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                          fontSize: 10,
+                    child: MinTapTarget(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          'delete',
+                          style: AppTypography.body(size: 10).copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
                         ),
                       ),
+                    ),
                     ),
                   ),
               ],

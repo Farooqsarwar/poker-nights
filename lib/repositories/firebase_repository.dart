@@ -423,9 +423,75 @@ class FirebaseRepository {
   /// Deletes the profile doc, membership mirrors and rows, then the auth user.
   /// Throws [fa.FirebaseException] code `requires-recent-login` when the
   /// caller must re-authenticate first.
-  Future<void> deleteAccount() async {
+  /// The provider ids backing the signed-in account, e.g. `password`,
+  /// `google.com`. Empty for an anonymous guest.
+  Set<String> get signInProviders =>
+      _auth.currentUser?.providerData.map((p) => p.providerId).toSet() ??
+      const {};
+
+  /// True when deleting requires the user to retype their password. Google and
+  /// guest accounts re-authenticate without one.
+  bool get deleteNeedsPassword =>
+      signInProviders.contains('password') &&
+      !signInProviders.contains('google.com');
+
+  /// Re-establishes a "recent login". Firebase rejects [deleteAccount] with
+  /// `requires-recent-login` when the credential is more than a few minutes
+  /// old, which is the normal case for anyone who did not just sign in.
+  Future<void> reauthenticate({String? password}) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final providers = signInProviders;
+
+    if (providers.contains('google.com')) {
+      if (kIsWeb) {
+        await user.reauthenticateWithPopup(
+          fa.GoogleAuthProvider()
+            ..setCustomParameters({'prompt': 'select_account'}),
+        );
+        return;
+      }
+      final credentials = await googleSignIn.signInOnline();
+      if (credentials == null) {
+        throw fa.FirebaseAuthException(
+          code: 'user-cancelled',
+          message: 'Re-authentication was cancelled.',
+        );
+      }
+      await user.reauthenticateWithCredential(
+        await _googleCredential(credentials),
+      );
+      return;
+    }
+
+    if (providers.contains('password')) {
+      final email = user.email;
+      if (email == null || password == null || password.isEmpty) {
+        throw fa.FirebaseAuthException(
+          code: 'missing-password',
+          message: 'Please enter your password to confirm.',
+        );
+      }
+      await user.reauthenticateWithCredential(
+        fa.EmailAuthProvider.credential(email: email, password: password),
+      );
+      return;
+    }
+    // Anonymous guest: there is no credential to re-present, and Firebase
+    // allows an anonymous user to delete itself without one.
+  }
+
+  Future<void> deleteAccount({String? password}) async {
     final uid = currentUid;
     if (uid == null) return;
+    final email = _auth.currentUser?.email;
+
+    // BEFORE anything is destroyed. The auth user can only be removed after
+    // the Firestore cleanup (every rule keys off `request.auth.uid`), so a
+    // `requires-recent-login` discovered at that point would leave the profile
+    // deleted and the credential alive. Proving freshness up front means a
+    // failed re-auth costs nothing -- no data has been touched yet.
+    await reauthenticate(password: password);
     final userDoc = _db.collection('users').doc(uid);
 
     final memberships = await userDoc.collection('groups').get();
@@ -436,13 +502,32 @@ class FirebaseRepository {
         _db.collection('groups').doc(m.id).collection('members').doc(uid),
       );
     }
-    for (final sub in const ['presets', 'chipSets', 'notifications']) {
+    // `results` belongs here: it is the player's private per-game finish
+    // mirror. Left behind it is unreadable by anyone — the read rule keys off
+    // a uid that no longer exists — but still stored, which is exactly the
+    // residue account deletion is supposed to remove.
+    for (final sub in const [
+      'presets',
+      'chipSets',
+      'notifications',
+      'results',
+    ]) {
       final docs = await userDoc.collection(sub).get();
       for (final d in docs.docs) {
         batch.delete(d.reference);
       }
     }
+    // The public email -> uid row written by [ensureUserDoc]. Without this the
+    // address stayed resolvable after deletion and `findUserByEmail` kept
+    // handing admins a uid with no account behind it.
+    if (email != null && email.trim().isNotEmpty) {
+      batch.delete(_db.collection('emailIndex').doc(emailIndexKey(email)));
+    }
     batch.delete(userDoc);
+    // Firestore first, auth last: the order is forced because every rule above
+    // keys off `request.auth.uid`, so removing the auth user first would strip
+    // the permission needed to clean up. The re-auth above is what makes this
+    // order safe.
     await batch.commit();
     await _auth.currentUser?.delete();
   }
@@ -552,8 +637,8 @@ class FirebaseRepository {
           .doc(uid)
           .set(
             _stamp({
-              if (name != null) 'name': name,
-              if (email != null) 'email': email,
+              'name': ?name,
+              'email': ?email,
               if (email != null) 'emailLower': email.trim().toLowerCase(),
             }),
             SetOptions(merge: true),
@@ -796,10 +881,10 @@ class FirebaseRepository {
     bool? pinned,
     String? role,
   }) => userGroupIndexRef(uid, gid).set({
-    if (name != null) 'name': name,
-    if (icon != null) 'icon': icon,
-    if (pinned != null) 'pinned': pinned,
-    if (role != null) 'role': role,
+    'name': ?name,
+    'icon': ?icon,
+    'pinned': ?pinned,
+    'role': ?role,
   }, SetOptions(merge: true));
 
   Future<void> setMemberRole(String gid, String targetUid, String role) => _db

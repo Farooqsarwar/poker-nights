@@ -24,6 +24,12 @@ extension AppProviderPlayers on AppProvider {
     final bounty = _currentGame!.settings.koEnabled
         ? _currentGame!.settings.koAmount
         : 0;
+    // §25.5 / §3: "at each elimination, also check the survivors' current
+    // stacks against their stored lowestStackBB and update if this is a new
+    // low." Only meaningful for a player the host has actually entered a
+    // [Player.stack] for — most nights that will be nobody, and the recap
+    // stays honestly empty rather than inventing a sample.
+    final currentBB = _currentGame!.currentLevelData?.bb ?? 0;
     final updated = _currentGame!.players.map((p) {
       if (p.id == playerId) {
         return p.copyWith(
@@ -35,13 +41,24 @@ extension AppProviderPlayers on AppProvider {
           seat: 0,
         );
       }
+      var next = p;
       // Optional single knockout recipient (technical §11.3). The bounty
       // chips transfer from the eliminated player, so total chips in play
       // is unchanged — only the recipient's knockout count increases.
       if (koRecipientId != null && p.id == koRecipientId) {
-        return p.copyWith(knockouts: p.knockouts + 1);
+        next = next.copyWith(knockouts: next.knockouts + 1);
       }
-      return p;
+      if (next.active && !next.eliminated) {
+        final sampled = sampledLowestStackBB(
+          existing: next.lowestStackBB,
+          stack: next.stack,
+          currentBB: currentBB,
+        );
+        if (sampled != next.lowestStackBB) {
+          next = next.copyWith(lowestStackBB: sampled);
+        }
+      }
+      return next;
     }).toList();
     final remaining = updated.where((p) => p.active).length;
     // Final table redraw only fires for multi-table events (spec §7 and BR-020: "If a
@@ -299,6 +316,30 @@ extension AppProviderPlayers on AppProvider {
       lastIdempotencyKey: idemKey,
     );
     _updatePrizePool();
+  }
+
+  /// §3's [Player.stack]: the host's manual, spot-check chip count for one
+  /// player. Not gameplay-advancing on its own — it only feeds §25.5's
+  /// low-water-mark sample at the NEXT elimination — so it is not idempotency-
+  /// guarded or undo-tracked the way rebuys/add-ons/eliminations are; a host
+  /// correcting a mistyped count should not need Undo for it.
+  void updatePlayerStack(String playerId, int? stack) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return;
+    final game = _currentGame;
+    if (game == null) return;
+    _currentGame = game.copyWith(
+      players: [
+        for (final p in game.players)
+          if (p.id == playerId)
+            stack == null
+                ? p.copyWith(clearStack: true)
+                : p.copyWith(stack: stack)
+          else
+            p,
+      ],
+    );
+    if (!_disposed) notifyListeners();
   }
 
   void grantAddOn(String playerId, {String? idempotencyKey}) {
@@ -703,6 +744,19 @@ extension AppProviderPlayers on AppProvider {
       return;
     }
 
+    // §25.1a. Eligibility only — the chip bonus itself cannot be computed
+    // until the starting stack is final, which happens at Start
+    // ([AppProviderTimer.startTimer]), not here. A player who checks in,
+    // cancels, and checks in again after the cutoff loses eligibility, since
+    // this is recomputed fresh every call rather than sticking once true.
+    final settings = _currentGame!.settings;
+    final earlyArrivalBonusEligible = isEarlyArrivalEligible(
+      bonusEnabled: settings.earlyArrivalBonusEnabled,
+      scheduledStart: settings.scheduledStart,
+      now: _serverNow,
+      cutoffMins: settings.effectiveEarlyArrivalCutoffMins,
+    );
+
     _pushUndo();
     _currentGame = _currentGame!.copyWith(
       players: _currentGame!.players
@@ -722,6 +776,7 @@ extension AppProviderPlayers on AppProvider {
                     // a chair. Both flags have to come back.
                     noShow: false,
                     active: true,
+                    earlyArrivalBonusEligible: earlyArrivalBonusEligible,
                   )
                 : p,
           )
@@ -1368,6 +1423,19 @@ extension AppProviderPlayers on AppProvider {
     // group's default otherwise (spec: configurable, defaults to 10).
     final maxPerTable = effectiveTableSettings.maxPerTable.clamp(2, 999);
     final count = ordered.length;
+    // §11.4 / §26.1: a shootout's Stage A structure was generated for exactly
+    // `effectiveShootoutTables` independent tables, and the blind/chip math
+    // assumed that many seats per table. Seating already handles multiple
+    // tables under one shared clock, so a shootout only needs the table
+    // COUNT pinned to what the structure assumed -- not independent clocks --
+    // which is why this reads the setting directly rather than re-deriving a
+    // count from `maxPerTable`. Once Stage B has been started (host-triggered
+    // via `startShootoutFinalTable`, never automatic per boundary #9), the
+    // split is gone and everyone belongs on the single final table, so this
+    // no longer applies.
+    final isShootoutStageA =
+        game.settings.effectiveFormat == TournamentFormat.shootout &&
+            game.shootoutStage != ShootoutStage.stageB;
     // Addendum §3: multi-table hosting is Premium. A free night stays on one
     // table, which is also why nine is the boundary -- the seating model is
     // 1-9 on one table and 10 becomes 5+5.
@@ -1376,9 +1444,9 @@ extension AppProviderPlayers on AppProvider {
     // reaching ten, so this is a backstop rather than the primary limit: it
     // keeps a free tournament on one table even if players arrived by some
     // path those gates do not cover.
-    final tableCount = canHostPlayers(count)
-        ? (count / maxPerTable).ceil()
-        : 1;
+    final tableCount = isShootoutStageA
+        ? max(1, game.settings.effectiveShootoutTables)
+        : (canHostPlayers(count) ? (count / maxPerTable).ceil() : 1);
     final perTable = List<int>.filled(tableCount, count ~/ tableCount);
     for (var i = 0; i < count % tableCount; i++) {
       perTable[i]++;

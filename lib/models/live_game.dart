@@ -196,6 +196,17 @@ class GameSettings {
   /// the 12.5% default — see [effectiveEarlyArrivalPct].
   final double? earlyArrivalBonusPctOverride;
 
+  /// §11.4 Stage A. Mirrors [TournamentParams.effectiveShootoutTables] so live
+  /// seating (§26.1) can split a shootout field into the SAME table count the
+  /// structure was generated for, instead of re-deriving it from
+  /// `maxPerTable` and risking the two disagreeing.
+  int get effectiveShootoutTables {
+    final stated = shootoutTables;
+    if (stated != null && stated >= 2) return stated;
+    if (players <= kDefaultTableSize) return 1;
+    return (players / kDefaultTableSize).ceil();
+  }
+
   /// How steeply the prize pool falls away from first place. Not part of the
   /// generation-override group above — a Reset there must not quietly undo a
   /// payout decision that has nothing to do with the blind curve.
@@ -277,6 +288,7 @@ class GameSettings {
     String? chipSetName,
     bool? announceEliminations,
     int? forcePaidPlaces,
+    bool clearForcePaidPlaces = false,
     int? rebuyCost,
     int? addOnCost,
     bool? locationPrivate,
@@ -344,7 +356,8 @@ class GameSettings {
       chipSet: chipSet ?? this.chipSet,
       chipSetName: chipSetName ?? this.chipSetName,
       announceEliminations: announceEliminations ?? this.announceEliminations,
-      forcePaidPlaces: forcePaidPlaces ?? this.forcePaidPlaces,
+      forcePaidPlaces:
+          clearForcePaidPlaces ? null : (forcePaidPlaces ?? this.forcePaidPlaces),
       rebuyCost: rebuyCost ?? this.rebuyCost,
       addOnCost: addOnCost ?? this.addOnCost,
       locationPrivate: locationPrivate ?? this.locationPrivate,
@@ -485,6 +498,16 @@ enum LiveGameStatus {
 
 enum SpeedRecommendation { speedUp, slowDown }
 
+/// §11.4. Which of the two structures a shootout is currently playing.
+///
+/// Null on [LiveGame.shootoutStage] for every non-shootout format, and for a
+/// shootout game before its first structure generation. Set to [stageA] at
+/// that generation and moved to [stageB] only by
+/// `AppProviderTournament.startShootoutFinalTable`, never automatically —
+/// the spec's Stage B trigger is "once every table reports in", a human
+/// judgement call, not a player-count threshold the app can safely guess.
+enum ShootoutStage { stageA, stageB }
+
 /// A full tournament game (live or past).
 class LiveGame {
   const LiveGame({
@@ -528,6 +551,7 @@ class LiveGame {
     this.editorDeviceId = '',
     this.editorClaimedAt,
     this.audioMasterDeviceId = '',
+    this.shootoutStage,
   });
 
   final String id;
@@ -548,6 +572,9 @@ class LiveGame {
   final List<Player> pendingGuests;
   final List<String> finishOrder; // playerIds, first-out first
   final SpeedRecommendation? speedRecommendation;
+
+  /// §11.4. See [ShootoutStage].
+  final ShootoutStage? shootoutStage;
 
   /// True once the end-of-rebuy settlement has been confirmed. The public
   /// label then changes from "Estimated Prize Pool" to "Prize Pool"
@@ -888,6 +915,7 @@ class LiveGame {
     String? editorDeviceId,
     DateTime? editorClaimedAt,
     String? audioMasterDeviceId,
+    ShootoutStage? shootoutStage,
   }) {
     return LiveGame(
       id: id ?? this.id,
@@ -934,6 +962,7 @@ class LiveGame {
       editorDeviceId: editorDeviceId ?? this.editorDeviceId,
       editorClaimedAt: editorClaimedAt ?? this.editorClaimedAt,
       audioMasterDeviceId: audioMasterDeviceId ?? this.audioMasterDeviceId,
+      shootoutStage: shootoutStage ?? this.shootoutStage,
     );
   }
 }

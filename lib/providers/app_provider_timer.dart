@@ -339,6 +339,42 @@ extension AppProviderTimer on AppProvider {
           '${_currentGame!.structure.levels.length} levels.',
     );
 
+    // §25.1a. The early-arrival bonus is granted here, not at check-in,
+    // because it is a percentage of the STARTING STACK, and that number does
+    // not become final until the structure regeneration two lines up. A
+    // player who was eligible but had already had it computed against a
+    // provisional stack would get the wrong bonus if the field size changed
+    // between check-in and Start.
+    if (_currentGame!.settings.earlyArrivalBonusEnabled) {
+      final bonusChips = earlyArrivalBonusChips(
+        startingStack: _currentGame!.structure.startingStack,
+        effectivePct: _currentGame!.settings.effectiveEarlyArrivalPct,
+      );
+      if (bonusChips > 0) {
+        var totalBonus = 0;
+        final grantedTo = <String>[];
+        final withBonuses = _currentGame!.players.map((p) {
+          if (p.earlyArrivalBonusEligible && p.earlyArrivalBonusChips == null) {
+            totalBonus += bonusChips;
+            grantedTo.add(p.name);
+            return p.copyWith(earlyArrivalBonusChips: bonusChips);
+          }
+          return p;
+        }).toList();
+        if (grantedTo.isNotEmpty) {
+          _currentGame = _currentGame!.copyWith(
+            players: withBonuses,
+            totalChipsInPlay: _currentGame!.totalChipsInPlay + totalBonus,
+          );
+          addAuditRecord(
+            'early_arrival_bonus',
+            'Early-arrival bonus of $bonusChips chips granted to '
+                '${grantedTo.join(', ')}.',
+          );
+        }
+      }
+    }
+
     _levelAnnouncementMarks.clear();
     // Re-calibrate server time and start periodic re-calibration for long
     // tournaments (tech spec §4.3).

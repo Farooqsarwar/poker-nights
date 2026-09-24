@@ -616,7 +616,7 @@ class _PodiumSlot extends StatelessWidget {
 }
 
 /// §34a. One row per award that actually happened this game — `biggestComeback`
-/// stays dormant (and so absent here) until stack sampling exists to feed it
+/// is absent whenever nobody's stack was spot-checked before an elimination
 /// (boundary #8: best-effort, not a full highlight reel).
 class _RecapCard extends StatelessWidget {
   const _RecapCard({required this.recap});

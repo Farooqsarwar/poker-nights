@@ -61,6 +61,9 @@ class Player {
     this.eliminationPos,
     this.eliminatedAtLevel,
     this.lowestStackBB,
+    this.stack,
+    this.earlyArrivalBonusEligible = false,
+    this.earlyArrivalBonusChips,
     required this.rebuys,
     this.reEntries = 0,
     required this.hasAddOn,
@@ -86,14 +89,33 @@ class Player {
   /// §3 / §34a. The lowest this player's stack ever fell to, measured in big
   /// blinds — the input to the "biggest comeback" award.
   ///
-  /// ALWAYS NULL TODAY, and deliberately so. §25.5 fills it by sampling every
-  /// survivor's stack at each elimination, but this app does not track chip
-  /// stacks at all: there is no stack field anywhere on a player, and adding
-  /// one is a feature the client has not specified. The field exists so the
-  /// schema, the codec and §34a's recap are ready the day stack capture lands;
-  /// until then [AppProviderTournament.gameRecap] reports no comeback rather
-  /// than inventing one.
+  /// Updated in [AppProviderPlayers.eliminatePlayer] whenever a survivor's
+  /// [stack] is known and has posted a new personal low, in whatever unit
+  /// [stack] itself is chip counts, converted to BB at the current level. Null
+  /// until the host has entered a stack for this player at least once — a
+  /// missing sample must not read as "never went low," so the recap only
+  /// ranks players who actually have one.
   final int? lowestStackBB;
+
+  /// The host's last manually entered chip count for this player, or null if
+  /// never entered. The app has no automated chip counting, so this is
+  /// necessarily a spot-check, not a continuous series — updated whenever the
+  /// host bothers to look, most usefully right before an elimination so
+  /// [lowestStackBB] has something fresh to sample.
+  final int? stack;
+
+  /// §25.1a. Set at check-in when [GameSettings.earlyArrivalBonusEnabled] is
+  /// on and this player checked in at least
+  /// [GameSettings.effectiveEarlyArrivalCutoffMins] before the scheduled
+  /// start. Eligibility, not the grant itself — the bonus chip count cannot
+  /// be computed until the starting stack is final, which happens at Start,
+  /// not at check-in (see [earlyArrivalBonusChips]).
+  final bool earlyArrivalBonusEligible;
+
+  /// §25.1a. The actual chip bonus granted at Start, or null before then / if
+  /// never eligible. Computed once, from the FINAL starting stack — the
+  /// number the host hands this player over the printed stack.
+  final int? earlyArrivalBonusChips;
 
   final int rebuys;
 
@@ -120,6 +142,10 @@ class Player {
     int? eliminatedAtLevel,
     bool clearEliminatedAtLevel = false,
     int? lowestStackBB,
+    int? stack,
+    bool clearStack = false,
+    bool? earlyArrivalBonusEligible,
+    int? earlyArrivalBonusChips,
     int? rebuys,
     int? reEntries,
     bool? hasAddOn,
@@ -144,6 +170,11 @@ class Player {
       eliminatedAtLevel:
           clearEliminatedAtLevel ? null : eliminatedAtLevel ?? this.eliminatedAtLevel,
       lowestStackBB: lowestStackBB ?? this.lowestStackBB,
+      stack: clearStack ? null : stack ?? this.stack,
+      earlyArrivalBonusEligible:
+          earlyArrivalBonusEligible ?? this.earlyArrivalBonusEligible,
+      earlyArrivalBonusChips:
+          earlyArrivalBonusChips ?? this.earlyArrivalBonusChips,
       rebuys: rebuys ?? this.rebuys,
       reEntries: reEntries ?? this.reEntries,
       hasAddOn: hasAddOn ?? this.hasAddOn,
@@ -169,6 +200,9 @@ class Player {
       eliminationPos: eliminationPos,
       eliminatedAtLevel: eliminatedAtLevel,
       lowestStackBB: lowestStackBB,
+      stack: stack,
+      earlyArrivalBonusEligible: earlyArrivalBonusEligible,
+      earlyArrivalBonusChips: earlyArrivalBonusChips,
       rebuys: rebuys,
       reEntries: reEntries,
       hasAddOn: hasAddOn,

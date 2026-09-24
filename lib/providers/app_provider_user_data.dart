@@ -192,7 +192,10 @@ extension AppProviderUserData on AppProvider {
       GameResultRow(
         gameId: game.id,
         groupId: game.groupId,
-        position: index + 1,
+        position: finishPositionFromIndex(
+          index: index,
+          listLength: game.finishOrder.length,
+        ),
         playerCount: game.finishOrder.length,
         knockouts: me.knockouts,
         finishedAt: DateTime.now(),
@@ -226,7 +229,10 @@ extension AppProviderUserData on AppProvider {
           GameResultRow(
             gameId: game.id,
             groupId: game.groupId,
-            position: index + 1,
+            position: finishPositionFromIndex(
+              index: index,
+              listLength: game.finishOrder.length,
+            ),
             playerCount: game.finishOrder.length,
             knockouts: me.knockouts,
             finishedAt: DateTime.now(),

@@ -10,6 +10,7 @@ import '../../constants/app_constants.dart';
 import '../../models/game.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
+import '../../models/tournament_format.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/premium_gate.dart';
 import '../../services/entitlements.dart';
@@ -336,6 +337,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       LiveGameStatus.onBreak,
     }.contains(status);
     final inTheMoney = liveNow && paidPlaces > 0 && playersLeft == paidPlaces;
+
+    // Spec §11.4 / boundary #9: a shootout plays Stage A (several tables,
+    // one shared clock) then Stage B (a single final table). Null stage means
+    // "hasn't been generated as a shootout yet" -- still conceptually about
+    // to play Stage A, so it displays the same as stageA. The move to Stage B
+    // is always a host decision (see `startShootoutFinalTable` below) --
+    // never derived from a player count -- because "every table reported its
+    // winner" is a judgement call the app cannot safely infer.
+    final isShootout = settings.effectiveFormat == TournamentFormat.shootout;
+    final shootoutStage = game.shootoutStage ?? ShootoutStage.stageA;
 
     final device = AppBreakpoints.deviceOf(context);
     final timerSize = device.isMobile ? 54.0 : 64.0;
@@ -682,6 +693,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     'money.',
               ),
             ),
+          // Shootout stage indicator (§11.4 / boundary #9). Admin-only, like
+          // the other true-admin (not co-admin-delegable) actions on this
+          // screen -- hence `app.isAdmin` rather than the `isAdmin` local
+          // (which is `canRunCurrentGame` and also covers an assigned TO).
+          if (isShootout && app.isAdmin) ...[
+            if (shootoutStage == ShootoutStage.stageA)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                child: AppAlertBanner(
+                  type: AppAlertType.info,
+                  message: 'Shootout — Stage A: '
+                      '${settings.effectiveShootoutTables} tables playing',
+                  actionLabel: 'Start Final Table (Stage B)',
+                  onAction: () => _confirmStartShootoutFinalTable(context, app),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                child: const AppAlertBanner(
+                  type: AppAlertType.info,
+                  message: 'Shootout — Final Table',
+                ),
+              ),
+          ],
           // Speed recommendation — always previewed before applying
           // (audit fix B4: old vs. proposed structure + finish estimates).
           if (game.speedRecommendation != null)
@@ -1654,6 +1690,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               label: 'Add-on',
                               variant: AppBadgeVariant.green,
                             ),
+                          // §25.1a: granted at Start once the stack is final;
+                          // eligible-but-not-yet-granted shows during check-in.
+                          if (p.earlyArrivalBonusChips != null)
+                            AppBadge(
+                              label: 'Early bird +${p.earlyArrivalBonusChips}',
+                              variant: AppBadgeVariant.gold,
+                            )
+                          else if (p.earlyArrivalBonusEligible)
+                            const AppBadge(
+                              label: 'Early bird',
+                              variant: AppBadgeVariant.muted,
+                            ),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.xxs),
@@ -1663,6 +1711,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           color: AppColors.mutedForeground,
                         ),
                       ),
+                      if (app.isAdmin)
+                        GestureDetector(
+                          onTap: () => _editPlayerStack(context, app, p),
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                            child: Text(
+                              // §3's Player.stack: a manual spot-check, not a
+                              // live count — feeds §25.5's lowestStackBB
+                              // sample at the NEXT elimination.
+                              p.stack != null
+                                  ? 'Stack: ${p.stack} (tap to update)'
+                                  : 'Tap to record stack',
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.primary,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1716,6 +1783,48 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     ];
   }
 
+  /// §3's [Player.stack]: a manual host spot-check, not a live count. Feeds
+  /// §25.5's `lowestStackBB` sample the next time anyone busts.
+  void _editPlayerStack(BuildContext context, AppProvider app, Player p) {
+    final ctrl = TextEditingController(text: p.stack?.toString() ?? '');
+    showAppModal(
+      context: context,
+      title: "${p.name}'s stack",
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'A spot-check, not a live count — record it right before an '
+            'elimination so the post-game recap has something fresh to '
+            'compare a comeback against.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            controller: ctrl,
+            label: 'Current stack (chips)',
+            hint: 'e.g. 12500',
+            keyboardType: TextInputType.number,
+            autofocus: true,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppButton(
+            fullWidth: true,
+            onPressed: () {
+              final value = int.tryParse(ctrl.text.trim());
+              app.updatePlayerStack(p.id, value);
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmRemovePlayer(BuildContext context, AppProvider app, Player p) {
     showAppModal(
       context: context,
@@ -1745,6 +1854,62 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   Navigator.pop(context);
                 },
                 child: const Text('Remove'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // §11.4 / boundary #9: moving from Stage A to Stage B collapses every
+  // Stage A table into one final table, which only makes sense once every
+  // table has actually reported its winner(s) -- a human judgement call the
+  // app has no way to verify. So, like `_confirmRemovePlayer` and
+  // `_confirmAddOn`, this is a confirm-first admin action, never a tap that
+  // fires immediately.
+  void _confirmStartShootoutFinalTable(BuildContext context, AppProvider app) {
+    showAppModal(
+      context: context,
+      title: 'Start Final Table',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'This assumes every Stage A table has already reported its '
+            'winner(s). Starting the final table now will seat the '
+            'remaining players together and end Stage A.\n\n'
+            'Only continue once every table is done.',
+            style: AppTypography.bodySm,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              AppButton(
+                variant: AppButtonVariant.ghost,
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AppButton(
+                onPressed: () {
+                  // Returns a human summary on success, or null if this game
+                  // turned out not to be an eligible shootout (wrong format,
+                  // already Stage B, no structure yet) -- only report when
+                  // there is something to report.
+                  final result = app.startShootoutFinalTable();
+                  Navigator.pop(context);
+                  if (result != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(result),
+                        duration: const Duration(seconds: 6),
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Start Final Table'),
               ),
             ],
           ),

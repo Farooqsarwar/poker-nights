@@ -407,10 +407,13 @@ Map<String, dynamic> playerToMap(Player p) => {
       'eliminated': p.eliminated,
       'eliminationPos': p.eliminationPos,
       'eliminatedAtLevel': p.eliminatedAtLevel,
-      // §3 / §34a. Null on every game written so far — see the field's own doc
-      // on [Player]. Persisted regardless so the day stack capture (§25.5)
-      // lands, history written before it stays readable without a migration.
+      // §3 / §34a. Sampled at elimination time from [stack] — see both
+      // fields' doc comments on [Player].
       'lowestStackBB': p.lowestStackBB,
+      'stack': p.stack,
+      // §25.1a.
+      'earlyArrivalBonusEligible': p.earlyArrivalBonusEligible,
+      'earlyArrivalBonusChips': p.earlyArrivalBonusChips,
       'rebuys': p.rebuys,
       'reEntries': p.reEntries,
       'hasAddOn': p.hasAddOn,
@@ -436,6 +439,10 @@ Player playerFromMap(Map<String, dynamic> m) => Player(
       eliminationPos: (m['eliminationPos'] as num?)?.toInt(),
       eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
       lowestStackBB: (m['lowestStackBB'] as num?)?.toInt(),
+      stack: (m['stack'] as num?)?.toInt(),
+      earlyArrivalBonusEligible:
+          (m['earlyArrivalBonusEligible'] as bool?) ?? false,
+      earlyArrivalBonusChips: (m['earlyArrivalBonusChips'] as num?)?.toInt(),
       rebuys: (m['rebuys'] as num?)?.toInt() ?? 0,
       reEntries: (m['reEntries'] as num?)?.toInt() ?? 0,
       hasAddOn: (m['hasAddOn'] as bool?) ?? false,
@@ -599,6 +606,8 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'editorDeviceId': game.editorDeviceId,
     'editorClaimedAt': _nullOrIso(game.editorClaimedAt),
     'audioMasterDeviceId': game.audioMasterDeviceId,
+    // §11.4. Null on every non-shootout game.
+    'shootoutStage': game.shootoutStage?.name,
   };
 }
 
@@ -682,6 +691,8 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       editorDeviceId: (map['editorDeviceId'] as String?) ?? '',
       editorClaimedAt: _isoOrNull(map['editorClaimedAt']),
       audioMasterDeviceId: (map['audioMasterDeviceId'] as String?) ?? '',
+      shootoutStage:
+          _enumByNameOrNull(ShootoutStage.values, map['shootoutStage']),
     );
 
 /// Firestore representation: list-like collections that benefit from targeted

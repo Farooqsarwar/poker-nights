@@ -19,6 +19,7 @@ class Group {
     this.icon = '♠️',
     this.pinned = false,
     this.tableSettings = TableSettings.fallback,
+    this.defaultChipSetId,
   });
 
   final String id;
@@ -41,6 +42,9 @@ class Group {
   /// group runs, overridable per tournament on [GameSettings.tableSettingsOverride].
   final TableSettings tableSettings;
 
+  /// Default chip set ID for games created in this group.
+  final String? defaultChipSetId;
+
   List<LiveGame> get upcomingGames =>
       games.where((g) => g.status.isUpcoming).toList();
 
@@ -58,6 +62,7 @@ class Group {
     String? icon,
     bool? pinned,
     TableSettings? tableSettings,
+    String? defaultChipSetId,
   }) {
     return Group(
       id: id,
@@ -72,6 +77,7 @@ class Group {
       icon: icon ?? this.icon,
       pinned: pinned ?? this.pinned,
       tableSettings: tableSettings ?? this.tableSettings,
+      defaultChipSetId: defaultChipSetId ?? this.defaultChipSetId,
     );
   }
 }

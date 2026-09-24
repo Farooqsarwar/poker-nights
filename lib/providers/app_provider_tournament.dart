@@ -3,7 +3,372 @@
 /// Extracted verbatim from app_provider.dart (`// ── Late registration ──` + structure/completion). Do not change business logic.
 part of 'app_provider.dart';
 
+/// §10.1. What the group's last five nights say about their own pace, offered
+/// to the host BEFORE generation runs.
+///
+/// Carries the measured average as well as the percentage because the spec
+/// requires the host to SEE the evidence — "the host sees the measured average
+/// and the proposed percentage before generation runs, and explicitly accepts
+/// or declines it". A bare percentage is not something anyone can judge.
+class PaceProposal {
+  const PaceProposal({
+    required this.adjustmentPct,
+    required this.meanOverageMins,
+    required this.meanActualMins,
+    required this.targetDurationMins,
+    required this.sampleSize,
+  });
+
+  /// Clamped to ±0.20 by the engine. Positive means the group consistently
+  /// OVERRUNS, so levels must get SHORTER: accepting scales
+  /// `levelDurationMins` by (1 − [adjustmentPct]).
+  final double adjustmentPct;
+
+  /// Mean of (actual − target) across the sample, in minutes. Positive means
+  /// they run long. This is the number the host is shown.
+  final double meanOverageMins;
+
+  /// Mean measured wall-clock length of the sampled nights, in minutes.
+  final double meanActualMins;
+
+  /// The CURRENT tournament's target length in minutes — what the proposal is
+  /// being applied to.
+  final int targetDurationMins;
+
+  /// How many completed nights fed the average. Always 5 today, because §10.1
+  /// returns nothing below five, but exposed so the UI never has to assume it.
+  final int sampleSize;
+
+  /// The level length the host would end up with, given [baseLevelMins].
+  int scaledLevelMins(int baseLevelMins) =>
+      (baseLevelMins * (1 - adjustmentPct)).round();
+}
+
+/// One §34a award: who won it and the number that won it.
+class RecapAward {
+  const RecapAward({
+    required this.playerId,
+    required this.playerName,
+    required this.value,
+  });
+
+  final String playerId;
+  final String playerName;
+
+  /// The measurement behind the award — lowest stack in big blinds, the level
+  /// of the first bust, or a knockout count, depending on which award this is.
+  final int value;
+}
+
+/// §34a post-game recap, computed once the game reaches `completed`.
+///
+/// Every award excludes players whose finishing position is <= 0 (§34): a row
+/// with no position never played, and a no-show cannot win "fastest bust".
+class GameRecap {
+  const GameRecap({
+    this.biggestComeback,
+    this.fastestBust,
+    this.mostKnockouts,
+  });
+
+  /// Lowest [Player.lowestStackBB] among the top-3 finishers.
+  ///
+  /// DORMANT: always null today. §25.5 fills `lowestStackBB` by sampling every
+  /// survivor's stack at each elimination, and this app tracks no chip stacks
+  /// at all, so there is no data to rank. The award is computed honestly from
+  /// whatever data exists rather than substituted with a proxy — a fake
+  /// comeback story is worse than no comeback story.
+  final RecapAward? biggestComeback;
+
+  /// Lowest [Player.eliminatedAtLevel] among non-winners — the shortest night.
+  final RecapAward? fastestBust;
+
+  /// Highest knockout count.
+  final RecapAward? mostKnockouts;
+
+  bool get isEmpty =>
+      biggestComeback == null && fastestBust == null && mostKnockouts == null;
+}
+
 extension AppProviderTournament on AppProvider {
+  // ── §34a post-game recap ───────────────────────────────────────────────────
+
+  /// Final finishing position for every player who has one (1 = winner).
+  ///
+  /// Eliminated players carry theirs on [Player.eliminationPos]. Survivors do
+  /// not: [recordFinishOrder] stores only the id list, so their places are
+  /// derived here exactly as [_validateCompletionState] derives them, from
+  /// `finishOrder` read first-out-first. Two readings of the same list must
+  /// never disagree, so this deliberately mirrors the validator rather than
+  /// inventing a second convention.
+  Map<String, int> _finalPositions(LiveGame game) {
+    final positions = <String, int>{};
+    for (final p in game.players) {
+      if (p.eliminated && p.eliminationPos != null) {
+        positions[p.id] = p.eliminationPos!;
+      }
+    }
+    final activeCount = game.activePlayers.length;
+    var survivorRank = 0;
+    final seen = <String>{};
+    for (final id in game.finishOrder) {
+      if (!seen.add(id)) continue;
+      final p = game.players.where((x) => x.id == id).firstOrNull;
+      if (p == null || p.eliminated) continue;
+      survivorRank++;
+      positions[id] = activeCount - survivorRank + 1;
+    }
+    return positions;
+  }
+
+  /// §34a. The three post-game awards for the open game, or null before it is
+  /// `completed` (the spec computes them once, at completion).
+  ///
+  /// Pure: reading this mutates nothing, so a screen may call it in `build`.
+  GameRecap? get gameRecap {
+    final game = _currentGame;
+    if (game == null || game.status != LiveGameStatus.completed) return null;
+    return recapFor(game);
+  }
+
+  /// §34a for any completed game — the history screen shows recaps for nights
+  /// that are not the open one.
+  GameRecap recapFor(LiveGame game) {
+    final positions = _finalPositions(game);
+    // §34: "exclude position <= 0 from all three". A player with no position
+    // at all never finished the event and is excluded on the same grounds.
+    final eligible = [
+      for (final p in game.players)
+        if ((positions[p.id] ?? 0) > 0) p,
+    ];
+    if (eligible.isEmpty) return const GameRecap();
+
+    // Biggest comeback: lowest stack ever held, among the top three.
+    // `lowestStackBB` is null on every player until §25.5's stack sampling
+    // exists, so `candidates` is empty and this stays null — by design. The
+    // ranking is written out so the award works the moment data appears.
+    RecapAward? comeback;
+    final topThree = [
+      for (final p in eligible)
+        if ((positions[p.id] ?? 0) <= 3 && p.lowestStackBB != null) p,
+    ];
+    if (topThree.isNotEmpty) {
+      var best = topThree.first;
+      for (final p in topThree) {
+        if (p.lowestStackBB! < best.lowestStackBB!) best = p;
+      }
+      comeback = RecapAward(
+        playerId: best.id,
+        playerName: best.name,
+        value: best.lowestStackBB!,
+      );
+    }
+
+    // Fastest bust: the earliest level anybody went out on. The winner is
+    // excluded by construction — they were never eliminated, so they carry no
+    // `eliminatedAtLevel` — and position 1 is skipped explicitly so a chopped
+    // or hand-recorded finish cannot slip them in.
+    RecapAward? fastest;
+    final busted = [
+      for (final p in eligible)
+        if (p.eliminatedAtLevel != null && (positions[p.id] ?? 0) > 1) p,
+    ];
+    if (busted.isNotEmpty) {
+      var first = busted.first;
+      for (final p in busted) {
+        if (p.eliminatedAtLevel! < first.eliminatedAtLevel!) first = p;
+      }
+      fastest = RecapAward(
+        playerId: first.id,
+        playerName: first.name,
+        value: first.eliminatedAtLevel!,
+      );
+    }
+
+    // Most knockouts. A night where nobody was credited with one has no
+    // winner here rather than an arbitrary player on zero.
+    RecapAward? knockouts;
+    var top = eligible.first;
+    for (final p in eligible) {
+      if (p.knockouts > top.knockouts) top = p;
+    }
+    if (top.knockouts > 0) {
+      knockouts = RecapAward(
+        playerId: top.id,
+        playerName: top.name,
+        value: top.knockouts,
+      );
+    }
+
+    return GameRecap(
+      biggestComeback: comeback,
+      fastestBust: fastest,
+      mostKnockouts: knockouts,
+    );
+  }
+
+  // ── §10.1 pace learning ────────────────────────────────────────────────────
+
+  /// The group's completed nights that carry a usable §3 `actualDurationMins`,
+  /// most recent first.
+  ///
+  /// Ordered by [LiveGame.startedAt] where it exists and by the (sortable)
+  /// `settings.date` otherwise — the same ordering the repository's own
+  /// `orderBy('settings.date', descending: true)` uses. The open game is
+  /// excluded: a night cannot learn from itself.
+  List<LiveGame> _paceHistory() {
+    final currentId = _currentGame?.id;
+    final rows = _currentGroup.pastGames
+        .where((g) =>
+            g.id != currentId &&
+            g.actualDurationMins != null &&
+            g.actualDurationMins! > 0 &&
+            g.settings.durationHours > 0)
+        .toList();
+    rows.sort((a, b) {
+      final at = a.startedAt, bt = b.startedAt;
+      if (at != null && bt != null) return bt.compareTo(at);
+      return b.settings.date.compareTo(a.settings.date);
+    });
+    return rows;
+  }
+
+  /// §10.1's proposal for the open tournament, or null when there is nothing
+  /// worth asking about — fewer than five completed nights, or a mean overage
+  /// under 15 minutes, both of which [TournamentEngine.paceAdjustmentFor]
+  /// decides. Null MUST mean the host is not asked.
+  ///
+  /// Pure: reading this changes nothing. §10.1 forbids silent application, so
+  /// the proposal only becomes real through [acceptPaceAdjustment].
+  PaceProposal? get paceProposal {
+    final game = _currentGame;
+    if (game == null) return null;
+    final history = _paceHistory();
+    if (history.length < 5) return null;
+    final sample = history.take(5).toList();
+
+    final actuals = [for (final g in sample) g.actualDurationMins!];
+    final estimates = [
+      for (final g in sample) (g.settings.durationHours * 60).round(),
+    ];
+    final pct = TournamentEngine.paceAdjustmentFor(
+      actualDurationMins: actuals,
+      estimatedDurationMins: estimates,
+    );
+    if (pct == null) return null;
+
+    var sumOverage = 0.0;
+    var sumActual = 0.0;
+    for (var i = 0; i < sample.length; i++) {
+      sumOverage += actuals[i] - estimates[i];
+      sumActual += actuals[i];
+    }
+    return PaceProposal(
+      adjustmentPct: pct,
+      meanOverageMins: sumOverage / sample.length,
+      meanActualMins: sumActual / sample.length,
+      targetDurationMins: (game.settings.durationHours * 60).round(),
+      sampleSize: sample.length,
+    );
+  }
+
+  /// True while a §10.1 proposal is outstanding: one exists and the host has
+  /// neither accepted nor declined it for this game. The UI shows the prompt
+  /// on this, not on [paceProposal] alone, so a decline stays declined.
+  bool get paceProposalPending =>
+      !_paceProposalAnswered && paceProposal != null;
+
+  /// The adjustment the host accepted for the open game, or null. Exposed so
+  /// the structure screen can show "levels shortened 8.6% on your own pace"
+  /// rather than leaving an unexplained number in the schedule.
+  double? get acceptedPaceAdjustmentPct => _acceptedPaceAdjustmentPct;
+
+  /// The level length §10.1's scaling starts from: the host's explicit choice
+  /// when they made one, otherwise whatever the last generation settled on.
+  int _paceBaseLevelMins(LiveGame game) {
+    final stated = game.settings.levelDurationMins;
+    if (stated != null && stated > 0) return stated;
+    return game.structure.levelDuration;
+  }
+
+  /// §10.1. The host has SEEN the measured average and said yes.
+  ///
+  /// Scales `levelDurationMins` by (1 − adjustmentPct) and writes it into the
+  /// settings, which is where every generation path reads it from
+  /// ([generateFinalStructure] and [_recalculateWithPlayers] both pass
+  /// `settings.levelDurationMins` into [TournamentEngine.generate]). Storing
+  /// the decision rather than passing it through a parameter is what makes it
+  /// survive the T-minus-10 recalculation and the final regeneration at Start.
+  ///
+  /// Returns a human summary of what changed, or null if there was nothing to
+  /// accept.
+  String? acceptPaceAdjustment() {
+    final game = _currentGame;
+    if (game == null) return null;
+    if (_acceptedPaceAdjustmentPct != null) return null; // already applied once
+    final proposal = paceProposal;
+    if (proposal == null) return null;
+
+    final base = _paceBaseLevelMins(game);
+    if (base <= 0) return null;
+    final scaled = proposal.scaledLevelMins(base).clamp(
+          TournamentEngine.kMinLevelDurationMins,
+          TournamentEngine.kMaxLevelDurationMins,
+        );
+
+    _pushUndo();
+    _acceptedPaceAdjustmentPct = proposal.adjustmentPct;
+    _paceProposalAnswered = true;
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(levelDurationMins: scaled),
+    );
+    final pctLabel = (proposal.adjustmentPct * 100).abs().toStringAsFixed(1);
+    final summary =
+        'Levels ${proposal.adjustmentPct > 0 ? 'shortened' : 'lengthened'} '
+        '$pctLabel% to $scaled min (was $base): this group averaged '
+        '${proposal.meanActualMins.round()} min over their last '
+        '${proposal.sampleSize} nights, '
+        '${proposal.meanOverageMins.round().abs()} min '
+        '${proposal.meanOverageMins >= 0 ? 'over' : 'under'} target.';
+    addAuditRecord('pace_adjustment', summary);
+    // Regenerate only if there is already a structure to correct. Before the
+    // first generation the stored setting is enough — the very next generate
+    // call reads it.
+    if (game.structure.levels.isNotEmpty) {
+      recalculateStructure();
+    }
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return summary;
+  }
+
+  /// §10.1. The host has seen the same evidence and said no. Records the
+  /// answer so the prompt does not reappear, and changes nothing else.
+  void declinePaceAdjustment() {
+    if (_paceProposalAnswered) return;
+    _paceProposalAnswered = true;
+    final proposal = paceProposal;
+    if (proposal != null) {
+      addAuditRecord(
+        'pace_adjustment',
+        'Host declined the suggested '
+            '${(proposal.adjustmentPct * 100).abs().toStringAsFixed(1)}% level '
+            'adjustment (group averaged ${proposal.meanActualMins.round()} min '
+            'over ${proposal.sampleSize} nights).',
+      );
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Forgets the host's answer. Called when a different game is opened — the
+  /// decision is per tournament, and a stale "already accepted" would suppress
+  /// the prompt for the next night entirely.
+  void _resetPaceProposalState() {
+    _acceptedPaceAdjustmentPct = null;
+    _paceProposalAnswered = false;
+  }
+
+
   /// Late registration stays open until the rebuy period ends — the configured
   /// closing level, normally the end of Level 6 (07-039, 12-028, 20-023).
   bool get lateRegistrationOpen {
@@ -518,11 +883,11 @@ extension AppProviderTournament on AppProvider {
   int expectedPlayersFromRsvps(LiveGame game) {
     var total = 0;
     for (final p in game.players) {
-      if (!p.isGuest && p.rsvp != null && p.rsvp!.isGoing) {
+      if (!p.isGuest && !p.noShow && p.rsvp != null && p.rsvp!.isGoing) {
         total += 1 + p.rsvp!.guestCount;
       }
     }
-    return total >= 2 ? total : game.players.where((p) => !p.isGuest).length;
+    return total >= 2 ? total : game.players.where((p) => !p.isGuest && !p.noShow).length;
   }
 
   /// Admin has reviewed the generated structure (30-minute estimate).
@@ -583,6 +948,11 @@ extension AppProviderTournament on AppProvider {
     final planned =
         stated != null ? max(stated, confirmedCount) : expected;
     final count = planned < 2 ? 2 : planned;
+    // §10.1: an ACCEPTED pace adjustment has already been folded into
+    // `settings.levelDurationMins` by [acceptPaceAdjustment], so it reaches
+    // the engine below through `s.levelDurationMins` like any other host
+    // choice. Nothing is applied here implicitly — a proposal the host never
+    // answered leaves this value untouched.
     final s = game.settings.copyWith(players: count);
     final structure = TournamentEngine.generate(
       TournamentParams(
@@ -612,6 +982,13 @@ extension AppProviderTournament on AppProvider {
         addOnChips: s.addOnChips,
         levelDurationMins: s.levelDurationMins,
         payoutShape: s.payoutShape,
+        format: s.format,
+        maxReEntries: s.maxReEntries,
+        shootoutTables: s.shootoutTables,
+        shootoutTableTargetMins: s.shootoutTableTargetMins,
+        earlyArrivalBonusEnabled: s.earlyArrivalBonusEnabled,
+        earlyArrivalCutoffMins: s.earlyArrivalCutoffMins,
+        earlyArrivalBonusPctOverride: s.earlyArrivalBonusPctOverride,
       ),
     );
     // Addendum acceptance criterion 10: the engine may move the rebuy cutoff
@@ -899,6 +1276,9 @@ extension AppProviderTournament on AppProvider {
   void _recalculateWithPlayers(int count) {
     final game = _currentGame!;
     final s = game.settings;
+    // Same as [generateFinalStructure]: an accepted §10.1 adjustment already
+    // lives in `levelDurationMins`, so every rebuild — including the firm
+    // recalculation at Start — keeps it.
     final newSettings = s.copyWith(players: count);
     var structure = TournamentEngine.generate(
       TournamentParams(
@@ -927,6 +1307,13 @@ extension AppProviderTournament on AppProvider {
         addOnChips: newSettings.addOnChips,
         levelDurationMins: newSettings.levelDurationMins,
         payoutShape: newSettings.payoutShape,
+        format: newSettings.format,
+        maxReEntries: newSettings.maxReEntries,
+        shootoutTables: newSettings.shootoutTables,
+        shootoutTableTargetMins: newSettings.shootoutTableTargetMins,
+        earlyArrivalBonusEnabled: newSettings.earlyArrivalBonusEnabled,
+        earlyArrivalCutoffMins: newSettings.earlyArrivalCutoffMins,
+        earlyArrivalBonusPctOverride: newSettings.earlyArrivalBonusPctOverride,
       ),
     );
     // Once play has started the starting stacks are frozen — blinds, levels
@@ -1286,6 +1673,38 @@ extension AppProviderTournament on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  /// §3's `actualDurationMins`: WALL-CLOCK minutes from the first level to the
+  /// final hand — "levelEndTime of the last played level − scheduledStart".
+  ///
+  /// This used to sum the PLANNED durations of the levels reached, which is a
+  /// different quantity with the opposite sign. A SLOW group gets through
+  /// FEWER levels, so the planned sum came out SMALL, so §10.1's mean overage
+  /// went NEGATIVE, so accepting the pace proposal scaled `levelDurationMins`
+  /// by (1 − adjustmentPct) > 1 and handed that group LONGER levels — making
+  /// them slower still. It also could not see the biggest pause of the night:
+  /// the end-of-rebuy settlement break runs without a countdown (User Flow
+  /// §4.13). [LiveGame.startedAt] is the first Start press and is never
+  /// rewritten, so `now − startedAt` is the honest elapsed evening.
+  ///
+  /// Returns null rather than a plausible-looking number when the measurement
+  /// cannot be trusted — §10.1 averages this field over five nights, so one
+  /// bad sample drags every future structure the group generates. A game
+  /// restored from a stale recovery snapshot (phone left closed for days) or
+  /// one whose clock was never started would otherwise record a three-day
+  /// tournament; those are discarded here.
+  int? measuredWallClockMins(LiveGame game) {
+    final startedAt = game.startedAt;
+    // Legacy game, or the clock was never started through `startTimer`. There
+    // is no wall-clock origin to measure from, and the summed schedule is the
+    // wrong quantity — so record nothing.
+    if (startedAt == null) return null;
+    final mins = _serverNow.difference(startedAt).inMinutes;
+    // Clock skew or a device whose time moved backwards.
+    if (mins <= 0) return null;
+    if (mins > AppProvider._maxPlausibleGameMins) return null;
+    return mins;
+  }
+
   bool recordFinishOrder(List<String> order) {
     _forceClaimEditor();
     final game = _currentGame;
@@ -1310,10 +1729,12 @@ extension AppProviderTournament on AppProvider {
     }
     _completionError = null;
     _pushUndo();
+
     _currentGame = _currentGame!.copyWith(
       finishOrder: order,
       status: LiveGameStatus.completed,
       timerRunning: false,
+      actualDurationMins: measuredWallClockMins(game),
     );
     _syncGroupGame();
     // This device settled the game — write my own result now (other members'

@@ -83,6 +83,9 @@ Map<String, String> validateEventSettings(GameSettings s, {DateTime? now}) {
   if (s.rebuys && s.rebuyLimit != null && s.rebuyLimit! < 0) {
     errors['rebuyLimit'] = 'Must be >= 0';
   }
+  if (s.maxReEntries != null && s.maxReEntries! < 0) {
+    errors['maxReEntries'] = 'Must be >= 0';
+  }
 
   if (s.koEnabled && s.koAmount < 0) {
     errors['koAmount'] = 'Must be >= 0';

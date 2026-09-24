@@ -34,7 +34,7 @@ void main() {
     // Play state — public, this is what the screens are for.
     'settings', 'structure', 'status', 'currentLevel', 'timerRunning',
     'secondsRemaining', 'players', 'totalChipsInPlay', 'finishOrder',
-    'levelEndTime', 'startedAt', 'speedRecommendation', 'dealerPlayerId',
+    'levelEndTime', 'startedAt', 'actualDurationMins', 'speedRecommendation', 'dealerPlayerId',
     'originalLevels', 'shotClock',
     // Social — chat is gated by role inside the projection.
     'chat', 'announcements',

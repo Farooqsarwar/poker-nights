@@ -24,6 +24,7 @@ abstract final class RoutePaths {
   static const String toolClock = '/tools/clock';
   static const String toolIcm = '/tools/icm';
   static const String toolPayouts = '/tools/payouts';
+  static const String toolQuickBlind = '/tools/quick-blind';
 
   /// Group invite deep link (`?code=CODE`) — shared as a link or encoded in
   /// the group's QR code. Requires sign-in; unauthenticated visitors are

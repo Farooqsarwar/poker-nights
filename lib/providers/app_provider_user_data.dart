@@ -196,6 +196,7 @@ extension AppProviderUserData on AppProvider {
         playerCount: game.finishOrder.length,
         knockouts: me.knockouts,
         finishedAt: DateTime.now(),
+        eliminatedAtLevel: me.eliminatedAtLevel,
       ),
     ];
     _user = _user?.copyWith(stats: _statsFromResults(_myResults));
@@ -229,6 +230,7 @@ extension AppProviderUserData on AppProvider {
             playerCount: game.finishOrder.length,
             knockouts: me.knockouts,
             finishedAt: DateTime.now(),
+            eliminatedAtLevel: me.eliminatedAtLevel,
           ),
         )
         .catchError(

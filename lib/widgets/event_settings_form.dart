@@ -6,6 +6,7 @@ import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/chip_color.dart';
+import '../models/tournament_format.dart';
 import '../models/live_game.dart';
 import '../models/table_settings.dart';
 import '../models/tournament.dart';
@@ -101,6 +102,16 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
   late final TextEditingController _rebuyLimit;
   late final TextEditingController _rebuyCost;
   late final TextEditingController _addOnCost;
+  late TournamentFormat _format;
+  late final TextEditingController _maxReEntries;
+  late final TextEditingController _shootoutTables;
+  late final TextEditingController _shootoutTableTargetMins;
+  late bool _earlyArrivalBonus;
+  late final TextEditingController _earlyArrivalCutoff;
+
+  /// Holds a PERCENT (12.5), not the fraction the model stores (0.125).
+  /// See [_pctLabel] / [_earlyArrivalPctFraction].
+  late final TextEditingController _earlyArrivalPct;
 
   @override
   void initState() {
@@ -140,6 +151,46 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
     _rebuyLimit = TextEditingController(text: s.rebuyLimit?.toString() ?? '1');
     _rebuyCost = TextEditingController(text: s.rebuyCost?.toString() ?? '');
     _addOnCost = TextEditingController(text: s.addOnCost?.toString() ?? '');
+    _format = s.effectiveFormat;
+    _maxReEntries = TextEditingController(text: s.maxReEntries?.toString() ?? '');
+    // §11.4 / §25.1a overrides. Empty means "engine decides", the same
+    // nullable-override idiom the rebuy limit and max re-entries already use.
+    _shootoutTables =
+        TextEditingController(text: s.shootoutTables?.toString() ?? '');
+    _shootoutTableTargetMins = TextEditingController(
+      text: s.shootoutTableTargetMins?.toString() ?? '',
+    );
+    _earlyArrivalBonus = s.earlyArrivalBonusEnabled;
+    _earlyArrivalCutoff =
+        TextEditingController(text: s.earlyArrivalCutoffMins?.toString() ?? '');
+    _earlyArrivalPct = TextEditingController(
+      text: s.earlyArrivalBonusPctOverride == null
+          ? ''
+          : _pctLabel(s.earlyArrivalBonusPctOverride!),
+    );
+  }
+
+  /// The model stores the early-arrival bonus as a FRACTION of the starting
+  /// stack (0.125); the host reads and types a PERCENT (12.5). The conversion
+  /// lives in exactly two places — here on the way in and
+  /// [_earlyArrivalPctFraction] on the way out — because getting it wrong by a
+  /// factor of 100 ships a 1250% bonus that nothing downstream would catch.
+  static String _pctLabel(double fraction) {
+    // Via a fixed 2dp string, not `fraction * 100` straight: 0.1 * 100 is
+    // 10.000000000000002 in binary floating point and the host would be shown
+    // exactly that.
+    var s = (fraction * 100).toStringAsFixed(2);
+    if (s.contains('.')) {
+      s = s.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+    }
+    return s;
+  }
+
+  /// The typed percent as the fraction the model wants. Null (blank field)
+  /// leaves the documented 12.5% default in charge.
+  double? get _earlyArrivalPctFraction {
+    final pct = double.tryParse(_earlyArrivalPct.text.trim());
+    return pct == null ? null : pct / 100;
   }
 
   @override
@@ -154,6 +205,11 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
       _rebuyLimit,
       _rebuyCost,
       _addOnCost,
+      _maxReEntries,
+      _shootoutTables,
+      _shootoutTableTargetMins,
+      _earlyArrivalCutoff,
+      _earlyArrivalPct,
     ]) {
       c.dispose();
     }
@@ -224,6 +280,19 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
             )
           : null,
       clearTableSettingsOverride: !_overrideTableSettings,
+      format: _format,
+      maxReEntries: num.tryParse(_maxReEntries.text.trim())?.toInt(),
+      // §11.4 Stage A. Blank = the engine derives the table count from the
+      // expected field and paces each table at the §38 45-minute default.
+      shootoutTables: num.tryParse(_shootoutTables.text.trim())?.toInt(),
+      shootoutTableTargetMins:
+          num.tryParse(_shootoutTableTargetMins.text.trim())?.toInt(),
+      // §25.1a. The toggle is the switch that matters — `effectiveEarlyArrivalPct`
+      // returns 0 when it is off, so a stale override cannot keep granting chips.
+      earlyArrivalBonusEnabled: _earlyArrivalBonus,
+      earlyArrivalCutoffMins:
+          num.tryParse(_earlyArrivalCutoff.text.trim())?.toInt(),
+      earlyArrivalBonusPctOverride: _earlyArrivalPctFraction,
     );
   }
 
@@ -489,6 +558,111 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
     final errors = validateEventSettings(_buildSettings(strict: true));
     return [
       _EditRow(
+        title: 'Tournament format',
+        subtitle: 'How entries work',
+        trailing: _OptionPicker(
+          options: const ['Freeze Out', 'Rebuy', 'Re-entry', 'Shootout'],
+          selected: _format.label,
+          onChanged: (v) {
+            setState(() {
+              if (v == 'Freeze Out') {
+                _format = TournamentFormat.freezeOut;
+                _rebuys = false;
+                _reEntry = false;
+                _rebuyUnlimited = false;
+              } else if (v == 'Rebuy') {
+                _format = TournamentFormat.rebuy;
+                _rebuys = true;
+                _reEntry = false;
+              } else if (v == 'Re-entry') {
+                _format = TournamentFormat.reEntry;
+                _rebuys = true;
+                _reEntry = true;
+              } else if (v == 'Shootout') {
+                _format = TournamentFormat.shootout;
+                _rebuys = false;
+                _reEntry = false;
+                _rebuyUnlimited = false;
+              }
+            });
+            _emit();
+          },
+        ),
+      ),
+      if (_format == TournamentFormat.reEntry)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xs, bottom: AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Max re-entries per player',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              SizedBox(
+                width: 130,
+                child: AppTextField(
+                  controller: _maxReEntries,
+                  keyboardType: TextInputType.number,
+                  placeholder: 'Unlimited',
+                  error: errors['maxReEntries'],
+                  onChanged: (_) => _emit(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      // §11.4: a shootout's Stage A is N independent tables, each played down
+      // to a winner. Both figures are optional — the engine derives the table
+      // count from the expected field and paces each table at §38's 45
+      // minutes — so they are offered as overrides, not as required input.
+      if (_format == TournamentFormat.shootout)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xs, bottom: AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Stage A tables',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              SizedBox(
+                width: 130,
+                child: AppTextField(
+                  controller: _shootoutTables,
+                  keyboardType: TextInputType.number,
+                  placeholder: 'Auto',
+                  onChanged: (_) => _emit(),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Minutes per Stage A table',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              SizedBox(
+                width: 130,
+                child: AppTextField(
+                  controller: _shootoutTableTargetMins,
+                  keyboardType: TextInputType.number,
+                  placeholder: '45',
+                  onChanged: (_) => _emit(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      Divider(color: AppColors.border),
+      _EditRow(
         title: 'Rebuys & re-entry',
         subtitle: 'Players can buy back in after elimination',
         trailing: _OptionPicker(
@@ -666,6 +840,77 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
               );
               _emit();
             },
+          ),
+        ),
+      Divider(color: AppColors.border),
+      // §25.1a: players checked in before the cutoff start above the printed
+      // stack. Off by default — it is a house rule, not a tournament rule —
+      // and both figures fall back to the engine's 30 minutes / 12.5% when
+      // left blank.
+      _ToggleRow(
+        title: 'Early arrival bonus',
+        subtitle: 'Extra starting chips for players checked in before the '
+            'cutoff',
+        value: _earlyArrivalBonus,
+        onChanged: (v) {
+          setState(() => _earlyArrivalBonus = v);
+          _emit();
+        },
+      ),
+      if (_earlyArrivalBonus)
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Check in this many minutes before the start',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              SizedBox(
+                width: 130,
+                child: AppTextField(
+                  controller: _earlyArrivalCutoff,
+                  keyboardType: TextInputType.number,
+                  placeholder: '30',
+                  onChanged: (_) => _emit(),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Bonus, as a % of the starting stack',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              SizedBox(
+                width: 130,
+                child: AppTextField(
+                  controller: _earlyArrivalPct,
+                  // Decimal: 12.5% is the default and hosts round it to
+                  // halves, so an integer-only keypad would make the default
+                  // itself untypeable.
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  placeholder: '12.5',
+                  suffixIcon: Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: Text(
+                      '%',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ),
+                  onChanged: (_) => _emit(),
+                ),
+              ),
+            ],
           ),
         ),
       Divider(color: AppColors.border),

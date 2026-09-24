@@ -602,7 +602,14 @@ class _GroupHeader extends StatelessWidget {
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < _mobileBreakpoint;
         // Mobile: icon bleeds off the top-right corner (unchanged).
-        // Desktop/laptop: icon is centered in the header instead.
+        // Desktop/laptop: icon anchors to the right edge, vertically
+        // centered — NOT dead-center across the whole header. The header's
+        // content (title on the left, action buttons on the right) is
+        // asymmetric, so centering the icon across the full width landed it
+        // in the empty gap between the two, reading as misplaced rather than
+        // as a deliberate corner watermark. Anchoring right keeps it in the
+        // same visual role as the mobile corner-bleed, just inset instead of
+        // clipped, regardless of how wide the header gets.
         // minHeight MUST be large enough to contain the icon at its offset
         // or the Stack's own bounding box will be shorter than the icon and
         // hard-clip it into a broken rectangle instead of showing the full
@@ -748,11 +755,14 @@ class _GroupHeader extends StatelessWidget {
                     ),
                   )
                 else
-                  Align(
-                    alignment: Alignment.center,
-                    child: _GroupHeaderIcon(
-                      icon: groupIconMap[group.icon] ?? Icons.casino,
-                      size: iconSize,
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.lg),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _GroupHeaderIcon(
+                        icon: groupIconMap[group.icon] ?? Icons.casino,
+                        size: iconSize,
+                      ),
                     ),
                   ),
                 Align(alignment: Alignment.topLeft, child: content),

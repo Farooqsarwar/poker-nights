@@ -3,6 +3,12 @@
 /// Extracted verbatim from app_provider.dart (`// ── Player management ──` + `// ── Guest session ──`). Do not change business logic.
 part of 'app_provider.dart';
 
+/// §25.4b. The three gameplay events a per-player undo may reverse.
+///
+/// `Remove player` is deliberately absent: the spec calls it "a roster
+/// correction, not a gameplay event" and rules it out of this path explicitly.
+enum PlayerActionKind { rebuy, addOn, bust }
+
 extension AppProviderPlayers on AppProvider {
   void eliminatePlayer(String playerId, {String? koRecipientId, String? idempotencyKey}) {
     _forceClaimEditor();
@@ -20,7 +26,14 @@ extension AppProviderPlayers on AppProvider {
         : 0;
     final updated = _currentGame!.players.map((p) {
       if (p.id == playerId) {
-        return p.copyWith(eliminated: true, active: false, eliminationPos: pos, table: 0, seat: 0);
+        return p.copyWith(
+          eliminated: true,
+          active: false,
+          eliminationPos: pos,
+          eliminatedAtLevel: _currentGame!.currentLevel,
+          table: 0,
+          seat: 0,
+        );
       }
       // Optional single knockout recipient (technical §11.3). The bounty
       // chips transfer from the eliminated player, so total chips in play
@@ -262,9 +275,9 @@ extension AppProviderPlayers on AppProvider {
     final (rev, idemKey) =
         _claimIdempotency(idempotencyKey ?? '', action: 'grantReEntry', target: playerId);
     if (rev == null) return; // replayed action — already applied
-    if (!game.settings.reEntry || game.rebuysClosed) return;
     final player = game.players.where((p) => p.id == playerId).firstOrNull;
     if (player == null || !player.eliminated) return;
+    if (!game.canReEnter(player)) return;
 
     _pushUndo();
     final entryStack = game.structure.startingStack;
@@ -355,6 +368,199 @@ extension AppProviderPlayers on AppProvider {
     _saveUndoStack(); // <-- newly added sidecar persistence
     if (!_disposed) notifyListeners();
     addAnnouncement('Last action undone.', false);
+  }
+
+  // ── §25.4b per-player undo ─────────────────────────────────────────────────
+  //
+  // Spec deviation #13: "Per-player undo is filtered removal, not a stack pop —
+  // a host correcting one player's last action shouldn't have to also undo
+  // everyone else's actions taken since."
+  //
+  // The spec's algorithm walks a typed event stack and removes one entry. This
+  // app's undo stack is not that: `_undoStack` is `List<LiveGame?>`, whole-game
+  // snapshots, and §32.5 says the storage does NOT change — only the traversal
+  // does. You cannot filter one player's event out of a snapshot, because a
+  // snapshot is not a set of events. So the inverse is applied DIRECTLY to the
+  // live game here, which produces the state the spec's `applyInverse` would,
+  // and [undoLast]'s snapshot stack is left completely alone — undoing one
+  // player's rebuy no longer rolls back everyone else's evening.
+  //
+  // What the direct inverse cannot recover is noted at each branch below.
+
+  /// Reverse-chronological search for the last gameplay event belonging to one
+  /// player, using the audit timeline — the only per-action record this app
+  /// keeps (§14/§29: "every live operational action creates a timestamped
+  /// activity-log record"). Returns the audit record and the kind it maps to.
+  ///
+  /// The acting player's name always opens the detail line in every one of the
+  /// three writers ([grantRebuy], [grantAddOn], [eliminatePlayer]), so the
+  /// prefix match is exact rather than a substring scan. Two players sharing a
+  /// display name would be ambiguous; the state fallback below covers the case
+  /// where the timeline is unavailable at all.
+  (AuditRecord, PlayerActionKind)? _lastPlayerAuditEvent(Player p) {
+    final history = _currentGame?.auditHistory;
+    if (history == null) return null;
+    for (final rec in history.reversed) {
+      if (!rec.details.startsWith('${p.name} ')) continue;
+      switch (rec.type) {
+        case 'rebuy':
+          return (rec, PlayerActionKind.rebuy);
+        case 'addon':
+          return (rec, PlayerActionKind.addOn);
+        case 'elimination':
+          return (rec, PlayerActionKind.bust);
+      }
+    }
+    return null;
+  }
+
+  /// What a per-player undo would reverse for [playerId], or null when there
+  /// is nothing of theirs to reverse. Pure — the UI can label its button with
+  /// this before the host commits.
+  ({PlayerActionKind kind, String summary})? lastUndoablePlayerAction(
+    String playerId,
+  ) {
+    final game = _currentGame;
+    if (game == null) return null;
+    final p = game.players.where((x) => x.id == playerId).firstOrNull;
+    if (p == null) return null;
+
+    final event = _lastPlayerAuditEvent(p);
+    if (event != null) {
+      return (kind: event.$2, summary: event.$1.details);
+    }
+    // Fallback: the audit timeline is an admin-only sidecar and can be empty
+    // (a co-admin device that has not loaded it, or a restored session). State
+    // still tells us which events happened, just not their order, so fall back
+    // to the order the spec's own list implies — the most consequential first.
+    if (p.eliminated) {
+      return (kind: PlayerActionKind.bust, summary: '${p.name} eliminated.');
+    }
+    if (p.hasAddOn) {
+      return (kind: PlayerActionKind.addOn, summary: '${p.name} took the add-on.');
+    }
+    if (p.rebuys > 0) {
+      return (kind: PlayerActionKind.rebuy, summary: '${p.name} rebought.');
+    }
+    return null;
+  }
+
+  /// Pulls the knocker-out's name back out of an elimination audit line.
+  ///
+  /// [eliminatePlayer] writes "X eliminated by Y — N bounty awarded.", and the
+  /// knockout credit lives only on the recipient's counter — there is no field
+  /// on the eliminated player recording who busted them. Reading the line this
+  /// module wrote itself is the only way to give the credit back; without it,
+  /// undoing a bust would silently leave a phantom knockout on the books.
+  String? _knockerOutNameFrom(String details, String playerName) {
+    const marker = ' eliminated by ';
+    final start = details.indexOf(marker, playerName.length);
+    if (start < 0) return null;
+    final from = start + marker.length;
+    final dash = details.indexOf(' —', from);
+    final name = (dash < 0 ? details.substring(from) : details.substring(from, dash))
+        .trim();
+    return name.isEmpty || name == '?' ? null : name;
+  }
+
+  /// §25.4b. Reverses ONE player's last gameplay action — rebuy, add-on or
+  /// bust — leaving every other player's actions since then untouched.
+  ///
+  /// `Remove player` is deliberately not reversible here: §25.4b calls it "a
+  /// roster correction, not a gameplay event". Use the normal add-player path.
+  ///
+  /// Returns a summary of what was reversed, or null when there was nothing.
+  String? undoLastPlayerAction(String playerId) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return null;
+    final game = _currentGame;
+    if (game == null) return null;
+    final p = game.players.where((x) => x.id == playerId).firstOrNull;
+    if (p == null) return null;
+    final action = lastUndoablePlayerAction(playerId);
+    if (action == null) return null;
+
+    final (rev, key) = _claimIdempotency(
+      '',
+      action: 'undoLastPlayerAction',
+      target: playerId,
+    );
+    if (rev == null) return null;
+    _pushUndo();
+
+    var chipsBack = 0;
+    String summary;
+    var players = game.players;
+
+    switch (action.kind) {
+      case PlayerActionKind.rebuy:
+        if (p.rebuys <= 0) return null;
+        // The chips come off at the CURRENT rebuy stack. A host who edited the
+        // structure between the rebuy and the correction would see a small
+        // discrepancy — the snapshot stack cannot tell us the old figure
+        // either, and the alternative is leaving the chips in play forever.
+        chipsBack = game.structure.rebuyStack;
+        players = [
+          for (final x in game.players)
+            if (x.id == playerId) x.copyWith(rebuys: x.rebuys - 1) else x,
+        ];
+        // Note the player is NOT re-eliminated. §25.4b lists the inverse as
+        // "decrement rebuys" only, and the common correction is a rebuy
+        // credited to the wrong person — who was never out in the first place.
+        summary = '${p.name}\'s last rebuy reversed '
+            '($chipsBack chips removed).';
+      case PlayerActionKind.addOn:
+        if (!p.hasAddOn) return null;
+        chipsBack = game.structure.addOnStack;
+        players = [
+          for (final x in game.players)
+            if (x.id == playerId) x.copyWith(hasAddOn: false) else x,
+        ];
+        summary = '${p.name}\'s add-on reversed ($chipsBack chips removed).';
+      case PlayerActionKind.bust:
+        if (!p.eliminated) return null;
+        final koName = _knockerOutNameFrom(action.summary, p.name);
+        var creditReturned = false;
+        players = game.players.map((x) {
+          if (x.id == playerId) {
+            return x.copyWith(
+              eliminated: false,
+              active: true,
+              clearEliminationPos: true,
+              clearEliminatedAtLevel: true,
+            );
+          }
+          // Only the FIRST match gives the credit back, so a duplicate display
+          // name cannot cost two people a knockout for one reversal.
+          if (!creditReturned &&
+              koName != null &&
+              x.name == koName &&
+              x.knockouts > 0) {
+            creditReturned = true;
+            return x.copyWith(knockouts: x.knockouts - 1);
+          }
+          return x;
+        }).toList();
+        // The seat is NOT restored: `eliminatePlayer` zeroes table and seat and
+        // the snapshot is gone, so the host re-seats from the Seating tab —
+        // the same path a late arrival uses.
+        summary = '${p.name} un-eliminated'
+            '${creditReturned ? ", knockout credit returned to $koName" : ''}.';
+    }
+
+    _currentGame = game.copyWith(
+      players: players,
+      totalChipsInPlay: (game.totalChipsInPlay - chipsBack).clamp(0, 99999999),
+      revision: rev,
+      lastIdempotencyKey: key,
+    );
+    // Money left the game, so the pool and the prizes move with it.
+    _updatePrizePool();
+    addAuditRecord('undo_player_action', summary);
+    addAnnouncement(summary, false);
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return summary;
   }
 
   void requestCheckIn(String playerId) {
@@ -502,7 +708,21 @@ extension AppProviderPlayers on AppProvider {
       players: _currentGame!.players
           .map(
             (p) => p.id == playerId
-                ? p.copyWith(checkedIn: true, confirmed: true)
+                ? p.copyWith(
+                    checkedIn: true,
+                    confirmed: true,
+                    // §8.1's no-show gate flips a flag instead of deleting the
+                    // row precisely so "the seat stays reserved so a late
+                    // arrival can still be added normally". Clearing
+                    // `confirmed` alone left them half-in: they counted in
+                    // `confirmedCount`, so their buy-in entered `grossEligible`,
+                    // but `LiveGame.activePlayers` is `active && !eliminated`,
+                    // so they could not be seated, eliminated, or seen by
+                    // `isOnBubble`. The game took their money and refused them
+                    // a chair. Both flags have to come back.
+                    noShow: false,
+                    active: true,
+                  )
                 : p,
           )
           .toList(),
@@ -695,6 +915,12 @@ extension AppProviderPlayers on AppProvider {
                   confirmed: true,
                   checkedIn: true,
                   active: true,
+                  // §8.1: a guest dropped by the no-show gate is being seated
+                  // again here, so the flag that dropped them has to clear too
+                  // — `active` alone leaves `noShow` lying to every count that
+                  // reads it (expected attendance, the gate itself on a later
+                  // Start).
+                  noShow: false,
                   table: autoSeat?.table ?? p.table,
                   seat: autoSeat?.seat ?? p.seat,
                 )

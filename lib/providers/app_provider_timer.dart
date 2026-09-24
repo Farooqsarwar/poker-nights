@@ -311,8 +311,20 @@ extension AppProviderTimer on AppProvider {
     );
   }
 
-  void startTimer() {
+  void startTimer({List<String> noShowIds = const []}) {
     _forceClaimEditor();
+
+    if (noShowIds.isNotEmpty) {
+      _currentGame = _currentGame!.copyWith(
+        players: _currentGame!.players.map((p) {
+          if (noShowIds.contains(p.id)) {
+            return p.copyWith(noShow: true, active: false);
+          }
+          return p;
+        }).toList(),
+      );
+    }
+
     // Client rule: no guessed player count at setup — the AI finalises the
     // stacks/blinds/levels right now, from the actual final headcount
     // (checked-in players if any confirmed, otherwise final RSVPs), the

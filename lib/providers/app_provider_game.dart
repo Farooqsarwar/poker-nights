@@ -45,6 +45,10 @@ extension AppProviderGame on AppProvider {
 
   void setCurrentGame(LiveGame game) {
     _clearUndoStack();
+    // §10.1's accept/decline is a decision about THIS tournament. Carrying it
+    // into the next game would either suppress the prompt or claim an
+    // adjustment had been applied that never touched this structure.
+    _resetPaceProposalState();
     // Re-apply the member's not-yet-acked RSVP / check-in so navigating into a
     // game never shows a stale bundle copy that drops a pending selection.
     _currentGame = _withPendingCheckInOverlay(_withOwnRsvpOverlay(game));
@@ -520,6 +524,13 @@ extension AppProviderGame on AppProvider {
             addOnChips: s.addOnChips,
             levelDurationMins: s.levelDurationMins,
             payoutShape: s.payoutShape,
+            format: s.format,
+            maxReEntries: s.maxReEntries,
+            shootoutTables: s.shootoutTables,
+            shootoutTableTargetMins: s.shootoutTableTargetMins,
+            earlyArrivalBonusEnabled: s.earlyArrivalBonusEnabled,
+            earlyArrivalCutoffMins: s.earlyArrivalCutoffMins,
+            earlyArrivalBonusPctOverride: s.earlyArrivalBonusPctOverride,
           ),
         );
         // After play starts the starting stacks are frozen (client rule).

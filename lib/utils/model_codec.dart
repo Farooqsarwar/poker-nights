@@ -6,6 +6,7 @@ import '../models/group.dart';
 import '../models/live_game.dart';
 import '../models/table_settings.dart';
 import '../models/tournament.dart';
+import '../models/tournament_format.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
 import '../models/payment_record.dart';
@@ -31,6 +32,14 @@ T _enumByName<T extends Enum>(List<T> values, Object? name, T fallback) {
     }
   }
   return fallback;
+}
+
+T? _enumByNameOrNull<T extends Enum>(List<T> values, Object? raw) {
+  if (raw is! String) return null;
+  for (final v in values) {
+    if (v.name == raw) return v;
+  }
+  return null;
 }
 
 String? _nullOrIso(DateTime? value) => value?.toIso8601String();
@@ -211,6 +220,9 @@ Map<String, dynamic> tournamentStructureToMap(TournamentStructure s) => {
       'paidPlaces': s.paidPlaces,
       'colorUpInstructions': List<String>.from(s.colorUpInstructions),
       'warnings': List<String>.from(s.warnings),
+      'styleNote': s.styleNote,
+      'rebuysCloseLevel': s.rebuysCloseLevel,
+      'engineVersion': s.engineVersion,
     };
 
 TournamentStructure tournamentStructureFromMap(Map<String, dynamic> m) =>
@@ -230,8 +242,9 @@ TournamentStructure tournamentStructureFromMap(Map<String, dynamic> m) =>
           .map(scheduledBreakFromMap)
           .toList(),
       styleNote: (m['styleNote'] as String?) ?? '',
-      rebuysCloseLevel:
+      rebuysCloseLevel: (m['rebuysCloseLevel'] as num?)?.toInt() ??
           (m['structureRebuysCloseLevel'] as num?)?.toInt() ?? 0,
+      engineVersion: (m['engineVersion'] as String?) ?? '2.1.0',
       levelDuration: (m['levelDuration'] as num?)?.toInt() ?? 15,
       plannedLevels: (m['plannedLevels'] as num?)?.toInt() ?? 0,
       expectedFinishMins: (m['expectedFinishMins'] as num?)?.toInt() ?? 0,
@@ -292,6 +305,13 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'addOnChips': s.addOnChips,
       'levelDurationMins': s.levelDurationMins,
       'payoutShape': s.payoutShape.name,
+      'format': s.format?.name,
+      'maxReEntries': s.maxReEntries,
+      'shootoutTables': s.shootoutTables,
+      'shootoutTableTargetMins': s.shootoutTableTargetMins,
+      'earlyArrivalBonusEnabled': s.earlyArrivalBonusEnabled,
+      'earlyArrivalCutoffMins': s.earlyArrivalCutoffMins,
+      'earlyArrivalBonusPctOverride': s.earlyArrivalBonusPctOverride,
     };
 
 GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
@@ -357,6 +377,17 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
         // at all, and every one of them was generated on the standard curve.
         orElse: () => PayoutShape.standard,
       ),
+      format: _enumByNameOrNull(TournamentFormat.values, m['format']),
+      maxReEntries: (m['maxReEntries'] as num?)?.toInt(),
+      shootoutTables: (m['shootoutTables'] as num?)?.toInt(),
+      shootoutTableTargetMins: (m['shootoutTableTargetMins'] as num?)?.toInt(),
+      // Absent on every game written before the bonus existed, and those games
+      // did not grant one — false is the honest default, not merely the safe.
+      earlyArrivalBonusEnabled:
+          (m['earlyArrivalBonusEnabled'] as bool?) ?? false,
+      earlyArrivalCutoffMins: (m['earlyArrivalCutoffMins'] as num?)?.toInt(),
+      earlyArrivalBonusPctOverride:
+          (m['earlyArrivalBonusPctOverride'] as num?)?.toDouble(),
     );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -371,9 +402,15 @@ Map<String, dynamic> playerToMap(Player p) => {
       'guestSlot': p.guestSlot,
       'rsvp': p.rsvp?.name,
       'checkedIn': p.checkedIn,
+      'noShow': p.noShow,
       'confirmed': p.confirmed,
       'eliminated': p.eliminated,
       'eliminationPos': p.eliminationPos,
+      'eliminatedAtLevel': p.eliminatedAtLevel,
+      // §3 / §34a. Null on every game written so far — see the field's own doc
+      // on [Player]. Persisted regardless so the day stack capture (§25.5)
+      // lands, history written before it stays readable without a migration.
+      'lowestStackBB': p.lowestStackBB,
       'rebuys': p.rebuys,
       'reEntries': p.reEntries,
       'hasAddOn': p.hasAddOn,
@@ -393,9 +430,12 @@ Player playerFromMap(Map<String, dynamic> m) => Player(
           ? null
           : _enumByName(Rsvp.values, m['rsvp'], Rsvp.maybe),
       checkedIn: (m['checkedIn'] as bool?) ?? false,
+      noShow: (m['noShow'] as bool?) ?? false,
       confirmed: (m['confirmed'] as bool?) ?? false,
       eliminated: (m['eliminated'] as bool?) ?? false,
       eliminationPos: (m['eliminationPos'] as num?)?.toInt(),
+      eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
+      lowestStackBB: (m['lowestStackBB'] as num?)?.toInt(),
       rebuys: (m['rebuys'] as num?)?.toInt() ?? 0,
       reEntries: (m['reEntries'] as num?)?.toInt() ?? 0,
       hasAddOn: (m['hasAddOn'] as bool?) ?? false,
@@ -552,6 +592,7 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'addOnRequests': List<String>.from(game.addOnRequests),
     'levelEndTime': _nullOrIso(game.levelEndTime),
     'startedAt': _nullOrIso(game.startedAt),
+    'actualDurationMins': game.actualDurationMins,
     'changeLog': List<String>.from(game.changeLog),
     'revision': game.revision,
     'lastIdempotencyKey': game.lastIdempotencyKey,
@@ -633,6 +674,7 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       addOnRequests: List<String>.from(map['addOnRequests'] as List? ?? const []),
       levelEndTime: _isoOrNull(map['levelEndTime']),
       startedAt: _isoOrNull(map['startedAt']),
+      actualDurationMins: (map['actualDurationMins'] as num?)?.toInt(),
       changeLog:
           List<String>.from(map['changeLog'] as List? ?? const []),
       revision: (map['revision'] as num?)?.toInt() ?? 0,
@@ -860,6 +902,7 @@ Map<String, dynamic> groupToMap(Group g) => {
       'icon': g.icon,
       'pinned': g.pinned,
       'tableSettings': tableSettingsToMap(g.tableSettings),
+      if (g.defaultChipSetId != null) 'defaultChipSetId': g.defaultChipSetId,
     };
 
 Group groupFromMap(Map<String, dynamic> m) => Group(
@@ -886,4 +929,5 @@ Group groupFromMap(Map<String, dynamic> m) => Group(
           ? TableSettings.fallback
           : tableSettingsFromMap(
               Map<String, dynamic>.from(m['tableSettings'] as Map)),
+      defaultChipSetId: m['defaultChipSetId'] as String?,
     );

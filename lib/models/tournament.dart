@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'chip_color.dart';
+import 'tournament_format.dart';
 
 /// A single blind level within the tournament structure.
 class BlindLevel {
@@ -92,6 +93,21 @@ const double kExpectedRebuyRate = 0.35;
 const double kExpectedReEntryRate = 0.20;
 const double kExpectedAddOnRate = 0.65;
 
+/// §26.1's default seats per table, reused by §11.4 to split a shootout field.
+const int kDefaultTableSize = 9;
+
+/// §11.4 / §38. Stage A's per-table target when the host states nothing —
+/// typical single-table sit-and-go pace.
+const int kShootoutTableTargetMins = 45;
+
+/// §3 / §25.1a. The early-arrival grant, as a fraction of the starting stack.
+const double kEarlyArrivalBonusPct = 0.125;
+
+/// §25.1a. How long before the scheduled start a check-in still counts as
+/// early. Long enough to mean "arrived on time", short enough not to be
+/// everybody.
+const int kEarlyArrivalCutoffMins = 30;
+
 /// How steeply the prize pool falls away from first place.
 ///
 /// The engine already offered a choice of how MANY places to pay. It offered no
@@ -166,6 +182,13 @@ class TournamentParams {
     this.addOnChips,
     this.levelDurationMins,
     this.payoutShape = PayoutShape.standard,
+    this.format,
+    this.maxReEntries,
+    this.shootoutTables,
+    this.shootoutTableTargetMins,
+    this.earlyArrivalBonusEnabled = false,
+    this.earlyArrivalCutoffMins,
+    this.earlyArrivalBonusPctOverride,
   });
 
   final int players;
@@ -230,8 +253,48 @@ class TournamentParams {
   /// pool exactly as it always did.
   final PayoutShape payoutShape;
 
+  final TournamentFormat? format;
+  final int? maxReEntries;
+  final int? shootoutTables;
+  final int? shootoutTableTargetMins;
+  final bool earlyArrivalBonusEnabled;
+  final int? earlyArrivalCutoffMins;
+  final double? earlyArrivalBonusPctOverride;
+
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
+
+  TournamentFormat get effectiveFormat =>
+      format ??
+      (reEntry
+          ? TournamentFormat.reEntry
+          : rebuys
+              ? TournamentFormat.rebuy
+              : TournamentFormat.freezeOut);
+
+  /// §11.4 Stage A. How many independent tables the field splits into. The
+  /// host's choice wins; otherwise it is the same seating arithmetic §26.1
+  /// uses, so a shootout draws the tables the room would have had anyway.
+  int get effectiveShootoutTables {
+    final stated = shootoutTables;
+    if (stated != null && stated >= 2) return stated;
+    if (players <= kDefaultTableSize) return 1;
+    return (players / kDefaultTableSize).ceil();
+  }
+
+  /// §11.4 Stage A. 45 minutes is the single-table sit-and-go pace in §38.
+  int get effectiveShootoutTableTargetMins =>
+      shootoutTableTargetMins ?? kShootoutTableTargetMins;
+
+  /// §3. The early-arrival grant as a fraction of the starting stack, 0 when
+  /// the bonus is switched off so a stale override cannot keep granting chips.
+  double get effectiveEarlyArrivalPct => earlyArrivalBonusEnabled
+      ? (earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct).clamp(0.0, 1.0)
+      : 0;
+
+  /// §25.1a. Minutes before the scheduled start a check-in must land.
+  int get effectiveEarlyArrivalCutoffMins =>
+      earlyArrivalCutoffMins ?? kEarlyArrivalCutoffMins;
 
   /// Expected take-up, override first and the rate as the fallback. A format
   /// that is switched off contributes nothing however the field is filled in —
@@ -248,6 +311,18 @@ class TournamentParams {
   int get effectiveExpectedAddOns => addOn
       ? math.max(0, expectedAddOns ?? (players * kExpectedAddOnRate).round())
       : 0;
+
+  /// §12.1: how many times over the box must fund one seat's worth of chips.
+  /// One for the starting stack, plus the expected extra entries per seat. An
+  /// add-on counts half — it is one stack arriving once, late, after colour-up
+  /// has already retired the small denominations it would otherwise need.
+  double get reserveMultiplier {
+    if (players <= 0) return 1;
+    return 1 +
+        effectiveExpectedRebuys / players +
+        effectiveExpectedReEntries / players +
+        effectiveExpectedAddOns / players * 0.5;
+  }
 
   TournamentParams copyWith({
     int? players,
@@ -277,6 +352,13 @@ class TournamentParams {
     int? addOnChips,
     int? levelDurationMins,
     PayoutShape? payoutShape,
+    TournamentFormat? format,
+    int? maxReEntries,
+    int? shootoutTables,
+    int? shootoutTableTargetMins,
+    bool? earlyArrivalBonusEnabled,
+    int? earlyArrivalCutoffMins,
+    double? earlyArrivalBonusPctOverride,
   }) =>
       TournamentParams(
         players: players ?? this.players,
@@ -307,6 +389,17 @@ class TournamentParams {
         addOnChips: addOnChips ?? this.addOnChips,
         levelDurationMins: levelDurationMins ?? this.levelDurationMins,
         payoutShape: payoutShape ?? this.payoutShape,
+        format: format ?? this.format,
+        maxReEntries: maxReEntries ?? this.maxReEntries,
+        shootoutTables: shootoutTables ?? this.shootoutTables,
+        shootoutTableTargetMins:
+            shootoutTableTargetMins ?? this.shootoutTableTargetMins,
+        earlyArrivalBonusEnabled:
+            earlyArrivalBonusEnabled ?? this.earlyArrivalBonusEnabled,
+        earlyArrivalCutoffMins:
+            earlyArrivalCutoffMins ?? this.earlyArrivalCutoffMins,
+        earlyArrivalBonusPctOverride:
+            earlyArrivalBonusPctOverride ?? this.earlyArrivalBonusPctOverride,
       );
 }
 
@@ -491,6 +584,7 @@ class TournamentStructure {
     this.breaks = const [],
     this.styleNote = '',
     this.rebuysCloseLevel = 0,
+    this.engineVersion = '2.1.0',
   });
 
   /// The rebuy cutoff this structure was actually built around.
@@ -607,6 +701,14 @@ class TournamentStructure {
   int get expectedFinishHours => expectedFinishMins ~/ 60;
   int get expectedFinishRemainderMins => expectedFinishMins % 60;
 
+  /// The engine version that generated this structure.
+  ///
+  /// Older versions of the engine generated structures that the current engine
+  /// might consider invalid. This version guard prevents the engine from
+  /// attempting to verify structures it did not create, avoiding false positive
+  /// mismatch warnings.
+  final String engineVersion;
+
   /// Returns a copy with only the prize-related fields updated.
   /// All blind levels and manual overrides remain intact.
   TournamentStructure copyWith({
@@ -630,6 +732,7 @@ class TournamentStructure {
     List<ScheduledBreak>? breaks,
     String? styleNote,
     int? rebuysCloseLevel,
+    String? engineVersion,
   }) {
     return TournamentStructure(
       startingStack: startingStack ?? this.startingStack,
@@ -658,6 +761,7 @@ class TournamentStructure {
       breaks: breaks ?? this.breaks,
       styleNote: styleNote ?? this.styleNote,
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
+      engineVersion: engineVersion ?? this.engineVersion,
     );
   }
 }

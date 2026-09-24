@@ -127,6 +127,7 @@ class GameResultRow {
     required this.playerCount,
     required this.knockouts,
     required this.finishedAt,
+    this.eliminatedAtLevel,
   });
 
   final String gameId;
@@ -137,6 +138,7 @@ class GameResultRow {
   final int playerCount;
   final int knockouts;
   final DateTime? finishedAt;
+  final int? eliminatedAtLevel;
 
   Map<String, dynamic> toMap() => {
     'gameId': gameId,
@@ -144,6 +146,8 @@ class GameResultRow {
     'position': position,
     'playerCount': playerCount,
     'knockouts': knockouts,
+    'finishedAt': finishedAt,
+    'eliminatedAtLevel': eliminatedAtLevel,
   };
 
   static GameResultRow fromMap(String id, Map<String, dynamic> m) =>
@@ -157,6 +161,7 @@ class GameResultRow {
           final DateTime dt => dt,
           _ => null,
         },
+        eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
       );
 }
 

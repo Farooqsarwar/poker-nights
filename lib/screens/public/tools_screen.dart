@@ -23,7 +23,7 @@ import '../../widgets/glass_styles.dart';
 
 /// The public tools (§2).
 ///
-/// Four calculators that need no account, each on its own URL. §2 also asks
+/// Five calculators that need no account, each on its own URL. §2 also asks
 /// for a "soft prompt into the full app" — soft being the operative word:
 /// somebody who came to settle a chop argument should get their answer first
 /// and an invitation second, or they will never come back.
@@ -164,7 +164,7 @@ class _ToolScaffold extends StatelessWidget {
   }
 }
 
-/// Index of the four tools (§2).
+/// Index of the five tools (§2).
 class ToolsScreen extends StatelessWidget {
   const ToolsScreen({super.key});
 
@@ -191,6 +191,11 @@ class ToolsScreen extends StatelessWidget {
         title: 'Payout Calculator',
         blurb: 'Clean, countable prize splits from a buy-in and a field size.',
         path: RoutePaths.toolPayouts,
+      ),
+      (
+        title: 'Quick Blind Calculator',
+        blurb: 'One level, right now. What should the blinds be for this stack?',
+        path: RoutePaths.toolQuickBlind,
       ),
     ];
 
@@ -1473,3 +1478,90 @@ class _SegmentRow extends StatelessWidget {
     );
   }
 }
+
+/// Quick Blind Calculator — one level, right now.
+class ToolQuickBlindScreen extends StatefulWidget {
+  const ToolQuickBlindScreen({super.key});
+
+  @override
+  State<ToolQuickBlindScreen> createState() => _ToolQuickBlindScreenState();
+}
+
+class _ToolQuickBlindScreenState extends State<ToolQuickBlindScreen> {
+  int _stack = 10000;
+  String _chipSetName = kToolChipSets.keys.first;
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = kToolChipSets[_chipSetName] ?? kToolChipSet;
+    final targetBB = _stack / TournamentEngine.targetHeadsUpAverageBB;
+    final bb = TournamentEngine.snapToPracticalBlind(targetBB, chips);
+    
+    int minChip = 1;
+    final values = chips.map((c) => c.value).where((v) => v > 0).toList()..sort();
+    if (values.isNotEmpty) minChip = values.first;
+
+    int sb = bb ~/ 2;
+    if (sb < minChip) {
+      sb = minChip;
+    } else {
+      sb = (sb ~/ minChip) * minChip;
+    }
+    if (sb == 0) sb = minChip;
+
+    return _ToolScaffold(
+      title: 'Quick Blind Calculator',
+      blurb: 'One level, right now. What should the blinds be for this stack?',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _Field(
+            label: 'Stack size',
+            child: CountStepper(
+              value: _stack,
+              min: 500,
+              max: 1000000,
+              step: 500,
+              semanticLabel: 'Stack size',
+              onChanged: (v) => setState(() => _stack = v),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppSelect<String>(
+            label: 'Chips',
+            value: _chipSetName,
+            items: [
+              for (final name in kToolChipSets.keys)
+                DropdownMenuItem<String>(value: name, child: Text(name)),
+            ],
+            onChanged: (v) => setState(() => _chipSetName = v ?? _chipSetName),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  'Blinds',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '$sb / $bb',
+                  style: AppTypography.display(
+                    size: AppFontSizes.xxxl,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

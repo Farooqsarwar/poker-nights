@@ -66,6 +66,7 @@ const _publicPaths = {
   RoutePaths.toolClock,
   RoutePaths.toolIcm,
   RoutePaths.toolPayouts,
+  RoutePaths.toolQuickBlind,
 };
 
 /// Admin-only routes — non-admins are bounced to invitation (if a game exists)
@@ -343,6 +344,10 @@ GoRouter buildAppRouter(AppProvider app) {
     GoRoute(
       path: RoutePaths.toolPayouts,
       builder: (context, state) => const ToolPayoutsScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.toolQuickBlind,
+      builder: (context, state) => const ToolQuickBlindScreen(),
     ),
 
     // ── App shell ────────────────────────────────────────────────────────────

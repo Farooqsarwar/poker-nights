@@ -682,6 +682,26 @@ class AppProvider extends ChangeNotifier {
   static const int _maxUndoDepth = 30;
   final List<LiveGame?> _undoStack = [];
 
+  // ── Pace learning (§10.1) ──────────────────────────────────────────────────
+  /// The longest wall-clock run that can still plausibly be one poker night.
+  /// Anything beyond this is a stale recovery snapshot, not a tournament, and
+  /// must not be recorded as `actualDurationMins` — see
+  /// [AppProviderTournament.measuredWallClockMins].
+  static const int _maxPlausibleGameMins = 24 * 60;
+
+  /// The pace adjustment the host explicitly ACCEPTED for the open tournament,
+  /// or null when they declined or were never asked.
+  ///
+  /// §10.1 is emphatic that the adjustment "is NEVER applied silently", so the
+  /// proposal itself ([AppProviderTournament.paceProposal]) changes nothing;
+  /// only [AppProviderTournament.acceptPaceAdjustment] writes here, and only
+  /// in response to a host action.
+  double? _acceptedPaceAdjustmentPct;
+
+  /// True once the host has answered the §10.1 proposal for the open game
+  /// either way, so a declined proposal is not re-offered on every rebuild.
+  bool _paceProposalAnswered = false;
+
   /// An editor claim older than this is considered stale: any admin device may
   /// take over the single-writer role (90 seconds of silence).
   static const Duration _editorClaimStaleWindow = Duration(seconds: 90);

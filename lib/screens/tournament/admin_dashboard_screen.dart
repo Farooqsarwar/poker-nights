@@ -29,6 +29,7 @@ import '../../widgets/code_display.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/tournament_display_block.dart';
 import '../../widgets/medal_icon.dart';
+import '../../widgets/min_tap_target.dart';
 import '../../widgets/structure_editor.dart';
 import '../../models/payment_record.dart';
 import '../../widgets/dummy_payment_sheet.dart';
@@ -100,6 +101,112 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (text.isEmpty) return;
     app.addAnnouncement(text);
     _announcementController.clear();
+  }
+
+  void _confirmStartTimer(BuildContext context, AppProvider app) {
+    final game = app.currentGame;
+    if (game == null) return;
+    final missingPlayers = game.players.where((p) => p.rsvp?.isGoing == true && !p.checkedIn && !p.noShow).toList();
+    if (missingPlayers.isEmpty) {
+      app.startTimer();
+      return;
+    }
+
+    // §8.1 takes a LIST — `startWithout(playerIds)` — so the host chooses who
+    // is actually a no-show. Dropping everybody who had not tapped check-in
+    // was the wrong default for the player standing at the door: the host
+    // knows they are here, the app did not. Everyone starts ticked (the common
+    // case is that they really are all missing), and un-ticking keeps a player
+    // in the field.
+    final selected = {for (final p in missingPlayers) p.id};
+
+    final dialogInsets = appDialogInsets(context);
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AppModal(
+          insetPadding: dialogInsets,
+          open: true,
+          onClose: () => Navigator.pop(ctx),
+          title: 'Missing Players',
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.md, horizontal: AppSpacing.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  "The following players RSVP'd but have not checked in. "
+                  'Untick anyone who is here — they keep their seat.',
+                  style: AppTypography.body(),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                for (final p in missingPlayers)
+                  Semantics(
+                    toggled: selected.contains(p.id),
+                    child: InkWell(
+                      onTap: () => setDialogState(() {
+                        if (!selected.remove(p.id)) selected.add(p.id);
+                      }),
+                      child: MinTapTarget(
+                        child: Row(
+                          children: [
+                            Icon(
+                              selected.contains(p.id)
+                                  ? Icons.check_box
+                                  : Icons.check_box_outline_blank,
+                              color: selected.contains(p.id)
+                                  ? AppColors.primary
+                                  : AppColors.mutedForeground,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                p.name,
+                                style: AppTypography.body()
+                                    .copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.xl),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    // §8.1's `waitMinutes` "needs no new state, since
+                    // scheduled already permits check-in to continue" — so
+                    // this is a plain dismiss, and it must not promise a
+                    // five-minute countdown the app never runs.
+                    AppButton(
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Keep Waiting'),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    AppButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        app.startTimer(noShowIds: selected.toList());
+                      },
+                      child: Text(
+                        selected.isEmpty
+                            ? 'Start With Everyone'
+                            : 'Start & Drop ${selected.length} No-show'
+                                '${selected.length == 1 ? '' : 's'}',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -228,7 +335,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       LiveGameStatus.finaltable,
       LiveGameStatus.onBreak,
     }.contains(status);
-    final onBubble = liveNow && paidPlaces > 0 && playersLeft == paidPlaces + 1;
     final inTheMoney = liveNow && paidPlaces > 0 && playersLeft == paidPlaces;
 
     final device = AppBreakpoints.deviceOf(context);
@@ -556,13 +662,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           // The bubble is the loudest moment of the night and the one a host
           // most often misses while running the clock. Announcing it is the
           // whole feature — there is nothing to action, so no button.
-          if (onBubble)
+          if (game.isOnBubble)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: AppAlertBanner(
                 type: AppAlertType.warning,
                 message: 'On the bubble — $playersLeft left, $paidPlaces paid. '
                     'The next player out wins nothing.',
+                actionLabel: 'ICM Calculator',
+                onAction: () => context.push(RoutePaths.toolIcm),
               ),
             )
           else if (inTheMoney)
@@ -643,7 +751,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             status == LiveGameStatus.ready) {
                           return AppButton(
                             size: AppButtonSize.lg,
-                            onPressed: app.startTimer,
+                            onPressed: () => _confirmStartTimer(context, app),
                             child: const AppIconLabel(
                               label: 'Start Timer',
                               icon: Icons.play_arrow,
@@ -942,6 +1050,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               if (_tab == 'players') ..._playersTab(app, game),
                               if (_tab == 'eliminated')
                                 _EliminatedTab(
+                                  game: game,
                                   players: eliminatedPlayers,
                                   settings: settings,
                                   currentLevel: currentLevel,
@@ -1087,7 +1196,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     status == LiveGameStatus.ready)
                   AppButton(
                     size: AppButtonSize.lg,
-                    onPressed: app.startTimer,
+                    onPressed: () => _confirmStartTimer(context, app),
                     child: const AppIconLabel(
                       label: 'Start',
                       icon: Icons.play_arrow,
@@ -1330,6 +1439,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             // Eliminated tab
             if (_tab == 'eliminated')
               _EliminatedTab(
+                game: game,
                 players: eliminatedPlayers,
                 settings: settings,
                 currentLevel: currentLevel,
@@ -1576,6 +1686,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         variant: AppButtonVariant.secondary,
                         onPressed: () => _confirmAddOn(context, app, p),
                         child: const Text('Add-on'),
+                      ),
+                    if (app.isAdmin &&
+                        app.lastUndoablePlayerAction(p.id) != null)
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.ghost,
+                        onPressed: () =>
+                            _confirmUndoPlayerAction(context, app, p),
+                        child: const Icon(Icons.undo, size: 16),
                       ),
                     if (app.isAdmin)
                       AppButton(
@@ -2313,8 +2432,51 @@ void _payThenGrant({
   );
 }
 
+/// §25.4b. One player's most recent gameplay action (rebuy, add-on or bust),
+/// reversed on its own — every other player's actions since then are
+/// untouched. Shared by the active-roster and eliminated tabs, since a bust is
+/// only reachable from one and a rebuy/add-on only from the other.
+void _confirmUndoPlayerAction(BuildContext context, AppProvider app, Player p) {
+  final action = app.lastUndoablePlayerAction(p.id);
+  if (action == null) return;
+  showAppModal(
+    context: context,
+    title: 'Undo Last Action',
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          "This reverses ${p.name}'s most recent action:\n\n${action.summary}",
+          style: AppTypography.bodySm,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            AppButton(
+              variant: AppButtonVariant.ghost,
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            AppButton(
+              variant: AppButtonVariant.danger,
+              onPressed: () {
+                app.undoLastPlayerAction(p.id);
+                Navigator.pop(context);
+              },
+              child: const Text('Undo'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
 class _EliminatedTab extends StatelessWidget {
   const _EliminatedTab({
+    required this.game,
     required this.players,
     required this.settings,
     required this.currentLevel,
@@ -2323,6 +2485,10 @@ class _EliminatedTab extends StatelessWidget {
     required this.isAdmin,
   });
 
+  /// §14.1: the re-entry affordance is a PER-PLAYER question — the cap counts
+  /// how many times *this* player has already re-entered — so the tab needs
+  /// the game, not just the settings, to answer it.
+  final LiveGame game;
   final List<Player> players;
   final GameSettings settings;
   final int currentLevel;
@@ -2350,8 +2516,11 @@ class _EliminatedTab extends StatelessWidget {
     }
     final canRebuy =
         settings.rebuys && currentLevel <= settings.rebuysCloseLevel;
-    final canReEnter =
-        settings.reEntry && currentLevel <= settings.rebuysCloseLevel;
+    // §14.1: there is NO game-wide `canReEnter`. The local that used to live
+    // here shadowed `LiveGame.canReEnter` and dropped the `maxReEntries` cap,
+    // so the button stayed on screen past the cap and `grantReEntry` then
+    // refused it silently — a dead button. The check is now made per player,
+    // inside the loop, by the model method that owns the rule.
     return Column(
       children: [
         for (final p in players)
@@ -2393,7 +2562,7 @@ class _EliminatedTab extends StatelessWidget {
                         ),
                         child: const Text('Grant rebuy'),
                       ),
-                    if (canReEnter)
+                    if (game.canReEnter(p))
                       Padding(
                         padding: const EdgeInsets.only(left: AppSpacing.xs),
                         child: AppButton(
@@ -2407,6 +2576,20 @@ class _EliminatedTab extends StatelessWidget {
                         ),
                       ),
                     if (isAdmin) ...[
+                    if (context.watch<AppProvider>().lastUndoablePlayerAction(p.id) != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: AppSpacing.xs),
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          variant: AppButtonVariant.ghost,
+                          onPressed: () => _confirmUndoPlayerAction(
+                            context,
+                            context.read<AppProvider>(),
+                            p,
+                          ),
+                          child: const Icon(Icons.undo, size: 16),
+                        ),
+                      ),
                     Padding(
                       padding: const EdgeInsets.only(left: AppSpacing.xs),
                       child: AppButton(

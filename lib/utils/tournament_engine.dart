@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/chip_color.dart';
 import '../models/tournament.dart';
+import '../models/tournament_format.dart';
 
 /// Thrown when a chip set contains two colours with the same value
 /// (spec User Flow §12.4 — duplicates are rejected, not warned).
@@ -12,6 +13,44 @@ class DuplicateChipValueException implements Exception {
   final String message;
   @override
   String toString() => message;
+}
+
+/// §11.4. The two structures a shootout actually plays.
+///
+/// Deliberately not one structure with a multiplier. §39 deviation 11: "Shootout
+/// is two Freeze Out generations, not a duration multiplier" — every table plays
+/// its own short Freeze Out, and the survivors play another one. There is no
+/// third growth formula to get wrong, which is the point.
+class ShootoutPlan {
+  const ShootoutPlan({
+    required this.tables,
+    required this.playersPerTable,
+    required this.advancePerTable,
+    required this.stageA,
+    required this.stageB,
+  });
+
+  /// How many independent tables Stage A runs at once.
+  final int tables;
+
+  /// Seats at one Stage A table — `ceil(field / tables)`, so the last table is
+  /// the short one rather than an overfull one.
+  final int playersPerTable;
+
+  /// Survivors each table sends up. One, per §11.4.
+  final int advancePerTable;
+
+  /// The structure EVERY Stage A table plays, independently and concurrently.
+  /// One structure, not one per table: the tables are identical by
+  /// construction, and a shootout where the tables played different blinds
+  /// would not be a shootout.
+  final TournamentStructure stageA;
+
+  /// The final table, played by the `tables × advancePerTable` survivors.
+  final TournamentStructure stageB;
+
+  /// Seats at the final table.
+  int get finalists => tables * advancePerTable;
 }
 
 /// Tournament structure engine — a faithful Dart port of the web app's
@@ -24,7 +63,39 @@ class TournamentEngine {
 
   /// Semantic version of this engine implementation. Persisted with each
   /// generated structure so the UI can detect engine upgrades.
-  static const String engineVersion = '2.1.0';
+  static const String engineVersion = '2.2.0';
+
+  /// §10.1. How much to stretch or compress level length for this group, based
+  /// on how their last nights actually ran. Null means "not enough evidence" or
+  /// "the estimate is already good" — and null must mean the host is not asked.
+  static double? paceAdjustmentFor({
+    required List<int> actualDurationMins,
+    required List<int> estimatedDurationMins,
+  }) {
+    if (actualDurationMins.length < 5) return null;
+    if (actualDurationMins.length != estimatedDurationMins.length) return null;
+
+    double sumOverage = 0;
+    for (int i = 0; i < actualDurationMins.length; i++) {
+      sumOverage += (actualDurationMins[i] - estimatedDurationMins[i]);
+    }
+    double meanOverage = sumOverage / actualDurationMins.length;
+    if (meanOverage.abs() < 15) return null;
+
+    double sumEstimated = 0;
+    for (int i = 0; i < estimatedDurationMins.length; i++) {
+      sumEstimated += estimatedDurationMins[i];
+    }
+    double meanEstimated = sumEstimated / estimatedDurationMins.length;
+    if (meanEstimated == 0) return null;
+
+    double ratio = meanOverage / meanEstimated;
+    return ratio.clamp(-0.20, 0.20);
+  }
+
+  /// A rebuy or add-on box must stretch to roughly two takers per seat before
+  /// the host is handing out chips that are already in someone's stack.
+  static const double lateEntryReserveMultiplier = 2;
 
   static const Map<String, List<ChipColor>> chipPresets = {
     'Standard 300': [
@@ -840,30 +911,113 @@ class TournamentEngine {
     return result;
   }
 
+  /// §11.3's risk premium for this tournament, as a fraction.
+  ///
+  /// Lives here rather than inside `generate` because §10.2's narrative has to
+  /// quote the same number the curve was built from; two copies of the formula
+  /// would drift. Zero for any format with no late chips — and NOT zero when
+  /// `rebuyCost == buyIn`, because the clamp floors it at 0.05 (§39: the spec's
+  /// claim that equal costs reduce to Freeze Out is wrong about this).
+  static double maxRiskPremium(TournamentParams params) =>
+      params.effectiveFormat.hasLateChips && params.buyIn > 0
+          ? (0.30 * (1 - params.effectiveRebuyCost / params.buyIn))
+              .clamp(0.05, 0.25)
+              .toDouble()
+          : 0.0;
+
+  /// §10.2's `formatRationale` — why the curve has the shape it has, in terms
+  /// of the format rather than a bare noun.
+  ///
+  /// The narrative used to emit `format.label` on its own, which named the
+  /// format and explained nothing; and it read `params.format` directly, so
+  /// every game written before the field existed (format == null) got no
+  /// format sentence at all. [TournamentParams.effectiveFormat] never returns
+  /// null, so legacy games now get the sentence their settings imply.
+  static String formatRationale(TournamentParams params) {
+    switch (params.effectiveFormat) {
+      case TournamentFormat.freezeOut:
+        return 'no rebuy safety net — one bad beat ends the night, so the '
+            'curve stays gentler early to protect that.';
+      case TournamentFormat.rebuy:
+      case TournamentFormat.reEntry:
+        final premiumPct = (maxRiskPremium(params) * 100).round();
+        return 'the window is open through level ${params.rebuysCloseLevel}, '
+            'so the curve runs $premiumPct% steeper until then, then matches '
+            'Freeze Out exactly once the safety net closes.';
+      case TournamentFormat.shootout:
+        return 'each table plays an independent Freeze Out to one winner; the '
+            'final table runs as its own Freeze Out once every table reports '
+            'in.';
+    }
+  }
+
   /// Plain-language explanation of the depth this structure landed on.
   ///
   /// Addendum section 2: "If the engine chooses an unusual depth, explain why
   /// in plain language." Naming the style is half of it; saying why it is not
   /// the default is the half that actually helps.
+  ///
+  /// [paceAdjustment] is the §10.1 adjustment the host ACCEPTED, or null. It is
+  /// a parameter rather than something read off [params] because there is
+  /// nothing on the params that records an acceptance — see the pace sentence
+  /// below for what reading the wrong field cost.
   static String _styleNarrative({
     required TournamentStyle style,
     required double depth,
     required bool inventoryLimited,
-    required double durationHours,
+    required TournamentParams params,
+    double? paceAdjustment,
   }) {
     final rounded = depth.round();
     final base = '${style.label} — $rounded big blinds to start, '
         '${style.purpose}.';
-    if (style == TournamentStyle.standard) return base;
-    if (inventoryLimited) {
-      return '$base Your chips could not fund a deeper start, so the '
-          'structure opens shorter than usual.';
+        
+    String depthSentence = base;
+    if (style != TournamentStyle.standard) {
+      if (inventoryLimited) {
+        depthSentence = '$base Your chips could not fund a deeper start, so the '
+            'structure opens shorter than usual.';
+      } else if (style == TournamentStyle.deep) {
+        depthSentence = '$base Chosen because ${params.durationHours}h leaves room for '
+            'post-flop play.';
+      } else {
+        depthSentence = '$base Chosen to finish near your ${params.durationHours}h target.';
+      }
     }
-    if (style == TournamentStyle.deep) {
-      return '$base Chosen because ${durationHours}h leaves room for '
-          'post-flop play.';
-    }
-    return '$base Chosen to finish near your ${durationHours}h target.';
+
+    final formatSentence = formatRationale(params);
+
+    // §10.2 gates this on `ante.trigger == afterRebuysClose`. There is no ante
+    // TRIGGER on the params — only a switch and the level it starts after — so
+    // the honest equivalent is "the ante is on and it starts no earlier than
+    // the level the rebuy window closes on", which is the same tournament the
+    // spec's trigger describes. Antes run from `anteAfterLevel + 1`, hence the
+    // "immediately after" wording.
+    final anteSentence =
+        params.anteEnabled && params.anteAfterLevel >= params.rebuysCloseLevel
+            ? 'Ante starts at level ${params.anteAfterLevel + 1}, immediately '
+                'after rebuys close, to start pushing toward a finish.'
+            : '';
+
+    // Only an ACCEPTED §10.1 pace adjustment may be claimed here. This used to
+    // be gated on `levelDurationMins != null` — the host's own manual level
+    // length — so a host who set 18-minute levels by hand was told their
+    // structure had been learned from their group's history. It had not.
+    final paceSentence = paceAdjustment != null && paceAdjustment != 0
+        // A positive adjustment means this group's nights OVERRAN the estimate,
+        // so the structure answers by running faster, and vice versa.
+        ? '${(paceAdjustment.abs() * 100).round()}% '
+            '${paceAdjustment > 0 ? 'faster' : 'slower'} than standard pace, '
+            'from this group\'s last 5 games running '
+            '${paceAdjustment > 0 ? 'long' : 'short'}.'
+        : '';
+
+    return [
+      depthSentence,
+      if (formatSentence.isNotEmpty) formatSentence,
+      if (anteSentence.isNotEmpty) anteSentence,
+      if (paceSentence.isNotEmpty) paceSentence,
+    ].join(' ');
   }
 
   /// Decides where scheduled breaks fall (specification section 8, and the
@@ -1428,6 +1582,33 @@ class TournamentEngine {
   }
 
   static TournamentStructure generate(TournamentParams params) {
+    // §11.4. A shootout has no single structure, so this returns the one the
+    // room actually sits down to: Stage A, the per-table Freeze Out. Callers
+    // that need the final table as well ask [generateShootout] for both.
+    // Throwing instead was tempting and wrong — seven call sites reach this
+    // method and the format is already selectable in setup, so refusing to
+    // generate would break the screens rather than the format.
+    //
+    // The MONEY is restated for the whole field: Stage A's own pipeline sees
+    // one table's worth of players, and a shootout's prize pool belongs to the
+    // event, not to a table.
+    if (params.effectiveFormat == TournamentFormat.shootout) {
+      final plan = generateShootout(params);
+      final recalculated = recalculatePrizes(
+        params.buyIn * params.players,
+        params.players,
+        params.organizerPct,
+        roundingUnit: roundingUnitFor(params.buyIn),
+        shape: params.payoutShape,
+      );
+      return plan.stageA.copyWith(
+        prizes: recalculated.prizes,
+        prizePool: recalculated.prizePool,
+        organizerAmount: recalculated.organizerAmount,
+        roundingRemainder: recalculated.roundingRemainder,
+      );
+    }
+
     final dupValues = params.chipSet.map((c) => c.value).toList();
     if (dupValues.toSet().length != dupValues.length) {
       throw const DuplicateChipValueException(
@@ -1505,6 +1686,7 @@ class TournamentEngine {
     // recycled into rebuys, so the full reserve is a floor, not a hard need
     // (Technical section 7.2).
     final reserveTiers = <int>{
+      (params.players * params.reserveMultiplier).ceil(),
       params.players + expectedRebuysForChips + expectedAddOnsForChips,
       params.players + expectedRebuysForChips,
       params.players,
@@ -1703,6 +1885,36 @@ class TournamentEngine {
     final expectedReEntriesTotal = params.effectiveExpectedReEntries;
     final expectedAddOnsTotal = params.effectiveExpectedAddOns;
 
+    // 12.4 Chip supply sufficiency check.
+    //
+    // The add-on term carries §12.1's 0.5 weight, the same weight
+    // [TournamentParams.reserveMultiplier] gives it and for the same reason: an
+    // add-on chip grant is sized from the average stack at rebuy close, not the
+    // starting stack, so it draws on a materially different, already-partially-
+    // coloured-up denomination mix and must not reserve at full weight against
+    // the STARTING chip plan. Charging it in full contradicted §12.1 and made
+    // the check fire on ordinary configurations, which is noise, not a warning.
+    final totalExpectedEntries = params.players +
+        expectedRebuysTotal +
+        expectedReEntriesTotal +
+        expectedAddOnsTotal * 0.5;
+
+    for (final entry in chipPlan) {
+      final requiredChips = (entry.count * totalExpectedEntries).ceil();
+      final chipDef = params.chipSet.firstWhere((c) => c.value == entry.value, orElse: () => ChipColor(color: entry.color, hex: entry.hex, value: entry.value, quantity: 0));
+      if (chipDef.quantity < requiredChips) {
+        final shortfall = requiredChips - chipDef.quantity;
+        final parts = <String>[];
+        if (expectedRebuysTotal > 0) parts.add('rebuys');
+        if (expectedReEntriesTotal > 0) parts.add('re-entries');
+        if (expectedAddOnsTotal > 0) parts.add('add-ons');
+        final driving = parts.isEmpty ? 'the starting field' : 'expected ${parts.join(', ')}';
+        warnings.add(
+          'Short ${shortfall}x ${entry.color} chips to fund $driving.',
+        );
+      }
+    }
+
     // ── Blind curve (tech spec §8.3 / §8.4) ─────────────────────────────────
     // The final big blind is derived from the total chips that will actually
     // be in play: starting stacks plus expected rebuys and add-ons, per the
@@ -1735,7 +1947,42 @@ class TournamentEngine {
     // big blind at the target finish came in around 2.5x too shallow — about
     // an hour of extra play. The same factor simply continues through the
     // spare levels, which is what you want if the game does run long.
-    final growthFactor = math
+    // ── Risk-adjusted growth (§11.3) ────────────────────────────────────────
+    // Chips that enter after level 1 — rebuys, re-entries — are chips the
+    // blind curve must eventually outrun. A curve solved only from the total
+    // ends up too shallow early and too steep late. The premium front-loads
+    // the growth into the window where those chips are actually arriving, and
+    // `gBase` is solved DOWN so the ladder still lands on targetFinalBB at the
+    // planned finish rather than overshooting by the premium's product.
+    final premiumCloseLevel = params.rebuysCloseLevel;
+    final maxPremium = maxRiskPremium(params);
+
+    // Level is 1-based here, matching the spec. Zero once rebuys have closed.
+    double rebuyPremium(int level) =>
+        (maxPremium == 0 || level > premiumCloseLevel || premiumCloseLevel <= 0)
+            ? 0.0
+            : maxPremium * (premiumCloseLevel - level + 1) / premiumCloseLevel;
+
+    // The compounded effect of every premium the ladder will apply. Solving
+    // gBase against this is what keeps the finish on target.
+    var premiumGrowthFactor = 1.0;
+    for (var l = 2; l <= premiumCloseLevel && l <= plannedLevels; l++) {
+      premiumGrowthFactor *= 1 + rebuyPremium(l);
+    }
+
+    final gBase = math
+        .pow(
+          math.max(targetFinalBB, openingBB.toDouble()) /
+              (openingBB * premiumGrowthFactor),
+          1 / math.max(1, plannedLevels - 1),
+        )
+        .toDouble();
+
+    // The growth a Freeze Out with these same chips would have used — the
+    // reference the premium is measured AGAINST. Identical to `gBase` bit for
+    // bit whenever `premiumGrowthFactor` is 1, which is every structure with
+    // no premium (§39 deviation 10, boundary 7).
+    final gFreezeOut = math
         .pow(
           math.max(targetFinalBB, openingBB.toDouble()) / openingBB,
           1 / math.max(1, plannedLevels - 1),
@@ -1744,8 +1991,16 @@ class TournamentEngine {
 
     final ladder = [...validBlindLevels];
     final levels = <BlindLevel>[];
+    // Two walks over the same ladder. `cursor` is the Freeze Out reference —
+    // it is exactly the walk this engine has always done, and it alone decides
+    // the printed blinds when there is no premium. `premCursor` is what is
+    // actually printed: the reference rung, pushed forward by the premium.
     var cursor = startIndex;
+    var premCursor = startIndex;
+    var prevRefBB = openingBB;
     var prevBB = openingBB;
+    var rawCurve = openingBB.toDouble();
+    var refCurve = openingBB.toDouble();
 
     for (var i = 0; i < numLevels; i++) {
       final int sb;
@@ -1754,29 +2009,81 @@ class TournamentEngine {
         sb = ladder[startIndex][0];
         bb = openingBB;
       } else {
-        final raw = openingBB * math.pow(growthFactor, i);
+        // `i` is 0-based; spec levels are 1-based. Level index i IS spec level
+        // i+1, so the first multiplication (i == 1) must use rebuyPremium(2).
+        rawCurve *= gBase * (1 + rebuyPremium(i + 1));
+        refCurve *= gFreezeOut;
+        final raw = refCurve;
+
+        // The premium as a MULTIPLE of the Freeze Out curve, not as an absolute
+        // big blind.
+        //
+        // This is the whole fix. The walk below advances at least one rung per
+        // level, and the practical ladder has roughly one rung per level, so
+        // the walk — not `rawCurve` — is what sets the printed blinds: the two
+        // `while` loops below never once fired on the raw value at 6, 9, 12 or
+        // 18 players, and Freeze Out and Rebuy came out byte-identical even at
+        // maximum premium. Chasing the raw value directly would fix that and
+        // simultaneously move every Freeze Out ladder, which boundary 7
+        // forbids. Expressing the premium as a ratio instead leaves the
+        // reference walk untouched (ratio is exactly 1.0 when every
+        // `rebuyPremium` is 0) and still moves the rungs when there is a
+        // premium to apply. The ratio peaks inside the rebuy window and decays
+        // back to 1 by the planned finish — which is `gBase` being solved down,
+        // seen from the other side: the steeper window is handed back so the
+        // ladder still ends where a Freeze Out would.
+        final premiumRatio = refCurve > 0 ? rawCurve / refCurve : 1.0;
 
         // Extend the ladder for huge fields once the printed end is reached.
-        if (cursor >= ladder.length - 1 && raw > prevBB) {
+        if (cursor >= ladder.length - 1 && raw > prevRefBB) {
           final lastSb = ladder.last[0];
           ladder.add([lastSb + 200, (lastSb + 200) * 2]);
         }
 
         // First ladder entry strictly above the previous big blind keeps the
         // curve monotonically increasing even when growth is nearly flat.
-        while (cursor < ladder.length - 1 && ladder[cursor][1] <= prevBB) {
+        while (cursor < ladder.length - 1 && ladder[cursor][1] <= prevRefBB) {
           cursor++;
         }
         // Then track the raw curve: advance whenever the next entry sits
         // closer to the raw target than the current one.
         while (cursor < ladder.length - 1 &&
-            ladder[cursor + 1][1] > prevBB &&
+            ladder[cursor + 1][1] > prevRefBB &&
             (ladder[cursor + 1][1] - raw).abs() <
                 (raw - ladder[cursor][1]).abs()) {
           cursor++;
         }
-        sb = ladder[cursor][0];
-        bb = ladder[cursor][1];
+        prevRefBB = ladder[cursor][1];
+
+        // Apply the premium on top of the reference rung. The printed cursor
+        // never sits behind the reference one, so the Freeze Out walk remains
+        // the floor and a decaying ratio can never pull the ladder backwards.
+        var idx = math.max(premCursor, cursor);
+        final premiumTarget = ladder[cursor][1] * premiumRatio;
+        // A premium can run past the printed end sooner than the reference
+        // walk does. Bounded: each pass appends a strictly larger rung.
+        var extended = 0;
+        while (idx >= ladder.length - 1 &&
+            premiumTarget > ladder.last[1] &&
+            extended < 64) {
+          final lastSb = ladder.last[0];
+          ladder.add([lastSb + 200, (lastSb + 200) * 2]);
+          extended++;
+        }
+        while (idx < ladder.length - 1 &&
+            (ladder[idx + 1][1] - premiumTarget).abs() <
+                (premiumTarget - ladder[idx][1]).abs()) {
+          idx++;
+        }
+        // 11-009 and the monotonicity invariant: the ladder holds duplicate
+        // big blinds (20/50 and 25/50), so "one rung on" is not automatically
+        // "one big blind up".
+        while (idx < ladder.length - 1 && ladder[idx][1] <= prevBB) {
+          idx++;
+        }
+        premCursor = idx;
+        sb = ladder[idx][0];
+        bb = ladder[idx][1];
       }
       prevBB = bb;
 
@@ -1809,14 +2116,14 @@ class TournamentEngine {
       rebuyStack,
       params.chipSet,
       params.players,
-      2,
+      TournamentEngine.lateEntryReserveMultiplier,
       smallBlind: openingSb,
     );
     final addOnChipPlan = _buildChipPlan(
       addOnStack,
       params.chipSet,
       params.players,
-      2,
+      TournamentEngine.lateEntryReserveMultiplier,
       smallBlind: openingSb,
     );
 
@@ -1938,7 +2245,7 @@ class TournamentEngine {
             style: chosenStyle,
             depth: openingDepthBB,
             inventoryLimited: warnings.any((w) => w.contains('cannot fund')),
-            durationHours: params.durationHours,
+            params: params,
           );
 
     if (params.players < 4) {
@@ -1965,6 +2272,85 @@ class TournamentEngine {
       roundingRemainder: roundingRemainder,
       colorUpInstructions: colorUpInstructions,
       warnings: warnings,
+      engineVersion: engineVersion,
+    );
+  }
+
+  /// Survivors each Stage A table sends to the final table (§11.4). One.
+  static const int shootoutAdvancePerTable = 1;
+
+  /// Shortest sensible Stage B budget, in minutes. `generate` floors its own
+  /// playing time at 60 anyway; naming it here stops a long Stage A from
+  /// producing a negative budget rather than a short one.
+  static const int shootoutMinStageMins = 60;
+
+  /// §11.4. Builds both halves of a shootout.
+  ///
+  /// Each half is the ORDINARY pipeline — `generate` with a `copyWith` that
+  /// restates the field, the target duration and the format — because §39
+  /// deviation 11 is explicit that a shootout is two Freeze Out generations and
+  /// not a duration multiplier. Nothing here knows how to build a blind ladder;
+  /// there is still exactly one implementation of that.
+  ///
+  /// Both stages are freeze-outs with the late-entry options switched off. A
+  /// rebuy at a table playing down to one winner would be a different format,
+  /// not a shootout with a safety net.
+  static ShootoutPlan generateShootout(TournamentParams params) {
+    final tables = math.max(1, params.effectiveShootoutTables);
+    // ceil, so the split never seats more than a table holds. A one-table
+    // "shootout" is degenerate but legal — it is a single Freeze Out that then
+    // plays a final table against itself — and it must not divide by zero.
+    final playersPerTable = math.max(2, (params.players / tables).ceil());
+    final stageATargetMins = math.max(
+      kMinLevelDurationMins,
+      params.effectiveShootoutTableTargetMins,
+    );
+
+    final stageA = generate(
+      params.copyWith(
+        players: playersPerTable,
+        durationHours: stageATargetMins / 60,
+        format: TournamentFormat.freezeOut,
+        rebuys: false,
+        reEntry: false,
+        addOn: false,
+        // Scheduled breaks belong to the event, and Stage A is a 45-minute
+        // sprint; placing the host's breaks in both stages would spend them
+        // twice. Stage B carries them.
+        breaks: const [],
+      ),
+    );
+
+    // §11.4 Stage B's budget is `mainTarget − elapsed Stage A time`, and the
+    // elapsed time is not knowable at generation: tables finish when they
+    // finish. The PLANNED Stage A target stands in for it, which is why
+    // boundary 9 calls shootout stage timing a target and not a guarantee —
+    // a Stage A that overruns eats into this budget in the room, not here.
+    final mainTargetMins = (params.durationHours * 60).round();
+    final stageBMins = math.max(
+      shootoutMinStageMins,
+      mainTargetMins - stageATargetMins,
+    );
+
+    final stageB = generate(
+      params.copyWith(
+        // A final table of one is not a table; two is the floor at which a
+        // structure means anything.
+        players: math.max(2, tables * shootoutAdvancePerTable),
+        durationHours: stageBMins / 60,
+        format: TournamentFormat.freezeOut,
+        rebuys: false,
+        reEntry: false,
+        addOn: false,
+      ),
+    );
+
+    return ShootoutPlan(
+      tables: tables,
+      playersPerTable: playersPerTable,
+      advancePerTable: shootoutAdvancePerTable,
+      stageA: stageA,
+      stageB: stageB,
     );
   }
 }

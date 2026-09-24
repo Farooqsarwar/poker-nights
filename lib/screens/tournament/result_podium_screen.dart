@@ -172,6 +172,15 @@ class ResultPodiumScreen extends StatelessWidget {
               ),
             ),
           const SizedBox(height: AppSpacing.lg),
+          // §34a post-game recap — best-effort, not exhaustive (boundary #8):
+          // one comeback, one fast bust, one knockout leader, whichever of the
+          // three actually happened. `recapFor` rather than `gameRecap` since
+          // this screen can show a past game via `gameId`, not just the open
+          // one.
+          if (!app.recapFor(game).isEmpty) ...[
+            _RecapCard(recap: app.recapFor(game)),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // My result banner
           if (myResult != null)
             AppCard(
@@ -600,6 +609,64 @@ class _PodiumSlot extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// §34a. One row per award that actually happened this game — `biggestComeback`
+/// stays dormant (and so absent here) until stack sampling exists to feed it
+/// (boundary #8: best-effort, not a full highlight reel).
+class _RecapCard extends StatelessWidget {
+  const _RecapCard({required this.recap});
+
+  final GameRecap recap;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    void addRow(IconData icon, String label, RecapAward? award, String valueText) {
+      if (award == null) return;
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: AppSpacing.sm));
+      rows.add(
+        Row(
+          children: [
+            Icon(icon, size: 18, color: AppColors.primary),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTypography.bodySm,
+              ),
+            ),
+            Text(
+              '${award.playerName} · $valueText',
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      );
+    }
+
+    addRow(Icons.trending_up, 'Biggest comeback', recap.biggestComeback,
+        '${recap.biggestComeback?.value} BB');
+    addRow(Icons.timer_outlined, 'Fastest bust', recap.fastestBust,
+        'Level ${recap.fastestBust?.value}');
+    addRow(Icons.local_fire_department, 'Most knockouts', recap.mostKnockouts,
+        '${recap.mostKnockouts?.value} KOs');
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Night recap',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ...rows,
         ],
       ),
     );

@@ -6,6 +6,7 @@ import 'shot_clock.dart';
 import 'game.dart';
 import 'table_settings.dart';
 import 'tournament.dart';
+import 'tournament_format.dart';
 
 /// Settings captured when creating a tournament game.
 class GameSettings {
@@ -50,6 +51,13 @@ class GameSettings {
     this.addOnChips,
     this.levelDurationMins,
     this.payoutShape = PayoutShape.standard,
+    this.format,
+    this.maxReEntries,
+    this.shootoutTables,
+    this.shootoutTableTargetMins,
+    this.earlyArrivalBonusEnabled = false,
+    this.earlyArrivalCutoffMins,
+    this.earlyArrivalBonusPctOverride,
   });
 
   final String name;
@@ -165,6 +173,28 @@ class GameSettings {
   final int? reEntryChips;
   final int? addOnChips;
   final int? levelDurationMins;
+  final TournamentFormat? format;
+  final int? maxReEntries;
+
+  /// §11.4. How many independent tables Stage A runs. Null lets the engine
+  /// derive it from the expected field.
+  final int? shootoutTables;
+
+  /// §11.4. Stage A's per-table target. Null falls back to the 45-minute
+  /// single-table pace in §38.
+  final int? shootoutTableTargetMins;
+
+  /// §25.1a. Whether players who are checked in before the cutoff start with a
+  /// bonus over the printed stack.
+  final bool earlyArrivalBonusEnabled;
+
+  /// §25.1a. Minutes before [scheduledStart] a check-in must land to earn the
+  /// bonus. Null uses the engine default.
+  final int? earlyArrivalCutoffMins;
+
+  /// §25.1a. Fraction of the starting stack granted as the bonus. Null means
+  /// the 12.5% default — see [effectiveEarlyArrivalPct].
+  final double? earlyArrivalBonusPctOverride;
 
   /// How steeply the prize pool falls away from first place. Not part of the
   /// generation-override group above — a Reset there must not quietly undo a
@@ -190,6 +220,18 @@ class GameSettings {
 
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
+
+  /// The format, resolved. Null means this game predates the field, so it is
+  /// derived from the booleans that have always driven the same behaviour.
+  /// Re-entry wins over rebuy when both are set, matching
+  /// [TournamentParams.effectiveExpectedReEntries]'s precedence.
+  TournamentFormat get effectiveFormat =>
+      format ??
+      (reEntry
+          ? TournamentFormat.reEntry
+          : rebuys
+              ? TournamentFormat.rebuy
+              : TournamentFormat.freezeOut);
 
   /// Expected take-up per entry type, override first and the shared rate as the
   /// fallback — the same resolution [TournamentParams] performs, so the screens
@@ -253,6 +295,25 @@ class GameSettings {
     int? addOnChips,
     int? levelDurationMins,
     PayoutShape? payoutShape,
+    TournamentFormat? format,
+    int? maxReEntries,
+    int? shootoutTables,
+    int? shootoutTableTargetMins,
+    bool? earlyArrivalBonusEnabled,
+    int? earlyArrivalCutoffMins,
+    double? earlyArrivalBonusPctOverride,
+
+    /// Per-field clears. A null above means "unchanged", which is right for a
+    /// partial update but leaves no way to hand one decision back to the
+    /// engine: a host who blanks the Stage A table count wants "you work it
+    /// out", not the number they typed last week. [clearGenerationOverrides]
+    /// resets the whole group at once, which is too blunt for a single field.
+    bool clearMaxReEntries = false,
+    bool clearShootoutTables = false,
+    bool clearShootoutTableTargetMins = false,
+    bool clearEarlyArrivalCutoffMins = false,
+    bool clearEarlyArrivalBonusPctOverride = false,
+
     /// Sends every generation override back to the engine default in one call,
     /// which is what the Parameters tab's "Reset" does. Individual nulls above
     /// mean "unchanged", so without this there is no way to clear one.
@@ -316,8 +377,39 @@ class GameSettings {
           ? null
           : levelDurationMins ?? this.levelDurationMins,
       payoutShape: payoutShape ?? this.payoutShape,
+      format: format ?? this.format,
+      maxReEntries:
+          clearMaxReEntries ? null : maxReEntries ?? this.maxReEntries,
+      shootoutTables: clearGenerationOverrides || clearShootoutTables
+          ? null
+          : shootoutTables ?? this.shootoutTables,
+      shootoutTableTargetMins:
+          clearGenerationOverrides || clearShootoutTableTargetMins
+              ? null
+              : shootoutTableTargetMins ?? this.shootoutTableTargetMins,
+      earlyArrivalBonusEnabled:
+          earlyArrivalBonusEnabled ?? this.earlyArrivalBonusEnabled,
+      earlyArrivalCutoffMins:
+          clearGenerationOverrides || clearEarlyArrivalCutoffMins
+              ? null
+              : earlyArrivalCutoffMins ?? this.earlyArrivalCutoffMins,
+      earlyArrivalBonusPctOverride:
+          clearGenerationOverrides || clearEarlyArrivalBonusPctOverride
+              ? null
+              : earlyArrivalBonusPctOverride ??
+                  this.earlyArrivalBonusPctOverride,
     );
   }
+
+  /// §3. The early-arrival grant as a fraction of the starting stack. The
+  /// override wins; 12.5% is the documented default.
+  double get effectiveEarlyArrivalPct =>
+      earlyArrivalBonusEnabled ? (earlyArrivalBonusPctOverride ?? 0.125) : 0;
+
+  /// §25.1a. How early a check-in must land to earn the bonus. 30 minutes is
+  /// the engine default — long enough to mean "arrived on time", short enough
+  /// that it is not just everyone.
+  int get effectiveEarlyArrivalCutoffMins => earlyArrivalCutoffMins ?? 30;
 
   /// The scheduled start parsed from the configured date/time fields.
   DateTime? get scheduledStart => DateTime.tryParse('${date}T$time');
@@ -426,6 +518,7 @@ class LiveGame {
     this.addOnRequests = const [],
     this.levelEndTime,
     this.startedAt,
+    this.actualDurationMins,
     this.changeLog = const [],
     this.payments = const [],
     this.organizerIds = const [],
@@ -533,6 +626,11 @@ class LiveGame {
   /// the clock is first started, in which case callers fall back to summed
   /// level durations.
   final DateTime? startedAt;
+
+  /// Wall-clock minutes from first level to the final hand, recorded once at
+  /// completion. The input to §10.1's pace learning: a group whose nights
+  /// consistently overrun does not want the same estimate next time.
+  final int? actualDurationMins;
 
   /// Human-readable audit of post-publication event edits (user-flow spec
   /// §10.4): "2026-08-24 14:05 · buy-in 15 → 20". Oldest first; the provider
@@ -699,6 +797,22 @@ class LiveGame {
     return currentLevel > settings.rebuysCloseLevel;
   }
 
+  /// Whether [player] may still re-enter. §9's cap, plus the existing window.
+  bool canReEnter(Player player) {
+    if (!settings.reEntry) return false;
+    if (rebuysClosed) return false;
+    final cap = settings.maxReEntries;
+    if (cap != null && player.reEntries >= cap) return false;
+    return true;
+  }
+
+  /// One elimination from the money (§22.5, §27.5). The table plays very
+  /// differently here and the room should be told.
+  bool get isOnBubble {
+    final paid = structure.paidPlacesForDisplay;
+    return paid > 0 && activePlayers.length == paid + 1;
+  }
+
   /// True once NO NEW PLAYER may enter (User Flow section 4.13, Technical
   /// section 10.3: "Late registration closes permanently when the rebuy level
   /// ends").
@@ -765,6 +879,7 @@ class LiveGame {
     List<String>? addOnRequests,
     DateTime? levelEndTime,
     DateTime? startedAt,
+    int? actualDurationMins,
     bool clearSpeedRecommendation = false,
     bool clearLevelEndTime = false,
     List<String>? changeLog,
@@ -812,6 +927,7 @@ class LiveGame {
           ? null
           : levelEndTime ?? this.levelEndTime,
       startedAt: startedAt ?? this.startedAt,
+      actualDurationMins: actualDurationMins ?? this.actualDurationMins,
       changeLog: changeLog ?? this.changeLog,
       revision: revision ?? this.revision,
       lastIdempotencyKey: lastIdempotencyKey ?? this.lastIdempotencyKey,

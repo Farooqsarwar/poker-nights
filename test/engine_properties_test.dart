@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/chip_color.dart';
 import 'package:poker_night/models/tournament.dart';
@@ -408,4 +409,34 @@ void main() {
       );
     });
   });
+
+  group('Risk-adjusted growth (§11.3)', () {
+    test('§11.3 worked example: the raw curve lands on target', () {
+      const openingBB = 4;
+      const targetFinalBB = 6000.0;
+      const plannedLevels = 22;
+      const closeLevel = 6;
+      const maxPremium = 0.20;
+
+      double premium(int l) =>
+          l > closeLevel ? 0.0 : maxPremium * (closeLevel - l + 1) / closeLevel;
+
+      var pgf = 1.0;
+      for (var l = 2; l <= closeLevel; l++) {
+        pgf *= 1 + premium(l);
+      }
+      expect(pgf, closeTo(1.603, 0.01));          // spec: ≈ 1.603
+
+      final gBase = math.pow(
+        targetFinalBB / (openingBB * pgf), 1 / (plannedLevels - 1)).toDouble();
+      expect(gBase, closeTo(1.385, 0.01));        // spec: ≈ 1.385
+
+      var raw = openingBB.toDouble();
+      for (var i = 1; i < plannedLevels; i++) {
+        raw *= gBase * (1 + premium(i + 1));
+      }
+      expect(raw, closeTo(targetFinalBB, 1.0));   // lands on 6000 at level 22
+    });
+  });
+
 }

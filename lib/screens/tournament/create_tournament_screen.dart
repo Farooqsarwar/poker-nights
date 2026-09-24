@@ -234,16 +234,31 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   @override
   void initState() {
     super.initState();
+    final app = context.read<AppProvider>();
+    final group = app.currentGroup;
+
     final presetName = TournamentEngine.presetNames.isNotEmpty
         ? TournamentEngine.presetNames[2]
         : TournamentEngine.presetNames.firstOrNull ?? '';
     _draft = _initialDraft(presetName, expectedPlayers: 2);
 
+    final defaultChipSetId = group.defaultChipSetId ?? app.defaultChipSetId;
+    if (defaultChipSetId != null) {
+      final saved = app.savedChipSets.cast<({String id, String name, List<ChipColor> chips})?>().firstWhere(
+        (cs) => cs?.id == defaultChipSetId,
+        orElse: () => null,
+      );
+      if (saved != null) {
+        _draft = _draft.copyWith(
+          chipSetName: saved.name,
+          chipSet: saved.chips,
+        );
+      }
+    }
+
     // Auto-fill players from group + apply preset / suggestions
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final app = context.read<AppProvider>();
-      final group = app.currentGroup;
 
       int expected = group.members.length;
       for (final poll in group.polls) {

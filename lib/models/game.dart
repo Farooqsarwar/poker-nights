@@ -55,9 +55,12 @@ class Player {
     this.guestSlot,
     this.rsvp,
     required this.checkedIn,
+    this.noShow = false,
     required this.confirmed,
     required this.eliminated,
     this.eliminationPos,
+    this.eliminatedAtLevel,
+    this.lowestStackBB,
     required this.rebuys,
     this.reEntries = 0,
     required this.hasAddOn,
@@ -74,9 +77,24 @@ class Player {
   final int? guestSlot;
   final Rsvp? rsvp;
   final bool checkedIn;
+  final bool noShow;
   final bool confirmed;
   final bool eliminated;
   final int? eliminationPos;
+  final int? eliminatedAtLevel;
+
+  /// §3 / §34a. The lowest this player's stack ever fell to, measured in big
+  /// blinds — the input to the "biggest comeback" award.
+  ///
+  /// ALWAYS NULL TODAY, and deliberately so. §25.5 fills it by sampling every
+  /// survivor's stack at each elimination, but this app does not track chip
+  /// stacks at all: there is no stack field anywhere on a player, and adding
+  /// one is a feature the client has not specified. The field exists so the
+  /// schema, the codec and §34a's recap are ready the day stack capture lands;
+  /// until then [AppProviderTournament.gameRecap] reports no comeback rather
+  /// than inventing one.
+  final int? lowestStackBB;
+
   final int rebuys;
 
   /// Number of re-entries taken (checklist 12-046) — recorded separately from
@@ -94,10 +112,14 @@ class Player {
     String? inviterId,
     Rsvp? rsvp,
     bool? checkedIn,
+    bool? noShow,
     bool? confirmed,
     bool? eliminated,
     int? eliminationPos,
     bool clearEliminationPos = false,
+    int? eliminatedAtLevel,
+    bool clearEliminatedAtLevel = false,
+    int? lowestStackBB,
     int? rebuys,
     int? reEntries,
     bool? hasAddOn,
@@ -114,10 +136,14 @@ class Player {
       guestSlot: guestSlot,
       rsvp: rsvp ?? this.rsvp,
       checkedIn: checkedIn ?? this.checkedIn,
+      noShow: noShow ?? this.noShow,
       confirmed: confirmed ?? this.confirmed,
       eliminated: eliminated ?? this.eliminated,
       eliminationPos:
           clearEliminationPos ? null : eliminationPos ?? this.eliminationPos,
+      eliminatedAtLevel:
+          clearEliminatedAtLevel ? null : eliminatedAtLevel ?? this.eliminatedAtLevel,
+      lowestStackBB: lowestStackBB ?? this.lowestStackBB,
       rebuys: rebuys ?? this.rebuys,
       reEntries: reEntries ?? this.reEntries,
       hasAddOn: hasAddOn ?? this.hasAddOn,
@@ -137,9 +163,12 @@ class Player {
       guestSlot: guestSlot,
       rsvp: null,
       checkedIn: checkedIn,
+      noShow: noShow,
       confirmed: confirmed,
       eliminated: eliminated,
       eliminationPos: eliminationPos,
+      eliminatedAtLevel: eliminatedAtLevel,
+      lowestStackBB: lowestStackBB,
       rebuys: rebuys,
       reEntries: reEntries,
       hasAddOn: hasAddOn,

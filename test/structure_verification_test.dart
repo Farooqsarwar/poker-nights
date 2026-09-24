@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/chip_color.dart';
 import 'package:poker_night/models/live_game.dart';
 import 'package:poker_night/models/tournament.dart';
+import 'package:poker_night/models/game.dart';
+import 'package:poker_night/models/tournament_format.dart';
 import 'package:poker_night/utils/structure_verification.dart';
 import 'package:poker_night/utils/tournament_engine.dart';
 
@@ -270,6 +272,16 @@ void main() {
       );
       expect(audit.verdict, StructureVerdict.cannotVerify);
     });
+
+    test('older engine version', () {
+      final s = settings();
+      final real = generate(s);
+      final audit = StructureVerification.audit(
+        game(s, real.copyWith(engineVersion: '1.0.0')),
+      );
+      expect(audit.verdict, StructureVerdict.cannotVerify);
+      expect(audit.reason, contains('engine v1.0.0'));
+    });
   });
 
   test('the engine is deterministic — the whole mechanism rests on it', () {
@@ -286,5 +298,28 @@ void main() {
       expect(a.levels[i].bb, b.levels[i].bb);
       expect(a.levels[i].ante, b.levels[i].ante);
     }
+  });
+
+  group('TournamentFormat and maxReEntries', () {
+    test('a settings map with rebuys:true and no format resolves to rebuy', () {
+      final s = settings(players: 5).copyWith(rebuys: true, format: null, reEntry: false);
+      expect(s.effectiveFormat, TournamentFormat.rebuy);
+    });
+
+    test('reEntry wins over rebuys when both are set', () {
+      final s = settings(players: 5).copyWith(rebuys: true, format: null, reEntry: true);
+      expect(s.effectiveFormat, TournamentFormat.reEntry);
+    });
+
+    test('maxReEntries blocks the (n+1)th re-entry', () {
+      final s = settings(players: 5).copyWith(reEntry: true, maxReEntries: 1, format: TournamentFormat.reEntry);
+      final g = game(s, generate(s));
+      final p = Player(
+        id: 'p1', name: 'P1', active: true, eliminated: true, reEntries: 1, rebuys: 0,
+        checkedIn: true, confirmed: true, table: 1, seat: 1, isGuest: false,
+        knockouts: 0, hasAddOn: false
+      );
+      expect(g.canReEnter(p), isFalse);
+    });
   });
 }

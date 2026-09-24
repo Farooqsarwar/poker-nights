@@ -239,6 +239,10 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                       color: AppColors.mutedForeground,
                     ),
                   ),
+                  if (app.paceProposalPending) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    _PaceProposalCard(app: app),
+                  ],
                   const SizedBox(height: AppSpacing.xl),
                   AppButton(
                     fullWidth: true,
@@ -329,6 +333,10 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
           // sections below keep their original indentation; re-indenting six
           // hundred lines to sit under this guard would bury the change.
           if (_tab == _tabParams) ...[
+          if (app.paceProposalPending) ...[
+            _PaceProposalCard(app: app),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           AppAlertBanner(
             type: AppAlertType.info,
             message: game.structureConfirmed
@@ -1744,6 +1752,76 @@ class _GenerationParamsCardState extends State<_GenerationParamsCard> {
                 variant: AppButtonVariant.secondary,
                 onPressed: _reset,
                 child: const Text('Reset'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// §10.1. The proposal card: the measured average and the percentage shown
+/// BEFORE generation, with an explicit accept/decline. Nothing here is ever
+/// applied silently — [AppProvider.acceptPaceAdjustment] only runs when the
+/// host presses Accept.
+class _PaceProposalCard extends StatelessWidget {
+  const _PaceProposalCard({required this.app});
+
+  final AppProvider app;
+
+  @override
+  Widget build(BuildContext context) {
+    final proposal = app.paceProposal;
+    if (proposal == null) return const SizedBox.shrink();
+    final pctLabel = (proposal.adjustmentPct.abs() * 100).toStringAsFixed(1);
+    final runsLong = proposal.adjustmentPct > 0;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.history, size: 20, color: AppColors.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                "This group's own pace",
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Over the last ${proposal.sampleSize} nights this group averaged '
+            '${proposal.meanActualMins.round()} min — '
+            '${proposal.meanOverageMins.abs().round()} min '
+            '${runsLong ? 'over' : 'under'} the ${proposal.targetDurationMins} '
+            'min target. Accepting will ${runsLong ? 'shorten' : 'lengthen'} '
+            'levels by $pctLabel% before generating.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              AppButton(
+                size: AppButtonSize.sm,
+                onPressed: () => app.acceptPaceAdjustment(),
+                child: Text(
+                  'Accept ($pctLabel% ${runsLong ? 'shorter' : 'longer'})',
+                ),
+              ),
+              AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => app.declinePaceAdjustment(),
+                child: const Text('Keep as planned'),
               ),
             ],
           ),

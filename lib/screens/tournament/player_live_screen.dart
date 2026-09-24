@@ -257,6 +257,23 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
+            if (game.isOnBubble)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                child: AppAlertBanner(
+                  type: AppAlertType.warning,
+                  // §6.2: a non-admin projection ships an EMPTY `prizes` list
+                  // on purpose (so the Firestore rule can assert
+                  // `prizes.size() == 0`) and carries the `paidPlaces` scalar
+                  // instead. Counting `prizes` here read 0 paid on every
+                  // player's screen — exactly the number §22.5's bubble
+                  // warning exists to state.
+                  message: 'On the bubble — ${activePlayers.length} left, ${game.structure.paidPlacesForDisplay} paid. '
+                      'The next player out wins nothing.',
+                  actionLabel: 'ICM Calculator',
+                  onAction: () => context.push(RoutePaths.toolIcm),
+                ),
+              ),
             AppTabs(
               tabs: [
                 const AppTabItem(id: 'dashboard', label: 'Dashboard'),

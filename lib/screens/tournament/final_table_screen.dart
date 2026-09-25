@@ -221,7 +221,9 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                           crossAxisCount: 3,
                           mainAxisSpacing: AppSpacing.sm,
                           crossAxisSpacing: AppSpacing.sm,
-                          childAspectRatio: 1.6,
+                          // Tall enough for "Seat N" over a name at phone
+                          // width; 1.6 clipped the name line.
+                          childAspectRatio: 1.25,
                         ),
                     itemCount: _seating.length,
                     itemBuilder: (context, i) {
@@ -368,7 +370,10 @@ class _DraggableSeatTileState extends State<_DraggableSeatTile> {
     return Opacity(
       opacity: dimmed ? 0.35 : 1,
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.sm),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
         decoration: BoxDecoration(
           color: background ?? AppColors.secondary,
           borderRadius: BorderRadius.circular(AppRadius.md),

@@ -175,16 +175,16 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       Container(
                         width: 8,
                         height: 8,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF22C55E),
+                        decoration: BoxDecoration(
+                          color: AppColors.successText,
                           shape: BoxShape.circle,
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         'PLAYER VIEW · LEVEL ${game.currentLevel}',
-                        style: const TextStyle(
-                          color: Color(0xFFE24446),
+                        style: TextStyle(
+                          color: AppColors.primaryText,
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.5,
@@ -206,16 +206,16 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.chat_bubble_outline,
                                 size: 16,
-                                color: Color(0xFFE24446),
+                                color: AppColors.primaryText,
                               ),
                               const SizedBox(width: 6),
-                              const Text(
+                              Text(
                                 'Chat',
                                 style: TextStyle(
-                                  color: Color(0xFFE24446),
+                                  color: AppColors.primaryText,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 14,
                                 ),
@@ -390,17 +390,17 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                     return Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF141416),
+                        color: AppColors.card,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF242428)),
+                        border: Border.all(color: AppColors.borderSubtle),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'YOUR SEAT',
                             style: TextStyle(
-                              color: Color(0xFFE24446),
+                              color: AppColors.primaryText,
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.2,
@@ -412,15 +412,15 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                               Container(
                                 width: 42,
                                 height: 42,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFD53032),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
                                   shape: BoxShape.circle,
                                 ),
                                 alignment: Alignment.center,
                                 child: Text(
                                   initial,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: AppColors.foreground,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 18,
                                   ),
@@ -433,8 +433,8 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                   children: [
                                     Text(
                                       displayName,
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                      style: TextStyle(
+                                        color: AppColors.foreground,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 16,
                                       ),
@@ -442,8 +442,8 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                     const SizedBox(height: 2),
                                     Text(
                                       tableSeat,
-                                      style: const TextStyle(
-                                        color: Color(0xFF8E8E93),
+                                      style: TextStyle(
+                                        color: AppColors.mutedForeground,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -455,8 +455,8 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                 children: [
                                   Text(
                                     Formatters.prize(stack),
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    style: TextStyle(
+                                      color: AppColors.foreground,
                                       fontWeight: FontWeight.w700,
                                       fontSize: 22,
                                     ),
@@ -464,8 +464,8 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                   const SizedBox(height: 2),
                                   Text(
                                     '$bbCount BB',
-                                    style: const TextStyle(
-                                      color: Color(0xFF8E8E93),
+                                    style: TextStyle(
+                                      color: AppColors.mutedForeground,
                                       fontSize: 12,
                                     ),
                                   ),
@@ -487,26 +487,26 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF141416),
+                          color: AppColors.card,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFF242428)),
+                          border: Border.all(color: AppColors.borderSubtle),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               '${activePlayers.length}',
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: AppColors.foreground,
                                 fontSize: 26,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                             const SizedBox(height: 4),
-                            const Text(
+                            Text(
                               'players left',
                               style: TextStyle(
-                                color: Color(0xFF8E8E93),
+                                color: AppColors.mutedForeground,
                                 fontSize: 12,
                               ),
                             ),
@@ -519,26 +519,26 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF141416),
+                          color: AppColors.card,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFF242428)),
+                          border: Border.all(color: AppColors.borderSubtle),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               Formatters.chips(avgStack),
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: AppColors.foreground,
                                 fontSize: 26,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                             const SizedBox(height: 4),
-                            const Text(
+                            Text(
                               'avg stack',
                               style: TextStyle(
-                                color: Color(0xFF8E8E93),
+                                color: AppColors.mutedForeground,
                                 fontSize: 12,
                               ),
                             ),
@@ -557,25 +557,25 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                     vertical: 16,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF141416),
+                    color: AppColors.card,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF242428)),
+                    border: Border.all(color: AppColors.borderSubtle),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'In the money at',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: AppColors.foreground,
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                       Text(
                         '${game.structure.paidPlacesForDisplay > 0 ? game.structure.paidPlacesForDisplay : 3} players',
-                        style: const TextStyle(
-                          color: Color(0xFFEAB308),
+                        style: TextStyle(
+                          color: AppColors.primaryText,
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),

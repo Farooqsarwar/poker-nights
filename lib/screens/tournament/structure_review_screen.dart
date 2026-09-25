@@ -297,15 +297,15 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                   icon: Icons.chevron_left,
                   size: 40,
                   borderRadius: 12,
-                  backgroundColor: const Color(0xFF141416),
-                  borderColor: const Color(0xFF242428),
+                  backgroundColor: AppColors.card,
+                  borderColor: AppColors.borderSubtle,
                   onPressed: () => context.go(backTo),
                 ),
                 const Spacer(),
-                const Text(
+                Text(
                   'Step 5 of 5',
                   style: TextStyle(
-                    color: Color(0xFF8E8E93),
+                    color: AppColors.mutedForeground,
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
@@ -318,18 +318,18 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
             Container(
               height: 2.5,
               width: double.infinity,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFFD53032), Color(0xFFFF5252)],
+                  colors: [AppColors.primary, AppColors.primaryHover],
                 ),
               ),
             ),
             const SizedBox(height: 20),
 
-            const Text(
+            Text(
               'Review structure',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.foreground,
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
               ),
@@ -366,9 +366,9 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
             // Structure Levels Card
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF141416),
+                color: AppColors.card,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF242428)),
+                border: Border.all(color: AppColors.borderSubtle),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Column(
@@ -376,7 +376,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                   for (var i = 0; i < schedule.length; i++) ...[
                     _buildC2ScheduleRow(schedule[i], structure),
                     if (i < schedule.length - 1)
-                      const Divider(height: 1, color: Color(0xFF1E1E22)),
+                      Divider(height: 1, color: AppColors.muted),
                   ],
                 ],
               ),
@@ -392,9 +392,9 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                     height: 52,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF141416),
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Color(0xFF242428)),
+                        backgroundColor: AppColors.card,
+                        foregroundColor: AppColors.foreground,
+                        side: BorderSide(color: AppColors.borderSubtle),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -415,9 +415,9 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                     height: 52,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [
+                      boxShadow: [
                         BoxShadow(
-                          color: Color(0x66D53032),
+                          color: AppColors.primary.withValues(alpha: 0.4),
                           blurRadius: 16,
                           offset: Offset(0, 4),
                         ),
@@ -425,8 +425,8 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                     ),
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD53032),
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.foreground,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -1667,9 +1667,9 @@ void _showAdjustModal(
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF141416),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF242428)),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       child: Column(
         children: [
@@ -1677,9 +1677,9 @@ void _showAdjustModal(
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: AppTypography.monoFamily,
-                color: Colors.white,
+                color: AppColors.foreground,
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
               ),
@@ -1688,8 +1688,8 @@ void _showAdjustModal(
           const SizedBox(height: 4),
           Text(
             caption,
-            style: const TextStyle(
-              color: Color(0xFF8E8E93),
+            style: TextStyle(
+              color: AppColors.mutedForeground,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -1705,16 +1705,16 @@ void _showAdjustModal(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
           children: [
-            const Icon(
+            Icon(
               Icons.coffee_outlined,
               size: 18,
-              color: Color(0xFF4CAF50),
+              color: AppColors.successText,
             ),
             const SizedBox(width: 8),
-            const Text(
+            Text(
               'Break',
               style: TextStyle(
-                color: Color(0xFF4CAF50),
+                color: AppColors.successText,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -1722,8 +1722,8 @@ void _showAdjustModal(
             const Spacer(),
             Text(
               '${row.breakMins}m',
-              style: const TextStyle(
-                color: Color(0xFF8E8E93),
+              style: TextStyle(
+                color: AppColors.mutedForeground,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
@@ -1742,8 +1742,8 @@ void _showAdjustModal(
             width: 36,
             child: Text(
               'L${l.level}',
-              style: const TextStyle(
-                color: Color(0xFFE24446),
+              style: TextStyle(
+                color: AppColors.primaryText,
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
               ),
@@ -1752,8 +1752,8 @@ void _showAdjustModal(
           const SizedBox(width: 12),
           Text(
             '${Formatters.chips(l.sb)} / ${Formatters.chips(l.bb)}',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: AppColors.foreground,
               fontSize: 15,
               fontWeight: FontWeight.w700,
             ),
@@ -1761,8 +1761,8 @@ void _showAdjustModal(
           if (l.ante != null && l.ante! > 0) ...[
             Text(
               ' +${Formatters.chips(l.ante!)}',
-              style: const TextStyle(
-                color: Color(0xFFE24446),
+              style: TextStyle(
+                color: AppColors.primaryText,
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
               ),
@@ -1771,8 +1771,8 @@ void _showAdjustModal(
           const Spacer(),
           Text(
             '${l.durationMins}m',
-            style: const TextStyle(
-              color: Color(0xFF8E8E93),
+            style: TextStyle(
+              color: AppColors.mutedForeground,
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),

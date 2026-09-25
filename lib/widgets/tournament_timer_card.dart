@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app/colors.dart';
 
 import '../app/typography.dart';
 import '../models/live_game.dart';
@@ -44,12 +45,12 @@ class TournamentTimerCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF121214),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF242428), width: 1),
-        boxShadow: const [
+        border: Border.all(color: AppColors.borderSubtle, width: 1),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x33000000),
+            color: AppColors.shadowSoft,
             blurRadius: 16,
             offset: Offset(0, 4),
           ),
@@ -63,10 +64,10 @@ class TournamentTimerCard extends StatelessWidget {
           // Header: Red Spade + Status
           Row(
             children: [
-              const Text(
+              Text(
                 '♠',
                 style: TextStyle(
-                  color: Color(0xFFD53032),
+                  color: AppColors.primary,
                   fontSize: 16,
                   height: 1,
                 ),
@@ -78,8 +79,8 @@ class TournamentTimerCard extends StatelessWidget {
                     : isPaused
                         ? 'PAUSED'
                         : 'RUNNING',
-                style: const TextStyle(
-                  color: Color(0xFFE24446),
+                style: TextStyle(
+                  color: AppColors.primaryText,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 2.0,
@@ -89,15 +90,15 @@ class TournamentTimerCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          const Divider(height: 1, color: Color(0xFF242428)),
+          Divider(height: 1, color: AppColors.borderSubtle),
           const SizedBox(height: 14),
 
           // "LEVEL X" Tracking Text
           Center(
             child: Text(
               isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
-              style: const TextStyle(
-                color: Color(0xFFE24446),
+              style: TextStyle(
+                color: AppColors.primaryText,
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 3.5,
@@ -130,11 +131,11 @@ class TournamentTimerCard extends StatelessWidget {
                     children: [
                       TextSpan(
                         text: minutesPart,
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: AppColors.foreground),
                       ),
                       TextSpan(
                         text: secondsPart,
-                        style: const TextStyle(color: Color(0xFFD53032)),
+                        style: TextStyle(color: AppColors.primary),
                       ),
                     ],
                   ),
@@ -185,14 +186,14 @@ class TournamentTimerCard extends StatelessWidget {
                 child: Container(
                   height: 4,
                   width: double.infinity,
-                  color: const Color(0xFF242428),
+                  color: AppColors.borderSubtle,
                   child: FractionallySizedBox(
                     alignment: Alignment.centerLeft,
                     widthFactor: progress,
                     child: Container(
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [Color(0xFFD53032), Color(0xFFFF5252)],
+                          colors: [AppColors.primary, AppColors.primaryHover],
                         ),
                       ),
                     ),
@@ -219,35 +220,35 @@ class TournamentTimerCard extends StatelessWidget {
                         value: Formatters.time(totalSeconds),
                       ),
                     ),
-                    Container(width: 1, height: 32, color: const Color(0xFF242428)),
+                    Container(width: 1, height: 32, color: AppColors.borderSubtle),
                     Expanded(
                       child: _SubStatItem(
                         label: 'AVG STACK',
                         value: Formatters.chips(avgStack),
                       ),
                     ),
-                    Container(width: 1, height: 32, color: const Color(0xFF242428)),
+                    Container(width: 1, height: 32, color: AppColors.borderSubtle),
                     Expanded(
                       child: _SubStatItem(
                         label: 'PLAYERS',
                         customValue: RichText(
                           textAlign: TextAlign.center,
                           text: TextSpan(
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: AppTypography.monoFamily,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              color: AppColors.foreground,
                             ),
                             children: [
                               TextSpan(text: '$activeCount'),
-                              const TextSpan(
+                              TextSpan(
                                 text: '/',
-                                style: TextStyle(color: Color(0xFFD53032)),
+                                style: TextStyle(color: AppColors.primary),
                               ),
                               TextSpan(
                                 text: '$totalCount',
-                                style: const TextStyle(color: Color(0xFFD53032)),
+                                style: TextStyle(color: AppColors.primary),
                               ),
                             ],
                           ),
@@ -284,7 +285,7 @@ class _BlindColumn extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: highlighted ? const Color(0xFFE24446) : const Color(0xFF8E8E93),
+            color: highlighted ? AppColors.primaryText : AppColors.mutedForeground,
             fontSize: 12,
             fontWeight: FontWeight.w600,
             letterSpacing: 1.0,
@@ -297,7 +298,7 @@ class _BlindColumn extends StatelessWidget {
             value,
             style: TextStyle(
               fontFamily: AppTypography.monoFamily,
-              color: highlighted ? const Color(0xFFE24446) : Colors.white,
+              color: highlighted ? AppColors.primaryText : AppColors.foreground,
               fontSize: 22,
               fontWeight: FontWeight.w700,
             ),
@@ -327,8 +328,8 @@ class _SubStatItem extends StatelessWidget {
         Text(
           label,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Color(0xFF8E8E93),
+          style: TextStyle(
+            color: AppColors.mutedForeground,
             fontSize: 10,
             fontWeight: FontWeight.w600,
             letterSpacing: 1.0,
@@ -342,11 +343,11 @@ class _SubStatItem extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value ?? '',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: AppTypography.monoFamily,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: AppColors.foreground,
               ),
             ),
           ),

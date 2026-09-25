@@ -22,6 +22,25 @@ enum AppButtonVariant {
 
 enum AppButtonSize { sm, md, lg, xl }
 
+/// Tells widgets inside an [AppButton]'s label which foreground the button
+/// paints with, so helpers such as `AppIconLabel` match it instead of using
+/// their standalone default.
+class AppButtonScope extends InheritedWidget {
+  const AppButtonScope({
+    super.key,
+    required this.foreground,
+    required super.child,
+  });
+
+  final Color foreground;
+
+  static Color? foregroundOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppButtonScope>()?.foreground;
+
+  @override
+  bool updateShouldNotify(AppButtonScope old) => old.foreground != foreground;
+}
+
 class AppButton extends StatefulWidget {
   const AppButton({
     super.key,
@@ -129,7 +148,16 @@ class _AppButtonState extends State<AppButton> {
                                       : FontWeight.w600,
                                 ),
                                 textAlign: TextAlign.center,
-                                child: widget.child,
+                                // Icons in the label take the label colour —
+                                // a grey arrow on a crimson button read as
+                                // disabled.
+                                child: IconTheme.merge(
+                                  data: IconThemeData(color: colors.foreground),
+                                  child: AppButtonScope(
+                                    foreground: colors.foreground,
+                                    child: widget.child,
+                                  ),
+                                ),
                               ),
                       ),
                     ),

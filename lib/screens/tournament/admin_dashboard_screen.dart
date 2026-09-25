@@ -393,15 +393,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: status == LiveGameStatus.running
-                        ? const Color(0xFF22C55E)
-                        : const Color(0xFFE24446),
+                        ? AppColors.successText
+                        : AppColors.primaryText,
                   ),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   'LIVE · ${status == LiveGameStatus.running ? "RUNNING" : (status == LiveGameStatus.paused ? "PAUSED" : (status == LiveGameStatus.rebuypause ? "BREAK" : status.label.toUpperCase()))}',
-                  style: const TextStyle(
-                    color: Color(0xFFE24446),
+                  style: TextStyle(
+                    color: AppColors.primaryText,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.5,
@@ -415,8 +415,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 Expanded(
                   child: Text(
                     settings.name,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppColors.foreground,
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1138,11 +1138,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           return Container(
                             height: 48,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFD53032),
+                              color: AppColors.primary,
                               borderRadius: BorderRadius.circular(12),
-                              boxShadow: const [
+                              boxShadow: [
                                 BoxShadow(
-                                  color: Color(0x66D53032),
+                                  color: AppColors.primary.withValues(alpha: 0.4),
                                   blurRadius: 16,
                                   offset: Offset(0, 4),
                                 ),
@@ -1153,19 +1153,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               child: InkWell(
                                 onTap: () => _confirmStartTimer(context, app),
                                 borderRadius: BorderRadius.circular(12),
-                                child: const Row(
+                                child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
                                       Icons.play_arrow,
-                                      color: Colors.white,
+                                      color: AppColors.foreground,
                                       size: 22,
                                     ),
                                     SizedBox(width: 6),
                                     Text(
                                       'Start',
                                       style: TextStyle(
-                                        color: Colors.white,
+                                        color: AppColors.foreground,
                                         fontSize: 16,
                                         fontWeight: FontWeight.w700,
                                       ),
@@ -1179,11 +1179,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           return Container(
                             height: 48,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFD53032),
+                              color: AppColors.primary,
                               borderRadius: BorderRadius.circular(12),
-                              boxShadow: const [
+                              boxShadow: [
                                 BoxShadow(
-                                  color: Color(0x66D53032),
+                                  color: AppColors.primary.withValues(alpha: 0.4),
                                   blurRadius: 16,
                                   offset: Offset(0, 4),
                                 ),
@@ -1194,19 +1194,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               child: InkWell(
                                 onTap: app.pauseTimer,
                                 borderRadius: BorderRadius.circular(12),
-                                child: const Row(
+                                child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
                                       Icons.pause,
-                                      color: Colors.white,
+                                      color: AppColors.foreground,
                                       size: 20,
                                     ),
                                     SizedBox(width: 8),
                                     Text(
                                       'Pause',
                                       style: TextStyle(
-                                        color: Colors.white,
+                                        color: AppColors.foreground,
                                         fontSize: 16,
                                         fontWeight: FontWeight.w700,
                                       ),
@@ -1225,13 +1225,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             height: 48,
                             decoration: BoxDecoration(
                               color: canResume
-                                  ? const Color(0xFFD53032)
-                                  : const Color(0xFF2A2A2E),
+                                  ? AppColors.primary
+                                  : AppColors.muted,
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: canResume
-                                  ? const [
+                                  ? [
                                       BoxShadow(
-                                        color: Color(0x66D53032),
+                                        color: AppColors.primary.withValues(alpha: 0.4),
                                         blurRadius: 16,
                                         offset: Offset(0, 4),
                                       ),
@@ -1243,19 +1243,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               child: InkWell(
                                 onTap: canResume ? app.resumeTimer : null,
                                 borderRadius: BorderRadius.circular(12),
-                                child: const Row(
+                                child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
                                       Icons.play_arrow,
-                                      color: Colors.white,
+                                      color: AppColors.foreground,
                                       size: 22,
                                     ),
                                     SizedBox(width: 6),
                                     Text(
                                       'Resume',
                                       style: TextStyle(
-                                        color: Colors.white,
+                                        color: AppColors.foreground,
                                         fontSize: 16,
                                         fontWeight: FontWeight.w700,
                                       ),
@@ -1275,9 +1275,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     child: Container(
                       height: 48,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1C1C1F),
+                        color: AppColors.muted,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF2A2A2E)),
+                        border: Border.all(color: AppColors.muted),
                       ),
                       child: Material(
                         color: Colors.transparent,
@@ -1288,13 +1288,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   idempotencyKey: _idemKey('next'),
                                 ),
                           borderRadius: BorderRadius.circular(12),
-                          child: const Row(
+                          child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
                                 'Next',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.foreground,
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1302,7 +1302,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               SizedBox(width: 4),
                               Icon(
                                 Icons.arrow_right,
-                                color: Colors.white,
+                                color: AppColors.foreground,
                                 size: 22,
                               ),
                             ],
@@ -1319,7 +1319,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 children: [
                   _buildQuickToolButton(
                     icon: Icons.bolt,
-                    iconColor: const Color(0xFFE24446),
+                    iconColor: AppColors.primaryText,
                     label: 'Speed',
                     onTap: () => _showSpeedPreview(
                       app,
@@ -1359,9 +1359,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: const Color(0xFF141416),
+                color: AppColors.card,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF242428)),
+                border: Border.all(color: AppColors.borderSubtle),
               ),
               child: Row(
                 children: [
@@ -1531,14 +1531,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: active ? const Color(0xFFD53032) : Colors.transparent,
+            color: active ? AppColors.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
           alignment: Alignment.center,
           child: Text(
             label,
             style: TextStyle(
-              color: active ? Colors.white : const Color(0xFF8E8E93),
+              color: active ? AppColors.foreground : AppColors.mutedForeground,
               fontWeight: active ? FontWeight.w700 : FontWeight.w500,
               fontSize: 13,
             ),
@@ -1563,19 +1563,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFF161619),
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF242428)),
+              border: Border.all(color: AppColors.borderSubtle),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 22, color: iconColor ?? Colors.white),
+                Icon(icon, size: 22, color: iconColor ?? AppColors.foreground),
                 const SizedBox(height: 6),
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: Color(0xFF8E8E93),
+                  style: TextStyle(
+                    color: AppColors.mutedForeground,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1592,12 +1592,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final isAdmin = app.canRunCurrentGame;
     if (game.activePlayers.isEmpty) {
       return [
-        const Padding(
+        Padding(
           padding: EdgeInsets.symmetric(vertical: 24),
           child: Center(
             child: Text(
               'No active players',
-              style: TextStyle(color: Color(0xFF8E8E93), fontSize: 14),
+              style: TextStyle(color: AppColors.mutedForeground, fontSize: 14),
             ),
           ),
         ),
@@ -1634,24 +1634,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161619),
+                  color: AppColors.card,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF242428)),
+                  border: Border.all(color: AppColors.borderSubtle),
                 ),
                 child: Row(
                   children: [
                     Container(
                       width: 40,
                       height: 40,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF2E1C1D),
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySoft,
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
                       child: Text(
                         p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          color: Color(0xFFE24446),
+                        style: TextStyle(
+                          color: AppColors.primaryText,
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
                         ),
@@ -1667,8 +1667,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               Flexible(
                                 child: Text(
                                   p.name,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: AppColors.foreground,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 15,
                                   ),
@@ -1683,13 +1683,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF242428),
+                                    color: AppColors.borderSubtle,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
                                     '×${p.rebuys}',
-                                    style: const TextStyle(
-                                      color: Color(0xFFE24446),
+                                    style: TextStyle(
+                                      color: AppColors.primaryText,
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -1701,8 +1701,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           const SizedBox(height: 3),
                           Text(
                             'Table ${p.table} · Seat ${p.seat}${p.stack != null ? ' · ${Formatters.prize(p.stack!)}' : ''}',
-                            style: const TextStyle(
-                              color: Color(0xFF8E8E93),
+                            style: TextStyle(
+                              color: AppColors.mutedForeground,
                               fontSize: 12,
                             ),
                           ),
@@ -1721,16 +1721,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2B1C1D),
+                              color: AppColors.primarySoft,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: const Color(0xFF452225),
+                                color: AppColors.primarySoftBorder,
                               ),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Out',
                               style: TextStyle(
-                                color: Color(0xFFE24446),
+                                color: AppColors.primaryText,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
                               ),
@@ -1754,7 +1754,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   ) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF141416),
+      backgroundColor: AppColors.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1771,29 +1771,29 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF333338),
+                      color: AppColors.borderSubtle,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Tournament Actions',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.foreground,
                     fontWeight: FontWeight.w700,
                     fontSize: 18,
                   ),
                 ),
                 const SizedBox(height: 12),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.chat_bubble_outline,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
-                  title: const Text(
+                  title: Text(
                     'Chat',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: AppColors.foreground),
                   ),
                   trailing: app.unreadGameChatCount(game.id) > 0
                       ? ChatUnreadBadge(count: app.unreadGameChatCount(game.id))
@@ -1804,15 +1804,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.tv_outlined, color: Colors.white),
-                  title: const Text(
+                  leading: Icon(Icons.tv_outlined, color: AppColors.foreground),
+                  title: Text(
                     'TV Mode',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: AppColors.foreground),
                   ),
                   subtitle: Text(
                     'TV Code: ${game.tvCode}',
-                    style: const TextStyle(
-                      color: Color(0xFF8E8E93),
+                    style: TextStyle(
+                      color: AppColors.mutedForeground,
                       fontSize: 12,
                     ),
                   ),
@@ -1826,18 +1826,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     app.voiceEnabled
                         ? Icons.volume_up_outlined
                         : Icons.volume_off_outlined,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
-                  title: const Text(
+                  title: Text(
                     'Audio Master',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: AppColors.foreground),
                   ),
                   subtitle: Text(
                     app.thisDeviceIsAudioMaster
                         ? 'This device is Audio Master'
                         : (app.voiceEnabled ? 'Voice on' : 'Voice muted'),
-                    style: const TextStyle(
-                      color: Color(0xFF8E8E93),
+                    style: TextStyle(
+                      color: AppColors.mutedForeground,
                       fontSize: 12,
                     ),
                   ),
@@ -1848,10 +1848,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 if (app.canUndo)
                   ListTile(
-                    leading: const Icon(Icons.undo, color: Colors.white),
-                    title: const Text(
+                    leading: Icon(Icons.undo, color: AppColors.foreground),
+                    title: Text(
                       'Undo Last Action',
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.foreground),
                     ),
                     onTap: () {
                       Navigator.pop(ctx);
@@ -1859,13 +1859,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     },
                   ),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.campaign_outlined,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
-                  title: const Text(
+                  title: Text(
                     'Announcements',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: AppColors.foreground),
                   ),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -1874,13 +1874,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 if (app.canRunCurrentGame && game.status.isActiveLive)
                   ListTile(
-                    leading: const Icon(
+                    leading: Icon(
                       Icons.timer_outlined,
-                      color: Colors.white,
+                      color: AppColors.foreground,
                     ),
-                    title: const Text(
+                    title: Text(
                       'Shot Clock',
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.foreground),
                     ),
                     onTap: () {
                       Navigator.pop(ctx);
@@ -1889,13 +1889,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                 if (app.isAdmin && game.players.any((p) => p.table > 1))
                   ListTile(
-                    leading: const Icon(
+                    leading: Icon(
                       Icons.table_chart_outlined,
-                      color: Colors.white,
+                      color: AppColors.foreground,
                     ),
-                    title: const Text(
+                    title: Text(
                       'Final Table Redraw',
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.foreground),
                     ),
                     onTap: () {
                       Navigator.pop(ctx);
@@ -1905,15 +1905,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 if (app.isAdmin &&
                     game.status != LiveGameStatus.completed &&
                     game.status != LiveGameStatus.cancelled) ...[
-                  const Divider(color: Color(0xFF242428)),
+                  Divider(color: AppColors.borderSubtle),
                   ListTile(
-                    leading: const Icon(
+                    leading: Icon(
                       Icons.cancel_outlined,
-                      color: Color(0xFFE24446),
+                      color: AppColors.primaryText,
                     ),
-                    title: const Text(
+                    title: Text(
                       'Cancel Tournament',
-                      style: TextStyle(color: Color(0xFFE24446)),
+                      style: TextStyle(color: AppColors.primaryText),
                     ),
                     onTap: () {
                       Navigator.pop(ctx);

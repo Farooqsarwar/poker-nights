@@ -1173,17 +1173,21 @@ class _ConfirmPlayersStep extends StatelessWidget {
                   color: AppColors.primary,
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Text(
-                  'Active players going to add-on phase: ',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.mutedForeground,
+                Expanded(
+                  child: Text(
+                    'Active players going to add-on phase: ',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
                   ),
                 ),
+                const SizedBox(width: AppSpacing.sm),
                 Text(
                   '${active.length}',
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
+                  style: AppTypography.mono(
+                    size: AppFontSizes.md,
+                    weight: FontWeight.w700,
+                    color: AppColors.primaryText,
                   ),
                 ),
               ],

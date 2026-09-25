@@ -2070,18 +2070,18 @@ class _PremiumEventHeader extends StatelessWidget {
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xFFE53935),
-                    Color(0xFFC62828),
-                    Color(0xFF9E1B1B),
+                    AppColors.primary,
+                    Color.alphaBlend(AppColors.black.withValues(alpha: 0.2), AppColors.primary),
+                    Color.alphaBlend(AppColors.black.withValues(alpha: 0.38), AppColors.primary),
                   ],
                 ),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
-                    color: Color(0x66D53032),
+                    color: AppColors.primary.withValues(alpha: 0.4),
                     blurRadius: 20,
                     offset: Offset(0, 6),
                   ),
@@ -2099,9 +2099,9 @@ class _PremiumEventHeader extends StatelessWidget {
                         size: 38,
                         iconSize: 22,
                         borderRadius: 12,
-                        backgroundColor: const Color(0x33000000),
-                        borderColor: Colors.white.withValues(alpha: 0.15),
-                        iconColor: Colors.white,
+                        backgroundColor: AppColors.shadowSoft,
+                        borderColor: AppColors.foreground.withValues(alpha: 0.15),
+                        iconColor: AppColors.foreground,
                         onPressed: () {
                           if (context.canPop()) {
                             context.pop();
@@ -2113,14 +2113,14 @@ class _PremiumEventHeader extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: const Color(0x33000000),
+                          color: AppColors.shadowSoft,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                          border: Border.all(color: AppColors.foreground.withValues(alpha: 0.15)),
                         ),
-                        child: const Text(
+                        child: Text(
                           "YOU'RE INVITED",
                           style: TextStyle(
-                            color: Colors.white,
+                            color: AppColors.foreground,
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 1.2,
@@ -2132,8 +2132,8 @@ class _PremiumEventHeader extends StatelessWidget {
                   const SizedBox(height: 18),
                   Text(
                     settings.name,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppColors.foreground,
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
                       height: 1.15,
@@ -2145,15 +2145,15 @@ class _PremiumEventHeader extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppColors.foreground,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           settings.date.isNotEmpty && settings.time.isNotEmpty
                               ? '${settings.date.split(',').first.toUpperCase()} · ${settings.time}'
                               : 'FRI · 8:00 PM',
-                          style: const TextStyle(
-                            color: Color(0xFFD53032),
+                          style: TextStyle(
+                            color: AppColors.primary,
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                           ),
@@ -2163,14 +2163,14 @@ class _PremiumEventHeader extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0x44000000),
+                          color: AppColors.shadowSoft,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                          border: Border.all(color: AppColors.foreground.withValues(alpha: 0.2)),
                         ),
                         child: Text(
                           '\$${settings.buyIn.toInt()} BUY-IN',
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: AppColors.foreground,
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                           ),
@@ -2199,7 +2199,7 @@ class _PremiumEventHeader extends StatelessWidget {
                   height: 140,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: AppColors.foreground.withValues(alpha: 0.08),
                   ),
                 ),
               ),
@@ -2211,21 +2211,21 @@ class _PremiumEventHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: const Color(0xFF161619),
+            color: AppColors.card,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF242428)),
+            border: Border.all(color: AppColors.borderSubtle),
           ),
           child: Row(
             children: [
-              const Icon(Icons.location_on_outlined, color: Color(0xFFE24446), size: 22),
+              Icon(Icons.location_on_outlined, color: AppColors.primaryText, size: 22),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   showAddress
                       ? (settings.location.isNotEmpty ? settings.location : "Marcus's place")
                       : 'Address shared at check-in',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: AppColors.foreground,
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
@@ -2233,10 +2233,10 @@ class _PremiumEventHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const Text(
+              Text(
                 '2.4 mi',
                 style: TextStyle(
-                  color: Color(0xFF8E8E93),
+                  color: AppColors.mutedForeground,
                   fontSize: 13,
                 ),
               ),

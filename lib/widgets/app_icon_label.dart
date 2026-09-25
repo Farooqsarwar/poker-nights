@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app/colors.dart';
+import 'app_button.dart';
 
 /// A compact label for buttons, optionally with a leading and/or trailing
 /// solid icon in the app's light-red color.
@@ -24,7 +25,8 @@ class AppIconLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveColor = color ?? AppColors.icon;
+    final effectiveColor =
+        color ?? AppButtonScope.foregroundOf(context) ?? AppColors.icon;
     return Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,

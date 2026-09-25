@@ -736,8 +736,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 icon: Icons.chevron_left,
                 size: 40,
                 borderRadius: 12,
-                backgroundColor: const Color(0xFF141416),
-                borderColor: const Color(0xFF242428),
+                backgroundColor: AppColors.card,
+                borderColor: AppColors.borderSubtle,
                 onPressed: () => _step == 1
                     ? context.go(RoutePaths.group)
                     : setState(() => _step--),
@@ -745,8 +745,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
               const Spacer(),
               Text(
                 'Step $_step of ${_steps.length}',
-                style: const TextStyle(
-                  color: Color(0xFF8E8E93),
+                style: TextStyle(
+                  color: AppColors.mutedForeground,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
@@ -759,14 +759,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           Container(
             height: 2.5,
             width: double.infinity,
-            color: const Color(0xFF242428),
+            color: AppColors.borderSubtle,
             child: FractionallySizedBox(
               alignment: Alignment.centerLeft,
               widthFactor: (_step / _steps.length.toDouble()).clamp(0.0, 1.0),
               child: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFFD53032), Color(0xFFFF5252)],
+                    colors: [AppColors.primary, AppColors.primaryHover],
                   ),
                 ),
               ),
@@ -828,8 +828,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       children: [
         Text(
           _steps[stepNumber - 1].toUpperCase(),
-          style: const TextStyle(
-            color: Color(0xFFE24446),
+          style: TextStyle(
+            color: AppColors.primaryText,
             fontSize: 12,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.5,
@@ -838,8 +838,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         const SizedBox(height: 6),
         Text(
           _steps[stepNumber - 1],
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: AppColors.foreground,
             fontSize: 26,
             fontWeight: FontWeight.w700,
           ),
@@ -851,8 +851,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   Widget _buildFormFieldLabel(String label) {
     return Text(
       label,
-      style: const TextStyle(
-        color: Color(0xFF8E8E93),
+      style: TextStyle(
+        color: AppColors.mutedForeground,
         fontSize: 13,
         fontWeight: FontWeight.w500,
       ),
@@ -870,22 +870,27 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       alignment: Alignment.centerLeft,
       decoration: BoxDecoration(
-        color: const Color(0xFF141416),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF242428)),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: AppColors.foreground,
           fontSize: 15,
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
           border: InputBorder.none,
+          // The container draws the field; without these the theme's
+          // outline and fill paint a second box inside it.
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          filled: false,
           hintText: placeholder,
-          hintStyle: const TextStyle(color: Color(0xFF555555)),
+          hintStyle: TextStyle(color: AppColors.onSurfaceHint),
           isDense: true,
           contentPadding: EdgeInsets.zero,
         ),
@@ -910,21 +915,21 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ),
                 decoration: BoxDecoration(
                   color: i == _step - 1
-                      ? const Color(0xFF381416)
-                      : const Color(0xFF141416),
+                      ? AppColors.primarySoft
+                      : AppColors.card,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: i == _step - 1
-                        ? const Color(0xFFD53032)
-                        : const Color(0xFF242428),
+                        ? AppColors.primary
+                        : AppColors.borderSubtle,
                   ),
                 ),
                 child: Text(
                   _steps[i].toUpperCase(),
                   style: TextStyle(
                     color: i == _step - 1
-                        ? const Color(0xFFE24446)
-                        : const Color(0xFF8E8E93),
+                        ? AppColors.primaryText
+                        : AppColors.mutedForeground,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.8,
@@ -946,9 +951,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0x66D53032),
+              color: AppColors.primary.withValues(alpha: 0.4),
               blurRadius: 16,
               offset: Offset(0, 4),
             ),
@@ -956,8 +961,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ),
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFD53032),
-            foregroundColor: Colors.white,
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.foreground,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -978,10 +983,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Eyebrow
-        const Text(
+        Text(
           'EVENT DETAILS',
           style: TextStyle(
-            color: Color(0xFFE24446),
+            color: AppColors.primaryText,
             fontSize: 12,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.5,
@@ -989,10 +994,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ),
         const SizedBox(height: 6),
         // Title
-        const Text(
+        Text(
           'New tournament',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.foreground,
             fontSize: 28,
             fontWeight: FontWeight.w700,
           ),
@@ -1046,14 +1051,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       alignment: Alignment.centerLeft,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF141416),
+                        color: AppColors.card,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF242428)),
+                        border: Border.all(color: AppColors.borderSubtle),
                       ),
                       child: Text(
                         _formatDisplayDate(_draft.date),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppColors.foreground,
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
                         ),
@@ -1095,14 +1100,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       alignment: Alignment.centerLeft,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF141416),
+                        color: AppColors.card,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF242428)),
+                        border: Border.all(color: AppColors.borderSubtle),
                       ),
                       child: Text(
                         _formatDisplayTime(_draft.time),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppColors.foreground,
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
                         ),
@@ -1141,16 +1146,16 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     height: 52,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF141416),
+                      color: AppColors.card,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF242428)),
+                      border: Border.all(color: AppColors.borderSubtle),
                     ),
                     child: Row(
                       children: [
-                        const Text(
+                        Text(
                           r'$',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: AppColors.foreground,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1160,15 +1165,20 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                           child: TextField(
                             controller: _buyInController,
                             keyboardType: TextInputType.number,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: AppColors.foreground,
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
                             ),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               border: InputBorder.none,
+                              // The container draws the field; without these the theme's
+                              // outline and fill paint a second box inside it.
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              filled: false,
                               hintText: '100',
-                              hintStyle: TextStyle(color: Color(0xFF555555)),
+                              hintStyle: TextStyle(color: AppColors.onSurfaceHint),
                               isDense: true,
                               contentPadding: EdgeInsets.zero,
                             ),
@@ -1195,9 +1205,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     height: 52,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF141416),
+                      color: AppColors.card,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF242428)),
+                      border: Border.all(color: AppColors.borderSubtle),
                     ),
                     child: Row(
                       children: [
@@ -1205,13 +1215,18 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                           child: TextField(
                             controller: _playersController,
                             keyboardType: TextInputType.number,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: AppColors.foreground,
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
                             ),
                             decoration: const InputDecoration(
                               border: InputBorder.none,
+                              // The container draws the field; without these the theme's
+                              // outline and fill paint a second box inside it.
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              filled: false,
                               isDense: true,
                               contentPadding: EdgeInsets.zero,
                             ),
@@ -1227,10 +1242,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                             },
                           ),
                         ),
-                        const Text(
+                        Text(
                           'from group',
                           style: TextStyle(
-                            color: Color(0xFF8E8E93),
+                            color: AppColors.mutedForeground,
                             fontSize: 12,
                             fontWeight: FontWeight.w400,
                           ),

@@ -79,6 +79,7 @@ class AppColors {
   // ── Avatar ─────────────────────────────────────────────────────────────────
   static List<Color> get avatarPalette => currentPalette.avatarPalette;
   static Color avatarColorFor(String name) => currentPalette.avatarColorFor(name);
+  static Color avatarTintFor(String name) => currentPalette.avatarTintFor(name);
 
   // ── Gradient helpers ───────────────────────────────────────────────────────
   static LinearGradient get crimsonShimmer => currentPalette.shimmerGradient;

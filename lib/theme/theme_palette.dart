@@ -120,6 +120,23 @@ class ThemePalette {
     const Color(0xFF455A64),
   ];
 
+  /// Hues for the redesign's tinted avatars (a soft disc with a coloured
+  /// initial). Drawn from the semantic colours so every palette stays in
+  /// key; gold is left out, as it is reserved for first place and Premium.
+  List<Color> get avatarTints => [primary, success, warning, mutedForeground];
+
+  Color avatarTintFor(String name) {
+    final key = name.trim();
+    if (key.isEmpty) return avatarTints.last;
+    // Hash the whole name, not the initial: first letters cluster ("A",
+    // "M") and gave a whole table the same colour.
+    var h = 0;
+    for (final c in key.codeUnits) {
+      h = (h * 31 + c) & 0x7fffffff;
+    }
+    return avatarTints[h % avatarTints.length];
+  }
+
   Color avatarColorFor(String name) {
     if (name.isEmpty) return avatarPalette.first;
     return avatarPalette[name.codeUnitAt(0) % avatarPalette.length];

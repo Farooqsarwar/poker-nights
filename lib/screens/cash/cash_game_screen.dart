@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -136,10 +137,10 @@ class _CashGameScreenState extends State<CashGameScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF121417),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: Color(0xFF22262B)),
+        side: BorderSide(color: AppColors.borderSubtle),
       ),
       builder: (bottomSheetContext) {
         return StatefulBuilder(
@@ -165,7 +166,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
                             style: AppTypography.display(
                               size: 20,
                               weight: FontWeight.w700,
-                              color: Colors.white,
+                              color: AppColors.foreground,
                             ),
                           ),
                           InkWell(
@@ -174,12 +175,12 @@ class _CashGameScreenState extends State<CashGameScreen> {
                                 _playerControllers.add(TextEditingController());
                               });
                             },
-                            child: const Padding(
+                            child: Padding(
                               padding: EdgeInsets.all(6),
                               child: Text(
                                 '+ Add seat',
                                 style: TextStyle(
-                                  color: Color(0xFFD53032),
+                                  color: AppColors.primary,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -196,15 +197,15 @@ class _CashGameScreenState extends State<CashGameScreen> {
                               Container(
                                 width: 28,
                                 height: 28,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF22262B),
+                                decoration: BoxDecoration(
+                                  color: AppColors.borderSubtle,
                                   shape: BoxShape.circle,
                                 ),
                                 alignment: Alignment.center,
                                 child: Text(
                                   '${i + 1}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF8E8E93),
+                                  style: TextStyle(
+                                    color: AppColors.mutedForeground,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -217,23 +218,28 @@ class _CashGameScreenState extends State<CashGameScreen> {
                                     horizontal: 14,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0F1113),
+                                    color: AppColors.card,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: const Color(0xFF22262B),
+                                      color: AppColors.borderSubtle,
                                     ),
                                   ),
                                   child: TextField(
                                     controller: _playerControllers[i],
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    style: TextStyle(
+                                      color: AppColors.foreground,
                                       fontSize: 14,
                                     ),
-                                    decoration: const InputDecoration(
+                                    decoration: InputDecoration(
                                       border: InputBorder.none,
+                                      // The container draws the field; without these the theme's
+                                      // outline and fill paint a second box inside it.
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      filled: false,
                                       hintText: 'Player name',
                                       hintStyle: TextStyle(
-                                        color: Color(0xFF71767B),
+                                        color: AppColors.onSurfaceHint,
                                       ),
                                       isDense: true,
                                       contentPadding: EdgeInsets.symmetric(
@@ -246,10 +252,10 @@ class _CashGameScreenState extends State<CashGameScreen> {
                               if (_playerControllers.length > 2) ...[
                                 const SizedBox(width: 8),
                                 IconButton(
-                                  icon: const Icon(
+                                  icon: Icon(
                                     Icons.close,
                                     size: 18,
-                                    color: Color(0xFF71767B),
+                                    color: AppColors.onSurfaceHint,
                                   ),
                                   onPressed: () {
                                     setSheetState(() {
@@ -264,7 +270,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
                       const SizedBox(height: 16),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFD53032),
+                          backgroundColor: AppColors.primary,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -274,10 +280,10 @@ class _CashGameScreenState extends State<CashGameScreen> {
                           Navigator.of(bottomSheetContext).pop();
                           _start(app);
                         },
-                        child: const Text(
+                        child: Text(
                           'Confirm & Start',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: AppColors.foreground,
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                           ),
@@ -297,10 +303,10 @@ class _CashGameScreenState extends State<CashGameScreen> {
   void _chooseChipSet(BuildContext context, AppProvider app) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF121417),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: Color(0xFF22262B)),
+        side: BorderSide(color: AppColors.borderSubtle),
       ),
       builder: (bottomSheetContext) {
         return SafeArea(
@@ -314,17 +320,17 @@ class _CashGameScreenState extends State<CashGameScreen> {
                   'Select Chip Set',
                   style: AppTypography.bodyLg.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  title: const Text(
+                  title: Text(
                     'Home set · 5 colors',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: AppColors.foreground),
                   ),
                   trailing: _selectedChipSetId == null
-                      ? const Icon(Icons.check, color: Color(0xFFD53032))
+                      ? Icon(Icons.check, color: AppColors.primary)
                       : null,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -338,10 +344,10 @@ class _CashGameScreenState extends State<CashGameScreen> {
                   ListTile(
                     title: Text(
                       '${set.name} · ${set.chips.length} colors',
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.foreground),
                     ),
                     trailing: _selectedChipSetId == set.id
-                        ? const Icon(Icons.check, color: Color(0xFFD53032))
+                        ? Icon(Icons.check, color: AppColors.primary)
                         : null,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -403,14 +409,14 @@ class _CashGameScreenState extends State<CashGameScreen> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2A1215),
+                  color: AppColors.destructiveSoft,
                   borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(color: const Color(0x44EF4444)),
+                  border: Border.all(color: AppColors.destructive.withValues(alpha: 0.3)),
                 ),
-                child: const Text(
+                child: Text(
                   'CASH GAME',
                   style: TextStyle(
-                    color: Color(0xFFEF4444),
+                    color: AppColors.destructiveText,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.0,
@@ -427,7 +433,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
             style: AppTypography.display(
               size: 32,
               weight: FontWeight.w700,
-              color: Colors.white,
+              color: AppColors.foreground,
             ),
           ),
           const SizedBox(height: 24),
@@ -436,7 +442,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
           Text(
             'Stakes',
             style: AppTypography.bodySm.copyWith(
-              color: const Color(0xFF8E8E93),
+              color: AppColors.mutedForeground,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -444,9 +450,9 @@ class _CashGameScreenState extends State<CashGameScreen> {
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F1113),
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF22262B)),
+              border: Border.all(color: AppColors.borderSubtle),
             ),
             child: Row(
               children: [
@@ -486,7 +492,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
                     Text(
                       'Min buy-in',
                       style: AppTypography.bodySm.copyWith(
-                        color: const Color(0xFF8E8E93),
+                        color: AppColors.mutedForeground,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -503,7 +509,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
                     Text(
                       'Max buy-in',
                       style: AppTypography.bodySm.copyWith(
-                        color: const Color(0xFF8E8E93),
+                        color: AppColors.mutedForeground,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -520,7 +526,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
           Text(
             'Chip set',
             style: AppTypography.bodySm.copyWith(
-              color: const Color(0xFF8E8E93),
+              color: AppColors.mutedForeground,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -531,24 +537,24 @@ class _CashGameScreenState extends State<CashGameScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F1113),
+                color: AppColors.card,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF22262B)),
+                border: Border.all(color: AppColors.borderSubtle),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     chipSetName,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppColors.foreground,
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const Icon(
+                  Icon(
                     Icons.keyboard_arrow_down,
-                    color: Color(0xFF8E8E93),
+                    color: AppColors.mutedForeground,
                     size: 22,
                   ),
                 ],
@@ -561,9 +567,9 @@ class _CashGameScreenState extends State<CashGameScreen> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF121417),
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF22262B)),
+              border: Border.all(color: AppColors.borderSubtle),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -571,10 +577,10 @@ class _CashGameScreenState extends State<CashGameScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Track settlement',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.foreground,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
@@ -589,7 +595,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
                 Text(
                   'Auto-calculate who owes who at the end.',
                   style: AppTypography.bodyXs.copyWith(
-                    color: const Color(0xFF8E8E93),
+                    color: AppColors.mutedForeground,
                     fontSize: 13,
                   ),
                 ),
@@ -606,20 +612,20 @@ class _CashGameScreenState extends State<CashGameScreen> {
               height: 56,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xFFD53032),
+                color: AppColors.primary,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
-                    color: Color(0x66D53032),
+                    color: AppColors.primary.withValues(alpha: 0.4),
                     blurRadius: 18,
                     offset: Offset(0, 4),
                   ),
                 ],
               ),
-              child: const Text(
+              child: Text(
                 'Start session',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.foreground,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
@@ -645,12 +651,12 @@ class _CashGameScreenState extends State<CashGameScreen> {
         padding: const EdgeInsets.symmetric(vertical: 12),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFD53032) : Colors.transparent,
+          color: selected ? AppColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           boxShadow: selected
-              ? const [
+              ? [
                   BoxShadow(
-                    color: Color(0x44D53032),
+                    color: AppColors.primarySoftBorder,
                     blurRadius: 8,
                     offset: Offset(0, 2),
                   ),
@@ -660,7 +666,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : const Color(0xFF8E8E93),
+            color: selected ? AppColors.foreground : AppColors.mutedForeground,
             fontSize: 15,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           ),
@@ -676,16 +682,16 @@ class _CashGameScreenState extends State<CashGameScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F1113),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF22262B)),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       child: Row(
         children: [
           Text(
             prefix,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: AppColors.foreground,
               fontSize: 16,
               fontWeight: FontWeight.w600,
             ),
@@ -697,13 +703,18 @@ class _CashGameScreenState extends State<CashGameScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: AppColors.foreground,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
               decoration: const InputDecoration(
                 border: InputBorder.none,
+                // The container draws the field; without these the theme's
+                // outline and fill paint a second box inside it.
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(vertical: 12),
               ),

@@ -9,6 +9,7 @@ import '../../constants/app_constants.dart';
 import '../../models/cash_game.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
+import '../../widgets/app_avatar.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
@@ -158,10 +159,10 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   void _showSessionMenu(BuildContext context, AppProvider app) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF121417),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: Color(0xFF22262B)),
+        side: BorderSide(color: AppColors.borderSubtle),
       ),
       builder: (bottomSheetContext) {
         return SafeArea(
@@ -176,18 +177,18 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   style: AppTypography.display(
                     size: 20,
                     weight: FontWeight.w700,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.scale_outlined,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
-                  title: const Text(
+                  title: Text(
                     'Reconcile ledger',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: AppColors.foreground),
                   ),
                   onTap: () {
                     Navigator.of(bottomSheetContext).pop();
@@ -195,13 +196,13 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.person_add_outlined,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
-                  title: const Text(
+                  title: Text(
                     'Add new player',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: AppColors.foreground),
                   ),
                   onTap: () {
                     Navigator.of(bottomSheetContext).pop();
@@ -209,13 +210,13 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.stop_circle_outlined,
-                    color: Color(0xFFEF4444),
+                    color: AppColors.destructiveText,
                   ),
-                  title: const Text(
+                  title: Text(
                     'End game',
-                    style: TextStyle(color: Color(0xFFEF4444)),
+                    style: TextStyle(color: AppColors.destructiveText),
                   ),
                   onTap: () {
                     Navigator.of(bottomSheetContext).pop();
@@ -237,10 +238,10 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   ) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF121417),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: Color(0xFF22262B)),
+        side: BorderSide(color: AppColors.borderSubtle),
       ),
       builder: (sheetContext) {
         return SafeArea(
@@ -252,25 +253,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: _getAvatarBg(player.name),
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        player.name.isNotEmpty
-                            ? player.name[0].toUpperCase()
-                            : '?',
-                        style: TextStyle(
-                          color: _getAvatarTextColor(player.name),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
+                    AppAvatar(name: player.name, size: AppAvatarSize.lg),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
@@ -281,13 +264,13 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                             style: AppTypography.display(
                               size: 18,
                               weight: FontWeight.w700,
-                              color: Colors.white,
+                              color: AppColors.foreground,
                             ),
                           ),
                           Text(
                             'In ${player.totalBuyIns.toInt()} · Stack ${player.stack.toInt()}',
-                            style: const TextStyle(
-                              color: Color(0xFF8E8E93),
+                            style: TextStyle(
+                              color: AppColors.mutedForeground,
                               fontSize: 13,
                             ),
                           ),
@@ -299,13 +282,13 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 const SizedBox(height: 20),
                 if (!player.isCashedOut) ...[
                   ListTile(
-                    leading: const Icon(
+                    leading: Icon(
                       Icons.add_circle_outline,
-                      color: Color(0xFF4ADE80),
+                      color: AppColors.successText,
                     ),
-                    title: const Text(
+                    title: Text(
                       'Buy-in / Rebuy',
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.foreground),
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -319,13 +302,13 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                     },
                   ),
                   ListTile(
-                    leading: const Icon(
+                    leading: Icon(
                       Icons.monetization_on_outlined,
-                      color: Color(0xFFF59E0B),
+                      color: AppColors.warningText,
                     ),
-                    title: const Text(
+                    title: Text(
                       'Cash out',
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.foreground),
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -340,10 +323,10 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   ),
                 ],
                 ListTile(
-                  leading: const Icon(Icons.edit_outlined, color: Colors.white),
-                  title: const Text(
+                  leading: Icon(Icons.edit_outlined, color: AppColors.foreground),
+                  title: Text(
                     'Edit player stack & details',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: AppColors.foreground),
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -359,24 +342,6 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
         );
       },
     );
-  }
-
-  static Color _getAvatarBg(String name) {
-    final lower = name.toLowerCase();
-    if (lower.startsWith('a')) return const Color(0xFF381A1F);
-    if (lower.startsWith('m')) return const Color(0xFF1A2F22);
-    if (lower.startsWith('d')) return const Color(0xFF1A2238);
-    if (lower.startsWith('s')) return const Color(0xFF332917);
-    return const Color(0xFF281F38);
-  }
-
-  static Color _getAvatarTextColor(String name) {
-    final lower = name.toLowerCase();
-    if (lower.startsWith('a')) return const Color(0xFFF87171);
-    if (lower.startsWith('m')) return const Color(0xFF4ADE80);
-    if (lower.startsWith('d')) return const Color(0xFF60A5FA);
-    if (lower.startsWith('s')) return const Color(0xFFFBBF24);
-    return const Color(0xFFC084FC);
   }
 
   @override
@@ -447,12 +412,12 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   Container(
                     width: 9,
                     height: 9,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF22C55E),
+                    decoration: BoxDecoration(
+                      color: AppColors.successText,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Color(0x6622C55E),
+                          color: AppColors.success.withValues(alpha: 0.4),
                           blurRadius: 6,
                           spreadRadius: 1,
                         ),
@@ -462,8 +427,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   const SizedBox(width: 8),
                   Text(
                     'LIVE · ${_num(settings.smallBlind)} / ${_num(settings.bigBlind)}',
-                    style: const TextStyle(
-                      color: Color(0xFFE2E8F0),
+                    style: TextStyle(
+                      color: AppColors.secondaryForeground,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.8,
@@ -474,7 +439,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
               SquircleIconButton(
                 icon: Icons.more_vert,
                 iconSize: 22,
-                iconColor: const Color(0xFF8E8E93),
+                iconColor: AppColors.mutedForeground,
                 tooltip: 'Session options',
                 onPressed: () => _showSessionMenu(context, app),
               ),
@@ -488,7 +453,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
             style: AppTypography.display(
               size: 30,
               weight: FontWeight.w700,
-              color: Colors.white,
+              color: AppColors.foreground,
             ),
           ),
           const SizedBox(height: 20),
@@ -524,27 +489,27 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFF121417),
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF22262B)),
+              border: Border.all(color: AppColors.borderSubtle),
             ),
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Expected in play',
                       style: TextStyle(
-                        color: Color(0xFF8E8E93),
+                        color: AppColors.mutedForeground,
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
                       ),
                     ),
                     Text(
                       Formatters.prize(session.expectedInPlay.toInt()),
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppColors.foreground,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
@@ -555,10 +520,10 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Difference',
                       style: TextStyle(
-                        color: Color(0xFF8E8E93),
+                        color: AppColors.mutedForeground,
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
                       ),
@@ -571,8 +536,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                           : '${session.difference.toInt()}',
                       style: TextStyle(
                         color: session.difference >= 0
-                            ? const Color(0xFF4ADE80)
-                            : const Color(0xFFF87171),
+                            ? AppColors.successText
+                            : AppColors.destructiveText,
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),
@@ -593,18 +558,18 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 style: AppTypography.bodyXs.copyWith(
                   letterSpacing: 1.2,
                   fontWeight: FontWeight.w600,
-                  color: const Color(0xFF71767B),
+                  color: AppColors.onSurfaceHint,
                 ),
               ),
               InkWell(
                 onTap: () =>
                     _openAction(const _CashAction(_CashActionType.buyIn, null)),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   child: Text(
                     '+ Add',
                     style: TextStyle(
-                      color: Color(0xFFEF4444),
+                      color: AppColors.destructiveText,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
@@ -635,20 +600,20 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
               height: 56,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xFFD53032),
+                color: AppColors.primary,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
-                    color: Color(0x66D53032),
+                    color: AppColors.primary.withValues(alpha: 0.4),
                     blurRadius: 18,
                     offset: Offset(0, 4),
                   ),
                 ],
               ),
-              child: const Text(
+              child: Text(
                 'Cash out & settle',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.foreground,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
@@ -675,9 +640,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF121417),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF22262B), width: 1),
+        border: Border.all(color: AppColors.borderSubtle, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -689,7 +654,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
               style: AppTypography.display(
                 size: 26,
                 weight: FontWeight.w700,
-                color: Colors.white,
+                color: AppColors.foreground,
               ),
             ),
           ),
@@ -697,7 +662,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
           Text(
             label,
             style: AppTypography.bodySm.copyWith(
-              color: const Color(0xFF8E8E93),
+              color: AppColors.mutedForeground,
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -724,29 +689,13 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFF121417),
+          color: AppColors.card,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF22262B)),
+          border: Border.all(color: AppColors.borderSubtle),
         ),
         child: Row(
           children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: _getAvatarBg(player.name),
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                player.name.isNotEmpty ? player.name[0].toUpperCase() : '?',
-                style: TextStyle(
-                  color: _getAvatarTextColor(player.name),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                ),
-              ),
-            ),
+            AppAvatar(name: player.name, size: AppAvatarSize.lg),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -754,8 +703,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 children: [
                   Text(
                     player.name,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppColors.foreground,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -763,8 +712,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   const SizedBox(height: 3),
                   Text(
                     'In ${player.totalBuyIns.toInt()} · ${player.buyInCount} buy-in${player.buyInCount == 1 ? '' : 's'}',
-                    style: const TextStyle(
-                      color: Color(0xFF8E8E93),
+                    style: TextStyle(
+                      color: AppColors.mutedForeground,
                       fontSize: 13,
                     ),
                   ),
@@ -776,13 +725,13 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF22262B),
+                  color: AppColors.borderSubtle,
                   borderRadius: BorderRadius.circular(AppRadius.pill),
                 ),
-                child: const Text(
+                child: Text(
                   'OUT',
                   style: TextStyle(
-                    color: Color(0xFF8E8E93),
+                    color: AppColors.mutedForeground,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                   ),
@@ -794,8 +743,8 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
               netText,
               style: TextStyle(
                 color: net >= 0
-                    ? const Color(0xFF4ADE80)
-                    : const Color(0xFFF87171),
+                    ? AppColors.successText
+                    : AppColors.destructiveText,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
               ),
@@ -920,9 +869,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Has cashed out',
-                  style: TextStyle(color: Colors.white),
+                  style: TextStyle(color: AppColors.foreground),
                 ),
                 Switch(
                   value: _editHasCashedOut,
@@ -1014,10 +963,10 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                     value: _forceEnd,
                     onChanged: (v) => setState(() => _forceEnd = v ?? false),
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Force end anyway with note',
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.foreground),
                     ),
                   ),
                 ],
@@ -1031,9 +980,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                 ),
               ],
             ] else ...[
-              const Text(
+              Text(
                 'All stacks reconcile perfectly. Would you like to finish this session?',
-                style: TextStyle(color: Color(0xFF8E8E93)),
+                style: TextStyle(color: AppColors.mutedForeground),
               ),
             ],
             const SizedBox(height: AppSpacing.lg),

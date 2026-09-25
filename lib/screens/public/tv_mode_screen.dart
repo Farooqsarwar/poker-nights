@@ -343,14 +343,26 @@ class _TVLayoutState extends State<_TVLayout> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
-                          flex: 3,
+                          // The scoreboard is the point of the TV; it gets
+                          // the larger share beside the rotating panel.
+                          flex: 5,
                           child: Column(
                             children: [
                               Expanded(
-                                child: SingleChildScrollView(
-                                  child: TournamentDisplayBlock(
-                                    game: game,
-                                    showPayoutAmounts: false,
+                                // Always the wide scoreboard layout (the TV
+                                // frame), laid out at its reference width and
+                                // scaled to the column. Given the column's
+                                // own width it fell back to the phone layout
+                                // at phone-sized type.
+                                child: FittedBox(
+                                  fit: BoxFit.contain,
+                                  alignment: Alignment.topCenter,
+                                  child: SizedBox(
+                                    width: 1536,
+                                    child: TournamentDisplayBlock(
+                                      game: game,
+                                      showPayoutAmounts: false,
+                                    ),
                                   ),
                                 ),
                               ),

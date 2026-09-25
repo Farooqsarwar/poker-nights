@@ -153,7 +153,7 @@ class _AppTextFieldState extends State<AppTextField> {
               fillColor: Colors.transparent, // Let Glass surface show through
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
-                vertical: 12,
+                vertical: 14,
               ),
               border: InputBorder.none,
               enabledBorder: InputBorder.none,

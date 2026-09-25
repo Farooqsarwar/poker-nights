@@ -83,4 +83,5 @@ class AppColors {
   static LinearGradient get crimsonShimmer => currentPalette.shimmerGradient;
   static RadialGradient get luxuryGradient => currentPalette.luxuryGradient;
   static RadialGradient get feltBackground => currentPalette.feltBackground;
+  static RadialGradient get topGlow => currentPalette.topGlow;
 }

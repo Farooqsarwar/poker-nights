@@ -377,22 +377,24 @@ class Glass {
         ? AppColors.destructive.withValues(alpha: 0.70)
         : focused
             ? AppColors.ring.withValues(alpha: 0.80)
-            : AppColors.border.withValues(alpha: borderOpacity + 0.06);
+            : AppColors.border.withValues(alpha: 0.75);
+    // A solid field on the dark ground with a hairline you can actually see,
+    // per the redesign. This used to set `color` AND `gradient`; Flutter drops
+    // the colour when a gradient is present, so the fill never painted and the
+    // input was only a faint outline on the page.
     return BoxDecoration(
-      color: AppColors.card.withValues(alpha: inputOpacity),
-      borderRadius: BorderRadius.circular(AppRadius.sm),
+      color: AppColors.card,
+      borderRadius: BorderRadius.circular(AppRadius.md),
       border: Border.all(color: borderColor),
       boxShadow: focused
           ? [
               BoxShadow(
-                color: AppColors.ring.withValues(alpha: 0.10),
-                blurRadius: 12,
-                spreadRadius: -1,
+                color: AppColors.ring.withValues(alpha: 0.18),
+                blurRadius: 14,
+                spreadRadius: -2,
               ),
-              ...neumorphicUp,
             ]
-          : neumorphicUp,
-      gradient: innerHighlight,
+          : null,
     );
   }
 

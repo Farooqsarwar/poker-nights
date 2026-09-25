@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -12,15 +13,22 @@ import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../services/recovery_service.dart';
 import '../../utils/formatters.dart';
-import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_alert_banner.dart';
+import '../../widgets/app_eyebrow.dart';
 import '../../widgets/app_icon_label.dart';
+import '../../widgets/app_tag.dart';
+import '../../widgets/app_text_field.dart';
 import '../../widgets/app_timer.dart';
 import '../../widgets/app_avatar.dart';
-import '../../widgets/brand_lockup.dart';
+import '../../widgets/code_input.dart';
+import '../../widgets/form_screen_header.dart';
+import '../../widgets/icon_tile.dart';
 import '../../widgets/min_tap_target.dart';
+import '../../widgets/onboarding_scaffold.dart';
+import '../../widgets/prompt_link.dart';
+import '../../widgets/stat_rows_card.dart';
 
 enum _GuestStep {
   enterCode,
@@ -300,23 +308,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.xxl,
-            vertical: AppSpacing.xxxl,
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 384),
-              child: _buildBody(app, game),
-            ),
-          ),
-        ),
-      ),
-    );
+    return OnboardingScaffold(child: _buildBody(app, game));
   }
 
   Widget _buildBody(AppProvider app, LiveGame? game) {
@@ -416,23 +408,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           },
         ),
         // Header
-        Column(
-          children: [
-            const PokerNightLogo(size: 40),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              game.settings.name,
-              style: AppTypography.display(size: AppFontSizes.xl),
-            ),
-            Text(
-              showAddress
-                  ? '${game.settings.date} · ${game.settings.location}'
-                  : game.settings.date,
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ],
+        FormScreenHeader(
+          centered: true,
+          titleSize: AppFontSizes.xxl,
+          leading: const IconTile(label: '♠', size: 40),
+          title: game.settings.name,
+          subtitle: showAddress
+              ? '${game.settings.date} · ${game.settings.location}'
+              : game.settings.date,
         ),
         const SizedBox(height: AppSpacing.xl),
         // Progress
@@ -494,75 +477,43 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: AppSpacing.xl),
-        const PokerNightLogo(size: 80),
-        const SizedBox(height: AppSpacing.lg),
-        Text(
-          'Join as guest',
-          textAlign: TextAlign.center,
-          style: AppTypography.display(size: AppFontSizes.xxl),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          'Enter the code from the admin or invitation link',
-          textAlign: TextAlign.center,
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.mutedForeground,
-          ),
+        const SizedBox(height: AppSpacing.md),
+        const FormScreenHeader(
+          centered: true,
+          titleSize: 24,
+          leading: IconTile(label: '♠', size: 52),
+          title: 'Join as guest',
+          subtitle: 'Enter the code from the admin or invitation link',
         ),
         const SizedBox(height: AppSpacing.xl),
         AppCard(
-          padding: const EdgeInsets.all(AppSpacing.xl),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Game code',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              TextField(
+              const AppEyebrow('Game code', muted: true),
+              const SizedBox(height: AppSpacing.sm),
+              CodeInput(
                 controller: _codeController,
+                hint: 'ENTER CODE',
+                semanticLabel: 'Game code',
                 autofocus: true,
                 maxLength: 8,
-                textCapitalization: TextCapitalization.characters,
-                textAlign: TextAlign.center,
-                style: AppTypography.monoXl.copyWith(letterSpacing: 3),
+                hasError: _codeError != null,
                 onChanged: (_) {
                   if (_codeError != null) setState(() => _codeError = null);
                 },
-                decoration: InputDecoration(
-                  counterText: '',
-                  hintText: 'ENTER CODE',
-                  hintStyle: AppTypography.monoXl.copyWith(
-                    color: AppColors.onSurfaceHint,
-                    letterSpacing: 3,
-                  ),
-                  isDense: true,
-                  filled: true,
-                  fillColor: AppColors.card,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 13,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    borderSide: BorderSide(color: AppColors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    borderSide: BorderSide(color: AppColors.ring),
-                  ),
-                ),
               ),
               if (_codeError != null) ...[
                 const SizedBox(height: AppSpacing.sm),
-                Text(
-                  _codeError!,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.destructiveText,
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    _codeError!,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.destructiveText,
+                    ),
                   ),
                 ),
               ],
@@ -571,11 +522,12 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                 child: AppButton(
                   variant: AppButtonVariant.primary,
                   size: AppButtonSize.md,
+                  width: 128,
                   onPressed: _submitCode,
                   child: const Text('Join'),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.xs),
               Text.rich(
                 TextSpan(
                   children: [
@@ -593,11 +545,11 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             vertical: 12,
-                            horizontal: 8,
+                            horizontal: 4,
                           ),
                           child: Text(
                             'FP2608',
-                            style: AppTypography.monoSm.copyWith(
+                            style: AppTypography.monoXs.copyWith(
                               color: AppColors.primaryText,
                               fontWeight: FontWeight.w700,
                             ),
@@ -612,38 +564,11 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        // Wrap, not Row — same reason as the identical block in JoinScreen:
-        // two unbounded Texts that together exceed a 320px phone's content
-        // width. "Sign in" moves to its own line rather than overflowing.
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Have an account? ',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-            InkWell(
-              onTap: () => context.go(RoutePaths.login),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 8,
-                ),
-                child: Text(
-                  'Sign in',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.primaryText,
-                    decoration: TextDecoration.underline,
-                    decorationColor: AppColors.primary,
-                  ),
-                ),
-              ),
-            ),
-          ],
+        const SizedBox(height: AppSpacing.md),
+        PromptLink(
+          prompt: 'Have an account? ',
+          action: 'Sign in',
+          onTap: () => context.go(RoutePaths.login),
         ),
       ],
     );
@@ -669,17 +594,12 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   Widget _buildEventIntro(LiveGame game, {required bool showAddress}) {
     final s = game.settings;
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'You’re invited to',
-            style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
+          const AppEyebrow('You’re invited to', textAlign: TextAlign.center),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             s.name,
             textAlign: TextAlign.center,
@@ -722,9 +642,10 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             fullWidth: true,
             size: AppButtonSize.lg,
             onPressed: () => setState(() => _step = _GuestStep.chooseInviter),
-            child: const AppIconLabel(
+            child: AppIconLabel(
               label: 'Claim My Guest Place',
               trailing: Icons.arrow_forward,
+              color: AppColors.primaryForeground,
             ),
           ),
         ],
@@ -743,20 +664,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         )
         .toList();
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Who invited you?',
-            style: AppTypography.display(size: AppFontSizes.lg),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Select the Registered Group Member who brought you along.',
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
-            ),
+          const _StepTitle(
+            title: 'Who invited you?',
+            subtitle:
+                'Select the Registered Group Member who brought you along.',
           ),
           const SizedBox(height: AppSpacing.md),
           if (invited.isEmpty)
@@ -785,40 +700,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             for (final p in invited)
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: InkWell(
+                child: _ChoiceRow(
+                  selected: _selectedInviter == p.id,
                   onTap: () => setState(() => _selectedInviter = p.id),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Container(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: _selectedInviter == p.id
-                          ? AppColors.primarySoft
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(
-                        color: _selectedInviter == p.id
-                            ? AppColors.primary
-                            : AppColors.border,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        AppAvatar(name: p.name),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Text(
-                            p.name,
-                            style: AppTypography.bodySm.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        AppBadge(
-                          label: '${_freeSlotsFor(game, p)} free',
-                          variant: AppBadgeVariant.green,
-                        ),
-                      ],
-                    ),
+                  leading: AppAvatar(name: p.name),
+                  label: p.name,
+                  trailing: AppTag(
+                    '${_freeSlotsFor(game, p)} free',
+                    tone: AppTagTone.success,
                   ),
                 ),
               ),
@@ -826,16 +715,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           AppButton(
             variant: AppButtonVariant.primary,
             fullWidth: true,
+            size: AppButtonSize.lg,
             onPressed: _selectedInviter == null
                 ? null
                 : () => setState(() => _step = _GuestStep.chooseSlot),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Continue'),
-                SizedBox(width: 6),
-                Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
-              ],
+            child: AppIconLabel(
+              label: 'Continue',
+              trailing: Icons.arrow_forward,
+              color: AppColors.primaryForeground,
             ),
           ),
         ],
@@ -850,24 +737,21 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     List<Player> players,
   ) {
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _BackLink(
-            onTap: () => setState(() => _step = _GuestStep.chooseInviter),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Choose your guest slot',
-            style: AppTypography.display(size: AppFontSizes.lg),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _BackLink(
+              onTap: () => setState(() => _step = _GuestStep.chooseInviter),
+            ),
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            '${inviter?.name ?? 'The admin'} is bringing $availableSlots guest${availableSlots > 1 ? 's' : ''}. Which slot are you?',
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
-            ),
+          _StepTitle(
+            title: 'Choose your guest slot',
+            subtitle:
+                '${inviter?.name ?? 'The admin'} is bringing $availableSlots guest${availableSlots > 1 ? 's' : ''}. Which slot are you?',
           ),
           const SizedBox(height: AppSpacing.md),
           for (var slot = 1; slot <= availableSlots; slot++) ...[
@@ -889,53 +773,20 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                     reservedName != null &&
                     reservedName.isNotEmpty;
 
-                return InkWell(
+                return _ChoiceRow(
+                  selected: _selectedSlot == slot,
+                  disabled: taken,
                   onTap: taken
                       ? null
                       : () => setState(() => _selectedSlot = slot),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Container(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: taken
-                          ? AppColors.muted
-                          : (_selectedSlot == slot
-                                ? AppColors.primarySoft
-                                : Colors.transparent),
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(
-                        color: _selectedSlot == slot
-                            ? AppColors.primary
-                            : AppColors.border,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          isReserved
-                              ? "Reserved for $reservedName"
-                              : "${inviter?.name ?? ''}'s Guest $slot",
-                          style: AppTypography.bodySm.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: taken ? AppColors.mutedForeground : null,
-                          ),
-                        ),
-                        if (taken) ...[
-                          const Spacer(),
-                          const AppBadge(
-                            label: 'Taken',
-                            variant: AppBadgeVariant.red,
-                          ),
-                        ] else if (isReserved) ...[
-                          const Spacer(),
-                          const AppBadge(
-                            label: 'Reserved',
-                            variant: AppBadgeVariant.accent,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                  label: isReserved
+                      ? "Reserved for $reservedName"
+                      : "${inviter?.name ?? ''}'s Guest $slot",
+                  trailing: taken
+                      ? const AppTag('Taken', tone: AppTagTone.danger)
+                      : isReserved
+                      ? const AppTag('Reserved', tone: AppTagTone.primary)
+                      : null,
                 );
               },
             ),
@@ -945,16 +796,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           AppButton(
             variant: AppButtonVariant.primary,
             fullWidth: true,
+            size: AppButtonSize.lg,
             onPressed: _selectedSlot == null
                 ? null
                 : () => setState(() => _step = _GuestStep.enterName),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Continue'),
-                SizedBox(width: 6),
-                Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
-              ],
+            child: AppIconLabel(
+              label: 'Continue',
+              trailing: Icons.arrow_forward,
+              color: AppColors.primaryForeground,
             ),
           ),
         ],
@@ -964,72 +813,46 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
 
   Widget _buildEnterName(Player? inviter) {
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _BackLink(onTap: () => setState(() => _step = _GuestStep.chooseSlot)),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Enter your name',
-            style: AppTypography.display(size: AppFontSizes.lg),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'This is shown to the admin and displayed on the seating plan.',
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _BackLink(
+              onTap: () => setState(() => _step = _GuestStep.chooseSlot),
             ),
           ),
+          const SizedBox(height: AppSpacing.xs),
+          const _StepTitle(
+            title: 'Enter your name',
+            subtitle:
+                'This is shown to the admin and displayed on the seating plan.',
+          ),
           const SizedBox(height: AppSpacing.md),
-          TextField(
+          AppTextField(
             controller: _nameController,
             autofocus: true,
-            maxLength: 32,
+            placeholder: 'Your first name',
+            textCapitalization: TextCapitalization.words,
+            // Same 32-character cap as before, without the visible counter.
+            inputFormatters: [LengthLimitingTextInputFormatter(32)],
+            error: _nameError,
             onChanged: (_) {
               if (_nameError != null) setState(() => _nameError = null);
               setState(() {});
             },
-            style: AppTypography.body(
+            textStyle: AppTypography.body(
               size: AppFontSizes.lg,
               weight: FontWeight.w500,
             ),
-            decoration: InputDecoration(
-              counterText: '',
-              hintText: 'Your first name',
-              hintStyle: AppTypography.bodyLg.copyWith(
-                color: AppColors.onSurfaceHint,
-              ),
-              isDense: true,
-              filled: true,
-              fillColor: AppColors.card,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 13,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                borderSide: BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                borderSide: BorderSide(color: AppColors.ring),
-              ),
-            ),
           ),
-          if (_nameError != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              _nameError!,
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.destructiveText,
-              ),
-            ),
-          ],
           const SizedBox(height: AppSpacing.lg),
           AppButton(
             variant: AppButtonVariant.primary,
             fullWidth: true,
+            size: AppButtonSize.lg,
+            loading: _submittingCheckIn,
             onPressed:
                 (_nameController.text.trim().isEmpty || _submittingCheckIn)
                 ? null
@@ -1061,61 +884,38 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         reservedName != null &&
         reservedName.isNotEmpty;
 
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xxxl),
-      child: Column(
-        children: [
-          SizedBox(
-            width: 36,
-            height: 36,
-            child: CircularProgressIndicator(
-              strokeWidth: 3,
-              color: AppColors.primary,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _StateCard(
+          tile: IconTile(
+            tone: IconTileTone.soft,
+            size: 52,
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: AppColors.primaryText,
+              ),
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Waiting for admin',
-            style: AppTypography.display(size: AppFontSizes.lg),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Your check-in request has been sent. The admin will confirm you shortly.',
-            textAlign: TextAlign.center,
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
+          title: 'Waiting for admin',
+          message:
+              'Your check-in request has been sent. The admin will confirm you shortly.',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        StatRowsCard(
+          rows: [
+            StatRow(
+              'Guest slot',
+              value: isReserved
+                  ? "Reserved for $reservedName"
+                  : "${inviter?.name ?? ''}'s Guest ${_selectedSlot ?? 1}",
             ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.muted,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'Guest slot',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                Text(
-                  isReserved
-                      ? "Reserved for $reservedName"
-                      : "${inviter?.name ?? ''}'s Guest ${_selectedSlot ?? 1}",
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -1129,53 +929,19 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppCard(
-          borderColor: AppColors.border,
-          padding: const EdgeInsets.all(AppSpacing.xxl),
-          child: Column(
-            children: [
-              Icon(
-                Icons.schedule,
-                size: AppFontSizes.displayLg,
-                color: AppColors.mutedForeground,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'You have missed this one',
-                textAlign: TextAlign.center,
-                style: AppTypography.display(
-                  size: AppFontSizes.xl,
-                  weight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                _tooLateReason ??
-                    'This tournament is no longer accepting new players.',
-                textAlign: TextAlign.center,
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.secondary,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Text(
-                  'Have a word with the host — they can see exactly where the '
-                  'tournament is up to. Nothing here can reopen it for you.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-              ),
-            ],
+        _StateCard(
+          tile: const IconTile(
+            icon: Icons.schedule,
+            tone: IconTileTone.neutral,
+            size: 52,
           ),
+          title: 'You have missed this one',
+          message:
+              _tooLateReason ??
+              'This tournament is no longer accepting new players.',
+          footnote:
+              'Have a word with the host — they can see exactly where the '
+              'tournament is up to. Nothing here can reopen it for you.',
         ),
         const SizedBox(height: AppSpacing.lg),
         AppButton(
@@ -1184,7 +950,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           onPressed: () => context.go(RoutePaths.register),
           child: const Text('Create an account for next time'),
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.sm),
         AppButton(
           variant: AppButtonVariant.secondary,
           size: AppButtonSize.lg,
@@ -1200,35 +966,17 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppCard(
-          borderColor: AppColors.destructive.withValues(alpha: 0.4),
-          padding: const EdgeInsets.all(AppSpacing.xxl),
-          child: Column(
-            children: [
-              Icon(
-                Icons.close,
-                size: AppFontSizes.displayLg,
-                color: AppColors.destructive,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                "Request declined",
-                style: AppTypography.display(
-                  size: AppFontSizes.xl,
-                  weight: FontWeight.w600,
-                  color: AppColors.destructive,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'The host could not confirm your guest slot. This can happen when the slot was already taken or registration has closed.',
-                textAlign: TextAlign.center,
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ],
+        _StateCard(
+          tile: const IconTile(
+            icon: Icons.close,
+            tone: IconTileTone.danger,
+            size: 52,
           ),
+          title: 'Request declined',
+          titleColor: AppColors.destructiveText,
+          borderColor: AppColors.destructive.withValues(alpha: 0.4),
+          message:
+              'The host could not confirm your guest slot. This can happen when the slot was already taken or registration has closed.',
         ),
         const SizedBox(height: AppSpacing.lg),
         AppButton(
@@ -1243,38 +991,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   }
 
   Widget _buildCompleted() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AppCard(
-          padding: const EdgeInsets.all(AppSpacing.xxl),
-          child: Column(
-            children: [
-              Icon(
-                Icons.emoji_events,
-                size: AppFontSizes.displayLg,
-                color: AppColors.mutedForeground,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Game Completed',
-                style: AppTypography.display(
-                  size: AppFontSizes.xl,
-                  weight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'This tournament has already finished.',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ],
+    return const _StateCard(
+      tile: IconTile(
+        icon: Icons.emoji_events,
+        tone: IconTileTone.neutral,
+        size: 52,
+      ),
+      title: 'Game Completed',
+      message: 'This tournament has already finished.',
     );
   }
 
@@ -1286,72 +1010,29 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppCard(
+        _StateCard(
           glow: true,
           borderColor: AppColors.successSoftBorder,
-          padding: const EdgeInsets.all(AppSpacing.xxl),
-          child: Column(
-            children: [
-              Icon(
-                confirmed ? Icons.check_circle : Icons.event_available,
-                size: AppFontSizes.displayLg,
-                color: AppColors.success,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                confirmed ? 'You\u2019re confirmed!' : 'Your slot is booked',
-                style: AppTypography.display(
-                  size: AppFontSizes.xl,
-                  weight: FontWeight.w600,
-                  color: AppColors.success,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                confirmed
-                    ? 'The admin has accepted your seat.'
-                    : (reservedName == null || reservedName.isEmpty
-                          ? 'You have a reserved seat.'
-                          : 'Reserved for $reservedName.'),
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ],
+          tile: IconTile(
+            icon: confirmed ? Icons.check_circle : Icons.event_available,
+            tone: IconTileTone.success,
+            size: 52,
           ),
+          title: confirmed ? 'You’re confirmed!' : 'Your slot is booked',
+          titleColor: AppColors.successText,
+          message: confirmed
+              ? 'The admin has accepted your seat.'
+              : (reservedName == null || reservedName.isEmpty
+                    ? 'You have a reserved seat.'
+                    : 'Reserved for $reservedName.'),
         ),
         if (confirmed) ...[
           const SizedBox(height: AppSpacing.md),
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Your seat',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  guest.table > 0 && guest.seat > 0
-                      ? 'Table ${guest.table} · Seat ${guest.seat}'
-                      : 'Table 1 · Seat ${_selectedSlot ?? 1}',
-                  style: AppTypography.mono(
-                    size: AppFontSizes.xxl,
-                    weight: FontWeight.w700,
-                  ),
-                ),
-                if (!(guest.table > 0 && guest.seat > 0))
-                  Text(
-                    'Seats are assigned once the admin generates the seating plan.',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-              ],
-            ),
+          _SeatCard(
+            seat: guest.table > 0 && guest.seat > 0
+                ? 'Table ${guest.table} · Seat ${guest.seat}'
+                : 'Table 1 · Seat ${_selectedSlot ?? 1}',
+            pending: !(guest.table > 0 && guest.seat > 0),
           ),
         ],
         const SizedBox(height: AppSpacing.md),
@@ -1361,7 +1042,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'The game isn\u2019t live yet',
+                'The game isn’t live yet',
                 style: AppTypography.display(size: AppFontSizes.lg),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -1371,34 +1052,17 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                   color: AppColors.mutedForeground,
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.muted,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'Scheduled for',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    Text(
-                      _formatSchedule(game.settings.date, game.settings.time),
-                      style: AppTypography.bodyStyle.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        StatRowsCard(
+          rows: [
+            StatRow(
+              'Scheduled for',
+              value: _formatSchedule(game.settings.date, game.settings.time),
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.lg),
         AppButton(
@@ -1416,34 +1080,16 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppCard(
+        _StateCard(
           borderColor: AppColors.warning.withValues(alpha: 0.6),
-          padding: const EdgeInsets.all(AppSpacing.xxl),
-          child: Column(
-            children: [
-              Icon(
-                Icons.event_busy,
-                size: AppFontSizes.displayLg,
-                color: AppColors.warning,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Not booked on your name',
-                style: AppTypography.display(
-                  size: AppFontSizes.xl,
-                  weight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'This slot is not booked on the name you entered — it is reserved for someone else. It was not changed.',
-                textAlign: TextAlign.center,
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ],
+          tile: const IconTile(
+            icon: Icons.event_busy,
+            tone: IconTileTone.warning,
+            size: 52,
           ),
+          title: 'Not booked on your name',
+          message:
+              'This slot is not booked on the name you entered — it is reserved for someone else. It was not changed.',
         ),
         const SizedBox(height: AppSpacing.lg),
         AppButton(
@@ -1472,69 +1118,28 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
 
   Widget _buildConfirmed(BlindLevel? level) {
     final guest = _currentGuest();
+    final seated = guest != null && guest.table > 0 && guest.seat > 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppCard(
+        _StateCard(
           glow: true,
           borderColor: AppColors.successSoftBorder,
-          padding: const EdgeInsets.all(AppSpacing.xxl),
-          child: Column(
-            children: [
-              Icon(
-                Icons.check_circle,
-                size: AppFontSizes.displayLg,
-                color: AppColors.success,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                "You're in!",
-                style: AppTypography.display(
-                  size: AppFontSizes.xl,
-                  weight: FontWeight.w600,
-                  color: AppColors.success,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Your seat has been confirmed.',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ],
+          tile: const IconTile(
+            icon: Icons.check_circle,
+            tone: IconTileTone.success,
+            size: 52,
           ),
+          title: "You're in!",
+          titleColor: AppColors.successText,
+          message: 'Your seat has been confirmed.',
         ),
         const SizedBox(height: AppSpacing.md),
-        AppCard(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your seat',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-              Text(
-                guest != null && guest.table > 0 && guest.seat > 0
-                    ? 'Table ${guest.table} · Seat ${guest.seat}'
-                    : 'Pending seating',
-                style: AppTypography.mono(
-                  size: AppFontSizes.xxl,
-                  weight: FontWeight.w700,
-                ),
-              ),
-              if (!(guest != null && guest.table > 0 && guest.seat > 0))
-                Text(
-                  'Seats are assigned once the admin generates the seating plan.',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-            ],
-          ),
+        _SeatCard(
+          seat: seated
+              ? 'Table ${guest.table} · Seat ${guest.seat}'
+              : 'Pending seating',
+          pending: !seated,
         ),
         if (level != null) ...[
           const SizedBox(height: AppSpacing.md),
@@ -1543,49 +1148,38 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Live game',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
+                const AppEyebrow('Live game', muted: true),
                 const SizedBox(height: AppSpacing.md),
                 Row(
                   children: [
                     Expanded(
-                      child: Column(
-                        children: [
-                          Builder(
-                            builder: (context) {
-                              final game = context
-                                  .read<AppProvider>()
-                                  .currentGame;
-                              return Column(
-                                children: [
-                                  if (game != null)
-                                    LiveTimerBuilder(
-                                      game: game,
-                                      builder: (context, remaining) => AppTimer(
-                                        secondsRemaining: remaining,
-                                        size: AppFontSizes.xxl,
-                                      ),
-                                    )
-                                  else
-                                    AppTimer(
-                                      secondsRemaining: 0,
-                                      size: AppFontSizes.xxl,
-                                    ),
-                                  Text(
-                                    'Level ${game?.currentLevel ?? 1}',
-                                    style: AppTypography.bodyXs.copyWith(
-                                      color: AppColors.mutedForeground,
-                                    ),
+                      child: Builder(
+                        builder: (context) {
+                          final game = context.read<AppProvider>().currentGame;
+                          return Column(
+                            children: [
+                              if (game != null)
+                                LiveTimerBuilder(
+                                  game: game,
+                                  builder: (context, remaining) => AppTimer(
+                                    secondsRemaining: remaining,
+                                    size: AppFontSizes.xxl,
                                   ),
-                                ],
-                              );
-                            },
-                          ),
-                        ],
+                                )
+                              else
+                                AppTimer(
+                                  secondsRemaining: 0,
+                                  size: AppFontSizes.xxl,
+                                ),
+                              Text(
+                                'Level ${game?.currentLevel ?? 1}',
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                     Expanded(
@@ -1619,45 +1213,241 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           size: AppButtonSize.lg,
           fullWidth: true,
           onPressed: () => context.go(RoutePaths.playerLive),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Watch live game'),
-              SizedBox(width: 6),
-              Icon(Icons.arrow_forward, size: 14, color: AppColors.icon),
-            ],
+          child: AppIconLabel(
+            label: 'Watch live game',
+            trailing: Icons.arrow_forward,
+            color: AppColors.primaryForeground,
           ),
         ),
-        const SizedBox(height: AppSpacing.sm),
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: 'Create an account to use chat and get notifications. ',
+        const SizedBox(height: AppSpacing.xs),
+        PromptLink(
+          prompt: 'Create an account to use chat and get notifications. ',
+          action: 'Sign up',
+          onTap: () => context.go(RoutePaths.register),
+        ),
+      ],
+    );
+  }
+}
+
+/// Title + helper line at the top of a guest-flow step card.
+class _StepTitle extends StatelessWidget {
+  const _StepTitle({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTypography.display(
+            size: AppFontSizes.lg,
+            weight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          subtitle,
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A selectable row — inviter or guest slot. Crimson outline and soft fill
+/// when selected; dimmed and inert when [disabled].
+class _ChoiceRow extends StatelessWidget {
+  const _ChoiceRow({
+    required this.selected,
+    required this.onTap,
+    required this.label,
+    this.leading,
+    this.trailing,
+    this.disabled = false,
+  });
+
+  final bool selected;
+  final VoidCallback? onTap;
+  final String label;
+  final Widget? leading;
+  final Widget? trailing;
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: !disabled,
+      selected: selected,
+      enabled: !disabled,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: AnimatedContainer(
+            duration: AppDurations.fast,
+            constraints: const BoxConstraints(minHeight: 52),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm + 2,
+            ),
+            decoration: BoxDecoration(
+              color: disabled
+                  ? AppColors.muted
+                  : (selected ? AppColors.primarySoft : AppColors.card),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(
+                color: selected
+                    ? AppColors.primary
+                    : AppColors.border.withValues(alpha: 0.75),
+              ),
+            ),
+            child: Row(
+              children: [
+                if (leading != null) ...[
+                  leading!,
+                  const SizedBox(width: AppSpacing.md),
+                ],
+                Expanded(
+                  child: Text(
+                    label,
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: disabled ? AppColors.mutedForeground : null,
+                    ),
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  trailing!,
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Centred outcome card for a guest-flow state: a tinted [IconTile], a title,
+/// the explanation, and an optional quieter footnote panel.
+class _StateCard extends StatelessWidget {
+  const _StateCard({
+    required this.tile,
+    required this.title,
+    required this.message,
+    this.titleColor,
+    this.borderColor,
+    this.glow = false,
+    this.footnote,
+  });
+
+  final Widget tile;
+  final String title;
+  final String message;
+  final Color? titleColor;
+  final Color? borderColor;
+  final bool glow;
+  final String? footnote;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      glow: glow,
+      borderColor: borderColor,
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        children: [
+          tile,
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AppTypography.display(
+              size: AppFontSizes.xl,
+              weight: FontWeight.w700,
+              color: titleColor,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+          if (footnote != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.muted,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: AppColors.border.withValues(alpha: 0.75),
+                ),
+              ),
+              child: Text(
+                footnote!,
+                textAlign: TextAlign.center,
                 style: AppTypography.bodyXs.copyWith(
                   color: AppColors.mutedForeground,
                 ),
               ),
-              WidgetSpan(
-                alignment: PlaceholderAlignment.baseline,
-                baseline: TextBaseline.alphabetic,
-                child: InkWell(
-                  onTap: () => context.go(RoutePaths.register),
-                  child: Text(
-                    'Sign up',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.primaryText,
-                      decoration: TextDecoration.underline,
-                      decorationColor: AppColors.primary,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// "Your seat" — the guest's table and seat, or a pending note.
+class _SeatCard extends StatelessWidget {
+  const _SeatCard({required this.seat, required this.pending});
+
+  final String seat;
+  final bool pending;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const AppEyebrow('Your seat', muted: true),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            seat,
+            style: AppTypography.mono(
+              size: AppFontSizes.xxl,
+              weight: FontWeight.w700,
+            ),
           ),
-          textAlign: TextAlign.center,
-        ),
-      ],
+          if (pending) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Seats are assigned once the admin generates the seating plan.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1694,18 +1484,23 @@ class _BackLink extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       child: MinTapTarget(
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.arrow_back, size: 14, color: AppColors.icon),
-            const SizedBox(width: AppSpacing.xs),
+            Icon(
+              Icons.chevron_left,
+              size: 18,
+              color: AppColors.mutedForeground,
+            ),
             Text(
               'Back',
-              style: AppTypography.bodyXs.copyWith(
+              style: AppTypography.bodySm.copyWith(
                 color: AppColors.mutedForeground,
               ),
             ),
+            const SizedBox(width: AppSpacing.xs),
           ],
         ),
       ),

@@ -50,6 +50,10 @@ class AppTypography {
       // Space Grotesk display headers look premium with tighter tracking
       letterSpacing: letterSpacing ?? (size >= AppFontSizes.xl ? -0.8 : -0.3),
     ).copyWith(
+      // Tabular, slashed-zero figures everywhere, not just in [mono] — the
+      // redesign states "all numerals", and a count inside a heading or a
+      // sentence should line up the same way the clock does.
+      fontFeatures: numericFeatures,
       fontFamilyFallback: const [
         'Noto Color Emoji',
         'Apple Color Emoji',
@@ -73,6 +77,7 @@ class AppTypography {
       // Slight positive tracking for body text improves legibility
       letterSpacing: letterSpacing ?? 0.2,
     ).copyWith(
+      fontFeatures: numericFeatures,
       fontFamilyFallback: const [
         'Noto Color Emoji',
         'Apple Color Emoji',
@@ -101,6 +106,34 @@ class AppTypography {
         'Apple Color Emoji',
         'Segoe UI Emoji',
       ],
+    );
+  }
+
+  /// Small tracked capitals — the redesign's section and field label
+  /// ("PRIVATE HOME POKER", "GAME CODE", "GROUP INVITE"). Crimson by default,
+  /// using the text-safe [AppColors.primaryText]; pass a muted colour for a
+  /// quieter field label.
+  static TextStyle eyebrow({
+    double size = 11,
+    Color? color,
+    FontWeight weight = FontWeight.w600,
+  }) {
+    return body(
+      size: size,
+      weight: weight,
+      color: color ?? AppColors.primaryText,
+      height: 1.3,
+      letterSpacing: size * 0.16,
+    );
+  }
+
+  /// Large, widely tracked figures for typed invite and game codes.
+  static TextStyle code({double size = AppFontSizes.xl, Color? color}) {
+    return mono(
+      size: size,
+      weight: FontWeight.w600,
+      color: color,
+      letterSpacing: size * 0.22,
     );
   }
 

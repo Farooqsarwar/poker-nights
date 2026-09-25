@@ -133,6 +133,14 @@ class ThemePalette {
     colors: [primary.withValues(alpha: 0.20), Colors.transparent],
   );
 
+  /// The redesign's soft accent bloom falling from the top edge of a
+  /// full-screen page (onboarding, join and guest screens).
+  RadialGradient get topGlow => RadialGradient(
+    center: const Alignment(0, -1.15),
+    radius: 1.1,
+    colors: [primary.withValues(alpha: 0.14), primary.withValues(alpha: 0.0)],
+  );
+
   RadialGradient get feltBackground => RadialGradient(
     center: const Alignment(0, 0.7),
     radius: 1.4,

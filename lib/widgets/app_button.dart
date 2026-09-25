@@ -51,6 +51,7 @@ class AppButton extends StatefulWidget {
 class _AppButtonState extends State<AppButton> {
   bool _pressing = false;
   bool _hovering = false;
+  bool _focused = false;
 
   bool get _isEnabled =>
       !widget.disabled && !widget.loading && widget.onPressed != null;
@@ -95,11 +96,21 @@ class _AppButtonState extends State<AppButton> {
                   decoration: _pressing
                       ? _neumorphicPressedDecoration(colors, borderRadius)
                       : decoration,
+                  // Keyboard focus ring. Painted in front so it never shifts
+                  // the label, and only for focus — not hover or press.
+                  foregroundDecoration: _focused
+                      ? BoxDecoration(
+                          borderRadius: borderRadius,
+                          border: Border.all(color: AppColors.ring, width: 2),
+                        )
+                      : null,
                   child: Material(
                     color: Colors.transparent,
                     borderRadius: borderRadius,
                     child: InkWell(
                       onTap: _isEnabled ? widget.onPressed : null,
+                      onFocusChange: (f) => setState(() => _focused = f),
+                      focusColor: Colors.transparent,
                       borderRadius: borderRadius,
                       splashColor: AppColors.primarySoftStrong,
                       highlightColor: Colors.transparent,
@@ -115,7 +126,7 @@ class _AppButtonState extends State<AppButton> {
                                   color: colors.foreground,
                                   fontWeight: widget.variant == AppButtonVariant.gold
                                       ? FontWeight.w700
-                                      : FontWeight.w500,
+                                      : FontWeight.w600,
                                 ),
                                 textAlign: TextAlign.center,
                                 child: widget.child,
@@ -179,25 +190,26 @@ class _AppButtonState extends State<AppButton> {
 
   BoxDecoration _decorationFor(_BtnColors colors, BorderRadius borderRadius) {
     switch (widget.variant) {
+      // Solid crimson, as the redesign draws every primary action — the
+      // translucent glass fill read as a muted brick red against #0A0A0A.
+      // The soft glow stays; hover steps to [AppColors.primaryHover].
       case AppButtonVariant.primary:
         return BoxDecoration(
+          color: _hovering ? AppColors.primaryHover : AppColors.primary,
           borderRadius: borderRadius,
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.12),
+            color: Colors.white.withValues(alpha: 0.10),
           ),
           boxShadow: widget.size == AppButtonSize.xl
               ? Glass.primaryGlow
               : [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.20),
-                    blurRadius: 12,
-                    spreadRadius: -1,
+                    color: AppColors.primary.withValues(alpha: 0.28),
+                    blurRadius: 16,
+                    spreadRadius: -4,
+                    offset: const Offset(0, 4),
                   ),
                 ],
-          gradient: _sheenOn(
-            AppColors.primary.withValues(alpha: 0.85),
-            highlight: _hovering ? 0.18 : 0.12,
-          ),
         );
       case AppButtonVariant.gold:
         return BoxDecoration(
@@ -212,27 +224,19 @@ class _AppButtonState extends State<AppButton> {
             shade: 0.06,
           ),
         );
-      // Deliberately NOT converted to _sheenOn. The other filled variants set
-      // `color` AND `gradient`, so their fill was silently dropped and they
-      // rendered as washed-out ghosts of themselves — a bug, because their
-      // labels are near-black and only legible on a filled background.
-      //
-      // This one is different: its label is `secondaryForeground` (light), it
-      // carries a border, and the near-transparent result reads as a proper
-      // outline button. Giving it a solid fill turned all ~117 of them into
-      // filled panels and made the UI look markedly lighter. The rendering is
-      // the intended look here, so it stays as it was.
+      // The redesign draws secondary actions ("Join with a code", "Scan QR
+      // code", "Sign in" in the top bar) as a dark raised surface one step
+      // above the page, with a visible hairline — not the near-transparent
+      // outline this used to be. `muted` is that step on every palette.
       case AppButtonVariant.secondary:
         return BoxDecoration(
-          color: AppColors.card.withValues(alpha: Glass.surfaceSecondaryOpacity),
+          color: _hovering ? AppColors.surfaceHover : AppColors.muted,
           borderRadius: borderRadius,
           border: Border.all(
             color: _hovering
-                ? AppColors.border.withValues(alpha: Glass.borderActiveOpacity)
-                : AppColors.border.withValues(alpha: Glass.borderOpacity),
+                ? AppColors.border
+                : AppColors.border.withValues(alpha: 0.75),
           ),
-          boxShadow: Glass.neumorphicUp,
-          gradient: _hovering ? Glass.primarySheen : Glass.innerHighlight,
         );
       case AppButtonVariant.danger:
         return BoxDecoration(
@@ -278,18 +282,13 @@ class _AppButtonState extends State<AppButton> {
               ? Border.all(color: AppColors.border.withValues(alpha: Glass.borderOpacity))
               : null,
         );
+      // The auth screens' solid white submit (A3/A4/A5).
       case AppButtonVariant.light:
         return BoxDecoration(
+          color: _hovering
+              ? AppColors.foreground.withValues(alpha: 0.88)
+              : AppColors.foreground,
           borderRadius: borderRadius,
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.15),
-          ),
-          boxShadow: Glass.neumorphicUp,
-          gradient: _sheenOn(
-            AppColors.foreground.withValues(alpha: 0.90),
-            highlight: 0.15,
-            shade: 0.05,
-          ),
         );
     }
   }
@@ -299,6 +298,17 @@ class _AppButtonState extends State<AppButton> {
     BorderRadius borderRadius,
   ) {
     final base = _decorationFor(colors, borderRadius);
+    // Solid-fill variants darken their own fill on press. Layering the
+    // gradient below over them would replace the colour outright (a
+    // BoxDecoration paints the gradient INSTEAD of the colour), so a held
+    // primary button would flash transparent.
+    final fill = base.color;
+    if (fill != null && base.gradient == null) {
+      return base.copyWith(
+        color: Color.alphaBlend(Colors.black.withValues(alpha: 0.14), fill),
+        boxShadow: const [],
+      );
+    }
     return base.copyWith(
       boxShadow: Glass.neumorphicDown,
       gradient: _pressing
@@ -326,8 +336,8 @@ class _AppButtonState extends State<AppButton> {
         );
       case AppButtonVariant.secondary:
         return _BtnColors(
-          background: Colors.transparent,
-          foreground: AppColors.secondaryForeground,
+          background: AppColors.muted,
+          foreground: AppColors.foreground,
           border: Border.all(color: AppColors.border),
         );
       case AppButtonVariant.danger:

@@ -7,9 +7,11 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../responsive/responsive.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_eyebrow.dart';
+import '../../widgets/app_tag.dart';
 import '../../widgets/backgrounds.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/brand_lockup.dart';
+import '../../widgets/icon_tile.dart';
 
 /// Public landing page mirroring the web `LandingPage`.
 class LandingScreen extends StatefulWidget {
@@ -73,10 +75,16 @@ class _LandingScreenState extends State<LandingScreen> {
       // leaves the logo and the gap between them room to spare.
       child: Row(
         children: [
-          Flexible(
-            child: PokerNightLogo(size: isMobile ? 36 : 40),
+          // scaleDown: on the narrowest phones the two buttons leave the
+          // wordmark less than its natural width, so it shrinks as a unit
+          // rather than overflowing (the old PNG logo shrank the same way).
+          const Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(fit: BoxFit.scaleDown, child: _Wordmark()),
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: AppSpacing.sm),
           AppButton(
             variant: AppButtonVariant.secondary,
             size: AppButtonSize.sm,
@@ -120,54 +128,48 @@ class _LandingScreenState extends State<LandingScreen> {
                     Expanded(
                       child: Container(
                         height: 1,
-                        color: AppColors.primary.withValues(alpha: 0.3),
+                        color: AppColors.primarySoftBorder,
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
                         horizontal: AppSpacing.lg,
                       ),
-                      child: Text(
-                        'PRIVATE HOME POKER',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                          letterSpacing: 3,
-                        ),
-                      ),
+                      child: AppEyebrow('Private home poker'),
                     ),
                     Expanded(
                       child: Container(
                         height: 1,
-                        color: AppColors.primary.withValues(alpha: 0.3),
+                        color: AppColors.primarySoftBorder,
                       ),
                     ),
                   ],
                 )
               else
-                Text(
-                  'PRIVATE HOME POKER',
+                const AppEyebrow(
+                  'Private home poker',
                   textAlign: TextAlign.center,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                    letterSpacing: 2,
-                  ),
                 ),
               const SizedBox(height: AppSpacing.lg),
 
-              // Heading
-              Text(
-                'Run your best',
+              // Heading — the last words in solid crimson, as drawn.
+              Text.rich(
+                TextSpan(
+                  children: [
+                    const TextSpan(text: 'Run your best\n'),
+                    TextSpan(
+                      text: 'poker night',
+                      style: TextStyle(color: AppColors.primary),
+                    ),
+                  ],
+                ),
                 textAlign: TextAlign.center,
                 style: AppTypography.display(
                   size: headingSize,
                   weight: FontWeight.w700,
-                  height: 1.15,
+                  height: 1.12,
+                  letterSpacing: -1.0,
                 ),
-              ),
-              Text(
-                'poker night',
-                textAlign: TextAlign.center,
-                style: AppTypography.crimsonShimmer(size: headingSize),
               ),
               const SizedBox(height: AppSpacing.lg),
 
@@ -183,44 +185,62 @@ class _LandingScreenState extends State<LandingScreen> {
               ),
               const SizedBox(height: AppSpacing.xl),
 
-              // Feature pills
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: const [
-                  _FeaturePill(label: 'Auto blind structure'),
-                  _FeaturePill(label: 'Live timer'),
-                  _FeaturePill(label: 'Seating & redraws'),
-                  _FeaturePill(label: 'TV mode'),
-                  _FeaturePill(label: 'Cash game tracker'),
-                  _FeaturePill(label: 'Group chat'),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-
-              // Both doors, side by side and wrapping on a narrow screen:
-              // hosts create an account, invited players just came for a
-              // code. The phone header only carries "Sign in", so creating
-              // an account has to live here or it is unreachable.
-              Wrap(
+              // Feature tags
+              const Wrap(
                 alignment: WrapAlignment.center,
                 spacing: AppSpacing.sm,
                 runSpacing: AppSpacing.sm,
                 children: [
-                  AppButton(
-                    variant: AppButtonVariant.primary,
-                    size: AppButtonSize.md,
-                    onPressed: () => context.go(RoutePaths.register),
-                    child: const Text('Create account'),
-                  ),
-                  AppButton(
-                    variant: AppButtonVariant.secondary,
-                    size: AppButtonSize.md,
-                    onPressed: _openJoin,
-                    child: const Text('Join with a code'),
-                  ),
+                  AppTag('Auto blind structure'),
+                  AppTag('Live timer'),
+                  AppTag('Seating & redraws'),
+                  AppTag('TV mode'),
+                  AppTag('Cash game tracker'),
+                  AppTag('Group chat'),
                 ],
+              ),
+              const SizedBox(height: AppSpacing.xxl),
+
+              // Both doors, side by side as equal halves: hosts create an
+              // account, invited players just came for a code. Capped so the
+              // pair stays button-sized on a wide screen; below ~300px of
+              // content they stack instead of squeezing the labels.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    final create = AppButton(
+                      variant: AppButtonVariant.primary,
+                      size: AppButtonSize.md,
+                      fullWidth: true,
+                      onPressed: () => context.go(RoutePaths.register),
+                      child: const Text('Create account'),
+                    );
+                    final join = AppButton(
+                      variant: AppButtonVariant.secondary,
+                      size: AppButtonSize.md,
+                      fullWidth: true,
+                      onPressed: _openJoin,
+                      child: const Text('Join with a code'),
+                    );
+                    if (c.maxWidth < 300) {
+                      return Column(
+                        children: [
+                          create,
+                          const SizedBox(height: AppSpacing.sm),
+                          join,
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: create),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(child: join),
+                      ],
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
 
@@ -234,6 +254,12 @@ class _LandingScreenState extends State<LandingScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.xxl),
+              Container(
+                height: 1,
+                constraints: const BoxConstraints(maxWidth: 440),
+                color: AppColors.border.withValues(alpha: 0.6),
+              ),
+              const SizedBox(height: AppSpacing.xl),
 
               // Native apps are not built yet. Saying so plainly — rather than
               // shipping store badges that lead nowhere — keeps the promise
@@ -303,15 +329,7 @@ class _LandingScreenState extends State<LandingScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (eyebrow != null) ...[
-                Text(
-                  eyebrow.toUpperCase(),
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.primaryText,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                AppEyebrow(eyebrow, textAlign: TextAlign.center),
                 const SizedBox(height: AppSpacing.sm),
               ],
               Text(
@@ -815,26 +833,29 @@ class _LandingScreenState extends State<LandingScreen> {
 // Helper Widgets
 // -----------------------------------------------------------------------------
 
-class _FeaturePill extends StatelessWidget {
-  const _FeaturePill({required this.label});
-
-  final String label;
+/// "♠ Poker Night" — the crimson spade tile and wordmark from the top bar.
+class _Wordmark extends StatelessWidget {
+  const _Wordmark();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: 6,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.card.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+    return Semantics(
+      label: 'Poker Night',
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const IconTile(label: '♠', size: 30, glow: false),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            'Poker Night',
+            style: AppTypography.display(
+              size: AppFontSizes.md,
+              weight: FontWeight.w700,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -906,25 +927,7 @@ class _PhaseCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              border: Border.all(color: AppColors.primarySoftBorder),
-            ),
-            child: Text(
-              phase.toUpperCase(),
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.primaryText,
-                letterSpacing: 1.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+          AppTag(phase, tone: AppTagTone.primary),
           const SizedBox(height: AppSpacing.md),
           Text(
             headline,
@@ -987,7 +990,7 @@ class _ToolCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 22, color: AppColors.primaryText),
+          IconTile(icon: icon, size: 36, tone: IconTileTone.soft),
           const SizedBox(height: AppSpacing.md),
           Text(
             title,
@@ -1096,22 +1099,25 @@ class _StoreBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: 0.75,
+    // Static: no tap handler, and announced as "coming soon" rather than as
+    // something to press.
+    return Semantics(
+      label: '$store, coming soon',
+      excludeSemantics: true,
       child: Container(
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
+          horizontal: AppSpacing.md + 2,
           vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: AppColors.card.withValues(alpha: 0.6),
+          color: AppColors.muted,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: AppColors.border.withValues(alpha: 0.75)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 26, color: AppColors.foreground),
+            Icon(icon, size: 22, color: AppColors.foreground),
             const SizedBox(width: AppSpacing.sm),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1163,8 +1169,8 @@ class _FeatureCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: AppFontSizes.xxxl, color: AppColors.icon),
-          const SizedBox(height: AppSpacing.md),
+          IconTile(icon: icon, size: 44, tone: IconTileTone.soft),
+          const SizedBox(height: AppSpacing.lg),
           Text(title, style: AppTypography.display(size: AppFontSizes.lg)),
           const SizedBox(height: AppSpacing.sm),
           Text(

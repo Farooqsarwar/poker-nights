@@ -7,7 +7,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:poker_night/app/colors.dart';
 import 'package:poker_night/app/theme.dart';
 import 'package:poker_night/providers/app_provider.dart';
+import 'package:poker_night/screens/public/auth_screen.dart';
+import 'package:poker_night/screens/public/guest_flow_screen.dart';
+import 'package:poker_night/screens/public/join_screen.dart';
 import 'package:poker_night/screens/public/landing_screen.dart';
+import 'package:poker_night/screens/public/splash_screen.dart';
 import 'package:poker_night/screens/public/tools_screen.dart';
 import 'package:poker_night/screens/premium/upgrade_screen.dart';
 import 'package:poker_night/theme/theme_palette.dart';
@@ -39,16 +43,49 @@ import 'package:provider/provider.dart';
 /// faithful. The letter shapes are Segoe UI rather than Space Grotesk, so
 /// judge layout and hierarchy from these, not the typeface itself.
 Future<void> _loadRealFonts() async {
-  final bytes = File(r'C:\Windows\Fonts\segoeui.ttf').readAsBytesSync();
+  ByteData font(String file) =>
+      ByteData.view(File('C:\\Windows\\Fonts\\$file').readAsBytesSync().buffer);
+  Future<void> register(String family, ByteData data) async {
+    final loader = FontLoader(family)..addFont(Future.value(data));
+    await loader.load();
+  }
+
+  final regular = font('segoeui.ttf');
   for (final family in const [
     'SpaceGrotesk',
     'SpaceMono',
     'Space Grotesk',
     'Space Mono',
   ]) {
-    final loader = FontLoader(family)
-      ..addFont(Future.value(ByteData.view(bytes.buffer)));
-    await loader.load();
+    await register(family, regular);
+  }
+  // google_fonts registers each weight as its own family, named
+  // `<Family>_<variant>` (`SpaceGrotesk_regular`, `SpaceGrotesk_700`, …).
+  // Registering only the bare names above left every styled run unresolved,
+  // which is why earlier captures rendered as test-font blocks.
+  final byWeight = {
+    'regular': regular,
+    '300': font('segoeuil.ttf'),
+    '400': regular,
+    '500': font('seguisb.ttf'),
+    '600': font('seguisb.ttf'),
+    '700': font('segoeuib.ttf'),
+    '800': font('segoeuib.ttf'),
+  };
+  for (final e in byWeight.entries) {
+    await register('SpaceGrotesk_${e.key}', e.value);
+  }
+  // Material icons, from the Flutter SDK's own cache.
+  final flutterRoot = File(Platform.resolvedExecutable).parent.parent.parent
+      .parent.parent.parent.path;
+  final icons = File(
+    '$flutterRoot/bin/cache/artifacts/material_fonts/materialicons-regular.otf',
+  );
+  if (icons.existsSync()) {
+    await register(
+      'MaterialIcons',
+      ByteData.view(icons.readAsBytesSync().buffer),
+    );
   }
 }
 
@@ -114,7 +151,9 @@ void main() {
       await t.pumpWidget(host);
     }
 
+    // Long enough for entrance fades (flutter_animate, 400ms) to finish.
     await t.pump(const Duration(milliseconds: 100));
+    await t.pump(const Duration(milliseconds: 700));
     // google_fonts throws once per text style in the sandbox; drain so the
     // capture is not lost to environment noise.
     while (t.takeException() != null) {}
@@ -143,12 +182,91 @@ void main() {
     );
   });
 
+  testWidgets('landing phone full', (t) async {
+    await shoot(
+      t,
+      'a2_landing_phone_full',
+      const LandingScreen(),
+      size: const Size(390, 5200),
+    );
+  });
+
   testWidgets('landing 320', (t) async {
     await shoot(
       t,
       'landing_320',
       const LandingScreen(),
       size: const Size(320, 1200),
+    );
+  });
+
+  // ── Phase A · Onboarding & access ──────────────────────────────────────────
+  const phone = Size(390, 844);
+  const desktop = Size(1280, 860);
+
+  testWidgets('A1 splash (settled on the wordmark face)', (t) async {
+    t.view.physicalSize = phone;
+    t.view.devicePixelRatio = 1.0;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.forPalette(ThemePalettes.forId('red')),
+        home: const SplashScreen(),
+      ),
+    );
+    // 3.2s: past the flip (ends at 72% of 4.2s), before the exit fade.
+    await t.pump(const Duration(milliseconds: 3200));
+    while (t.takeException() != null) {}
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/design/a1_splash_phone.png'),
+    );
+    // Unmount before the redirect timer fires — there is no router here.
+    await t.pumpWidget(const SizedBox.shrink());
+    while (t.takeException() != null) {}
+  });
+
+  for (final (id, mode) in const [
+    ('a3_login', AuthMode.login),
+    ('a4_register', AuthMode.register),
+    ('a5_forgot', AuthMode.forgotPassword),
+  ]) {
+    testWidgets('$id phone', (t) async {
+      await shoot(t, '${id}_phone', AuthScreen(mode: mode), size: phone);
+    });
+    testWidgets('$id desktop', (t) async {
+      await shoot(t, '${id}_desktop', AuthScreen(mode: mode), size: desktop);
+    });
+  }
+
+  testWidgets('a6 guest code entry phone', (t) async {
+    await shoot(
+      t,
+      'a6_guest_phone',
+      const GuestFlowScreen(),
+      size: phone,
+      needsProvider: true,
+    );
+  });
+
+  testWidgets('a7 join phone', (t) async {
+    await shoot(
+      t,
+      'a7_join_phone',
+      const JoinScreen(),
+      size: phone,
+      needsProvider: true,
+    );
+  });
+
+  testWidgets('a7 join desktop', (t) async {
+    await shoot(
+      t,
+      'a7_join_desktop',
+      const JoinScreen(),
+      size: desktop,
+      needsProvider: true,
     );
   });
 

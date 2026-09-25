@@ -1,6 +1,3 @@
-import 'dart:async';
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
@@ -17,9 +14,7 @@ import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../utils/main_button.dart';
 import '../../widgets/app_alert_banner.dart';
-import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
@@ -50,6 +45,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static String _hhmm(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  static String _getInitials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+    if (parts.isEmpty) return 'FP';
+    return parts.map((p) => p[0].toUpperCase()).take(2).join();
+  }
 
   @override
   void dispose() {
@@ -94,69 +95,180 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Stack(
       children: [
-        const _LuxuryDecorations(),
         AppPage(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppSpacing.sm),
-              // Persistent group context — the user always knows which group
-              // they are looking at, and can switch without leaving (IA §1).
-              const GroupContextHeader(),
-              const SizedBox(height: AppSpacing.lg),
-              // Header
+              // Top Header Row
               Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF381E20),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF4A282A)),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      user?.name.isNotEmpty == true
+                          ? user!.name[0].toUpperCase()
+                          : 'A',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Text(
-                              'Home',
-                              style:
-                                  AppTypography.display(
-                                    size: AppFontSizes.display,
-                                    weight: FontWeight.w700,
-                                  ).copyWith(
-                                    shadows: [
-                                      Shadow(
-                                        color: AppColors.primary.withValues(
-                                          alpha: 0.5,
-                                        ),
-                                        blurRadius: 16,
-                                      ),
-                                    ],
-                                  ),
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF4ADE80),
+                                shape: BoxShape.circle,
+                              ),
                             ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.success,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.sm),
-                                // Audit fix E11: no more "Welcome back, Guest".
-                                Text(
-                                  user?.name != null && user!.name.isNotEmpty
-                                      ? 'Welcome back, ${user.name}'
-                                      : 'Welcome back',
-                                  style: AppTypography.bodySm.copyWith(
-                                    color: AppColors.mutedForeground,
-                                  ),
-                                ),
-                              ],
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Welcome back',
+                              style: TextStyle(
+                                color: Color(0xFF8E8E93),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 2),
+                        Text(
+                          user?.name.isNotEmpty == true
+                              ? user!.name
+                              : 'Alex Morgan',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => context.go(RoutePaths.notifications),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141416),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF242428)),
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          const Icon(
+                            Icons.notifications_outlined,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          if (app.notifications.any((n) => !n.read))
+                            Positioned(
+                              top: 10,
+                              right: 11,
+                              child: Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFD53032),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              // Screen Title: Large bold white 'Home'
+              const Text(
+                'Home',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              // Group Switcher Card: Squircle card with crimson FP initials badge
+              InkWell(
+                onTap: () => showGroupSwitcher(context),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF242428)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD53032),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          _getInitials(app.hasCurrentGroup ? group.name : 'FP'),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          app.hasCurrentGroup ? group.name : 'Select a group',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.keyboard_arrow_down,
+                        color: Color(0xFF8E8E93),
+                        size: 22,
                       ),
                     ],
                   ),
-                  const SizedBox(height: AppSpacing.xl),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
               // Offline Conflict Banner
               if (app.hasOfflineConflict) ...[
                 AppAlertBanner(
@@ -179,7 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: AppSpacing.xl),
               ],
 
-              // Next required action (User Flow §4.1)
+              // 'NEXT UP' Live / Upcoming Card
               ...[
                 _NextActionCard(
                   app: app,
@@ -190,45 +302,74 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: AppSpacing.lg),
               ],
 
-              // Primary actions (User Flow §4.1)
-              if (isAdmin) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: AppButton(
-                        onPressed: () =>
-                            context.go(RoutePaths.createTournament),
-                        child: const AppIconLabel(
-                          label: 'New game',
-                          icon: Icons.add,
+              // Quick action buttons side-by-side: + New game & Cash game
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => context.go(RoutePaths.createTournament),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF18181A),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFF28282C)),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add, color: Color(0xFFE5797A), size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'New game',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: AppButton(
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => context.go(RoutePaths.cashGame),
-                        child: const AppIconLabel(
-                          label: 'Cash game',
-                          icon: Icons.sports_esports,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => context.go(RoutePaths.cashGame),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF18181A),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFF28282C)),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Text(
+                          'Cash game',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.lg),
-              ],
-              // Group snapshot — answers "how is the group doing?" at a glance
-              // (IA §7). Sits after the primary actions, matching the
-              // redesigned Home flow: NEXT UP → New game / Cash game →
-              // Group snapshot → Upcoming.
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xl),
+
+              // 'Group snapshot' section
               if (app.hasCurrentGroup) ...[
-                Text(
+                const Text(
                   'Group snapshot',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                    letterSpacing: 1,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -414,92 +555,87 @@ class _GroupStats extends StatelessWidget {
     final past = group.pastGames.length;
     final members = group.members.length;
     final cash = app.cashHistory.length;
-    final prizeVolume = group.pastGames
-        .fold<int>(0, (s, g) => s + g.structure.prizePool);
-    final cashVolume = app.cashHistory
-        .fold<double>(0, (s, c) => s + c.totalBuyIns);
+    final prizeVolume = group.pastGames.fold<int>(
+      0,
+      (s, g) => s + g.structure.prizePool,
+    );
+    final cashVolume = app.cashHistory.fold<double>(
+      0,
+      (s, c) => s + c.totalBuyIns,
+    );
+    final totalVol = prizeVolume + cashVolume;
+    final volumeStr = totalVol >= 1000
+        ? '${(totalVol / 1000).round()}k'
+        : '\$$totalVol';
 
-    final stats = [
-      ('games', '$past', Icons.style_outlined),
-      ('members', '$members', Icons.groups_outlined),
-      ('cash games', '$cash', Icons.payments_outlined),
-      (
-        'volume',
-        '\$${Formatters.chips(prizeVolume + cashVolume)}',
-        Icons.account_balance_wallet_outlined,
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final twoCol = c.maxWidth < 560;
-        final w = twoCol ? (c.maxWidth - AppSpacing.sm) / 2 : null;
-        return Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            for (final s in stats)
-              SizedBox(
-                width: w,
-                child: _HomeStat(icon: s.$3, label: s.$1, value: s.$2),
-              ),
-          ],
-        );
-      },
+    return Row(
+      children: [
+        _MetricCard(value: '$past', label: 'games'),
+        const SizedBox(width: 8),
+        _MetricCard(value: '$members', label: 'members'),
+        const SizedBox(width: 8),
+        _MetricCard(value: '$cash', label: 'cash\ngames'),
+        const SizedBox(width: 8),
+        _MetricCard(
+          value: volumeStr,
+          label: 'volume',
+          valueColor: const Color(0xFFF59E0B),
+        ),
+      ],
     );
   }
 }
 
-class _HomeStat extends StatelessWidget {
-  const _HomeStat({
-    required this.icon,
-    required this.label,
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({
     required this.value,
+    required this.label,
+    this.valueColor,
   });
 
-  final IconData icon;
-  final String label;
   final String value;
+  final String label;
+  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: AppColors.primary),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    value,
-                    style: AppTypography.mono(
-                      size: AppFontSizes.md,
-                      weight: FontWeight.w700,
-                      color: AppColors.foreground,
-                    ),
-                  ),
+    return Expanded(
+      child: Container(
+        height: 82,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141416),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF242428)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: TextStyle(
+                  color: valueColor ?? Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
                 ),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: const TextStyle(
+                color: Color(0xFF8E8E93),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                height: 1.1,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -546,104 +682,149 @@ class _NextActionCard extends StatelessWidget {
     final game = _target();
     if (game == null) return const SizedBox.shrink();
 
-    final pending = game.players
-        .where((p) => p.checkedIn && !p.confirmed)
-        .length;
-    final confirmed = game.players.where((p) => p.confirmed).length;
     final going = game.goingCount;
-
-    final (title, subtitle, actionLabel, path) = switch (game.status) {
+    final (title, subtitle, actionLabel) = switch (game.status) {
       LiveGameStatus.running || LiveGameStatus.paused => (
-        '${game.settings.name} is live',
-        'Level ${game.currentLevel} · ${game.activePlayers.length} players remaining · $going going',
-        isAdmin ? 'Open Dashboard' : 'View Game',
-        RoutePaths.adminDashboard,
+        game.settings.name,
+        '${game.settings.date} ${game.settings.time} · $going going',
+        'Open dashboard',
       ),
       LiveGameStatus.rebuypause => (
-        'Settlement required',
-        'Rebuys closed — record add-ons and confirm the prize pool',
-        'Complete Break',
-        RoutePaths.rebuySettlement,
+        game.settings.name,
+        'Settlement required · $going going',
+        'Complete break',
       ),
       LiveGameStatus.finaltable => (
-        'Final table',
-        'Nine players remain — redraw the seats',
-        'Redraw Table',
-        RoutePaths.finalTable,
+        game.settings.name,
+        'Final table · 9 remain · $going going',
+        'Redraw table',
       ),
       LiveGameStatus.checkin || LiveGameStatus.ready => (
-        pending > 0
-            ? '$pending check-in${pending == 1 ? '' : 's'} waiting'
-            : 'Check-in is open',
-        '$confirmed confirmed · $going going so far',
-        'Open Check-in',
-        RoutePaths.checkIn,
+        game.settings.name,
+        '${game.settings.date} ${game.settings.time} · $going going',
+        'Open check-in',
       ),
       _ => (
-        'RSVPs are open',
-        '$going going · structure unlocks 30 min before start',
-        'Review Event',
-        RoutePaths.invitation,
+        game.settings.name,
+        '${game.settings.date} ${game.settings.time} · $going going',
+        'Open dashboard',
       ),
     };
 
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      glow: game.status.isActiveLive,
-      color: AppColors.primarySoft,
-      borderColor: AppColors.primary.withValues(alpha: 0.3),
-      child: Row(
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFD53032).withValues(alpha: 0.35),
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33D53032),
+            blurRadius: 16,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Next up',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: AppTypography.bodyLg.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    if (game.status.isActiveLive) ...[
-                      const SizedBox(width: AppSpacing.xs),
-                      AppBadge(
-                        label: 'LIVE',
-                        variant: AppBadgeVariant.gold,
-                        dotColor: AppColors.primary,
-                      ),
-                    ],
-                  ],
-                ),
-                if (subtitle.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      subtitle,
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ),
-              ],
+          const Text(
+            'NEXT UP',
+            style: TextStyle(
+              color: Color(0xFFE5797A),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(width: AppSpacing.md),
-          AppButton(
-            size: AppButtonSize.sm,
-            onPressed: () => onOpen(game),
-            child: Text(actionLabel),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title.isNotEmpty ? title : 'Friday Night Freezeout',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (game.status.isActiveLive) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F3826),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF4ADE80),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      const Text(
+                        'LIVE',
+                        style: TextStyle(
+                          color: Color(0xFF4ADE80),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          InkWell(
+            onTap: () => onOpen(game),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD53032),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x40D53032),
+                    blurRadius: 12,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                actionLabel,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -670,70 +851,27 @@ class _UpcomingGames extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.calendar_month_outlined,
-                    color: AppColors.primary,
-                    size: 24,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  // Flexible, not bare: at 320px the icon, the gap and this
-                  // heading at 20pt are wider than the row once the admin's
-                  // "+ New game" button takes its share, and an unconstrained
-                  // Text in a Row overflows rather than wrapping.
-                  Flexible(
-                    child: Text(
-                      'Upcoming',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.display(
-                        size: AppFontSizes.xl,
-                        weight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
+            const Text(
+              'Upcoming',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
               ),
             ),
             InkWell(
               onTap: () => context.go(RoutePaths.group),
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xs,
-                  vertical: 2,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'See all',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.primaryText,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 2),
-                    Icon(
-                      Icons.chevron_right,
-                      size: 16,
-                      color: AppColors.primaryText,
-                    ),
-                  ],
+              child: const Text(
+                'See all',
+                style: TextStyle(
+                  color: Color(0xFFE5797A),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            if (isAdmin) ...[
-              const SizedBox(width: AppSpacing.sm),
-              AppButton(
-                size: AppButtonSize.sm,
-                onPressed: () => context.go(RoutePaths.createTournament),
-                child: const Text('+ New game'),
-              ),
-            ],
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -759,20 +897,11 @@ class _UpcomingGames extends StatelessWidget {
             children: [
               for (var i = 0; i < games.length; i++) ...[
                 _GameRow(
-                      game: games[i],
-                      isAdmin: isAdmin,
-                      userId: userId,
-                      onOpen: () => onOpen(games[i]),
-                    )
-                    .animate()
-                    .fadeIn(delay: (i * 100).ms, duration: 450.ms)
-                    .slideX(
-                      begin: -0.06,
-                      end: 0,
-                      delay: (i * 100).ms,
-                      duration: 450.ms,
-                      curve: Curves.easeOutCubic,
-                    ),
+                  game: games[i],
+                  isAdmin: isAdmin,
+                  userId: userId,
+                  onOpen: () => onOpen(games[i]),
+                ),
                 const SizedBox(height: AppSpacing.md),
               ],
             ],
@@ -795,196 +924,92 @@ class _GameRow extends StatelessWidget {
   final String? userId;
   final VoidCallback onOpen;
 
-  AppBadgeVariant _colorFor(LiveGameStatus s) {
-    switch (s) {
-      case LiveGameStatus.running:
-        return AppBadgeVariant.green;
-      case LiveGameStatus.paused:
-      case LiveGameStatus.rebuypause:
-      case LiveGameStatus.onBreak:
-      case LiveGameStatus.finaltable:
-      case LiveGameStatus.published:
-      case LiveGameStatus.checkin:
-      case LiveGameStatus.ready:
-        return AppBadgeVariant.accent;
-      case LiveGameStatus.draft:
-      case LiveGameStatus.completed:
-        return AppBadgeVariant.muted;
-      case LiveGameStatus.cancelled:
-        return AppBadgeVariant.red;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final going = game.goingCount;
-    // One dominant next action per card (user-flow spec §7.2, §9).
-    final me = userId == null
-        ? null
-        : game.players.where((p) => p.id == userId).firstOrNull;
-    final action = mainActionFor(
-      isAdmin ? MainButtonRole.admin : MainButtonRole.member,
-      game,
-      memberRow: me,
-    );
-    return AppCard(
+    return InkWell(
       onTap: onOpen,
-      padding: EdgeInsets.zero,
-      glow: game.status == LiveGameStatus.running,
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              width: 5,
-              color: game.status == LiveGameStatus.running
-                  ? AppColors.success
-                  : AppColors.primary.withValues(alpha: 0.5),
-            ),
-          ),
+          color: const Color(0xFF141416),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF242428)),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            game.settings.name,
-                            style: AppTypography.bodyLg.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        AppBadge(
-                          label: game.status.label,
-                          variant: _colorFor(game.status),
-                          border: true,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: AppSpacing.md,
-                      runSpacing: AppSpacing.xs,
-                      children: [
-                        _InfoChip(
-                          icon: Icons.calendar_today_outlined,
-                          text: game.settings.date,
-                        ),
-                        _InfoChip(
-                          icon: Icons.access_time_outlined,
-                          text: game.settings.time,
-                        ),
-                        _InfoChip(
-                          icon: Icons.location_on_outlined,
-                          text: game.settings.location,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: AppSpacing.md,
-                      runSpacing: AppSpacing.xs,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.secondary,
-                            borderRadius: BorderRadius.circular(AppRadius.sm),
-                          ),
-                          child: Text(
-                            'Buy-in: ${game.settings.buyIn}',
-                            style: AppTypography.mono(
-                              size: AppFontSizes.xs,
-                              color: AppColors.foreground,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '$going going',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                        Text(
-                          'Code: ${game.publicCode}',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (game.status == LiveGameStatus.running) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                          border: Border.all(
-                            color: AppColors.success.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: AppColors.success,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            Text(
-                              'LIVE · Level ${game.currentLevel}',
-                              style: AppTypography.mono(
-                                size: AppFontSizes.xs,
-                                weight: FontWeight.w700,
-                                color: AppColors.success,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            Flexible(
-              child: Padding(
-                padding: const EdgeInsets.only(right: AppSpacing.lg),
-                child: AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.primary,
-                  onPressed: action.enabled ? onOpen : null,
-                  child: Text(
-                    action.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
+        clipBehavior: Clip.antiAlias,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFD53032),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
                   ),
                 ),
               ),
-            ),
-          ],
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        game.settings.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${game.settings.date} ${game.settings.time} · Buy-in \$${game.settings.buyIn} · $going going',
+                        style: const TextStyle(
+                          color: Color(0xFF8E8E93),
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF242428),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Text(
+                      'RSVP',
+                      style: TextStyle(
+                        color: Color(0xFF8E8E93),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1358,370 +1383,6 @@ class _AlertsPreview extends StatelessWidget {
                     curve: Curves.easeOut,
                   ),
           ],
-        ),
-      ],
-    );
-  }
-}
-
-class _LuxuryDecorations extends StatelessWidget {
-  const _LuxuryDecorations();
-
-  @override
-  Widget build(BuildContext context) {
-    final rng = Random(7);
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: Stack(
-          children: [
-            // Deep background glow - Primary color pulsing
-            Positioned(
-              top: -150,
-              right: -150,
-              child:
-                  Container(
-                        width: 600,
-                        height: 600,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              AppColors.primary.withValues(alpha: 0.15),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      )
-                      .animate(
-                        onPlay: (controller) =>
-                            controller.repeat(reverse: true),
-                      )
-                      .scaleXY(
-                        begin: 1.0,
-                        end: 1.15,
-                        duration: 4.seconds,
-                        curve: Curves.easeInOut,
-                      ),
-            ),
-            // Deep background glow - Destructive color pulsing
-            Positioned(
-              bottom: -200,
-              left: -150,
-              child:
-                  Container(
-                        width: 700,
-                        height: 700,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              AppColors.destructive.withValues(alpha: 0.12),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      )
-                      .animate(
-                        onPlay: (controller) =>
-                            controller.repeat(reverse: true),
-                      )
-                      .scaleXY(
-                        begin: 1.0,
-                        end: 1.2,
-                        duration: 5.seconds,
-                        curve: Curves.easeInOut,
-                      ),
-            ),
-
-            // Spinning Wheel / Rays effect
-            Positioned(top: -150, right: -150, child: _SpinningRays()),
-
-            // Floating elements
-            for (var i = 0; i < 14; i++)
-              Positioned(
-                left: rng.nextInt(100) / 100 * 2000 - 400,
-                top: rng.nextInt(90) / 100 * 700,
-                child: i % 3 == 0
-                    ? _FloatCard(delay: Duration(milliseconds: i * 600))
-                    : _FloatChip(
-                        delay: Duration(milliseconds: i * 600),
-                        label: i % 2 == 0 ? '500' : '100',
-                      ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SpinningRays extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-          width: 600,
-          height: 600,
-          decoration: const BoxDecoration(shape: BoxShape.circle),
-          child: Stack(
-            alignment: Alignment.center,
-            children: List.generate(12, (index) {
-              return Transform.rotate(
-                angle: (index * pi) / 6,
-                child: Container(
-                  height: 600,
-                  width: 8,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        AppColors.primary.withValues(alpha: 0.0),
-                        AppColors.primary.withValues(alpha: 0.04),
-                        AppColors.primary.withValues(alpha: 0.0),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        )
-        .animate(onPlay: (controller) => controller.repeat())
-        .rotate(duration: 40.seconds, curve: Curves.linear);
-  }
-}
-
-class _FloatCard extends StatefulWidget {
-  const _FloatCard({required this.delay});
-
-  final Duration delay;
-
-  @override
-  State<_FloatCard> createState() => _FloatCardState();
-}
-
-class _FloatCardState extends State<_FloatCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  final rng = Random();
-  late final String suit;
-  late final bool isRed;
-  late final double _rotationOffset;
-
-  /// Cancelled in [dispose] — see the note on `_FloatChipState._start`. An
-  /// uncancellable `Future.delayed` here kept a timer alive past the screen's
-  /// life for as long as this card's stagger.
-  Timer? _start;
-
-  @override
-  void initState() {
-    super.initState();
-    final suits = ['♠', '♥', '♦', '♣'];
-    suit = suits[rng.nextInt(4)];
-    isRed = suit == '♥' || suit == '♦';
-    _rotationOffset = rng.nextDouble() * 0.5 - 0.25;
-
-    _controller =
-        AnimationController(
-          vsync: this,
-          duration: Duration(seconds: 7 + rng.nextInt(3)),
-        )..addStatusListener((status) {
-          if (status == AnimationStatus.completed) _controller.repeat();
-        });
-    _start = Timer(widget.delay, () {
-      if (mounted) _controller.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _start?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: TweenSequence<double>([
-        TweenSequenceItem(
-          tween: Tween(
-            begin: 0.0,
-            end: 0.4,
-          ).chain(CurveTween(curve: Curves.easeOut)),
-          weight: 30,
-        ),
-        TweenSequenceItem(tween: ConstantTween(0.4), weight: 40),
-        TweenSequenceItem(
-          tween: Tween(
-            begin: 0.4,
-            end: 0.0,
-          ).chain(CurveTween(curve: Curves.easeIn)),
-          weight: 30,
-        ),
-      ]).animate(_controller),
-      child: SlideTransition(
-        position: Tween(
-          begin: const Offset(0, 1.2),
-          end: const Offset(0, -0.8),
-        ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear)),
-        child: RotationTransition(
-          turns: Tween(
-            begin: _rotationOffset,
-            end: _rotationOffset + 0.5,
-          ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear)),
-          child: Container(
-            width: 32,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: AppColors.border, width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.card.withValues(alpha: 0.5),
-                  blurRadius: 4,
-                ),
-              ],
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              suit,
-              style: AppTypography.body(
-                size: 18,
-                weight: FontWeight.bold,
-              ).copyWith(
-                color: isRed ? AppColors.destructive : AppColors.foreground,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FloatChip extends StatefulWidget {
-  const _FloatChip({required this.delay, required this.label});
-
-  final Duration delay;
-  final String label;
-
-  @override
-  State<_FloatChip> createState() => _FloatChipState();
-}
-
-class _FloatChipState extends State<_FloatChip>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  /// Held so [dispose] can cancel it. A bare `Future.delayed` cannot be
-  /// cancelled: leaving this chip's staggered start running after the screen
-  /// closes keeps a timer alive for up to [widget.delay], which is why every
-  /// Home smoke test failed with "A Timer is still pending after the widget
-  /// tree was disposed". The `mounted` check below made it harmless, not
-  /// absent.
-  Timer? _start;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 6))
-          ..addStatusListener((status) {
-            if (status == AnimationStatus.completed) _controller.repeat();
-          });
-    _start = Timer(widget.delay, () {
-      if (mounted) _controller.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _start?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: TweenSequence<double>([
-        TweenSequenceItem(
-          tween: Tween(
-            begin: 0.0,
-            end: 0.5,
-          ).chain(CurveTween(curve: Curves.easeOut)),
-          weight: 30,
-        ),
-        TweenSequenceItem(tween: ConstantTween(0.5), weight: 40),
-        TweenSequenceItem(
-          tween: Tween(
-            begin: 0.5,
-            end: 0.0,
-          ).chain(CurveTween(curve: Curves.easeIn)),
-          weight: 30,
-        ),
-      ]).animate(_controller),
-      child: SlideTransition(
-        position: Tween(
-          begin: const Offset(0, 1.0),
-          end: const Offset(0, -0.6),
-        ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear)),
-        child: RotationTransition(
-          turns: Tween(
-            begin: 0.0,
-            end: 1.0,
-          ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear)),
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.card,
-              border: Border.all(color: AppColors.border, width: 2.5),
-              boxShadow: [
-                BoxShadow(
-                  color: widget.label == '500'
-                      ? AppColors.primary.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                  blurRadius: 8,
-                ),
-              ],
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              widget.label,
-              style: AppTypography.mono(
-                size: 9,
-                weight: FontWeight.w700,
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: AppColors.mutedForeground),
-        const SizedBox(width: AppSpacing.xs),
-        Text(
-          text,
-          style: AppTypography.bodyXs.copyWith(
-            color: AppColors.mutedForeground,
-          ),
         ),
       ],
     );

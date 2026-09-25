@@ -53,14 +53,14 @@ class ChatBubble extends StatelessWidget {
 
     final bubble = Container(
       constraints: BoxConstraints(maxWidth: maxWidth),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: mine ? AppColors.primary : AppColors.secondary,
-        borderRadius: BorderRadius.circular(18).copyWith(
-          bottomRight: mine ? const Radius.circular(5) : null,
-          bottomLeft: mine ? null : const Radius.circular(5),
+        color: mine ? const Color(0xFFD53032) : const Color(0xFF141416),
+        borderRadius: BorderRadius.circular(16).copyWith(
+          bottomRight: mine ? const Radius.circular(4) : null,
+          bottomLeft: mine ? null : const Radius.circular(4),
         ),
-        border: mine ? null : Border.all(color: AppColors.border),
+        border: mine ? null : Border.all(color: const Color(0xFF242428)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -70,28 +70,26 @@ class ChatBubble extends StatelessWidget {
         children: [
           if (!mine)
             Padding(
-              padding: const EdgeInsets.only(bottom: 2),
+              padding: const EdgeInsets.only(bottom: 4),
               child: Text(
                 message.authorName,
-                style: AppTypography.body(
-                  size: 11,
-                  weight: FontWeight.w700,
-                ).copyWith(color: AppColors.primaryText),
+                style: const TextStyle(
+                  color: Color(0xFFE5797A),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           Text(
             message.body,
-            style: AppTypography.bodySm.copyWith(
-              color: mine ? AppColors.primaryForeground : AppColors.foreground,
-            ),
+            style: const TextStyle(color: Colors.white, fontSize: 14),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
           Text(
             Formatters.relativeTime(message.timestamp),
-            style: AppTypography.body(size: 10).copyWith(
-              color: mine
-                  ? AppColors.primaryForeground.withValues(alpha: 0.75)
-                  : AppColors.mutedForeground,
+            style: TextStyle(
+              color: mine ? Colors.white70 : const Color(0xFF8E8E93),
+              fontSize: 10,
             ),
           ),
         ],
@@ -133,9 +131,9 @@ class ChatBubble extends StatelessWidget {
                           ),
                           child: Text(
                             'delete',
-                            style: AppTypography.body(size: 10).copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
+                            style: AppTypography.body(
+                              size: 10,
+                            ).copyWith(color: AppColors.mutedForeground),
                           ),
                         ),
                       ),
@@ -301,9 +299,9 @@ class _EventCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'Posted by ${message.authorName} · ${Formatters.relativeTime(message.timestamp)}',
-                style: AppTypography.body(size: 10).copyWith(
-                  color: AppColors.mutedForeground,
-                ),
+                style: AppTypography.body(
+                  size: 10,
+                ).copyWith(color: AppColors.mutedForeground),
               ),
               // RSVP is set on the game screen (tap this card) — shown here
               // read-only so chat and the hub never carry a second control.

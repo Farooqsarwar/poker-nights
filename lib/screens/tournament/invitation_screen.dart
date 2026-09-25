@@ -15,7 +15,6 @@ import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/event_settings_validation.dart';
 import '../../widgets/app_avatar.dart';
-import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -27,11 +26,11 @@ import '../../widgets/code_display.dart';
 import '../../widgets/rsvp_badge.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/app_alert_banner.dart';
-import '../../widgets/glass_styles.dart';
 import '../../widgets/event_day_checklist.dart';
 import '../../widgets/event_settings_form.dart';
 import '../../widgets/journey_progress.dart';
 import '../../widgets/min_tap_target.dart';
+import '../../widgets/squircle_icon_button.dart';
 
 /// Invitation / RSVP page mirroring the web `InvitationPage`.
 class InvitationScreen extends StatefulWidget {
@@ -935,58 +934,6 @@ class _InvitationScreenState extends State<InvitationScreen> {
           ],
 
           // Admin actions
-        ],
-      ),
-    );
-  }
-}
-
-class _Detail extends StatelessWidget {
-  const _Detail({
-    required this.label,
-    required this.value,
-    this.valueColor,
-    this.mono = false,
-  });
-
-  final String label;
-  final String value;
-  final Color? valueColor;
-  final bool mono;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 160,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        // `secondary` is white-with-alpha in most palettes, so overriding
-        // its alpha turned these tiles into pale blocks with unreadable
-        // labels on mobile. See Glass.solidTint.
-        color: Glass.solidTint(AppColors.secondary),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            value,
-            style: mono
-                ? AppTypography.monoSm.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: valueColor ?? AppColors.foreground,
-                  )
-                : AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-          ),
         ],
       ),
     );
@@ -2114,199 +2061,189 @@ class _PremiumEventHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = game.settings;
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── C3 HERO CRIMSON CARD ──
+        Stack(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFE53935),
+                    Color(0xFFC62828),
+                    Color(0xFF9E1B1B),
+                  ],
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66D53032),
+                    blurRadius: 20,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      SquircleIconButton(
+                        icon: Icons.chevron_left,
+                        size: 38,
+                        iconSize: 22,
+                        borderRadius: 12,
+                        backgroundColor: const Color(0x33000000),
+                        borderColor: Colors.white.withValues(alpha: 0.15),
+                        iconColor: Colors.white,
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go(RoutePaths.group);
+                          }
+                        },
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0x33000000),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                        ),
+                        child: const Text(
+                          "YOU'RE INVITED",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    settings.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      height: 1.15,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          settings.date.isNotEmpty && settings.time.isNotEmpty
+                              ? '${settings.date.split(',').first.toUpperCase()} · ${settings.time}'
+                              : 'FRI · 8:00 PM',
+                          style: const TextStyle(
+                            color: Color(0xFFD53032),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0x44000000),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                        ),
+                        child: Text(
+                          '\$${settings.buyIn.toInt()} BUY-IN',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (onEdit != null) ...[
+                        const Spacer(),
+                        IconButton(
+                          onPressed: onEdit,
+                          icon: const Icon(Icons.edit_outlined, color: Colors.white70, size: 20),
+                          tooltip: 'Edit details',
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Decorative background radial glow circle top-right
+            Positioned(
+              top: -30,
+              right: -30,
+              child: IgnorePointer(
+                child: Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // ── C3 LOCATION CARD ──
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF161619),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF242428)),
+          ),
+          child: Row(
             children: [
-              AppBackButton(onTap: () => context.go(RoutePaths.group)),
-              const SizedBox(width: AppSpacing.md),
+              const Icon(Icons.location_on_outlined, color: Color(0xFFE24446), size: 22),
+              const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('♠️', style: TextStyle(fontSize: 48)),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      settings.name,
-                      style: AppTypography.display(
-                        size: AppFontSizes.xxxl,
-                        weight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.calendar_today,
-                          size: 16,
-                          color: AppColors.mutedForeground,
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          settings.date,
-                          style: AppTypography.bodySm.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.access_time,
-                          size: 16,
-                          color: AppColors.mutedForeground,
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          settings.time,
-                          style: AppTypography.bodySm.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.location_on,
-                          size: 16,
-                          color: AppColors.mutedForeground,
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          showAddress
-                              ? settings.location
-                              : 'Address shared at check-in',
-                          style: AppTypography.bodySm.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                child: Text(
+                  showAddress
+                      ? (settings.location.isNotEmpty ? settings.location : "Marcus's place")
+                      : 'Address shared at check-in',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  AppBadge(
-                    label: game.status.name.toUpperCase(),
-                    variant: game.status.isActiveLive
-                        ? AppBadgeVariant.accent
-                        : AppBadgeVariant.muted,
-                  ),
-                  if (onEdit != null) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    IconButton(
-                      onPressed: onEdit,
-                      icon: Icon(
-                        Icons.edit_outlined,
-                        color: AppColors.mutedForeground,
-                      ),
-                      tooltip: 'Edit details',
-                    ),
-                  ],
-                ],
+              const Text(
+                '2.4 mi',
+                style: TextStyle(
+                  color: Color(0xFF8E8E93),
+                  fontSize: 13,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xl),
-          // The inputs the admin provided when creating the game — everyone
-          // in the group sees these (organizational costs stay admin-only).
-          Wrap(
-            runSpacing: AppSpacing.md,
-            spacing: AppSpacing.lg,
-            children: [
-              _Detail(
-                label: 'Buy-in',
-                value: '${settings.buyIn}',
-                valueColor: AppColors.primary,
-                mono: true,
-              ),
-              if (settings.koEnabled)
-                _Detail(
-                  label: 'KO bounty',
-                  value: '${settings.buyIn} + ${settings.koAmount}',
-                  valueColor: AppColors.primary,
-                  mono: true,
-                ),
-              _Detail(
-                label: 'Duration',
-                value:
-                    '${settings.durationHours == settings.durationHours.roundToDouble() ? settings.durationHours.round() : settings.durationHours}h',
-                mono: true,
-              ),
-              _Detail(
-                label: 'Rebuys',
-                value: settings.rebuys
-                    ? 'Unlimited, until L${settings.rebuysCloseLevel} @ ${settings.effectiveRebuyCost}'
-                    : 'None',
-              ),
-              _Detail(
-                label: 'Add-on',
-                value: settings.addOn
-                    ? '@ ${settings.effectiveAddOnCost}, end of L${settings.addOnCloseLevel}'
-                    : 'None',
-              ),
-              if (settings.anteEnabled)
-                _Detail(
-                  label: 'Ante',
-                  value: settings.anteStyle.name == 'individual'
-                      ? 'Individual, from L${settings.anteAfterLevel + 1}'
-                      : 'Big blind, from L${settings.anteAfterLevel + 1}',
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            runSpacing: AppSpacing.sm,
-            spacing: AppSpacing.lg,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.person_outline,
-                    size: 14,
-                    color: AppColors.mutedForeground,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Admin: $hostName',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  Icon(
-                    Icons.schedule_outlined,
-                    size: 14,
-                    color: AppColors.mutedForeground,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    settings.rsvpDeadline == null
-                        ? 'RSVPs close 1 hour before start'
-                        : 'RSVPs close at ${settings.rsvpDeadline!.hour.toString().padLeft(2, '0')}:${settings.rsvpDeadline!.minute.toString().padLeft(2, '0')}',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

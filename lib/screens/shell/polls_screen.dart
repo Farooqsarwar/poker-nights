@@ -13,7 +13,6 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
-import '../../widgets/group_switcher.dart';
 import '../../widgets/poll_card.dart';
 
 /// Group polls as a full screen (single navigation layer — no hub tab bar, so
@@ -139,17 +138,14 @@ class _PollsScreenState extends State<PollsScreen> {
           ],
           if (_pollOptions.length < 10)
             InkWell(
-              onTap: () => setState(
-                () => _pollOptions.add(TextEditingController()),
-              ),
+              onTap: () =>
+                  setState(() => _pollOptions.add(TextEditingController())),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12.0,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 12.0),
                 child: Text(
                   '+ Add option',
                   style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.primaryText,
+                    color: const Color(0xFFE5797A),
                   ),
                 ),
               ),
@@ -182,10 +178,7 @@ class _PollsScreenState extends State<PollsScreen> {
             fullWidth: true,
             disabled:
                 _pollQuestion.text.trim().isEmpty ||
-                _pollOptions
-                        .where((c) => c.text.trim().isNotEmpty)
-                        .length <
-                    2,
+                _pollOptions.where((c) => c.text.trim().isNotEmpty).length < 2,
             onPressed: () => _createPoll(app),
             child: const Text('Create poll'),
           ),
@@ -211,16 +204,25 @@ class _PollsScreenState extends State<PollsScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.poll_outlined, size: 64, color: AppColors.mutedForeground),
+                Icon(
+                  Icons.poll_outlined,
+                  size: 64,
+                  color: AppColors.mutedForeground,
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 Text(
                   'No group selected',
-                  style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w600),
+                  style: AppTypography.display(
+                    size: AppFontSizes.lg,
+                    weight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   'Join or create a group to see its polls.',
-                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 AppButton(
@@ -239,34 +241,76 @@ class _PollsScreenState extends State<PollsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const GroupContextHeader(title: 'Polls'),
-          const SizedBox(height: AppSpacing.lg),
-          if (group.polls.isEmpty) ...[
-            if (isAdmin)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => setState(() => _showPollModal = true),
-                  child: const Text('+ Create poll'),
+          // Top bar: Squircle back button <, Title 'Polls', + Create poll button
+          Row(
+            children: [
+              InkWell(
+                onTap: () => context.go(RoutePaths.group),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF242428)),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 18,
+                    color: Colors.white,
+                  ),
                 ),
               ),
+              const SizedBox(width: 14),
+              const Text(
+                'Polls',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              if (isAdmin)
+                InkWell(
+                  onTap: () => setState(() => _showPollModal = true),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD53032),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x33D53032),
+                          blurRadius: 10,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      '+ Create poll',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          if (group.polls.isEmpty) ...[
             AppEmptyState(
               icon: Icons.poll_outlined,
               title: 'No polls yet',
               description: 'Create a poll to help plan the next game.',
             ),
           ] else ...[
-            if (isAdmin) ...[
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => setState(() => _showPollModal = true),
-                child: const Text('+ Create poll'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-            ],
             for (final section in [
               ('OPEN', group.polls.where((p) => !p.closed).toList()),
               ('CLOSED', group.polls.where((p) => p.closed).toList()),
@@ -274,9 +318,11 @@ class _PollsScreenState extends State<PollsScreen> {
               if (section.$2.isNotEmpty) ...[
                 Text(
                   section.$1,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                    letterSpacing: 1,
+                  style: const TextStyle(
+                    color: Color(0xFF8E8E93),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -288,7 +334,7 @@ class _PollsScreenState extends State<PollsScreen> {
                     onVote: (opts) => app.votePoll(poll.id, opts),
                     onClose: () => app.closePoll(poll.id),
                   ),
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.md),
               ],
           ],
           _pollModal(app),

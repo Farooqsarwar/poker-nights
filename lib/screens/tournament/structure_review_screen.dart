@@ -33,6 +33,7 @@ import '../../widgets/medal_icon.dart';
 import '../../widgets/structure_editor.dart';
 import '../../widgets/count_stepper.dart';
 import '../../widgets/min_tap_target.dart';
+import '../../widgets/squircle_icon_button.dart';
 
 /// Structure review mirroring the web `StructureReviewPage`.
 ///
@@ -53,6 +54,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
   static const _tabStructure = 'structure';
 
   String _tab = _tabParams;
+  bool _isEditing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -282,11 +284,189 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
         : '${hhmm(start.add(Duration(minutes: totalMins - 10)))}–'
               '${hhmm(start.add(Duration(minutes: totalMins + 15)))}';
 
+    if (!_isEditing) {
+      return AppPage(
+        maxWidth: 640,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Top App Bar: Squircle back `<` button & `Step 5 of 5`
+            Row(
+              children: [
+                SquircleIconButton(
+                  icon: Icons.chevron_left,
+                  size: 40,
+                  borderRadius: 12,
+                  backgroundColor: const Color(0xFF141416),
+                  borderColor: const Color(0xFF242428),
+                  onPressed: () => context.go(backTo),
+                ),
+                const Spacer(),
+                const Text(
+                  'Step 5 of 5',
+                  style: TextStyle(
+                    color: Color(0xFF8E8E93),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Red progress indicator bar underneath app bar (100% full width gradient)
+            Container(
+              height: 2.5,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFD53032), Color(0xFFFF5252)],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            const Text(
+              'Review structure',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // 3 Summary Cards: levels | est. length | per level
+            Row(
+              children: [
+                Expanded(
+                  child: _buildC2SummaryCard(
+                    '${structure.levels.length}',
+                    'levels',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildC2SummaryCard(
+                    '~${(totalMins / 60).round()}h',
+                    'est. length',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildC2SummaryCard(
+                    '${structure.levelDuration}m',
+                    'per level',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Structure Levels Card
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF141416),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF242428)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                children: [
+                  for (var i = 0; i < schedule.length; i++) ...[
+                    _buildC2ScheduleRow(schedule[i], structure),
+                    if (i < schedule.length - 1)
+                      const Divider(height: 1, color: Color(0xFF1E1E22)),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Bottom Bar: Edit (dark squircle) & Publish event (crimson glowing)
+            Row(
+              children: [
+                Expanded(
+                  flex: 1,
+                  child: SizedBox(
+                    height: 52,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF141416),
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Color(0xFF242428)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: () => setState(() => _isEditing = true),
+                      child: const Text(
+                        'Edit',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x66D53032),
+                          blurRadius: 16,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD53032),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        app.publishGame();
+                        context.go(RoutePaths.invitation);
+                      },
+                      child: const Text(
+                        'Publish event',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      );
+    }
+
     return AppPage(
       maxWidth: 640,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _isEditing = false),
+                icon: const Icon(Icons.arrow_back, size: 16),
+                label: const Text('Back to review summary'),
+              ),
+            ),
+          ),
           JourneyProgress(
             game: game,
             currentRoute: RoutePaths.structureReview,
@@ -1481,7 +1661,127 @@ void _showAdjustModal(
       ),
     ),
   );
-}
+  }
+
+  Widget _buildC2SummaryCard(String value, String caption) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF242428)),
+      ),
+      child: Column(
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontFamily: AppTypography.monoFamily,
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            caption,
+            style: const TextStyle(
+              color: Color(0xFF8E8E93),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildC2ScheduleRow(_ScheduleRow row, TournamentStructure structure) {
+    if (row.isBreak) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.coffee_outlined,
+              size: 18,
+              color: Color(0xFF4CAF50),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Break',
+              style: TextStyle(
+                color: Color(0xFF4CAF50),
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '${row.breakMins}m',
+              style: const TextStyle(
+                color: Color(0xFF8E8E93),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final l = structure.levels[row.index];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 36,
+            child: Text(
+              'L${l.level}',
+              style: const TextStyle(
+                color: Color(0xFFE24446),
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '${Formatters.chips(l.sb)} / ${Formatters.chips(l.bb)}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (l.ante != null && l.ante! > 0) ...[
+            Text(
+              ' +${Formatters.chips(l.ante!)}',
+              style: const TextStyle(
+                color: Color(0xFFE24446),
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const Spacer(),
+          Text(
+            '${l.durationMins}m',
+            style: const TextStyle(
+              color: Color(0xFF8E8E93),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+);
+  }
+
 
 /// The numbers that drive the generator, as inputs instead of constants.
 ///

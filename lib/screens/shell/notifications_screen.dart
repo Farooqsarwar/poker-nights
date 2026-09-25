@@ -2,48 +2,56 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/colors.dart';
 import '../../app/route_paths.dart';
-import '../../app/typography.dart';
-import '../../constants/app_constants.dart';
 import '../../models/app_notification.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
-import '../../widgets/app_button.dart';
-import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 
-/// Notifications mirroring the web `NotificationsPage`.
+/// Notifications mirroring the mobile-first B6 design.
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
-  IconData _iconFor(NotificationType type) {
+  (Color, Color, IconData) _styleFor(NotificationType type) {
     switch (type) {
       case NotificationType.game:
-        return Icons.style_outlined;
+        return (
+          const Color(0xFF381E20),
+          const Color(0xFFD53032),
+          Icons.access_time,
+        );
       case NotificationType.invite:
-        return Icons.mail_outlined;
       case NotificationType.rsvp:
-        return Icons.check_circle_outlined;
-      case NotificationType.chat:
-        return Icons.chat_bubble_outline;
-      case NotificationType.admin:
-        return Icons.settings_outlined;
+        return (
+          const Color(0xFF1F3826),
+          const Color(0xFF4ADE80),
+          Icons.person_add_alt_1,
+        );
       case NotificationType.result:
-        return Icons.emoji_events_outlined;
+        return (
+          const Color(0xFF261C0D),
+          const Color(0xFFF59E0B),
+          Icons.emoji_events_outlined,
+        );
+      case NotificationType.chat:
+      case NotificationType.admin:
       case NotificationType.system:
-        return Icons.notifications_outlined;
+        return (
+          const Color(0xFF1E2024),
+          const Color(0xFF8E8E93),
+          Icons.chat_bubble_outline,
+        );
     }
   }
 
   void _openLink(BuildContext context, String? link) {
     if (link == null) return;
-    
+
     // Parse link to separate path and query parameters
     final uri = Uri.tryParse(link.startsWith('/') ? link : '/$link');
     final pathOnly = uri?.path ?? link;
-    
+
     final target = _routeFor(pathOnly);
     if (target == null) return;
     // For game-specific screens, ensure the current game is set in the
@@ -61,16 +69,18 @@ class NotificationsScreen extends StatelessWidget {
     if (gameScreens.contains(target)) {
       final app = context.read<AppProvider>();
       final gameId = uri?.queryParameters['gameId'];
-      
+
       LiveGame? gameToSet;
       if (gameId != null) {
-        gameToSet = app.currentGroup.games.where((g) => g.id == gameId).firstOrNull;
+        gameToSet = app.currentGroup.games
+            .where((g) => g.id == gameId)
+            .firstOrNull;
       }
       // Fallback if gameId is not found or not in link
       gameToSet ??= app.currentGroup.games
           .where((g) => g.status != LiveGameStatus.cancelled)
           .firstOrNull;
-          
+
       if (gameToSet != null) app.setCurrentGame(gameToSet);
     }
     context.go(target);
@@ -135,110 +145,162 @@ class NotificationsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Top bar: Squircle back button <, Title with unread count, Mark all read action
           Row(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Notifications',
-                      style: AppTypography.display(
-                        size: AppFontSizes.xxxl,
-                        weight: FontWeight.w700,
-                      ),
-                    ),
-                    if (unreadCount > 0)
-                      Text(
-                        '$unreadCount unread',
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                  ],
+              InkWell(
+                onTap: () => context.go(RoutePaths.home),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF242428)),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 18,
+                    color: Colors.white,
+                  ),
                 ),
               ),
+              const SizedBox(width: 14),
+              const Text(
+                'Notifications',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (unreadCount > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E2024),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$unreadCount unread',
+                    style: const TextStyle(
+                      color: Color(0xFF8E8E93),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+              const Spacer(),
               if (unreadCount > 0)
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.ghost,
-                  onPressed: app.markAllRead,
-                  child: const Text('Mark all read'),
+                InkWell(
+                  onTap: app.markAllRead,
+                  child: const Text(
+                    'Mark all read',
+                    style: TextStyle(
+                      color: Color(0xFFE5797A),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: 20),
           if (notifications.isEmpty)
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.xxl),
-              child: Column(
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: const Color(0xFF141416),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF242428)),
+              ),
+              child: const Column(
                 children: [
                   Icon(
                     Icons.notifications_outlined,
-                    size: AppFontSizes.display,
-                    color: AppColors.icon,
+                    size: 48,
+                    color: Color(0xFF8E8E93),
                   ),
-                  const SizedBox(height: AppSpacing.md),
+                  SizedBox(height: 16),
                   Text(
                     'No notifications yet.',
-                    style: AppTypography.bodyStyle.copyWith(
-                      color: AppColors.mutedForeground,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.xs),
+                  SizedBox(height: 6),
                   Text(
                     "You'll see game invites, RSVP updates, and announcements here.",
                     textAlign: TextAlign.center,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
+                    style: TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
                   ),
                 ],
               ),
             )
-          else
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  if (unreadList.isNotEmpty) ...[
-                    const _SectionHeader(label: 'NEW'),
-                    for (var i = 0; i < unreadList.length; i++)
-                      _NotificationRow(
-                        notification: unreadList[i],
-                        showDivider: i < unreadList.length - 1 || readList.isNotEmpty,
-                        icon: _iconFor(unreadList[i].type),
-                        onTap: () {
-                          app.markNotificationRead(unreadList[i].id);
-                          _openLink(context, unreadList[i].link);
-                        },
-                      ),
-                  ],
-                  if (readList.isNotEmpty) ...[
-                    const _SectionHeader(label: 'EARLIER'),
-                    for (var i = 0; i < readList.length; i++)
-                      _NotificationRow(
-                        notification: readList[i],
-                        showDivider: i < readList.length - 1,
-                        icon: _iconFor(readList[i].type),
-                        onTap: () {
-                          app.markNotificationRead(readList[i].id);
-                          _openLink(context, readList[i].link);
-                        },
-                      ),
-                  ],
-                ],
+          else ...[
+            if (unreadList.isNotEmpty) ...[
+              const Text(
+                'NEW',
+                style: TextStyle(
+                  color: Color(0xFF8E8E93),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                ),
               ),
-            ),
+              const SizedBox(height: 10),
+              for (final n in unreadList) ...[
+                _NotificationCard(
+                  notification: n,
+                  styleInfo: _styleFor(n.type),
+                  onTap: () {
+                    app.markNotificationRead(n.id);
+                    _openLink(context, n.link);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+              const SizedBox(height: 12),
+            ],
+            if (readList.isNotEmpty) ...[
+              const Text(
+                'EARLIER',
+                style: TextStyle(
+                  color: Color(0xFF8E8E93),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 10),
+              for (final n in readList) ...[
+                _NotificationCard(
+                  notification: n,
+                  styleInfo: _styleFor(n.type),
+                  onTap: () {
+                    app.markNotificationRead(n.id);
+                    _openLink(context, n.link);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ],
           if (notifications.isNotEmpty && unreadCount == 0)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.lg),
+            const Padding(
+              padding: EdgeInsets.only(top: 24),
               child: Text(
                 "You're all caught up.",
                 textAlign: TextAlign.center,
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
+                style: TextStyle(color: Color(0xFF8E8E93), fontSize: 12),
               ),
             ),
         ],
@@ -247,59 +309,31 @@ class NotificationsScreen extends StatelessWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.md,
-        AppSpacing.lg,
-        AppSpacing.sm,
-      ),
-      child: Text(
-        label,
-        style: AppTypography.bodyXs.copyWith(
-          color: AppColors.mutedForeground,
-          letterSpacing: 1,
-        ),
-      ),
-    );
-  }
-}
-
-class _NotificationRow extends StatelessWidget {
-  const _NotificationRow({
+class _NotificationCard extends StatelessWidget {
+  const _NotificationCard({
     required this.notification,
-    required this.icon,
-    required this.showDivider,
+    required this.styleInfo,
     required this.onTap,
   });
 
   final AppNotification notification;
-  final IconData icon;
-  final bool showDivider;
+  final (Color, Color, IconData) styleInfo;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final unread = !notification.read;
+    final (bgColor, iconColor, icon) = styleInfo;
+
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: unread
-              ? AppColors.primary.withValues(alpha: 0.04)
-              : Colors.transparent,
-          border: showDivider
-              ? Border(bottom: BorderSide(color: AppColors.border))
-              : null,
+          color: const Color(0xFF141416),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFF242428)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,18 +342,13 @@ class _NotificationRow extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: unread ? AppColors.primarySoft : AppColors.muted,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: unread
-                      ? AppColors.primary.withValues(alpha: 0.3)
-                      : AppColors.border,
-                ),
+                color: bgColor,
+                borderRadius: BorderRadius.circular(10),
               ),
               alignment: Alignment.center,
-              child: Icon(icon, size: 20, color: AppColors.icon),
+              child: Icon(icon, size: 20, color: iconColor),
             ),
-            const SizedBox(width: AppSpacing.md),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,53 +358,56 @@ class _NotificationRow extends StatelessWidget {
                       Expanded(
                         child: Text(
                           notification.title,
-                          style: AppTypography.bodySm.copyWith(
-                            fontWeight: FontWeight.w500,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                             color: unread
-                                ? AppColors.foreground
-                                : AppColors.mutedForeground,
+                                ? Colors.white
+                                : const Color(0xFFD1D1D6),
                           ),
                         ),
                       ),
                       if (unread) ...[
-                        const SizedBox(width: AppSpacing.sm),
+                        const SizedBox(width: 6),
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFD53032),
                             shape: BoxShape.circle,
                           ),
                         ),
                       ],
                     ],
                   ),
-                  const SizedBox(height: AppSpacing.xxs),
+                  const SizedBox(height: 3),
                   Text(
                     notification.body,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
+                    style: const TextStyle(
+                      color: Color(0xFF8E8E93),
+                      fontSize: 13,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.xxs),
+                  const SizedBox(height: 4),
                   Text(
                     Formatters.relativeTime(notification.timestamp),
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground.withValues(alpha: 0.6),
+                    style: const TextStyle(
+                      color: Color(0xFF636366),
+                      fontSize: 11,
                     ),
                   ),
                 ],
               ),
             ),
             if (notification.link != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
+              const Padding(
+                padding: EdgeInsets.only(top: 2, left: 6),
                 child: Icon(
                   Icons.chevron_right,
                   size: 18,
-                  color: AppColors.iconMuted.withValues(alpha: 0.6),
+                  color: Color(0xFF636366),
                 ),
               ),
           ],

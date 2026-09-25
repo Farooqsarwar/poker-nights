@@ -15,6 +15,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/back_nav_button.dart';
 import '../../widgets/chip_token.dart';
 import '../../widgets/count_stepper.dart';
 
@@ -96,8 +97,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
   /// Face value of the whole physical set — every colour's printed value
   /// times how many of that colour exist. Purely informational; never fed
   /// back into validation or the blind solver.
-  int get _totalValue =>
-      _chips.fold(0, (sum, c) => sum + c.value * c.quantity);
+  int get _totalValue => _chips.fold(0, (sum, c) => sum + c.value * c.quantity);
 
   void _addChip() {
     setState(() {
@@ -196,21 +196,47 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
         children: [
           Row(
             children: [
-              IconButton(
-                tooltip: 'Back',
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => context.pop(),
-              ),
+              BackNavButton(onPressed: () => context.pop(), label: 'Back'),
+              const SizedBox(width: 14),
               Expanded(
                 child: Text(
                   widget.chipSetId == null ? 'New Chip Set' : 'Edit Chip Set',
                   style: AppTypography.display(
-                    size: AppFontSizes.xxl,
+                    size: 26,
                     weight: FontWeight.w700,
+                    color: Colors.white,
                   ),
                 ),
               ),
-              AppButton(onPressed: _save, child: const Text('Save')),
+              InkWell(
+                onTap: _save,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD53032),
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x55D53032),
+                        blurRadius: 10,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -596,7 +622,8 @@ class _ChipRowState extends State<_ChipRow> {
     // Invalid but non-empty: don't update model, just show error
   }
 
-  void _onQuantity(int q) => widget.onChanged(widget.chip.copyWith(quantity: q));
+  void _onQuantity(int q) =>
+      widget.onChanged(widget.chip.copyWith(quantity: q));
 
   void _pickColor() {
     Color pickerColor = Color(widget.chip.hex);

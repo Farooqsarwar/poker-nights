@@ -16,9 +16,7 @@ import '../../models/table_settings.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_avatar.dart';
-import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
@@ -80,7 +78,7 @@ class _GroupScreenState extends State<GroupScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-              insetPadding: dialogInsets,
+          insetPadding: dialogInsets,
           backgroundColor: AppColors.card,
           title: const Text('Transfer Ownership'),
           content: Column(
@@ -266,70 +264,149 @@ class _GroupScreenState extends State<GroupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _GroupHeader(
-            group: group,
-            isAdmin: isAdmin,
-            onLeaveGroup: () => _confirmLeaveGroup(context),
-            onTransferOwnership: isAdmin
-                ? () => _showTransferOwnershipDialog(context)
-                : null,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // App bar: Squircle back button < on left, squircle more ⋮ button on right.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              CodeDisplay(code: group.joinCode, label: 'Group code'),
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => _showInviteModal(context, group),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.qr_code, size: 16),
-                    SizedBox(width: AppSpacing.xs),
-                    Text('Invite link / QR'),
-                  ],
-                ),
-              ),
-              if (isAdmin)
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => _showTableSettingsModal(context, app, group),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.table_bar_outlined, size: 16),
-                      SizedBox(width: AppSpacing.xs),
-                      Text('Table settings'),
-                    ],
+              InkWell(
+                onTap: () => context.go(RoutePaths.home),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF242428)),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 18,
+                    color: Colors.white,
                   ),
                 ),
+              ),
+              PopupMenuButton<String>(
+                icon: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF242428)),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.more_vert,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+                padding: EdgeInsets.zero,
+                color: const Color(0xFF18181A),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: Color(0xFF242428)),
+                ),
+                onSelected: (val) {
+                  if (val == 'leave') {
+                    _confirmLeaveGroup(context);
+                  } else if (val == 'transfer') {
+                    _showTransferOwnershipDialog(context);
+                  }
+                },
+                itemBuilder: (context) => [
+                  if (isAdmin)
+                    const PopupMenuItem(
+                      value: 'transfer',
+                      child: Text('Transfer Ownership'),
+                    ),
+                  const PopupMenuItem(
+                    value: 'leave',
+                    child: Text(
+                      'Leave Group',
+                      style: TextStyle(color: Color(0xFFE53935)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Group identity card
+          _GroupCardIdentity(group: group),
+          const SizedBox(height: AppSpacing.md),
+          // Action chips row: GROUP CODE · FP2608, Invite link / QR, Table settings
+          _GroupActionChips(
+            group: group,
+            isAdmin: isAdmin,
+            onInvite: () => _showInviteModal(context, group),
+            onTableSettings: () => _showTableSettingsModal(context, app, group),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Secondary button row: Presets, Pin, + New game
+          Row(
+            children: [
+              _SecondaryChip(
+                label: 'Presets',
+                onTap: () => context.go(RoutePaths.presets),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _SecondaryChip(
+                label: group.pinned ? 'Unpin' : 'Pin',
+                onTap: () => app.togglePinGroup(group),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              InkWell(
+                onTap: () => context.go(RoutePaths.createTournament),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  height: 42,
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD53032),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x33D53032),
+                        blurRadius: 10,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    '+ New game',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Games Section with count
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Text(
-                  'Games',
-                  style: AppTypography.bodyStyle.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+              const Text(
+                'Games',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               Text(
                 '${upcomingGames.length} upcoming',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
+                style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 14),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.md),
           _buildGames(app, group, upcomingGames, isAdmin, user),
         ],
       ),
@@ -583,216 +660,254 @@ class _GroupScreenState extends State<GroupScreen> {
   }
 }
 
-class _GroupHeader extends StatelessWidget {
+class _GroupCardIdentity extends StatelessWidget {
   final Group group;
-  final bool isAdmin;
-  final VoidCallback? onLeaveGroup;
-  final VoidCallback? onTransferOwnership;
-  const _GroupHeader({
-    required this.group,
-    required this.isAdmin,
-    this.onLeaveGroup,
-    this.onTransferOwnership,
-  });
-
-  static const double _mobileBreakpoint = 640;
+  const _GroupCardIdentity({required this.group});
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < _mobileBreakpoint;
-        // Mobile: icon bleeds off the top-right corner (unchanged).
-        // Desktop/laptop: icon anchors to the right edge, vertically
-        // centered — NOT dead-center across the whole header. The header's
-        // content (title on the left, action buttons on the right) is
-        // asymmetric, so centering the icon across the full width landed it
-        // in the empty gap between the two, reading as misplaced rather than
-        // as a deliberate corner watermark. Anchoring right keeps it in the
-        // same visual role as the mobile corner-bleed, just inset instead of
-        // clipped, regardless of how wide the header gets.
-        // minHeight MUST be large enough to contain the icon at its offset
-        // or the Stack's own bounding box will be shorter than the icon and
-        // hard-clip it into a broken rectangle instead of showing the full
-        // glyph.
-        final iconSize = isMobile ? 96.0 : 150.0;
-        final iconOffset = isMobile ? -14.0 : -22.0;
-        final minHeight = isMobile ? 128.0 : 170.0;
-
-        final info = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              group.name,
-              style: AppTypography.display(
-                size: AppFontSizes.xxxl,
-                weight: FontWeight.w700,
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF242428)),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -8,
+            top: -8,
+            child: IgnorePointer(
+              child: Icon(
+                groupIconMap[group.icon] ?? Icons.casino,
+                size: 72,
+                color: const Color(0xFFD53032).withValues(alpha: 0.15),
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: [
-                Text(
-                  '${group.members.length} members',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                group.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(width: AppSpacing.md),
-                SizedBox(
-                  height: 32,
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < group.members.length && i < 5; i++)
-                        Align(
-                          widthFactor: 0.6,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${group.members.length} members',
+                style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                height: 32,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < group.members.length && i < 4; i++)
+                      Align(
+                        widthFactor: 0.7,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF141416),
+                              width: 2,
+                            ),
+                          ),
                           child: AppAvatar(
                             name: group.members[i].name,
                             size: AppAvatarSize.sm,
                           ),
                         ),
-                      if (group.members.length > 5)
-                        Align(
-                          widthFactor: 0.6,
-                          child: CircleAvatar(
-                            radius: 12,
-                            backgroundColor: AppColors.border,
-                            child: Text(
-                              '+${group.members.length - 5}',
-                              style: AppTypography.monoXs,
+                      ),
+                    if (group.members.length > 4)
+                      Align(
+                        widthFactor: 0.7,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF242428),
+                            border: Border.all(
+                              color: const Color(0xFF141416),
+                              width: 2,
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '+${group.members.length - 4}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
-          ],
-        );
-
-        final actions = Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            if (isAdmin) ...[
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => context.go(RoutePaths.presets),
-                child: const Text('Presets'),
-              ),
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: () =>
-                    context.read<AppProvider>().togglePinGroup(group),
-                child: Text(group.pinned ? 'Unpin' : 'Pin'),
-              ),
-              AppButton(
-                size: AppButtonSize.sm,
-                onPressed: () => context.go(RoutePaths.createTournament),
-                child: const Text('+ New game'),
-              ),
-              if (isAdmin && onTransferOwnership != null)
-                AppButton(
-                  size: AppButtonSize.sm,
-                  variant: AppButtonVariant.secondary,
-                  onPressed: onTransferOwnership,
-                  child: const Text('Transfer Ownership'),
-                ),
-            ] else if (onLeaveGroup != null) ...[
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: onLeaveGroup,
-                child: const Text('Leave Group'),
               ),
             ],
-          ],
-        );
-
-        final content = isMobile
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  info,
-                  if (isAdmin) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    actions,
-                  ],
-                ],
-              )
-            : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: info),
-                  if (isAdmin) actions,
-                ],
-              );
-
-        return ClipRRect(
-          // Rounded clip so the icon bleeds off the corner cleanly instead
-          // of getting sliced into a hard rectangle.
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: minHeight),
-            child: Stack(
-              fit: StackFit.passthrough,
-              clipBehavior: Clip.hardEdge,
-              children: [
-                // Mobile keeps the corner-bleed look (Positioned must be a
-                // direct Stack child; IgnorePointer wraps the visual content
-                // rather than the other way around). Desktop centers the
-                // icon in the header instead.
-                if (isMobile)
-                  Positioned(
-                    right: iconOffset,
-                    top: iconOffset,
-                    child: _GroupHeaderIcon(
-                      icon: groupIconMap[group.icon] ?? Icons.casino,
-                      size: iconSize,
-                    ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.only(right: AppSpacing.lg),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _GroupHeaderIcon(
-                        icon: groupIconMap[group.icon] ?? Icons.casino,
-                        size: iconSize,
-                      ),
-                    ),
-                  ),
-                Align(alignment: Alignment.topLeft, child: content),
-              ],
-            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
 
-/// Decorative background icon for the group header. Uses AppColors.destructive
-/// rather than a hardcoded color, and ignores pointer events so it never
-/// intercepts taps meant for the content above it.
-class _GroupHeaderIcon extends StatelessWidget {
-  const _GroupHeaderIcon({required this.icon, required this.size});
+class _GroupActionChips extends StatelessWidget {
+  final Group group;
+  final bool isAdmin;
+  final VoidCallback onInvite;
+  final VoidCallback onTableSettings;
 
-  final IconData icon;
-  final double size;
+  const _GroupActionChips({
+    required this.group,
+    required this.isAdmin,
+    required this.onInvite,
+    required this.onTableSettings,
+  });
 
   @override
   Widget build(BuildContext context) {
-    Theme.of(context);
-    return IgnorePointer(
-      child: Icon(
-        icon,
-        size: size,
-        color: AppColors.primary.withValues(alpha: 0.2),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          InkWell(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: group.joinCode));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Group code copied')),
+              );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF141416),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF242428)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.copy, size: 14, color: Color(0xFF8E8E93)),
+                  const SizedBox(width: 8),
+                  Text(
+                    'GROUP CODE · ${group.joinCode}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: onInvite,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF141416),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF242428)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.qr_code, size: 14, color: Color(0xFF8E8E93)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Invite link / QR',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isAdmin) ...[
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: onTableSettings,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141416),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF242428)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.tune, size: 14, color: Color(0xFF8E8E93)),
+                    SizedBox(width: 8),
+                    Text(
+                      'Table settings',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SecondaryChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _SecondaryChip({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 42,
+          decoration: BoxDecoration(
+            color: const Color(0xFF141416),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF242428)),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -811,130 +926,171 @@ class _PremiumGameCard extends StatelessWidget {
     required this.onTap,
   });
 
-  // Matches the status colouring used on Home's upcoming-games list so a
-  // game reads the same way wherever it appears (spec: one design language).
-  AppBadgeVariant _colorFor(LiveGameStatus s) {
-    switch (s) {
-      case LiveGameStatus.running:
-        return AppBadgeVariant.green;
-      case LiveGameStatus.paused:
-      case LiveGameStatus.rebuypause:
-      case LiveGameStatus.onBreak:
-      case LiveGameStatus.finaltable:
-      case LiveGameStatus.published:
-      case LiveGameStatus.checkin:
-      case LiveGameStatus.ready:
-        return AppBadgeVariant.accent;
-      case LiveGameStatus.draft:
-      case LiveGameStatus.completed:
-        return AppBadgeVariant.muted;
-      case LiveGameStatus.cancelled:
-        return AppBadgeVariant.red;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final rsvp = game.players.where((p) => p.id == user?.id).firstOrNull?.rsvp;
+    final isLive = game.status.isActiveLive;
 
-    return AppCard(
-      onTap: onTap,
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      glow: game.status.isActiveLive,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isLive ? const Color(0xFFD53032) : const Color(0xFF242428),
+        ),
+        boxShadow: isLive
+            ? const [
+                BoxShadow(
+                  color: Color(0x33D53032),
+                  blurRadius: 16,
+                  offset: Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AppBadge(
-                // The friendly label ("Open for RSVP", "Live", …) instead of
-                // the raw enum name — same source Home already reads from.
-                label: game.status.label.toUpperCase(),
-                variant: _colorFor(game.status),
-                // The sheet marks a running game with a leading dot, not
-                // a glyph. Only when it is actually live — a dot on a
-                // finished game would read as "still going".
-                dotColor: game.status.isActiveLive ? AppColors.primary : null,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (isLive)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1F3826),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.circle, size: 6, color: Color(0xFF4ADE80)),
+                          SizedBox(width: 4),
+                          Text(
+                            'LIVE',
+                            style: TextStyle(
+                              color: Color(0xFF4ADE80),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E2024),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        game.status.label.toUpperCase(),
+                        style: const TextStyle(
+                          color: Color(0xFF8E8E93),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Color(0xFF8E8E93),
+                  ),
+                ],
               ),
-              Icon(Icons.chevron_right, color: AppColors.mutedForeground),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            game.settings.name,
-            style: AppTypography.display(
-              size: AppFontSizes.xl,
-              weight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.xs,
-            children: [
-              _InfoChip(
-                icon: Icons.calendar_today_outlined,
-                text: game.settings.date,
+              const SizedBox(height: 10),
+              Text(
+                game.settings.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              _InfoChip(
-                icon: Icons.access_time_outlined,
-                text: game.settings.time,
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                runSpacing: 4,
+                children: [
+                  _InfoChip(
+                    icon: Icons.calendar_today_outlined,
+                    text: game.settings.date,
+                  ),
+                  _InfoChip(
+                    icon: Icons.access_time_outlined,
+                    text: game.settings.time,
+                  ),
+                  _InfoChip(
+                    icon: Icons.location_on_outlined,
+                    text: game.settings.locationPrivate
+                        ? 'Private address'
+                        : game.settings.location,
+                  ),
+                ],
               ),
-              _InfoChip(
-                icon: Icons.location_on_outlined,
-                text: game.settings.locationPrivate
-                    ? 'Address shared at check-in'
-                    : game.settings.location,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: 2,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.secondary,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: Text(
-              'Buy-in: ${game.settings.buyIn}',
-              style: AppTypography.mono(
-                size: AppFontSizes.xs,
-                color: AppColors.foreground,
-              ),
-            ),
-          ),
-          // RSVP is set on the game screen only — here it is read-only.
-          if (user != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Text(
-                  game.settings.rsvpCutoffPassed
-                      ? 'RSVPs closed'
-                      : 'Your RSVP',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.mutedForeground,
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E2024),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Buy-in: ${game.settings.buyIn}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                RSVPBadge(rsvp: rsvp),
-                const Spacer(),
-                if (!game.settings.rsvpCutoffPassed)
-                  Text(
-                    rsvp == null ? 'Tap to respond' : 'Tap to change',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.primaryText,
+              ),
+              if (user != null) ...[
+                const SizedBox(height: 12),
+                const Divider(color: Color(0xFF242428), height: 1),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Text(
+                      game.settings.rsvpCutoffPassed
+                          ? 'RSVPs closed'
+                          : 'Your RSVP',
+                      style: const TextStyle(
+                        color: Color(0xFF8E8E93),
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    RSVPBadge(rsvp: rsvp),
+                    const Spacer(),
+                    if (!game.settings.rsvpCutoffPassed)
+                      Text(
+                        rsvp == null ? 'Tap to respond' : 'Tap to change',
+                        style: const TextStyle(
+                          color: Color(0xFFE5797A),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
+                ),
               ],
-            ),
-          ],
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

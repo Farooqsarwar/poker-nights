@@ -81,7 +81,7 @@ class ScreenShell extends StatelessWidget {
     return ResponsiveBuilder(
       builder: (context, device) {
         if (device.isCompact) {
-          return _MobileShell(child: child);
+          return _MobileShell(requiredPath: requiredPath, child: child);
         }
         return Scaffold(
           backgroundColor: Colors.transparent, // Background provided by ThemedAppBackground
@@ -183,14 +183,28 @@ class _Gate extends StatelessWidget {
 }
 
 class _MobileShell extends StatelessWidget {
-  const _MobileShell({required this.child});
+  const _MobileShell({required this.child, required this.requiredPath});
 
   final Widget child;
+  final String requiredPath;
+
+  static const _hasCustomTopBarPaths = {
+    RoutePaths.home,
+    RoutePaths.group,
+    RoutePaths.chat,
+    RoutePaths.members,
+    RoutePaths.polls,
+    RoutePaths.notifications,
+    RoutePaths.history,
+    RoutePaths.joinGroup,
+  };
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final hasCustomBar = _hasCustomTopBarPaths.contains(requiredPath);
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ThemedAppBackground(
@@ -198,7 +212,7 @@ class _MobileShell extends StatelessWidget {
           children: [
             Column(
               children: [
-                _MobileTopBar(onMenu: app.toggleDrawer),
+                if (!hasCustomBar) _MobileTopBar(onMenu: app.toggleDrawer),
                 const ConnectionBanner(
                   padding: EdgeInsets.fromLTRB(
                     AppSpacing.lg,
@@ -218,7 +232,9 @@ class _MobileShell extends StatelessWidget {
                     padding: EdgeInsets.only(
                       bottom: kBottomNavHeight + bottomInset,
                     ),
-                    child: child,
+                    child: hasCustomBar
+                        ? SafeArea(bottom: false, child: child)
+                        : child,
                   ),
                 ),
               ],

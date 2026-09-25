@@ -2,19 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/colors.dart';
 import '../../app/route_paths.dart';
-import '../../app/typography.dart';
-import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
-import '../../widgets/app_button.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/app_avatar.dart';
 import '../../widgets/app_page.dart';
 
 /// Landing page for a group invite link/QR code (`/join-group?code=...`).
-/// Requires sign-in (the router bounces unauthenticated visitors through
-/// login with `?next=` and returns them here) — group membership has no
-/// guest-session equivalent, unlike the per-tournament guest flow.
+/// Matches A8_JoinGroup.png layout with squircle badge, group summary, and actions.
 class JoinGroupScreen extends StatefulWidget {
   const JoinGroupScreen({super.key, required this.code});
 
@@ -31,13 +25,28 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
 
   String get _groupName => context.read<AppProvider>().currentGroup.name;
 
-  int get _memberCount => context.read<AppProvider>().currentGroup.members.length;
+  int get _memberCount =>
+      context.read<AppProvider>().currentGroup.members.length;
+
+  int get _gamesCount => context.read<AppProvider>().currentGroup.games.length;
+
+  String get _invitedBy {
+    final group = context.read<AppProvider>().currentGroup;
+    final owner = group.members.where((m) => m.id == group.ownerId).firstOrNull;
+    if (owner != null && owner.name.isNotEmpty) {
+      return 'Invited by ${owner.name}';
+    }
+    return 'You\'ve been invited to join';
+  }
 
   String get _groupInitials {
     final name = _groupName;
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
-    if (parts.isEmpty) return '?';
-    return parts.map((p) => p[0].toUpperCase()).join().substring(0, parts.length >= 2 ? 2 : 1);
+    if (parts.isEmpty) return 'FP';
+    return parts
+        .map((p) => p[0].toUpperCase())
+        .join()
+        .substring(0, parts.length >= 2 ? 2 : 1);
   }
 
   @override
@@ -50,112 +59,355 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     final ok = await context.read<AppProvider>().joinGroup(widget.code);
     if (!mounted) return;
     setState(() => _state = ok ? _JoinState.success : _JoinState.failure);
-    if (ok) {
-      Future.delayed(AppDurations.slow, () {
-        if (mounted) context.go(RoutePaths.members);
-      });
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Single cohesive card for every state — the group's identity is the
-    // payload once it resolves, so it reads as one surface growing to fit
-    // rather than a status line with a separate card bolted underneath.
-    // Purely presentational: the auto-join call and its timing (initState /
-    // _attemptJoin / the delayed forward nav) are unchanged below.
+    final app = context.watch<AppProvider>();
+    final group = app.currentGroup;
+
     return AppPage(
       maxWidth: 480,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.huge),
-          child: AppCard(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                switch (_state) {
-                  _JoinState.working => const CircularProgressIndicator(),
-                  _JoinState.success => Icon(
-                      Icons.check_circle,
-                      color: AppColors.success,
-                      size: 48,
-                    ),
-                  _JoinState.failure => Icon(
-                      Icons.error_outline,
-                      color: AppColors.destructive,
-                      size: 48,
-                    ),
-                },
-                const SizedBox(height: AppSpacing.lg),
-                Text(
-                  switch (_state) {
-                    _JoinState.working => 'Joining group…',
-                    _JoinState.success => 'You\'re in! Taking you there…',
-                    _JoinState.failure =>
-                      'That invite link/QR code is invalid or expired.',
-                  },
-                  textAlign: TextAlign.center,
-                  style: _state == _JoinState.working
-                      ? AppTypography.bodySm.copyWith(
-                          color: AppColors.mutedForeground,
-                        )
-                      : AppTypography.display(size: AppFontSizes.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Top bar: Squircle back button <
+          Align(
+            alignment: Alignment.centerLeft,
+            child: InkWell(
+              onTap: () => context.go(RoutePaths.home),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141416),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF242428)),
                 ),
-                if (_state == _JoinState.success) ...[
-                  const SizedBox(height: AppSpacing.xl),
-                  Container(height: 1, color: AppColors.border),
-                  const SizedBox(height: AppSpacing.xl),
-                  // The group's mark and name, and its member count — the
-                  // invite's identity, confirmed. The auto-join and forward
-                  // navigation above are unchanged.
-                  Container(
-                    width: 56,
-                    height: 56,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Text(
-                      _groupInitials,
-                      style: AppTypography.display(
-                        size: AppFontSizes.lg,
-                        weight: FontWeight.w700,
-                        color: AppColors.primaryText,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    _groupName,
-                    textAlign: TextAlign.center,
-                    style: AppTypography.display(
-                      size: AppFontSizes.xl,
-                      weight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '$_memberCount members',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
-                if (_state == _JoinState.failure) ...[
-                  const SizedBox(height: AppSpacing.xl),
-                  AppButton(
-                    fullWidth: true,
-                    onPressed: () => context.go(RoutePaths.home),
-                    child: const Text('Go home'),
-                  ),
-                ],
-              ],
+                child: const Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 18,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
-        ),
+          const SizedBox(height: 32),
+          if (_state == _JoinState.working)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 64),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    CircularProgressIndicator(color: Color(0xFFD53032)),
+                    SizedBox(height: 20),
+                    Text(
+                      'Checking invitation…',
+                      style: TextStyle(color: Color(0xFF8E8E93), fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (_state == _JoinState.failure)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 48),
+                child: Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF242428)),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: Color(0xFFE53935),
+                        size: 48,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Invalid Invitation',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'That invite link or QR code is invalid or has expired.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFF8E8E93),
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      InkWell(
+                        onTap: () => context.go(RoutePaths.home),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          height: 44,
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E2024),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF242428)),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'Go home',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else ...[
+            // GROUP INVITE eyebrow badge
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E2024),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'GROUP INVITE',
+                  style: TextStyle(
+                    color: Color(0xFFE5797A),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Red 64x64 squircle initials badge
+            Center(
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD53032),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x33D53032),
+                      blurRadius: 16,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _groupInitials,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            // Group name
+            Text(
+              _groupName,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Invited by
+            Text(
+              _invitedBy,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 14),
+            ),
+            const SizedBox(height: 28),
+            // Summary Card: Members + Games played
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF141416),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF242428)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          height: 28,
+                          child: Row(
+                            children: [
+                              for (
+                                var i = 0;
+                                i < group.members.length && i < 3;
+                                i++
+                              )
+                                Align(
+                                  widthFactor: 0.7,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: const Color(0xFF141416),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: AppAvatar(
+                                      name: group.members[i].name,
+                                      size: AppAvatarSize.sm,
+                                    ),
+                                  ),
+                                ),
+                              if (group.members.length > 3)
+                                Align(
+                                  widthFactor: 0.7,
+                                  child: Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF242428),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: const Color(0xFF141416),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '+${group.members.length - 3}',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '$_memberCount members',
+                          style: const TextStyle(
+                            color: Color(0xFF8E8E93),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 48,
+                    color: const Color(0xFF242428),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$_gamesCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Games played',
+                          style: TextStyle(
+                            color: Color(0xFF8E8E93),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+            // Join group button
+            InkWell(
+              onTap: () => context.go(RoutePaths.group),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD53032),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x33D53032),
+                      blurRadius: 16,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: const Text(
+                  'Join group',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Not now link
+            Center(
+              child: InkWell(
+                onTap: () => context.go(RoutePaths.home),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  child: Text(
+                    'Not now',
+                    style: TextStyle(
+                      color: Color(0xFF8E8E93),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

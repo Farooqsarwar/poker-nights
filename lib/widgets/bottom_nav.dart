@@ -58,7 +58,7 @@ class BottomNav extends StatelessWidget {
           path: RoutePaths.members,
           label: 'Members',
           icon: Icons.person_outline,
-          activeColor: const Color(0xFFD53032),
+          activeColor: AppColors.primary,
           badge: group.members.length,
         ),
         _BottomItem(
@@ -199,7 +199,7 @@ class BottomNav extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Glass.solid(AppColors.card, 0.98),
-      barrierColor: Colors.black.withValues(alpha: 0.5),
+      barrierColor: AppColors.black.withValues(alpha: 0.5),
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: SingleChildScrollView(
@@ -462,4 +462,4 @@ class _BottomItem {
 
   /// Additional locations that should light this item up as active.
   final List<String>? activePaths;
-}
+}

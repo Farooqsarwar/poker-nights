@@ -377,7 +377,7 @@ class Glass {
         ? AppColors.destructive.withValues(alpha: 0.70)
         : focused
             ? AppColors.ring.withValues(alpha: 0.80)
-            : AppColors.border.withValues(alpha: 0.75);
+            : AppColors.borderSubtle;
     // A solid field on the dark ground with a hairline you can actually see,
     // per the redesign. This used to set `color` AND `gradient`; Flutter drops
     // the colour when a gradient is present, so the fill never painted and the

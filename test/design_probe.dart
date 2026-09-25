@@ -42,7 +42,7 @@ import 'package:provider/provider.dart';
 /// exist. Substituting a real face makes width, wrapping and hierarchy
 /// faithful. The letter shapes are Segoe UI rather than Space Grotesk, so
 /// judge layout and hierarchy from these, not the typeface itself.
-Future<void> _loadRealFonts() async {
+Future<void> loadRealFonts() async {
   ByteData font(String file) =>
       ByteData.view(File('C:\\Windows\\Fonts\\$file').readAsBytesSync().buffer);
   Future<void> register(String family, ByteData data) async {
@@ -90,7 +90,7 @@ Future<void> _loadRealFonts() async {
 }
 
 void main() {
-  setUpAll(_loadRealFonts);
+  setUpAll(loadRealFonts);
 
   setUp(() {
     AppColors.currentPalette = ThemePalettes.forId('red');

@@ -11,8 +11,12 @@ import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_card.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_tag.dart';
+import '../../widgets/icon_tile.dart';
+import '../../widgets/page_header.dart';
 import '../../widgets/app_text_field.dart';
 
 /// Group members as a full screen (single navigation layer — the Members item
@@ -91,22 +95,22 @@ class MembersScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         insetPadding: dialogInsets,
-        backgroundColor: const Color(0xFF18181A),
-        title: const Text(
+        backgroundColor: AppColors.muted,
+        title: Text(
           'Remove Member',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: AppColors.foreground),
         ),
         content: Text(
           'Remove ${member.name} from this group? '
           'They can rejoin with the group code.',
-          style: const TextStyle(color: Color(0xFF8E8E93)),
+          style: TextStyle(color: AppColors.mutedForeground),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text(
+            child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: AppColors.mutedForeground),
             ),
           ),
           TextButton(
@@ -114,9 +118,9 @@ class MembersScreen extends StatelessWidget {
               app.removeMember(member.id);
               Navigator.of(ctx).pop();
             },
-            child: const Text(
+            child: Text(
               'Remove',
-              style: TextStyle(color: Color(0xFFE53935)),
+              style: TextStyle(color: AppColors.destructiveText),
             ),
           ),
         ],
@@ -134,115 +138,77 @@ class MembersScreen extends StatelessWidget {
     final isOwner = group.ownerId == m.id;
     final isAdmin = m.isAdmin || isOwner;
     final isCoAdmin = m.isCoAdmin && !isAdmin;
+    final canEditRoles = app.user?.id == group.ownerId && m.id != group.ownerId;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF141416),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF242428)),
+    return AppCard(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        canEditRoles ? AppSpacing.xs : AppSpacing.lg,
+        AppSpacing.md,
       ),
       child: Row(
         children: [
           AppAvatar(name: m.name, size: AppAvatarSize.md),
-          const SizedBox(width: 14),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        isMe ? '${m.name} (You)' : m.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (isAdmin) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0x26F59E0B),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFFF59E0B)),
-                        ),
-                        child: const Text(
-                          'ADMIN',
-                          style: TextStyle(
-                            color: Color(0xFFF59E0B),
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ] else if (isCoAdmin) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E2024),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'CO-ADMIN',
-                          style: TextStyle(
-                            color: Color(0xFF8E8E93),
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                Text(
+                  isMe ? '${m.name} · you' : m.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   m.email,
-                  style: const TextStyle(
-                    color: Color(0xFF8E8E93),
-                    fontSize: 12,
-                  ),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          Text(
-            '${m.stats.played}G · ${m.stats.wins}W',
-            style: const TextStyle(
-              color: Color(0xFF8E8E93),
-              fontSize: 13,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.w500,
-            ),
+          const SizedBox(width: AppSpacing.sm),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Gold is reserved for Premium and first place, so the admin
+              // marker uses the accent rather than the PDF's amber.
+              if (isAdmin)
+                const AppTag('Admin', tone: AppTagTone.primary)
+              else if (isCoAdmin)
+                const AppTag('Co-admin'),
+              if (isAdmin || isCoAdmin) const SizedBox(height: AppSpacing.xs),
+              Text(
+                '${m.stats.played}G · ${m.stats.wins}W',
+                style: AppTypography.mono(
+                  size: AppFontSizes.xs,
+                  weight: FontWeight.w500,
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ],
           ),
-          if (app.user?.id == group.ownerId && m.id != group.ownerId) ...[
-            const SizedBox(width: 4),
+          if (canEditRoles)
             PopupMenuButton<GroupRole>(
-              icon: const Icon(
+              tooltip: 'Member options',
+              icon: Icon(
                 Icons.more_vert,
                 size: 18,
-                color: Color(0xFF8E8E93),
+                color: AppColors.mutedForeground,
               ),
-              color: const Color(0xFF18181A),
+              color: AppColors.muted,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Color(0xFF242428)),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                side: BorderSide(color: AppColors.borderSubtle),
               ),
               onSelected: (role) => app.setGroupRole(m.id, role),
               itemBuilder: (context) => [
@@ -252,21 +218,20 @@ class MembersScreen extends StatelessWidget {
                     checked: app.roleOf(m) == role,
                     child: Text(role.label),
                   ),
-                const PopupMenuItem<GroupRole>(
+                PopupMenuItem<GroupRole>(
                   enabled: false,
                   height: 8,
-                  child: Divider(color: Color(0xFF242428), height: 1),
+                  child: Divider(color: AppColors.borderSubtle, height: 1),
                 ),
                 PopupMenuItem<GroupRole>(
                   onTap: () => _confirmRemoveMember(context, m),
-                  child: const Text(
+                  child: Text(
                     'Remove from Group',
-                    style: TextStyle(color: Color(0xFFE53935)),
+                    style: TextStyle(color: AppColors.destructiveText),
                   ),
                 ),
               ],
             ),
-          ],
         ],
       ),
     );
@@ -286,10 +251,10 @@ class MembersScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.groups_outlined,
+                const IconTile(
+                  icon: Icons.groups_outlined,
                   size: 64,
-                  color: AppColors.mutedForeground,
+                  tone: IconTileTone.neutral,
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 Text(
@@ -318,114 +283,49 @@ class MembersScreen extends StatelessWidget {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final twoCol = constraints.maxWidth >= 640;
-        final width = twoCol
-            ? (constraints.maxWidth - AppSpacing.sm) / 2
-            : constraints.maxWidth;
-        return AppPage(
-          maxWidth: 960,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return AppPage(
+      maxWidth: 960,
+      child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Top bar: Squircle back button <, Title with count, + Add member button
-              Row(
-                children: [
-                  InkWell(
-                    onTap: () => context.go(RoutePaths.group),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF141416),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF242428)),
-                      ),
-                      child: const Icon(
-                        Icons.arrow_back_ios_new,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  const Text(
-                    'Members',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E2024),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '${group.members.length}',
-                      style: const TextStyle(
-                        color: Color(0xFF8E8E93),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
+              PageHeader(
+                onBack: () => context.go(RoutePaths.group),
+                title: 'Members',
+                count: group.members.length,
+                actions: [
                   if (app.canManageMembers)
-                    InkWell(
-                      onTap: () => _showAddMemberDialog(context),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        height: 40,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD53032),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x33D53032),
-                              blurRadius: 10,
-                              offset: Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          '+ Add member',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
+                    AppButton(
+                      variant: AppButtonVariant.secondary,
+                      size: AppButtonSize.sm,
+                      onPressed: () => _showAddMemberDialog(context),
+                      child: const Text('+ Add member'),
                     ),
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  for (final m in group.members)
-                    SizedBox(
-                      width: width,
-                      child: _memberCard(context, app, m, group),
-                    ),
-                ],
+              // Measured here, at the grid itself, so the two-column split
+              // uses the page's real content width.
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final twoCol = constraints.maxWidth >= 640;
+                  final width = twoCol
+                      ? (constraints.maxWidth - AppSpacing.sm) / 2
+                      : constraints.maxWidth;
+                  return Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      for (final m in group.members)
+                        SizedBox(
+                          width: width,
+                          child: _memberCard(context, app, m, group),
+                        ),
+                    ],
+                  );
+                },
               ),
             ],
           ),
-        );
-      },
     );
   }
 }

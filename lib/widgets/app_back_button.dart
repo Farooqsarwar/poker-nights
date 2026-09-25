@@ -58,7 +58,7 @@ class _AppBackButtonState extends State<AppBackButton> {
                       border: Border.all(
                         color: _focused
                             ? AppColors.ring
-                            : AppColors.border.withValues(alpha: 0.75),
+                            : AppColors.borderSubtle,
                         width: _focused ? 2 : 1,
                       ),
                     ),

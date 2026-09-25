@@ -7,9 +7,12 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_tag.dart';
 import '../../widgets/chat_bubble.dart';
+import '../../widgets/icon_tile.dart';
 
 /// Group chat as a full screen (single navigation layer — no hub tabs, so the
 /// Chat item never appears twice).
@@ -76,58 +79,40 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Top bar: Squircle back button <, Group title + online indicator
+          // Top bar: back tile, group name and member count.
           Row(
             children: [
-              InkWell(
-                onTap: () => context.go(RoutePaths.group),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF141416),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF242428)),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back_ios_new,
-                    size: 18,
-                    color: Colors.white,
-                  ),
+              Transform.translate(
+                offset: const Offset(-4, 0),
+                child: AppBackButton(
+                  onTap: () => context.go(RoutePaths.group),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       group.name.isEmpty ? 'Chat' : group.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: AppTypography.display(
+                        size: AppFontSizes.md,
+                        weight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
                     ),
                     const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.circle,
-                          size: 6,
-                          color: Color(0xFF4ADE80),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          '${group.members.length} members · 3 online',
-                          style: const TextStyle(
-                            color: Color(0xFF8E8E93),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                    // Member count only: there is no presence data, so the
+                    // design's "· 3 online" is not shown.
+                    Text(
+                      '${group.members.length} members',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
@@ -139,41 +124,22 @@ class _ChatScreenState extends State<ChatScreen> {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD53032),
-                    borderRadius: BorderRadius.circular(10),
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                   child: Text(
                     '$unread',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                    style: AppTypography.mono(
+                      size: 11,
+                      weight: FontWeight.w700,
+                      color: AppColors.primaryForeground,
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 12),
-          // TODAY pill
-          Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF141416),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF242428)),
-              ),
-              child: const Text(
-                'TODAY',
-                style: TextStyle(
-                  color: Color(0xFF8E8E93),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-          ),
+          const SizedBox(height: AppSpacing.md),
+          const Center(child: AppTag('Today')),
           const SizedBox(height: 8),
           Expanded(
             child: messages.isEmpty
@@ -236,9 +202,9 @@ class _Composer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F0F11),
-        border: Border(top: BorderSide(color: Color(0xFF242428))),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border(top: BorderSide(color: AppColors.borderSubtle)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -246,22 +212,21 @@ class _Composer extends StatelessWidget {
           if (showCreateGame) ...[
             Align(
               alignment: Alignment.centerLeft,
-              child: TextButton.icon(
+              child: TextButton(
                 onPressed: () => context.go(RoutePaths.createTournament),
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFFE5797A),
+                  foregroundColor: AppColors.primaryText,
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   visualDensity: VisualDensity.compact,
                 ),
-                icon: const Icon(Icons.add_circle_outline, size: 16),
-                label: const Text('+ Create game in chat'),
+                child: const Text('+ Create game in chat'),
               ),
             ),
           ],
           if (error != null) ...[
             Text(
               error!,
-              style: const TextStyle(color: Color(0xFFE53935), fontSize: 12),
+              style: TextStyle(color: AppColors.destructiveText, fontSize: 12),
             ),
             const SizedBox(height: 4),
           ],
@@ -272,9 +237,9 @@ class _Composer extends StatelessWidget {
                   height: 44,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF141416),
+                    color: AppColors.card,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF242428)),
+                    border: Border.all(color: AppColors.borderSubtle),
                   ),
                   alignment: Alignment.center,
                   child: TextField(
@@ -286,11 +251,11 @@ class _Composer extends StatelessWidget {
                     textCapitalization: TextCapitalization.sentences,
                     onChanged: onChanged,
                     onSubmitted: (_) => onSend(),
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: AppColors.foreground, fontSize: 14),
+                    decoration: InputDecoration(
                       hintText: 'Type a message...',
                       hintStyle: TextStyle(
-                        color: Color(0xFF6B7280),
+                        color: AppColors.onSurfaceHint,
                         fontSize: 14,
                       ),
                       counterText: '',
@@ -312,13 +277,13 @@ class _Composer extends StatelessWidget {
                   height: 44,
                   decoration: BoxDecoration(
                     color: canSend
-                        ? const Color(0xFFD53032)
-                        : const Color(0xFF1E2024),
+                        ? AppColors.primary
+                        : AppColors.muted,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: canSend
-                        ? const [
+                        ? [
                             BoxShadow(
-                              color: Color(0x33D53032),
+                              color: AppColors.primary.withValues(alpha: 0.2),
                               blurRadius: 10,
                               offset: Offset(0, 3),
                             ),
@@ -329,7 +294,7 @@ class _Composer extends StatelessWidget {
                   child: Icon(
                     Icons.send_rounded,
                     size: 18,
-                    color: canSend ? Colors.white : const Color(0xFF6B7280),
+                    color: canSend ? AppColors.foreground : AppColors.onSurfaceHint,
                   ),
                 ),
               ),
@@ -355,26 +320,17 @@ class _EmptyChat extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141416),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF242428)),
-                ),
-                child: const Icon(
-                  Icons.chat_bubble_outline,
-                  size: 28,
-                  color: Color(0xFFE5797A),
-                ),
+              const IconTile(
+                icon: Icons.chat_bubble_outline,
+                size: 64,
+                tone: IconTileTone.soft,
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
                 'No messages yet',
                 style: AppTypography.bodySm.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color: AppColors.foreground,
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),

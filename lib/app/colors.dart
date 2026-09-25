@@ -65,6 +65,7 @@ class AppColors {
   static Color get glassOverlay => currentPalette.glassOverlay;
   static Color get hairlineWhite => currentPalette.hairlineWhite;
   static Color get hairlineBorder => currentPalette.hairlineBorder;
+  static Color get borderSubtle => currentPalette.borderSubtle;
   static Color get blackGlow => currentPalette.blackGlow;
   static Color get feltGlowStrong => currentPalette.feltGlowStrong;
   static Color get shadowDark => currentPalette.shadowDark;

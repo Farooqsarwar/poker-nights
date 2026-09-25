@@ -32,8 +32,8 @@ class SquircleIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveBg = backgroundColor ?? const Color(0xFF16191D);
-    final effectiveBorder = borderColor ?? const Color(0xFF262A30);
+    final effectiveBg = backgroundColor ?? AppColors.muted;
+    final effectiveBorder = borderColor ?? AppColors.borderSubtle;
     final effectiveIconColor = iconColor ?? AppColors.foreground;
 
     Widget button = Material(
@@ -49,9 +49,9 @@ class SquircleIconButton extends StatelessWidget {
             color: effectiveBg,
             borderRadius: BorderRadius.circular(borderRadius),
             border: Border.all(color: effectiveBorder, width: 1),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Color(0x22000000),
+                color: AppColors.shadowSoft,
                 blurRadius: 4,
                 offset: Offset(0, 2),
               ),

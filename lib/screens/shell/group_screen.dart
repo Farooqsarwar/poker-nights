@@ -16,6 +16,7 @@ import '../../models/table_settings.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_avatar.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
@@ -268,22 +269,10 @@ class _GroupScreenState extends State<GroupScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              InkWell(
-                onTap: () => context.go(RoutePaths.home),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF141416),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF242428)),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back_ios_new,
-                    size: 18,
-                    color: Colors.white,
-                  ),
+              Transform.translate(
+                offset: const Offset(-4, 0),
+                child: AppBackButton(
+                  onTap: () => context.go(RoutePaths.home),
                 ),
               ),
               PopupMenuButton<String>(
@@ -291,22 +280,22 @@ class _GroupScreenState extends State<GroupScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF141416),
+                    color: AppColors.card,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF242428)),
+                    border: Border.all(color: AppColors.borderSubtle),
                   ),
                   alignment: Alignment.center,
-                  child: const Icon(
+                  child: Icon(
                     Icons.more_vert,
                     size: 20,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
                 ),
                 padding: EdgeInsets.zero,
-                color: const Color(0xFF18181A),
+                color: AppColors.muted,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: Color(0xFF242428)),
+                  side: BorderSide(color: AppColors.borderSubtle),
                 ),
                 onSelected: (val) {
                   if (val == 'leave') {
@@ -321,11 +310,11 @@ class _GroupScreenState extends State<GroupScreen> {
                       value: 'transfer',
                       child: Text('Transfer Ownership'),
                     ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'leave',
                     child: Text(
                       'Leave Group',
-                      style: TextStyle(color: Color(0xFFE53935)),
+                      style: TextStyle(color: AppColors.destructiveText),
                     ),
                   ),
                 ],
@@ -357,33 +346,10 @@ class _GroupScreenState extends State<GroupScreen> {
                 onTap: () => app.togglePinGroup(group),
               ),
               const SizedBox(width: AppSpacing.sm),
-              InkWell(
-                onTap: () => context.go(RoutePaths.createTournament),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  height: 42,
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD53032),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x33D53032),
-                        blurRadius: 10,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    '+ New game',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+              AppButton(
+                size: AppButtonSize.sm,
+                onPressed: () => context.go(RoutePaths.createTournament),
+                child: const Text('+ New game'),
               ),
             ],
           ),
@@ -392,17 +358,17 @@ class _GroupScreenState extends State<GroupScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Games',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.foreground,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                 ),
               ),
               Text(
                 '${upcomingGames.length} upcoming',
-                style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 14),
+                style: TextStyle(color: AppColors.mutedForeground, fontSize: 14),
               ),
             ],
           ),
@@ -484,7 +450,7 @@ class _GroupScreenState extends State<GroupScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.10),
+                      color: AppColors.black.withValues(alpha: 0.10),
                       blurRadius: 18,
                       offset: const Offset(0, 4),
                     ),
@@ -669,9 +635,9 @@ class _GroupCardIdentity extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF141416),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF242428)),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       child: Stack(
         children: [
@@ -682,7 +648,7 @@ class _GroupCardIdentity extends StatelessWidget {
               child: Icon(
                 groupIconMap[group.icon] ?? Icons.casino,
                 size: 72,
-                color: const Color(0xFFD53032).withValues(alpha: 0.15),
+                color: AppColors.primary.withValues(alpha: 0.15),
               ),
             ),
           ),
@@ -691,8 +657,8 @@ class _GroupCardIdentity extends StatelessWidget {
             children: [
               Text(
                 group.name,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: AppColors.foreground,
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
                 ),
@@ -700,7 +666,7 @@ class _GroupCardIdentity extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 '${group.members.length} members',
-                style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
+                style: TextStyle(color: AppColors.mutedForeground, fontSize: 13),
               ),
               const SizedBox(height: 14),
               SizedBox(
@@ -714,7 +680,7 @@ class _GroupCardIdentity extends StatelessWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: const Color(0xFF141416),
+                              color: AppColors.card,
                               width: 2,
                             ),
                           ),
@@ -732,17 +698,17 @@ class _GroupCardIdentity extends StatelessWidget {
                           height: 32,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: const Color(0xFF242428),
+                            color: AppColors.borderSubtle,
                             border: Border.all(
-                              color: const Color(0xFF141416),
+                              color: AppColors.card,
                               width: 2,
                             ),
                           ),
                           alignment: Alignment.center,
                           child: Text(
                             '+${group.members.length - 4}',
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: AppColors.foreground,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                             ),
@@ -790,23 +756,18 @@ class _GroupActionChips extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF141416),
+                color: AppColors.primarySoft,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF242428)),
+                border: Border.all(color: AppColors.primarySoftBorder),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.copy, size: 14, color: Color(0xFF8E8E93)),
+                  Icon(Icons.copy, size: 14, color: AppColors.primaryText),
                   const SizedBox(width: 8),
                   Text(
                     'GROUP CODE · ${group.joinCode}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
+                    style: AppTypography.eyebrow(size: 11),
                   ),
                 ],
               ),
@@ -819,19 +780,19 @@ class _GroupActionChips extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF141416),
+                color: AppColors.card,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF242428)),
+                border: Border.all(color: AppColors.borderSubtle),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.qr_code, size: 14, color: Color(0xFF8E8E93)),
+                  Icon(Icons.qr_code, size: 14, color: AppColors.mutedForeground),
                   SizedBox(width: 8),
                   Text(
                     'Invite link / QR',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.foreground,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
@@ -851,19 +812,19 @@ class _GroupActionChips extends StatelessWidget {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF141416),
+                  color: AppColors.card,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF242428)),
+                  border: Border.all(color: AppColors.borderSubtle),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.tune, size: 14, color: Color(0xFF8E8E93)),
+                    Icon(Icons.tune, size: 14, color: AppColors.mutedForeground),
                     SizedBox(width: 8),
                     Text(
                       'Table settings',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.foreground,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -888,26 +849,12 @@ class _SecondaryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          height: 42,
-          decoration: BoxDecoration(
-            color: const Color(0xFF141416),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF242428)),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
+      child: AppButton(
+        variant: AppButtonVariant.secondary,
+        size: AppButtonSize.sm,
+        fullWidth: true,
+        onPressed: onTap,
+        child: Text(label, overflow: TextOverflow.ellipsis),
       ),
     );
   }
@@ -934,15 +881,15 @@ class _PremiumGameCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF141416),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isLive ? const Color(0xFFD53032) : const Color(0xFF242428),
+          color: isLive ? AppColors.primary : AppColors.borderSubtle,
         ),
         boxShadow: isLive
-            ? const [
+            ? [
                 BoxShadow(
-                  color: Color(0x33D53032),
+                  color: AppColors.primary.withValues(alpha: 0.2),
                   blurRadius: 16,
                   offset: Offset(0, 4),
                 ),
@@ -967,18 +914,18 @@ class _PremiumGameCard extends StatelessWidget {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1F3826),
+                        color: AppColors.successSoft,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.circle, size: 6, color: Color(0xFF4ADE80)),
+                          Icon(Icons.circle, size: 6, color: AppColors.successText),
                           SizedBox(width: 4),
                           Text(
                             'LIVE',
                             style: TextStyle(
-                              color: Color(0xFF4ADE80),
+                              color: AppColors.successText,
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                             ),
@@ -993,30 +940,30 @@ class _PremiumGameCard extends StatelessWidget {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E2024),
+                        color: AppColors.muted,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         game.status.label.toUpperCase(),
-                        style: const TextStyle(
-                          color: Color(0xFF8E8E93),
+                        style: TextStyle(
+                          color: AppColors.mutedForeground,
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                  const Icon(
+                  Icon(
                     Icons.chevron_right,
                     size: 18,
-                    color: Color(0xFF8E8E93),
+                    color: AppColors.mutedForeground,
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               Text(
                 game.settings.name,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: AppColors.foreground,
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1046,13 +993,13 @@ class _PremiumGameCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E2024),
+                  color: AppColors.muted,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   'Buy-in: ${game.settings.buyIn}',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: AppColors.foreground,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -1060,7 +1007,7 @@ class _PremiumGameCard extends StatelessWidget {
               ),
               if (user != null) ...[
                 const SizedBox(height: 12),
-                const Divider(color: Color(0xFF242428), height: 1),
+                Divider(color: AppColors.borderSubtle, height: 1),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -1068,8 +1015,8 @@ class _PremiumGameCard extends StatelessWidget {
                       game.settings.rsvpCutoffPassed
                           ? 'RSVPs closed'
                           : 'Your RSVP',
-                      style: const TextStyle(
-                        color: Color(0xFF8E8E93),
+                      style: TextStyle(
+                        color: AppColors.mutedForeground,
                         fontSize: 12,
                       ),
                     ),
@@ -1079,8 +1026,8 @@ class _PremiumGameCard extends StatelessWidget {
                     if (!game.settings.rsvpCutoffPassed)
                       Text(
                         rsvp == null ? 'Tap to respond' : 'Tap to change',
-                        style: const TextStyle(
-                          color: Color(0xFFE5797A),
+                        style: TextStyle(
+                          color: AppColors.primaryText,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),

@@ -64,7 +64,7 @@ class IconTile extends StatelessWidget {
       ),
       IconTileTone.neutral => (
         AppColors.muted,
-        AppColors.border.withValues(alpha: 0.75),
+        AppColors.borderSubtle,
         AppColors.mutedForeground,
       ),
     };

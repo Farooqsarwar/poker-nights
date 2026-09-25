@@ -55,46 +55,26 @@ class ChatBubble extends StatelessWidget {
       constraints: BoxConstraints(maxWidth: maxWidth),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: mine ? const Color(0xFFD53032) : const Color(0xFF141416),
-        borderRadius: BorderRadius.circular(16).copyWith(
+        color: mine ? AppColors.primary : AppColors.muted,
+        borderRadius: BorderRadius.circular(AppRadius.lg).copyWith(
           bottomRight: mine ? const Radius.circular(4) : null,
           bottomLeft: mine ? null : const Radius.circular(4),
         ),
-        border: mine ? null : Border.all(color: const Color(0xFF242428)),
+        border: mine ? null : Border.all(color: AppColors.borderSubtle),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: mine
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          if (!mine)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                message.authorName,
-                style: const TextStyle(
-                  color: Color(0xFFE5797A),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          Text(
-            message.body,
-            style: const TextStyle(color: Colors.white, fontSize: 14),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            Formatters.relativeTime(message.timestamp),
-            style: TextStyle(
-              color: mine ? Colors.white70 : const Color(0xFF8E8E93),
-              fontSize: 10,
-            ),
-          ),
-        ],
+      child: Text(
+        message.body,
+        style: AppTypography.bodySm.copyWith(
+          color: mine ? AppColors.primaryForeground : AppColors.foreground,
+        ),
       ),
     );
+
+    final metaStyle = AppTypography.bodyXs.copyWith(
+      color: AppColors.mutedForeground,
+      fontSize: 11,
+    );
+    final time = Formatters.relativeTime(message.timestamp);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -105,7 +85,10 @@ class ChatBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!mine) ...[
-            AppAvatar(name: message.authorName, size: AppAvatarSize.sm),
+            Padding(
+              padding: const EdgeInsets.only(top: 18),
+              child: AppAvatar(name: message.authorName, size: AppAvatarSize.sm),
+            ),
             const SizedBox(width: AppSpacing.sm),
           ],
           Flexible(
@@ -114,31 +97,42 @@ class ChatBubble extends StatelessWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
+                if (!mine)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 4),
+                    child: Text(
+                      message.authorName,
+                      style: metaStyle.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 bubble,
-                if (canDelete)
-                  Semantics(
-                    button: true,
-                    label: 'Delete this message',
-                    excludeSemantics: true,
-                    child: InkWell(
-                      onTap: onDelete,
-                      child: MinTapTarget(
-                        child: Padding(
-                          padding: const EdgeInsets.only(
-                            top: 2,
-                            right: 4,
-                            left: 4,
-                          ),
-                          child: Text(
-                            'delete',
-                            style: AppTypography.body(
-                              size: 10,
-                            ).copyWith(color: AppColors.mutedForeground),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(mine ? 'You · $time' : time, style: metaStyle),
+                    ),
+                    if (canDelete)
+                      Semantics(
+                        button: true,
+                        label: 'Delete this message',
+                        excludeSemantics: true,
+                        child: InkWell(
+                          onTap: onDelete,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          child: MinTapTarget(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              child: Text('· Delete', style: metaStyle),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
+                  ],
+                ),
               ],
             ),
           ),

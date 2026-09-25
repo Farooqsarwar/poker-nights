@@ -1317,7 +1317,7 @@ class _ChoiceRow extends StatelessWidget {
               border: Border.all(
                 color: selected
                     ? AppColors.primary
-                    : AppColors.border.withValues(alpha: 0.75),
+                    : AppColors.borderSubtle,
               ),
             ),
             child: Row(
@@ -1407,7 +1407,7 @@ class _StateCard extends StatelessWidget {
                 color: AppColors.muted,
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 border: Border.all(
-                  color: AppColors.border.withValues(alpha: 0.75),
+                  color: AppColors.borderSubtle,
                 ),
               ),
               child: Text(

@@ -56,7 +56,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
   String get _groupInitials {
     final name = _groupName;
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
-    if (parts.isEmpty) return 'FP';
+    if (parts.isEmpty) return '♠';
     return parts
         .map((p) => p[0].toUpperCase())
         .join()

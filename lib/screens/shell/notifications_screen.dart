@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -7,42 +8,32 @@ import '../../models/app_notification.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
+import '../../app/typography.dart';
+import '../../constants/app_constants.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_eyebrow.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/icon_tile.dart';
+import '../../widgets/page_header.dart';
+import '../../widgets/prompt_link.dart';
 
 /// Notifications mirroring the mobile-first B6 design.
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
-  (Color, Color, IconData) _styleFor(NotificationType type) {
-    switch (type) {
-      case NotificationType.game:
-        return (
-          const Color(0xFF381E20),
-          const Color(0xFFD53032),
-          Icons.access_time,
-        );
-      case NotificationType.invite:
-      case NotificationType.rsvp:
-        return (
-          const Color(0xFF1F3826),
-          const Color(0xFF4ADE80),
-          Icons.person_add_alt_1,
-        );
-      case NotificationType.result:
-        return (
-          const Color(0xFF261C0D),
-          const Color(0xFFF59E0B),
-          Icons.emoji_events_outlined,
-        );
-      case NotificationType.chat:
-      case NotificationType.admin:
-      case NotificationType.system:
-        return (
-          const Color(0xFF1E2024),
-          const Color(0xFF8E8E93),
-          Icons.chat_bubble_outline,
-        );
-    }
+  (IconTileTone, IconData) _styleFor(NotificationType type) {
+    return switch (type) {
+      NotificationType.game => (IconTileTone.soft, Icons.access_time),
+      NotificationType.invite ||
+      NotificationType.rsvp => (IconTileTone.success, Icons.person_add_alt_1),
+      NotificationType.result =>
+        (IconTileTone.warning, Icons.emoji_events_outlined),
+      NotificationType.chat ||
+      NotificationType.admin ||
+      NotificationType.system =>
+        (IconTileTone.neutral, Icons.chat_bubble_outline),
+    };
   }
 
   void _openLink(BuildContext context, String? link) {
@@ -145,118 +136,26 @@ class NotificationsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Top bar: Squircle back button <, Title with unread count, Mark all read action
-          Row(
-            children: [
-              InkWell(
-                onTap: () => context.go(RoutePaths.home),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF141416),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF242428)),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back_ios_new,
-                    size: 18,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              const Text(
-                'Notifications',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (unreadCount > 0) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E2024),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '$unreadCount unread',
-                    style: const TextStyle(
-                      color: Color(0xFF8E8E93),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-              const Spacer(),
-              if (unreadCount > 0)
-                InkWell(
-                  onTap: app.markAllRead,
-                  child: const Text(
-                    'Mark all read',
-                    style: TextStyle(
-                      color: Color(0xFFE5797A),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-            ],
+          PageHeader(
+            onBack: () => context.go(RoutePaths.home),
+            title: 'Notifications',
+            subtitle: unreadCount > 0 ? '$unreadCount unread' : null,
+            titleAction: unreadCount > 0
+                ? PromptLink(action: 'Mark all read', onTap: app.markAllRead)
+                : null,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.lg),
           if (notifications.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: const Color(0xFF141416),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF242428)),
-              ),
-              child: const Column(
-                children: [
-                  Icon(
-                    Icons.notifications_outlined,
-                    size: 48,
-                    color: Color(0xFF8E8E93),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'No notifications yet.',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    "You'll see game invites, RSVP updates, and announcements here.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
-                  ),
-                ],
-              ),
+            const AppEmptyState(
+              icon: Icons.notifications_outlined,
+              title: 'No notifications yet.',
+              description:
+                  "You'll see game invites, RSVP updates, and announcements here.",
             )
           else ...[
             if (unreadList.isNotEmpty) ...[
-              const Text(
-                'NEW',
-                style: TextStyle(
-                  color: Color(0xFF8E8E93),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 10),
+              const AppEyebrow('New', muted: true),
+              const SizedBox(height: AppSpacing.sm),
               for (final n in unreadList) ...[
                 _NotificationCard(
                   notification: n,
@@ -266,21 +165,13 @@ class NotificationsScreen extends StatelessWidget {
                     _openLink(context, n.link);
                   },
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
             ],
             if (readList.isNotEmpty) ...[
-              const Text(
-                'EARLIER',
-                style: TextStyle(
-                  color: Color(0xFF8E8E93),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 10),
+              const AppEyebrow('Earlier', muted: true),
+              const SizedBox(height: AppSpacing.sm),
               for (final n in readList) ...[
                 _NotificationCard(
                   notification: n,
@@ -290,17 +181,19 @@ class NotificationsScreen extends StatelessWidget {
                     _openLink(context, n.link);
                   },
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
               ],
             ],
           ],
           if (notifications.isNotEmpty && unreadCount == 0)
-            const Padding(
-              padding: EdgeInsets.only(top: 24),
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xl),
               child: Text(
                 "You're all caught up.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFF8E8E93), fontSize: 12),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
         ],
@@ -317,101 +210,78 @@ class _NotificationCard extends StatelessWidget {
   });
 
   final AppNotification notification;
-  final (Color, Color, IconData) styleInfo;
+  final (IconTileTone, IconData) styleInfo;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final unread = !notification.read;
-    final (bgColor, iconColor, icon) = styleInfo;
+    final (tone, icon) = styleInfo;
 
-    return InkWell(
+    return AppCard(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF141416),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFF242428)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 20, color: iconColor),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          notification.title,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: unread
-                                ? Colors.white
-                                : const Color(0xFFD1D1D6),
-                          ),
+      padding: const EdgeInsets.all(AppSpacing.md + 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconTile(icon: icon, size: 40, tone: tone, glow: false),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        notification.title,
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: unread
+                              ? AppColors.foreground
+                              : AppColors.secondaryForeground,
                         ),
                       ),
-                      if (unread) ...[
-                        const SizedBox(width: 6),
-                        Container(
+                    ),
+                    if (unread) ...[
+                      const SizedBox(width: 6),
+                      Semantics(
+                        label: 'Unread',
+                        child: Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFD53032),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
                             shape: BoxShape.circle,
                           ),
                         ),
-                      ],
+                      ),
                     ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${notification.body} · '
+                  '${Formatters.relativeTime(notification.timestamp)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    notification.body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF8E8E93),
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    Formatters.relativeTime(notification.timestamp),
-                    style: const TextStyle(
-                      color: Color(0xFF636366),
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
+                ),
+              ],
+            ),
+          ),
+          if (notification.link != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, left: 6),
+              child: Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: AppColors.onSurfaceHint,
               ),
             ),
-            if (notification.link != null)
-              const Padding(
-                padding: EdgeInsets.only(top: 2, left: 6),
-                child: Icon(
-                  Icons.chevron_right,
-                  size: 18,
-                  color: Color(0xFF636366),
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }

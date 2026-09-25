@@ -235,7 +235,7 @@ class _AppButtonState extends State<AppButton> {
           border: Border.all(
             color: _hovering
                 ? AppColors.border
-                : AppColors.border.withValues(alpha: 0.75),
+                : AppColors.borderSubtle,
           ),
         );
       case AppButtonVariant.danger:

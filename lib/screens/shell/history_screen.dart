@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../app/typography.dart';
+import '../../app/colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -10,6 +12,7 @@ import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/page_header.dart';
 import '../../widgets/medal_icon.dart';
 import '../../responsive/responsive.dart';
 
@@ -45,37 +48,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Top bar: Squircle back button <, Title 'History'
-              Row(
-                children: [
-                  InkWell(
-                    onTap: () => context.go(RoutePaths.group),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF141416),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF242428)),
-                      ),
-                      child: const Icon(
-                        Icons.arrow_back_ios_new,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  const Text(
-                    'History',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+              PageHeader(
+                onBack: () => context.go(RoutePaths.group),
+                title: 'History',
               ),
               const SizedBox(height: AppSpacing.md),
               // Filter pills row
@@ -137,23 +112,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF141416),
+                    color: AppColors.card,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF242428)),
+                    border: Border.all(color: AppColors.borderSubtle),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.account_balance_wallet_outlined,
                         size: 16,
-                        color: Color(0xFFD53032),
+                        color: AppColors.primary,
                       ),
                       const SizedBox(width: AppSpacing.sm),
-                      const Text(
+                      Text(
                         'Organizer P&L',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFFD53032),
+                          color: AppColors.primary,
                           fontSize: 13,
                         ),
                       ),
@@ -162,11 +137,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         Formatters.money('', myStats.totalPnl),
                         style: TextStyle(
                           color: myStats.totalPnl >= 0
-                              ? const Color(0xFF4ADE80)
-                              : const Color(0xFFE53935),
+                              ? AppColors.successText
+                              : AppColors.destructiveText,
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
-                          fontFamily: 'monospace',
+                          fontFeatures: AppTypography.numericFeatures,
                         ),
                       ),
                     ],
@@ -322,17 +297,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xxl),
       decoration: BoxDecoration(
-        color: const Color(0xFF141416),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF242428)),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       child: Column(
         children: [
-          Icon(icon, size: 40, color: const Color(0xFF8E8E93)),
+          Icon(icon, size: 40, color: AppColors.mutedForeground),
           const SizedBox(height: AppSpacing.sm),
           Text(
             message,
-            style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 14),
+            style: TextStyle(color: AppColors.mutedForeground, fontSize: 14),
           ),
         ],
       ),
@@ -379,9 +354,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF141416),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF242428)),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       child: Column(
         children: [
@@ -390,7 +365,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
                 border: i < sorted.length - 1
-                    ? const Border(bottom: BorderSide(color: Color(0xFF242428)))
+                    ? Border(bottom: BorderSide(color: AppColors.borderSubtle))
                     : null,
               ),
               child: Row(
@@ -401,10 +376,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ? MedalIcon(i + 1, size: 18)
                         : Text(
                             '#${i + 1}',
-                            style: const TextStyle(
-                              color: Color(0xFF8E8E93),
+                            style: TextStyle(
+                              color: AppColors.mutedForeground,
                               fontSize: 12,
-                              fontFamily: 'monospace',
+                              fontFeatures: AppTypography.numericFeatures,
                             ),
                           ),
                   ),
@@ -415,8 +390,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         Flexible(
                           child: Text(
                             sorted[i].value.name,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: AppColors.foreground,
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
@@ -477,20 +452,24 @@ class _FilterPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return Semantics(
+      button: true,
+      selected: active,
+      child: InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         height: 36,
+        margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          color: active ? const Color(0xFFD53032) : const Color(0xFF141416),
+          color: active ? AppColors.primary : AppColors.card,
           borderRadius: BorderRadius.circular(10),
-          border: active ? null : Border.all(color: const Color(0xFF242428)),
+          border: active ? null : Border.all(color: AppColors.borderSubtle),
           boxShadow: active
-              ? const [
+              ? [
                   BoxShadow(
-                    color: Color(0x33D53032),
+                    color: AppColors.primary.withValues(alpha: 0.2),
                     blurRadius: 8,
                     offset: Offset(0, 2),
                   ),
@@ -500,13 +479,14 @@ class _FilterPill extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           label,
-          style: TextStyle(
-            color: active ? Colors.white : const Color(0xFF8E8E93),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
+          style: AppTypography.eyebrow(
+            size: 11,
+            color: active
+                ? AppColors.primaryForeground
+                : AppColors.mutedForeground,
           ),
         ),
+      ),
       ),
     );
   }
@@ -536,9 +516,9 @@ class _MiniStat extends StatelessWidget {
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFF141416),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF242428)),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -547,11 +527,11 @@ class _MiniStat extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
-                fontFamily: 'monospace',
+                color: AppColors.foreground,
+                fontFeatures: AppTypography.numericFeatures,
               ),
             ),
           ),
@@ -560,7 +540,7 @@ class _MiniStat extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 11, color: Color(0xFF8E8E93)),
+              style: TextStyle(fontSize: 11, color: AppColors.mutedForeground),
             ),
           ),
         ],
@@ -581,16 +561,16 @@ class _LbStat extends StatelessWidget {
       children: [
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,
-            color: Colors.white,
-            fontFamily: 'monospace',
+            color: AppColors.foreground,
+            fontFeatures: AppTypography.numericFeatures,
           ),
         ),
         Text(
           label,
-          style: const TextStyle(fontSize: 10, color: Color(0xFF8E8E93)),
+          style: TextStyle(fontSize: 10, color: AppColors.mutedForeground),
         ),
       ],
     );
@@ -610,16 +590,16 @@ class _CashHistoryRow extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF141416),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF242428)),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       clipBehavior: Clip.antiAlias,
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(width: 4, color: const Color(0xFF242428)),
+            Container(width: 4, color: AppColors.borderSubtle),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -629,14 +609,14 @@ class _CashHistoryRow extends StatelessWidget {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E2024),
+                        color: AppColors.muted,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       alignment: Alignment.center,
-                      child: const Icon(
+                      child: Icon(
                         Icons.payments_outlined,
                         size: 20,
-                        color: Color(0xFF8E8E93),
+                        color: AppColors.mutedForeground,
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -646,8 +626,8 @@ class _CashHistoryRow extends StatelessWidget {
                         children: [
                           Text(
                             session.settings.name,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: AppColors.foreground,
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                             ),
@@ -656,8 +636,8 @@ class _CashHistoryRow extends StatelessWidget {
                           const SizedBox(height: 3),
                           Text(
                             '${session.settings.date} · ${session.players.length} players',
-                            style: const TextStyle(
-                              color: Color(0xFF8E8E93),
+                            style: TextStyle(
+                              color: AppColors.mutedForeground,
                               fontSize: 12,
                             ),
                           ),
@@ -670,11 +650,11 @@ class _CashHistoryRow extends StatelessWidget {
                         if (showAmounts)
                           Text(
                             Formatters.money(currency, session.totalBuyIns),
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: AppColors.foreground,
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
-                              fontFamily: 'monospace',
+                              fontFeatures: AppTypography.numericFeatures,
                             ),
                           ),
                         const SizedBox(height: 4),
@@ -684,15 +664,15 @@ class _CashHistoryRow extends StatelessWidget {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E2024),
+                            color: AppColors.muted,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             '${elapsedMins ~/ 60}H ${elapsedMins % 60}M',
-                            style: const TextStyle(
-                              color: Color(0xFF8E8E93),
+                            style: TextStyle(
+                              color: AppColors.mutedForeground,
                               fontSize: 10,
-                              fontFamily: 'monospace',
+                              fontFeatures: AppTypography.numericFeatures,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -749,11 +729,13 @@ class _HistoryRow extends StatelessWidget {
                   ? (game.settings.addOnCost ?? game.settings.buyIn)
                   : 0);
 
-    final stripeColor = isPodium
-        ? const Color(0xFFF59E0B)
+    final stripeColor = placement == 1
+        ? AppColors.gold
+        : isPodium
+        ? AppColors.primary
         : (net != null && net > 0
-              ? const Color(0xFF4ADE80)
-              : const Color(0xFF242428));
+              ? AppColors.successText
+              : AppColors.borderSubtle);
 
     return InkWell(
       onTap: () {
@@ -763,9 +745,9 @@ class _HistoryRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF141416),
+          color: AppColors.card,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF242428)),
+          border: Border.all(color: AppColors.borderSubtle),
         ),
         clipBehavior: Clip.antiAlias,
         child: IntrinsicHeight(
@@ -789,8 +771,8 @@ class _HistoryRow extends StatelessWidget {
                               children: [
                                 Text(
                                   game.settings.name,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: AppColors.foreground,
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -799,8 +781,8 @@ class _HistoryRow extends StatelessWidget {
                                 const SizedBox(height: 4),
                                 Text(
                                   '${game.settings.date} · $playersCount players${placement != null ? ' · #$placement' : ''}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF8E8E93),
+                                  style: TextStyle(
+                                    color: AppColors.mutedForeground,
                                     fontSize: 13,
                                   ),
                                 ),
@@ -818,11 +800,11 @@ class _HistoryRow extends StatelessWidget {
                                       : '-\$${net.abs()}',
                                   style: TextStyle(
                                     color: net >= 0
-                                        ? const Color(0xFF4ADE80)
-                                        : const Color(0xFFE53935),
+                                        ? AppColors.successText
+                                        : AppColors.destructiveText,
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
-                                    fontFamily: 'monospace',
+                                    fontFeatures: AppTypography.numericFeatures,
                                   ),
                                 )
                               else if (placement != null)
@@ -832,17 +814,21 @@ class _HistoryRow extends StatelessWidget {
                                     vertical: 3,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: isPodium
-                                        ? const Color(0x26F59E0B)
-                                        : const Color(0xFF1E2024),
+                                    color: placement == 1
+                                        ? AppColors.gold.withValues(alpha: 0.15)
+                                        : isPodium
+                                        ? AppColors.primarySoft
+                                        : AppColors.muted,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
                                     placement == 1 ? '1st' : '#$placement',
                                     style: TextStyle(
-                                      color: isPodium
-                                          ? const Color(0xFFF59E0B)
-                                          : const Color(0xFF8E8E93),
+                                      color: placement == 1
+                                          ? AppColors.gold
+                                          : isPodium
+                                          ? AppColors.primaryText
+                                          : AppColors.mutedForeground,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -855,7 +841,7 @@ class _HistoryRow extends StatelessWidget {
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1E2024),
+                                  color: AppColors.muted,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Builder(
@@ -870,10 +856,10 @@ class _HistoryRow extends StatelessWidget {
                                         : '${mins}M';
                                     return Text(
                                       durationStr,
-                                      style: const TextStyle(
-                                        color: Color(0xFF8E8E93),
+                                      style: TextStyle(
+                                        color: AppColors.mutedForeground,
                                         fontSize: 10,
-                                        fontFamily: 'monospace',
+                                        fontFeatures: AppTypography.numericFeatures,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     );
@@ -889,8 +875,8 @@ class _HistoryRow extends StatelessWidget {
                         children: [
                           Text(
                             'Winner: ${winner?.name ?? '—'}',
-                            style: const TextStyle(
-                              color: Color(0xFF8E8E93),
+                            style: TextStyle(
+                              color: AppColors.mutedForeground,
                               fontSize: 12,
                             ),
                           ),

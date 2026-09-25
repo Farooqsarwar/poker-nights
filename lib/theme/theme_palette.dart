@@ -99,6 +99,10 @@ class ThemePalette {
   Color get glassOverlay => const Color(0x99000000);
   Color get hairlineWhite => const Color(0x33FFFFFF);
   Color get hairlineBorder => border.withValues(alpha: 0.30);
+
+  /// The redesign's default 1px edge on dark cards, rows and raised
+  /// controls — present but quieter than [border].
+  Color get borderSubtle => border.withValues(alpha: 0.75);
   Color get blackGlow => const Color(0x99000000);
   Color get feltGlowStrong => primary.withValues(alpha: 0.20);
   Color get shadowDark => const Color(0x99000000);

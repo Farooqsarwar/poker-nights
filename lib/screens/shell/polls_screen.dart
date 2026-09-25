@@ -13,7 +13,9 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
+import '../../widgets/page_header.dart';
 import '../../widgets/poll_card.dart';
+import '../../widgets/prompt_link.dart';
 
 /// Group polls as a full screen (single navigation layer — no hub tab bar, so
 /// the Polls item never appears twice).
@@ -145,7 +147,7 @@ class _PollsScreenState extends State<PollsScreen> {
                 child: Text(
                   '+ Add option',
                   style: AppTypography.bodyXs.copyWith(
-                    color: const Color(0xFFE5797A),
+                    color: AppColors.primaryText,
                   ),
                 ),
               ),
@@ -241,65 +243,14 @@ class _PollsScreenState extends State<PollsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top bar: Squircle back button <, Title 'Polls', + Create poll button
-          Row(
-            children: [
-              InkWell(
-                onTap: () => context.go(RoutePaths.group),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF141416),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF242428)),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back_ios_new,
-                    size: 18,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              const Text(
-                'Polls',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
+          PageHeader(
+            onBack: () => context.go(RoutePaths.group),
+            title: 'Polls',
+            actions: [
               if (isAdmin)
-                InkWell(
+                PromptLink(
+                  action: '+ Create poll',
                   onTap: () => setState(() => _showPollModal = true),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD53032),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x33D53032),
-                          blurRadius: 10,
-                          offset: Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      '+ Create poll',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                 ),
             ],
           ),
@@ -316,16 +267,6 @@ class _PollsScreenState extends State<PollsScreen> {
               ('CLOSED', group.polls.where((p) => p.closed).toList()),
             ])
               if (section.$2.isNotEmpty) ...[
-                Text(
-                  section.$1,
-                  style: const TextStyle(
-                    color: Color(0xFF8E8E93),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
                 for (final poll in section.$2)
                   PollCard(
                     poll: poll,

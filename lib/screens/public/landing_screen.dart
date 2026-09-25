@@ -1112,7 +1112,7 @@ class _StoreBadge extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.muted,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.border.withValues(alpha: 0.75)),
+          border: Border.all(color: AppColors.borderSubtle),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

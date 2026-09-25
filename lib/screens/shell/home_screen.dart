@@ -48,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static String _getInitials(String name) {
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
-    if (parts.isEmpty) return 'FP';
+    if (parts.isEmpty) return '♠';
     return parts.map((p) => p[0].toUpperCase()).take(2).join();
   }
 
@@ -107,17 +107,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: 42,
                     height: 42,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF381E20),
+                      color: AppColors.primarySoft,
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF4A282A)),
+                      border: Border.all(color: AppColors.primarySoftBorder),
                     ),
                     alignment: Alignment.center,
                     child: Text(
                       user?.name.isNotEmpty == true
                           ? user!.name[0].toUpperCase()
-                          : 'A',
-                      style: const TextStyle(
-                        color: Colors.white,
+                          : '?',
+                      style: TextStyle(
+                        color: AppColors.foreground,
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),
@@ -133,16 +133,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             Container(
                               width: 7,
                               height: 7,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF4ADE80),
+                              decoration: BoxDecoration(
+                                color: AppColors.successText,
                                 shape: BoxShape.circle,
                               ),
                             ),
                             const SizedBox(width: 6),
-                            const Text(
+                            Text(
                               'Welcome back',
                               style: TextStyle(
-                                color: Color(0xFF8E8E93),
+                                color: AppColors.mutedForeground,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -153,9 +153,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(
                           user?.name.isNotEmpty == true
                               ? user!.name
-                              : 'Alex Morgan',
-                          style: const TextStyle(
-                            color: Colors.white,
+                              : '',
+                          style: TextStyle(
+                            color: AppColors.foreground,
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
                           ),
@@ -170,16 +170,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF141416),
+                        color: AppColors.card,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF242428)),
+                        border: Border.all(color: AppColors.borderSubtle),
                       ),
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.notifications_outlined,
-                            color: Colors.white,
+                            color: AppColors.foreground,
                             size: 20,
                           ),
                           if (app.notifications.any((n) => !n.read))
@@ -189,8 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Container(
                                 width: 7,
                                 height: 7,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFD53032),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
                                   shape: BoxShape.circle,
                                 ),
                               ),
@@ -203,10 +203,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: AppSpacing.lg),
               // Screen Title: Large bold white 'Home'
-              const Text(
+              Text(
                 'Home',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.foreground,
                   fontSize: 32,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -0.5,
@@ -223,9 +223,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF141416),
+                    color: AppColors.card,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF242428)),
+                    border: Border.all(color: AppColors.borderSubtle),
                   ),
                   child: Row(
                     children: [
@@ -233,14 +233,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFD53032),
+                          color: AppColors.primary,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         alignment: Alignment.center,
                         child: Text(
-                          _getInitials(app.hasCurrentGroup ? group.name : 'FP'),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          app.hasCurrentGroup ? _getInitials(group.name) : '♠',
+                          style: TextStyle(
+                            color: AppColors.foreground,
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
                           ),
@@ -250,8 +250,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       Expanded(
                         child: Text(
                           app.hasCurrentGroup ? group.name : 'Select a group',
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: AppColors.foreground,
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
@@ -259,9 +259,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const Icon(
+                      Icon(
                         Icons.keyboard_arrow_down,
-                        color: Color(0xFF8E8E93),
+                        color: AppColors.mutedForeground,
                         size: 22,
                       ),
                     ],
@@ -306,55 +306,36 @@ class _HomeScreenState extends State<HomeScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: InkWell(
-                      onTap: () => context.go(RoutePaths.createTournament),
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF18181A),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFF28282C)),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add, color: Color(0xFFE5797A), size: 18),
-                            SizedBox(width: 8),
-                            Text(
+                    child: AppButton(
+                      variant: AppButtonVariant.secondary,
+                      size: AppButtonSize.lg,
+                      fullWidth: true,
+                      onPressed: () => context.go(RoutePaths.createTournament),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add, color: AppColors.primaryText, size: 18),
+                          const SizedBox(width: AppSpacing.sm),
+                          const Flexible(
+                            child: Text(
                               'New game',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
-                    child: InkWell(
-                      onTap: () => context.go(RoutePaths.cashGame),
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF18181A),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFF28282C)),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          'Cash game',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                    child: AppButton(
+                      variant: AppButtonVariant.secondary,
+                      size: AppButtonSize.lg,
+                      fullWidth: true,
+                      onPressed: () => context.go(RoutePaths.cashGame),
+                      child: const Text(
+                        'Cash game',
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),
@@ -364,10 +345,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // 'Group snapshot' section
               if (app.hasCurrentGroup) ...[
-                const Text(
+                Text(
                   'Group snapshot',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.foreground,
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                   ),
@@ -568,7 +549,12 @@ class _GroupStats extends StatelessWidget {
         ? '${(totalVol / 1000).round()}k'
         : '\$$totalVol';
 
-    return Row(
+    // IntrinsicHeight + stretch: the four tiles size to their tallest
+    // content (the two-line "cash games" label) instead of a fixed height
+    // that clipped it on narrow phones.
+    return IntrinsicHeight(
+      child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _MetricCard(value: '$past', label: 'games'),
         const SizedBox(width: 8),
@@ -579,9 +565,10 @@ class _GroupStats extends StatelessWidget {
         _MetricCard(
           value: volumeStr,
           label: 'volume',
-          valueColor: const Color(0xFFF59E0B),
+          valueColor: AppColors.gold,
         ),
       ],
+      ),
     );
   }
 }
@@ -601,12 +588,12 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        height: 82,
+        constraints: const BoxConstraints(minHeight: 76),
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         decoration: BoxDecoration(
-          color: const Color(0xFF141416),
+          color: AppColors.card,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF242428)),
+          border: Border.all(color: AppColors.borderSubtle),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -615,10 +602,10 @@ class _MetricCard extends StatelessWidget {
               fit: BoxFit.scaleDown,
               child: Text(
                 value,
-                style: TextStyle(
-                  color: valueColor ?? Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
+                style: AppTypography.mono(
+                  size: AppFontSizes.xxl,
+                  weight: FontWeight.w700,
+                  color: valueColor ?? AppColors.foreground,
                 ),
               ),
             ),
@@ -627,8 +614,8 @@ class _MetricCard extends StatelessWidget {
               label,
               textAlign: TextAlign.center,
               maxLines: 2,
-              style: const TextStyle(
-                color: Color(0xFF8E8E93),
+              style: TextStyle(
+                color: AppColors.mutedForeground,
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
                 height: 1.1,
@@ -714,14 +701,14 @@ class _NextActionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF141416),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFFD53032).withValues(alpha: 0.35),
+          color: AppColors.primary.withValues(alpha: 0.35),
         ),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x33D53032),
+            color: AppColors.primary.withValues(alpha: 0.2),
             blurRadius: 16,
             offset: Offset(0, 4),
           ),
@@ -730,10 +717,10 @@ class _NextActionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'NEXT UP',
             style: TextStyle(
-              color: Color(0xFFE5797A),
+              color: AppColors.primaryText,
               fontSize: 12,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
@@ -745,8 +732,8 @@ class _NextActionCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title.isNotEmpty ? title : 'Friday Night Freezeout',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: AppColors.foreground,
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                   ),
@@ -762,7 +749,7 @@ class _NextActionCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1F3826),
+                    color: AppColors.successSoft,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -771,16 +758,16 @@ class _NextActionCard extends StatelessWidget {
                       Container(
                         width: 6,
                         height: 6,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF4ADE80),
+                        decoration: BoxDecoration(
+                          color: AppColors.successText,
                           shape: BoxShape.circle,
                         ),
                       ),
                       const SizedBox(width: 5),
-                      const Text(
+                      Text(
                         'LIVE',
                         style: TextStyle(
-                          color: Color(0xFF4ADE80),
+                          color: AppColors.successText,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
@@ -795,7 +782,7 @@ class _NextActionCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             subtitle,
-            style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
+            style: TextStyle(color: AppColors.mutedForeground, fontSize: 13),
           ),
           const SizedBox(height: 16),
           InkWell(
@@ -805,11 +792,11 @@ class _NextActionCard extends StatelessWidget {
               width: double.infinity,
               height: 48,
               decoration: BoxDecoration(
-                color: const Color(0xFFD53032),
+                color: AppColors.primary,
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
+                boxShadow: [
                   BoxShadow(
-                    color: Color(0x40D53032),
+                    color: AppColors.primary.withValues(alpha: 0.25),
                     blurRadius: 12,
                     offset: Offset(0, 4),
                   ),
@@ -818,8 +805,8 @@ class _NextActionCard extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 actionLabel,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: AppColors.foreground,
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
@@ -853,20 +840,20 @@ class _UpcomingGames extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Upcoming',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.foreground,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
             ),
             InkWell(
               onTap: () => context.go(RoutePaths.group),
-              child: const Text(
+              child: Text(
                 'See all',
                 style: TextStyle(
-                  color: Color(0xFFE5797A),
+                  color: AppColors.primaryText,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -932,9 +919,9 @@ class _GameRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF141416),
+          color: AppColors.card,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF242428)),
+          border: Border.all(color: AppColors.borderSubtle),
         ),
         clipBehavior: Clip.antiAlias,
         child: IntrinsicHeight(
@@ -943,8 +930,8 @@ class _GameRow extends StatelessWidget {
             children: [
               Container(
                 width: 4,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFD53032),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
                   borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(16),
                     bottomLeft: Radius.circular(16),
@@ -963,8 +950,8 @@ class _GameRow extends StatelessWidget {
                     children: [
                       Text(
                         game.settings.name,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppColors.foreground,
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
@@ -974,8 +961,8 @@ class _GameRow extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         '${game.settings.date} ${game.settings.time} · Buy-in \$${game.settings.buyIn} · $going going',
-                        style: const TextStyle(
-                          color: Color(0xFF8E8E93),
+                        style: TextStyle(
+                          color: AppColors.mutedForeground,
                           fontSize: 12,
                         ),
                         maxLines: 1,
@@ -994,13 +981,13 @@ class _GameRow extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF242428),
+                      color: AppColors.borderSubtle,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Text(
+                    child: Text(
                       'RSVP',
                       style: TextStyle(
-                        color: Color(0xFF8E8E93),
+                        color: AppColors.mutedForeground,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),

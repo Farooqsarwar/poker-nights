@@ -35,7 +35,7 @@ class AppTag extends StatelessWidget {
     final (fill, border, fg) = switch (tone) {
       AppTagTone.neutral => (
         AppColors.muted,
-        AppColors.border.withValues(alpha: 0.75),
+        AppColors.borderSubtle,
         AppColors.mutedForeground,
       ),
       AppTagTone.primary => (

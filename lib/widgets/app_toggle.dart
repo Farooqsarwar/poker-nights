@@ -42,7 +42,7 @@ class AppToggle extends StatelessWidget {
                 height: 28,
                 padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  color: value ? AppColors.primary : const Color(0xFF35393D),
+                  color: value ? AppColors.primary : AppColors.border,
                   borderRadius: BorderRadius.circular(AppRadius.pill),
                   boxShadow: value
                       ? [
@@ -64,11 +64,11 @@ class AppToggle extends StatelessWidget {
                     width: 22,
                     height: 22,
                     decoration: BoxDecoration(
-                      color: value ? Colors.white : const Color(0xFF8E9398),
+                      color: value ? AppColors.foreground : AppColors.mutedForeground,
                       shape: BoxShape.circle,
-                      boxShadow: const [
+                      boxShadow: [
                         BoxShadow(
-                          color: Color(0x33000000),
+                          color: AppColors.shadowSoft,
                           blurRadius: 4,
                           offset: Offset(0, 1),
                         ),

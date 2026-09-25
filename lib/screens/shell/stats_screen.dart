@@ -68,14 +68,14 @@ class StatsScreen extends StatelessWidget {
             style: AppTypography.display(
               size: 30,
               weight: FontWeight.w700,
-              color: Colors.white,
+              color: AppColors.foreground,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             '${user.name} · all-time results',
             style: AppTypography.bodySm.copyWith(
-              color: const Color(0xFF8E8E93),
+              color: AppColors.mutedForeground,
             ),
           ),
           const SizedBox(height: 24),
@@ -105,32 +105,32 @@ class StatsScreen extends StatelessWidget {
                 _buildStatCard(
                   label: 'Games\nplayed',
                   value: '${user.stats.played}',
-                  valueColor: Colors.white,
+                  valueColor: AppColors.foreground,
                 ),
                 _buildStatCard(
                   label: 'Wins',
                   value: '${user.stats.wins}',
-                  valueColor: const Color(0xFFF59E0B),
+                  valueColor: AppColors.gold,
                 ),
                 _buildStatCard(
                   label: 'Podium',
                   value: '${user.stats.podium}',
-                  valueColor: Colors.white,
+                  valueColor: AppColors.foreground,
                 ),
                 _buildStatCard(
                   label: 'Avg finish',
                   value: '#${user.stats.avgFinish.toStringAsFixed(1)}',
-                  valueColor: Colors.white,
+                  valueColor: AppColors.foreground,
                 ),
                 _buildStatCard(
                   label: 'Knockouts',
                   value: '${user.stats.knockouts}',
-                  valueColor: Colors.white,
+                  valueColor: AppColors.foreground,
                 ),
                 _buildStatCard(
                   label: 'Win rate',
                   value: winRate,
-                  valueColor: const Color(0xFFF59E0B),
+                  valueColor: AppColors.gold,
                 ),
               ],
             ),
@@ -140,18 +140,18 @@ class StatsScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: const Color(0xFF121417),
+                color: AppColors.card,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF22262B), width: 1),
+                border: Border.all(color: AppColors.borderSubtle, width: 1),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(top: 2),
                     child: Icon(
                       Icons.workspace_premium_outlined,
-                      color: Color(0xFFF87171),
+                      color: AppColors.destructiveText,
                       size: 22,
                     ),
                   ),
@@ -160,7 +160,7 @@ class StatsScreen extends StatelessWidget {
                     child: Text(
                       'Finishing positions over time, knockout records and exportable history are part of Premium. Your basic stats stay free.',
                       style: AppTypography.bodySm.copyWith(
-                        color: const Color(0xFF8E8E93),
+                        color: AppColors.mutedForeground,
                         height: 1.4,
                       ),
                     ),
@@ -183,9 +183,9 @@ class StatsScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF121417),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF22262B), width: 1),
+        border: Border.all(color: AppColors.borderSubtle, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,7 +205,7 @@ class StatsScreen extends StatelessWidget {
           Text(
             label,
             style: AppTypography.bodyXs.copyWith(
-              color: const Color(0xFF8E8E93),
+              color: AppColors.mutedForeground,
               fontWeight: FontWeight.w400,
               height: 1.2,
             ),

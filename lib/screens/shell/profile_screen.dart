@@ -56,7 +56,7 @@ class ProfileScreen extends StatelessWidget {
               SquircleIconButton(
                 icon: Icons.edit_outlined,
                 iconSize: 20,
-                iconColor: Colors.white,
+                iconColor: AppColors.foreground,
                 tooltip: 'Edit profile',
                 onPressed: () => _editProfile(context, app),
               ),
@@ -73,11 +73,11 @@ class ProfileScreen extends StatelessWidget {
                 Container(
                   width: 120,
                   height: 120,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Color(0x55D53032),
+                        color: AppColors.primary.withValues(alpha: 0.33),
                         blurRadius: 36,
                         spreadRadius: 8,
                       ),
@@ -90,17 +90,17 @@ class ProfileScreen extends StatelessWidget {
                     width: 86,
                     height: 86,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFD53032),
+                      color: AppColors.primary,
                       shape: BoxShape.circle,
-                      boxShadow: const [
+                      boxShadow: [
                         BoxShadow(
-                          color: Color(0x66D53032),
+                          color: AppColors.primary.withValues(alpha: 0.4),
                           blurRadius: 20,
                           offset: Offset(0, 4),
                         ),
                       ],
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.15),
+                        color: AppColors.foreground.withValues(alpha: 0.15),
                         width: 1.5,
                       ),
                     ),
@@ -112,7 +112,7 @@ class ProfileScreen extends StatelessWidget {
                       style: AppTypography.display(
                         size: 38,
                         weight: FontWeight.w700,
-                        color: Colors.white,
+                        color: AppColors.foreground,
                       ),
                     ),
                   ),
@@ -129,7 +129,7 @@ class ProfileScreen extends StatelessWidget {
               style: AppTypography.display(
                 size: 26,
                 weight: FontWeight.w700,
-                color: Colors.white,
+                color: AppColors.foreground,
               ),
               textAlign: TextAlign.center,
             ),
@@ -137,9 +137,11 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 4),
           Center(
             child: Text(
-              'Member since 2023 · $groupName',
+              // Group only: there is no account-creation date to show, and
+              // the design's "Member since 2023" was placeholder copy.
+              groupName,
               style: AppTypography.bodySm.copyWith(
-                color: const Color(0xFF8E8E93),
+                color: AppColors.mutedForeground,
                 fontWeight: FontWeight.w400,
               ),
               textAlign: TextAlign.center,
@@ -151,9 +153,9 @@ class ProfileScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             decoration: BoxDecoration(
-              color: const Color(0xFF121417),
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF22262B), width: 1),
+              border: Border.all(color: AppColors.borderSubtle, width: 1),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,7 +168,7 @@ class ProfileScreen extends StatelessWidget {
                       style: AppTypography.bodyXs.copyWith(
                         letterSpacing: 1.2,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF8E8E93),
+                        color: AppColors.mutedForeground,
                       ),
                     ),
                     Container(
@@ -176,21 +178,21 @@ class ProfileScreen extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: lifetime.totalPnl >= 0
-                            ? const Color(0xFF132A1C)
-                            : const Color(0xFF2D1517),
+                            ? AppColors.successSoft
+                            : AppColors.destructiveSoft,
                         borderRadius: BorderRadius.circular(AppRadius.pill),
                         border: Border.all(
                           color: lifetime.totalPnl >= 0
-                              ? const Color(0x3322C55E)
-                              : const Color(0x33EF4444),
+                              ? AppColors.successSoftBorder
+                              : AppColors.destructive.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Text(
                         lifetime.totalPnl >= 0 ? '↑ UP' : '↓ DOWN',
                         style: AppTypography.bodyXs.copyWith(
                           color: lifetime.totalPnl >= 0
-                              ? const Color(0xFF4ADE80)
-                              : const Color(0xFFF87171),
+                              ? AppColors.successText
+                              : AppColors.destructiveText,
                           fontWeight: FontWeight.w700,
                           fontSize: 11,
                         ),
@@ -210,8 +212,8 @@ class ProfileScreen extends StatelessWidget {
                     size: 38,
                     weight: FontWeight.w700,
                     color: lifetime.totalPnl >= 0
-                        ? const Color(0xFF4ADE80)
-                        : const Color(0xFFF87171),
+                        ? AppColors.successText
+                        : AppColors.destructiveText,
                   ),
                 ),
               ],
@@ -252,7 +254,7 @@ class ProfileScreen extends StatelessWidget {
             style: AppTypography.bodyXs.copyWith(
               letterSpacing: 1.2,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF71767B),
+              color: AppColors.onSurfaceHint,
             ),
           ),
           const SizedBox(height: 12),
@@ -263,25 +265,25 @@ class ProfileScreen extends StatelessWidget {
               _buildAchievementPill(
                 emoji: '🏆',
                 title: 'FIRST WIN',
-                bgColor: const Color(0xFF262010),
-                borderColor: const Color(0x55EAB308),
-                textColor: const Color(0xFFFACC15),
+                bgColor: AppColors.gold.withValues(alpha: 0.12),
+                borderColor: AppColors.gold.withValues(alpha: 0.33),
+                textColor: AppColors.gold,
                 active: lifetime.wins >= 1,
               ),
               _buildAchievementPill(
                 emoji: '🔥',
                 title: '3 IN A ROW',
-                bgColor: const Color(0xFF2A1417),
-                borderColor: const Color(0x55EF4444),
-                textColor: const Color(0xFFF87171),
+                bgColor: AppColors.primarySoft,
+                borderColor: AppColors.primarySoftBorder,
+                textColor: AppColors.primaryText,
                 active: achievements.any((a) => a.contains('3 IN A ROW')),
               ),
               _buildAchievementPill(
                 emoji: '💰',
                 title: '\$1K NIGHT',
-                bgColor: const Color(0xFF16231E),
-                borderColor: const Color(0x5510B981),
-                textColor: const Color(0xFF6EE7B7),
+                bgColor: AppColors.successSoft,
+                borderColor: AppColors.successSoftBorder,
+                textColor: AppColors.successText,
                 active: achievements.any((a) => a.contains('\$1K NIGHT')),
               ),
             ],
@@ -291,9 +293,9 @@ class ProfileScreen extends StatelessWidget {
           // Profile navigation actions
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF121417),
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF22262B)),
+              border: Border.all(color: AppColors.borderSubtle),
             ),
             child: Column(
               children: [
@@ -349,9 +351,9 @@ class ProfileScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF121417),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF22262B), width: 1),
+        border: Border.all(color: AppColors.borderSubtle, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -361,14 +363,14 @@ class ProfileScreen extends StatelessWidget {
             style: AppTypography.display(
               size: 26,
               weight: FontWeight.w700,
-              color: Colors.white,
+              color: AppColors.foreground,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
             style: AppTypography.bodySm.copyWith(
-              color: const Color(0xFF8E8E93),
+              color: AppColors.mutedForeground,
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -428,8 +430,8 @@ class ProfileScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           border: showDivider
-              ? const Border(
-                  bottom: BorderSide(color: Color(0xFF22262B), width: 1),
+              ? Border(
+                  bottom: BorderSide(color: AppColors.borderSubtle, width: 1),
                 )
               : null,
         ),

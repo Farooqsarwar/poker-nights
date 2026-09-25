@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -18,10 +19,10 @@ class SettingsScreen extends StatelessWidget {
   void _chooseDefaultChipSet(BuildContext context, AppProvider app) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF121417),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: Color(0xFF22262B)),
+        side: BorderSide(color: AppColors.borderSubtle),
       ),
       builder: (bottomSheetContext) {
         return SafeArea(
@@ -35,17 +36,17 @@ class SettingsScreen extends StatelessWidget {
                   'Default Chip Set',
                   style: AppTypography.bodyLg.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  title: const Text(
+                  title: Text(
                     'Standard set',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: AppColors.foreground),
                   ),
                   trailing: app.defaultChipSetId == null
-                      ? const Icon(Icons.check, color: Color(0xFFD53032))
+                      ? Icon(Icons.check, color: AppColors.primary)
                       : null,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -59,10 +60,10 @@ class SettingsScreen extends StatelessWidget {
                   ListTile(
                     title: Text(
                       set.name,
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: AppColors.foreground),
                     ),
                     trailing: app.defaultChipSetId == set.id
-                        ? const Icon(Icons.check, color: Color(0xFFD53032))
+                        ? Icon(Icons.check, color: AppColors.primary)
                         : null,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -123,14 +124,14 @@ class SettingsScreen extends StatelessWidget {
             style: AppTypography.display(
               size: 30,
               weight: FontWeight.w700,
-              color: Colors.white,
+              color: AppColors.foreground,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'Account and group preferences',
             style: AppTypography.bodySm.copyWith(
-              color: const Color(0xFF8E8E93),
+              color: AppColors.mutedForeground,
             ),
           ),
           const SizedBox(height: 24),
@@ -141,15 +142,15 @@ class SettingsScreen extends StatelessWidget {
             style: AppTypography.bodyXs.copyWith(
               letterSpacing: 1.2,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF71767B),
+              color: AppColors.onSurfaceHint,
             ),
           ),
           const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF121417),
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF22262B)),
+              border: Border.all(color: AppColors.borderSubtle),
             ),
             child: Column(
               children: [
@@ -207,24 +208,24 @@ class SettingsScreen extends StatelessWidget {
             style: AppTypography.bodyXs.copyWith(
               letterSpacing: 1.2,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF71767B),
+              color: AppColors.onSurfaceHint,
             ),
           ),
           const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF121417),
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF22262B)),
+              border: Border.all(color: AppColors.borderSubtle),
             ),
             child: Column(
               children: [
                 _buildSettingRow(
                   title: 'Chip sets',
                   subtitle: 'Manage saved denominations & colours',
-                  trailing: const Icon(
+                  trailing: Icon(
                     Icons.chevron_right,
-                    color: Color(0xFF71767B),
+                    color: AppColors.onSurfaceHint,
                     size: 20,
                   ),
                   onTap: () => context.push(RoutePaths.chipSets),
@@ -241,14 +242,14 @@ class SettingsScreen extends StatelessWidget {
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E2227),
+                        color: AppColors.muted,
                         borderRadius: BorderRadius.circular(AppRadius.pill),
-                        border: Border.all(color: const Color(0xFF2C3238)),
+                        border: Border.all(color: AppColors.borderSubtle),
                       ),
                       child: Text(
                         defaultSetName,
                         style: AppTypography.bodyXs.copyWith(
-                          color: const Color(0xFFD1D5DB),
+                          color: AppColors.secondaryForeground,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.6,
                         ),
@@ -268,7 +269,7 @@ class SettingsScreen extends StatelessWidget {
             style: AppTypography.bodyXs.copyWith(
               letterSpacing: 1.2,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF71767B),
+              color: AppColors.onSurfaceHint,
             ),
           ),
           const SizedBox(height: 10),
@@ -284,16 +285,16 @@ class SettingsScreen extends StatelessWidget {
             style: AppTypography.bodyXs.copyWith(
               letterSpacing: 1.2,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF71767B),
+              color: AppColors.onSurfaceHint,
             ),
           ),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF121417),
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF22262B)),
+              border: Border.all(color: AppColors.borderSubtle),
             ),
             child: Row(
               children: [
@@ -301,12 +302,12 @@ class SettingsScreen extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF22262B),
+                    color: AppColors.borderSubtle,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.person_outline,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                     size: 20,
                   ),
                 ),
@@ -319,14 +320,14 @@ class SettingsScreen extends StatelessWidget {
                         user?.name ?? 'Guest',
                         style: AppTypography.bodySm.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                          color: AppColors.foreground,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         user?.email ?? 'Not signed in',
                         style: AppTypography.bodyXs.copyWith(
-                          color: const Color(0xFF8E8E93),
+                          color: AppColors.mutedForeground,
                         ),
                       ),
                     ],
@@ -345,24 +346,24 @@ class SettingsScreen extends StatelessWidget {
               height: 54,
               padding: const EdgeInsets.symmetric(horizontal: 20),
               decoration: BoxDecoration(
-                color: const Color(0xFF121417),
+                color: AppColors.card,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF22262B)),
+                border: Border.all(color: AppColors.borderSubtle),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
+                children: [
                   Text(
                     'Sign out',
                     style: TextStyle(
-                      color: Color(0xFFEF4444),
+                      color: AppColors.destructiveText,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   Icon(
                     Icons.logout_rounded,
-                    color: Color(0xFFEF4444),
+                    color: AppColors.destructiveText,
                     size: 20,
                   ),
                 ],
@@ -394,14 +395,14 @@ class SettingsScreen extends StatelessWidget {
                   title,
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
                   style: AppTypography.bodyXs.copyWith(
-                    color: const Color(0xFF8E8E93),
+                    color: AppColors.mutedForeground,
                   ),
                 ),
               ],
@@ -421,7 +422,7 @@ class SettingsScreen extends StatelessWidget {
       children: [
         content,
         if (showDivider)
-          const Divider(height: 1, thickness: 1, color: Color(0xFF22262B)),
+          Divider(height: 1, thickness: 1, color: AppColors.borderSubtle),
       ],
     );
   }
@@ -430,15 +431,15 @@ class SettingsScreen extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF121417),
+        backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF22262B)),
+          side: BorderSide(color: AppColors.borderSubtle),
         ),
-        title: const Text('Sign out?', style: TextStyle(color: Colors.white)),
+        title: Text('Sign out?', style: TextStyle(color: AppColors.foreground)),
         content: Text(
           'You will need to log in again to see your games.',
-          style: AppTypography.bodySm.copyWith(color: const Color(0xFF8E8E93)),
+          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
         ),
         actions: [
           TextButton(
@@ -446,7 +447,7 @@ class SettingsScreen extends StatelessWidget {
             child: Text(
               'Cancel',
               style: AppTypography.bodySm.copyWith(
-                color: const Color(0xFF8E8E93),
+                color: AppColors.mutedForeground,
               ),
             ),
           ),
@@ -456,10 +457,10 @@ class SettingsScreen extends StatelessWidget {
               app.logout();
               context.go(RoutePaths.landing);
             },
-            child: const Text(
+            child: Text(
               'Sign out',
               style: TextStyle(
-                color: Color(0xFFEF4444),
+                color: AppColors.destructiveText,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -482,9 +483,9 @@ class _ThemeGrid extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: const Color(0xFF121417),
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF22262B)),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -558,7 +559,7 @@ class _ThemeCard extends StatelessWidget {
           color: palette.background,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
-            color: selected ? palette.primary : const Color(0xFF22262B),
+            color: selected ? palette.primary : AppColors.borderSubtle,
             width: selected ? 2 : 1,
           ),
         ),
@@ -613,7 +614,7 @@ class _Swatch extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(3),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.15),
+          color: AppColors.foreground.withValues(alpha: 0.15),
           width: 0.5,
         ),
       ),

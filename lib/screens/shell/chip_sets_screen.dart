@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -23,18 +24,18 @@ class ChipSetsScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF121417),
+        backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF22262B)),
+          side: BorderSide(color: AppColors.borderSubtle),
         ),
-        title: const Text(
+        title: Text(
           'Delete chip set?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: AppColors.foreground),
         ),
         content: Text(
           '"${cs.name}" will be removed. Games already played with it stay in history unchanged.',
-          style: AppTypography.bodySm.copyWith(color: const Color(0xFF8E8E93)),
+          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
         ),
         actions: [
           TextButton(
@@ -42,16 +43,16 @@ class ChipSetsScreen extends StatelessWidget {
             child: Text(
               'Cancel',
               style: AppTypography.bodySm.copyWith(
-                color: const Color(0xFF8E8E93),
+                color: AppColors.mutedForeground,
               ),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
+            child: Text(
               'Delete',
               style: TextStyle(
-                color: Color(0xFFEF4444),
+                color: AppColors.destructiveText,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -93,7 +94,7 @@ class ChipSetsScreen extends StatelessWidget {
                   style: AppTypography.display(
                     size: 28,
                     weight: FontWeight.w700,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
                 ),
               ),
@@ -106,20 +107,20 @@ class ChipSetsScreen extends StatelessWidget {
                     vertical: 9,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD53032),
+                    color: AppColors.primary,
                     borderRadius: BorderRadius.circular(AppRadius.pill),
-                    boxShadow: const [
+                    boxShadow: [
                       BoxShadow(
-                        color: Color(0x55D53032),
+                        color: AppColors.primary.withValues(alpha: 0.33),
                         blurRadius: 10,
                         offset: Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: const Text(
+                  child: Text(
                     '+ New',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.foreground,
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                     ),
@@ -136,16 +137,16 @@ class ChipSetsScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(AppSpacing.xxl),
                 child: Column(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.casino_outlined,
                       size: 48,
-                      color: Color(0xFF71767B),
+                      color: AppColors.onSurfaceHint,
                     ),
                     const SizedBox(height: 12),
                     Text(
                       'No saved chip sets.',
                       style: AppTypography.bodyLg.copyWith(
-                        color: const Color(0xFF8E8E93),
+                        color: AppColors.mutedForeground,
                       ),
                     ),
                   ],
@@ -170,9 +171,9 @@ class ChipSetsScreen extends StatelessWidget {
                 return Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF121417),
+                    color: AppColors.card,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF22262B)),
+                    border: Border.all(color: AppColors.borderSubtle),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,7 +191,7 @@ class ChipSetsScreen extends StatelessWidget {
                                     style: AppTypography.body(
                                       size: 18,
                                       weight: FontWeight.w700,
-                                      color: Colors.white,
+                                      color: AppColors.foreground,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -203,18 +204,18 @@ class ChipSetsScreen extends StatelessWidget {
                                       vertical: 3,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF132A1C),
+                                      color: AppColors.successSoft,
                                       borderRadius: BorderRadius.circular(
                                         AppRadius.pill,
                                       ),
                                       border: Border.all(
-                                        color: const Color(0x4422C55E),
+                                        color: AppColors.successSoftBorder,
                                       ),
                                     ),
-                                    child: const Text(
+                                    child: Text(
                                       'DEFAULT',
                                       style: TextStyle(
-                                        color: Color(0xFF4ADE80),
+                                        color: AppColors.successText,
                                         fontSize: 10,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 0.5,
@@ -229,7 +230,7 @@ class ChipSetsScreen extends StatelessWidget {
                             icon: Icons.edit_outlined,
                             size: 36,
                             iconSize: 18,
-                            iconColor: const Color(0xFF8E8E93),
+                            iconColor: AppColors.mutedForeground,
                             tooltip: 'Edit ${cs.name}',
                             onPressed: () => context.push(
                               RoutePaths.editChipSet,
@@ -242,7 +243,7 @@ class ChipSetsScreen extends StatelessWidget {
                               icon: Icons.delete_outline,
                               size: 36,
                               iconSize: 18,
-                              iconColor: const Color(0xFFEF4444),
+                              iconColor: AppColors.destructiveText,
                               tooltip: 'Delete ${cs.name}',
                               onPressed: () => _confirmDelete(context, app, cs),
                             ),
@@ -253,7 +254,7 @@ class ChipSetsScreen extends StatelessWidget {
                       Text(
                         '${cs.chips.length} denominations · $totalChips total chips',
                         style: AppTypography.bodyXs.copyWith(
-                          color: const Color(0xFF8E8E93),
+                          color: AppColors.mutedForeground,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -285,14 +286,14 @@ class ChipSetsScreen extends StatelessWidget {
 
     // Decide contrasting text color for chip center
     final luminance = chipColor.computeLuminance();
-    final textColor = luminance > 0.6 ? Colors.black87 : Colors.white;
+    final textColor = luminance > 0.6 ? Colors.black87 : AppColors.foreground;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF191D22),
+        color: AppColors.muted,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF262B31)),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -305,12 +306,12 @@ class ChipSetsScreen extends StatelessWidget {
               color: chipColor,
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withValues(alpha: 0.35),
+                color: AppColors.foreground.withValues(alpha: 0.35),
                 width: 2,
               ),
-              boxShadow: const [
+              boxShadow: [
                 BoxShadow(
-                  color: Color(0x44000000),
+                  color: AppColors.shadowSoft,
                   blurRadius: 4,
                   offset: Offset(0, 2),
                 ),
@@ -323,7 +324,7 @@ class ChipSetsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.4),
+                  color: AppColors.foreground.withValues(alpha: 0.4),
                   width: 1,
                 ),
               ),
@@ -345,17 +346,17 @@ class ChipSetsScreen extends StatelessWidget {
             children: [
               Text(
                 c.color,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color: AppColors.foreground,
                 ),
               ),
               Text(
                 '×${c.quantity}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: Color(0xFF8E8E93),
+                  color: AppColors.mutedForeground,
                   fontWeight: FontWeight.w500,
                 ),
               ),

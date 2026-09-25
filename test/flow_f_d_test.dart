@@ -148,8 +148,11 @@ void main() {
     await mountScreen(tester, const ProfileScreen());
 
     expect(find.text('Alex Morgan'), findsOneWidget);
-    expect(find.text('Friday Poker Club'), findsOneWidget);
-    expect(find.textContaining('Member since'), findsOneWidget);
+    // The group name is the header subtitle and the settings-row subtitle.
+    // "Member since 2023" was placeholder copy with no data behind it and
+    // is no longer shown, so it must not come back.
+    expect(find.text('Friday Poker Club'), findsNWidgets(2));
+    expect(find.textContaining('Member since'), findsNothing);
     expect(find.text('A'), findsOneWidget);
     expect(find.text('LIFETIME P&L'), findsOneWidget);
     expect(find.text('games'), findsOneWidget);

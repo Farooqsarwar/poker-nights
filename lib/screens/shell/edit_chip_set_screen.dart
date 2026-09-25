@@ -204,7 +204,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
                   style: AppTypography.display(
                     size: 26,
                     weight: FontWeight.w700,
-                    color: Colors.white,
+                    color: AppColors.foreground,
                   ),
                 ),
               ),
@@ -217,20 +217,20 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD53032),
+                    color: AppColors.primary,
                     borderRadius: BorderRadius.circular(AppRadius.pill),
-                    boxShadow: const [
+                    boxShadow: [
                       BoxShadow(
-                        color: Color(0x55D53032),
+                        color: AppColors.primary.withValues(alpha: 0.33),
                         blurRadius: 10,
                         offset: Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: const Text(
+                  child: Text(
                     'Save',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.foreground,
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                     ),
@@ -309,24 +309,25 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
             _TotalValueCard(total: _totalValue),
           ],
           const SizedBox(height: AppSpacing.md),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              AppButton(
-                variant: AppButtonVariant.secondary,
-                onPressed: _addChip,
-                child: const Text('+ Add denomination'),
-              ),
-              if (_mode == _EditorMode.quick &&
-                  _quickKind == _QuickKind.unnumbered &&
-                  _chips.isNotEmpty)
-                AppButton(
-                  variant: AppButtonVariant.ghost,
-                  onPressed: () => setState(_reRecommend),
-                  child: const Text('Re-suggest values'),
-                ),
-            ],
+          // Full-width, as the F5 frame draws it. Side by side, the two
+          // buttons did not fit a 320px phone.
+          AppButton(
+            variant: AppButtonVariant.secondary,
+            fullWidth: true,
+            onPressed: _addChip,
+            child: const Text('+ Add denomination'),
           ),
+          if (_mode == _EditorMode.quick &&
+              _quickKind == _QuickKind.unnumbered &&
+              _chips.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            AppButton(
+              variant: AppButtonVariant.ghost,
+              fullWidth: true,
+              onPressed: () => setState(_reRecommend),
+              child: const Text('Re-suggest values'),
+            ),
+          ],
           if (_mode == _EditorMode.quick && _quickKind == _QuickKind.unnumbered)
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.sm),

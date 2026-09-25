@@ -14,10 +14,12 @@ import '../../utils/clock_sequence.dart';
 import '../../utils/icm.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_badge.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
+import '../../widgets/app_tag.dart';
+import '../../widgets/icon_tile.dart';
 import '../../models/live_game.dart';
 import '../../widgets/count_stepper.dart';
 import '../../widgets/tournament_display_block.dart';
@@ -99,16 +101,16 @@ class _ToolScaffold extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: AppSpacing.lg),
-          Row(
-            children: [
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.ghost,
-                onPressed: () => context.go(RoutePaths.tools),
-                child: const Text('← All tools'),
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Transform.translate(
+              offset: const Offset(-4, 0),
+              child: AppBackButton(
+                onTap: () => context.go(RoutePaths.tools),
+                tooltip: 'All tools',
               ),
-            ],
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
@@ -121,8 +123,10 @@ class _ToolScaffold extends StatelessWidget {
                     Text(
                       title,
                       style: AppTypography.display(
-                        size: AppFontSizes.xxl,
+                        size: 26,
                         weight: FontWeight.w700,
+                        height: 1.15,
+                        letterSpacing: -0.6,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
@@ -149,13 +153,8 @@ class _ToolScaffold extends StatelessWidget {
           child,
           const SizedBox(height: AppSpacing.xxl),
           // The soft prompt. One line, after the answer.
-          Container(
+          AppCard(
             padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: Glass.solidTint(AppColors.secondary),
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(color: AppColors.border),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -176,6 +175,7 @@ class _ToolScaffold extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
                 AppButton(
                   size: AppButtonSize.sm,
+                  variant: AppButtonVariant.secondary,
                   onPressed: () => context.go(RoutePaths.landing),
                   child: const Text('Take a look'),
                 ),
@@ -190,40 +190,47 @@ class _ToolScaffold extends StatelessWidget {
   }
 }
 
-/// Index of the five tools (§2).
+/// Index of the five tools (§2). Laid out as the E1 frame: the four
+/// calculators as a two-by-two grid of icon cards, the quick calculator as a
+/// full-width row beneath them.
 class ToolsScreen extends StatelessWidget {
   const ToolsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    const tools = <({String title, String blurb, String path})>[
+    const tools = <({String title, String blurb, String path, IconData icon})>[
       (
         title: 'Blind Structure Generator',
         blurb: 'A full blind schedule built around your chips and how long '
             'you want to play.',
         path: RoutePaths.toolBlinds,
+        icon: Icons.format_list_numbered_rounded,
       ),
       (
         title: 'Tournament Clock',
         blurb: 'A simple, readable clock for a structure you already have.',
         path: RoutePaths.toolClock,
+        icon: Icons.timer_outlined,
       ),
       (
         title: 'ICM Calculator',
         blurb: 'What each stack is actually worth in money. Settle the chop.',
         path: RoutePaths.toolIcm,
+        icon: Icons.show_chart_rounded,
       ),
       (
         title: 'Payout Calculator',
         blurb: 'Clean, countable prize splits from a buy-in and a field size.',
         path: RoutePaths.toolPayouts,
-      ),
-      (
-        title: 'Quick Blind Calculator',
-        blurb: 'One level, right now. What should the blinds be for this stack?',
-        path: RoutePaths.toolQuickBlind,
+        icon: Icons.receipt_long_outlined,
       ),
     ];
+    const quick = (
+      title: 'Quick Blind Calculator',
+      blurb: 'One level, right now. What should the blinds be for this stack?',
+      path: RoutePaths.toolQuickBlind,
+      icon: Icons.bolt_rounded,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -235,17 +242,18 @@ class ToolsScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: AppSpacing.xl),
-          const AppBadge(
-            label: 'FREE · NO LOGIN',
-            variant: AppBadgeVariant.green,
-            border: true,
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: AppTag('Free · no login', tone: AppTagTone.primary),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.md),
           Text(
             'Poker tools',
             style: AppTypography.display(
-              size: AppFontSizes.xxxl,
+              size: 28,
               weight: FontWeight.w700,
+              height: 1.15,
+              letterSpacing: -0.6,
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -256,47 +264,108 @@ class ToolsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          for (final t in tools)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                onTap: () => context.go(t.path),
-                child: AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              t.title,
-                              style: AppTypography.bodySm.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+          LayoutBuilder(
+            builder: (context, c) {
+              // Two columns from ~320px of content; a single column below.
+              final cols = c.maxWidth >= 300 ? 2 : 1;
+              final w = (c.maxWidth - AppSpacing.md * (cols - 1)) / cols;
+              return Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.md,
+                children: [
+                  for (final t in tools)
+                    SizedBox(
+                      width: w,
+                      child: AppCard(
+                        onTap: () => context.go(t.path),
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Semantics(
+                          button: true,
+                          label: t.title,
+                          child: SizedBox(
+                            // Room for a two-line title and a three-line
+                            // blurb on a phone; wide cards need less.
+                            height: w < 240 ? 152 : 124,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                IconTile(
+                                  icon: t.icon,
+                                  size: 36,
+                                  tone: IconTileTone.soft,
+                                ),
+                                const SizedBox(height: AppSpacing.md),
+                                Text(
+                                  t.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.bodySm.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.25,
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpacing.xxs),
+                                Expanded(
+                                  child: Text(
+                                    t.blurb,
+                                    overflow: TextOverflow.fade,
+                                    style: AppTypography.bodyXs.copyWith(
+                                      color: AppColors.mutedForeground,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: AppSpacing.xxs),
-                            Text(
-                              t.blurb,
-                              style: AppTypography.bodyXs.copyWith(
-                                color: AppColors.mutedForeground,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                      Icon(
-                        Icons.chevron_right,
-                        size: 18,
-                        color: AppColors.mutedForeground,
-                      ),
-                    ],
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppCard(
+            onTap: () => context.go(quick.path),
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Semantics(
+              button: true,
+              label: quick.title,
+              child: Row(
+                children: [
+                  IconTile(icon: quick.icon, size: 36, tone: IconTileTone.soft),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          quick.title,
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          quick.blurb,
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: AppColors.mutedForeground,
+                  ),
+                ],
               ),
             ),
+          ),
           const SizedBox(height: AppSpacing.xxl),
         ],
       ),
@@ -1225,8 +1294,11 @@ class _TogglePill extends StatelessWidget {
               color: selected ? AppColors.primary : AppColors.border,
             ),
           ),
-          alignment: Alignment.center,
-          child: Text(
+          // Centre without `Container.alignment`, which made each chip take
+          // the full row width and stacked the whole Wrap into a column.
+          child: Center(
+            widthFactor: 1,
+            child: Text(
             label,
             style: AppTypography.bodyXs.copyWith(
               fontWeight: FontWeight.w700,
@@ -1235,6 +1307,7 @@ class _TogglePill extends StatelessWidget {
                   ? AppColors.primaryText
                   : AppColors.mutedForeground,
             ),
+          ),
           ),
         ),
       ),
@@ -1898,10 +1971,9 @@ class _ToolQuickBlindScreenState extends State<ToolQuickBlindScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const AppBadge(
-            label: '30-SECOND SETUP',
-            variant: AppBadgeVariant.green,
-            border: true,
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: AppTag('30-second setup', tone: AppTagTone.primary),
           ),
           const SizedBox(height: AppSpacing.md),
           _Field(

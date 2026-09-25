@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../constants/app_constants.dart';
+import '../app/colors.dart';
 import '../app/typography.dart';
-import 'glass_styles.dart';
+import '../constants/app_constants.dart';
 
-/// Toggle switch mirroring the web `Toggle` component with glassmorphism.
+/// Toggle switch mirroring the mobile-first redesign.
 ///
-/// Glass track with frosted thumb, ambient glow when active, and subtle
-/// neumorphic shadows.
+/// Features clean rounded pill track with smooth animated thumb, matching
+/// the Figma settings specification.
 class AppToggle extends StatelessWidget {
   const AppToggle({
     super.key,
@@ -22,7 +22,6 @@ class AppToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Theme.of(context);
     return Semantics(
       toggled: value,
       label: label ?? 'Toggle',
@@ -36,30 +35,54 @@ class AppToggle extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-            AnimatedContainer(
-              duration: AppDurations.normal,
-              curve: Curves.easeInOut,
-              width: 44,
-              height: 24,
-              padding: const EdgeInsets.all(AppSpacing.xxs),
-              decoration: Glass.glassToggle(active: value),
-              child: AnimatedAlign(
-                duration: AppDurations.normal,
+              AnimatedContainer(
+                duration: AppDurations.fast,
                 curve: Curves.easeInOut,
-                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  decoration: Glass.glassToggleThumb(),
+                width: 48,
+                height: 28,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: value ? AppColors.primary : const Color(0xFF35393D),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  boxShadow: value
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: AnimatedAlign(
+                  duration: AppDurations.fast,
+                  curve: Curves.easeInOut,
+                  alignment: value
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: value ? Colors.white : const Color(0xFF8E9398),
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x33000000),
+                          blurRadius: 4,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-            if (label != null) ...[
-              const SizedBox(width: AppSpacing.md),
-              Text(label!, style: AppTypography.bodySm),
+              if (label != null) ...[
+                const SizedBox(width: AppSpacing.md),
+                Text(label!, style: AppTypography.bodySm),
+              ],
             ],
-          ],
-        ),
+          ),
         ),
       ),
     );

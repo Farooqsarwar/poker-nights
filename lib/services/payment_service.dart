@@ -46,15 +46,15 @@ class PremiumPlan {
     PremiumPlan(
       id: 'monthly',
       name: 'Monthly',
-      price: '9',
+      price: '5',
       period: 'per month',
     ),
     PremiumPlan(
       id: 'yearly',
       name: 'Yearly',
-      price: '79',
-      period: 'per year',
-      saving: 'Save 27%',
+      price: '36',
+      period: 'per year · \$3/mo',
+      saving: 'Save 40%',
     ),
   ];
 }

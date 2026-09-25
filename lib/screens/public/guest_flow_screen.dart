@@ -308,7 +308,18 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
 
-    return OnboardingScaffold(child: _buildBody(app, game));
+    return OnboardingScaffold(
+      // From the code screen, back leaves the flow; from any later step it
+      // starts the guest over.
+      onBack: () {
+        if (_step == _GuestStep.enterCode) {
+          context.go(RoutePaths.landing);
+        } else {
+          _startOver();
+        }
+      },
+      child: _buildBody(app, game),
+    );
   }
 
   Widget _buildBody(AppProvider app, LiveGame? game) {

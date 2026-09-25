@@ -18,15 +18,18 @@ import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_icon_label.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_tabs.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_text_field.dart';
 import '../../widgets/chat_sheet.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/tournament_display_block.dart';
 import '../../widgets/stack_depth.dart';
 import '../../responsive/responsive.dart';
 import '../../models/game.dart';
+import '../../widgets/tournament_timer_card.dart';
 
 /// Player live view mirroring the web `PlayerLivePage`.
 class PlayerLiveScreen extends StatefulWidget {
@@ -163,100 +166,170 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 message: 'Tournament is paused. Wait for the admin to resume.',
               ),
             // Header
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AppBackButton(
-                  onTap: () {
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go(RoutePaths.home);
-                    }
-                  },
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            if (device.isMobile) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        game.settings.name,
-                        style: AppTypography.display(
-                          size: AppFontSizes.xxxl,
-                          weight: FontWeight.w700,
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF22C55E),
+                          shape: BoxShape.circle,
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color:
-                                  game.status == LiveGameStatus.paused ||
-                                      game.status == LiveGameStatus.rebuypause
-                                  ? AppColors.warning
-                                  : game.status == LiveGameStatus.cancelled
-                                  ? AppColors.destructive
-                                  : game.status == LiveGameStatus.completed
-                                  ? AppColors.mutedForeground
-                                  : AppColors.success,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Text(
-                            game.status.label,
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ],
+                      const SizedBox(width: 8),
+                      Text(
+                        'PLAYER VIEW · LEVEL ${game.currentLevel}',
+                        style: const TextStyle(
+                          color: Color(0xFFE24446),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.5,
+                        ),
                       ),
                     ],
                   ),
-                ),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  children: [
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: () => context.go(RoutePaths.tvMode),
-                      child: const AppIconLabel(
-                        label: 'TV Mode',
-                        icon: Icons.tv_outlined,
+                  if (!isGuest)
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => ChatSheet.show(context, game.id),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.chat_bubble_outline,
+                                size: 16,
+                                color: Color(0xFFE24446),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'Chat',
+                                style: TextStyle(
+                                  color: Color(0xFFE24446),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              if (app.unreadGameChatCount(game.id) > 0) ...[
+                                const SizedBox(width: 4),
+                                ChatUnreadBadge(
+                                  count: app.unreadGameChatCount(game.id),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                    // Guests have no chat (Tech §3.3/§6.6 — audit fix C1).
-                    if (!isGuest)
+                ],
+              ),
+              const SizedBox(height: 12),
+            ] else ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppBackButton(
+                    onTap: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go(RoutePaths.home);
+                      }
+                    },
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          game.settings.name,
+                          style: AppTypography.display(
+                            size: AppFontSizes.xxxl,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color:
+                                    game.status == LiveGameStatus.paused ||
+                                        game.status == LiveGameStatus.rebuypause
+                                    ? AppColors.warning
+                                    : game.status == LiveGameStatus.cancelled
+                                    ? AppColors.destructive
+                                    : game.status == LiveGameStatus.completed
+                                    ? AppColors.mutedForeground
+                                    : AppColors.success,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Text(
+                              game.status.label,
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    children: [
                       AppButton(
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.ghost,
-                        onPressed: () => ChatSheet.show(context, game.id),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const AppIconLabel(
-                              label: 'Chat',
-                              icon: Icons.chat_bubble_outline,
-                            ),
-                            if (app.unreadGameChatCount(game.id) > 0) ...[
-                              const SizedBox(width: AppSpacing.xs),
-                              ChatUnreadBadge(
-                                count: app.unreadGameChatCount(game.id),
-                              ),
-                            ],
-                          ],
+                        onPressed: () => context.go(RoutePaths.tvMode),
+                        child: const AppIconLabel(
+                          label: 'TV Mode',
+                          icon: Icons.tv_outlined,
                         ),
                       ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
+                      // Guests have no chat (Tech §3.3/§6.6 — audit fix C1).
+                      if (!isGuest)
+                        AppButton(
+                          size: AppButtonSize.sm,
+                          variant: AppButtonVariant.ghost,
+                          onPressed: () => ChatSheet.show(context, game.id),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const AppIconLabel(
+                                label: 'Chat',
+                                icon: Icons.chat_bubble_outline,
+                              ),
+                              if (app.unreadGameChatCount(game.id) > 0) ...[
+                                const SizedBox(width: AppSpacing.xs),
+                                ChatUnreadBadge(
+                                  count: app.unreadGameChatCount(game.id),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+            ],
             if (game.isOnBubble)
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -268,7 +341,8 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                   // instead. Counting `prizes` here read 0 paid on every
                   // player's screen — exactly the number §22.5's bubble
                   // warning exists to state.
-                  message: 'On the bubble — ${activePlayers.length} left, ${game.structure.paidPlacesForDisplay} paid. '
+                  message:
+                      'On the bubble — ${activePlayers.length} left, ${game.structure.paidPlacesForDisplay} paid. '
                       'The next player out wins nothing.',
                   actionLabel: 'ICM Calculator',
                   onAction: () => context.push(RoutePaths.toolIcm),
@@ -286,219 +360,467 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
             ),
             const SizedBox(height: AppSpacing.lg),
             if (_tab == 'dashboard') ...[
-              // Main timer card
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                child: TournamentDisplayBlock(
-                  game: game,
-                  showPayoutAmounts: false,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              if (game.status == LiveGameStatus.completed) ...[
-                AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Column(
-                    children: [
-                      Icon(Icons.emoji_events, size: 48, color: AppColors.icon),
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        'Tournament Complete!',
-                        style: AppTypography.display(
-                          size: AppFontSizes.xl,
-                          weight: FontWeight.w700,
-                        ),
+              if (device.isMobile) ...[
+                // ── C10 SCOREBOARD TIMER (white mins, crimson secs, coral ANTE) ──
+                TournamentTimerCard(game: game, showSubStats: false),
+                const SizedBox(height: 14),
+
+                // ── YOUR SEAT CARD ──
+                Builder(
+                  builder: (_) {
+                    final bb = (game.currentLevelData?.bb ?? 0) > 0
+                        ? game.currentLevelData!.bb
+                        : 1;
+                    final stack =
+                        me?.stack ??
+                        (activePlayers.isEmpty
+                            ? 0
+                            : game.totalChipsInPlay ~/ activePlayers.length);
+                    final bbCount = stack ~/ bb;
+                    final initial = me?.name.isNotEmpty == true
+                        ? me!.name[0].toUpperCase()
+                        : 'A';
+                    final displayName = me != null
+                        ? (me.id == app.user?.id ? 'You' : me.name)
+                        : 'You';
+                    final tableSeat = me != null && me.table > 0
+                        ? 'Table ${me.table} · Seat ${me.seat}'
+                        : 'Table 1 · Seat 2';
+
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141416),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF242428)),
                       ),
-                      const SizedBox(height: AppSpacing.lg),
-                      AppButton(
-                        fullWidth: true,
-                        onPressed: () => context.go(RoutePaths.resultPodium),
-                        child: const Text('View Final Results'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              // Next level
-              if (next != null)
-                AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Row(
-                    children: [
-                      Text(
-                        'Next level',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.lg),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Text(
-                              '${Formatters.chips(next.sb)} / ${Formatters.chips(next.bb)}',
-                              style: AppTypography.monoSm.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (next.ante != null) ...[
-                              const SizedBox(width: AppSpacing.xs),
-                              Text(
-                                '+ ante',
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.accent,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      Text(
-                        'Level ${game.currentLevel + 1}',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: AppSpacing.md),
-              // Stats row — the limited live view for players/guests.
-              // (Audit fix C2: removed the un-specced "Rank" card.)
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatCard(
-                      label: 'Players left',
-                      value: '${activePlayers.length}',
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    // Section 12: green/amber/red depth indicator around
-                    // AVG STACK. The chip count alone says nothing -- 12,000
-                    // is deep at 50/100 and desperate at 1000/2000.
-                    child: StackDepthRing(
-                      depth: StackDepth.of(
-                        avgStack: avgStack,
-                        bigBlind: game.currentLevelData?.bb ?? 0,
-                      ),
-                      child: _StatCard(
-                        label: 'Avg stack',
-                        value: Formatters.chips(avgStack),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: _StatCard(
-                      label: game.prizePoolLabel,
-                      value: Formatters.prize(game.structure.prizePool),
-                      valueColor: AppColors.primary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              // My seat
-              if (myPlayer != null)
-                AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Your seat',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          const Text(
+                            'YOUR SEAT',
+                            style: TextStyle(
+                              color: Color(0xFFE24446),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
                             children: [
-                              Text(
-                                myPlayer.eliminated &&
-                                        myPlayer.eliminationPos != null
-                                    ? _ordinalPlace(myPlayer.eliminationPos!)
-                                    : 'Table ${myPlayer.table} · Seat ${myPlayer.seat}',
-                                style: AppTypography.monoXl.copyWith(
-                                  fontWeight: FontWeight.w700,
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFD53032),
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  initial,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 18,
+                                  ),
                                 ),
                               ),
-                              if (myPlayer.knockouts > 0)
-                                Text(
-                                  '${myPlayer.knockouts} knockout${myPlayer.knockouts > 1 ? 's' : ''}',
-                                  style: AppTypography.bodySm.copyWith(
-                                    color: AppColors.primaryText,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const Spacer(),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              // The sheet's Busted/All-in pills carry a leading
-                              // glyph; "Active" gets the live dot instead, so
-                              // the two states differ by more than colour for
-                              // anyone who cannot distinguish red from green.
-                              myPlayer.eliminated
-                                  ? const AppBadge(
-                                      label: 'Eliminated',
-                                      variant: AppBadgeVariant.red,
-                                      icon: Icons.close,
-                                    )
-                                  : AppBadge(
-                                      label: 'Active',
-                                      variant: AppBadgeVariant.green,
-                                      dotColor: AppColors.success,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      displayName,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 16,
+                                      ),
                                     ),
-                              if (myPlayer.rebuys > 0)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Text(
-                                    '${myPlayer.rebuys} rebuy${myPlayer.rebuys > 1 ? 's' : ''}',
-                                    style: AppTypography.bodyXs.copyWith(
-                                      color: AppColors.mutedForeground,
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      tableSeat,
+                                      style: const TextStyle(
+                                        color: Color(0xFF8E8E93),
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    Formatters.prize(stack),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 22,
                                     ),
                                   ),
-                                ),
-                              if (myPlayer.hasAddOn)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    'Add-on taken',
-                                    style: AppTypography.bodyXs.copyWith(
-                                      color: AppColors.mutedForeground,
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '$bbCount BB',
+                                    style: const TextStyle(
+                                      color: Color(0xFF8E8E93),
+                                      fontSize: 12,
                                     ),
                                   ),
-                                ),
+                                ],
+                              ),
                             ],
                           ),
                         ],
                       ),
-                      if (game.settings.rebuys) ...[
-                        const SizedBox(height: AppSpacing.sm),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // ── SUB-STATS: PLAYERS LEFT | AVG STACK ──
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF141416),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFF242428)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${activePlayers.length}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'players left',
+                              style: TextStyle(
+                                color: Color(0xFF8E8E93),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF141416),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFF242428)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              Formatters.chips(avgStack),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'avg stack',
+                              style: TextStyle(
+                                color: Color(0xFF8E8E93),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // ── IN THE MONEY BANNER ──
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF242428)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'In the money at',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        '${game.structure.paidPlacesForDisplay > 0 ? game.structure.paidPlacesForDisplay : 3} players',
+                        style: const TextStyle(
+                          color: Color(0xFFEAB308),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                if (game.status == LiveGameStatus.completed) ...[
+                  AppCard(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.emoji_events,
+                          size: 48,
+                          color: AppColors.icon,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
                         Text(
-                          'Rebuys: ${myPlayer.rebuys} used · open until Level ${game.settings.rebuysCloseLevel}',
+                          'Tournament Complete!',
+                          style: AppTypography.display(
+                            size: AppFontSizes.xl,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        AppButton(
+                          fullWidth: true,
+                          onPressed: () => context.go(RoutePaths.resultPodium),
+                          child: const Text('View Final Results'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+              ] else ...[
+                // Main timer card
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: TournamentDisplayBlock(
+                    game: game,
+                    showPayoutAmounts: false,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                if (game.status == LiveGameStatus.completed) ...[
+                  AppCard(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.emoji_events,
+                          size: 48,
+                          color: AppColors.icon,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          'Tournament Complete!',
+                          style: AppTypography.display(
+                            size: AppFontSizes.xl,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        AppButton(
+                          fullWidth: true,
+                          onPressed: () => context.go(RoutePaths.resultPodium),
+                          child: const Text('View Final Results'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                // Next level
+                if (next != null)
+                  AppCard(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Next level',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.lg),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Text(
+                                '${Formatters.chips(next.sb)} / ${Formatters.chips(next.bb)}',
+                                style: AppTypography.monoSm.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (next.ante != null) ...[
+                                const SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  '+ ante',
+                                  style: AppTypography.bodyXs.copyWith(
+                                    color: AppColors.accent,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        Text(
+                          'Level ${game.currentLevel + 1}',
                           style: AppTypography.bodyXs.copyWith(
                             color: AppColors.mutedForeground,
                           ),
                         ),
                       ],
-                      // Rebuys and add-ons are recorded by the host, never
-                      // self-served (Tech §3 permission matrix, UAT: "a member
-                      // attempts to self-record a rebuy; the backend denies
-                      // the action") — so no request buttons here.
-                    ],
+                    ),
                   ),
+                const SizedBox(height: AppSpacing.md),
+                // Stats row — the limited live view for players/guests.
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StatCard(
+                        label: 'Players left',
+                        value: '${activePlayers.length}',
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: StackDepthRing(
+                        depth: StackDepth.of(
+                          avgStack: avgStack,
+                          bigBlind: game.currentLevelData?.bb ?? 0,
+                        ),
+                        child: _StatCard(
+                          label: 'Avg stack',
+                          value: Formatters.chips(avgStack),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: _StatCard(
+                        label: game.prizePoolLabel,
+                        value: Formatters.prize(game.structure.prizePool),
+                        valueColor: AppColors.primary,
+                      ),
+                    ),
+                  ],
                 ),
-              const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.md),
+                // My seat
+                if (myPlayer != null)
+                  AppCard(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Your seat',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Row(
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  myPlayer.eliminated &&
+                                          myPlayer.eliminationPos != null
+                                      ? _ordinalPlace(myPlayer.eliminationPos!)
+                                      : 'Table ${myPlayer.table} · Seat ${myPlayer.seat}',
+                                  style: AppTypography.monoXl.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (myPlayer.knockouts > 0)
+                                  Text(
+                                    '${myPlayer.knockouts} knockout${myPlayer.knockouts > 1 ? 's' : ''}',
+                                    style: AppTypography.bodySm.copyWith(
+                                      color: AppColors.primaryText,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const Spacer(),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                myPlayer.eliminated
+                                    ? const AppBadge(
+                                        label: 'Eliminated',
+                                        variant: AppBadgeVariant.red,
+                                        icon: Icons.close,
+                                      )
+                                    : AppBadge(
+                                        label: 'Active',
+                                        variant: AppBadgeVariant.green,
+                                        dotColor: AppColors.success,
+                                      ),
+                                if (myPlayer.rebuys > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      '${myPlayer.rebuys} rebuy${myPlayer.rebuys > 1 ? 's' : ''}',
+                                      style: AppTypography.bodyXs.copyWith(
+                                        color: AppColors.mutedForeground,
+                                      ),
+                                    ),
+                                  ),
+                                if (myPlayer.hasAddOn)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      'Add-on taken',
+                                      style: AppTypography.bodyXs.copyWith(
+                                        color: AppColors.mutedForeground,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        if (game.settings.rebuys) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            'Rebuys: ${myPlayer.rebuys} used · open until Level ${game.settings.rebuysCloseLevel}',
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.md),
+              ],
               // My table — who I'm sitting with
               if (tableMates.isNotEmpty)
                 AppCard(
@@ -908,14 +1230,17 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         ),
                       )
                     else
-                      for (final p in (game.structure.prizes.isNotEmpty
-                          ? game.structure.prizes
-                          : [
-                              for (var i = 1;
-                                  i <= game.structure.paidPlacesForDisplay;
-                                  i++)
-                                Prize(place: i, amount: 0),
-                            ]))
+                      for (final p
+                          in (game.structure.prizes.isNotEmpty
+                              ? game.structure.prizes
+                              : [
+                                  for (
+                                    var i = 1;
+                                    i <= game.structure.paidPlacesForDisplay;
+                                    i++
+                                  )
+                                    Prize(place: i, amount: 0),
+                                ]))
                         Container(
                           padding: const EdgeInsets.symmetric(
                             vertical: AppSpacing.sm,
@@ -996,51 +1321,43 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
     final name = TextEditingController();
     final email = TextEditingController();
     final password = TextEditingController();
-    showDialog<void>(
+    showAppModal(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Create Account'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: name,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextField(
-              controller: email,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email'),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextField(
-              controller: password,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
+      title: 'Create Account',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppTextField(controller: name, label: 'Name'),
+          const SizedBox(height: AppSpacing.sm),
+          AppTextField(
+            controller: email,
+            label: 'Email',
+            keyboardType: TextInputType.emailAddress,
           ),
-          FilledButton(
+          const SizedBox(height: AppSpacing.sm),
+          AppTextField(
+            controller: password,
+            label: 'Password',
+            obscureText: true,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(
+            fullWidth: true,
             onPressed: () async {
               final err = await app.convertGuestAccount(
                 name.text.trim(),
                 email.text.trim(),
                 password.text,
               );
-              if (!ctx.mounted) return;
+              if (!context.mounted) return;
               if (err != null) {
                 ScaffoldMessenger.of(
-                  ctx,
+                  context,
                 ).showSnackBar(SnackBar(content: Text(err)));
                 return;
               }
-              Navigator.of(ctx).pop();
+              Navigator.of(context).pop();
             },
             child: const Text('Create Account'),
           ),

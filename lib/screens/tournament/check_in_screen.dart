@@ -461,30 +461,28 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     ),
                   ),
                 ),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  child: Container(
-                    color: AppColors.card,
-                    child: Column(
-                      children: [
-                        for (final g in pendingRequests)
-                          _PendingGuestRow(
-                            key: ValueKey('pending-${g.id}'),
-                            guest: g,
-                            inviter: g.isGuest
-                                ? players
-                                      .where((p) => p.id == g.inviterId)
-                                      .firstOrNull
-                                : null,
-                            onConfirm: () => g.isGuest
-                                ? app.confirmGuest(g.id)
-                                : app.checkInPlayer(g.id),
-                            onReject: () => g.isGuest
-                                ? app.rejectGuest(g.id)
-                                : app.cancelCheckIn(g.id),
-                          ),
-                      ],
-                    ),
+                AppCard(
+                  padding: EdgeInsets.zero,
+                  borderColor: AppColors.warning.withValues(alpha: 0.3),
+                  child: Column(
+                    children: [
+                      for (final g in pendingRequests)
+                        _PendingGuestRow(
+                          key: ValueKey('pending-${g.id}'),
+                          guest: g,
+                          inviter: g.isGuest
+                              ? players
+                                    .where((p) => p.id == g.inviterId)
+                                    .firstOrNull
+                              : null,
+                          onConfirm: () => g.isGuest
+                              ? app.confirmGuest(g.id)
+                              : app.checkInPlayer(g.id),
+                          onReject: () => g.isGuest
+                              ? app.rejectGuest(g.id)
+                              : app.cancelCheckIn(g.id),
+                        ),
+                    ],
                   ),
                 ),
               ],
@@ -506,23 +504,21 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   ),
                 ),
               ),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                child: Container(
-                  color: AppColors.card,
-                  child: Column(
-                    children: [
-                      for (final p in players.where((p) => !p.isGuest))
-                        Container(
-                          key: ValueKey('player-${p.id}'),
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppSpacing.sm,
-                            horizontal: AppSpacing.md,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border(bottom: BorderSide(color: AppColors.border)),
-                          ),
-                          child: Row(
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    for (final p in players.where((p) => !p.isGuest))
+                      Container(
+                        key: ValueKey('player-${p.id}'),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.sm,
+                          horizontal: AppSpacing.md,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border(bottom: BorderSide(color: AppColors.border)),
+                        ),
+                        child: Row(
                             children: [
                               AppAvatar(name: p.name, size: AppAvatarSize.sm),
                               const SizedBox(width: AppSpacing.md),
@@ -595,7 +591,6 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     ],
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),

@@ -123,6 +123,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(height: AppSpacing.lg),
           _orderSummary(),
           const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Payment method',
+            style: AppTypography.bodySm.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           AppTextField(
             controller: _name,
             label: 'Name on card',
@@ -184,7 +191,28 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
           ],
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.lock_outline,
+                size: 14,
+                color: AppColors.mutedForeground,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  'Secured & encrypted — we never store your card details.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
           AppButton(
             fullWidth: true,
             size: AppButtonSize.lg,
@@ -249,13 +277,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Poker Night Premium',
+                      'Poker Night Pro',
                       style: AppTypography.bodySm.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     Text(
-                      '${_plan.name} · ${_plan.period}',
+                      '${_plan.name} (${_plan.period}) · 7-day free trial',
                       style: AppTypography.bodyXs.copyWith(
                         color: AppColors.mutedForeground,
                       ),

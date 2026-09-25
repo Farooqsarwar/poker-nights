@@ -232,7 +232,7 @@ class _JoinScreenState extends State<JoinScreen> {
           fullWidth: true,
           size: AppButtonSize.lg,
           loading: _busy,
-          onPressed: () => _resolve(_controller.text),
+          onPressed: _busy ? null : () => _resolve(_controller.text),
           child: const Text('Continue'),
         ),
         const AppDivider(label: 'OR', space: AppSpacing.xl),

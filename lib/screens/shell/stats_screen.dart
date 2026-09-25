@@ -5,16 +5,13 @@ import 'package:provider/provider.dart';
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
-import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_page.dart';
-import '../../services/entitlements.dart';
-import '../../widgets/premium_gate.dart';
+import '../../widgets/back_nav_button.dart';
 
-/// Detailed statistics mirroring the account area of the web app.
+/// Statistics screen matching F3_Stats mobile-first design.
 class StatsScreen extends StatelessWidget {
   const StatsScreen({super.key});
 
@@ -22,29 +19,6 @@ class StatsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final user = app.user;
-
-    // Addendum §3: "Advanced statistics, analytics, history and exports" are
-    // Premium. Basic group history (games played, wins, podiums) stays free
-    // and lives on the history screen -- this is the analytics view.
-    if (user != null &&
-        !Entitlements.allows(app.premiumTier, PremiumFeature.advancedStats)) {
-      return AppPage(
-        maxWidth: 560,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: AppSpacing.xxl),
-            PremiumGate(
-              tier: app.premiumTier,
-              feature: PremiumFeature.advancedStats,
-              blurb: 'Finishing positions over time, knockout records and '
-                  'exportable history. Your basic group history stays free.',
-              child: const SizedBox.shrink(),
-            ),
-          ],
-        ),
-      );
-    }
 
     if (user == null) {
       return AppPage(
@@ -61,28 +35,51 @@ class StatsScreen extends StatelessWidget {
       );
     }
 
+    final winRate = user.stats.played > 0
+        ? '${((user.stats.wins / user.stats.played) * 100).toStringAsFixed(0)}%'
+        : '0%';
+
     return AppPage(
-      maxWidth: 720,
+      maxWidth: 520,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // App bar with squircle back button <
+          Row(
+            children: [
+              BackNavButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(RoutePaths.profile);
+                  }
+                },
+                label: 'Back',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Title & Subtitle
           Text(
             'Statistics',
             style: AppTypography.display(
-              size: AppFontSizes.xxxl,
+              size: 30,
               weight: FontWeight.w700,
+              color: Colors.white,
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: 4),
           Text(
             '${user.name} · all-time results',
             style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
+              color: const Color(0xFF8E8E93),
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          // Before the first game the grid is six zeros and an "Avg finish"
-          // of #0.0, which reads as a broken screen rather than a new one.
+          const SizedBox(height: 24),
+
           if (user.stats.played == 0)
             AppEmptyState(
               icon: Icons.insights_outlined,
@@ -95,88 +92,122 @@ class StatsScreen extends StatelessWidget {
                 child: const Text('Go to your group'),
               ),
             )
-          else
-          // The SIX basic player statistics (Tech §15.2 — "no ROI,
-          // profit …, graphs, streaks or advanced filters"; no separate
-          // personal game-history page).
-          GridView.count(
-            crossAxisCount: MediaQuery.of(context).size.width < 600 ? 3 : 6,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: AppSpacing.sm,
-            crossAxisSpacing: AppSpacing.sm,
-            childAspectRatio: 1.1,
-            children: [
-              _HeadlineStat(
-                label: 'Games played',
-                value: '${user.stats.played}',
+          else ...[
+            // 2x3 Grid of Headline Stat Cards
+            GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 0.95,
+              children: [
+                _buildStatCard(
+                  label: 'Games\nplayed',
+                  value: '${user.stats.played}',
+                  valueColor: Colors.white,
+                ),
+                _buildStatCard(
+                  label: 'Wins',
+                  value: '${user.stats.wins}',
+                  valueColor: const Color(0xFFF59E0B),
+                ),
+                _buildStatCard(
+                  label: 'Podium',
+                  value: '${user.stats.podium}',
+                  valueColor: Colors.white,
+                ),
+                _buildStatCard(
+                  label: 'Avg finish',
+                  value: '#${user.stats.avgFinish.toStringAsFixed(1)}',
+                  valueColor: Colors.white,
+                ),
+                _buildStatCard(
+                  label: 'Knockouts',
+                  value: '${user.stats.knockouts}',
+                  valueColor: Colors.white,
+                ),
+                _buildStatCard(
+                  label: 'Win rate',
+                  value: winRate,
+                  valueColor: const Color(0xFFF59E0B),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Premium blurb card
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFF121417),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF22262B), width: 1),
               ),
-              _HeadlineStat(
-                label: 'Wins',
-                value: '${user.stats.wins}',
-                accent: AppColors.gold,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.workspace_premium_outlined,
+                      color: Color(0xFFF87171),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      'Finishing positions over time, knockout records and exportable history are part of Premium. Your basic stats stay free.',
+                      style: AppTypography.bodySm.copyWith(
+                        color: const Color(0xFF8E8E93),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              _HeadlineStat(
-                label: 'Podium finishes',
-                value: '${user.stats.podium}',
-              ),
-              _HeadlineStat(
-                label: 'Avg finish',
-                value: '#${user.stats.avgFinish.toStringAsFixed(1)}',
-              ),
-              _HeadlineStat(
-                label: 'Knockouts',
-                value: '${user.stats.knockouts}',
-              ),
-              _HeadlineStat(
-                label: 'Win rate',
-                value: user.stats.played > 0
-                    ? '${((user.stats.wins / user.stats.played) * 100).toStringAsFixed(0)}%'
-                    : '—',
-                accent: AppColors.gold,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xxl),
+            ),
+          ],
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
-}
 
-class _HeadlineStat extends StatelessWidget {
-  const _HeadlineStat({required this.label, required this.value, this.accent});
-
-  final String label;
-  final String value;
-  final Color? accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xs,
-        vertical: AppSpacing.sm,
+  static Widget _buildStatCard({
+    required String label,
+    required String value,
+    required Color valueColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF121417),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF22262B), width: 1),
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              style: AppTypography.mono(
-                size: AppFontSizes.lg,
+              style: AppTypography.display(
+                size: 28,
                 weight: FontWeight.w700,
-                color: accent ?? AppColors.foreground,
+                color: valueColor,
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.xxs),
           Text(
             label,
             style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
+              color: const Color(0xFF8E8E93),
+              fontWeight: FontWeight.w400,
+              height: 1.2,
             ),
           ),
         ],

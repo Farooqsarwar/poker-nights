@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_card.dart';
 import '../../constants/app_constants.dart';
+
+const _supportEmail = 'support@pokernight.app';
 
 class SupportScreen extends StatelessWidget {
   const SupportScreen({super.key});
@@ -42,6 +46,15 @@ class SupportScreen extends StatelessWidget {
     ),
   ];
 
+  Future<void> _emailSupport() async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: _supportEmail,
+      query: 'subject=Poker Night support',
+    );
+    await launchUrl(uri);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -74,34 +87,39 @@ class SupportScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   'Search the answers below, or reach us any time at '
-                  'support@pokernight.app — we usually reply within one business day.',
-                  style: AppTypography.body(),
+                  '$_supportEmail — we usually reply within one business day.',
+                  style: AppTypography.body(height: 1.7),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
                 Text(
-                  'Frequently asked questions',
-                  style: AppTypography.displaySm,
+                  'FREQUENTLY ASKED QUESTIONS',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                    letterSpacing: 1,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 for (final faq in _faqs) ...[
-                  Container(
+                  AppCard(
                     padding: const EdgeInsets.all(AppSpacing.lg),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(color: AppColors.border),
-                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(faq.q, style: AppTypography.bodyBold),
                         const SizedBox(height: AppSpacing.sm),
-                        Text(faq.a, style: AppTypography.body()),
+                        Text(faq.a, style: AppTypography.body(height: 1.6)),
                       ],
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
+                const SizedBox(height: AppSpacing.md),
+                AppButton(
+                  onPressed: _emailSupport,
+                  variant: AppButtonVariant.primary,
+                  fullWidth: true,
+                  child: const Text('Email us'),
+                ),
                 const SizedBox(height: AppSpacing.md),
                 AppButton(
                   onPressed: () {
@@ -112,6 +130,7 @@ class SupportScreen extends StatelessWidget {
                     }
                   },
                   variant: AppButtonVariant.secondary,
+                  fullWidth: true,
                   child: const Text('Back'),
                 ),
               ],

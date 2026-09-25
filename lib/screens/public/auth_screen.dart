@@ -302,7 +302,7 @@ class _AuthScreenState extends State<AuthScreen> {
           size: AppButtonSize.lg,
           fullWidth: true,
           loading: _loading,
-          onPressed: _handleSubmit,
+          onPressed: _loading ? null : _handleSubmit,
           child: Text(
             _loading
                 ? 'Please wait…'

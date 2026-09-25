@@ -10,6 +10,7 @@ import '../../constants/app_constants.dart';
 import '../../models/game.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
+import '../../models/tournament_format.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/premium_gate.dart';
 import '../../services/entitlements.dart';
@@ -37,6 +38,8 @@ import '../../widgets/payment_ledger_card.dart';
 import 'dart:async';
 import '../../widgets/glass_styles.dart';
 import '../../models/shot_clock.dart';
+import '../../widgets/squircle_icon_button.dart';
+import '../../widgets/tournament_timer_card.dart';
 
 /// Admin live dashboard mirroring the web `AdminDashboardPage`.
 class AdminDashboardScreen extends StatefulWidget {
@@ -57,7 +60,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   /// Estimated finish time: remaining clock + the durations of the levels
   /// still to play (+5% buffer). [futureDurationOverride] previews a
   /// speed-up/slow-down of all future levels.
-  String? _estimateFinish(LiveGame game, Duration clockOffset, {int? futureDurationOverride}) {
+  String? _estimateFinish(
+    LiveGame game,
+    Duration clockOffset, {
+    int? futureDurationOverride,
+  }) {
     final levels = game.structure.levels;
     if (levels.isEmpty) return null;
     // Only the PLANNED levels count. The generator appends a spare tail as
@@ -74,8 +81,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         mins += futureDurationOverride ?? l.durationMins;
       }
     }
-    String hhmm(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    
+    String hhmm(DateTime dt) =>
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
     final early = DateTime.now().add(Duration(minutes: (mins * 1.05).round()));
     final late = DateTime.now().add(Duration(minutes: (mins * 1.15).round()));
     return '${hhmm(early)} – ${hhmm(late)}';
@@ -106,7 +114,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void _confirmStartTimer(BuildContext context, AppProvider app) {
     final game = app.currentGame;
     if (game == null) return;
-    final missingPlayers = game.players.where((p) => p.rsvp?.isGoing == true && !p.checkedIn && !p.noShow).toList();
+    final missingPlayers = game.players
+        .where((p) => p.rsvp?.isGoing == true && !p.checkedIn && !p.noShow)
+        .toList();
     if (missingPlayers.isEmpty) {
       app.startTimer();
       return;
@@ -131,7 +141,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           title: 'Missing Players',
           child: Padding(
             padding: const EdgeInsets.symmetric(
-                vertical: AppSpacing.md, horizontal: AppSpacing.xl),
+              vertical: AppSpacing.md,
+              horizontal: AppSpacing.xl,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -164,8 +176,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             Expanded(
                               child: Text(
                                 p.name,
-                                style: AppTypography.body()
-                                    .copyWith(fontWeight: FontWeight.bold),
+                                style: AppTypography.body().copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
@@ -196,7 +209,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         selected.isEmpty
                             ? 'Start With Everyone'
                             : 'Start & Drop ${selected.length} No-show'
-                                '${selected.length == 1 ? '' : 's'}',
+                                  '${selected.length == 1 ? '' : 's'}',
                       ),
                     ),
                   ],
@@ -224,15 +237,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     // Final Table Auto-Trigger (Audit fix)
     // Spec §4.16 / Tech §12.3: the redraw only applies when the game started
     // with multiple tables. Single-table games must NOT trigger the redraw.
-    final hadMultipleTables = game != null && game.players.any((p) => p.table > 1);
-    final isNinePlayers = game != null && hadMultipleTables && game.activePlayers.length == 9;
+    final hadMultipleTables =
+        game != null && game.players.any((p) => p.table > 1);
+    final isNinePlayers =
+        game != null && hadMultipleTables && game.activePlayers.length == 9;
     // The `!_show*Modal` flags that used to guard this condition were removed:
     // they dated from when the structure/restart/cancel/undo modals were inline
     // state, and once those moved to `showAppModal` (pushed routes) nothing set
     // them again, so they had been reading `false` ever since. The check that
     // actually keeps this prompt from stacking on top of an open modal is
     // `ModalRoute.of(context)?.isCurrent` below.
-    if (isNinePlayers && game.status == LiveGameStatus.running && !_showedFinalTablePrompt) {
+    if (isNinePlayers &&
+        game.status == LiveGameStatus.running &&
+        !_showedFinalTablePrompt) {
       _showedFinalTablePrompt = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && ModalRoute.of(context)?.isCurrent == true) {
@@ -246,11 +263,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               onClose: () => Navigator.pop(ctx),
               title: 'Final Table Reached!',
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.xl),
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppSpacing.md,
+                  horizontal: AppSpacing.xl,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('Exactly 9 players remain. It is time for the final table redraw.'),
+                    const Text(
+                      'Exactly 9 players remain. It is time for the final table redraw.',
+                    ),
                     const SizedBox(height: AppSpacing.xl),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -276,7 +298,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           ).then((_) {
             if (mounted) {
-               // Let them re-trigger it if they want by some other means, but don't auto-show again.
+              // Let them re-trigger it if they want by some other means, but don't auto-show again.
             }
           });
         }
@@ -309,18 +331,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final settings = game.settings;
     final status = game.status;
     final currentLevel = game.currentLevel;
-    final secondsRemaining = game.currentSecondsRemaining(app.serverTimeOffset);
     final level = game.currentLevelData;
     final activePlayers = game.activePlayers;
     final eliminatedPlayers = game.eliminatedPlayers;
-    final timerDanger = secondsRemaining <= 60;
-    final timerWarning = secondsRemaining <= 300;
-    final levelDurationSecs = (level?.durationMins ?? 1) * 60;
-    final levelPct = level == null
-        ? 0.0
-        : (((levelDurationSecs - secondsRemaining) / levelDurationSecs) * 100)
-              .clamp(0, 100)
-              .toDouble();
 
     // The money bubble, derived rather than stored. It is a fact about two
     // numbers that already exist — how many players are left and how many get
@@ -337,14 +350,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }.contains(status);
     final inTheMoney = liveNow && paidPlaces > 0 && playersLeft == paidPlaces;
 
-    final device = AppBreakpoints.deviceOf(context);
-    final timerSize = device.isMobile ? 54.0 : 64.0;
+    // Spec §11.4 / boundary #9: a shootout plays Stage A (several tables,
+    // one shared clock) then Stage B (a single final table). Null stage means
+    // "hasn't been generated as a shootout yet" -- still conceptually about
+    // to play Stage A, so it displays the same as stageA. The move to Stage B
+    // is always a host decision (see `startShootoutFinalTable` below) --
+    // never derived from a player count -- because "every table reported its
+    // winner" is a judgement call the app cannot safely infer.
+    final isShootout = settings.effectiveFormat == TournamentFormat.shootout;
+    final shootoutStage = game.shootoutStage ?? ShootoutStage.stageA;
 
-    final timerColor = timerDanger
-        ? AppColors.destructive
-        : timerWarning
-        ? AppColors.warning
-        : AppColors.primary;
+    final device = AppBreakpoints.deviceOf(context);
 
     return AppPage(
       maxWidth: 1280,
@@ -352,7 +368,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (app.showAppTour) ...[
-            _AdminAppTourCard(game: game, onDismiss: () => app.setAppTour(false)),
+            _AdminAppTourCard(
+              game: game,
+              onDismiss: () => app.setAppTour(false),
+            ),
             const SizedBox(height: AppSpacing.md),
           ],
           // Persistent guest review entry point: pending/check-in requests stay
@@ -366,163 +385,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ],
           // Top bar
           if (device.isMobile) ...[
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
               children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: status == LiveGameStatus.running
+                        ? const Color(0xFF22C55E)
+                        : const Color(0xFFE24446),
+                  ),
+                ),
+                const SizedBox(width: 6),
                 Text(
-                  settings.name,
-                  style: AppTypography.display(
-                    size: AppFontSizes.xxxl,
-                    weight: FontWeight.w700,
+                  'LIVE · ${status == LiveGameStatus.running ? "RUNNING" : (status == LiveGameStatus.paused ? "PAUSED" : (status == LiveGameStatus.rebuypause ? "BREAK" : status.label.toUpperCase()))}',
+                  style: const TextStyle(
+                    color: Color(0xFFE24446),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.5,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.sm),
-            AppCard(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.xs,
-                vertical: AppSpacing.sm,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: () => context.go(RoutePaths.tvMode),
-                      child: const FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: AppIconLabel(
-                          label: 'TV',
-                          icon: Icons.tv_outlined,
-                        ),
-                      ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    settings.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  Expanded(
-                    child: AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: () => ChatSheet.show(context, game.id),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const AppIconLabel(
-                              label: 'Chat',
-                              icon: Icons.chat_bubble_outline,
-                            ),
-                            if (app.unreadGameChatCount(game.id) > 0) ...[
-                              const SizedBox(width: AppSpacing.xs),
-                              ChatUnreadBadge(
-                                count: app.unreadGameChatCount(game.id),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: () {
-                        if (!app.isAdmin) {
-                          app.toggleVoice();
-                          return;
-                        }
-                        // Tech Spec §13.2: the admin manually selects which
-                        // device is the Audio Master.
-                        showAppModal(
-                          context: context,
-                          title: 'Audio announcements',
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                app.thisDeviceIsAudioMaster
-                                    ? 'This device is the Audio Master — it '
-                                        'speaks for the event. Clear it to let '
-                                        'every voice-enabled device announce.'
-                                    : 'No Audio Master is set — every '
-                                        'voice-enabled device may announce. '
-                                        'Claim the role to speak from this '
-                                        'device only.',
-                                style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.lg),
-                              if (!app.thisDeviceIsAudioMaster)
-                                AppButton(
-                                  onPressed: () {
-                                    app.setAudioMasterDevice();
-                                    Navigator.pop(context);
-                                  },
-                                  child: const Text(
-                                      'Make this device the Audio Master'),
-                                ),
-                              if (app.thisDeviceIsAudioMaster)
-                                AppButton(
-                                  variant: AppButtonVariant.secondary,
-                                  onPressed: () {
-                                    app.clearAudioMasterDevice();
-                                    Navigator.pop(context);
-                                  },
-                                  child:
-                                      const Text('Allow all devices to announce'),
-                                ),
-                              const SizedBox(height: AppSpacing.sm),
-                              AppButton(
-                                variant: AppButtonVariant.ghost,
-                                onPressed: () {
-                                  app.toggleVoice();
-                                  Navigator.pop(context);
-                                },
-                                child: Text(
-                                  app.voiceEnabled
-                                      ? 'Mute voice'
-                                      : 'Unmute voice',
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: AppIconLabel(
-                          label: app.thisDeviceIsAudioMaster
-                              ? 'Audio Master · Me'
-                              : app.voiceEnabled
-                                  ? 'Audio Master'
-                                  : 'Voice off',
-                          icon: app.voiceEnabled
-                              ? Icons.volume_up_outlined
-                              : Icons.volume_off_outlined,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: app.canUndo
-                          ? () => _showUndoPreview(app)
-                          : null,
-                      child: const FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: AppIconLabel(label: 'Undo', icon: Icons.undo),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                SquircleIconButton(
+                  icon: Icons.more_vert,
+                  size: 40,
+                  iconSize: 20,
+                  borderRadius: 12,
+                  onPressed: () => _showMoreActionsMenu(context, app, game),
+                ),
+              ],
             ),
           ] else ...[
             Row(
@@ -667,7 +576,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: AppAlertBanner(
                 type: AppAlertType.warning,
-                message: 'On the bubble — $playersLeft left, $paidPlaces paid. '
+                message:
+                    'On the bubble — $playersLeft left, $paidPlaces paid. '
                     'The next player out wins nothing.',
                 actionLabel: 'ICM Calculator',
                 onAction: () => context.push(RoutePaths.toolIcm),
@@ -678,10 +588,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: AppAlertBanner(
                 type: AppAlertType.success,
-                message: 'Bubble burst — everyone still playing is in the '
+                message:
+                    'Bubble burst — everyone still playing is in the '
                     'money.',
               ),
             ),
+          // Shootout stage indicator (§11.4 / boundary #9). Admin-only, like
+          // the other true-admin (not co-admin-delegable) actions on this
+          // screen -- hence `app.isAdmin` rather than the `isAdmin` local
+          // (which is `canRunCurrentGame` and also covers an assigned TO).
+          if (isShootout && app.isAdmin) ...[
+            if (shootoutStage == ShootoutStage.stageA)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                child: AppAlertBanner(
+                  type: AppAlertType.info,
+                  message:
+                      'Shootout — Stage A: '
+                      '${settings.effectiveShootoutTables} tables playing',
+                  actionLabel: 'Start Final Table (Stage B)',
+                  onAction: () => _confirmStartShootoutFinalTable(context, app),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                child: const AppAlertBanner(
+                  type: AppAlertType.info,
+                  message: 'Shootout — Final Table',
+                ),
+              ),
+          ],
           // Speed recommendation — always previewed before applying
           // (audit fix B4: old vs. proposed structure + finish estimates).
           if (game.speedRecommendation != null)
@@ -693,7 +630,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ? 'Tournament is running late — shorter future levels suggested'
                     : 'Tournament finishing early — longer future levels suggested',
                 actionLabel: 'Preview change',
-                onAction: () => _showSpeedPreview(app, game, game.speedRecommendation!),
+                onAction: () =>
+                    _showSpeedPreview(app, game, game.speedRecommendation!),
               ),
             ),
           // Estimated finish — required on the admin control screen
@@ -723,7 +661,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             // ── DESKTOP BEAUTIFUL LAYOUT ──
             // Row 1: Timer full width, top center
             ClipRRect(
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(AppRadius.xl),
               child: TournamentDisplayBlock(game: game, showStatusChip: true),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -733,269 +671,285 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             // tournament and touching blinds/seating is out of Co-Admin's
             // scope) ─────────────────────────────────────────────────────
             if (isAdmin) ...[
-            // ── CONTROLS — Row 1: Timer ──────────────────────────────────
-            AppCard(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.md,
-              ),
-              child: Row(
-                children: [
-                  // Play / Pause / Resume — always takes up ~1/3
-                  Expanded(
-                    flex: 3,
-                    child: Builder(
-                      builder: (_) {
-                        if (status == LiveGameStatus.checkin ||
-                            status == LiveGameStatus.published ||
-                            status == LiveGameStatus.ready) {
-                          return AppButton(
-                            size: AppButtonSize.lg,
-                            onPressed: () => _confirmStartTimer(context, app),
-                            child: const AppIconLabel(
-                              label: 'Start Timer',
-                              icon: Icons.play_arrow,
-                            ),
-                          );
-                        } else if (status == LiveGameStatus.running) {
-                          return AppButton(
-                            size: AppButtonSize.lg,
-                            variant: AppButtonVariant.primary,
-                            onPressed: app.pauseTimer,
-                            child: const AppIconLabel(
-                              label: 'Pause Timer',
-                              icon: Icons.pause,
-                            ),
-                          );
-                        } else {
-                          final canResume = status != LiveGameStatus.finaltable && 
-                                            status != LiveGameStatus.completed &&
-                                            status != LiveGameStatus.cancelled;
-                          return AppButton(
-                            size: AppButtonSize.lg,
-                            variant: AppButtonVariant.primary,
-                            onPressed: canResume ? app.resumeTimer : null,
-                            child: AppIconLabel(
-                              label: 'Resume Timer',
-                              icon: Icons.play_arrow,
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-
-                  if (status == LiveGameStatus.running ||
-                      status == LiveGameStatus.paused) ...[
-                    const SizedBox(width: AppSpacing.sm),
-                    // Previous Level (spec §12 controls) — disabled at level 1.
-                    Expanded(
-                      flex: 2,
-                      child: AppButton(
-                        size: AppButtonSize.lg,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: currentLevel <= 1
-                            ? null
-                            : () => app.previousLevel(
-                                idempotencyKey: _idemKey('prev'),
-                              ),
-                        child: const AppIconLabel(
-                          label: 'Previous',
-                          icon: Icons.skip_previous,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    // Next Level
-                    Expanded(
-                      flex: 2,
-                      child: AppButton(
-                        size: AppButtonSize.lg,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: currentLevel >= structure.levels.length
-                            ? null
-                            : () =>
-                                app.nextLevel(idempotencyKey: _idemKey('next')),
-                        child: const AppIconLabel(
-                          label: 'Next Level',
-                          trailing: Icons.skip_next,
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  if (status == LiveGameStatus.rebuypause) ...[
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      flex: 4,
-                      child: AppButton(
-                        size: AppButtonSize.lg,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => context.go(RoutePaths.rebuySettlement),
-                        child: const AppIconLabel(
-                          label: 'Settlement',
-                          trailing: Icons.arrow_forward,
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (status == LiveGameStatus.finaltable) ...[
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      flex: 4,
-                      child: AppButton(
-                        size: AppButtonSize.lg,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => context.go(RoutePaths.finalTable),
-                        child: const AppIconLabel(
-                          label: 'Redraw Table',
-                          trailing: Icons.arrow_forward,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-
-            // ── FINISH CTA — the structure clock has run out with players still
-            // in; surface finishing prominently so the game never looks stuck.
-            if ((status == LiveGameStatus.running ||
-                    status == LiveGameStatus.paused ||
-                    status == LiveGameStatus.finaltable ||
-                    status == LiveGameStatus.rebuypause) &&
-                !game.timerRunning &&
-                game.secondsRemaining == 0) ...[
+              // ── CONTROLS — Row 1: Timer ──────────────────────────────────
               AppCard(
-                borderColor: AppColors.warning.withValues(alpha: 0.5),
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Structure complete — record final positions',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.warningText,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppButton(
-                      size: AppButtonSize.lg,
-                      variant: AppButtonVariant.primary,
-                      onPressed: () =>
-                          context.go(RoutePaths.completeTournament),
-                      child: const AppIconLabel(
-                        label: 'Record finish order',
-                        trailing: Icons.arrow_forward,
-                      ),
-                    ),
-                  ],
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.md,
                 ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-            ],
+                child: Row(
+                  children: [
+                    // Play / Pause / Resume — always takes up ~1/3
+                    Expanded(
+                      flex: 3,
+                      child: Builder(
+                        builder: (_) {
+                          if (status == LiveGameStatus.checkin ||
+                              status == LiveGameStatus.published ||
+                              status == LiveGameStatus.ready) {
+                            return AppButton(
+                              size: AppButtonSize.lg,
+                              onPressed: () => _confirmStartTimer(context, app),
+                              child: const AppIconLabel(
+                                label: 'Start Timer',
+                                icon: Icons.play_arrow,
+                              ),
+                            );
+                          } else if (status == LiveGameStatus.running) {
+                            return AppButton(
+                              size: AppButtonSize.lg,
+                              variant: AppButtonVariant.primary,
+                              onPressed: app.pauseTimer,
+                              child: const AppIconLabel(
+                                label: 'Pause Timer',
+                                icon: Icons.pause,
+                              ),
+                            );
+                          } else {
+                            final canResume =
+                                status != LiveGameStatus.finaltable &&
+                                status != LiveGameStatus.completed &&
+                                status != LiveGameStatus.cancelled;
+                            return AppButton(
+                              size: AppButtonSize.lg,
+                              variant: AppButtonVariant.primary,
+                              onPressed: canResume ? app.resumeTimer : null,
+                              child: AppIconLabel(
+                                label: 'Resume Timer',
+                                icon: Icons.play_arrow,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ),
 
-            // ── CONTROLS — Row 2: Structure / Nav (secondary actions) ───
-            // Restart Level lives here (secondary + confirmation), not next
-            // to Pause/Next Level (audit fixes E6/E1).
-            AppCard(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.md,
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
+                    if (status == LiveGameStatus.running ||
+                        status == LiveGameStatus.paused) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      // Previous Level (spec §12 controls) — disabled at level 1.
                       Expanded(
+                        flex: 2,
                         child: AppButton(
                           size: AppButtonSize.lg,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => _showSpeedPreview(app, game, SpeedRecommendation.speedUp),
+                          onPressed: currentLevel <= 1
+                              ? null
+                              : () => app.previousLevel(
+                                  idempotencyKey: _idemKey('prev'),
+                                ),
                           child: const AppIconLabel(
-                            label: 'Speed Up',
-                            icon: Icons.bolt,
+                            label: 'Previous',
+                            icon: Icons.skip_previous,
                           ),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.sm),
+                      // Next Level
                       Expanded(
+                        flex: 2,
                         child: AppButton(
                           size: AppButtonSize.lg,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => _showSpeedPreview(app, game, SpeedRecommendation.slowDown),
+                          onPressed: currentLevel >= structure.levels.length
+                              ? null
+                              : () => app.nextLevel(
+                                  idempotencyKey: _idemKey('next'),
+                                ),
                           child: const AppIconLabel(
-                            label: 'Slow Down',
-                            icon: Icons.trending_down,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: AppButton(
-                          size: AppButtonSize.lg,
-                          variant: AppButtonVariant.secondary,
-                          onPressed: app.forceEvaluateSpeedRecommendation,
-                          child: const AppIconLabel(
-                            label: 'Recalculate',
-                            icon: Icons.timer_outlined,
+                            label: 'Next Level',
+                            trailing: Icons.skip_next,
                           ),
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    children: [
+
+                    if (status == LiveGameStatus.rebuypause) ...[
+                      const SizedBox(width: AppSpacing.sm),
                       Expanded(
+                        flex: 4,
                         child: AppButton(
                           size: AppButtonSize.lg,
                           variant: AppButtonVariant.secondary,
                           onPressed: () =>
-                              _showStructureEditor(app, game, structure, currentLevel, settings),
+                              context.go(RoutePaths.rebuySettlement),
                           child: const AppIconLabel(
-                            label: 'Edit Levels',
-                            icon: Icons.edit_outlined,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: AppButton(
-                          size: AppButtonSize.lg,
-                          variant: AppButtonVariant.secondary,
-                          onPressed:
-                              status == LiveGameStatus.running ||
-                                  status == LiveGameStatus.paused ||
-                                  status == LiveGameStatus.rebuypause
-                              ? () => _showRestartPreview(app, game, level)
-                              : null,
-                          child: const AppIconLabel(
-                            label: 'Restart',
-                            icon: Icons.replay,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: AppButton(
-                          size: AppButtonSize.lg,
-                          variant: AppButtonVariant.secondary,
-                          onPressed: () => setState(() => _tab = 'seating'),
-                          child: const AppIconLabel(
-                            label: 'Seats',
-                            icon: Icons.people_outline,
+                            label: 'Settlement',
+                            trailing: Icons.arrow_forward,
                           ),
                         ),
                       ),
                     ],
-                  ),
-                ],
+                    if (status == LiveGameStatus.finaltable) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        flex: 4,
+                        child: AppButton(
+                          size: AppButtonSize.lg,
+                          variant: AppButtonVariant.secondary,
+                          onPressed: () => context.go(RoutePaths.finalTable),
+                          child: const AppIconLabel(
+                            label: 'Redraw Table',
+                            trailing: Icons.arrow_forward,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(height: AppSpacing.sm),
+
+              // ── FINISH CTA — the structure clock has run out with players still
+              // in; surface finishing prominently so the game never looks stuck.
+              if ((status == LiveGameStatus.running ||
+                      status == LiveGameStatus.paused ||
+                      status == LiveGameStatus.finaltable ||
+                      status == LiveGameStatus.rebuypause) &&
+                  !game.timerRunning &&
+                  game.secondsRemaining == 0) ...[
+                AppCard(
+                  borderColor: AppColors.warning.withValues(alpha: 0.5),
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Structure complete — record final positions',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.warningText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      AppButton(
+                        size: AppButtonSize.lg,
+                        variant: AppButtonVariant.primary,
+                        onPressed: () =>
+                            context.go(RoutePaths.completeTournament),
+                        child: const AppIconLabel(
+                          label: 'Record finish order',
+                          trailing: Icons.arrow_forward,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+
+              // ── CONTROLS — Row 2: Structure / Nav (secondary actions) ───
+              // Restart Level lives here (secondary + confirmation), not next
+              // to Pause/Next Level (audit fixes E6/E1).
+              AppCard(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.md,
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppButton(
+                            size: AppButtonSize.lg,
+                            variant: AppButtonVariant.secondary,
+                            onPressed: () => _showSpeedPreview(
+                              app,
+                              game,
+                              SpeedRecommendation.speedUp,
+                            ),
+                            child: const AppIconLabel(
+                              label: 'Speed Up',
+                              icon: Icons.bolt,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: AppButton(
+                            size: AppButtonSize.lg,
+                            variant: AppButtonVariant.secondary,
+                            onPressed: () => _showSpeedPreview(
+                              app,
+                              game,
+                              SpeedRecommendation.slowDown,
+                            ),
+                            child: const AppIconLabel(
+                              label: 'Slow Down',
+                              icon: Icons.trending_down,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: AppButton(
+                            size: AppButtonSize.lg,
+                            variant: AppButtonVariant.secondary,
+                            onPressed: app.forceEvaluateSpeedRecommendation,
+                            child: const AppIconLabel(
+                              label: 'Recalculate',
+                              icon: Icons.timer_outlined,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppButton(
+                            size: AppButtonSize.lg,
+                            variant: AppButtonVariant.secondary,
+                            onPressed: () => _showStructureEditor(
+                              app,
+                              game,
+                              structure,
+                              currentLevel,
+                              settings,
+                            ),
+                            child: const AppIconLabel(
+                              label: 'Edit Levels',
+                              icon: Icons.edit_outlined,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: AppButton(
+                            size: AppButtonSize.lg,
+                            variant: AppButtonVariant.secondary,
+                            onPressed:
+                                status == LiveGameStatus.running ||
+                                    status == LiveGameStatus.paused ||
+                                    status == LiveGameStatus.rebuypause
+                                ? () => _showRestartPreview(app, game, level)
+                                : null,
+                            child: const AppIconLabel(
+                              label: 'Restart',
+                              icon: Icons.replay,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: AppButton(
+                            size: AppButtonSize.lg,
+                            variant: AppButtonVariant.secondary,
+                            onPressed: () => setState(() => _tab = 'seating'),
+                            child: const AppIconLabel(
+                              label: 'Seats',
+                              icon: Icons.people_outline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ],
             const SizedBox(height: AppSpacing.xl),
 
@@ -1092,7 +1046,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       (status == LiveGameStatus.running ||
                                           status == LiveGameStatus.paused ||
                                           status == LiveGameStatus.finaltable ||
-                                          status == LiveGameStatus.rebuypause) &&
+                                          status ==
+                                              LiveGameStatus.rebuypause) &&
                                       !game.timerRunning &&
                                       game.secondsRemaining == 0,
                                 ),
@@ -1165,293 +1120,276 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ],
             ),
           ] else ...[
-            // ── MOBILE LINEAR LAYOUT ──
-            // Timer block
-            AppCard(
-              glow: timerDanger,
-              borderColor: timerDanger
-                  ? AppColors.destructive.withValues(alpha: 0.4)
-                  : timerWarning
-                  ? AppColors.warning.withValues(alpha: 0.4)
-                  : null,
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: _TimerColumn(
-                game: game,
-                timerSize: timerSize,
-                timerColor: timerColor,
-                levelPct: levelPct,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            // Timer controls + speed/structure quick actions — Host/Admin
-            // only, same reasoning as the desktop layout above.
+            // ── MOBILE C5 LAYOUT ──
+            // Scoreboard Timer Card (white minutes, crimson seconds, coral ANTE)
+            TournamentTimerCard(game: game, showSubStats: true),
+            const SizedBox(height: 14),
+            // Primary Controls Row (Pause / Resume crimson button with red glow + Next button)
             if (isAdmin) ...[
-            // Timer controls
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                if (status == LiveGameStatus.checkin ||
-                    status == LiveGameStatus.published ||
-                    status == LiveGameStatus.ready)
-                  AppButton(
-                    size: AppButtonSize.lg,
-                    onPressed: () => _confirmStartTimer(context, app),
-                    child: const AppIconLabel(
-                      label: 'Start',
-                      icon: Icons.play_arrow,
-                    ),
-                  )
-                else if (status == LiveGameStatus.running)
-                  AppButton(
-                    size: AppButtonSize.lg,
-                    variant: AppButtonVariant.secondary,
-                    onPressed: app.pauseTimer,
-                    child: const AppIconLabel(
-                      label: 'Pause',
-                      icon: Icons.pause,
-                    ),
-                  )
-                else if (status == LiveGameStatus.paused ||
-                    status == LiveGameStatus.rebuypause)
-                  AppButton(
-                    size: AppButtonSize.lg,
-                    onPressed: app.resumeTimer,
-                    child: const AppIconLabel(
-                      label: 'Resume',
-                      icon: Icons.play_arrow,
-                    ),
-                  ),
-                if (status == LiveGameStatus.running ||
-                    status == LiveGameStatus.paused) ...[
-                  AppButton(
-                    size: AppButtonSize.md,
-                    variant: AppButtonVariant.secondary,
-                    onPressed: currentLevel <= 1
-                        ? null
-                        : () =>
-                            app.previousLevel(idempotencyKey: _idemKey('prev')),
-                    child: const AppIconLabel(
-                      label: 'Previous',
-                      icon: Icons.skip_previous,
-                    ),
-                  ),
-                  AppButton(
-                    size: AppButtonSize.md,
-                    variant: AppButtonVariant.secondary,
-                    onPressed: currentLevel >= (structure.levels.length)
-                        ? null
-                        : () =>
-                            app.nextLevel(idempotencyKey: _idemKey('next')),
-                    child: const AppIconLabel(
-                      label: 'Next level',
-                      trailing: Icons.arrow_forward,
-                    ),
-                  ),
-                ],
-                if (status == LiveGameStatus.rebuypause)
-                  AppButton(
-                    size: AppButtonSize.md,
-                    onPressed: () => context.go(RoutePaths.rebuySettlement),
-                    child: const AppIconLabel(
-                      label: 'Settlement',
-                      trailing: Icons.arrow_forward,
-                    ),
-                  ),
-                if (status == LiveGameStatus.finaltable)
-                  AppButton(
-                    size: AppButtonSize.md,
-                    onPressed: () => context.go(RoutePaths.finalTable),
-                    child: const AppIconLabel(
-                      label: 'Redraw table',
-                      trailing: Icons.arrow_forward,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            // Speed / structure quick actions
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: AppButton(
-                          size: AppButtonSize.md,
-                          variant: AppButtonVariant.secondary,
-                          onPressed: () => _showSpeedPreview(app, game, SpeedRecommendation.speedUp),
-                          child: const AppIconLabel(
-                            label: 'Speed Up',
-                            icon: Icons.bolt,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: AppButton(
-                          size: AppButtonSize.md,
-                          variant: AppButtonVariant.secondary,
-                          onPressed: () => _showSpeedPreview(app, game, SpeedRecommendation.slowDown),
-                          child: const AppIconLabel(
-                            label: 'Slow Down',
-                            icon: Icons.trending_down,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: AppButton(
-                          size: AppButtonSize.md,
-                          variant: AppButtonVariant.secondary,
-                          onPressed:
-                              status == LiveGameStatus.running ||
-                                  status == LiveGameStatus.paused ||
-                                  status == LiveGameStatus.rebuypause
-                              ? () => _showRestartPreview(app, game, level)
-                              : null,
-                          child: const FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: AppIconLabel(
-                              label: 'Restart',
-                              icon: Icons.replay,
+                  Expanded(
+                    flex: 6,
+                    child: Builder(
+                      builder: (_) {
+                        if (status == LiveGameStatus.checkin ||
+                            status == LiveGameStatus.published ||
+                            status == LiveGameStatus.ready) {
+                          return Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD53032),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x66D53032),
+                                  blurRadius: 16,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
                             ),
-                          ),
-                        ),
-                      ),
-                    ],
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => _confirmStartTimer(context, app),
+                                borderRadius: BorderRadius.circular(12),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.play_arrow,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Start',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        } else if (status == LiveGameStatus.running) {
+                          return Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD53032),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x66D53032),
+                                  blurRadius: 16,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: app.pauseTimer,
+                                borderRadius: BorderRadius.circular(12),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.pause,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Pause',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        } else {
+                          final canResume =
+                              status != LiveGameStatus.finaltable &&
+                              status != LiveGameStatus.completed &&
+                              status != LiveGameStatus.cancelled;
+                          return Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: canResume
+                                  ? const Color(0xFFD53032)
+                                  : const Color(0xFF2A2A2E),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: canResume
+                                  ? const [
+                                      BoxShadow(
+                                        color: Color(0x66D53032),
+                                        blurRadius: 16,
+                                        offset: Offset(0, 4),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: canResume ? app.resumeTimer : null,
+                                borderRadius: BorderRadius.circular(12),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.play_arrow,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Resume',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                    ),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: AppButton(
-                          size: AppButtonSize.md,
-                          variant: AppButtonVariant.secondary,
-                          onPressed: app.forceEvaluateSpeedRecommendation,
-                          child: const FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: AppIconLabel(
-                              label: 'Recalculate',
-                              icon: Icons.timer_outlined,
-                            ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 5,
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1C1C1F),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF2A2A2E)),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: currentLevel >= structure.levels.length
+                              ? null
+                              : () => app.nextLevel(
+                                  idempotencyKey: _idemKey('next'),
+                                ),
+                          borderRadius: BorderRadius.circular(12),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Next',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              SizedBox(width: 4),
+                              Icon(
+                                Icons.arrow_right,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: AppButton(
-                          size: AppButtonSize.md,
-                          variant: AppButtonVariant.secondary,
-                          onPressed: () =>
-                              _showStructureEditor(app, game, structure, currentLevel, settings),
-                          child: const FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: AppIconLabel(
-                              label: 'Edit Levels',
-                              icon: Icons.edit_outlined,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: AppButton(
-                          size: AppButtonSize.md,
-                          variant: AppButtonVariant.secondary,
-                          onPressed: () => setState(() => _tab = 'seating'),
-                          child: const FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: AppIconLabel(
-                              label: 'Seats',
-                              icon: Icons.people_outline,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),
-            ),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            // TV code + announcement
-            Column(
-              children: [
-                AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'TV mode code',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      CodeDisplay(code: game.tvCode),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        'Open on any TV browser',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ],
+              const SizedBox(height: 12),
+              // Secondary Quick Tools Row (Speed, Edit, Seats, TV)
+              Row(
+                children: [
+                  _buildQuickToolButton(
+                    icon: Icons.bolt,
+                    iconColor: const Color(0xFFE24446),
+                    label: 'Speed',
+                    onTap: () => _showSpeedPreview(
+                      app,
+                      game,
+                      game.speedRecommendation ?? SpeedRecommendation.speedUp,
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                _AnnouncementCard(
-                  controller: _announcementController,
-                  announcements: game.announcements,
-                  onSend: () => _sendAnnouncement(app),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  _buildQuickToolButton(
+                    icon: Icons.edit_outlined,
+                    label: 'Edit',
+                    onTap: () => _showStructureEditor(
+                      app,
+                      game,
+                      structure,
+                      currentLevel,
+                      settings,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildQuickToolButton(
+                    icon: Icons.person_outline,
+                    label: 'Seats',
+                    onTap: () => setState(() => _tab = 'seating'),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildQuickToolButton(
+                    icon: Icons.tv_outlined,
+                    label: 'TV',
+                    onTap: () => context.go(RoutePaths.tvMode),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            // Pill Tabs (Players 18, Eliminated 6, Prizes)
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF141416),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF242428)),
+              ),
+              child: Row(
+                children: [
+                  _buildPillTab('players', 'Players ${activePlayers.length}'),
+                  _buildPillTab(
+                    'eliminated',
+                    'Eliminated ${eliminatedPlayers.length}',
+                  ),
+                  _buildPillTab('prize', 'Prizes'),
+                ],
+              ),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            // Tabs
-            AppTabs(
-              tabs: [
-                AppTabItem(
-                  id: 'players',
-                  label: 'Players',
-                  count: activePlayers.length,
-                ),
-                AppTabItem(
-                  id: 'eliminated',
-                  label: 'Eliminated',
-                  count: eliminatedPlayers.length,
-                ),
-                const AppTabItem(id: 'seating', label: 'Seating'),
-                const AppTabItem(id: 'prize', label: 'Prizes (private)'),
-                const AppTabItem(id: 'audit', label: 'Audit Log'),
-              ],
-              active: _tab,
-              onChanged: (t) => setState(() => _tab = t),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            // Players tab
-            if (_tab == 'players') ..._playersTab(app, game),
-            // Eliminated tab
+            const SizedBox(height: 14),
+            // Tab Content
+            if (_tab == 'players') ..._mobilePlayersList(app, game),
             if (_tab == 'eliminated')
               _EliminatedTab(
                 game: game,
                 players: eliminatedPlayers,
                 settings: settings,
                 currentLevel: currentLevel,
-                onGrantRebuy:
-                    (id, key) => app.grantRebuy(id, idempotencyKey: key),
-                onGrantReEntry:
-                    (id, key) => app.grantReEntry(id, idempotencyKey: key),
+                onGrantRebuy: (id, key) =>
+                    app.grantRebuy(id, idempotencyKey: key),
+                onGrantReEntry: (id, key) =>
+                    app.grantReEntry(id, idempotencyKey: key),
                 isAdmin: isAdmin,
               ),
-            // Seating tab
             if (_tab == 'seating') _SeatingTab(players: activePlayers),
-            // Prize tab
             if (_tab == 'prize')
               _PrizeTab(
                 structure: structure,
@@ -1463,8 +1401,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         status == LiveGameStatus.paused ||
                         status == LiveGameStatus.finaltable ||
                         status == LiveGameStatus.rebuypause) &&
-                        !game.timerRunning &&
-                        game.secondsRemaining == 0,
+                    !game.timerRunning &&
+                    game.secondsRemaining == 0,
               ),
             if (_tab == 'audit') _AuditTab(auditHistory: game.auditHistory),
           ],
@@ -1585,6 +1523,494 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  Widget _buildPillTab(String id, String label) {
+    final active = _tab == id;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _tab = id),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFFD53032) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: active ? Colors.white : const Color(0xFF8E8E93),
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickToolButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color? iconColor,
+  }) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF161619),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF242428)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 22, color: iconColor ?? Colors.white),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF8E8E93),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _mobilePlayersList(AppProvider app, LiveGame game) {
+    final isAdmin = app.canRunCurrentGame;
+    if (game.activePlayers.isEmpty) {
+      return [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: Text(
+              'No active players',
+              style: TextStyle(color: Color(0xFF8E8E93), fontSize: 14),
+            ),
+          ),
+        ),
+      ];
+    }
+    return [
+      if (app.canRunCurrentGame && game.status.isActiveLive)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _ShotClockBar(app: app, game: game),
+        ),
+      if (isAdmin && app.lateRegistrationOpen)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: AppButton(
+            fullWidth: true,
+            size: AppButtonSize.md,
+            variant: AppButtonVariant.secondary,
+            onPressed: () => _showAddLatePlayerModal(context, app),
+            child: const Text('+ Add Late Player (Late Reg)'),
+          ),
+        ),
+      for (final p in game.activePlayers)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => _editPlayerStack(context, app, p),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161619),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF242428)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF2E1C1D),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          color: Color(0xFFE24446),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  p.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (p.rebuys > 0) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF242428),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '×${p.rebuys}',
+                                    style: const TextStyle(
+                                      color: Color(0xFFE24446),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Table ${p.table} · Seat ${p.seat}${p.stack != null ? ' · ${Formatters.prize(p.stack!)}' : ''}',
+                            style: const TextStyle(
+                              color: Color(0xFF8E8E93),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isAdmin)
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => _showEliminateModal(context, app, p),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2B1C1D),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: const Color(0xFF452225),
+                              ),
+                            ),
+                            child: const Text(
+                              'Out',
+                              style: TextStyle(
+                                color: Color(0xFFE24446),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+    ];
+  }
+
+  void _showMoreActionsMenu(
+    BuildContext context,
+    AppProvider app,
+    LiveGame game,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF141416),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF333338),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Tournament Actions',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: const Icon(
+                    Icons.chat_bubble_outline,
+                    color: Colors.white,
+                  ),
+                  title: const Text(
+                    'Chat',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  trailing: app.unreadGameChatCount(game.id) > 0
+                      ? ChatUnreadBadge(count: app.unreadGameChatCount(game.id))
+                      : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    ChatSheet.show(context, game.id);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.tv_outlined, color: Colors.white),
+                  title: const Text(
+                    'TV Mode',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  subtitle: Text(
+                    'TV Code: ${game.tvCode}',
+                    style: const TextStyle(
+                      color: Color(0xFF8E8E93),
+                      fontSize: 12,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.go(RoutePaths.tvMode);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(
+                    app.voiceEnabled
+                        ? Icons.volume_up_outlined
+                        : Icons.volume_off_outlined,
+                    color: Colors.white,
+                  ),
+                  title: const Text(
+                    'Audio Master',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  subtitle: Text(
+                    app.thisDeviceIsAudioMaster
+                        ? 'This device is Audio Master'
+                        : (app.voiceEnabled ? 'Voice on' : 'Voice muted'),
+                    style: const TextStyle(
+                      color: Color(0xFF8E8E93),
+                      fontSize: 12,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    app.toggleVoice();
+                  },
+                ),
+                if (app.canUndo)
+                  ListTile(
+                    leading: const Icon(Icons.undo, color: Colors.white),
+                    title: const Text(
+                      'Undo Last Action',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showUndoPreview(app);
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.campaign_outlined,
+                    color: Colors.white,
+                  ),
+                  title: const Text(
+                    'Announcements',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showAnnouncementsModal(context, app, game);
+                  },
+                ),
+                if (app.canRunCurrentGame && game.status.isActiveLive)
+                  ListTile(
+                    leading: const Icon(
+                      Icons.timer_outlined,
+                      color: Colors.white,
+                    ),
+                    title: const Text(
+                      'Shot Clock',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showShotClockModal(context, app, game);
+                    },
+                  ),
+                if (app.isAdmin && game.players.any((p) => p.table > 1))
+                  ListTile(
+                    leading: const Icon(
+                      Icons.table_chart_outlined,
+                      color: Colors.white,
+                    ),
+                    title: const Text(
+                      'Final Table Redraw',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.push(RoutePaths.finalTable);
+                    },
+                  ),
+                if (app.isAdmin &&
+                    game.status != LiveGameStatus.completed &&
+                    game.status != LiveGameStatus.cancelled) ...[
+                  const Divider(color: Color(0xFF242428)),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.cancel_outlined,
+                      color: Color(0xFFE24446),
+                    ),
+                    title: const Text(
+                      'Cancel Tournament',
+                      style: TextStyle(color: Color(0xFFE24446)),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showCancelPreview(app, game.settings);
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAnnouncementsModal(
+    BuildContext context,
+    AppProvider app,
+    LiveGame game,
+  ) {
+    showAppModal(
+      context: context,
+      title: 'Announcements',
+      child: _AnnouncementCard(
+        controller: _announcementController,
+        announcements: game.announcements,
+        onSend: () => _sendAnnouncement(app),
+      ),
+    );
+  }
+
+  void _showShotClockModal(
+    BuildContext context,
+    AppProvider app,
+    LiveGame game,
+  ) {
+    final active = game.players
+        .where((p) => p.active && !p.eliminated)
+        .toList();
+    showAppModal(
+      context: context,
+      title: 'Put a player on the clock',
+      maxWidth: 400,
+      child: StatefulBuilder(
+        builder: (modalContext, setModalState) {
+          var seconds = ShotClock.defaultSeconds;
+          return StatefulBuilder(
+            builder: (ctx, setInner) => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Seconds',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    for (final s in ShotClock.presets) ...[
+                      Expanded(
+                        child: AppButton(
+                          size: AppButtonSize.sm,
+                          variant: s == seconds
+                              ? AppButtonVariant.primary
+                              : AppButtonVariant.secondary,
+                          onPressed: () => setInner(() => seconds = s),
+                          child: Text('$s'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                for (final p in active)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: AppButton(
+                      fullWidth: true,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () {
+                        app.startShotClock(p.id, seconds: seconds);
+                        Navigator.of(ctx).pop();
+                      },
+                      child: Text(p.name),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   List<Widget> _playersTab(AppProvider app, LiveGame game) {
     final settings = game.settings;
     // Rebuy is deliberately omitted from the active roster: it only applies to
@@ -1654,6 +2080,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               label: 'Add-on',
                               variant: AppBadgeVariant.green,
                             ),
+                          // §25.1a: granted at Start once the stack is final;
+                          // eligible-but-not-yet-granted shows during check-in.
+                          if (p.earlyArrivalBonusChips != null)
+                            AppBadge(
+                              label: 'Early bird +${p.earlyArrivalBonusChips}',
+                              variant: AppBadgeVariant.gold,
+                            )
+                          else if (p.earlyArrivalBonusEligible)
+                            const AppBadge(
+                              label: 'Early bird',
+                              variant: AppBadgeVariant.muted,
+                            ),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.xxs),
@@ -1663,6 +2101,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           color: AppColors.mutedForeground,
                         ),
                       ),
+                      if (app.isAdmin)
+                        GestureDetector(
+                          onTap: () => _editPlayerStack(context, app, p),
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                            child: Text(
+                              // §3's Player.stack: a manual spot-check, not a
+                              // live count — feeds §25.5's lowestStackBB
+                              // sample at the NEXT elimination.
+                              p.stack != null
+                                  ? 'Stack: ${p.stack} (tap to update)'
+                                  : 'Tap to record stack',
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.primary,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1716,6 +2173,48 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     ];
   }
 
+  /// §3's [Player.stack]: a manual host spot-check, not a live count. Feeds
+  /// §25.5's `lowestStackBB` sample the next time anyone busts.
+  void _editPlayerStack(BuildContext context, AppProvider app, Player p) {
+    final ctrl = TextEditingController(text: p.stack?.toString() ?? '');
+    showAppModal(
+      context: context,
+      title: "${p.name}'s stack",
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'A spot-check, not a live count — record it right before an '
+            'elimination so the post-game recap has something fresh to '
+            'compare a comeback against.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            controller: ctrl,
+            label: 'Current stack (chips)',
+            hint: 'e.g. 12500',
+            keyboardType: TextInputType.number,
+            autofocus: true,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppButton(
+            fullWidth: true,
+            onPressed: () {
+              final value = int.tryParse(ctrl.text.trim());
+              app.updatePlayerStack(p.id, value);
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmRemovePlayer(BuildContext context, AppProvider app, Player p) {
     showAppModal(
       context: context,
@@ -1753,14 +2252,78 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  void _showSpeedPreview(AppProvider app, LiveGame game, SpeedRecommendation rec) {
+  // §11.4 / boundary #9: moving from Stage A to Stage B collapses every
+  // Stage A table into one final table, which only makes sense once every
+  // table has actually reported its winner(s) -- a human judgement call the
+  // app has no way to verify. So, like `_confirmRemovePlayer` and
+  // `_confirmAddOn`, this is a confirm-first admin action, never a tap that
+  // fires immediately.
+  void _confirmStartShootoutFinalTable(BuildContext context, AppProvider app) {
+    showAppModal(
+      context: context,
+      title: 'Start Final Table',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'This assumes every Stage A table has already reported its '
+            'winner(s). Starting the final table now will seat the '
+            'remaining players together and end Stage A.\n\n'
+            'Only continue once every table is done.',
+            style: AppTypography.bodySm,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              AppButton(
+                variant: AppButtonVariant.ghost,
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AppButton(
+                onPressed: () {
+                  // Returns a human summary on success, or null if this game
+                  // turned out not to be an eligible shootout (wrong format,
+                  // already Stage B, no structure yet) -- only report when
+                  // there is something to report.
+                  final result = app.startShootoutFinalTable();
+                  Navigator.pop(context);
+                  if (result != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(result),
+                        duration: const Duration(seconds: 6),
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Start Final Table'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSpeedPreview(
+    AppProvider app,
+    LiveGame game,
+    SpeedRecommendation rec,
+  ) {
     final oldDur = game.structure.levelDuration;
     final newDur = _previewedDuration(game, rec);
     final isUp = rec == SpeedRecommendation.speedUp;
-    
-    final futureLevels = game.structure.levels.where((l) => l.level > game.currentLevel).length;
-    final hasAnte = game.structure.levels.any((l) => l.level > game.currentLevel && l.ante != null);
-    
+
+    final futureLevels = game.structure.levels
+        .where((l) => l.level > game.currentLevel)
+        .length;
+    final hasAnte = game.structure.levels.any(
+      (l) => l.level > game.currentLevel && l.ante != null,
+    );
+
     showAppModal(
       context: context,
       title: isUp ? 'Preview: speed up' : 'Preview: slow down',
@@ -1790,7 +2353,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: _PreviewCol(
                   label: 'Proposed',
                   duration: '$newDur min levels (future)',
-                  finish: _estimateFinish(game, app.serverTimeOffset, futureDurationOverride: newDur) ?? '—',
+                  finish:
+                      _estimateFinish(
+                        game,
+                        app.serverTimeOffset,
+                        futureDurationOverride: newDur,
+                      ) ??
+                      '—',
                   highlighted: true,
                 ),
               ),
@@ -1928,7 +2497,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  void _showStructureEditor(AppProvider app, LiveGame game, TournamentStructure structure, int currentLevel, GameSettings settings) {
+  void _showStructureEditor(
+    AppProvider app,
+    LiveGame game,
+    TournamentStructure structure,
+    int currentLevel,
+    GameSettings settings,
+  ) {
     showAppModal(
       context: context,
       title: 'Edit future structure',
@@ -2045,7 +2620,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final koEnabled = game.settings.koEnabled;
     final options = game.activePlayers.where((p) => p.id != player.id).toList();
     // Spec §4.12: before the rebuy deadline, ask "Leave Tournament or Rebuy?"
-    final canRebuyNow = game.settings.rebuys &&
+    final canRebuyNow =
+        game.settings.rebuys &&
         game.currentLevel <= game.settings.rebuysCloseLevel;
 
     showAppModal(
@@ -2060,8 +2636,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           app.eliminatePlayer(
             player.id,
             koRecipientId: koRecipientId,
-            idempotencyKey:
-                'elim-${DateTime.now().microsecondsSinceEpoch}',
+            idempotencyKey: 'elim-${DateTime.now().microsecondsSinceEpoch}',
           );
           Navigator.of(context).pop();
         },
@@ -2074,67 +2649,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       'elim-${DateTime.now().microsecondsSinceEpoch}',
                 );
                 // Immediately grant rebuy after elimination
-                Future.microtask(() => app.grantRebuy(
-                      player.id,
-                      idempotencyKey:
-                          'rebuy-${DateTime.now().microsecondsSinceEpoch}',
-                    ));
+                Future.microtask(
+                  () => app.grantRebuy(
+                    player.id,
+                    idempotencyKey:
+                        'rebuy-${DateTime.now().microsecondsSinceEpoch}',
+                  ),
+                );
                 Navigator.of(context).pop();
               }
             : null,
       ),
-    );
-  }
-}
-
-// ── Timer layout ──────────────────────────────────────────────────────────────
-class _TimerColumn extends StatelessWidget {
-  const _TimerColumn({
-    required this.game,
-    required this.timerSize,
-    required this.timerColor,
-    required this.levelPct,
-  });
-
-  final LiveGame game;
-  final double timerSize;
-  final Color timerColor;
-  final double levelPct;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _TimerInfo(
-          game: game,
-          timerSize: timerSize,
-          timerColor: timerColor,
-          levelPct: levelPct,
-        ),
-      ],
-    );
-  }
-}
-
-class _TimerInfo extends StatelessWidget {
-  const _TimerInfo({
-    required this.game,
-    required this.timerSize,
-    required this.timerColor,
-    required this.levelPct,
-  });
-
-  final LiveGame game;
-  final double timerSize;
-  final Color timerColor;
-  final double levelPct;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: TournamentDisplayBlock(game: game, showStatusChip: true),
     );
   }
 }
@@ -2339,7 +2864,8 @@ class _ShotClockBarState extends State<_ShotClockBar> {
     final left = clock.remainingAt(now);
     final expired = clock.expiredAt(now);
     final urgent = clock.isUrgentAt(now);
-    final name = widget.game.players
+    final name =
+        widget.game.players
             .where((p) => p.id == clock.playerId)
             .firstOrNull
             ?.name ??
@@ -2348,8 +2874,8 @@ class _ShotClockBarState extends State<_ShotClockBar> {
     final colour = expired
         ? AppColors.mutedForeground
         : urgent
-            ? AppColors.destructive
-            : AppColors.primary;
+        ? AppColors.destructive
+        : AppColors.primary;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -2380,9 +2906,7 @@ class _ShotClockBarState extends State<_ShotClockBar> {
                   ),
                 ),
                 Text(
-                  expired
-                      ? 'Time is up — the table decides.'
-                      : 'On the clock',
+                  expired ? 'Time is up — the table decides.' : 'On the clock',
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
                   ),
@@ -2576,81 +3100,84 @@ class _EliminatedTab extends StatelessWidget {
                         ),
                       ),
                     if (isAdmin) ...[
-                    if (context.watch<AppProvider>().lastUndoablePlayerAction(p.id) != null)
+                      if (context.watch<AppProvider>().lastUndoablePlayerAction(
+                            p.id,
+                          ) !=
+                          null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: AppSpacing.xs),
+                          child: AppButton(
+                            size: AppButtonSize.sm,
+                            variant: AppButtonVariant.ghost,
+                            onPressed: () => _confirmUndoPlayerAction(
+                              context,
+                              context.read<AppProvider>(),
+                              p,
+                            ),
+                            child: const Icon(Icons.undo, size: 16),
+                          ),
+                        ),
                       Padding(
                         padding: const EdgeInsets.only(left: AppSpacing.xs),
                         child: AppButton(
                           size: AppButtonSize.sm,
                           variant: AppButtonVariant.ghost,
-                          onPressed: () => _confirmUndoPlayerAction(
-                            context,
-                            context.read<AppProvider>(),
-                            p,
+                          onPressed: () => context
+                              .read<AppProvider>()
+                              .correctElimination(p.id),
+                          child: Text(
+                            'Correct Result',
+                            style: TextStyle(color: AppColors.destructive),
                           ),
-                          child: const Icon(Icons.undo, size: 16),
                         ),
                       ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: AppSpacing.xs),
-                      child: AppButton(
+                      AppButton(
                         size: AppButtonSize.sm,
                         variant: AppButtonVariant.ghost,
-                        onPressed: () => context
-                            .read<AppProvider>()
-                            .correctElimination(p.id),
-                        child: Text(
-                          'Correct Result',
-                          style: TextStyle(color: AppColors.destructive),
+                        onPressed: () {
+                          showAppModal(
+                            context: context,
+                            title: 'Remove Player',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'Are you sure you want to completely remove ${p.name} from this tournament?\n\n'
+                                  'This will delete their seat assignment, result record, and deduct their starting stack and any rebuys/add-ons from the total chips in play.',
+                                  style: AppTypography.bodySm,
+                                ),
+                                const SizedBox(height: AppSpacing.lg),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    AppButton(
+                                      variant: AppButtonVariant.ghost,
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    AppButton(
+                                      variant: AppButtonVariant.danger,
+                                      onPressed: () {
+                                        context
+                                            .read<AppProvider>()
+                                            .removePlayer(p.id);
+                                        Navigator.pop(context);
+                                      },
+                                      child: const Text('Remove'),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        child: Icon(
+                          Icons.delete_outline,
+                          color: AppColors.destructive,
+                          size: 16,
                         ),
                       ),
-                    ),
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: () {
-                        showAppModal(
-                          context: context,
-                          title: 'Remove Player',
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'Are you sure you want to completely remove ${p.name} from this tournament?\n\n'
-                                'This will delete their seat assignment, result record, and deduct their starting stack and any rebuys/add-ons from the total chips in play.',
-                                style: AppTypography.bodySm,
-                              ),
-                              const SizedBox(height: AppSpacing.lg),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  AppButton(
-                                    variant: AppButtonVariant.ghost,
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  AppButton(
-                                    variant: AppButtonVariant.danger,
-                                    onPressed: () {
-                                      context.read<AppProvider>().removePlayer(
-                                        p.id,
-                                      );
-                                      Navigator.pop(context);
-                                    },
-                                    child: const Text('Remove'),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      child: Icon(
-                        Icons.delete_outline,
-                        color: AppColors.destructive,
-                        size: 16,
-                      ),
-                    ),
                     ],
                   ],
                 ),
@@ -2817,10 +3344,7 @@ class _SeatingTab extends StatelessWidget {
 }
 
 class _PendingReviewBanner extends StatelessWidget {
-  const _PendingReviewBanner({
-    required this.game,
-    required this.onReview,
-  });
+  const _PendingReviewBanner({required this.game, required this.onReview});
 
   final LiveGame game;
   final VoidCallback onReview;
@@ -2830,8 +3354,9 @@ class _PendingReviewBanner extends StatelessWidget {
     final pending = game.pendingGuests
         .where((p) => p.name.trim().isNotEmpty)
         .toList();
-    final unconfirmed =
-        game.players.where((p) => p.checkedIn && !p.confirmed).toList();
+    final unconfirmed = game.players
+        .where((p) => p.checkedIn && !p.confirmed)
+        .toList();
     final total = pending.length + unconfirmed.length;
     if (total == 0) return const SizedBox.shrink();
     return Padding(
@@ -3196,43 +3721,43 @@ class _PrizeTab extends StatelessWidget {
             tier: context.watch<AppProvider>().premiumTier,
             feature: PremiumFeature.chipOptimisation,
             child: AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Color-up instructions',
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                for (final ins in structure.colorUpInstructions)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.arrow_forward,
-                          size: AppFontSizes.xs,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Text(
-                            ins,
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                      ],
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Color-up instructions',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-              ],
+                  const SizedBox(height: AppSpacing.sm),
+                  for (final ins in structure.colorUpInstructions)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.arrow_forward,
+                            size: AppFontSizes.xs,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              ins,
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
           ),
         ],
         if (remainingPlayers <= 3 || structureEnded) ...[
@@ -3568,40 +4093,55 @@ class _AdminAppTourCard extends StatelessWidget {
     String title = '';
     String description = '';
 
-    if (game.status == LiveGameStatus.draft || game.status == LiveGameStatus.published || game.status == LiveGameStatus.checkin || game.status == LiveGameStatus.ready) {
-      if (game.players.any((p) => p.checkedIn && !p.confirmed) || game.pendingGuests.isNotEmpty) {
+    if (game.status == LiveGameStatus.draft ||
+        game.status == LiveGameStatus.published ||
+        game.status == LiveGameStatus.checkin ||
+        game.status == LiveGameStatus.ready) {
+      if (game.players.any((p) => p.checkedIn && !p.confirmed) ||
+          game.pendingGuests.isNotEmpty) {
         step = 'Step 1: Confirm Arrivals';
         title = 'Seat Your Players';
-        description = 'Open the Check-in tab to approve requests. You must manually approve and seat players before the app can calculate the tournament math.';
+        description =
+            'Open the Check-in tab to approve requests. You must manually approve and seat players before the app can calculate the tournament math.';
       } else if (!game.structureConfirmed) {
         step = 'Step 2: Lock the Math';
         title = 'Generate the Tournament';
-        description = 'Once everyone has checked in, tap "Generate Final Structure" to let Poker Night calculate the perfect starting stacks, blind levels, and prize pool.';
+        description =
+            'Once everyone has checked in, tap "Generate Final Structure" to let Poker Night calculate the perfect starting stacks, blind levels, and prize pool.';
       } else {
         step = 'Step 3: Shuffle Up and Deal!';
         title = 'Start the Clock';
-        description = 'Share the TV Mode link on your big screen, then tap "Start Tournament" to begin the game. All player screens will sync automatically.';
+        description =
+            'Share the TV Mode link on your big screen, then tap "Start Tournament" to begin the game. All player screens will sync automatically.';
       }
     } else if (game.status == LiveGameStatus.rebuypause) {
       step = 'Step 4: Settlement Break';
       title = 'Lock the Prize Pool';
-      description = 'Rebuys are now closed. Tap "Complete Rebuy & Add-on Break" to record final add-ons, exchange small chips, and lock in the final Prize Pool.';
-    } else if ((game.status == LiveGameStatus.running || game.status == LiveGameStatus.finaltable) && game.activePlayers.length <= 1) {
+      description =
+          'Rebuys are now closed. Tap "Complete Rebuy & Add-on Break" to record final add-ons, exchange small chips, and lock in the final Prize Pool.';
+    } else if ((game.status == LiveGameStatus.running ||
+            game.status == LiveGameStatus.finaltable) &&
+        game.activePlayers.length <= 1) {
       step = 'Step 5: Finalize Results';
       title = 'Publish the Winners';
-      description = 'Verify the final positions. Players will only see their rank, not the money. Tap "Finish Tournament" to save to History.';
-    } else if (game.status == LiveGameStatus.running || game.status == LiveGameStatus.finaltable) {
+      description =
+          'Verify the final positions. Players will only see their rank, not the money. Tap "Finish Tournament" to save to History.';
+    } else if (game.status == LiveGameStatus.running ||
+        game.status == LiveGameStatus.finaltable) {
       step = 'Now Playing';
       title = 'Keep everyone in sync';
-      description = 'Mirror the tournament on your big screen with TV Mode (top bar) and post announcements in Chat — every player screen updates live.';
+      description =
+          'Mirror the tournament on your big screen with TV Mode (top bar) and post announcements in Chat — every player screen updates live.';
     } else if (game.status == LiveGameStatus.paused) {
       step = 'Paused';
       title = 'Ready to resume?';
-      description = 'When the break ends, tap Resume Tournament in the top bar to restart the blinds clock where you left off.';
+      description =
+          'When the break ends, tap Resume Tournament in the top bar to restart the blinds clock where you left off.';
     } else {
       step = 'In the books';
       title = 'Saved to History';
-      description = 'This tournament is complete. Open History (left menu) to replay the results, then start your next event from the Dashboard.';
+      description =
+          'This tournament is complete. Open History (left menu) to replay the results, then start your next event from the Dashboard.';
     }
 
     return AppCard(
@@ -3628,12 +4168,17 @@ class _AdminAppTourCard extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   title,
-                  style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w700),
+                  style: AppTypography.display(
+                    size: AppFontSizes.lg,
+                    weight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   description,
-                  style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.foreground,
+                  ),
                 ),
               ],
             ),

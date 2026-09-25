@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/colors.dart';
@@ -13,6 +14,7 @@ import '../../utils/clock_sequence.dart';
 import '../../utils/icm.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_badge.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
@@ -72,11 +74,15 @@ class _ToolScaffold extends StatelessWidget {
     required this.title,
     required this.blurb,
     required this.child,
+    this.actions = const [],
   });
 
   final String title;
   final String blurb;
   final Widget child;
+
+  /// One or two compact buttons placed on the title row (e.g. "Share").
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -105,19 +111,39 @@ class _ToolScaffold extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            title,
-            style: AppTypography.display(
-              size: AppFontSizes.xxl,
-              weight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            blurb,
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTypography.display(
+                        size: AppFontSizes.xxl,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      blurb,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (actions.isNotEmpty) ...[
+                const SizedBox(width: AppSpacing.md),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: actions,
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: AppSpacing.xl),
           child,
@@ -209,6 +235,12 @@ class ToolsScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: AppSpacing.xl),
+          const AppBadge(
+            label: 'FREE · NO LOGIN',
+            variant: AppBadgeVariant.green,
+            border: true,
+          ),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             'Poker tools',
             style: AppTypography.display(
@@ -336,6 +368,42 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
     if (picked != null && mounted) setState(() => _startAt = picked);
   }
 
+  /// The generated schedule as plain text, ready to paste into a group chat.
+  String _scheduleText(TournamentStructure r) {
+    final buf = StringBuffer()
+      ..writeln('Blind Structure Generator')
+      ..writeln(
+        '${r.plannedLevels} levels · ${r.levelDuration}-min levels · '
+        '${r.startingStack} starting stack',
+      );
+    var at = 0;
+    for (final seg in ClockSequence.build(r)) {
+      buf
+        ..write(_clockAt(at))
+        ..write('  ');
+      at += seg.seconds ~/ 60;
+      if (seg.isBreak) {
+        buf.write('Break');
+      } else {
+        buf.write('L${seg.level!.level} ${seg.level!.sb} / ${seg.level!.bb}');
+        if (seg.level!.ante != null) {
+          buf.write('  ante ${seg.level!.ante}');
+        }
+      }
+      buf.writeln('  ${seg.seconds ~/ 60}m');
+    }
+    buf.writeln('— generated with Poker Night');
+    return buf.toString();
+  }
+
+  Future<void> _share(TournamentStructure r) async {
+    await Clipboard.setData(ClipboardData(text: _scheduleText(r)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Schedule copied to clipboard')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final r = _result;
@@ -343,6 +411,15 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
       title: 'Blind Structure Generator',
       blurb: 'Pick the box of chips you actually own — the denominations decide '
           'the starting stack and the whole ladder.',
+      actions: [
+        if (r != null)
+          AppButton(
+            size: AppButtonSize.sm,
+            variant: AppButtonVariant.ghost,
+            onPressed: () => _share(r),
+            child: const Text('Share'),
+          ),
+      ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -368,17 +445,36 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          AppSelect<int>(
-            label: 'Level length',
-            value: _levelMins,
-            items: const [
-              DropdownMenuItem<int>(value: 0, child: Text('Auto')),
-              DropdownMenuItem<int>(value: 10, child: Text('10 minutes')),
-              DropdownMenuItem<int>(value: 15, child: Text('15 minutes')),
-              DropdownMenuItem<int>(value: 20, child: Text('20 minutes')),
-              DropdownMenuItem<int>(value: 30, child: Text('30 minutes')),
+          Text(
+            'Quick settings',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // Same _levelMins / _antes state as before, behind pill toggles
+          // instead of a dropdown and a switch — the mockup's quick-settings
+          // row.
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final opt in const [
+                (mins: 0, label: 'AUTO LEVELS'),
+                (mins: 10, label: '10 MIN LEVELS'),
+                (mins: 15, label: '15 MIN LEVELS'),
+                (mins: 20, label: '20 MIN LEVELS'),
+                (mins: 30, label: '30 MIN LEVELS'),
+              ])
+                _TogglePill(
+                  label: opt.label,
+                  selected: _levelMins == opt.mins,
+                  onTap: () => setState(() => _levelMins = opt.mins),
+                ),
+              _TogglePill(
+                label: 'ANTES FROM L7',
+                selected: _antes,
+                onTap: () => setState(() => _antes = !_antes),
+              ),
             ],
-            onChanged: (v) => setState(() => _levelMins = v ?? _levelMins),
           ),
           const SizedBox(height: AppSpacing.md),
           AppSelect<String>(
@@ -398,14 +494,6 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
               variant: AppButtonVariant.secondary,
               onPressed: _pickStart,
               child: Text(_clockAt(0)),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _Field(
-            label: 'Antes from level 7',
-            child: Switch(
-              value: _antes,
-              onChanged: (v) => setState(() => _antes = v),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -468,7 +556,44 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 44,
+                        child: Text(
+                          'Time',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 34,
+                        child: Text(
+                          'Lvl',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          'Blinds / ante',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Min',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: AppSpacing.md),
                   // Breaks are segments of the clock, not footnotes on the
                   // level before them, so the schedule prints them in place
                   // and the wall-clock column carries their length through.
@@ -637,6 +762,14 @@ class _ToolPayoutsScreenState extends State<ToolPayoutsScreen> {
                 ),
               ),
             ),
+          const SizedBox(height: AppSpacing.lg),
+          AppButton(
+            fullWidth: true,
+            onPressed: options.isEmpty
+                ? null
+                : () => _useStructure(options.first),
+            child: const Text('Use this structure'),
+          ),
         ],
       ),
     );
@@ -648,6 +781,29 @@ class _ToolPayoutsScreenState extends State<ToolPayoutsScreen> {
         3 => '3rd',
         _ => '${n}th',
       };
+
+  /// Hands the recommended split over as plain text a host can paste into the
+  /// group chat. The tool is standalone (no account), so copy is the honest
+  /// "use" — the app's own scoreboard reads the same numbers.
+  Future<void> _useStructure(PayoutOption o) async {
+    final buf = StringBuffer()
+      ..writeln('Payout structure — ${o.paidPlaces} places paid')
+      ..writeln(
+        '$_players entries · $_buyIn buy-in · ${o.prizePool} prize pool',
+      );
+    for (var i = 0; i < o.prizes.length; i++) {
+      buf.writeln(
+        '${_ordinal(o.prizes[i].place)}  ${o.prizes[i].amount}  '
+        '(${o.percentages[i]}%)',
+      );
+    }
+    buf.writeln('— calculated with Poker Night');
+    await Clipboard.setData(ClipboardData(text: buf.toString()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Payout structure copied to clipboard')),
+    );
+  }
 }
 
 /// ICM Calculator — what each stack is worth in money.
@@ -705,7 +861,7 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Stacks',
+            'Chip stacks',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -1030,6 +1186,62 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+/// A small selectable pill for a quick binary/enum setting — the "15 MIN
+/// LEVELS" / "ANTES FROM L7" style controls on the mockup. Purely a visual
+/// alternative to a dropdown or a switch; the caller still owns the state and
+/// decides what selected means.
+class _TogglePill extends StatelessWidget {
+  const _TogglePill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 40),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primary.withValues(alpha: 0.16)
+                : Glass.solidTint(AppColors.secondary),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(
+              color: selected ? AppColors.primary : AppColors.border,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: AppTypography.bodyXs.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+              color: selected
+                  ? AppColors.primaryText
+                  : AppColors.mutedForeground,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Field extends StatelessWidget {
   const _Field({required this.label, required this.child});
 
@@ -1156,6 +1368,31 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
     return null;
   }
 
+  /// Levels remaining — this one included — before the next scheduled break,
+  /// or null when none remain. Companion to [_untilBreak]: that one answers
+  /// "how long", this answers "how many levels first".
+  int? get _levelsUntilBreak {
+    if (_segments.isEmpty) return null;
+    if (_segments[_index].isBreak) return 0;
+    var count = 1;
+    for (var i = _index + 1; i < _segments.length; i++) {
+      if (_segments[i].isBreak) return count;
+      count++;
+    }
+    return null;
+  }
+
+  /// A one-line preview of the segment right after this one, or null at the
+  /// end of the structure.
+  String? get _nextLabel {
+    if (_segments.isEmpty) return null;
+    final next = _index + 1;
+    if (next >= _segments.length) return null;
+    final seg = _segments[next];
+    if (seg.isBreak) return 'Next: Break';
+    return 'Next: L${seg.level!.level}  ${seg.level!.sb} / ${seg.level!.bb}';
+  }
+
   @override
   void dispose() {
     _ticker?.cancel();
@@ -1261,10 +1498,15 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
   /// returns the stored `secondsRemaining` verbatim in that case, which lets
   /// this screen's own ticker drive the count instead of a wall-clock
   /// `levelEndTime` that a preview has no reason to invent.
-  LiveGame _previewGame() {
+  ///
+  /// [index]/[left] let the fullscreen copy of the clock render a snapshot at
+  /// a caller-supplied position; when omitted the live tool state is used.
+  LiveGame _previewGame({int? index, int? left}) {
     final structure = _structure!;
-    final level = ClockSequence.levelAt(_segments, _index);
-    final onBreak = _segments[_index].isBreak;
+    final i = index ?? _index;
+    final l = left ?? _left;
+    final level = ClockSequence.levelAt(_segments, i);
+    final onBreak = _segments[i].isBreak;
 
     return LiveGame(
       id: 'tool-clock',
@@ -1294,13 +1536,27 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
       tvCode: '',
       currentLevel: level?.level ?? 1,
       timerRunning: false,
-      secondsRemaining: _left,
+      secondsRemaining: l,
       players: const [],
       chat: const [],
       announcements: const [],
       totalChipsInPlay: structure.startingStack * _players,
       pendingGuests: const [],
       finishOrder: const [],
+    );
+  }
+
+  void _enterFullScreen() {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: true,
+        pageBuilder: (_, _, _) => _FullscreenClock(
+          segments: _segments,
+          initialIndex: _index,
+          initialLeft: _left,
+          gameFor: (index, left) => _previewGame(index: index, left: left),
+        ),
+      ),
     );
   }
 
@@ -1315,16 +1571,16 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (!started) ...[
-            _Field(
-              label: 'Players',
-              child: CountStepper(
-                value: _players,
-                min: 2,
-                max: 100,
-                semanticLabel: 'Players',
-                onChanged: (v) => setState(() => _players = v),
-              ),
+_Field(
+            label: 'Entries',
+            child: CountStepper(
+              value: _players,
+              min: 2,
+              max: 100,
+              semanticLabel: 'Entries',
+              onChanged: (v) => setState(() => _players = v),
             ),
+          ),
             const SizedBox(height: AppSpacing.md),
             _Field(
               label: 'Hours',
@@ -1345,6 +1601,16 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
           ] else ...[
             // The real display block — the same widget driving the TV screen
             // and the host dashboard, not a reproduction of it.
+            Align(
+              alignment: Alignment.centerRight,
+              child: AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.ghost,
+                onPressed: _enterFullScreen,
+                child: const Text('Full screen'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.lg),
               child: TournamentDisplayBlock(
@@ -1364,6 +1630,32 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
                   ),
                 ),
               ),
+            ] else ...[
+              if (_nextLabel != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Center(
+                  child: Text(
+                    _nextLabel!,
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ),
+              ],
+              if (_levelsUntilBreak != null && _levelsUntilBreak! > 0) ...[
+                const SizedBox(height: AppSpacing.xxs),
+                Center(
+                  child: Text(
+                    _levelsUntilBreak == 1
+                        ? 'Break after this level'
+                        : 'Break in ${_levelsUntilBreak! - 1} more '
+                            'level${_levelsUntilBreak! - 1 == 1 ? '' : 's'}',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ),
+              ],
             ],
             const SizedBox(height: AppSpacing.md),
 
@@ -1443,6 +1735,97 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
   }
 }
 
+/// Fullscreen copy of the clock tool. Runs its own one-second ticker: the
+/// preview [LiveGame] is built from a snapshot, and [LiveTimerBuilder] only
+/// counts down while `timerRunning` is true, so the display would otherwise
+/// freeze here without a parent rebuild each tick.
+class _FullscreenClock extends StatefulWidget {
+  const _FullscreenClock({
+    required this.segments,
+    required this.initialIndex,
+    required this.initialLeft,
+    required this.gameFor,
+  });
+
+  final List<ClockSegment> segments;
+  final int initialIndex;
+  final int initialLeft;
+
+  /// Builds a [LiveGame] snapshot at an arbitrary (index, seconds-left)
+  /// position, so the fullscreen clock and the button that opened it stay in
+  /// step when the tool was running.
+  final LiveGame Function(int index, int left) gameFor;
+
+  @override
+  State<_FullscreenClock> createState() => _FullscreenClockState();
+}
+
+class _FullscreenClockState extends State<_FullscreenClock> {
+  Timer? _ticker;
+  late int _index;
+  late int _left;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex;
+    _left = widget.initialLeft;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(_tick);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  void _tick() {
+    if (_left > 0) {
+      _left--;
+      if (_left == 0 && _index + 1 < widget.segments.length) {
+        _index++;
+        _left = widget.segments[_index].seconds;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                child: TournamentDisplayBlock(
+                  game: widget.gameFor(_index, _left),
+                  showStatusChip: false,
+                  showPayoutAmounts: false,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.ghost,
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Exit full screen'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SegmentRow extends StatelessWidget {
   const _SegmentRow({required this.segment, required this.isCurrent});
 
@@ -1515,14 +1898,20 @@ class _ToolQuickBlindScreenState extends State<ToolQuickBlindScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const AppBadge(
+            label: '30-SECOND SETUP',
+            variant: AppBadgeVariant.green,
+            border: true,
+          ),
+          const SizedBox(height: AppSpacing.md),
           _Field(
-            label: 'Stack size',
+            label: 'Starting stack',
             child: CountStepper(
               value: _stack,
               min: 500,
               max: 1000000,
               step: 500,
-              semanticLabel: 'Stack size',
+              semanticLabel: 'Starting stack',
               onChanged: (v) => setState(() => _stack = v),
             ),
           ),

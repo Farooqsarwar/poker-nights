@@ -310,6 +310,9 @@ class _TVLayoutState extends State<_TVLayout> {
       body: SafeArea(
         child: Column(
         children: [
+          // Event identity + TV code, so whoever is standing at the screen
+          // can confirm it is showing the right game at a glance.
+          _TVHeader(name: game.settings.name, tvCode: game.tvCode),
           // Reconnection banner for TV mode (tech spec §4.2).
           Consumer<AppProvider>(
             builder: (_, app, x) {
@@ -448,6 +451,62 @@ class _TVLayoutState extends State<_TVLayout> {
     if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     return '${diff.inHours}h ago';
+  }
+}
+
+/// Slim identity bar above the scoreboard clock — the event name and the
+/// TV code that was used to connect this screen. Purely informational: the
+/// host glances up to confirm this display is showing the right game.
+class _TVHeader extends StatelessWidget {
+  const _TVHeader({required this.name, required this.tvCode});
+
+  final String name;
+  final String tvCode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.sm,
+        AppSpacing.lg,
+        0,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: 3,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Text(
+              tvCode,
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.mutedForeground,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

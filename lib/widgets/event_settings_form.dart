@@ -307,7 +307,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.sections.contains(EventFormSection.details))
-          _group('Details', _detailsFields()),
+          _group('Event details', _detailsFields()),
         if (widget.sections.contains(EventFormSection.chips))
           _group('Chips', _chipsFields()),
         if (widget.sections.contains(EventFormSection.rules))
@@ -349,7 +349,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
     return [
       AppTextField(
         controller: _name,
-        label: 'Name',
+        label: 'Event name',
         placeholder: 'e.g. Friday Poker',
         error: errors['name'],
         onChanged: (_) => _emit(),
@@ -383,7 +383,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
               child: AbsorbPointer(
                 child: AppTextField(
                   controller: _time,
-                  label: 'Start time',
+                  label: 'Time',
                   error: errors['time'],
                   readOnly: true,
                   suffixIcon: IconButton(
@@ -420,7 +420,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
       const SizedBox(height: AppSpacing.lg),
       AppTextField(
         controller: _buyIn,
-        label: 'Buy-in amount',
+        label: 'Buy-in',
         error: errors['buyIn'],
         keyboardType: TextInputType.number,
         onChanged: (_) => _emit(),

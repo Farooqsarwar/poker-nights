@@ -20,9 +20,9 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/back_nav_button.dart';
 import '../../widgets/chip_pill.dart';
 import '../../widgets/event_settings_form.dart';
+import '../../widgets/squircle_icon_button.dart';
 
 /// Minimum normalized score for a preset to qualify as a suggestion
 /// (tech spec §6.2).
@@ -204,14 +204,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   // source: an untouched stepper keeps tracking them (override stays null),
   // and `_generate` only writes the edited number once the host moves it.
   bool get _expectedOverridden => _draft.expectedPlayersOverride != null;
-  int get _expectedPlayers =>
-      _draft.expectedPlayersOverride ?? _draft.players;
+  int get _expectedPlayers => _draft.expectedPlayersOverride ?? _draft.players;
   bool get _breaksOn => _draft.breaks.isNotEmpty;
 
   // Preset support (checklist §9.1). Tech spec §6.2: before starting from
   // zero, saved presets close to the current base inputs are suggested.
   final List<({TournamentPreset preset, double score, List<String> diffs})>
-      _presetMatches = [];
+  _presetMatches = [];
   bool _suggestionsDismissed = false;
   String? _appliedPresetId;
 
@@ -231,6 +230,66 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     return '${h == h.roundToDouble() ? h.round() : h}h';
   }
 
+  late TextEditingController _nameController;
+  late TextEditingController _locationController;
+  late TextEditingController _buyInController;
+  late TextEditingController _playersController;
+
+  String _formatDisplayDate(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return iso.isEmpty ? 'Fri, Mar 14' : iso;
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${weekdays[dt.weekday - 1]}, ${months[dt.month - 1]} ${dt.day}';
+  }
+
+  String _formatDisplayTime(String timeStr) {
+    final parts = timeStr.split(':');
+    if (parts.length >= 2) {
+      final h = int.tryParse(parts[0]) ?? 20;
+      final m = int.tryParse(parts[1]) ?? 0;
+      final ampm = h >= 12 ? 'PM' : 'AM';
+      final hour12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+      return '$hour12:${m.toString().padLeft(2, '0')} $ampm';
+    }
+    return timeStr.isEmpty ? '8:00 PM' : timeStr;
+  }
+
+  void _syncControllers() {
+    if (_nameController.text != _draft.name) _nameController.text = _draft.name;
+    if (_locationController.text != _draft.location) {
+      _locationController.text = _draft.location;
+    }
+    final buyInStr = _draft.buyIn > 0 ? '${_draft.buyIn}' : '';
+    if (_buyInController.text != buyInStr) _buyInController.text = buyInStr;
+    final playersStr = '$_expectedPlayers';
+    if (_playersController.text != playersStr) {
+      _playersController.text = playersStr;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _locationController.dispose();
+    _buyInController.dispose();
+    _playersController.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -241,18 +300,20 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ? TournamentEngine.presetNames[2]
         : TournamentEngine.presetNames.firstOrNull ?? '';
     _draft = _initialDraft(presetName, expectedPlayers: 2);
+    _nameController = TextEditingController(text: _draft.name);
+    _locationController = TextEditingController(text: _draft.location);
+    _buyInController = TextEditingController(
+      text: _draft.buyIn > 0 ? '${_draft.buyIn}' : '',
+    );
+    _playersController = TextEditingController(text: '$_expectedPlayers');
 
     final defaultChipSetId = group.defaultChipSetId ?? app.defaultChipSetId;
     if (defaultChipSetId != null) {
-      final saved = app.savedChipSets.cast<({String id, String name, List<ChipColor> chips})?>().firstWhere(
-        (cs) => cs?.id == defaultChipSetId,
-        orElse: () => null,
-      );
+      final saved = app.savedChipSets
+          .cast<({String id, String name, List<ChipColor> chips})?>()
+          .firstWhere((cs) => cs?.id == defaultChipSetId, orElse: () => null);
       if (saved != null) {
-        _draft = _draft.copyWith(
-          chipSetName: saved.name,
-          chipSet: saved.chips,
-        );
+        _draft = _draft.copyWith(chipSetName: saved.name, chipSet: saved.chips);
       }
     }
 
@@ -303,7 +364,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
   /// The wizard's opening draft. Numeric fields the host is expected to fill
   /// (buy-in) start invalid so the shared validator flags them until entered.
-  GameSettings _initialDraft(String chipSetName, {required int expectedPlayers}) {
+  GameSettings _initialDraft(
+    String chipSetName, {
+    required int expectedPlayers,
+  }) {
     return GameSettings(
       name: '',
       date: _todayIso,
@@ -337,6 +401,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   /// suggestions are recomputed from the new base inputs.
   void _onDraftChanged(GameSettings next) {
     setState(() => _draft = next);
+    _syncControllers();
     _refreshPresetMatches(context.read<AppProvider>());
   }
 
@@ -347,9 +412,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   /// was explicitly picked ([_appliedPresetId]), the section was dismissed,
   /// or the review step was reached.
   void _refreshPresetMatches(AppProvider app) {
-    if (_appliedPresetId != null ||
-        _suggestionsDismissed ||
-        _reachedReview) {
+    if (_appliedPresetId != null || _suggestionsDismissed || _reachedReview) {
       _presetMatches.clear();
       setState(() {});
       return;
@@ -666,56 +729,51 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header
+          // Top App Bar: Squircle back `<` button & `Step X of 5`
           Row(
             children: [
-              BackNavButton(
-                label: _step == 1 ? 'Back to games' : 'Back to the previous step',
+              SquircleIconButton(
+                icon: Icons.chevron_left,
+                size: 40,
+                borderRadius: 12,
+                backgroundColor: const Color(0xFF141416),
+                borderColor: const Color(0xFF242428),
                 onPressed: () => _step == 1
                     ? context.go(RoutePaths.group)
                     : setState(() => _step--),
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'New Game',
-                      style: AppTypography.display(
-                        size: AppFontSizes.xxxl,
-                        weight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      'Step $_step of ${_steps.length}: ${_steps[_step - 1]}',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
+              const Spacer(),
+              Text(
+                'Step $_step of ${_steps.length}',
+                style: const TextStyle(
+                  color: Color(0xFF8E8E93),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          // Progress
-          Row(
-            children: [
-              for (var i = 0; i < _steps.length; i++)
-                Expanded(
-                  child: Container(
-                    height: 4,
-                    margin: const EdgeInsets.only(right: 4),
-                    decoration: BoxDecoration(
-                      color: i < _step ? AppColors.primary : AppColors.border,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
+          const SizedBox(height: 12),
+
+          // Red progress indicator bar underneath app bar
+          Container(
+            height: 2.5,
+            width: double.infinity,
+            color: const Color(0xFF242428),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: (_step / _steps.length.toDouble()).clamp(0.0, 1.0),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFD53032), Color(0xFFFF5252)],
                   ),
                 ),
-            ],
+              ),
+            ),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: 20),
+
           if (_step == 1 &&
               _presetMatches.isNotEmpty &&
               !_suggestionsDismissed &&
@@ -723,100 +781,473 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             _buildSuggestionBanner(),
             const SizedBox(height: AppSpacing.lg),
           ],
+
           // Steps
           if (_step == 1) _buildStep1(app),
-          if (_step == 2) _buildStep2(app),
-          if (_step == 3) _buildStep3(app),
-          if (_step == 4) _buildStep4(app),
-          if (_step == 5) _buildStep5(app),
-          const SizedBox(height: AppSpacing.lg),
-          // Nav buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              AppButton(
-                variant: AppButtonVariant.secondary,
-                onPressed: () => _step == 1
-                    ? context.go(RoutePaths.group)
-                    : setState(() => _step--),
-                child: _step == 1
-                    ? const Text('Cancel')
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.arrow_back,
-                            size: 14,
-                            color: AppColors.icon,
-                          ),
-                          SizedBox(width: 6),
-                          Text('Back'),
-                        ],
-                      ),
-              ),
-              if (_step < 5)
-                AppButton(
-                  onPressed: _next,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Next'),
-                      SizedBox(width: 6),
-                      Icon(
-                        Icons.arrow_forward,
-                        size: 14,
-                        color: AppColors.icon,
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
+          if (_step == 2) ...[
+            _buildStepHeader(2),
+            const SizedBox(height: 16),
+            _buildStep2(app),
+            const SizedBox(height: 24),
+            _buildStepChipsRow(),
+          ],
+          if (_step == 3) ...[
+            _buildStepHeader(3),
+            const SizedBox(height: 16),
+            _buildStep3(app),
+            const SizedBox(height: 24),
+            _buildStepChipsRow(),
+          ],
+          if (_step == 4) ...[
+            _buildStepHeader(4),
+            const SizedBox(height: 16),
+            _buildStep4(app),
+            const SizedBox(height: 24),
+            _buildStepChipsRow(),
+          ],
+          if (_step == 5) ...[
+            _buildStepHeader(5),
+            const SizedBox(height: 16),
+            _buildStep5(app),
+            const SizedBox(height: 24),
+            _buildStepChipsRow(),
+          ],
+
+          const SizedBox(height: 24),
+
+          // Bottom sticky Continue button
+          _buildBottomBar(app),
         ],
       ),
     );
   }
 
-  Widget _buildStep1(AppProvider app) {
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _buildStepHeader(int stepNumber) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _steps[stepNumber - 1].toUpperCase(),
+          style: const TextStyle(
+            color: Color(0xFFE24446),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _steps[stepNumber - 1],
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 26,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFormFieldLabel(String label) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: Color(0xFF8E8E93),
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String placeholder,
+    required ValueChanged<String> onChanged,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF242428)),
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          hintText: placeholder,
+          hintStyle: const TextStyle(color: Color(0xFF555555)),
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _buildStepChipsRow() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
         children: [
-          // E — expected players surfaced as an editable estimate. The shared
-          // details section owns the stepper; RSVPs stay the real source and
-          // the figure only becomes an override the moment the host moves it.
-          Row(
-            children: [
-              Icon(
-                Icons.groups_outlined,
-                size: 18,
-                color: AppColors.primary,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
+          for (var i = 0; i < _steps.length; i++) ...[
+            InkWell(
+              onTap: () => setState(() => _step = i + 1),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: i == _step - 1
+                      ? const Color(0xFF381416)
+                      : const Color(0xFF141416),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: i == _step - 1
+                        ? const Color(0xFFD53032)
+                        : const Color(0xFF242428),
+                  ),
+                ),
                 child: Text(
-                  _expectedOverridden
-                      ? 'Expecting ~$_expectedPlayers — you overrode the group estimate. Change if you know better.'
-                      : 'Expecting ~$_expectedPlayers — from your group. Change if you know better.',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: _expectedOverridden
-                        ? AppColors.primary
-                        : AppColors.mutedForeground,
+                  _steps[i].toUpperCase(),
+                  style: TextStyle(
+                    color: i == _step - 1
+                        ? const Color(0xFFE24446)
+                        : const Color(0xFF8E8E93),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
                   ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          EventSettingsForm(
-            key: _formKey,
-            initial: _draft,
-            sections: const {EventFormSection.details},
-            onChanged: _onDraftChanged,
-          ),
+            ),
+            if (i < _steps.length - 1) const SizedBox(width: 8),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildBottomBar(AppProvider app) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x66D53032),
+              blurRadius: 16,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFD53032),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 0,
+          ),
+          onPressed: _step < 5 ? _next : () => _generate(app),
+          child: Text(
+            _step == 5 ? 'Publish event' : 'Continue',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStep1(AppProvider app) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Eyebrow
+        const Text(
+          'EVENT DETAILS',
+          style: TextStyle(
+            color: Color(0xFFE24446),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        // Title
+        const Text(
+          'New tournament',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Event name
+        _buildFormFieldLabel('Event name'),
+        const SizedBox(height: 8),
+        _buildTextField(
+          controller: _nameController,
+          placeholder: 'Friday Night Freezeout',
+          onChanged: (val) {
+            _onDraftChanged(_draft.copyWith(name: val));
+          },
+        ),
+        const SizedBox(height: 16),
+
+        // Date & Time side-by-side row
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('Date'),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () async {
+                      final current =
+                          DateTime.tryParse(_draft.date) ?? DateTime.now();
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: current,
+                        firstDate: DateTime.now().subtract(
+                          const Duration(days: 30),
+                        ),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (picked != null) {
+                        final m = picked.month.toString().padLeft(2, '0');
+                        final d = picked.day.toString().padLeft(2, '0');
+                        _onDraftChanged(
+                          _draft.copyWith(date: '${picked.year}-$m-$d'),
+                        );
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      height: 52,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      alignment: Alignment.centerLeft,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141416),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF242428)),
+                      ),
+                      child: Text(
+                        _formatDisplayDate(_draft.date),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('Time'),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () async {
+                      final parts = _draft.time.split(':');
+                      final h = parts.isNotEmpty
+                          ? int.tryParse(parts[0]) ?? 20
+                          : 20;
+                      final m = parts.length > 1
+                          ? int.tryParse(parts[1]) ?? 0
+                          : 0;
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay(hour: h, minute: m),
+                      );
+                      if (picked != null) {
+                        final timeStr =
+                            '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+                        _onDraftChanged(_draft.copyWith(time: timeStr));
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      height: 52,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      alignment: Alignment.centerLeft,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141416),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF242428)),
+                      ),
+                      child: Text(
+                        _formatDisplayTime(_draft.time),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Location
+        _buildFormFieldLabel('Location'),
+        const SizedBox(height: 8),
+        _buildTextField(
+          controller: _locationController,
+          placeholder: "Marcus's place",
+          onChanged: (val) {
+            _onDraftChanged(_draft.copyWith(location: val));
+          },
+        ),
+        const SizedBox(height: 16),
+
+        // Buy-in & Expected players side-by-side row
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('Buy-in'),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141416),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF242428)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text(
+                          r'$',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: TextField(
+                            controller: _buyInController,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              hintText: '100',
+                              hintStyle: TextStyle(color: Color(0xFF555555)),
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            onChanged: (val) {
+                              final parsed = int.tryParse(val) ?? 0;
+                              _onDraftChanged(_draft.copyWith(buyIn: parsed));
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('Expected players'),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141416),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF242428)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _playersController,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            onChanged: (val) {
+                              final parsed =
+                                  int.tryParse(val) ?? _derivedExpectedPlayers;
+                              _onDraftChanged(
+                                _draft.copyWith(
+                                  players: parsed,
+                                  expectedPlayersOverride: parsed,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const Text(
+                          'from group',
+                          style: TextStyle(
+                            color: Color(0xFF8E8E93),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+
+        // Step chips row
+        _buildStepChipsRow(),
+      ],
     );
   }
 
@@ -856,15 +1287,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         for (final m in _presetMatches)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Container(
+            child: AppCard(
               padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.4),
-                ),
-              ),
+              color: AppColors.primarySoft,
+              borderColor: AppColors.primary.withValues(alpha: 0.4),
               child: Row(
                 children: [
                   Expanded(
@@ -1028,7 +1454,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                           ? 'Unlimited rebuys to L${s.rebuysCloseLevel}'
                           : '${s.rebuyLimit} rebuys to L${s.rebuysCloseLevel}${s.rebuyCost != null ? ' @ ${s.rebuyCost}' : ''}')
                     : 'No rebuys',
-                variant: s.rebuys ? AppBadgeVariant.gold : AppBadgeVariant.muted,
+                variant: s.rebuys
+                    ? AppBadgeVariant.gold
+                    : AppBadgeVariant.muted,
               ),
               AppBadge(
                 label: s.reEntry ? 'Re-entry' : 'No re-entry',
@@ -1037,7 +1465,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     : AppBadgeVariant.muted,
               ),
               AppBadge(
-                label: s.addOn ? 'Add-on to L${s.addOnCloseLevel}' : 'No add-on',
+                label: s.addOn
+                    ? 'Add-on to L${s.addOnCloseLevel}'
+                    : 'No add-on',
                 variant: s.addOn ? AppBadgeVariant.gold : AppBadgeVariant.muted,
               ),
               AppBadge(
@@ -1302,11 +1732,7 @@ class _ConfirmDetailsDialog extends StatelessWidget {
             tooltip: 'Close',
             visualDensity: VisualDensity.compact,
             onPressed: () => Navigator.of(context).pop(false),
-            icon: Icon(
-              Icons.close,
-              size: 18,
-              color: AppColors.mutedForeground,
-            ),
+            icon: Icon(Icons.close, size: 18, color: AppColors.mutedForeground),
           ),
         ],
       ),
@@ -1383,16 +1809,12 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.xs,
       ),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
-      ),
+      color: AppColors.background,
       child: Column(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
@@ -1413,9 +1835,7 @@ class _ConfirmRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: last
             ? null
-            : Border(
-                bottom: BorderSide(color: AppColors.border, width: 0.6),
-              ),
+            : Border(bottom: BorderSide(color: AppColors.border, width: 0.6)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1452,16 +1872,12 @@ class _SummaryStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.symmetric(
         vertical: AppSpacing.md,
         horizontal: AppSpacing.xs,
       ),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
-      ),
+      color: AppColors.background,
       child: Column(
         children: [
           Icon(icon, size: 24, color: AppColors.primary),

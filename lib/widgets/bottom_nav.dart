@@ -57,8 +57,8 @@ class BottomNav extends StatelessWidget {
         _BottomItem(
           path: RoutePaths.members,
           label: 'Members',
-          icon: Icons.groups_outlined,
-          activeColor: AppColors.primary,
+          icon: Icons.person_outline,
+          activeColor: const Color(0xFFD53032),
           badge: group.members.length,
         ),
         _BottomItem(

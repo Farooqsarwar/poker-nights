@@ -26,34 +26,20 @@ LiveGame projectionFor(
 
   final viewerCanSeeChat = role == GameProjectionRole.player;
 
-  // 12, 13: Zero organizerPct and clear forcePaidPlaces for non-admin
-  final publicSettings = GameSettings(
-    name: game.settings.name,
-    date: game.settings.date,
-    time: game.settings.time,
-    location: game.settings.location,
-    players: game.settings.players,
-    durationHours: game.settings.durationHours,
-    buyIn: game.settings.buyIn,
-    koEnabled: game.settings.koEnabled,
-    koAmount: game.settings.koAmount,
-    rebuys: game.settings.rebuys,
-    rebuysCloseLevel: game.settings.rebuysCloseLevel,
-    reEntry: game.settings.reEntry,
-    addOn: game.settings.addOn,
-    addOnCloseLevel: game.settings.addOnCloseLevel,
-    anteEnabled: game.settings.anteEnabled,
-    anteAfterLevel: game.settings.anteAfterLevel,
-    anteStyle: game.settings.anteStyle,
-    antePreference: game.settings.antePreference,
+  // 12, 13: Zero organizerPct and clear forcePaidPlaces for non-admin.
+  //
+  // This used to be a full manual `GameSettings(...)` reconstruction that
+  // named every field individually — which means every field NOT named
+  // silently dropped to its default (usually null) for every player, guest
+  // and TV viewer, rather than riding through untouched. `format` was the
+  // field that got caught doing this; the fix is structural, not another
+  // field added to a list that will just go stale again next time: `copyWith`
+  // makes "public by default, private fields listed explicitly" the actual
+  // behaviour, matching this function's own doc comment above. Only the two
+  // fields §6.2's table marks private are named here.
+  final publicSettings = game.settings.copyWith(
     organizerPct: 0,
-    chipSet: game.settings.chipSet,
-    chipSetName: game.settings.chipSetName,
-    announceEliminations: game.settings.announceEliminations,
-    forcePaidPlaces: null,
-    rebuyCost: game.settings.rebuyCost,
-    addOnCost: game.settings.addOnCost,
-    locationPrivate: game.settings.locationPrivate,
+    clearForcePaidPlaces: true,
   );
 
   // 14-045 / 05-033 / 19-021: players do not see their own investment either —

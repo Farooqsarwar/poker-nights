@@ -2,23 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/colors.dart';
 import '../../app/route_paths.dart';
-import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/cash_game.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
-import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/app_tabs.dart';
 import '../../widgets/medal_icon.dart';
-import '../../widgets/group_switcher.dart';
 import '../../responsive/responsive.dart';
 
-/// History + leaderboard mirroring the web `HistoryPage`.
+/// History + leaderboard mirroring B7_History.png mobile-first layout.
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
@@ -27,14 +22,13 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  String _tab = 'games';
+  String _tab = 'all';
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final group = app.currentGroup;
-    final allPast = group.pastGames;
-    final pastGames = allPast;
+    final pastGames = group.pastGames;
     final userId = app.user?.id;
     final isAdmin = app.isAdmin;
 
@@ -51,20 +45,72 @@ class _HistoryScreenState extends State<HistoryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const GroupContextHeader(title: 'History'),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                group.name.isNotEmpty
-                    ? '${group.name} · all past games'
-                    : 'All past games',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
+              // Top bar: Squircle back button <, Title 'History'
+              Row(
+                children: [
+                  InkWell(
+                    onTap: () => context.go(RoutePaths.group),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141416),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF242428)),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  const Text(
+                    'History',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              // Filter pills row
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterPill(
+                      label: 'ALL',
+                      active: _tab == 'all',
+                      onTap: () => setState(() => _tab = 'all'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterPill(
+                      label: 'TOURNAMENTS',
+                      active: _tab == 'tournaments',
+                      onTap: () => setState(() => _tab = 'tournaments'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterPill(
+                      label: 'CASH',
+                      active: _tab == 'cash',
+                      onTap: () => setState(() => _tab = 'cash'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterPill(
+                      label: 'LEADERBOARD',
+                      active: _tab == 'leaderboard',
+                      onTap: () => setState(() => _tab = 'leaderboard'),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
-              // Personal stats — the FIVE basic aggregate statistics (Tech §15.2:
-              // "No ROI, profit, investment, winnings, rebuy/add-on history,
-              // graphs, streaks or advanced filters").
+              const SizedBox(height: AppSpacing.lg),
+              // Personal stats
               GridView.count(
                 crossAxisCount: isMobile ? 3 : 5,
                 shrinkWrap: true,
@@ -85,68 +131,72 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   _MiniStat(label: 'KOs', value: '${myStats.knockouts}'),
                 ],
               ),
-              // Admin P&L row — only organisers see financial totals (spec §2.4).
+              // Admin P&L row
               if (isAdmin) ...[
                 const SizedBox(height: AppSpacing.sm),
-                AppCard(
+                Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
-                  borderColor: AppColors.primary.withValues(alpha: 0.2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF242428)),
+                  ),
                   child: Row(
                     children: [
-                      Icon(Icons.account_balance_wallet_outlined, size: 16, color: AppColors.primary),
+                      const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        size: 16,
+                        color: Color(0xFFD53032),
+                      ),
                       const SizedBox(width: AppSpacing.sm),
-                      Text(
+                      const Text(
                         'Organizer P&L',
-                        style: AppTypography.bodySm.copyWith(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
+                          color: Color(0xFFD53032),
+                          fontSize: 13,
                         ),
                       ),
                       const Spacer(),
                       Text(
                         Formatters.money('', myStats.totalPnl),
-                        style: AppTypography.monoSm.copyWith(
-                          // *Text variants: `success`/`destructive` are fill
-                          // colours and fail AA as text on this surface.
+                        style: TextStyle(
                           color: myStats.totalPnl >= 0
-                              ? AppColors.successText
-                              : AppColors.destructiveText,
+                              ? const Color(0xFF4ADE80)
+                              : const Color(0xFFE53935),
                           fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          fontFamily: 'monospace',
                         ),
                       ),
                     ],
                   ),
                 ),
               ],
-              const SizedBox(height: AppSpacing.xl),
-              AppTabs(
-                tabs: const [
-                  AppTabItem(id: 'games', label: 'Games'),
-                  AppTabItem(id: 'leaderboard', label: 'Leaderboard'),
-                  AppTabItem(id: 'cash', label: 'Cash games'),
-                ],
-                active: _tab,
-                onChanged: (t) => setState(() => _tab = t),
-              ),
               const SizedBox(height: AppSpacing.lg),
             ],
           ),
         ),
-        // The tab bodies are slivers, not boxes: `games` and `cash` are both
-        // unbounded lists, so their rows build only as they scroll into view.
-        if (_tab == 'games')
+        if (_tab == 'all')
+          _buildAll(pastGames, app.cashHistory, userId, isAdmin)
+        else if (_tab == 'tournaments')
           _buildGames(pastGames, userId, isAdmin)
-        else if (_tab == 'leaderboard')
-          SliverToBoxAdapter(child: _buildLeaderboard(pastGames, userId))
+        else if (_tab == 'cash')
+          _buildCash(app.cashHistory, isAdmin)
         else
-          _buildCash(app.cashHistory, isAdmin),
+          SliverToBoxAdapter(child: _buildLeaderboard(pastGames, userId)),
       ],
     );
   }
 
-  // Only the FIVE basic aggregate statistics (Tech §15.2). Admins also
-  // get a P&L row via the extra totalPnl field.
-  ({int played, int wins, int podium, double avgFinish, int knockouts, double totalPnl})
+  ({
+    int played,
+    int wins,
+    int podium,
+    double avgFinish,
+    int knockouts,
+    double totalPnl,
+  })
   _computeMyStats(List<LiveGame> myGames, String? userId) {
     var played = 0, wins = 0, podium = 0, knockouts = 0;
     var totalPlacements = 0;
@@ -166,13 +216,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (me != null) {
         knockouts += me.knockouts;
       }
-      // Admin P&L: prize won minus (buy-in + rebuy cost × rebuys + add-on cost)
       final prize = g.structure.prizes
-          .where((pr) => pr.place == (pos >= 0 ? g.finishOrder.length - pos : -1))
+          .where(
+            (pr) => pr.place == (pos >= 0 ? g.finishOrder.length - pos : -1),
+          )
           .fold<int>(0, (s, pr) => s + pr.amount);
-      final cost = g.settings.buyIn +
+      final cost =
+          g.settings.buyIn +
           (g.settings.rebuyCost ?? g.settings.buyIn) * (me?.rebuys ?? 0) +
-          (g.settings.addOnCost ?? g.settings.buyIn) * ((me?.hasAddOn ?? false) ? 1 : 0);
+          (g.settings.addOnCost ?? g.settings.buyIn) *
+              ((me?.hasAddOn ?? false) ? 1 : 0);
       totalPnl += prize - cost;
     }
     final avgFinish = placedGames == 0 ? 0.0 : totalPlacements / placedGames;
@@ -186,19 +239,58 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
+  Widget _buildAll(
+    List<LiveGame> pastGames,
+    List<CashSession> cashHistory,
+    String? userId,
+    bool isAdmin,
+  ) {
+    if (pastGames.isEmpty && cashHistory.isEmpty) {
+      return SliverToBoxAdapter(
+        child: _emptyCard(
+          icon: Icons.history,
+          message: 'No completed games yet.',
+        ),
+      );
+    }
+    return SliverList.builder(
+      itemCount: pastGames.length + cashHistory.length,
+      itemBuilder: (context, i) {
+        if (i < pastGames.length) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _HistoryRow(
+              game: pastGames[i],
+              userId: userId,
+              showAmounts: isAdmin,
+            ),
+          );
+        }
+        final cashIndex = i - pastGames.length;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _CashHistoryRow(
+            session: cashHistory[cashIndex],
+            showAmounts: isAdmin,
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildGames(List<LiveGame> pastGames, String? userId, bool isAdmin) {
     if (pastGames.isEmpty) {
       return SliverToBoxAdapter(
         child: _emptyCard(
           icon: Icons.style_outlined,
-          message: 'No completed games yet.',
+          message: 'No completed tournaments yet.',
         ),
       );
     }
     return SliverList.builder(
       itemCount: pastGames.length,
       itemBuilder: (context, i) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+        padding: const EdgeInsets.only(bottom: 10),
         child: _HistoryRow(
           game: pastGames[i],
           userId: userId,
@@ -220,24 +312,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return SliverList.builder(
       itemCount: sessions.length,
       itemBuilder: (context, i) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+        padding: const EdgeInsets.only(bottom: 10),
         child: _CashHistoryRow(session: sessions[i], showAmounts: isAdmin),
       ),
     );
   }
 
   Widget _emptyCard({required IconData icon, required String message}) {
-    return AppCard(
+    return Container(
       padding: const EdgeInsets.all(AppSpacing.xxl),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF242428)),
+      ),
       child: Column(
         children: [
-          Icon(icon, size: AppFontSizes.xxxl, color: AppColors.icon),
+          Icon(icon, size: 40, color: const Color(0xFF8E8E93)),
           const SizedBox(height: AppSpacing.sm),
           Text(
             message,
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
-            ),
+            style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 14),
           ),
         ],
       ),
@@ -251,10 +346,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
         final entry = statsMap.putIfAbsent(p.id, () => _LbEntry(name: p.name));
         entry.played++;
         entry.knockouts += p.knockouts;
-        final pos = game.finishOrder.indexOf(p.id);
-        final placement = pos >= 0 ? game.finishOrder.length - pos : null;
-        if (placement == 1) entry.wins++;
-        if (placement != null && placement <= 3) entry.podium++;
+      }
+      final winnerId = game.finishOrder.isNotEmpty
+          ? game.finishOrder.last
+          : null;
+      if (winnerId != null && statsMap.containsKey(winnerId)) {
+        statsMap[winnerId]!.wins++;
+      }
+      final top3 = game.finishOrder.reversed.take(3);
+      for (final id in top3) {
+        if (statsMap.containsKey(id)) {
+          statsMap[id]!.podium++;
+        }
       }
     }
     final sorted = statsMap.entries.toList()
@@ -266,132 +369,144 @@ class _HistoryScreenState extends State<HistoryScreen> {
         return b.value.played.compareTo(a.value.played);
       });
 
-    return AppCard(
-      padding: EdgeInsets.zero,
+    if (sorted.isEmpty) {
+      return _emptyCard(
+        icon: Icons.leaderboard_outlined,
+        message: 'No completed games yet.',
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF242428)),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Text(
-              'All-time standings',
-              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          if (sorted.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.xxl),
-              child: Text(
-                'No data yet.',
-                textAlign: TextAlign.center,
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
+          for (var i = 0; i < sorted.length; i++)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                border: i < sorted.length - 1
+                    ? const Border(bottom: BorderSide(color: Color(0xFF242428)))
+                    : null,
               ),
-            )
-          else
-            for (var i = 0; i < sorted.length; i++)
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: sorted[i].key == userId
-                      ? AppColors.primary.withValues(alpha: 0.04)
-                      : Colors.transparent,
-                  border: i < sorted.length - 1
-                      ? Border(
-                          bottom: BorderSide(color: AppColors.border),
-                        )
-                      : null,
-                ),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 28,
-                      child: i < 3
-                          ? MedalIcon(i + 1, size: 20)
-                          : Text(
-                              '#${i + 1}',
-                              textAlign: TextAlign.center,
-                              style: AppTypography.mono(
-                                size: AppFontSizes.xs,
-                                color: AppColors.mutedForeground,
-                              ),
-                            ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: AppColors.avatarColorFor(sorted[i].value.name),
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        sorted[i].value.name.isEmpty
-                            ? '?'
-                            : sorted[i].value.name[0].toUpperCase(),
-                        style: AppTypography.bodyXs.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.foreground,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              sorted[i].value.name,
-                              style: AppTypography.bodySm.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 28,
+                    child: i < 3
+                        ? MedalIcon(i + 1, size: 18)
+                        : Text(
+                            '#${i + 1}',
+                            style: const TextStyle(
+                              color: Color(0xFF8E8E93),
+                              fontSize: 12,
+                              fontFamily: 'monospace',
                             ),
                           ),
-                          if (sorted[i].key == userId) ...[
-                            const SizedBox(width: AppSpacing.sm),
-                            const AppBadge(
-                              label: 'You',
-                              variant: AppBadgeVariant.green,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    Row(
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Row(
                       children: [
-                        _LbStat(
-                          value: '${sorted[i].value.wins}',
-                          label: 'wins',
+                        Flexible(
+                          child: Text(
+                            sorted[i].value.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        const SizedBox(width: AppSpacing.lg),
-                        _LbStat(
-                          value: '${sorted[i].value.podium}',
-                          label: 'podium',
-                        ),
-                        const SizedBox(width: AppSpacing.lg),
-                        _LbStat(
-                          value: '${sorted[i].value.played}',
-                          label: 'played',
-                        ),
-                        if (sorted[i].value.knockouts > 0) ...[
-                          const SizedBox(width: AppSpacing.lg),
-                          _LbStat(
-                            value: '${sorted[i].value.knockouts}',
-                            label: 'KOs',
+                        if (sorted[i].key == userId) ...[
+                          const SizedBox(width: 8),
+                          const AppBadge(
+                            label: 'You',
+                            variant: AppBadgeVariant.green,
                           ),
                         ],
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  Row(
+                    children: [
+                      _LbStat(value: '${sorted[i].value.wins}', label: 'wins'),
+                      const SizedBox(width: 14),
+                      _LbStat(
+                        value: '${sorted[i].value.podium}',
+                        label: 'podium',
+                      ),
+                      const SizedBox(width: 14),
+                      _LbStat(
+                        value: '${sorted[i].value.played}',
+                        label: 'played',
+                      ),
+                      if (sorted[i].value.knockouts > 0) ...[
+                        const SizedBox(width: 14),
+                        _LbStat(
+                          value: '${sorted[i].value.knockouts}',
+                          label: 'KOs',
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+class _FilterPill extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _FilterPill({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFD53032) : const Color(0xFF141416),
+          borderRadius: BorderRadius.circular(10),
+          border: active ? null : Border.all(color: const Color(0xFF242428)),
+          boxShadow: active
+              ? const [
+                  BoxShadow(
+                    color: Color(0x33D53032),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? Colors.white : const Color(0xFF8E8E93),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
       ),
     );
   }
@@ -415,10 +530,15 @@ class _MiniStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xs,
         vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF242428)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -427,21 +547,20 @@ class _MiniStat extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              style: AppTypography.mono(
-                size: AppFontSizes.md,
-                weight: FontWeight.w700,
-                color: AppColors.foreground,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                fontFamily: 'monospace',
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.xxs),
+          const SizedBox(height: 2),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               label,
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
-              ),
+              style: const TextStyle(fontSize: 11, color: Color(0xFF8E8E93)),
             ),
           ),
         ],
@@ -462,17 +581,16 @@ class _LbStat extends StatelessWidget {
       children: [
         Text(
           value,
-          style: AppTypography.mono(
-            size: AppFontSizes.sm,
-            weight: FontWeight.w700,
-            color: AppColors.foreground,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            fontFamily: 'monospace',
           ),
         ),
         Text(
           label,
-          style: AppTypography.body(size: 10).copyWith(
-            color: AppColors.mutedForeground,
-          ),
+          style: const TextStyle(fontSize: 10, color: Color(0xFF8E8E93)),
         ),
       ],
     );
@@ -489,66 +607,104 @@ class _CashHistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final currency = session.settings.currency;
     final elapsedMins = session.elapsed.inMinutes;
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.secondary,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.payments_outlined,
-              size: 20,
-              color: AppColors.icon,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  session.settings.name,
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  '${session.settings.date} · ${session.players.length} players',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${elapsedMins ~/ 60}h ${elapsedMins % 60}m',
-                style: AppTypography.mono(
-                  size: AppFontSizes.xs,
-                  color: AppColors.primary,
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF242428)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 4, color: const Color(0xFF242428)),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E2024),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.payments_outlined,
+                        size: 20,
+                        color: Color(0xFF8E8E93),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            session.settings.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${session.settings.date} · ${session.players.length} players',
+                            style: const TextStyle(
+                              color: Color(0xFF8E8E93),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (showAmounts)
+                          Text(
+                            Formatters.money(currency, session.totalBuyIns),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E2024),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '${elapsedMins ~/ 60}H ${elapsedMins % 60}M',
+                            style: const TextStyle(
+                              color: Color(0xFF8E8E93),
+                              fontSize: 10,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                showAmounts
-                    ? Formatters.money(currency, session.totalBuyIns)
-                    : 'Completed',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -573,7 +729,7 @@ class _HistoryRow extends StatelessWidget {
     final winnerId = game.finishOrder.isNotEmpty ? game.finishOrder.last : null;
     final winner = game.players.where((p) => p.id == winnerId).firstOrNull;
     final playersCount = game.players.where((p) => !p.isGuest).length;
-    final totalRebuys = game.players.fold<int>(0, (s, p) => s + p.rebuys);
+    final isPodium = placement != null && placement <= 3;
     final prizeForPlacement = placement == null
         ? 0
         : game.structure.prizes.isEmpty
@@ -586,121 +742,171 @@ class _HistoryRow extends StatelessWidget {
     final net = placement == null
         ? null
         : prizeForPlacement -
-            game.settings.buyIn -
-            ((me?.rebuys ?? 0) * (game.settings.rebuyCost ?? game.settings.buyIn)) -
-            ((me?.hasAddOn ?? false) ? (game.settings.addOnCost ?? game.settings.buyIn) : 0);
+              game.settings.buyIn -
+              ((me?.rebuys ?? 0) *
+                  (game.settings.rebuyCost ?? game.settings.buyIn)) -
+              ((me?.hasAddOn ?? false)
+                  ? (game.settings.addOnCost ?? game.settings.buyIn)
+                  : 0);
 
-    return AppCard(
+    final stripeColor = isPodium
+        ? const Color(0xFFF59E0B)
+        : (net != null && net > 0
+              ? const Color(0xFF4ADE80)
+              : const Color(0xFF242428));
+
+    return InkWell(
       onTap: () {
-        // Set the game in provider before navigating so the podium screen
-        // can find it via app.currentGame (fixes "Result unavailable" bug).
         context.read<AppProvider>().setCurrentGame(game);
         context.go(RoutePaths.resultPodium);
       },
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF141416),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF242428)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.secondary,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                ),
-                alignment: Alignment.center,
-                child: placement != null && placement <= 3
-                    ? MedalIcon(placement, size: AppFontSizes.xl)
-                    : Icon(
-                        Icons.style_outlined,
-                        size: AppFontSizes.xl,
-                        color: AppColors.icon,
-                      ),
-              ),
-              const SizedBox(width: AppSpacing.md),
+              Container(width: 4, color: stripeColor),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      game.settings.name,
-                      style: AppTypography.bodySm.copyWith(
-                        fontWeight: FontWeight.w600,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  game.settings.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${game.settings.date} · $playersCount players${placement != null ? ' · #$placement' : ''}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF8E8E93),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              if (net != null && showAmounts)
+                                Text(
+                                  net >= 0
+                                      ? '+\$${net.abs()}'
+                                      : '-\$${net.abs()}',
+                                  style: TextStyle(
+                                    color: net >= 0
+                                        ? const Color(0xFF4ADE80)
+                                        : const Color(0xFFE53935),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    fontFamily: 'monospace',
+                                  ),
+                                )
+                              else if (placement != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isPodium
+                                        ? const Color(0x26F59E0B)
+                                        : const Color(0xFF1E2024),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    placement == 1 ? '1st' : '#$placement',
+                                    style: TextStyle(
+                                      color: isPodium
+                                          ? const Color(0xFFF59E0B)
+                                          : const Color(0xFF8E8E93),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E2024),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Builder(
+                                  builder: (context) {
+                                    final totalMins =
+                                        (game.settings.durationHours * 60)
+                                            .round();
+                                    final hours = totalMins ~/ 60;
+                                    final mins = totalMins % 60;
+                                    final durationStr = hours > 0
+                                        ? '${hours}H ${mins}M'
+                                        : '${mins}M';
+                                    return Text(
+                                      durationStr,
+                                      style: const TextStyle(
+                                        color: Color(0xFF8E8E93),
+                                        fontSize: 10,
+                                        fontFamily: 'monospace',
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      '${game.settings.date} · $playersCount players',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Text(
+                            'Winner: ${winner?.name ?? '—'}',
+                            style: const TextStyle(
+                              color: Color(0xFF8E8E93),
+                              fontSize: 12,
+                            ),
+                          ),
+                          if (placement != null && placement <= 3) ...[
+                            const SizedBox(width: 6),
+                            MedalIcon(placement, size: 14),
+                          ],
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (placement != null)
-                    Text(
-                      placement == 1 ? '1st' : '#$placement',
-                      style: AppTypography.bodySm.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  if (net != null && showAmounts)
-                    Text(
-                      net >= 0
-                          ? '+${Formatters.chips(net)}'
-                          : Formatters.chips(net),
-                      style: AppTypography.mono(
-                        size: AppFontSizes.xs,
-                        weight: FontWeight.w600,
-                        color: net >= 0
-                            ? AppColors.success
-                            : AppColors.destructive,
-                      ),
-                    ),
-                  if (game.structure.prizePool > 0 && showAmounts)
-                    Text(
-                      Formatters.chips(game.structure.prizePool),
-                      style: AppTypography.mono(
-                        size: AppFontSizes.xs,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                'Winner: ${winner?.name ?? '—'}',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-              if (totalRebuys > 0 && showAmounts)
-                Text(
-                  '· $totalRebuys rebuys',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
+                    ],
                   ),
                 ),
-              if (placement != null && placement <= 3)
-                Padding(
-                  padding: const EdgeInsets.only(left: AppSpacing.sm),
-                  child: MedalIcon(placement, size: AppFontSizes.xs),
-                ),
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

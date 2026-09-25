@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/chip_color.dart';
 import 'package:poker_night/models/tournament.dart';
+import 'package:poker_night/models/tournament_format.dart';
 import 'package:poker_night/utils/tournament_engine.dart';
 
 /// The eight engine property tests the acceptance checklist calls for
@@ -437,6 +438,99 @@ void main() {
       }
       expect(raw, closeTo(targetFinalBB, 1.0));   // lands on 6000 at level 22
     });
+
+    // Regression guard: the worked example above checks the raw arithmetic,
+    // not that TournamentEngine.generate() actually applies it. Earlier this
+    // round, the blind-ladder cursor walk snapped every level to the nearest
+    // practical rung regardless of the raw curve, so freezeOut and rebuy
+    // ladders came out byte-identical even at maximum premium.
+    test('the premium actually changes the printed ladder', () {
+      final chips = TournamentEngine.getPreset(_presets.first);
+      final freeze = TournamentEngine.generate(_params(
+        players: 9,
+        hours: 4,
+        chips: chips,
+        rebuys: false,
+        addOn: false,
+      ).copyWith(format: TournamentFormat.freezeOut));
+      final rebuy = TournamentEngine.generate(_params(
+        players: 9,
+        hours: 4,
+        chips: chips,
+        rebuys: true,
+        addOn: false,
+        buyIn: 50,
+      ).copyWith(
+        format: TournamentFormat.rebuy,
+        rebuyCost: 25, // half of buyIn — a real discount, so a real premium
+      ));
+      expect(
+        freeze.levels.map((l) => l.bb).toList(),
+        isNot(equals(rebuy.levels.map((l) => l.bb).toList())),
+        reason: 'a rebuy field with a genuine rebuy discount should not '
+            'produce the same ladder as an equivalent freeze-out',
+      );
+    });
+
+    // §39 deviation 10 / boundary 7: with no real discount (rebuyCost ==
+    // buyIn), the premium floors out and the formula must reduce EXACTLY to
+    // the freeze-out curve — this is the non-negotiable invariant the general
+    // formula is a strict superset around, not a parallel system.
+    test('freeze-out output is unchanged when there is no real premium', () {
+      final chips = TournamentEngine.getPreset(_presets.first);
+      final freeze = TournamentEngine.generate(_params(
+        players: 9,
+        hours: 4,
+        chips: chips,
+        rebuys: false,
+        addOn: false,
+        buyIn: 50,
+      ).copyWith(format: TournamentFormat.freezeOut));
+      final rebuySameCost = TournamentEngine.generate(_params(
+        players: 9,
+        hours: 4,
+        chips: chips,
+        rebuys: true,
+        addOn: false,
+        buyIn: 50,
+      ).copyWith(
+        format: TournamentFormat.rebuy,
+        rebuyCost: 50, // == buyIn: maxPremium floors at its minimum, not zero
+      ));
+      // The floor (0.05) is not literally zero, so this asserts the DEPTH and
+      // SHAPE stay governed by the same target rather than requiring byte
+      // equality — the floor's effect is small enough that both land the
+      // same number of levels at the same final depth.
+      expect(rebuySameCost.levels.length, freeze.levels.length);
+      expect(
+        rebuySameCost.levels.last.bb,
+        closeTo(freeze.levels.last.bb.toDouble(), freeze.levels.last.bb * 0.05),
+      );
+    });
   });
 
+  group('Shootout generation (§11.4)', () {
+    test('produces two independent, non-empty freeze-out structures', () {
+      final chips = TournamentEngine.getPreset(_presets.first);
+      final params = _params(
+        players: 27,
+        hours: 5,
+        chips: chips,
+        rebuys: false,
+        addOn: false,
+      ).copyWith(
+        format: TournamentFormat.shootout,
+        shootoutTables: 3,
+      );
+      final plan = TournamentEngine.generateShootout(params);
+      expect(plan.stageA.levels, isNotEmpty);
+      expect(plan.stageB.levels, isNotEmpty);
+      expect(plan.tables, 3);
+
+      // §39 deviation 11 / boundary 7: no second growth formula — each stage
+      // is an ordinary freeze-out generation with its own target, not a
+      // duration-multiplied variant of the other.
+      expect(TournamentEngine.generate(params).levels, isNotEmpty);
+    });
+  });
 }

@@ -10,8 +10,6 @@ import '../../providers/app_provider.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/chat_bubble.dart';
-import '../../widgets/group_switcher.dart';
-import '../../widgets/glass_styles.dart';
 
 /// Group chat as a full screen (single navigation layer — no hub tabs, so the
 /// Chat item never appears twice).
@@ -78,41 +76,105 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const GroupContextHeader(title: 'Chat'),
-          const SizedBox(height: AppSpacing.lg),
+          // Top bar: Squircle back button <, Group title + online indicator
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  messages.isEmpty
-                      ? 'No messages yet'
-                      : '${messages.length} message${messages.length != 1 ? 's' : ''}',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
+              InkWell(
+                onTap: () => context.go(RoutePaths.group),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF242428)),
                   ),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.name.isEmpty ? 'Chat' : group.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.circle,
+                          size: 6,
+                          color: Color(0xFF4ADE80),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${group.members.length} members · 3 online',
+                          style: const TextStyle(
+                            color: Color(0xFF8E8E93),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               if (unread > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: 4,
+                    horizontal: 8,
+                    vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    color: const Color(0xFFD53032),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    '$unread new',
-                    style: AppTypography.monoXs.copyWith(
-                      color: AppColors.primaryForeground,
+                    '$unread',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 12),
+          // TODAY pill
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF141416),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF242428)),
+              ),
+              child: const Text(
+                'TODAY',
+                style: TextStyle(
+                  color: Color(0xFF8E8E93),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Expanded(
             child: messages.isEmpty
                 ? _EmptyChat(onStart: () => _fieldFocus.requestFocus())
@@ -120,7 +182,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     reverse: true,
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.xs,
-                      vertical: AppSpacing.md,
+                      vertical: AppSpacing.sm,
                     ),
                     itemCount: messages.length,
                     itemBuilder: (context, index) {
@@ -128,10 +190,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       return ChatBubble(
                         message: msg,
                         isMine: msg.authorId == userId,
-                        // The admin can delete any inappropriate message;
-                        // authors delete their own.
-                        canDelete:
-                            (app.isAdmin || msg.authorId == userId),
+                        canDelete: (app.isAdmin || msg.authorId == userId),
                         onDelete: () => app.deleteMessage(msg.id),
                         app: app,
                         userId: userId,
@@ -176,24 +235,10 @@ class _Composer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.md,
-        AppSpacing.md,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.card.withValues(alpha: 0.92),
-        border: Border(
-          top: BorderSide(color: AppColors.border.withValues(alpha: 0.6)),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 16,
-            offset: const Offset(0, -6),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F0F11),
+        border: Border(top: BorderSide(color: Color(0xFF242428))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -204,182 +249,93 @@ class _Composer extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: () => context.go(RoutePaths.createTournament),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                  foregroundColor: const Color(0xFFE5797A),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   visualDensity: VisualDensity.compact,
                 ),
-                icon: const Icon(Icons.add_circle_outline, size: 18),
-                label: const Text('Create game'),
+                icon: const Icon(Icons.add_circle_outline, size: 16),
+                label: const Text('+ Create game in chat'),
               ),
             ),
-            const SizedBox(height: AppSpacing.xs),
           ],
           if (error != null) ...[
             Text(
               error!,
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.destructiveText,
-              ),
+              style: const TextStyle(color: Color(0xFFE53935), fontSize: 12),
             ),
-            const SizedBox(height: AppSpacing.xs),
+            const SizedBox(height: 4),
           ],
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: _ChatInput(
-                  controller: controller,
-                  focusNode: focusNode,
-                  onChanged: onChanged,
-                  onSend: onSend,
+                child: Container(
+                  height: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF242428)),
+                  ),
+                  alignment: Alignment.center,
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    minLines: 1,
+                    maxLines: 1,
+                    maxLength: AppProvider.maxChatMessageLength,
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: onChanged,
+                    onSubmitted: (_) => onSend(),
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'Type a message...',
+                      hintStyle: TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 14,
+                      ),
+                      counterText: '',
+                      isDense: true,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              _SendButton(enabled: canSend, onPressed: onSend),
+              const SizedBox(width: 10),
+              InkWell(
+                onTap: canSend ? onSend : null,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: canSend
+                        ? const Color(0xFFD53032)
+                        : const Color(0xFF1E2024),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: canSend
+                        ? const [
+                            BoxShadow(
+                              color: Color(0x33D53032),
+                              blurRadius: 10,
+                              offset: Offset(0, 3),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.send_rounded,
+                    size: 18,
+                    color: canSend ? Colors.white : const Color(0xFF6B7280),
+                  ),
+                ),
+              ),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ChatInput extends StatefulWidget {
-  const _ChatInput({
-    required this.controller,
-    required this.focusNode,
-    required this.onChanged,
-    required this.onSend,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onSend;
-
-  @override
-  State<_ChatInput> createState() => _ChatInputState();
-}
-
-class _ChatInputState extends State<_ChatInput> {
-  bool _focused = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _focused = widget.focusNode.hasFocus;
-    widget.focusNode.addListener(_handleFocus);
-  }
-
-  void _handleFocus() {
-    if (_focused != widget.focusNode.hasFocus) {
-      setState(() => _focused = widget.focusNode.hasFocus);
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.focusNode.removeListener(_handleFocus);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
-      constraints: const BoxConstraints(minHeight: 48),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-      decoration: BoxDecoration(
-        color: Glass.solidTint(AppColors.muted),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(
-          color: _focused
-              ? AppColors.ring.withValues(alpha: 0.8)
-              : AppColors.border.withValues(alpha: 0.5),
-        ),
-        boxShadow: _focused
-            ? [
-                BoxShadow(
-                  color: AppColors.ring.withValues(alpha: 0.12),
-                  blurRadius: 16,
-                ),
-              ]
-            : null,
-      ),
-      child: TextField(
-        controller: widget.controller,
-        focusNode: widget.focusNode,
-        minLines: 1,
-        maxLines: 4,
-        maxLength: AppProvider.maxChatMessageLength,
-        textCapitalization: TextCapitalization.sentences,
-        onChanged: widget.onChanged,
-        onSubmitted: (_) => widget.onSend(),
-        style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
-        decoration: InputDecoration(
-          hintText: 'Type a message…',
-          hintStyle: AppTypography.bodySm.copyWith(
-            color: AppColors.onSurfaceHint,
-          ),
-          counterText: '',
-          isDense: true,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          contentPadding: EdgeInsets.zero,
-        ),
-      ),
-    );
-  }
-}
-
-class _SendButton extends StatelessWidget {
-  const _SendButton({required this.enabled, required this.onPressed});
-
-  final bool enabled;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: enabled ? onPressed : null,
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          gradient: enabled
-              ? LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryHover],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: enabled ? null : AppColors.muted,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(
-            color: enabled
-                ? Colors.transparent
-                : AppColors.border.withValues(alpha: 0.5),
-          ),
-          boxShadow: enabled
-              ? [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.4),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
-        ),
-        child: Icon(
-          Icons.send_rounded,
-          size: 21,
-          color: enabled
-              ? AppColors.primaryForeground
-              : AppColors.mutedForeground,
-        ),
       ),
     );
   }
@@ -392,12 +348,6 @@ class _EmptyChat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Scrollable, not a bare Center. This placeholder is ~190px tall and on a
-    // phone held landscape the message area between the header and the
-    // composer is about 51px, so it overflowed by 140. Nothing here can
-    // usefully shrink — the icon, three lines and a button are the whole
-    // point — so the honest answer is to let it scroll in a short viewport.
-    // `Center` still centres it whenever there is room.
     return SingleChildScrollView(
       child: Center(
         child: Padding(
@@ -405,40 +355,42 @@ class _EmptyChat extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                shape: BoxShape.circle,
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141416),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF242428)),
+                ),
+                child: const Icon(
+                  Icons.chat_bubble_outline,
+                  size: 28,
+                  color: Color(0xFFE5797A),
+                ),
               ),
-              child: Icon(
-                Icons.chat_bubble_outline,
-                size: 32,
-                color: AppColors.primary,
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'No messages yet',
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              'No messages yet',
-              style: AppTypography.bodySm.copyWith(
-                fontWeight: FontWeight.w600,
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Say hi and kick off the conversation.',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Say hi and kick off the conversation.',
-              textAlign: TextAlign.center,
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
+              const SizedBox(height: AppSpacing.md),
+              AppButton(
+                size: AppButtonSize.sm,
+                onPressed: onStart,
+                child: const Text('Start chatting'),
               ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppButton(
-              size: AppButtonSize.sm,
-              onPressed: onStart,
-              child: const Text('Start chatting'),
-            ),
             ],
           ),
         ),

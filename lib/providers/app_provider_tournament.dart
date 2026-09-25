@@ -73,11 +73,10 @@ class GameRecap {
 
   /// Lowest [Player.lowestStackBB] among the top-3 finishers.
   ///
-  /// DORMANT: always null today. §25.5 fills `lowestStackBB` by sampling every
-  /// survivor's stack at each elimination, and this app tracks no chip stacks
-  /// at all, so there is no data to rank. The award is computed honestly from
-  /// whatever data exists rather than substituted with a proxy — a fake
-  /// comeback story is worse than no comeback story.
+  /// Only ever populated for players the host bothered to spot-check via
+  /// [Player.stack] before an elimination — [AppProviderPlayers.eliminatePlayer]
+  /// samples it there. A typical night where nobody's stack was ever entered
+  /// still reports no comeback rather than inventing one from a proxy.
   final RecapAward? biggestComeback;
 
   /// Lowest [Player.eliminatedAtLevel] among non-winners — the shortest night.
@@ -998,6 +997,18 @@ extension AppProviderTournament on AppProvider {
         ? s.copyWith(rebuysCloseLevel: structure.rebuysCloseLevel)
         : s;
 
+    // §11.4: this generation ALWAYS produces Stage A's structure for a
+    // shootout (see TournamentEngine.generate's own shootout branch), so a
+    // shootout game lands in Stage A here — every time this reruns, right up
+    // through Start, which is exactly what makes it safe to call repeatedly.
+    // Never moves a game OUT of Stage B: only `startShootoutFinalTable` does
+    // that, on the host's own say-so (boundary #9).
+    final shootoutStage =
+        s.effectiveFormat == TournamentFormat.shootout &&
+                game.shootoutStage != ShootoutStage.stageB
+            ? ShootoutStage.stageA
+            : null;
+
     _currentGame = game.copyWith(
       settings: withRebuyClose,
       structure: structure,
@@ -1006,6 +1017,7 @@ extension AppProviderTournament on AppProvider {
       currentLevel: 1,
       secondsRemaining: structure.levelDuration * 60,
       structureConfirmed: false,
+      shootoutStage: shootoutStage,
     );
     addAuditRecord(
       'structure_estimate',
@@ -1144,6 +1156,108 @@ extension AppProviderTournament on AppProvider {
           '${lost > 0 ? ', $lost dropped (no longer in the schedule)' : ''}.',
     );
     if (!_disposed) notifyListeners();
+  }
+
+  /// §11.4 Stage B. The host has decided every Stage A table has reported its
+  /// winner(s) and it is time to seat and play the final table. NEVER
+  /// automatic — boundary #9 is explicit that Stage B's trigger is a human
+  /// judgement call, not a player-count threshold the app can safely guess.
+  ///
+  /// Returns a human summary of what changed, or null if this game is not an
+  /// eligible shootout (wrong format, already in Stage B, or has no structure
+  /// yet).
+  String? startShootoutFinalTable() {
+    final game = _currentGame;
+    if (game == null) return null;
+    if (game.settings.effectiveFormat != TournamentFormat.shootout) {
+      return null;
+    }
+    if (game.shootoutStage == ShootoutStage.stageB) return null;
+    if (game.structure.levels.isEmpty) return null;
+
+    _forceClaimEditor();
+    _pushUndo();
+
+    // Same params-building block as [generateFinalStructure] — the only
+    // deliberate difference is the player count, which here is the ACTUAL
+    // number of survivors rather than an expected/confirmed head-count.
+    // `generateShootout` derives Stage B's own field size from `tables x
+    // advancePerTable`; this count only feeds `effectiveShootoutTables`
+    // (through `s.shootoutTables`) the same way Stage A's generation did.
+    final count = max(2, game.activePlayers.length);
+    final s = game.settings.copyWith(players: count);
+    final plan = TournamentEngine.generateShootout(
+      TournamentParams(
+        players: count,
+        durationHours: s.durationHours,
+        buyIn: s.buyIn,
+        chipSet: s.chipSet,
+        rebuys: s.rebuys,
+        rebuysCloseLevel: s.rebuysCloseLevel,
+        rebuyCloseChosenByOrganizer: s.rebuyCloseChosenByOrganizer,
+        reEntry: s.reEntry,
+        addOn: s.addOn,
+        anteEnabled: s.anteEnabled,
+        anteAfterLevel: s.anteAfterLevel,
+        anteStyle: s.anteStyle,
+        koEnabled: s.koEnabled,
+        koAmount: s.koAmount,
+        organizerPct: s.effectiveOrganizerPct,
+        rebuyCost: s.rebuyCost,
+        addOnCost: s.addOnCost,
+        breaks: s.breaks,
+        expectedRebuys: s.expectedRebuys,
+        expectedReEntries: s.expectedReEntries,
+        expectedAddOns: s.expectedAddOns,
+        rebuyChips: s.rebuyChips,
+        reEntryChips: s.reEntryChips,
+        addOnChips: s.addOnChips,
+        levelDurationMins: s.levelDurationMins,
+        payoutShape: s.payoutShape,
+        format: s.format,
+        maxReEntries: s.maxReEntries,
+        shootoutTables: s.shootoutTables,
+        shootoutTableTargetMins: s.shootoutTableTargetMins,
+        earlyArrivalBonusEnabled: s.earlyArrivalBonusEnabled,
+        earlyArrivalCutoffMins: s.earlyArrivalCutoffMins,
+        earlyArrivalBonusPctOverride: s.earlyArrivalBonusPctOverride,
+      ),
+    );
+    final stageB = plan.stageB;
+
+    // The Stage A split no longer applies — every survivor sits at the one
+    // remaining table, seated in order.
+    final finalists = game.activePlayers;
+    final seatOf = {
+      for (var i = 0; i < finalists.length; i++) finalists[i].id: i + 1,
+    };
+    final players = game.players.map((p) {
+      final seat = seatOf[p.id];
+      return seat == null ? p : p.copyWith(table: 1, seat: seat);
+    }).toList();
+
+    _currentGame = game.copyWith(
+      players: players,
+      structure: stageB,
+      shootoutStage: ShootoutStage.stageB,
+      currentLevel: 1,
+      secondsRemaining:
+          stageB.levels.isNotEmpty ? stageB.levels.first.durationMins * 60 : 0,
+      // Clears the OLD structure's countdown so the clock does not read as
+      // mid-level against a level that no longer exists — mirrors how a
+      // structure edit already leaves `timerRunning` untouched (whatever
+      // resume control the host already had stays exactly as it was).
+      levelEndTime: null,
+      clearLevelEndTime: true,
+    );
+
+    final summary = 'Final table seated: ${finalists.length} player'
+        '${finalists.length == 1 ? '' : 's'}, ${stageB.levels.length} '
+        'level${stageB.levels.length == 1 ? '' : 's'} ahead.';
+    addAuditRecord('shootout_final_table', summary);
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return summary;
   }
 
   /// Technical section 17 offers THREE actions on the generated estimate:
@@ -1330,6 +1444,15 @@ extension AppProviderTournament on AppProvider {
     }
 
     final newLevel = game.currentLevel.clamp(1, structure.levels.length);
+    // §11.4: same rule as [generateFinalStructure] — this path (recalculate,
+    // the T-minus-10 recalculation, and the firm regeneration `startTimer`
+    // triggers) always regenerates Stage A's structure for a shootout, so it
+    // may set Stage A here but must never undo a host's move to Stage B.
+    final shootoutStage =
+        newSettings.effectiveFormat == TournamentFormat.shootout &&
+                game.shootoutStage != ShootoutStage.stageB
+            ? ShootoutStage.stageA
+            : null;
     _currentGame = game.copyWith(
       settings: newSettings,
       structure: structure,
@@ -1337,6 +1460,7 @@ extension AppProviderTournament on AppProvider {
       secondsRemaining: structure.levels[newLevel - 1].durationMins * 60,
       speedRecommendation: null,
       clearSpeedRecommendation: true,
+      shootoutStage: shootoutStage,
     );
     addAnnouncement(
       'Structure recalculated for $count confirmed player${count != 1 ? 's' : ''}.',

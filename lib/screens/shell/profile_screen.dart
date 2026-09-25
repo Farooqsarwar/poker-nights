@@ -6,16 +6,14 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
-import '../../models/user.dart';
 import '../../providers/app_provider.dart';
-import '../../widgets/app_badge.dart';
+import '../../utils/formatters.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_card.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/min_tap_target.dart';
+import '../../widgets/squircle_icon_button.dart';
 
-/// User profile mirroring the account area of the web app.
+/// User profile redesign matching F1_Profile mobile-first design.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -39,148 +37,82 @@ class ProfileScreen extends StatelessWidget {
       );
     }
 
+    final lifetime = _lifetime(app, user.id);
+    final achievements = _achievements(app, user.id, lifetime.wins);
+    final groupName = app.hasCurrentGroup
+        ? app.currentGroup.name
+        : 'Poker Club';
+
     return AppPage(
-      maxWidth: 720,
+      maxWidth: 520,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Profile',
-            style: AppTypography.display(
-              size: AppFontSizes.xxxl,
-              weight: FontWeight.w700,
-            ),
+          // Top action row (Squircle edit button on top right)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              SquircleIconButton(
+                icon: Icons.edit_outlined,
+                iconSize: 20,
+                iconColor: Colors.white,
+                tooltip: 'Edit profile',
+                onPressed: () => _editProfile(context, app),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.xl),
-          // Identity card
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Row(
+          const SizedBox(height: 8),
+
+          // Centered Big Avatar with red glow shadow
+          Center(
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    CircleAvatar(
-                      radius: 40,
-                      backgroundColor:
-                          AppColors.avatarPalette[app.avatarColorIndex %
-                              AppColors.avatarPalette.length],
-                      child: Text(
-                        user.initials,
-                        style: AppTypography.body(
-                          size: AppFontSizes.xl,
-                          weight: FontWeight.w700,
-                          color: AppColors.foreground,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: -2,
-                      bottom: -2,
-                      child: Tooltip(
-                        message: 'Change avatar colour',
-                        child: Semantics(
-                        button: true,
-                        label: 'Change avatar colour',
-                        child: InkWell(
-                        onTap: () => _chooseAvatarColor(context, app),
-                        customBorder: const CircleBorder(),
-                        child: Container(
-                          // 17, not 14: 17 + 14 + 17 is exactly the 48px
-                          // minimum touch target. The badge is a visible
-                          // circle, so it grows to the floor rather than
-                          // hiding a transparent margin behind the avatar.
-                          padding: const EdgeInsets.all(17),
-                          decoration: BoxDecoration(
-                            color: AppColors.card,
-                            shape: BoxShape.circle,
-                            border: Border.fromBorderSide(
-                              BorderSide(color: AppColors.border),
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.camera_alt_outlined,
-                            size: 14,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              user.name,
-                              style: AppTypography.body(
-                                size: AppFontSizes.xl,
-                                weight: FontWeight.w700,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (app.isAdmin) ...[
-                            const SizedBox(width: AppSpacing.sm),
-                            const AppBadge(
-                              label: 'Admin',
-                              variant: AppBadgeVariant.gold,
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        user.email,
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        'Member of ${app.currentGroup.name}',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
+                // Subtle radial glow behind avatar
+                Container(
+                  width: 120,
+                  height: 120,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0x55D53032),
+                        blurRadius: 36,
+                        spreadRadius: 8,
                       ),
                     ],
                   ),
                 ),
-                Semantics(
-                  button: true,
-                  label: 'Edit your profile',
-                  excludeSemantics: true,
-                  child: InkWell(
-                    onTap: () => _editProfile(context, app),
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    child: MinTapTarget(
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.sm),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.edit_outlined,
-                              size: 16,
-                              color: AppColors.primary,
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            Text(
-                              'Edit',
-                              style: AppTypography.bodySm.copyWith(
-                                color: AppColors.primaryText,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                GestureDetector(
+                  onTap: () => _chooseAvatarColor(context, app),
+                  child: Container(
+                    width: 86,
+                    height: 86,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD53032),
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x66D53032),
+                          blurRadius: 20,
+                          offset: Offset(0, 4),
                         ),
+                      ],
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        width: 1.5,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      user.initials.isNotEmpty
+                          ? user.initials[0].toUpperCase()
+                          : 'A',
+                      style: AppTypography.display(
+                        size: 38,
+                        weight: FontWeight.w700,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -188,73 +120,425 @@ class ProfileScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          // Stats overview
+          const SizedBox(height: 16),
+
+          // User Name & Subtitle
+          Center(
+            child: Text(
+              user.name,
+              style: AppTypography.display(
+                size: 26,
+                weight: FontWeight.w700,
+                color: Colors.white,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: Text(
+              'Member since 2023 · $groupName',
+              style: AppTypography.bodySm.copyWith(
+                color: const Color(0xFF8E8E93),
+                fontWeight: FontWeight.w400,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // LIFETIME P&L Card
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF121417),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFF22262B), width: 1),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'LIFETIME P&L',
+                      style: AppTypography.bodyXs.copyWith(
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF8E8E93),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: lifetime.totalPnl >= 0
+                            ? const Color(0xFF132A1C)
+                            : const Color(0xFF2D1517),
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        border: Border.all(
+                          color: lifetime.totalPnl >= 0
+                              ? const Color(0x3322C55E)
+                              : const Color(0x33EF4444),
+                        ),
+                      ),
+                      child: Text(
+                        lifetime.totalPnl >= 0 ? '↑ UP' : '↓ DOWN',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: lifetime.totalPnl >= 0
+                              ? const Color(0xFF4ADE80)
+                              : const Color(0xFFF87171),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  lifetime.totalPnl >= 0
+                      ? '+${Formatters.money(app.cashSession?.settings.currency ?? '', lifetime.totalPnl)}'
+                      : Formatters.signedMoney(
+                          app.cashSession?.settings.currency ?? '',
+                          lifetime.totalPnl,
+                        ),
+                  style: AppTypography.display(
+                    size: 38,
+                    weight: FontWeight.w700,
+                    color: lifetime.totalPnl >= 0
+                        ? const Color(0xFF4ADE80)
+                        : const Color(0xFFF87171),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 3 Metric Cards Row (games, wins, ITM)
           Row(
             children: [
-              Text(
-                'Your stats',
-                style: AppTypography.bodySm.copyWith(
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: _buildMetricCard(
+                  value: '${lifetime.played}',
+                  label: 'games',
                 ),
               ),
-              const Spacer(),
-              AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => context.go(RoutePaths.stats),
-                child: const Text('View all'),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildMetricCard(
+                  value: '${lifetime.wins}',
+                  label: 'wins',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildMetricCard(
+                  value: '${lifetime.itmPercent}%',
+                  label: 'ITM',
+                ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          _StatsGrid(stats: user.stats),
-          const SizedBox(height: AppSpacing.xl),
-          // Actions
-          AppCard(
-            padding: EdgeInsets.zero,
+          const SizedBox(height: 24),
+
+          // ACHIEVEMENTS Section
+          Text(
+            'ACHIEVEMENTS',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF71767B),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildAchievementPill(
+                emoji: '🏆',
+                title: 'FIRST WIN',
+                bgColor: const Color(0xFF262010),
+                borderColor: const Color(0x55EAB308),
+                textColor: const Color(0xFFFACC15),
+                active: lifetime.wins >= 1,
+              ),
+              _buildAchievementPill(
+                emoji: '🔥',
+                title: '3 IN A ROW',
+                bgColor: const Color(0xFF2A1417),
+                borderColor: const Color(0x55EF4444),
+                textColor: const Color(0xFFF87171),
+                active: achievements.any((a) => a.contains('3 IN A ROW')),
+              ),
+              _buildAchievementPill(
+                emoji: '💰',
+                title: '\$1K NIGHT',
+                bgColor: const Color(0xFF16231E),
+                borderColor: const Color(0x5510B981),
+                textColor: const Color(0xFF6EE7B7),
+                active: achievements.any((a) => a.contains('\$1K NIGHT')),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+
+          // Profile navigation actions
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF121417),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF22262B)),
+            ),
             child: Column(
               children: [
-                _ProfileRow(
+                _buildActionRow(
                   icon: Icons.bar_chart_outlined,
                   title: 'Statistics',
-                  subtitle: 'Win rate, finishes and recent results',
+                  subtitle: 'Win rate, finishes and detailed results',
                   onTap: () => context.go(RoutePaths.stats),
                   showDivider: true,
                 ),
-                _ProfileRow(
+                _buildActionRow(
                   icon: Icons.settings_outlined,
                   title: 'Settings',
-                  subtitle: 'Voice announcements and preferences',
+                  subtitle: 'Gameplay preferences and game assets',
                   onTap: () => context.go(RoutePaths.settings),
                   showDivider: true,
                 ),
-                _ProfileRow(
-                  icon: Icons.home_outlined,
+                _buildActionRow(
+                  icon: Icons.people_outline,
                   title: 'Your group',
-                  subtitle: app.currentGroup.name,
+                  subtitle: groupName,
                   onTap: () => context.go(RoutePaths.group),
                   showDivider: true,
                 ),
-                _ProfileRow(
+                _buildActionRow(
                   icon: Icons.delete_outline,
                   title: 'Delete account',
-                  subtitle: 'Permanently remove your account and all sessions',
+                  subtitle: 'Permanently remove your account and all data',
+                  textColor: AppColors.destructiveText,
+                  iconColor: AppColors.destructiveText,
                   onTap: () => _confirmDeleteAccount(context, app),
                   showDivider: false,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: 16),
           AppButton(
             variant: AppButtonVariant.secondary,
             onPressed: () => _confirmSignOut(context, app),
             child: const Text('Sign out'),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );
+  }
+
+  static Widget _buildMetricCard({
+    required String value,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF121417),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF22262B), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: AppTypography.display(
+              size: 26,
+              weight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: AppTypography.bodySm.copyWith(
+              color: const Color(0xFF8E8E93),
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _buildAchievementPill({
+    required String emoji,
+    required String title,
+    required Color bgColor,
+    required Color borderColor,
+    required Color textColor,
+    required bool active,
+  }) {
+    return Opacity(
+      opacity: active ? 1.0 : 0.45,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: borderColor, width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: AppTypography.bodyXs.copyWith(
+                color: textColor,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildActionRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    required bool showDivider,
+    Color? textColor,
+    Color? iconColor,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          border: showDivider
+              ? const Border(
+                  bottom: BorderSide(color: Color(0xFF22262B), width: 1),
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: iconColor ?? AppColors.icon),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: textColor ?? AppColors.foreground,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: AppColors.mutedForeground,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  ({int played, int wins, double totalPnl, int itmPercent}) _lifetime(
+    AppProvider app,
+    String? userId,
+  ) {
+    var played = 0, wins = 0, itm = 0;
+    double totalPnl = 0;
+    for (final g in app.groups) {
+      for (final game in g.pastGames) {
+        if (!game.players.any((p) => p.id == userId)) continue;
+        played++;
+        final pos = game.finishOrder.indexOf(userId ?? '');
+        final placement = pos >= 0 ? game.finishOrder.length - pos : 0;
+        if (placement == 1) wins++;
+        if (placement > 0 && placement <= game.structure.prizes.length) {
+          itm++;
+        }
+        final prize = game.structure.prizes
+            .where((pr) => pr.place == placement)
+            .fold<int>(0, (s, pr) => s + pr.amount);
+        final me = game.players.where((p) => p.id == userId).firstOrNull;
+        final cost =
+            game.settings.buyIn +
+            (game.settings.rebuyCost ?? game.settings.buyIn) *
+                (me?.rebuys ?? 0) +
+            (game.settings.addOnCost ?? game.settings.buyIn) *
+                ((me?.hasAddOn ?? false) ? 1 : 0);
+        totalPnl += prize - cost;
+      }
+    }
+    final itmPercent = played == 0 ? 0 : (itm * 100 / played).round();
+    return (
+      played: played,
+      wins: wins,
+      totalPnl: totalPnl,
+      itmPercent: itmPercent,
+    );
+  }
+
+  List<String> _achievements(AppProvider app, String? userId, int wins) {
+    final earned = <String>[];
+    if (wins >= 1) earned.add('🏆  FIRST WIN');
+
+    var streak = 0, best = 0;
+    for (final g in app.groups) {
+      for (final game in g.pastGames) {
+        if (!game.players.any((p) => p.id == userId)) continue;
+        if (game.finishOrder.firstOrNull == userId) {
+          streak++;
+          if (streak > best) best = streak;
+        } else {
+          streak = 0;
+        }
+      }
+    }
+    if (best >= 3) earned.add('🔥  3 IN A ROW');
+
+    var biggestPrize = 0;
+    for (final g in app.groups) {
+      for (final game in g.pastGames) {
+        if (!game.players.any((p) => p.id == userId)) continue;
+        final pos = game.finishOrder.indexOf(userId ?? '');
+        final placement = pos >= 0 ? game.finishOrder.length - pos : 0;
+        final prize = game.structure.prizes
+            .where((pr) => pr.place == placement)
+            .fold<int>(0, (s, pr) => s + pr.amount);
+        if (prize > biggestPrize) biggestPrize = prize;
+      }
+    }
+    if (biggestPrize >= 1000) earned.add('💰  \$1K NIGHT');
+    return earned;
   }
 
   void _chooseAvatarColor(BuildContext context, AppProvider app) {
@@ -390,14 +674,8 @@ class ProfileScreen extends StatelessWidget {
     );
     if (confirmed != true) return;
 
-    // Firebase refuses `user.delete()` unless the sign-in is minutes old, so an
-    // email/password account has to re-present its password. Google and guest
-    // accounts re-authenticate without one (popup / no credential), so they
-    // skip straight through.
     String? password;
     if (app.deleteNeedsPassword) {
-      // The confirm dialog above was awaited, so this context may have gone
-      // away while it was open.
       if (!context.mounted) return;
       password = await _askPassword(context);
       if (password == null) return;
@@ -411,7 +689,6 @@ class ProfileScreen extends StatelessWidget {
     router.go(RoutePaths.landing);
   }
 
-  /// Second step of deletion for password accounts. Returns null if dismissed.
   Future<String?> _askPassword(BuildContext context) {
     final controller = TextEditingController();
     return showDialog<String>(
@@ -498,141 +775,6 @@ class ProfileScreen extends StatelessWidget {
               style: AppTypography.bodySm.copyWith(
                 color: AppColors.destructiveText,
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    required this.showDivider,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final bool showDivider;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          border: showDivider
-              ? Border(bottom: BorderSide(color: AppColors.border))
-              : null,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: AppColors.icon),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTypography.bodySm.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(
-                    subtitle,
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: AppColors.mutedForeground,
-              size: 18,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatsGrid extends StatelessWidget {
-  const _StatsGrid({required this.stats});
-
-  final UserStats stats;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: MediaQuery.of(context).size.width < 600 ? 3 : 6,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: AppSpacing.sm,
-      crossAxisSpacing: AppSpacing.sm,
-      childAspectRatio: 1.1,
-      children: [
-        _ProfileStat(label: 'Played', value: '${stats.played}'),
-        _ProfileStat(label: 'Wins', value: '${stats.wins}'),
-        _ProfileStat(label: 'Podium', value: '${stats.podium}'),
-        _ProfileStat(
-          label: 'Avg finish',
-          value: '#${stats.avgFinish.toStringAsFixed(1)}',
-        ),
-        _ProfileStat(label: 'Knockouts', value: '${stats.knockouts}'),
-        _ProfileStat(
-          label: 'Win rate',
-          value:
-              '${stats.played == 0 ? 0 : ((stats.wins / stats.played) * 100).round()}%',
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfileStat extends StatelessWidget {
-  const _ProfileStat({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xs,
-        vertical: AppSpacing.sm,
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: AppTypography.mono(
-                size: AppFontSizes.lg,
-                weight: FontWeight.w700,
-                color: AppColors.foreground,
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(
-            label,
-            style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
             ),
           ),
         ],

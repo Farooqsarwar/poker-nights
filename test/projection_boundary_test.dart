@@ -3,6 +3,7 @@ import 'package:poker_night/models/game.dart';
 import 'package:poker_night/models/live_game.dart';
 import 'package:poker_night/models/payment_record.dart';
 import 'package:poker_night/models/tournament.dart';
+import 'package:poker_night/models/tournament_format.dart';
 import 'package:poker_night/services/projections.dart' as projections;
 import 'package:poker_night/utils/model_codec.dart';
 
@@ -272,5 +273,52 @@ void main() {
       expect(admin.payments, hasLength(2));
       expect(admin.totalCollected, 40);
     });
+  });
+
+  group('structural GameSettings fields ride through to every role', () {
+    // `publicSettings` used to be a manual `GameSettings(...)` reconstruction
+    // naming every field individually — anything NOT named silently dropped
+    // to null/default for every non-admin viewer. `format` was the field that
+    // got caught doing this. The fix (`game.settings.copyWith(...)`, only
+    // naming the two genuinely private fields) makes that whole bug class
+    // structural rather than a list someone has to remember to update, so
+    // this test picks fields spanning the file's whole history — one from
+    // day one (`breaks`), one from a recent round (`payoutShape`), and the
+    // one that actually broke (`format`) — rather than re-testing the same
+    // field three times.
+    final withStructuralFields = _game().copyWith(
+      settings: _settings.copyWith(
+        format: TournamentFormat.shootout,
+        shootoutTables: 3,
+        breaks: const [ScheduledBreak(afterLevel: 4, durationMins: 10)],
+        payoutShape: PayoutShape.topHeavy,
+        levelDurationMins: 20,
+      ),
+    );
+
+    for (final role in [
+      projections.GameProjectionRole.player,
+      projections.GameProjectionRole.guest,
+      projections.GameProjectionRole.tv,
+    ]) {
+      test('${role.name}: format/breaks/payoutShape/levelDurationMins survive', () {
+        final projected =
+            projections.projectionFor(withStructuralFields, role);
+        expect(projected.settings.format, TournamentFormat.shootout);
+        expect(projected.settings.shootoutTables, 3);
+        expect(projected.settings.breaks, hasLength(1));
+        expect(projected.settings.payoutShape, PayoutShape.topHeavy);
+        expect(projected.settings.levelDurationMins, 20);
+      });
+
+      test('${role.name}: organizerPct and forcePaidPlaces are still stripped', () {
+        final withPrivateFields = _game().copyWith(
+          settings: _settings.copyWith(forcePaidPlaces: 4),
+        );
+        final projected = projections.projectionFor(withPrivateFields, role);
+        expect(projected.settings.organizerPct, 0);
+        expect(projected.settings.forcePaidPlaces, isNull);
+      });
+    }
   });
 }

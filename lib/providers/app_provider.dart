@@ -20,6 +20,7 @@ import '../models/payment_record.dart';
 import '../models/shot_clock.dart';
 import '../models/table_settings.dart';
 import '../models/tournament.dart';
+import '../models/tournament_format.dart';
 import '../models/tournament_preset.dart';
 import '../models/user.dart';
 import '../models/chip_color.dart';
@@ -28,6 +29,7 @@ import '../services/entitlements.dart';
 import '../services/permissions.dart';
 import '../services/payment_service.dart';
 import '../utils/formatters.dart';
+import '../utils/live_play_rules.dart';
 import '../utils/mock_data.dart';
 import '../utils/model_codec.dart';
 import '../utils/sanitization.dart';
@@ -116,8 +118,11 @@ class SeatMoveRecommendation {
 ///    it via their +N count / guest names; the admin never edits slots).
 ///
 /// Pure and side-effect free so it can be unit tested.
-LiveGame mergeMemberOwnedFields(LiveGame local, LiveGame remote,
-    {String? adminId}) {
+LiveGame mergeMemberOwnedFields(
+  LiveGame local,
+  LiveGame remote, {
+  String? adminId,
+}) {
   if (remote.id != local.id) return local;
   final localById = {for (final p in local.players) p.id: p};
   var changed = false;
@@ -134,7 +139,7 @@ LiveGame mergeMemberOwnedFields(LiveGame local, LiveGame remote,
             // Merge checkedIn if the member checked themselves in remotely,
             // taking care not to let a stale remote overwrite an admin's local check-in.
             final checkInArrived = r.checkedIn && !p.checkedIn;
-            
+
             if (rsvpChanged || checkInArrived) {
               changed = true;
               return p.copyWith(
@@ -200,14 +205,17 @@ LiveGame restoreAdminPrivateFields(LiveGame remote, LiveGame local) {
     // over the wire is always empty. Re-attach the one already in memory —
     // otherwise every remote snapshot would wipe the host's audit history and
     // flip the content signature on every emit.
-    auditHistory:
-        remote.auditHistory.isEmpty ? local.auditHistory : remote.auditHistory,
+    auditHistory: remote.auditHistory.isEmpty
+        ? local.auditHistory
+        : remote.auditHistory,
     // Same story for the pending request queue: scrubbed on the wire, held
     // in memory and in the admin sidecar.
-    rebuyRequests:
-        remote.rebuyRequests.isEmpty ? local.rebuyRequests : remote.rebuyRequests,
-    addOnRequests:
-        remote.addOnRequests.isEmpty ? local.addOnRequests : remote.addOnRequests,
+    rebuyRequests: remote.rebuyRequests.isEmpty
+        ? local.rebuyRequests
+        : remote.rebuyRequests,
+    addOnRequests: remote.addOnRequests.isEmpty
+        ? local.addOnRequests
+        : remote.addOnRequests,
   );
 }
 
@@ -315,8 +323,10 @@ class AppProvider extends ChangeNotifier {
   /// ONLY the server-held entitlement counts -- at which point a manipulated
   /// client flag grants nothing, which is what QA cases PN-SEC-003 and
   /// PN-NEG-001 are actually asking for.
-  static const bool demoPremiumEnabled =
-      bool.fromEnvironment('DEMO_PREMIUM', defaultValue: false);
+  static const bool demoPremiumEnabled = bool.fromEnvironment(
+    'DEMO_PREMIUM',
+    defaultValue: false,
+  );
 
   Future<void> loadPremiumTier() async {
     // Both awaits below sit behind a ternary: with the backend down and
@@ -361,9 +371,8 @@ class AppProvider extends ChangeNotifier {
 
   StreamSubscription<dynamic>? _lookupSub;
   StreamSubscription<List<TournamentPreset>>? _presetsSub;
-  StreamSubscription<
-          List<({String id, String name, List<ChipColor> chips})>>?
-      _chipSetsSub;
+  StreamSubscription<List<({String id, String name, List<ChipColor> chips})>>?
+  _chipSetsSub;
   StreamSubscription<List<AppNotification>>? _notificationsSub;
   StreamSubscription<List<GameRequest>>? _requestsSub;
   StreamSubscription<List<CashSession>>? _cashSub;
@@ -540,7 +549,7 @@ class AppProvider extends ChangeNotifier {
 
   // ── Notification outbox mirror (free-plan fan-out) ─────────────────────────
   final Map<String, StreamSubscription<List<OutboxNotification>>>
-      _groupOutboxSubs = {};
+  _groupOutboxSubs = {};
   final Set<String> _mirroredOutboxIds = <String>{};
   final Map<String, bool> _outboxPrimed = {};
   final Map<String, int> _mirrorCursors = {};
@@ -555,17 +564,23 @@ class AppProvider extends ChangeNotifier {
     if (key == 'colorTheme' || key == 'themePreference') {
       try {
         final db = Localstore.instance;
-        db.collection('app').doc('prefs').set({key: value}, SetOptions(merge: true));
+        db.collection('app').doc('prefs').set({
+          key: value,
+        }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('Failed to save theme to localstore: $e');
       }
     }
-    
+
     final uid = _repo.currentUid;
     if (!_backendUp || uid == null) return;
-    unawaited(_repo
-        .saveUserPref(uid, key, value)
-        .catchError((Object e) => debugPrint('saveUserPref($key) failed: $e')));
+    unawaited(
+      _repo
+          .saveUserPref(uid, key, value)
+          .catchError(
+            (Object e) => debugPrint('saveUserPref($key) failed: $e'),
+          ),
+    );
   }
 
   // ── Chip Sets ──────────────────────────────────────────────────────────────
@@ -723,8 +738,11 @@ class AppProvider extends ChangeNotifier {
   /// identity (`action-target-revision+1`) instead of bypassing replay
   /// protection entirely. Returns the new revision and the persistence key
   /// (the caller stores the latter as `lastIdempotencyKey`).
-  (int?, String) _claimIdempotency(String idempotencyKey,
-      {required String action, String target = ''}) {
+  (int?, String) _claimIdempotency(
+    String idempotencyKey, {
+    required String action,
+    String target = '',
+  }) {
     final g = _currentGame;
     if (g == null) return (null, '');
     final key = idempotencyKey.isNotEmpty
@@ -847,11 +865,11 @@ class AppProvider extends ChangeNotifier {
   /// window via [_adminVerdictByGroup].
   /// What the signed-in user is, for the tournament in front of them (§28).
   Actor get currentActor => Permissions.actorFor(
-        user: _user,
-        group: _currentGroup,
-        game: _currentGame,
-        isGuestSession: hasGuestSession,
-      );
+    user: _user,
+    group: _currentGroup,
+    game: _currentGame,
+    isGuestSession: hasGuestSession,
+  );
 
   /// Whether the signed-in user may run the CURRENT tournament — an admin
   /// anywhere, or an organizer assigned to this one (§3, §28).
@@ -895,10 +913,8 @@ class AppProvider extends ChangeNotifier {
           ? [...game.organizerIds, userId]
           : game.organizerIds.where((id) => id != userId).toList(),
     );
-    final name = _currentGroup.members
-            .where((m) => m.id == userId)
-            .firstOrNull
-            ?.name ??
+    final name =
+        _currentGroup.members.where((m) => m.id == userId).firstOrNull?.name ??
         userId;
     addAuditRecord(
       assigned ? 'organizer_assigned' : 'organizer_removed',
@@ -916,9 +932,11 @@ class AppProvider extends ChangeNotifier {
     final group = _currentGroup;
     final gid = _currentGroupId ?? group.id;
     final resolvable =
-        group.id.isNotEmpty && (group.ownerId.isNotEmpty || group.members.isNotEmpty);
+        group.id.isNotEmpty &&
+        (group.ownerId.isNotEmpty || group.members.isNotEmpty);
     if (resolvable) {
-      final verdict = group.ownerId == user.id ||
+      final verdict =
+          group.ownerId == user.id ||
           group.members.any((m) => m.id == user.id && m.isAdmin);
       if (gid.isNotEmpty) _adminVerdictByGroup[gid] = verdict;
       return verdict;
@@ -931,10 +949,29 @@ class AppProvider extends ChangeNotifier {
     return false;
   }
 
+  @visibleForTesting
+  void setUserForTesting(AppUser? user) {
+    _user = user;
+    if (!_disposed) notifyListeners();
+  }
+
+  @visibleForTesting
+  void setCurrentGroupForTesting(Group group) {
+    _currentGroup = group;
+    _currentGroupId = group.id;
+    if (!_disposed) {
+      notifyListeners();
+    }
+  }
+
   /// Application-level UI state (no business logic / backend).
   AppProvider({String? initialColorTheme, String? initialThemePreference}) {
-    if (initialColorTheme != null) _colorTheme = initialColorTheme;
-    if (initialThemePreference != null) _themePreference = initialThemePreference;
+    if (initialColorTheme != null) {
+      _colorTheme = initialColorTheme;
+    }
+    if (initialThemePreference != null) {
+      _themePreference = initialThemePreference;
+    }
     _currentGame = null;
     AppProviderTimer(this)._startTick();
     AppProviderUserData(this)._loadRecovery();
@@ -943,7 +980,8 @@ class AppProvider extends ChangeNotifier {
     // degrade gracefully by marking auth resolved so route guards open up.
     try {
       _authSub = _repo.authStateChanges().listen(
-          (u) => AppProviderAuth(this)._onAuthStateChanged(u));
+        (u) => AppProviderAuth(this)._onAuthStateChanged(u),
+      );
     } catch (_) {
       _backendUp = false;
       _authReady = true;
@@ -1050,5 +1088,6 @@ class GuestCheckInResult {
   /// True when the guest now owns a booking on the slot ([booked] just made
   /// one; [confirmed] reused the one already under their name).
   bool get ok =>
-      status == GuestCheckInStatus.booked || status == GuestCheckInStatus.confirmed;
+      status == GuestCheckInStatus.booked ||
+      status == GuestCheckInStatus.confirmed;
 }

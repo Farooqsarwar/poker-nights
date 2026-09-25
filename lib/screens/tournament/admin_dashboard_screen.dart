@@ -759,7 +759,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             // ── DESKTOP BEAUTIFUL LAYOUT ──
             // Row 1: Timer full width, top center
             ClipRRect(
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(AppRadius.xl),
               child: TournamentDisplayBlock(game: game, showStatusChip: true),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -2298,7 +2298,7 @@ class _TimerInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       child: TournamentDisplayBlock(game: game, showStatusChip: true),
     );
   }

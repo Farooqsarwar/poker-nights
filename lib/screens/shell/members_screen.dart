@@ -137,7 +137,7 @@ class MembersScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  m.name,
+                  m.id == app.user?.id ? '${m.name} · you' : m.name,
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w500,
                   ),
@@ -256,7 +256,7 @@ class MembersScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const GroupContextHeader(title: 'Members'),
+              GroupContextHeader(title: 'Members ${group.members.length}'),
               const SizedBox(height: AppSpacing.lg),
               if (app.canManageMembers) ...[
                 Align(

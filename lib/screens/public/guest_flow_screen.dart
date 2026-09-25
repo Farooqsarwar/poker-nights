@@ -10,6 +10,7 @@ import '../../models/game.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
+import '../../responsive/responsive.dart';
 import '../../services/recovery_service.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
@@ -33,6 +34,7 @@ enum _GuestStep {
   rejected,
   notLive,
   wrongOwner,
+
   /// Arrived after late registration closed permanently, or the event was
   /// called off. A real dead end for tonight — say so kindly and offer the
   /// only things that still help.
@@ -285,7 +287,8 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   /// editing anything, and returns the sentence to show them.
   String? _closedMessage(String? raw) {
     final m = (raw ?? '').toLowerCase();
-    if (m.contains('late registration') || m.contains('registration has closed')) {
+    if (m.contains('late registration') ||
+        m.contains('registration has closed')) {
       return 'Registration for tonight closed when the rebuy period ended, '
           'so no new players can be added to this tournament.';
     }
@@ -300,26 +303,69 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
 
+    final device = AppBreakpoints.deviceOf(context);
+    final twoColumn = device.isDesktop || device.isLargeDesktop;
+    final statusBarHeight = MediaQuery.paddingOf(context).top;
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.xxl,
-            vertical: AppSpacing.xxxl,
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 384),
-              child: _buildBody(app, game),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.xxl,
+                vertical: twoColumn
+                    ? AppSpacing.xxxl
+                    : (statusBarHeight + AppSpacing.xxxl + 20),
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 384),
+                  child: _buildBody(app, game, twoColumn),
+                ),
+              ),
             ),
           ),
-        ),
+          Positioned(
+            top: statusBarHeight + AppSpacing.md,
+            left: AppSpacing.lg,
+            child: Semantics(
+              button: true,
+              label: 'Back',
+              child: InkWell(
+                onTap: () {
+                  if (_step == _GuestStep.enterCode) {
+                    context.go(RoutePaths.landing);
+                  } else {
+                    _startOver();
+                  }
+                },
+                borderRadius: BorderRadius.circular(44),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.card,
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Icon(
+                    Icons.chevron_left,
+                    size: 24,
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildBody(AppProvider app, LiveGame? game) {
+  Widget _buildBody(AppProvider app, LiveGame? game, bool twoColumn) {
     if (game != null && game.status == LiveGameStatus.cancelled) {
       // Silently bouncing back to the code screen looked like the code had
       // stopped working. Say what happened.
@@ -336,7 +382,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     }
 
     if (game == null) {
-      if (_step == _GuestStep.enterCode) return _buildCodeEntry();
+      if (_step == _GuestStep.enterCode) return _buildCodeEntry(twoColumn);
       return const SizedBox.shrink();
     }
 
@@ -348,7 +394,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           setState(() => _step = _GuestStep.eventIntro);
         }
       });
-      return _buildCodeEntry();
+      return _buildCodeEntry(twoColumn);
     }
 
     final registeredPlayers = game.players.where((p) => !p.isGuest).toList();
@@ -418,8 +464,10 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         // Header
         Column(
           children: [
-            const PokerNightLogo(size: 40),
-            const SizedBox(height: AppSpacing.xs),
+            if (twoColumn) ...[
+              const PokerNightLogo(size: 40),
+              const SizedBox(height: AppSpacing.xs),
+            ],
             Text(
               game.settings.name,
               style: AppTypography.display(size: AppFontSizes.xl),
@@ -490,160 +538,239 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     );
   }
 
-  Widget _buildCodeEntry() {
+  Widget _buildCodeEntry(bool twoColumn) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: AppSpacing.xl),
-        const PokerNightLogo(size: 80),
-        const SizedBox(height: AppSpacing.lg),
+        if (twoColumn) ...[
+          const SizedBox(height: AppSpacing.xl),
+          const PokerNightLogo(size: 80),
+          const SizedBox(height: AppSpacing.lg),
+        ] else ...[
+          const SizedBox(height: AppSpacing.md),
+          Center(
+            child: Container(
+              width: 48,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD53032),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66D53032),
+                    blurRadius: 18,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Text(
+                '♠',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         Text(
           'Join as guest',
           textAlign: TextAlign.center,
-          style: AppTypography.display(size: AppFontSizes.xxl),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          'Enter the code from the admin or invitation link',
-          textAlign: TextAlign.center,
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.mutedForeground,
+          style: AppTypography.display(
+            size: 22,
+            weight: FontWeight.w700,
+            color: Colors.white,
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
-        AppCard(
-          padding: const EdgeInsets.all(AppSpacing.xl),
+        const SizedBox(height: 6),
+        const Text(
+          'Enter the code from the admin or invitation link',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Color(0xFFB8B8C2), fontSize: 13),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF141416),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF242428)),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Game code',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
+              const Text(
+                'GAME CODE',
+                style: TextStyle(
+                  color: Color(0xFF9A9AA6),
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
                 ),
               ),
-              const SizedBox(height: AppSpacing.xs),
-              TextField(
-                controller: _codeController,
-                autofocus: true,
-                maxLength: 8,
-                textCapitalization: TextCapitalization.characters,
-                textAlign: TextAlign.center,
-                style: AppTypography.monoXl.copyWith(letterSpacing: 3),
-                onChanged: (_) {
-                  if (_codeError != null) setState(() => _codeError = null);
-                },
-                decoration: InputDecoration(
-                  counterText: '',
-                  hintText: 'ENTER CODE',
-                  hintStyle: AppTypography.monoXl.copyWith(
-                    color: AppColors.onSurfaceHint,
+              const SizedBox(height: 8),
+              Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0A0A0A),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF26262A)),
+                ),
+                alignment: Alignment.center,
+                child: TextField(
+                  controller: _codeController,
+                  autofocus: true,
+                  maxLength: 8,
+                  textCapitalization: TextCapitalization.characters,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'Space Grotesk',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: 3,
+                    color: Colors.white,
                   ),
-                  isDense: true,
-                  filled: true,
-                  fillColor: AppColors.card,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 13,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    borderSide: BorderSide(color: AppColors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    borderSide: BorderSide(color: AppColors.ring),
+                  onChanged: (_) {
+                    if (_codeError != null) setState(() => _codeError = null);
+                  },
+                  decoration: const InputDecoration(
+                    counterText: '',
+                    hintText: 'ENTER CODE',
+                    hintStyle: TextStyle(
+                      fontFamily: 'Space Grotesk',
+                      fontSize: 18,
+                      letterSpacing: 3,
+                      color: Color(0xFF9A9AA6),
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
                   ),
                 ),
               ),
               if (_codeError != null) ...[
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: 8),
                 Text(
                   _codeError!,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.destructiveText,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFFE5797A),
+                    fontSize: 12,
                   ),
                 ),
               ],
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: 20),
               Center(
-                child: AppButton(
-                  variant: AppButtonVariant.primary,
-                  size: AppButtonSize.md,
-                  onPressed: _submitCode,
-                  child: const Text('Join'),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Demo code: ',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
+                child: Container(
+                  width: 120,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x66D53032),
+                        blurRadius: 16,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD53032),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    WidgetSpan(
-                      alignment: PlaceholderAlignment.baseline,
-                      baseline: TextBaseline.alphabetic,
-                      child: InkWell(
-                        onTap: () => _codeController.text = 'FP2608',
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 8,
-                          ),
-                          child: Text(
-                            'FP2608',
-                            style: AppTypography.monoSm.copyWith(
-                              color: AppColors.primaryText,
-                              fontWeight: FontWeight.w700,
+                    onPressed: _submitCode,
+                    child: const Text(
+                      'Join',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: 'Demo code: ',
+                        style: TextStyle(
+                          color: Color(0xFF9A9AA6),
+                          fontSize: 11,
+                        ),
+                      ),
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.baseline,
+                        baseline: TextBaseline.alphabetic,
+                        child: InkWell(
+                          onTap: () => _codeController.text = 'FP2608',
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
+                            child: Text(
+                              'FP2608',
+                              style: TextStyle(
+                                color: Color(0xFFE5797A),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'Space Grotesk',
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                textAlign: TextAlign.center,
               ),
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        // Wrap, not Row — same reason as the identical block in JoinScreen:
-        // two unbounded Texts that together exceed a 320px phone's content
-        // width. "Sign in" moves to its own line rather than overflowing.
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Have an account? ',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-            InkWell(
-              onTap: () => context.go(RoutePaths.login),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 8,
+        const SizedBox(height: 24),
+        Center(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                const TextSpan(
+                  text: 'Have an account? ',
+                  style: TextStyle(color: Color(0xFF9A9AA6), fontSize: 13),
                 ),
-                child: Text(
-                  'Sign in',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.primaryText,
-                    decoration: TextDecoration.underline,
-                    decorationColor: AppColors.primary,
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.baseline,
+                  baseline: TextBaseline.alphabetic,
+                  child: InkWell(
+                    onTap: () => context.go(RoutePaths.login),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Text(
+                        'Sign in',
+                        style: TextStyle(
+                          color: Color(0xFFE5797A),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.underline,
+                          decorationColor: Color(0xFFE5797A),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ],
     );
@@ -767,8 +894,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                 // guest could not tell which applied: nobody brought guests
                 // at all, versus every slot already claimed. The second is
                 // far more likely for a guest arriving last.
-                game.guestSlots.isEmpty &&
-                        !game.players.any((p) => p.isGuest)
+                game.guestSlots.isEmpty && !game.players.any((p) => p.isGuest)
                     ? 'Nobody has brought a guest to this game yet. Ask '
                           'whoever invited you to add you as their +1, then '
                           'come back.'

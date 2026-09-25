@@ -143,7 +143,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'New Cash Game',
+                    'New cash game',
                     style: AppTypography.display(
                       size: AppFontSizes.xxxl,
                       weight: FontWeight.w700,
@@ -313,8 +313,35 @@ class _SetupForm extends StatelessWidget {
           ),
           Divider(color: AppColors.border, height: AppSpacing.xxl),
           Text(
-            'Blinds',
+            'Stakes',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AnimatedBuilder(
+            animation: Listenable.merge([smallBlind, bigBlind]),
+            builder: (context, _) {
+              return Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  for (final stake in const [
+                    ('0.5', '1'),
+                    ('1', '2'),
+                    ('2', '5'),
+                  ])
+                    _StakeChip(
+                      label: '${stake.$1} / ${stake.$2}',
+                      selected:
+                          smallBlind.text.trim() == stake.$1 &&
+                          bigBlind.text.trim() == stake.$2,
+                      onTap: () {
+                        smallBlind.text = stake.$1;
+                        bigBlind.text = stake.$2;
+                      },
+                    ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.sm),
           Row(
@@ -534,6 +561,58 @@ class _SummaryRow extends StatelessWidget {
         const Spacer(),
         Text(value, style: AppTypography.monoSm),
       ],
+    );
+  }
+}
+
+/// A tappable stake shortcut that fills the blind fields. Presentation only —
+/// the entered numbers stay the source of truth. [selected] reflects whether
+/// the small/big blind fields currently hold this stake's values, so the
+/// chip a player picked stays visibly highlighted even after they move on.
+class _StakeChip extends StatelessWidget {
+  const _StakeChip({
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: AnimatedContainer(
+          duration: AppDurations.fast,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: 8,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primary : AppColors.secondary,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(
+              color: selected ? AppColors.primary : AppColors.border,
+            ),
+            boxShadow: selected ? AppShadows.primaryGlow : null,
+          ),
+          child: Text(
+            label,
+            style: AppTypography.monoSm.copyWith(
+              fontWeight: FontWeight.w600,
+              color: selected
+                  ? AppColors.primaryForeground
+                  : AppColors.foreground,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

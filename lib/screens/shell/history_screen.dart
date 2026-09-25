@@ -121,9 +121,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
               const SizedBox(height: AppSpacing.xl),
               AppTabs(
                 tabs: const [
-                  AppTabItem(id: 'games', label: 'Games'),
+                  AppTabItem(id: 'games', label: 'Tournaments'),
                   AppTabItem(id: 'leaderboard', label: 'Leaderboard'),
-                  AppTabItem(id: 'cash', label: 'Cash games'),
+                  AppTabItem(id: 'cash', label: 'Cash'),
                 ],
                 active: _tab,
                 onChanged: (t) => setState(() => _tab = t),

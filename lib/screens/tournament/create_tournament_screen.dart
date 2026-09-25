@@ -681,7 +681,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'New Game',
+                      'New tournament',
                       style: AppTypography.display(
                         size: AppFontSizes.xxxl,
                         weight: FontWeight.w700,
@@ -760,7 +760,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Next'),
+                      Text('Continue'),
                       SizedBox(width: 6),
                       Icon(
                         Icons.arrow_forward,
@@ -856,15 +856,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         for (final m in _presetMatches)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Container(
+            child: AppCard(
               padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.4),
-                ),
-              ),
+              color: AppColors.primarySoft,
+              borderColor: AppColors.primary.withValues(alpha: 0.4),
               child: Row(
                 children: [
                   Expanded(
@@ -1383,16 +1378,12 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.xs,
       ),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
-      ),
+      color: AppColors.background,
       child: Column(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
@@ -1452,16 +1443,12 @@ class _SummaryStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.symmetric(
         vertical: AppSpacing.md,
         horizontal: AppSpacing.xs,
       ),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
-      ),
+      color: AppColors.background,
       child: Column(
         children: [
           Icon(icon, size: 24, color: AppColors.primary),

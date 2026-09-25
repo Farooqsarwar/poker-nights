@@ -6,10 +6,8 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../responsive/responsive.dart';
-import '../../widgets/app_button.dart';
 import '../../widgets/backgrounds.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/brand_lockup.dart';
 
 /// Public landing page mirroring the web `LandingPage`.
 class LandingScreen extends StatefulWidget {
@@ -38,12 +36,14 @@ class _LandingScreenState extends State<LandingScreen> {
             children: [
               _buildHeader(context),
               _buildHero(context, isDesktop),
-              _buildHowItWorks(context, isDesktop),
-              _buildFeatures(context, isDesktop),
-              _buildLifecycle(context, isDesktop),
-              _buildTools(context, isDesktop),
-              _buildFaq(context, isDesktop),
-              _buildFooter(context),
+              if (isDesktop) ...[
+                _buildHowItWorks(context, isDesktop),
+                _buildFeatures(context, isDesktop),
+                _buildLifecycle(context, isDesktop),
+                _buildTools(context, isDesktop),
+                _buildFaq(context, isDesktop),
+                _buildFooter(context),
+              ],
             ],
           ),
         ),
@@ -58,37 +58,85 @@ class _LandingScreenState extends State<LandingScreen> {
       padding: EdgeInsets.only(
         left: isMobile ? AppSpacing.lg : AppSpacing.xxl,
         right: isMobile ? AppSpacing.lg : AppSpacing.xxl,
-        // Absorb the status-bar inset so content sits below it,
-        // while the background bleeds all the way to the top edge.
         top: statusBarHeight + (isMobile ? AppSpacing.sm : AppSpacing.lg),
         bottom: isMobile ? AppSpacing.sm : AppSpacing.lg,
       ),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.hairlineWhite)),
-      ),
-      // Both doors stay in the bar at every width. What overflowed a 320px
-      // phone originally was not having two buttons — it was a default-size
-      // button carrying the long "Create Account". At `sm` with the short
-      // label the pair costs about 150px of a 288px content width, which
-      // leaves the logo and the gap between them room to spare.
       child: Row(
         children: [
-          Flexible(
-            child: PokerNightLogo(size: isMobile ? 36 : 40),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD53032),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x55D53032),
+                      blurRadius: 10,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Text(
+                  '♠',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    height: 1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Poker Night',
+                style: AppTypography.display(
+                  size: 17,
+                  weight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ],
           ),
           const Spacer(),
-          AppButton(
-            variant: AppButtonVariant.secondary,
-            size: AppButtonSize.sm,
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              backgroundColor: const Color(0xFF161618),
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Color(0xFF28282C)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              minimumSize: const Size(0, 36),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             onPressed: () => context.go(RoutePaths.login),
-            child: const Text('Sign in'),
+            child: const Text(
+              'Sign in',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ),
-          SizedBox(width: isMobile ? AppSpacing.sm : AppSpacing.md),
-          AppButton(
-            variant: AppButtonVariant.primary,
-            size: AppButtonSize.sm,
+          const SizedBox(width: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD53032),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              minimumSize: const Size(0, 36),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             onPressed: () => context.go(RoutePaths.register),
-            child: Text(isMobile ? 'Sign up' : 'Create Account'),
+            child: const Text(
+              'Sign up',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -96,181 +144,197 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 
   Widget _buildHero(BuildContext context, bool isDesktop) {
-    final headingSize = isDesktop ? 48.0 : 32.0;
-
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 800),
+        constraints: const BoxConstraints(maxWidth: 520),
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: isDesktop ? AppSpacing.xxxl : AppSpacing.lg,
-            vertical: isDesktop ? AppSpacing.huge : AppSpacing.xl,
+            vertical: isDesktop ? AppSpacing.huge : AppSpacing.md,
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Eyebrow.
-              //
-              // The rule-either-side treatment needs room the phone does not
-              // have: squeezed between two dividers the label truncated to
-              // "PRIVATE…", which is worse than no rule at all. Desktop keeps
-              // the rules; the phone just centres the words.
-              if (isDesktop)
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        height: 1,
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                      ),
-                      child: Text(
-                        'PRIVATE HOME POKER',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                          letterSpacing: 3,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Container(
-                        height: 1,
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                Text(
-                  'PRIVATE HOME POKER',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                    letterSpacing: 2,
-                  ),
+              const SizedBox(height: 12),
+              Text(
+                'PRIVATE HOME POKER',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyXs.copyWith(
+                  color: const Color(0xFF9A9AA6),
+                  letterSpacing: 2.5,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 9.5,
                 ),
-              const SizedBox(height: AppSpacing.lg),
-
-              // Heading
+              ),
+              const SizedBox(height: 14),
               Text(
                 'Run your best',
                 textAlign: TextAlign.center,
                 style: AppTypography.display(
-                  size: headingSize,
-                  weight: FontWeight.w700,
+                  size: isDesktop ? 44.0 : 34.0,
+                  weight: FontWeight.w800,
                   height: 1.15,
+                  color: Colors.white,
                 ),
               ),
               Text(
                 'poker night',
                 textAlign: TextAlign.center,
-                style: AppTypography.crimsonShimmer(size: headingSize),
+                style: AppTypography.display(
+                  size: isDesktop ? 44.0 : 34.0,
+                  weight: FontWeight.w800,
+                  height: 1.15,
+                  color: const Color(0xFFD53032),
+                ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-
+              const SizedBox(height: 14),
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 500),
+                constraints: const BoxConstraints(maxWidth: 380),
                 child: Text(
                   'One admin, one app. Tournament structure generated from your real chips. Timer, blinds, seating and prizes — handled.',
                   textAlign: TextAlign.center,
-                  style: AppTypography.bodyStyle.copyWith(
-                    color: AppColors.mutedForeground,
+                  style: TextStyle(
+                    color: const Color(0xFFB8B8C2),
+                    fontSize: 13,
+                    height: 1.45,
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
-
-              // Feature pills
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: const [
-                  _FeaturePill(label: 'Auto blind structure'),
-                  _FeaturePill(label: 'Live timer'),
-                  _FeaturePill(label: 'Seating & redraws'),
-                  _FeaturePill(label: 'TV mode'),
-                  _FeaturePill(label: 'Cash game tracker'),
-                  _FeaturePill(label: 'Group chat'),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-
-              // Both doors, side by side and wrapping on a narrow screen:
-              // hosts create an account, invited players just came for a
-              // code. The phone header only carries "Sign in", so creating
-              // an account has to live here or it is unreachable.
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
+              const SizedBox(height: 20),
+              // Feature pills in 3 rows
+              Column(
                 children: [
-                  AppButton(
-                    variant: AppButtonVariant.primary,
-                    size: AppButtonSize.md,
-                    onPressed: () => context.go(RoutePaths.register),
-                    child: const Text('Create account'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      _FeaturePill(label: 'AUTO BLIND STRUCTURE'),
+                      SizedBox(width: 8),
+                      _FeaturePill(label: 'LIVE TIMER'),
+                    ],
                   ),
-                  AppButton(
-                    variant: AppButtonVariant.secondary,
-                    size: AppButtonSize.md,
-                    onPressed: _openJoin,
-                    child: const Text('Join with a code'),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      _FeaturePill(label: 'SEATING & REDRAWS'),
+                      SizedBox(width: 8),
+                      _FeaturePill(label: 'TV MODE'),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      _FeaturePill(label: 'CASH GAME TRACKER'),
+                      SizedBox(width: 8),
+                      _FeaturePill(label: 'GROUP CHAT'),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
-
-              // The free tier, said plainly at the moment of hesitation.
-              // Three objections — cost, card, install — answered in one line.
-              Text(
+              const SizedBox(height: 24),
+              // Two buttons side by side in a row!
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x66D53032),
+                            blurRadius: 16,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFD53032),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () => context.go(RoutePaths.register),
+                        child: const Text(
+                          'Create account',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: const Color(0xFF161618),
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFF28282C)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: _openJoin,
+                        child: const Text(
+                          'Join with a code',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text(
                 'Free for up to 9 players. No card, nothing to install.',
                 textAlign: TextAlign.center,
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
+                style: TextStyle(color: Color(0xFF9A9AA6), fontSize: 11),
               ),
-              const SizedBox(height: AppSpacing.xxl),
-
-              // Native apps are not built yet. Saying so plainly — rather than
-              // shipping store badges that lead nowhere — keeps the promise
-              // honest, and lets the browser story (which IS the advantage
-              // today) carry the section instead of looking like a gap.
-              Text(
+              const SizedBox(height: 20),
+              Container(height: 1, color: const Color(0xFF1E1E22)),
+              const SizedBox(height: 20),
+              const Text(
                 'Runs in any browser today',
                 textAlign: TextAlign.center,
-                style: AppTypography.bodySm.copyWith(
-                  fontWeight: FontWeight.w600,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Host, player and TV views all open from a link — '
-                'nothing to download.',
+              const SizedBox(height: 6),
+              const Text(
+                'Host, player and TV views all open from a link — nothing to download.',
                 textAlign: TextAlign.center,
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
+                style: TextStyle(color: Color(0xFF9A9AA6), fontSize: 11),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              const Wrap(
-                alignment: WrapAlignment.center,
-                spacing: AppSpacing.md,
-                runSpacing: AppSpacing.md,
-                children: [
-                  _StoreBadge(
-                    icon: Icons.apple,
-                    store: 'App Store',
+              const SizedBox(height: 16),
+              Row(
+                children: const [
+                  Expanded(
+                    child: _StoreBadge(icon: Icons.apple, store: 'App Store'),
                   ),
-                  _StoreBadge(
-                    icon: Icons.android,
-                    store: 'Google Play',
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: _StoreBadge(
+                      icon: Icons.play_arrow_rounded,
+                      store: 'Google Play',
+                    ),
                   ),
                 ],
               ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -371,8 +435,7 @@ class _LandingScreenState extends State<LandingScreen> {
     ];
 
     final cards = [
-      for (final s in steps)
-        _StepCard(step: s.$1, title: s.$2, body: s.$3),
+      for (final s in steps) _StepCard(step: s.$1, title: s.$2, body: s.$3),
     ];
 
     return _section(
@@ -756,10 +819,7 @@ class _LandingScreenState extends State<LandingScreen> {
             child: Padding(
               // A comfortable tap target without inventing horizontal gaps
               // the Wrap is already providing.
-              padding: const EdgeInsets.symmetric(
-                vertical: 10,
-                horizontal: 4,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
               child: Text(
                 entry.key,
                 style: AppTypography.bodyXs.copyWith(
@@ -774,9 +834,7 @@ class _LandingScreenState extends State<LandingScreen> {
     final copyright = Text(
       '© 2026 Poker Night. All rights reserved.',
       textAlign: isMobile ? TextAlign.center : TextAlign.start,
-      style: AppTypography.bodyXs.copyWith(
-        color: AppColors.mutedForeground,
-      ),
+      style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
     );
 
     return Container(
@@ -833,8 +891,12 @@ class _FeaturePill extends StatelessWidget {
         border: Border.all(color: AppColors.border),
       ),
       child: Text(
-        label,
-        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+        label.toUpperCase(),
+        style: AppTypography.bodyXs.copyWith(
+          color: AppColors.mutedForeground,
+          letterSpacing: 0.6,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -991,9 +1053,7 @@ class _ToolCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Text(
             title,
-            style: AppTypography.bodySm.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(

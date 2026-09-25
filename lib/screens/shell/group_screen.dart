@@ -18,6 +18,7 @@ import '../../providers/app_provider.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
@@ -797,7 +798,7 @@ class _GroupHeaderIcon extends StatelessWidget {
   }
 }
 
-class _PremiumGameCard extends StatefulWidget {
+class _PremiumGameCard extends StatelessWidget {
   final LiveGame game;
   final AppProvider app;
   final AppUser? user;
@@ -810,164 +811,156 @@ class _PremiumGameCard extends StatefulWidget {
     required this.onTap,
   });
 
-  @override
-  State<_PremiumGameCard> createState() => _PremiumGameCardState();
-}
-
-class _PremiumGameCardState extends State<_PremiumGameCard> {
-  bool _hovering = false;
+  // Matches the status colouring used on Home's upcoming-games list so a
+  // game reads the same way wherever it appears (spec: one design language).
+  AppBadgeVariant _colorFor(LiveGameStatus s) {
+    switch (s) {
+      case LiveGameStatus.running:
+        return AppBadgeVariant.green;
+      case LiveGameStatus.paused:
+      case LiveGameStatus.rebuypause:
+      case LiveGameStatus.onBreak:
+      case LiveGameStatus.finaltable:
+      case LiveGameStatus.published:
+      case LiveGameStatus.checkin:
+      case LiveGameStatus.ready:
+        return AppBadgeVariant.accent;
+      case LiveGameStatus.draft:
+      case LiveGameStatus.completed:
+        return AppBadgeVariant.muted;
+      case LiveGameStatus.cancelled:
+        return AppBadgeVariant.red;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final game = widget.game;
-    final rsvp = game.players
-        .where((p) => p.id == widget.user?.id)
-        .firstOrNull
-        ?.rsvp;
+    final rsvp = game.players.where((p) => p.id == user?.id).firstOrNull?.rsvp;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.border),
-            boxShadow: _hovering
-                ? [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.08),
-                      blurRadius: 12,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : [],
+    return AppCard(
+      onTap: onTap,
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      glow: game.status.isActiveLive,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              AppBadge(
+                // The friendly label ("Open for RSVP", "Live", …) instead of
+                // the raw enum name — same source Home already reads from.
+                label: game.status.label.toUpperCase(),
+                variant: _colorFor(game.status),
+                // The sheet marks a running game with a leading dot, not
+                // a glyph. Only when it is actually live — a dot on a
+                // finished game would read as "still going".
+                dotColor: game.status.isActiveLive ? AppColors.primary : null,
+              ),
+              Icon(Icons.chevron_right, color: AppColors.mutedForeground),
+            ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            game.settings.name,
+            style: AppTypography.display(
+              size: AppFontSizes.xl,
+              weight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.xs,
+            children: [
+              _InfoChip(
+                icon: Icons.calendar_today_outlined,
+                text: game.settings.date,
+              ),
+              _InfoChip(
+                icon: Icons.access_time_outlined,
+                text: game.settings.time,
+              ),
+              _InfoChip(
+                icon: Icons.location_on_outlined,
+                text: game.settings.locationPrivate
+                    ? 'Address shared at check-in'
+                    : game.settings.location,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: 2,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.secondary,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Text(
+              'Buy-in: ${game.settings.buyIn}',
+              style: AppTypography.mono(
+                size: AppFontSizes.xs,
+                color: AppColors.foreground,
+              ),
+            ),
+          ),
+          // RSVP is set on the game screen only — here it is read-only.
+          if (user != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    AppBadge(
-                      label: game.status.name.toUpperCase(),
-                      variant: game.status.isActiveLive
-                          ? AppBadgeVariant.accent
-                          : AppBadgeVariant.muted,
-                      // The sheet marks a running game with a leading dot, not
-                      // a glyph. Only when it is actually live — a dot on a
-                      // finished game would read as "still going".
-                      dotColor: game.status.isActiveLive
-                          ? AppColors.primary
-                          : null,
-                    ),
-                    Icon(Icons.chevron_right, color: AppColors.mutedForeground),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
                 Text(
-                  game.settings.name,
-                  style: AppTypography.display(
-                    size: AppFontSizes.xl,
-                    weight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today,
-                      size: 14,
-                      color: AppColors.mutedForeground,
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      game.settings.date,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.access_time,
-                      size: 14,
-                      color: AppColors.mutedForeground,
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      game.settings.time,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.location_on,
-                      size: 14,
-                      color: AppColors.mutedForeground,
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      game.settings.locationPrivate
-                          ? 'Address shared at check-in'
-                          : game.settings.location,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Buy-in: ${game.settings.buyIn}',
+                  game.settings.rsvpCutoffPassed
+                      ? 'RSVPs closed'
+                      : 'Your RSVP',
                   style: AppTypography.bodySm.copyWith(
-                    color: AppColors.foreground,
-                    fontWeight: FontWeight.w600,
+                    color: AppColors.mutedForeground,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.md),
-                // RSVP is set on the game screen only — here it is read-only.
-                if (widget.user != null)
-                  Row(
-                    children: [
-                      Text(
-                        game.settings.rsvpCutoffPassed
-                            ? 'RSVPs closed'
-                            : 'Your RSVP',
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      RSVPBadge(rsvp: rsvp),
-                      const Spacer(),
-                      if (!game.settings.rsvpCutoffPassed)
-                        Text(
-                          rsvp == null ? 'Tap to respond' : 'Tap to change',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.primaryText,
-                          ),
-                        ),
-                    ],
+                const SizedBox(width: AppSpacing.sm),
+                RSVPBadge(rsvp: rsvp),
+                const Spacer(),
+                if (!game.settings.rsvpCutoffPassed)
+                  Text(
+                    rsvp == null ? 'Tap to respond' : 'Tap to change',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.primaryText,
+                    ),
                   ),
               ],
             ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact icon+label pair for a game card's date/time/location row — the
+/// same shape as the info chips on Home's upcoming-games list.
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: AppColors.mutedForeground),
+        const SizedBox(width: AppSpacing.xs),
+        Text(
+          text,
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
           ),
         ),
-      ),
+      ],
     );
   }
 }

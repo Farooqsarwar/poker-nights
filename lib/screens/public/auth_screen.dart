@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -9,7 +8,6 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
 import '../../responsive/responsive.dart';
-import '../../widgets/app_button.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/backgrounds.dart';
 import '../../widgets/brand_lockup.dart';
@@ -147,11 +145,10 @@ class _AuthScreenState extends State<AuthScreen> {
     context.go(widget.next ?? RoutePaths.home);
   }
 
-  /// A leading field icon padded to sit inside the input pill.
-  Widget _leading(IconData icon) {
+  Widget _trailing(IconData icon) {
     return Padding(
-      padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.sm),
-      child: Icon(icon, size: 18, color: AppColors.mutedForeground),
+      padding: const EdgeInsets.only(right: AppSpacing.md),
+      child: Icon(icon, size: 20, color: const Color(0xFF9A9AA6)),
     );
   }
 
@@ -160,8 +157,8 @@ class _AuthScreenState extends State<AuthScreen> {
     return IconButton(
       icon: Icon(
         _showPw ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-        size: 18,
-        color: AppColors.mutedForeground,
+        size: 20,
+        color: const Color(0xFF9A9AA6),
       ),
       tooltip: _showPw ? 'Hide password' : 'Show password',
       onPressed: () => setState(() => _showPw = !_showPw),
@@ -202,55 +199,37 @@ class _AuthScreenState extends State<AuthScreen> {
                       padding: EdgeInsets.only(
                         left: AppSpacing.lg,
                         right: AppSpacing.lg,
-                        // Push scroll content below the status bar + back button
-                        top: statusBarHeight + AppSpacing.xxl,
+                        top: statusBarHeight + AppSpacing.xxxl + 20,
                         bottom: AppSpacing.huge,
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        children: [
-                          logo,
-                          const SizedBox(height: AppSpacing.xxl),
-                          card,
-                        ],
+                        children: [card],
                       ),
                     ),
                   ),
             Positioned(
-              // Sit the back button just below the status bar
-              top: statusBarHeight + AppSpacing.sm,
-              left: AppSpacing.xl,
+              top: statusBarHeight + AppSpacing.md,
+              left: AppSpacing.lg,
               child: Semantics(
                 button: true,
                 label: 'Back',
                 child: InkWell(
                   onTap: () => context.go(RoutePaths.landing),
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  borderRadius: BorderRadius.circular(12),
                   child: Container(
-                    constraints: const BoxConstraints(
-                      minWidth: 44,
-                      minHeight: 44,
-                    ),
+                    width: 40,
+                    height: 40,
                     alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141416),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF242428)),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.arrow_back,
-                          size: 18,
-                          color: AppColors.mutedForeground,
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Text(
-                          'Back',
-                          style: AppTypography.bodySm.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ],
+                    child: const Icon(
+                      Icons.chevron_left,
+                      size: 22,
+                      color: Color(0xFFE5797A),
                     ),
                   ),
                 ),
@@ -263,201 +242,235 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Widget _buildCard(BuildContext context) {
+    final device = AppBreakpoints.deviceOf(context);
+    final twoColumn = device.isDesktop || device.isLargeDesktop;
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          _title,
+          style: AppTypography.display(
+            size: AppFontSizes.xxl,
+            weight: FontWeight.w700,
+          ),
+        ),
+        if (_isForgot) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            "Enter your email and we'll send a link to set a new one.",
+            style: const TextStyle(
+              color: Color(0xFFB8B8C2),
+              fontSize: 13.5,
+              height: 1.4,
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.xl),
+        // Google Sign-In — shown on login & register, not on
+        // forgot-password (which is email-only by nature).
+        if (!_isForgot) ...[
+          _GoogleSignInButton(
+            loading: _loading,
+            onPressed: _handleGoogleSignIn,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: const [
+              Expanded(child: Divider(color: Color(0xFF242428))),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Text(
+                  'or continue with email',
+                  style: TextStyle(color: Color(0xFF9A9AA6), fontSize: 12),
+                ),
+              ),
+              Expanded(child: Divider(color: Color(0xFF242428))),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+        if (_isRegister) ...[
+          AppTextField(
+            controller: _nameController,
+            label: null,
+            placeholder: 'Full Name',
+            textCapitalization: TextCapitalization.words,
+            suffixIcon: _trailing(Icons.person_outline),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+        AppTextField(
+          controller: _emailController,
+          label: null,
+          placeholder: 'Email address',
+          keyboardType: TextInputType.emailAddress,
+          suffixIcon: _trailing(Icons.mail_outline),
+        ),
+        if (!_isForgot) ...[
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            controller: _passwordController,
+            label: null,
+            placeholder: 'Password',
+            obscureText: !_showPw,
+            suffixIcon: _eyeToggle(),
+          ),
+          if (_isRegister) ...[
+            const SizedBox(height: AppSpacing.lg),
+            AppTextField(
+              controller: _confirmController,
+              label: null,
+              placeholder: 'Confirm Password',
+              obscureText: !_showPw,
+              suffixIcon: _eyeToggle(),
+            ),
+          ],
+        ],
+        if (widget.mode == AuthMode.login) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerRight,
+            child: InkWell(
+              onTap: () => context.go(RoutePaths.forgotPassword),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                child: Text(
+                  'Forgot Password?',
+                  style: TextStyle(
+                    color: Color(0xFFE5797A),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (_error != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            _error!,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.destructiveText,
+            ),
+          ),
+        ],
+        if (_success != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            _success!,
+            style: AppTypography.bodySm.copyWith(color: AppColors.successText),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.xl),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF0A0A0A),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: _loading ? null : _handleSubmit,
+            child: _loading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF0A0A0A),
+                    ),
+                  )
+                : Text(
+                    _isForgot
+                        ? 'Send reset link'
+                        : _isRegister
+                        ? 'Create Account'
+                        : 'Sign In',
+                    style: const TextStyle(
+                      color: Color(0xFF0A0A0A),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        if (widget.mode == AuthMode.login) ...[
+          _switchLine(
+            context,
+            prompt: "Don't have an account? ",
+            action: 'Create Account',
+            onTap: () {
+              final next = widget.next;
+              if (next != null) {
+                context.go(
+                  '${RoutePaths.register}?next=${Uri.encodeComponent(next)}',
+                );
+              } else {
+                context.go(RoutePaths.register);
+              }
+            },
+          ),
+        ] else if (_isRegister) ...[
+          _switchLine(
+            context,
+            prompt: 'Already have an account? ',
+            action: 'Sign In',
+            onTap: () {
+              final next = widget.next;
+              if (next != null) {
+                context.go(
+                  '${RoutePaths.login}?next=${Uri.encodeComponent(next)}',
+                );
+              } else {
+                context.go(RoutePaths.login);
+              }
+            },
+          ),
+        ] else ...[
+          Center(
+            child: InkWell(
+              onTap: () => context.go(RoutePaths.login),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                child: Text(
+                  'Back to Sign In',
+                  style: TextStyle(
+                    color: Color(0xFFE5797A),
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
-      child:
-          Container(
-                padding: const EdgeInsets.all(AppSpacing.xxl),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: AppColors.border),
-                  boxShadow: AppShadows.cardGlow,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      _title,
-                      style: AppTypography.display(size: AppFontSizes.xxl),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    // Google Sign-In — shown on login & register, not on
-                    // forgot-password (which is email-only by nature).
-                    if (!_isForgot) ...[
-                      _GoogleSignInButton(
-                        loading: _loading,
-                        onPressed: _handleGoogleSignIn,
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: AppColors.border)),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md,
-                            ),
-                            child: Text(
-                              'or continue with email',
-                              style: AppTypography.bodyXs.copyWith(
-                                color: AppColors.mutedForeground,
-                              ),
-                            ),
-                          ),
-                          Expanded(child: Divider(color: AppColors.border)),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
-                    if (_isRegister) ...[
-                      AppTextField(
-                        controller: _nameController,
-                        label: null,
-                        placeholder: 'Full Name',
-                        textCapitalization: TextCapitalization.words,
-                        prefixIcon: _leading(Icons.person_outline),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
-                    AppTextField(
-                      controller: _emailController,
-                      label: null,
-                      placeholder: 'Email address',
-                      keyboardType: TextInputType.emailAddress,
-                      prefixIcon: _leading(Icons.mail_outline),
-                    ),
-                    if (!_isForgot) ...[
-                      const SizedBox(height: AppSpacing.lg),
-                      AppTextField(
-                        controller: _passwordController,
-                        label: null,
-                        placeholder: 'Password',
-                        obscureText: !_showPw,
-                        prefixIcon: _leading(Icons.lock_outline),
-                        suffixIcon: _eyeToggle(),
-                      ),
-                      if (_isRegister) ...[
-                        const SizedBox(height: AppSpacing.lg),
-                        AppTextField(
-                          controller: _confirmController,
-                          label: null,
-                          placeholder: 'Confirm Password',
-                          obscureText: !_showPw,
-                          prefixIcon: _leading(Icons.lock_outline),
-                          suffixIcon: _eyeToggle(),
-                        ),
-                      ],
-                    ],
-                    if (widget.mode == AuthMode.login) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: InkWell(
-                          onTap: () => context.go(RoutePaths.forgotPassword),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                            child: Text(
-                              'Forgot Password?',
-                              style: AppTypography.bodySm.copyWith(
-                                color: AppColors.primaryText,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (_error != null) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        _error!,
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.destructiveText,
-                        ),
-                      ),
-                    ],
-                    if (_success != null) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        _success!,
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.successText,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: AppSpacing.xl),
-                    AppButton(
-                      variant: AppButtonVariant.light,
-                      size: AppButtonSize.lg,
-                      fullWidth: true,
-                      loading: _loading,
-                      onPressed: _handleSubmit,
-                      child: Text(
-                        _loading
-                            ? 'Please wait…'
-                            : _isForgot
-                            ? 'Send reset link'
-                            : _isRegister
-                            ? 'Create Account'
-                            : 'Sign In',
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    if (widget.mode == AuthMode.login) ...[
-                      _switchLine(
-                        context,
-                        prompt: "Don't have an account? ",
-                        action: 'Create Account',
-                        onTap: () {
-                          // Carry the deep-link destination through to the
-                          // register screen so it isn't lost mid-flow (C2).
-                          final next = widget.next;
-                          if (next != null) {
-                            context.go(
-                              '${RoutePaths.register}?next=${Uri.encodeComponent(next)}',
-                            );
-                          } else {
-                            context.go(RoutePaths.register);
-                          }
-                        },
-                      ),
-                    ] else if (_isRegister) ...[
-                      _switchLine(
-                        context,
-                        prompt: 'Already have an account? ',
-                        action: 'Sign In',
-                        onTap: () {
-                          final next = widget.next;
-                          if (next != null) {
-                            context.go(
-                              '${RoutePaths.login}?next=${Uri.encodeComponent(next)}',
-                            );
-                          } else {
-                            context.go(RoutePaths.login);
-                          }
-                        },
-                      ),
-                    ] else ...[
-                      Center(
-                        child: InkWell(
-                          onTap: () => context.go(RoutePaths.login),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                            child: Text(
-                              'Back to Sign In',
-                              style: AppTypography.bodySm.copyWith(
-                                color: AppColors.primaryText,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              )
-              .animate()
-              .fadeIn(duration: 400.ms)
-              .slideY(begin: 0.08, end: 0, curve: Curves.easeOut),
+      child: twoColumn
+          ? Container(
+              padding: const EdgeInsets.all(AppSpacing.xxl),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: AppColors.border),
+                boxShadow: AppShadows.cardGlow,
+              ),
+              child: content,
+            )
+          : Container(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: content,
+            ),
     );
   }
 
@@ -473,21 +486,24 @@ class _AuthScreenState extends State<AuthScreen> {
           children: [
             TextSpan(
               text: prompt,
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
+              style: const TextStyle(color: Color(0xFF9A9AA6), fontSize: 13),
             ),
             WidgetSpan(
-              alignment: PlaceholderAlignment.middle,
+              alignment: PlaceholderAlignment.baseline,
+              baseline: TextBaseline.alphabetic,
               child: InkWell(
                 onTap: onTap,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 4,
+                  ),
                   child: Text(
                     action,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.primaryText,
-                      fontWeight: FontWeight.w600,
+                    style: const TextStyle(
+                      color: Color(0xFFE5797A),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),

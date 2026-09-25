@@ -314,6 +314,17 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
+          // At-a-glance expected-vs-actual reconciliation. The full breakdown
+          // (and the settlement ledger) stays behind the Reconcile button —
+          // this is just enough to catch a mismatch without opening it.
+          _ReconcileInlineBar(
+            currency: currency,
+            expected: session.expectedInPlay,
+            actual: totalInPlay,
+            difference: session.difference,
+            onTap: () => setState(() => _showReconcile = true),
+          ),
+          const SizedBox(height: AppSpacing.md),
           // Players
           AppCard(
             padding: EdgeInsets.zero,
@@ -1042,6 +1053,85 @@ class _CashStatCard extends StatelessWidget {
             style: AppTypography.bodyXs.copyWith(
               color: AppColors.mutedForeground,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact expected-vs-actual chips-in-play line shown inline on the live
+/// screen, so a mismatch is visible without opening the Reconcile modal.
+class _ReconcileInlineBar extends StatelessWidget {
+  const _ReconcileInlineBar({
+    required this.currency,
+    required this.expected,
+    required this.actual,
+    required this.difference,
+    required this.onTap,
+  });
+
+  final String currency;
+  final double expected;
+  final double actual;
+  final double difference;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = difference.abs() < 0.01;
+    final statusColor = matches ? AppColors.success : AppColors.destructive;
+
+    return AppCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            matches ? Icons.check_circle_outline : Icons.error_outline,
+            size: 16,
+            color: statusColor,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Expected ',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  TextSpan(
+                    text: Formatters.money(currency, expected),
+                    style: AppTypography.monoXs,
+                  ),
+                  TextSpan(
+                    text: '  ·  Actual ',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  TextSpan(
+                    text: Formatters.money(currency, actual),
+                    style: AppTypography.monoXs,
+                  ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          AppBadge(
+            label: matches
+                ? 'Reconciled'
+                : 'Off by ${Formatters.money(currency, difference.abs())}',
+            variant: matches ? AppBadgeVariant.green : AppBadgeVariant.red,
           ),
         ],
       ),

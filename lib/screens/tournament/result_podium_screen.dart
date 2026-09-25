@@ -16,7 +16,9 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_text_field.dart';
 import '../../widgets/medal_icon.dart';
 
 class _PodiumResult {
@@ -481,51 +483,43 @@ class ResultPodiumScreen extends StatelessWidget {
     final name = TextEditingController();
     final email = TextEditingController();
     final password = TextEditingController();
-    showDialog<void>(
+    showAppModal(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Create Account'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: name,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextField(
-              controller: email,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email'),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextField(
-              controller: password,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
+      title: 'Create Account',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppTextField(controller: name, label: 'Name'),
+          const SizedBox(height: AppSpacing.sm),
+          AppTextField(
+            controller: email,
+            label: 'Email',
+            keyboardType: TextInputType.emailAddress,
           ),
-          FilledButton(
+          const SizedBox(height: AppSpacing.sm),
+          AppTextField(
+            controller: password,
+            label: 'Password',
+            obscureText: true,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(
+            fullWidth: true,
             onPressed: () async {
               final err = await app.convertGuestAccount(
                 name.text.trim(),
                 email.text.trim(),
                 password.text,
               );
-              if (!ctx.mounted) return;
+              if (!context.mounted) return;
               if (err != null) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
+                ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(err)),
                 );
                 return;
               }
-              Navigator.of(ctx).pop();
+              Navigator.of(context).pop();
             },
             child: const Text('Create Account'),
           ),

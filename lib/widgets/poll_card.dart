@@ -88,6 +88,12 @@ class _PollCardState extends State<PollCard> {
     final mySingle = !isMulti && widget.userId != null
         ? poll.votes[widget.userId!]
         : null;
+    final winnerOpt = poll.closed && totalVotes > 0
+        ? counts.entries.fold<MapEntry<String, int>?>(
+            null,
+            (acc, e) => acc == null || e.value > acc.value ? e : acc,
+          )
+        : null;
 
     void toggleMulti(String opt) {
       setState(() {
@@ -150,6 +156,24 @@ class _PollCardState extends State<PollCard> {
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
+          ],
+          if (poll.closed && totalVotes > 0) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Winner: ${winnerOpt!.key} · '
+                    '${(winnerOpt.value / totalVotes * 100).round()}%',
+                    style: AppTypography.bodyXs.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.successText,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ],
           Row(
             children: [
@@ -242,7 +266,9 @@ class _PollOption extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '$count vote${count != 1 ? 's' : ''}',
+                  total > 0
+                      ? '${pct.round()}%'
+                      : '$count vote${count != 1 ? 's' : ''}',
                   style: AppTypography.mono(
                     size: AppFontSizes.xs,
                     color: AppColors.mutedForeground,

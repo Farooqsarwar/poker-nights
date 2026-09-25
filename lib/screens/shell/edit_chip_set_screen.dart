@@ -8,6 +8,7 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/formatters.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_button.dart';
@@ -15,6 +16,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/chip_token.dart';
+import '../../widgets/count_stepper.dart';
 
 enum _EditorMode { exact, quick }
 
@@ -90,6 +92,12 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
 
   bool get _hasEmptyChipSet =>
       _chips.isEmpty || _chips.every((c) => c.quantity <= 0);
+
+  /// Face value of the whole physical set — every colour's printed value
+  /// times how many of that colour exist. Purely informational; never fed
+  /// back into validation or the blind solver.
+  int get _totalValue =>
+      _chips.fold(0, (sum, c) => sum + c.value * c.quantity);
 
   void _addChip() {
     setState(() {
@@ -207,7 +215,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
           ),
           const SizedBox(height: AppSpacing.xl),
           AppTextField(
-            label: 'Chip Set Name',
+            label: 'Set name',
             controller: _nameController,
             placeholder: 'e.g. My Tournament Set',
             error: _nameError,
@@ -270,6 +278,10 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
             _buildReorderableList()
           else
             _buildChipList(),
+          if (_chips.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            _TotalValueCard(total: _totalValue),
+          ],
           const SizedBox(height: AppSpacing.md),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -277,7 +289,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
               AppButton(
                 variant: AppButtonVariant.secondary,
                 onPressed: _addChip,
-                child: const Text('+ Add colour'),
+                child: const Text('+ Add denomination'),
               ),
               if (_mode == _EditorMode.quick &&
                   _quickKind == _QuickKind.unnumbered &&
@@ -440,6 +452,44 @@ class _EmptyChips extends StatelessWidget {
   }
 }
 
+/// Running total of the set's face value — how much money the physical
+/// chips represent once every colour's value × quantity is added up.
+class _TotalValueCard extends StatelessWidget {
+  const _TotalValueCard({required this.total});
+
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      child: Row(
+        children: [
+          Text(
+            'Total chip value',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            Formatters.prize(total),
+            style: AppTypography.mono(
+              size: AppFontSizes.lg,
+              weight: FontWeight.w700,
+              color: AppColors.foreground,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ModeButton extends StatelessWidget {
   const _ModeButton({
     required this.label,
@@ -505,18 +555,13 @@ class _ChipRow extends StatefulWidget {
 
 class _ChipRowState extends State<_ChipRow> {
   late final TextEditingController _valueController;
-  late final TextEditingController _quantityController;
   bool _valueError = false;
-  bool _quantityError = false;
 
   @override
   void initState() {
     super.initState();
     _valueController = TextEditingController(
       text: widget.chip.value.toString(),
-    );
-    _quantityController = TextEditingController(
-      text: widget.chip.quantity.toString(),
     );
   }
 
@@ -527,20 +572,14 @@ class _ChipRowState extends State<_ChipRow> {
         oldWidget.chip.value != widget.chip.value) {
       _valueController.text = widget.chip.value.toString();
     }
-    if (oldWidget.chip.color != widget.chip.color ||
-        oldWidget.chip.quantity != widget.chip.quantity) {
-      _quantityController.text = widget.chip.quantity.toString();
-    }
     if (oldWidget.chip.color != widget.chip.color) {
       _valueError = false;
-      _quantityError = false;
     }
   }
 
   @override
   void dispose() {
     _valueController.dispose();
-    _quantityController.dispose();
     super.dispose();
   }
 
@@ -557,16 +596,7 @@ class _ChipRowState extends State<_ChipRow> {
     // Invalid but non-empty: don't update model, just show error
   }
 
-  void _onQuantity(String raw) {
-    final q = int.tryParse(raw.trim());
-    final valid = q != null && q >= 0;
-    setState(() => _quantityError = !valid && raw.trim().isNotEmpty);
-    if (valid) {
-      widget.onChanged(widget.chip.copyWith(quantity: q));
-    } else if (raw.trim().isEmpty) {
-      widget.onChanged(widget.chip.copyWith(quantity: 0));
-    }
-  }
+  void _onQuantity(int q) => widget.onChanged(widget.chip.copyWith(quantity: q));
 
   void _pickColor() {
     Color pickerColor = Color(widget.chip.hex);
@@ -622,128 +652,134 @@ class _ChipRowState extends State<_ChipRow> {
   Widget build(BuildContext context) {
     final chip = widget.chip;
     final errorColor = AppColors.destructive;
-    final borderColor = widget.duplicateValue || _valueError || _quantityError
+    final borderColor = widget.duplicateValue || _valueError
         ? errorColor
         : AppColors.border;
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.md),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (widget.showDragHandle)
-            ReorderableDragStartListener(
-              index: widget.index,
-              child: Padding(
-                padding: EdgeInsets.only(right: AppSpacing.xs),
-                child: Icon(
-                  Icons.drag_handle,
-                  size: 18,
-                  color: AppColors.mutedForeground,
+          Row(
+            children: [
+              if (widget.showDragHandle)
+                ReorderableDragStartListener(
+                  index: widget.index,
+                  child: Padding(
+                    padding: EdgeInsets.only(right: AppSpacing.xs),
+                    child: Icon(
+                      Icons.drag_handle,
+                      size: 18,
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ),
+              ChipToken(
+                colorName: chip.color,
+                hex: chip.colorValue,
+                value: chip.value,
+                count: chip.quantity,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: GestureDetector(
+                  onTap: _pickColor,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: Color(chip.hex),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            chip.color,
+                            style: AppTypography.bodySm,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ChipToken(
-            colorName: chip.color,
-            hex: chip.colorValue,
-            value: chip.value,
-            count: chip.quantity,
+              IconButton(
+                tooltip: 'Remove this chip colour',
+                icon: Icon(Icons.delete, color: AppColors.destructiveText),
+                onPressed: widget.onDelete,
+              ),
+            ],
           ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: GestureDetector(
-              onTap: _pickColor,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 12,
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              SizedBox(
+                width: 88,
+                child: TextField(
+                  controller: _valueController,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySm,
+                  decoration: InputDecoration(
+                    labelText: 'Value',
+                    isDense: true,
+                    errorText: widget.duplicateValue
+                        ? 'dup'
+                        : (_valueError ? 'inv' : null),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: borderColor),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.ring),
+                    ),
+                  ),
+                  onChanged: _onValue,
                 ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: Row(
+              ),
+              if (widget.showQuantity) ...[
+                const SizedBox(width: AppSpacing.lg),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: Color(chip.hex),
-                        shape: BoxShape.circle,
+                    Text(
+                      'Quantity',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        chip.color,
-                        style: AppTypography.bodySm,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    const SizedBox(height: AppSpacing.xxs),
+                    CountStepper(
+                      value: chip.quantity,
+                      min: 0,
+                      max: 9999,
+                      step: 5,
+                      semanticLabel: '${chip.color} chip quantity',
+                      onChanged: _onQuantity,
                     ),
                   ],
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          SizedBox(
-            width: 72,
-            child: TextField(
-              controller: _valueController,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              style: AppTypography.bodySm,
-              decoration: InputDecoration(
-                labelText: 'Value',
-                isDense: true,
-                errorText: widget.duplicateValue
-                    ? 'dup'
-                    : (_valueError ? 'inv' : null),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 8,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: borderColor),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: AppColors.ring),
-                ),
-              ),
-              onChanged: _onValue,
-            ),
-          ),
-          if (widget.showQuantity) ...[
-            const SizedBox(width: AppSpacing.sm),
-            SizedBox(
-              width: 72,
-              child: TextField(
-                controller: _quantityController,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: AppTypography.bodySm,
-                decoration: InputDecoration(
-                  labelText: 'Qty',
-                  isDense: true,
-                  errorText: _quantityError ? 'inv' : null,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.ring),
-                  ),
-                ),
-                onChanged: _onQuantity,
-              ),
-            ),
-          ],
-          IconButton(
-            tooltip: 'Remove this chip colour',
-            icon: Icon(Icons.delete, color: AppColors.destructiveText),
-            onPressed: widget.onDelete,
+              ],
+            ],
           ),
         ],
       ),

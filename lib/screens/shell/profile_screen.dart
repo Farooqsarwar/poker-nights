@@ -8,6 +8,7 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -38,6 +39,9 @@ class ProfileScreen extends StatelessWidget {
         ),
       );
     }
+
+    final lifetime = _lifetime(app, user.id);
+    final achievements = _achievements(app, user.id, lifetime.wins);
 
     return AppPage(
       maxWidth: 720,
@@ -189,6 +193,72 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
+          // Lifetime P&L — the user's own money across every group. This is
+          // personal data (their prize won minus what they paid in), never
+          // another player's result.
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            borderColor: AppColors.primary.withValues(alpha: 0.2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'LIFETIME P&L',
+                      style: AppTypography.bodyXs.copyWith(
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.8,
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (lifetime.totalPnl > 0) ...[
+                      Icon(
+                        Icons.arrow_upward,
+                        size: 14,
+                        color: AppColors.successText,
+                      ),
+                      const SizedBox(width: AppSpacing.xxs),
+                    ] else if (lifetime.totalPnl < 0) ...[
+                      Icon(
+                        Icons.arrow_downward,
+                        size: 14,
+                        color: AppColors.destructiveText,
+                      ),
+                      const SizedBox(width: AppSpacing.xxs),
+                    ],
+                    Text(
+                      Formatters.signedMoney('', lifetime.totalPnl),
+                      style: AppTypography.monoSm.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: lifetime.totalPnl >= 0
+                            ? AppColors.successText
+                            : AppColors.destructiveText,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Divider(color: AppColors.border, height: 1),
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  children: [
+                    _LifetimeStat(
+                      label: 'games',
+                      value: '${lifetime.played}',
+                    ),
+                    _LifetimeStat(label: 'wins', value: '${lifetime.wins}'),
+                    _LifetimeStat(
+                      label: 'ITM',
+                      value: '${lifetime.itmPercent}%',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
           // Stats overview
           Row(
             children: [
@@ -209,6 +279,30 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           _StatsGrid(stats: user.stats),
+          if (achievements.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xl),
+            Text(
+              'ACHIEVEMENTS',
+              style: AppTypography.bodyXs.copyWith(
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.8,
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                for (final a in achievements)
+                  AppBadge(
+                    label: a,
+                    variant: AppBadgeVariant.muted,
+                    border: true,
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: AppSpacing.xl),
           // Actions
           AppCard(
@@ -255,6 +349,84 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// The user's own results across every group's completed games, rolled up
+  /// the same way the history screen sums them — their P&L, wins and
+  /// in-the-money rate. These are the user's own numbers, never another
+  /// player's prize.
+  ({int played, int wins, double totalPnl, int itmPercent}) _lifetime(
+    AppProvider app,
+    String? userId,
+  ) {
+    var played = 0, wins = 0, itm = 0;
+    double totalPnl = 0;
+    for (final g in app.groups) {
+      for (final game in g.pastGames) {
+        if (!game.players.any((p) => p.id == userId)) continue;
+        played++;
+        final pos = game.finishOrder.indexOf(userId ?? '');
+        final placement = pos >= 0 ? game.finishOrder.length - pos : 0;
+        if (placement == 1) wins++;
+        if (placement > 0 && placement <= game.structure.prizes.length) {
+          itm++;
+        }
+        final prize = game.structure.prizes
+            .where((pr) => pr.place == placement)
+            .fold<int>(0, (s, pr) => s + pr.amount);
+        final me = game.players.where((p) => p.id == userId).firstOrNull;
+        final cost = game.settings.buyIn +
+            (game.settings.rebuyCost ?? game.settings.buyIn) *
+                (me?.rebuys ?? 0) +
+            (game.settings.addOnCost ?? game.settings.buyIn) *
+                ((me?.hasAddOn ?? false) ? 1 : 0);
+        totalPnl += prize - cost;
+      }
+    }
+    final itmPercent = played == 0 ? 0 : (itm * 100 / played).round();
+    return (
+      played: played,
+      wins: wins,
+      totalPnl: totalPnl,
+      itmPercent: itmPercent,
+    );
+  }
+
+  /// Achievements earned so far, computed strictly from facts the model
+  /// already holds — nothing is invented, and a badge is simply absent until
+  /// its condition is real.
+  List<String> _achievements(AppProvider app, String? userId, int wins) {
+    final earned = <String>[];
+    if (wins >= 1) earned.add('🏆  FIRST WIN');
+
+    var streak = 0, best = 0;
+    for (final g in app.groups) {
+      for (final game in g.pastGames) {
+        if (!game.players.any((p) => p.id == userId)) continue;
+        if (game.finishOrder.firstOrNull == userId) {
+          streak++;
+          if (streak > best) best = streak;
+        } else {
+          streak = 0;
+        }
+      }
+    }
+    if (best >= 3) earned.add('🔥  3 IN A ROW');
+
+    var biggestPrize = 0;
+    for (final g in app.groups) {
+      for (final game in g.pastGames) {
+        if (!game.players.any((p) => p.id == userId)) continue;
+        final pos = game.finishOrder.indexOf(userId ?? '');
+        final placement = pos >= 0 ? game.finishOrder.length - pos : 0;
+        final prize = game.structure.prizes
+            .where((pr) => pr.place == placement)
+            .fold<int>(0, (s, pr) => s + pr.amount);
+        if (prize > biggestPrize) biggestPrize = prize;
+      }
+    }
+    if (biggestPrize >= 1000) earned.add('💰  \$1K NIGHT');
+    return earned;
   }
 
   void _chooseAvatarColor(BuildContext context, AppProvider app) {
@@ -616,6 +788,42 @@ class _ProfileStat extends StatelessWidget {
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: AppTypography.mono(
+                size: AppFontSizes.lg,
+                weight: FontWeight.w700,
+                color: AppColors.foreground,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            label,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LifetimeStat extends StatelessWidget {
+  const _LifetimeStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           FittedBox(
             fit: BoxFit.scaleDown,

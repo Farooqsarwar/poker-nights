@@ -157,12 +157,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xl),
-              // Group activity snapshot — answers "how is the group doing?"
-              // at a glance (IA §7).
-              if (app.hasCurrentGroup) ...[
-                _GroupStats(group: group, app: app),
-                const SizedBox(height: AppSpacing.xl),
-              ],
               // Offline Conflict Banner
               if (app.hasOfflineConflict) ...[
                 AppAlertBanner(
@@ -205,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: () =>
                             context.go(RoutePaths.createTournament),
                         child: const AppIconLabel(
-                          label: 'New Game',
+                          label: 'New game',
                           icon: Icons.add,
                         ),
                       ),
@@ -216,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         variant: AppButtonVariant.secondary,
                         onPressed: () => context.go(RoutePaths.cashGame),
                         child: const AppIconLabel(
-                          label: 'Start Cash Game',
+                          label: 'Cash game',
                           icon: Icons.sports_esports,
                         ),
                       ),
@@ -224,6 +218,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
+              ],
+              // Group snapshot — answers "how is the group doing?" at a glance
+              // (IA §7). Sits after the primary actions, matching the
+              // redesigned Home flow: NEXT UP → New game / Cash game →
+              // Group snapshot → Upcoming.
+              if (app.hasCurrentGroup) ...[
+                Text(
+                  'Group snapshot',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _GroupStats(group: group, app: app),
+                const SizedBox(height: AppSpacing.xl),
               ],
               // Two-column layout
               LayoutBuilder(
@@ -410,10 +420,14 @@ class _GroupStats extends StatelessWidget {
         .fold<double>(0, (s, c) => s + c.totalBuyIns);
 
     final stats = [
-      ('Games', '$past', Icons.style_outlined),
-      ('Members', '$members', Icons.groups_outlined),
-      ('Cash games', '$cash', Icons.payments_outlined),
-      ('Volume', Formatters.chips(prizeVolume + cashVolume), Icons.account_balance_wallet_outlined),
+      ('games', '$past', Icons.style_outlined),
+      ('members', '$members', Icons.groups_outlined),
+      ('cash games', '$cash', Icons.payments_outlined),
+      (
+        'volume',
+        '\$${Formatters.chips(prizeVolume + cashVolume)}',
+        Icons.account_balance_wallet_outlined,
+      ),
     ];
 
     return LayoutBuilder(
@@ -541,7 +555,7 @@ class _NextActionCard extends StatelessWidget {
     final (title, subtitle, actionLabel, path) = switch (game.status) {
       LiveGameStatus.running || LiveGameStatus.paused => (
         '${game.settings.name} is live',
-        'Level ${game.currentLevel} · ${game.activePlayers.length} players remaining',
+        'Level ${game.currentLevel} · ${game.activePlayers.length} players remaining · $going going',
         isAdmin ? 'Open Dashboard' : 'View Game',
         RoutePaths.adminDashboard,
       ),
@@ -592,11 +606,25 @@ class _NextActionCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  title,
-                  style: AppTypography.bodyLg.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: AppTypography.bodyLg.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (game.status.isActiveLive) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      AppBadge(
+                        label: 'LIVE',
+                        variant: AppBadgeVariant.gold,
+                        dotColor: AppColors.primary,
+                      ),
+                    ],
+                  ],
                 ),
                 if (subtitle.isNotEmpty)
                   Padding(
@@ -658,7 +686,7 @@ class _UpcomingGames extends StatelessWidget {
                   // Text in a Row overflows rather than wrapping.
                   Flexible(
                     child: Text(
-                      'Upcoming Games',
+                      'Upcoming',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.display(
@@ -670,12 +698,42 @@ class _UpcomingGames extends StatelessWidget {
                 ],
               ),
             ),
-            if (isAdmin)
+            InkWell(
+              onTap: () => context.go(RoutePaths.group),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: 2,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'See all',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.primaryText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 16,
+                      color: AppColors.primaryText,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (isAdmin) ...[
+              const SizedBox(width: AppSpacing.sm),
               AppButton(
                 size: AppButtonSize.sm,
                 onPressed: () => context.go(RoutePaths.createTournament),
                 child: const Text('+ New game'),
               ),
+            ],
           ],
         ),
         const SizedBox(height: AppSpacing.md),

@@ -9,11 +9,10 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
+import '../../responsive/responsive.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_card.dart';
 import '../../widgets/backgrounds.dart';
 import '../../widgets/brand_lockup.dart';
-import '../../widgets/min_tap_target.dart';
 
 /// Unified join screen: enter an invite **code**, paste an invite **link**, or
 /// scan a **QR code** — for games *and* groups, as a guest *or* signed in.
@@ -69,9 +68,9 @@ class _JoinScreenState extends State<JoinScreen> {
   }
 
   Future<void> _scan() async {
-    final raw = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const ScanQRScreen()),
-    );
+    final raw = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const ScanQRScreen()));
     if (!mounted || raw == null || raw.trim().isEmpty) return;
     _controller.text = raw.trim();
     _resolve(raw);
@@ -159,89 +158,168 @@ class _JoinScreenState extends State<JoinScreen> {
       (a) => a.isAuthenticated && !a.isGuest,
     );
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: FeltBackground(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.xxl,
-              vertical: AppSpacing.xl,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: _BackLink(onTap: _back),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    const Center(child: PokerNightLogo(size: 64)),
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      'Join a game or group',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.display(size: AppFontSizes.xxl),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Enter an invite code, paste an invite link, or scan a QR '
-                      'code from your admin.',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    AppCard(
-                      padding: const EdgeInsets.all(AppSpacing.xl),
-                      child: _groupSignInCode != null
-                          ? _buildSignInToJoin()
-                          : _buildInput(),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    if (!hasAccount && _groupSignInCode == null)
-                      // Wrap, not Row. Both halves are unbounded text and the
-                      // pair is wider than a 320px phone once the page padding
-                      // is taken off, so a Row overflowed by 101px there and
-                      // 21px at 400px. Wrapping puts "Sign in" on its own line
-                      // instead — an ellipsis would be wrong here, the link is
-                      // the point of the sentence.
-                      Wrap(
-                        alignment: WrapAlignment.center,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            'Have an account? ',
-                            style: AppTypography.bodySm.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                          InkWell(
-                            onTap: () => context.go(RoutePaths.login),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                              child: Text(
-                                'Sign in',
-                                style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.primaryText,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
+    final device = AppBreakpoints.deviceOf(context);
+    final twoColumn = device.isDesktop || device.isLargeDesktop;
+    final statusBarHeight = MediaQuery.paddingOf(context).top;
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (twoColumn) ...[
+          const Center(child: PokerNightLogo(size: 64)),
+          const SizedBox(height: AppSpacing.lg),
+        ] else ...[
+          const SizedBox(height: AppSpacing.md),
+          Center(
+            child: Container(
+              width: 48,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD53032),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66D53032),
+                    blurRadius: 18,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Text(
+                '♠',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  height: 1,
                 ),
               ),
             ),
           ),
+          const SizedBox(height: 16),
+        ],
+        Text(
+          'Join a game or group',
+          textAlign: TextAlign.center,
+          style: AppTypography.display(
+            size: 22,
+            weight: FontWeight.w700,
+            color: Colors.white,
+          ),
         ),
+        const SizedBox(height: 6),
+        const Text(
+          'Enter an invite code, paste an invite link, or\nscan a QR code from your admin.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Color(0xFFB8B8C2),
+            fontSize: 13,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF141416),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF242428)),
+          ),
+          child: _groupSignInCode != null
+              ? _buildSignInToJoin()
+              : _buildInput(),
+        ),
+        const SizedBox(height: 24),
+        if (!hasAccount && _groupSignInCode == null)
+          Center(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  const TextSpan(
+                    text: 'Have an account? ',
+                    style: TextStyle(color: Color(0xFF9A9AA6), fontSize: 13),
+                  ),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.baseline,
+                    baseline: TextBaseline.alphabetic,
+                    child: InkWell(
+                      onTap: () => context.go(RoutePaths.login),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: Text(
+                          'Sign in',
+                          style: TextStyle(
+                            color: Color(0xFFE5797A),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                            decorationColor: Color(0xFFE5797A),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Stack(
+        children: [
+          FeltBackground(
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xxl,
+                  vertical: twoColumn
+                      ? AppSpacing.xl
+                      : (statusBarHeight + AppSpacing.xxxl + 20),
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: content,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: statusBarHeight + AppSpacing.md,
+            left: AppSpacing.lg,
+            child: Semantics(
+              button: true,
+              label: 'Back',
+              child: InkWell(
+                onTap: _back,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF242428)),
+                  ),
+                  child: const Icon(
+                    Icons.chevron_left,
+                    size: 22,
+                    color: Color(0xFFE5797A),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -250,99 +328,147 @@ class _JoinScreenState extends State<JoinScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Invite code or link',
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.mutedForeground,
+        const Text(
+          'INVITE CODE OR LINK',
+          style: TextStyle(
+            color: Color(0xFF9A9AA6),
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
           ),
         ),
-        const SizedBox(height: AppSpacing.xs),
-        TextField(
-          controller: _controller,
-          autofocus: widget.initialCode == null,
-          enabled: !_busy,
-          textCapitalization: TextCapitalization.characters,
-          textAlign: TextAlign.center,
-          onChanged: (_) {
-            if (_error != null) setState(() => _error = null);
-          },
-          onSubmitted: _resolve,
-          inputFormatters: [LengthLimitingTextInputFormatter(200)],
-          style: AppTypography.monoLg.copyWith(letterSpacing: 2),
-          decoration: InputDecoration(
-            counterText: '',
-            hintText: 'CODE',
-            hintStyle: AppTypography.monoLg.copyWith(
-              color: AppColors.onSurfaceHint,
-              letterSpacing: 2,
+        const SizedBox(height: 8),
+        Container(
+          height: 52,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A0A0A),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF26262A)),
+          ),
+          alignment: Alignment.center,
+          child: TextField(
+            controller: _controller,
+            autofocus: widget.initialCode == null,
+            enabled: !_busy,
+            textCapitalization: TextCapitalization.characters,
+            textAlign: TextAlign.center,
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
+            onSubmitted: _resolve,
+            inputFormatters: [LengthLimitingTextInputFormatter(200)],
+            style: const TextStyle(
+              fontFamily: 'Space Grotesk',
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 3,
+              color: Colors.white,
             ),
-            isDense: true,
-            filled: true,
-            fillColor: AppColors.background,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 14,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide: BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide: BorderSide(color: AppColors.ring),
+            decoration: const InputDecoration(
+              counterText: '',
+              hintText: 'CODE',
+              hintStyle: TextStyle(
+                fontFamily: 'Space Grotesk',
+                fontSize: 18,
+                letterSpacing: 3,
+                color: Color(0xFF9A9AA6),
+              ),
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
             ),
           ),
         ),
         if (_error != null) ...[
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 8),
           Text(
             _error!,
             textAlign: TextAlign.center,
-            style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+            style: const TextStyle(color: Color(0xFFE5797A), fontSize: 12),
           ),
         ],
-        const SizedBox(height: AppSpacing.lg),
-        AppButton(
-          fullWidth: true,
-          size: AppButtonSize.lg,
-          loading: _busy,
-          onPressed: () => _resolve(_controller.text),
-          child: const Text('Continue'),
+        const SizedBox(height: 20),
+        Container(
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x66D53032),
+                blurRadius: 16,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD53032),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: _busy ? null : () => _resolve(_controller.text),
+            child: _busy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    'Continue',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+          ),
         ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: 16),
         Row(
-          children: [
-            Expanded(child: Divider(color: AppColors.border)),
+          children: const [
+            Expanded(child: Divider(color: Color(0xFF242428))),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              padding: EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 'OR',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
+                style: TextStyle(
+                  color: Color(0xFF9A9AA6),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
-            Expanded(child: Divider(color: AppColors.border)),
+            Expanded(child: Divider(color: Color(0xFF242428))),
           ],
         ),
-        const SizedBox(height: AppSpacing.lg),
-        AppButton(
-          fullWidth: true,
-          size: AppButtonSize.lg,
-          variant: AppButtonVariant.secondary,
-          onPressed: _busy ? null : _scan,
-          // The icon and label together want 220px; a 320px phone leaves the
-          // button 164px inside its own padding. scaleDown shrinks the pair
-          // to fit rather than clipping the label to "Scan QR c…", and does
-          // nothing at any width where the label already fits.
-          child: const FittedBox(
-            fit: BoxFit.scaleDown,
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 48,
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E1E22),
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Color(0xFF28282C)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: _busy ? null : _scan,
             child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.qr_code_scanner, size: 18),
-                SizedBox(width: AppSpacing.sm),
-                Text('Scan QR code'),
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.qr_code_scanner, size: 20, color: Colors.white),
+                SizedBox(width: 8),
+                Text(
+                  'Scan QR code',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
               ],
             ),
           ),
@@ -413,38 +539,6 @@ class _JoinScreenState extends State<JoinScreen> {
   }
 }
 
-class _BackLink extends StatelessWidget {
-  const _BackLink({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: MinTapTarget(
-        child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.arrow_back, size: 16, color: AppColors.mutedForeground),
-            const SizedBox(width: 6),
-            Text(
-              'Back',
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ],
-        ),
-      ),
-      ),
-    );
-  }
-}
-
 /// Full-screen QR scanner. Pops the raw scanned payload (bare code or invite
 /// URL) back to the caller, which resolves it through [AppProvider].
 class ScanQRScreen extends StatefulWidget {
@@ -475,7 +569,10 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
               if (_handled) return;
               final code = capture.barcodes
                   .map((b) => b.rawValue)
-                  .firstWhere((v) => v != null && v.isNotEmpty, orElse: () => null);
+                  .firstWhere(
+                    (v) => v != null && v.isNotEmpty,
+                    orElse: () => null,
+                  );
               if (code == null) return;
               _handled = true;
               Navigator.of(context).pop(code);
@@ -503,9 +600,7 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
               // instead of white70: 70% white vanishes against a bright wall.
               style: AppTypography.bodySm.copyWith(
                 color: Colors.white,
-                shadows: const [
-                  Shadow(blurRadius: 4, color: Colors.black87),
-                ],
+                shadows: const [Shadow(blurRadius: 4, color: Colors.black87)],
               ),
             ),
           ),

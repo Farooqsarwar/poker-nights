@@ -8,6 +8,7 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
 import '../../models/chip_color.dart';
+import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
@@ -74,7 +75,7 @@ class ChipSetsScreen extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  'Chip Sets',
+                  'Chip sets',
                   style: AppTypography.display(
                     size: AppFontSizes.xxl,
                     weight: FontWeight.w700,
@@ -83,7 +84,7 @@ class ChipSetsScreen extends StatelessWidget {
               ),
               AppButton(
                 onPressed: () => context.push(RoutePaths.editChipSet),
-                child: const Text('New Chip Set'),
+                child: const Text('+ New'),
               ),
             ],
           ),
@@ -121,6 +122,29 @@ class ChipSetsScreen extends StatelessWidget {
                               style: AppTypography.bodyLg.copyWith(
                                 fontWeight: FontWeight.w600,
                               ),
+                            ),
+                            const SizedBox(height: AppSpacing.xxs),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    '${cs.chips.length} '
+                                    'denomination${cs.chips.length == 1 ? '' : 's'}',
+                                    style: AppTypography.bodyXs.copyWith(
+                                      color: AppColors.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                                if (cs.id ==
+                                    (app.defaultChipSetId ?? 'cs-default')) ...[
+                                  const SizedBox(width: AppSpacing.sm),
+                                  const AppBadge(
+                                    label: 'DEFAULT',
+                                    variant: AppBadgeVariant.green,
+                                    border: true,
+                                  ),
+                                ],
+                              ],
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Wrap(

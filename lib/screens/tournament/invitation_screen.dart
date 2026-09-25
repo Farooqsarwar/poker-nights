@@ -66,15 +66,28 @@ class _InvitationScreenState extends State<InvitationScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'Your tournament is created! Here is what to do next.',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AppSpacing.md),
-          const Text('1. Group members have been notified and can RSVP.'),
-          const Text('2. Share the 4-digit code below with any guests.'),
-          const Text(
+          Text(
+            '1. Group members have been notified and can RSVP.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          Text(
+            '2. Share the 4-digit code below with any guests.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          Text(
             '3. When you are ready to start seating players, tap "Open Check-in".',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.xl),
           AppButton(
@@ -83,7 +96,9 @@ class _InvitationScreenState extends State<InvitationScreen> {
             child: const Text('Got it'),
           ),
           const SizedBox(height: AppSpacing.md),
-          TextButton(
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.ghost,
             onPressed: () {
               context.read<AppProvider>().setAppTour(false);
               Navigator.of(context).pop();
@@ -1437,68 +1452,51 @@ class _EditEventModalBodyState extends State<_EditEventModalBody> {
 }
 
 void showAppLinkModal(BuildContext context, LiveGame game) {
-  showDialog<void>(
+  showAppModal(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.7),
-    builder: (context) => Dialog(
-      backgroundColor: AppColors.card,
-      insetPadding: const EdgeInsets.all(AppSpacing.lg),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        side: BorderSide(color: AppColors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Guest link',
-              style: AppTypography.display(size: AppFontSizes.lg),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            // Real scannable QR code for the guest join link.
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                // Literal white, deliberately: a QR code needs a light quiet
-                // zone and maximum contrast to scan.
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-              child: QrImageView(
-                data:
-                    'https://poker-night-tools.web.app/game/${game.publicCode}',
-                version: QrVersions.auto,
-                size: 200,
-                gapless: false,
-                backgroundColor: Colors.white,
-                errorCorrectionLevel: QrErrorCorrectLevel.M,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              'https://poker-night-tools.web.app/game/${game.publicCode}',
-              textAlign: TextAlign.center,
-              style: AppTypography.monoSm.copyWith(color: AppColors.primary),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Guests scan this to open the join page — no account needed.',
-              textAlign: TextAlign.center,
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            AppButton(
-              fullWidth: true,
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Done'),
-            ),
-          ],
+    title: 'Guest link',
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Real scannable QR code for the guest join link.
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            // Literal white, deliberately: a QR code needs a light quiet
+            // zone and maximum contrast to scan.
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: QrImageView(
+            data: 'https://poker-night-tools.web.app/game/${game.publicCode}',
+            version: QrVersions.auto,
+            size: 200,
+            gapless: false,
+            backgroundColor: Colors.white,
+            errorCorrectionLevel: QrErrorCorrectLevel.M,
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'https://poker-night-tools.web.app/game/${game.publicCode}',
+          textAlign: TextAlign.center,
+          style: AppTypography.monoSm.copyWith(color: AppColors.primary),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Guests scan this to open the join page — no account needed.',
+          textAlign: TextAlign.center,
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        AppButton(
+          fullWidth: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
+      ],
     ),
   );
 }
@@ -1862,7 +1860,7 @@ class _RsvpSectionState extends State<_RsvpSection> {
               onTap: () => widget.onRsvp(Rsvp.maybe),
             ),
             _RsvpChip(
-              label: "Can't come",
+              label: "Can't",
               active: current == Rsvp.cant,
               enabled: enabled,
               onTap: () => widget.onRsvp(Rsvp.cant),

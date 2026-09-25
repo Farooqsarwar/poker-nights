@@ -169,7 +169,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Tournament Presets',
+                      'Presets',
                       style: AppTypography.display(
                         size: AppFontSizes.xxl,
                         weight: FontWeight.w700,
@@ -177,7 +177,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'Save your favourite game settings and start a new game in one tap.',
+                      'One-tap tournament setups.',
                       style: AppTypography.bodySm.copyWith(
                         color: AppColors.mutedForeground,
                       ),
@@ -189,7 +189,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                 padding: const EdgeInsets.only(top: 4.0),
                 child: AppButton(
                   onPressed: () => _editPreset(app, null),
-                  child: const Text('+ New preset'),
+                  child: const Text('+ New'),
                 ),
               ),
             ],
@@ -290,7 +290,7 @@ class _PresetsScreenState extends State<PresetsScreen> {
                             onPressed: () => context.go(
                               '${RoutePaths.createTournament}?preset=${p.id}',
                             ),
-                            child: const Text('Use for new game'),
+                            child: const Text('Use preset'),
                           ),
                         ),
                       ],
@@ -325,8 +325,11 @@ class _Tag extends StatelessWidget {
         border: Border.all(color: AppColors.border),
       ),
       child: Text(
-        text,
-        style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+        text.toUpperCase(),
+        style: AppTypography.bodyXs.copyWith(
+          color: AppColors.mutedForeground,
+          letterSpacing: 0.6,
+        ),
       ),
     );
   }

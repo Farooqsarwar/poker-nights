@@ -58,6 +58,13 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     });
   }
 
+  static const _features = <String>[
+    'Unlimited tournaments & players',
+    'TV mode & big-screen clock',
+    'ICM deals & advanced payouts',
+    'Cloud sync across devices',
+  ];
+
   /// §3, verbatim. Free on the left, what the money buys on the right.
   static const _comparison = <({String free, String? premium})>[
     (free: 'Account, RSVP, event link and QR', premium: null),
@@ -90,7 +97,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
         children: [
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Run bigger nights',
+            'Poker Night Pro',
             textAlign: TextAlign.center,
             style: AppTypography.display(
               size: AppFontSizes.xxxl,
@@ -99,12 +106,42 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Everything you need for a single table is free, and always will '
-            'be. Premium is for more tables, more intelligence and more '
-            'control.',
+            'Unlimited tournaments, TV mode, ICM deals and cloud sync for '
+            'the whole group.',
             textAlign: TextAlign.center,
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final feature in _features)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          size: 16,
+                          // Gold marks the value on this screen; crimson is
+                          // reserved for the commit action below.
+                          color: AppColors.gold,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            feature,
+                            style: AppTypography.bodySm,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -117,7 +154,15 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
               RoutePaths.checkout,
               extra: _selectedPlanId,
             ),
-            child: const Text('Continue'),
+            child: const Text('Start 7-day free trial'),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Cancel anytime · billed after trial',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.xl),
           _comparisonTable(),
@@ -227,7 +272,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                   'Premium',
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
+                    color: AppColors.gold,
                   ),
                 ),
               ),
@@ -276,7 +321,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                               Icon(
                                 Icons.auto_awesome,
                                 size: 14,
-                                color: AppColors.primary,
+                                color: AppColors.gold,
                               ),
                               const SizedBox(width: AppSpacing.xs),
                               Expanded(
@@ -395,11 +440,17 @@ class _PlanCard extends StatelessWidget {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.success,
+                      // Gold marks the value (the saving); crimson is
+                      // reserved for the commit action.
+                      //
+                      // Note: AppBadge's `gold` variant actually resolves to
+                      // AppColors.primary internally, so a manual container
+                      // is used here to get genuine gold.
+                      color: AppColors.gold,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                     child: Text(
-                      plan.saving!,
+                      plan.saving!.toUpperCase(),
                       style: AppTypography.bodyXs.copyWith(
                         color: AppColors.background,
                         fontWeight: FontWeight.w700,

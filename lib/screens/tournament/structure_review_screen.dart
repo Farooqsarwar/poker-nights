@@ -197,7 +197,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Structure Review',
+                      'Review structure',
                       style: AppTypography.display(
                         size: AppFontSizes.xxxl,
                         weight: FontWeight.w700,
@@ -302,7 +302,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Structure Review',
+                      'Review structure',
                       style: AppTypography.display(
                         size: AppFontSizes.xxxl,
                         weight: FontWeight.w700,
@@ -1331,7 +1331,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Confirm & Publish'),
+                        Text('Publish event'),
                         SizedBox(width: 6),
                         Icon(
                           Icons.check_circle,

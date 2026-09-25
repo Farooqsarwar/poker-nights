@@ -345,7 +345,7 @@ class _AddOnsStep extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Row(
           children: [
-            const Icon(Icons.check_circle, color: Colors.green),
+            Icon(Icons.check_circle, color: AppColors.success),
             const SizedBox(width: AppSpacing.sm),
             Text(
               'Add-ons selected: $totalAddOns',
@@ -656,7 +656,7 @@ class _ColorUpStep extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Row(
           children: [
-            const Icon(Icons.check_circle, color: Colors.green),
+            Icon(Icons.check_circle, color: AppColors.success),
             const SizedBox(width: AppSpacing.sm),
             Text(
               'Color-up complete',
@@ -1037,7 +1037,7 @@ class _ConfirmPlayersStep extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Row(
           children: [
-            const Icon(Icons.check_circle, color: Colors.green),
+            Icon(Icons.check_circle, color: AppColors.success),
             const SizedBox(width: AppSpacing.sm),
             Text(
               'Players confirmed',

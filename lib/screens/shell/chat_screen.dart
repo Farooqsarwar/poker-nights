@@ -85,8 +85,8 @@ class _ChatScreenState extends State<ChatScreen> {
               Expanded(
                 child: Text(
                   messages.isEmpty
-                      ? 'No messages yet'
-                      : '${messages.length} message${messages.length != 1 ? 's' : ''}',
+                      ? '${group.members.length} member${group.members.length != 1 ? 's' : ''}'
+                      : '${group.members.length} member${group.members.length != 1 ? 's' : ''} · ${messages.length} message${messages.length != 1 ? 's' : ''}',
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
                   ),
@@ -317,7 +317,7 @@ class _ChatInputState extends State<_ChatInput> {
         onSubmitted: (_) => widget.onSend(),
         style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
         decoration: InputDecoration(
-          hintText: 'Type a message…',
+          hintText: 'Message the group…',
           hintStyle: AppTypography.bodySm.copyWith(
             color: AppColors.onSurfaceHint,
           ),

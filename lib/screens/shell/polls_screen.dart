@@ -267,14 +267,29 @@ class _PollsScreenState extends State<PollsScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
             ],
-            for (final poll in group.polls)
-              PollCard(
-                poll: poll,
-                userId: userId,
-                isAdmin: isAdmin,
-                onVote: (opts) => app.votePoll(poll.id, opts),
-                onClose: () => app.closePoll(poll.id),
-              ),
+            for (final section in [
+              ('OPEN', group.polls.where((p) => !p.closed).toList()),
+              ('CLOSED', group.polls.where((p) => p.closed).toList()),
+            ])
+              if (section.$2.isNotEmpty) ...[
+                Text(
+                  section.$1,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                for (final poll in section.$2)
+                  PollCard(
+                    poll: poll,
+                    userId: userId,
+                    isAdmin: isAdmin,
+                    onVote: (opts) => app.votePoll(poll.id, opts),
+                    onClose: () => app.closePoll(poll.id),
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
           ],
           _pollModal(app),
         ],

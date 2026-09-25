@@ -127,6 +127,8 @@ class NotificationsScreen extends StatelessWidget {
     final app = context.watch<AppProvider>();
     final notifications = app.notifications;
     final unreadCount = notifications.where((n) => !n.read).length;
+    final unreadList = notifications.where((n) => !n.read).toList();
+    final readList = notifications.where((n) => n.read).toList();
 
     return AppPage(
       maxWidth: 600,
@@ -199,16 +201,32 @@ class NotificationsScreen extends StatelessWidget {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  for (var i = 0; i < notifications.length; i++)
-                    _NotificationRow(
-                      notification: notifications[i],
-                      showDivider: i < notifications.length - 1,
-                      icon: _iconFor(notifications[i].type),
-                      onTap: () {
-                        app.markNotificationRead(notifications[i].id);
-                        _openLink(context, notifications[i].link);
-                      },
-                    ),
+                  if (unreadList.isNotEmpty) ...[
+                    const _SectionHeader(label: 'NEW'),
+                    for (var i = 0; i < unreadList.length; i++)
+                      _NotificationRow(
+                        notification: unreadList[i],
+                        showDivider: i < unreadList.length - 1 || readList.isNotEmpty,
+                        icon: _iconFor(unreadList[i].type),
+                        onTap: () {
+                          app.markNotificationRead(unreadList[i].id);
+                          _openLink(context, unreadList[i].link);
+                        },
+                      ),
+                  ],
+                  if (readList.isNotEmpty) ...[
+                    const _SectionHeader(label: 'EARLIER'),
+                    for (var i = 0; i < readList.length; i++)
+                      _NotificationRow(
+                        notification: readList[i],
+                        showDivider: i < readList.length - 1,
+                        icon: _iconFor(readList[i].type),
+                        onTap: () {
+                          app.markNotificationRead(readList[i].id);
+                          _openLink(context, readList[i].link);
+                        },
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -224,6 +242,32 @@ class NotificationsScreen extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
+      child: Text(
+        label,
+        style: AppTypography.bodyXs.copyWith(
+          color: AppColors.mutedForeground,
+          letterSpacing: 1,
+        ),
       ),
     );
   }

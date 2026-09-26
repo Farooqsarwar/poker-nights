@@ -6,6 +6,8 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_eyebrow.dart';
+import '../../widgets/legal_page.dart';
 import '../../constants/app_constants.dart';
 
 const _supportEmail = 'support@pokernight.app';
@@ -55,89 +57,117 @@ class SupportScreen extends StatelessWidget {
     await launchUrl(uri);
   }
 
+  void _back(BuildContext context) {
+    if (GoRouter.of(context).canPop()) {
+      context.pop();
+    } else {
+      context.go(RoutePaths.home);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text('Support', style: AppTypography.displaySm),
-        leading: IconButton(
-          tooltip: 'Back',
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (GoRouter.of(context).canPop()) {
-              context.pop();
-            } else {
-              context.go(RoutePaths.home);
-            }
-          },
+    return LegalPage(
+      onBack: () => _back(context),
+      children: [
+        const LegalTitle('Need help?'),
+        const SizedBox(height: AppSpacing.md),
+        Text.rich(
+          TextSpan(
+            children: [
+              const TextSpan(
+                text: 'Search the answers below, or reach us any time at ',
+              ),
+              TextSpan(
+                text: _supportEmail,
+                style: TextStyle(
+                  color: AppColors.primaryText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const TextSpan(
+                text: ' — we usually reply within one business day.',
+              ),
+            ],
+          ),
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+            height: 1.6,
+          ),
         ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
+        const SizedBox(height: AppSpacing.xl),
+        const AppEyebrow('Frequently asked questions', muted: true),
+        const SizedBox(height: AppSpacing.md),
+        for (final faq in _faqs) ...[
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Need help?', style: AppTypography.display(size: 28)),
-                const SizedBox(height: AppSpacing.md),
                 Text(
-                  'Search the answers below, or reach us any time at '
-                  '$_supportEmail — we usually reply within one business day.',
-                  style: AppTypography.body(height: 1.7),
+                  faq.q,
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                const SizedBox(height: AppSpacing.xxl),
+                const SizedBox(height: AppSpacing.xs),
                 Text(
-                  'FREQUENTLY ASKED QUESTIONS',
-                  style: AppTypography.bodyXs.copyWith(
+                  faq.a,
+                  style: AppTypography.bodySm.copyWith(
                     color: AppColors.mutedForeground,
-                    letterSpacing: 1,
+                    height: 1.55,
                   ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                for (final faq in _faqs) ...[
-                  AppCard(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(faq.q, style: AppTypography.bodyBold),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(faq.a, style: AppTypography.body(height: 1.6)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                AppButton(
-                  onPressed: _emailSupport,
-                  variant: AppButtonVariant.primary,
-                  fullWidth: true,
-                  child: const Text('Email us'),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                AppButton(
-                  onPressed: () {
-                    if (GoRouter.of(context).canPop()) {
-                      context.pop();
-                    } else {
-                      context.go(RoutePaths.home);
-                    }
-                  },
-                  variant: AppButtonVariant.secondary,
-                  fullWidth: true,
-                  child: const Text('Back'),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        // "Found a bug?" — the H3 closing card, carrying the Email us action.
+        AppCard(
+          color: AppColors.primarySoft,
+          borderColor: AppColors.primary,
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Found a bug?',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _supportEmail,
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              AppButton(
+                onPressed: _emailSupport,
+                size: AppButtonSize.sm,
+                child: const Text('Email us'),
+              ),
+            ],
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          onPressed: () => _back(context),
+          variant: AppButtonVariant.ghost,
+          fullWidth: true,
+          child: const Text('Back'),
+        ),
+      ],
     );
   }
 }

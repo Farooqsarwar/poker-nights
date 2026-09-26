@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../../app/typography.dart';
 import '../../app/colors.dart';
 import '../../constants/app_constants.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_eyebrow.dart';
+import '../../widgets/legal_page.dart';
 
 class TermsScreen extends StatelessWidget {
   const TermsScreen({super.key});
@@ -67,56 +70,86 @@ class TermsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text('Terms of Service', style: AppTypography.displaySm),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
+    return LegalPage(
+      children: [
+        const AppEyebrow('Effective date: August 1, 2026'),
+        const SizedBox(height: AppSpacing.md),
+        const LegalTitle('Terms of Service'),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'These Terms of Service govern your access to and use of Poker Night.',
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+            height: 1.6,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        for (final s in _sections) ...[
+          _TermCard(title: s.title, body: s.body),
+          const SizedBox(height: AppSpacing.md),
+        ],
+      ],
+    );
+  }
+}
+
+/// One numbered term as the H2 frame draws it: the number large and crimson,
+/// then the heading and body. The number is split off the existing
+/// "1. Heading" titles, so the copy itself is unchanged.
+class _TermCard extends StatelessWidget {
+  const _TermCard({required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final match = RegExp(r'^(\d+)\.\s+(.*)$').firstMatch(title);
+    final number = match?.group(1);
+    final heading = match?.group(2) ?? title;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (number != null) ...[
+            SizedBox(
+              width: 28,
+              child: Text(
+                number,
+                style: AppTypography.mono(
+                  size: AppFontSizes.xl,
+                  weight: FontWeight.w700,
+                  color: AppColors.primaryText,
+                  height: 1.1,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'EFFECTIVE DATE: AUGUST 1, 2026',
-                  style: AppTypography.bodyXs.copyWith(
+                  heading,
+                  style: AppTypography.body(
+                    size: AppFontSizes.md,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  body,
+                  style: AppTypography.bodySm.copyWith(
                     color: AppColors.mutedForeground,
-                    letterSpacing: 0.8,
-                    fontWeight: FontWeight.w600,
+                    height: 1.6,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Terms of Service',
-                  style: AppTypography.display(size: AppFontSizes.xxxl),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Text(
-                  'These Terms of Service govern your access to and use of Poker Night.',
-                  style: AppTypography.body(height: 1.7),
-                ),
-                const SizedBox(height: AppSpacing.section),
-                for (final s in _sections) ...[
-                  Text(
-                    s.title,
-                    style: AppTypography.body(
-                      size: AppFontSizes.lg,
-                      weight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(s.body, style: AppTypography.body(height: 1.7)),
-                  const SizedBox(height: AppSpacing.xxl),
-                ],
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }

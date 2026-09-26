@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../../app/typography.dart';
 import '../../app/colors.dart';
 import '../../constants/app_constants.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_eyebrow.dart';
+import '../../widgets/app_tag.dart';
+import '../../widgets/legal_page.dart';
 
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
@@ -69,66 +73,48 @@ class PrivacyScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text('Privacy Policy', style: AppTypography.displaySm),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'EFFECTIVE DATE: AUGUST 1, 2026',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                    letterSpacing: 0.8,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Privacy Policy',
-                  style: AppTypography.display(size: AppFontSizes.xxxl),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Text(
-                  'Overview',
-                  style: AppTypography.bodySm.copyWith(
-                    color: AppColors.mutedForeground,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'This Privacy Policy explains what data Poker Night collects, how it is '
-                  'used, and the choices you have over your information.',
-                  style: AppTypography.body(height: 1.7),
-                ),
-                const SizedBox(height: AppSpacing.section),
-                for (final s in _sections) ...[
-                  Text(
-                    s.title,
-                    style: AppTypography.body(
-                      size: AppFontSizes.lg,
-                      weight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(s.body, style: AppTypography.body(height: 1.7)),
-                  const SizedBox(height: AppSpacing.xxl),
-                ],
-              ],
-            ),
+    return LegalPage(
+      children: [
+        const AppEyebrow('Effective date: August 1, 2026'),
+        const SizedBox(height: AppSpacing.md),
+        const LegalTitle('Privacy Policy'),
+        const SizedBox(height: AppSpacing.xl),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const AppTag('Overview', tone: AppTagTone.primary),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'This Privacy Policy explains what data Poker Night collects, how it is '
+                'used, and the choices you have over your information.',
+                style: AppTypography.body(height: 1.6),
+              ),
+            ],
           ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.xxl),
+        for (final s in _sections) ...[
+          Text(
+            s.title,
+            style: AppTypography.body(
+              size: AppFontSizes.md,
+              weight: FontWeight.w700,
+              color: AppColors.primaryText,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            s.body,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+              height: 1.65,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+        ],
+      ],
     );
   }
 }

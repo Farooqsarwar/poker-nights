@@ -10,8 +10,11 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_button.dart';
+<<<<<<< Updated upstream
 import '../../widgets/app_card.dart';
 import '../../widgets/backgrounds.dart';
+=======
+>>>>>>> Stashed changes
 import '../../widgets/brand_lockup.dart';
 
 /// Unified join screen: enter an invite **code**, paste an invite **link**, or
@@ -158,6 +161,7 @@ class _JoinScreenState extends State<JoinScreen> {
       (a) => a.isAuthenticated && !a.isGuest,
     );
 
+<<<<<<< Updated upstream
     return Scaffold(
       backgroundColor: AppColors.background,
       body: FeltBackground(
@@ -234,6 +238,187 @@ class _JoinScreenState extends State<JoinScreen> {
             ),
           ),
         ),
+=======
+    final device = AppBreakpoints.deviceOf(context);
+    final twoColumn = device.isDesktop || device.isLargeDesktop;
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (twoColumn) ...[
+          const Center(child: PokerNightLogo(size: 64)),
+          const SizedBox(height: AppSpacing.lg),
+        ] else ...[
+          const SizedBox(height: AppSpacing.md),
+          Center(
+            child: Container(
+              width: 48,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD53032),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66D53032),
+                    blurRadius: 18,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Text(
+                '♠',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        Text(
+          'Join a game or group',
+          textAlign: TextAlign.center,
+          style: AppTypography.display(
+            size: 22,
+            weight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Enter an invite code, paste an invite link, or\nscan a QR code from your admin.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Color(0xFFB8B8C2),
+            fontSize: 13,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF141416),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF242428)),
+          ),
+          child: _groupSignInCode != null
+              ? _buildSignInToJoin()
+              : _buildInput(),
+        ),
+        const SizedBox(height: 24),
+        if (!hasAccount && _groupSignInCode == null)
+          Center(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  const TextSpan(
+                    text: 'Have an account? ',
+                    style: TextStyle(color: Color(0xFF9A9AA6), fontSize: 13),
+                  ),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.baseline,
+                    baseline: TextBaseline.alphabetic,
+                    child: InkWell(
+                      onTap: () => context.go(RoutePaths.login),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: Text(
+                          'Sign in',
+                          style: TextStyle(
+                            color: Color(0xFFE5797A),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                            decorationColor: Color(0xFFE5797A),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+
+    final backBtn = Semantics(
+      button: true,
+      label: 'Back',
+      child: InkWell(
+        onTap: _back,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF141416),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF242428)),
+          ),
+          child: const Icon(
+            Icons.chevron_left,
+            size: 22,
+            color: Color(0xFFE5797A),
+          ),
+        ),
+      ),
+    );
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0A0A),
+      body: SafeArea(
+        child: twoColumn
+            ? Row(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(AppSpacing.xxl),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            backBtn,
+                            const SizedBox(height: 24),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 420),
+                              child: content,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: backBtn,
+                      ),
+                      const SizedBox(height: 24),
+                      content,
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ),
+>>>>>>> Stashed changes
       ),
     );
   }
@@ -317,6 +502,7 @@ class _JoinScreenState extends State<JoinScreen> {
             Expanded(child: Divider(color: AppColors.border)),
           ],
         ),
+<<<<<<< Updated upstream
         const SizedBox(height: AppSpacing.lg),
         AppButton(
           fullWidth: true,
@@ -330,6 +516,40 @@ class _JoinScreenState extends State<JoinScreen> {
               SizedBox(width: AppSpacing.sm),
               Text('Scan QR code'),
             ],
+=======
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 48,
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E1E22),
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Color(0xFF28282C)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: _busy ? null : _scan,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.qr_code_scanner, size: 20, color: Colors.white),
+                SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Scan QR code',
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+>>>>>>> Stashed changes
           ),
         ),
       ],

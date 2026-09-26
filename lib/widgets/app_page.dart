@@ -18,7 +18,33 @@ class AppPage extends StatelessWidget {
     this.scrollable = true,
   });
 
+<<<<<<< Updated upstream
   final Widget child;
+=======
+  /// Same page chrome — padding, max width, safe area — but the content is a
+  /// sliver list, so off-screen rows are never built.
+  ///
+  /// Use this when a list has no upper bound (game history, cash sessions).
+  /// The default [AppPage] puts its child in a `SingleChildScrollView`, which
+  /// builds and lays out every row whether or not it is on screen; on a group
+  /// with a few hundred past games that is the whole list on every rebuild.
+  ///
+  /// `shrinkWrap: true` is NOT the shortcut it looks like — inside a scroll
+  /// view it still builds every child in order to measure them, so it buys
+  /// the sliver's awkwardness with none of its benefit.
+  const AppPage.slivers({
+    super.key,
+    required List<Widget> this.slivers,
+    this.maxWidth = 1280,
+    this.padding,
+    this.color,
+    this.topInset = false,
+  }) : child = null,
+       scrollable = true;
+
+  final Widget? child;
+  final List<Widget>? slivers;
+>>>>>>> Stashed changes
   final double maxWidth;
   final EdgeInsets? padding;
   final Color? color;
@@ -54,6 +80,7 @@ class AppPage extends StatelessWidget {
       );
     }
 
+<<<<<<< Updated upstream
     return ColoredBox(
       color: effectiveColor,
       child: SafeArea(
@@ -61,6 +88,11 @@ class AppPage extends StatelessWidget {
         top: false, 
         child: SingleChildScrollView(padding: effectivePadding, child: content)
       ),
+=======
+    return Scaffold(
+      backgroundColor: effectiveColor,
+      body: SafeArea(top: topInset, bottom: true, child: body),
+>>>>>>> Stashed changes
     );
   }
 }

@@ -13,6 +13,11 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+<<<<<<< Updated upstream
+=======
+import '../../widgets/app_text_field.dart';
+import '../../widgets/squircle_icon_button.dart';
+>>>>>>> Stashed changes
 
 /// User profile mirroring the account area of the web app.
 class ProfileScreen extends StatelessWidget {
@@ -288,14 +293,14 @@ class ProfileScreen extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+            AppTextField(
               controller: nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
+              label: 'Name',
             ),
             const SizedBox(height: AppSpacing.md),
-            TextField(
+            AppTextField(
               controller: emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
+              label: 'Email',
             ),
           ],
         ),
@@ -341,6 +346,77 @@ class ProfileScreen extends StatelessWidget {
         ),
         actions: [
           TextButton(
+<<<<<<< Updated upstream
+=======
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'Yes, delete my account',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.destructiveText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    String? password;
+    if (app.deleteNeedsPassword) {
+      if (!context.mounted) return;
+      password = await _askPassword(context);
+      if (password == null) return;
+    }
+
+    final error = await app.deleteAccount(password: password);
+    if (error != null) {
+      messenger.showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    router.go(RoutePaths.landing);
+  }
+
+  Future<String?> _askPassword(BuildContext context) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Confirm your password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'For security, please re-enter your password to delete your '
+              'account.',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: controller,
+              obscureText: true,
+              autofocus: true,
+              label: 'Password',
+              onSubmitted: (v) => Navigator.of(dialogContext).pop(v),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+>>>>>>> Stashed changes
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text(
               'Cancel',

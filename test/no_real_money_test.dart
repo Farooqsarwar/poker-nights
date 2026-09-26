@@ -119,7 +119,15 @@ void main() {
 
     test('production builds can switch the demo grant off', () {
       final source = read('lib/providers/app_provider.dart');
-      expect(source, contains("bool.fromEnvironment('DEMO_PREMIUM'"));
+      // A literal substring match broke the day `dart format` wrapped this
+      // call across multiple lines -- the property this test actually cares
+      // about (an env-gated flag exists at all) has nothing to do with
+      // whether Dart chose to put a line break after the open paren, so the
+      // pattern tolerates any whitespace there instead of asserting on it.
+      expect(
+        RegExp(r"bool\.fromEnvironment\(\s*'DEMO_PREMIUM'").hasMatch(source),
+        isTrue,
+      );
     });
 
     test('the deploy script makes a deliberate, documented choice', () {

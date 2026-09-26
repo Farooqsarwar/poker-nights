@@ -274,6 +274,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ),
                     ),
                   ),
+<<<<<<< Updated upstream
                   Expanded(
                     child: AppButton(
                       size: AppButtonSize.sm,
@@ -397,6 +398,59 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                 ],
               ),
+=======
+                ),
+                Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => ChatSheet.show(context, game.id),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF141416),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFF242428),
+                              ),
+                            ),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.chat_bubble_outline,
+                                  size: 20,
+                                  color: Colors.white,
+                                ),
+                                if (app.unreadGameChatCount(game.id) > 0)
+                                  Positioned(
+                                    top: 6,
+                                    right: 6,
+                                    child: ChatUnreadBadge(
+                                      count: app.unreadGameChatCount(game.id),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SquircleIconButton(
+                        icon: Icons.more_vert,
+                        size: 40,
+                        iconSize: 20,
+                        borderRadius: 12,
+                        onPressed: () => _showMoreActionsMenu(context, app, game),
+                      ),
+                    ],
+                  ),
+              ],
+>>>>>>> Stashed changes
             ),
           ] else ...[
             Row(

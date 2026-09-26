@@ -265,13 +265,29 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
             ),
           ],
           const SizedBox(height: AppSpacing.md),
+          Text(
+            'DENOMINATIONS',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF71767B),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           if (_mode == _EditorMode.quick && _quickKind == _QuickKind.unnumbered)
             _buildReorderableList()
           else
             _buildChipList(),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // `spaceBetween` pushed the two buttons to opposite edges with
+          // nothing shrinkable between them, which is fine right up until
+          // both labels together are wider than the row — at a 320px phone
+          // "+ Add denomination" and "Re-suggest values" together no longer
+          // fit. Wrap reflows the second button onto its own line instead of
+          // forcing an overflow.
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
             children: [
               AppButton(
                 variant: AppButtonVariant.secondary,

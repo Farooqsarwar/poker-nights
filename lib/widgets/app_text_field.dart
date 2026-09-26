@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import '../app/colors.dart';
 import '../constants/app_constants.dart';
 import '../app/typography.dart';
-import 'glass_styles.dart';
 
 /// Text field mirroring the web `Input` component (label / hint / error).
 class AppTextField extends StatefulWidget {
@@ -99,6 +98,12 @@ class _AppTextFieldState extends State<AppTextField> {
   Widget build(BuildContext context) {
     final hasError = widget.error != null;
 
+    final borderColor = hasError
+        ? AppColors.destructiveText
+        : _isFocused
+            ? AppColors.primary
+            : const Color(0xFF26262A); // Matching design
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -113,9 +118,10 @@ class _AppTextFieldState extends State<AppTextField> {
         ],
         AnimatedContainer(
           duration: AppDurations.fast,
-          decoration: Glass.glassInput(
-            focused: _isFocused,
-            hasError: hasError,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A0A0A),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor),
           ),
           child: TextField(
             controller: widget.controller,
@@ -132,11 +138,11 @@ class _AppTextFieldState extends State<AppTextField> {
             maxLength: widget.maxLength,
             onChanged: widget.onChanged,
             onSubmitted: widget.onSubmitted,
-            style: widget.textStyle ?? AppTypography.bodyStyle,
+            style: widget.textStyle ?? AppTypography.bodyStyle.copyWith(color: Colors.white),
             decoration: InputDecoration(
               hintText: widget.placeholder,
               hintStyle: AppTypography.bodySm.copyWith(
-                color: AppColors.onSurfaceHint,
+                color: const Color(0xFF9A9AA6),
               ),
               prefixIcon: widget.prefixIcon,
               suffixIcon: widget.suffixIcon,
@@ -150,10 +156,10 @@ class _AppTextFieldState extends State<AppTextField> {
               ),
               isDense: true,
               filled: true,
-              fillColor: Colors.transparent, // Let Glass surface show through
+              fillColor: Colors.transparent,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 12,
+                horizontal: 16,
+                vertical: 16,
               ),
               border: InputBorder.none,
               enabledBorder: InputBorder.none,

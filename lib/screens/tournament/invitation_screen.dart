@@ -1404,6 +1404,7 @@ class _EditEventFormState extends State<_EditEventForm> {
     super.dispose();
   }
 
+<<<<<<< Updated upstream
   /// Opens the shared [ChipSetEditor] over this form. The edit is staged in
   /// local state and only committed by the form's own Save, so backing out of
   /// the sheet leaves the published event alone.
@@ -1455,6 +1456,16 @@ class _EditEventFormState extends State<_EditEventForm> {
       ),
     );
   }
+=======
+  /// Spec 7 caps organizer cost at 20%. This modal edits games that already
+  /// exist, some created under the old 0-100 rule, so the ceiling is raised
+  /// to whatever the game was saved with when that is higher. An existing
+  /// figure is never silently rewritten — it can only be reduced.
+  int get _orgPctCeiling =>
+      widget.settings.organizerPct > GameSettings.maxOrganizerPct
+      ? widget.settings.organizerPct
+      : GameSettings.maxOrganizerPct;
+>>>>>>> Stashed changes
 
   void _save() {
     final s = widget.settings;
@@ -2829,6 +2840,7 @@ class _PremiumEventHeader extends StatelessWidget {
                         size: AppFontSizes.xxxl,
                         weight: FontWeight.w700,
                       ),
+<<<<<<< Updated upstream
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Row(
@@ -2837,6 +2849,53 @@ class _PremiumEventHeader extends StatelessWidget {
                           Icons.calendar_today,
                           size: 16,
                           color: AppColors.mutedForeground,
+=======
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0x33000000),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.15),
+                          ),
+                        ),
+                        child: const Text(
+                          "YOU'RE INVITED",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    settings.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      height: 1.15,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+>>>>>>> Stashed changes
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Text(
@@ -2845,6 +2904,43 @@ class _PremiumEventHeader extends StatelessWidget {
                             color: AppColors.mutedForeground,
                           ),
                         ),
+<<<<<<< Updated upstream
+=======
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0x44000000),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Text(
+                          '\$${settings.buyIn.toInt()} BUY-IN',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (onEdit != null) ...[
+                        const Spacer(),
+                        IconButton(
+                          onPressed: onEdit,
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            color: Colors.white70,
+                            size: 20,
+                          ),
+                          tooltip: 'Edit details',
+                        ),
+>>>>>>> Stashed changes
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
@@ -2908,6 +3004,64 @@ class _PremiumEventHeader extends StatelessWidget {
                   ],
                 ],
               ),
+<<<<<<< Updated upstream
+=======
+            ),
+            // Decorative background radial glow circle top-right
+            Positioned(
+              top: -30,
+              right: -30,
+              child: IgnorePointer(
+                child: Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // ── C3 LOCATION CARD ──
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF161619),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF242428)),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.location_on_outlined,
+                color: Color(0xFFE24446),
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  showAddress
+                      ? (settings.location.isNotEmpty
+                            ? settings.location
+                            : "Marcus's place")
+                      : 'Address shared at check-in',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Text(
+                '2.4 mi',
+                style: TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
+              ),
+>>>>>>> Stashed changes
             ],
           ),
           const SizedBox(height: AppSpacing.xl),

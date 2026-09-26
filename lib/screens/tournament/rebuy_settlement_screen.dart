@@ -222,10 +222,20 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
               instructions: structure.colorUpInstructions,
               anteEnabled: settings.anteEnabled,
               anteStyle: settings.anteStyle,
+<<<<<<< Updated upstream
               onAnteChanged: (v) => app.updateEventSettings(
                 settings.copyWith(anteEnabled: v),
               ),
               onNext: () => setState(() => _step = _SettlementStep.confirm),
+=======
+              onAnteChanged: (v) =>
+                  app.updateEventSettings(settings.copyWith(anteEnabled: v)),
+              // This used to call `confirmSettlement()` outright, which locked
+              // the pool without the host ever seeing it. Color-up is a
+              // physical instruction, not a financial decision — it only
+              // unlocks the confirmation below.
+              onNext: () => setState(() => _colorUpConfirmed = true),
+>>>>>>> Stashed changes
             ),
           // Step 3: Confirm
           if (_step == _SettlementStep.confirm)
@@ -307,6 +317,32 @@ class _AddOnsStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+<<<<<<< Updated upstream
+=======
+    if (isConfirmed) {
+      return AppCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          children: [
+            Icon(Icons.check_circle, color: AppColors.success),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              'Add-ons selected: $totalAddOns',
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            AppButton(
+              size: AppButtonSize.sm,
+              variant: AppButtonVariant.secondary,
+              onPressed: onEdit,
+              child: const Text('Edit'),
+            ),
+          ],
+        ),
+      );
+    }
+
+>>>>>>> Stashed changes
     final isSuggestionNew =
         suggestedPrice > 0 && suggestedPrice != currentAddOnCost;
     return AppCard(
@@ -716,9 +752,29 @@ class _ColorUpStep extends StatelessWidget {
   }
 }
 
+<<<<<<< Updated upstream
 class _ConfirmStep extends StatelessWidget {
   const _ConfirmStep({
     required this.activeCount,
+=======
+/// Step 4 — the host reads the prize pool and confirms it.
+///
+/// §25.4a's third gate. It is locked until the add-on step submits because
+/// §18's `grossEligible` needs `totalAddOns` fixed, and that is exactly what
+/// the add-on step fixes. This step previously did not exist: color-up called
+/// `confirmSettlement()` directly, so the pool — the one number the whole
+/// settlement break exists to produce — was written without the host ever
+/// seeing it, and nothing can reopen it afterwards (§25.4a is one-way).
+///
+/// The figures are the provider's own settlement preview, so what is shown
+/// here is what gets stored.
+class _ConfirmPrizePoolStep extends StatelessWidget {
+  const _ConfirmPrizePoolStep({
+    required this.organizerAmount,
+    required this.prizePool,
+    required this.roundingRemainder,
+    required this.prizes,
+>>>>>>> Stashed changes
     required this.addOnsTaken,
     required this.anteEnabled,
     required this.prizePool,
@@ -1009,11 +1065,7 @@ class _ConfirmPlayersStep extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.people_outline,
-                  size: 16,
-                  color: AppColors.primary,
-                ),
+                Icon(Icons.people_outline, size: 16, color: AppColors.primary),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
                   'Active players going to add-on phase: ',

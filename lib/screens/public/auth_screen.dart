@@ -13,7 +13,6 @@ import '../../providers/app_provider.dart';
 import '../../responsive/responsive.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_text_field.dart';
-import '../../widgets/backgrounds.dart';
 import '../../widgets/brand_lockup.dart';
 
 enum AuthMode { login, register, forgotPassword }
@@ -176,27 +175,84 @@ class _AuthScreenState extends State<AuthScreen> {
     final twoColumn = device.isDesktop || device.isLargeDesktop;
 
     final logo = const PokerNightLogo(size: 160);
-
     final card = _buildCard(context);
 
-    final statusBarHeight = MediaQuery.paddingOf(context).top;
+    final backBtn = Semantics(
+      button: true,
+      label: 'Back',
+      child: InkWell(
+        onTap: () => context.go(RoutePaths.landing),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF141416),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF242428)),
+          ),
+          child: const Icon(
+            Icons.chevron_left,
+            size: 22,
+            color: Color(0xFFE5797A),
+          ),
+        ),
+      ),
+    );
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: FeltBackground(
-        child: Stack(
-          children: [
-            twoColumn
-                ? Row(
-                    children: [
-                      Expanded(child: Center(child: logo)),
-                      Expanded(
-                        child: Center(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.all(AppSpacing.xxl),
-                            child: card,
+      backgroundColor: const Color(0xFF0A0A0A),
+      body: SafeArea(
+        child: twoColumn
+            ? Row(
+                children: [
+                  Expanded(child: Center(child: logo)),
+                  Expanded(
+                    child: Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(AppSpacing.xxl),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            backBtn,
+                            const SizedBox(height: 24),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 420),
+                              child: card,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const SizedBox(height: 16),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: backBtn,
+                              ),
+                              const SizedBox(height: 24),
+                              Expanded(child: card),
+                            ],
                           ),
                         ),
                       ),
+<<<<<<< Updated upstream
                     ],
                   )
                 : Center(
@@ -256,15 +312,234 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                 ),
+=======
+                    ),
+                  );
+                },
+>>>>>>> Stashed changes
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
 
   Widget _buildCard(BuildContext context) {
+<<<<<<< Updated upstream
+=======
+    final device = AppBreakpoints.deviceOf(context);
+    final twoColumn = device.isDesktop || device.isLargeDesktop;
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          _title,
+          style: AppTypography.display(
+            size: AppFontSizes.xxl,
+            weight: FontWeight.w700,
+          ),
+        ),
+        if (_isForgot) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            "Enter your email and we'll send a link to set a new one.",
+            style: const TextStyle(
+              color: Color(0xFFB8B8C2),
+              fontSize: 13.5,
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.xl),
+        if (!_isForgot) ...[
+          _GoogleSignInButton(
+            onPressed: _loading ? () {} : _handleGoogleSignIn,
+            loading: _loading,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: const [
+              Expanded(child: Divider(color: Color(0xFF242428))),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'or continue with email',
+                  style: TextStyle(
+                    color: Color(0xFF9A9AA6),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: Color(0xFF242428))),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+        if (_isRegister) ...[
+          AppTextField(
+            controller: _nameController,
+            label: null,
+            placeholder: 'Full Name',
+            textCapitalization: TextCapitalization.words,
+            suffixIcon: _trailing(Icons.person_outline),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+        AppTextField(
+          controller: _emailController,
+          label: null,
+          placeholder: 'Email address',
+          keyboardType: TextInputType.emailAddress,
+          suffixIcon: _trailing(Icons.mail_outline),
+        ),
+        if (!_isForgot) ...[
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            controller: _passwordController,
+            label: null,
+            placeholder: 'Password',
+            obscureText: !_showPw,
+            suffixIcon: _eyeToggle(),
+          ),
+          if (_isRegister) ...[
+            const SizedBox(height: AppSpacing.lg),
+            AppTextField(
+              controller: _confirmController,
+              label: null,
+              placeholder: 'Confirm Password',
+              obscureText: !_showPw,
+              suffixIcon: _eyeToggle(),
+            ),
+          ],
+        ],
+        if (widget.mode == AuthMode.login) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerRight,
+            child: InkWell(
+              onTap: () => context.go(RoutePaths.forgotPassword),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                child: Text(
+                  'Forgot Password?',
+                  style: TextStyle(
+                    color: Color(0xFFE5797A),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (_error != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            _error!,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.destructiveText,
+            ),
+          ),
+        ],
+        if (_success != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            _success!,
+            style: AppTypography.bodySm.copyWith(color: AppColors.successText),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.xl),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF0A0A0A),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: _loading ? null : _handleSubmit,
+            child: _loading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF0A0A0A),
+                    ),
+                  )
+                : Text(
+                    _isForgot
+                        ? 'Send reset link'
+                        : _isRegister
+                        ? 'Create Account'
+                        : 'Sign In',
+                    style: const TextStyle(
+                      color: Color(0xFF0A0A0A),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+          ),
+        ),
+        if (!twoColumn) const Spacer(), // Push switch line to the bottom on mobile
+        if (!twoColumn) const SizedBox(height: 24),
+        if (widget.mode == AuthMode.login) ...[
+          _switchLine(
+            context,
+            prompt: "Don't have an account? ",
+            action: 'Create Account',
+            onTap: () {
+              final next = widget.next;
+              if (next != null) {
+                context.go(
+                  '${RoutePaths.register}?next=${Uri.encodeComponent(next)}',
+                );
+              } else {
+                context.go(RoutePaths.register);
+              }
+            },
+          ),
+        ] else if (_isRegister) ...[
+          _switchLine(
+            context,
+            prompt: 'Already have an account? ',
+            action: 'Sign In',
+            onTap: () {
+              final next = widget.next;
+              if (next != null) {
+                context.go(
+                  '${RoutePaths.login}?next=${Uri.encodeComponent(next)}',
+                );
+              } else {
+                context.go(RoutePaths.login);
+              }
+            },
+          ),
+        ] else ...[
+          Center(
+            child: InkWell(
+              onTap: () => context.go(RoutePaths.login),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                child: Text(
+                  'Back to Sign In',
+                  style: TextStyle(
+                    color: Color(0xFFE5797A),
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+
+>>>>>>> Stashed changes
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
       child:

@@ -161,21 +161,23 @@ class _CheckInScreenState extends State<CheckInScreen> {
               // Spec \u00A712.5: late registration is only allowed before the
               // rebuy period closes. The provider enforces the hard gate;
               // this banner makes the timing visible to the admin.
-              Builder(builder: (ctx) {
-                final app = ctx.read<AppProvider>();
-                if (!app.lateRegistrationOpen) {
+              Builder(
+                builder: (ctx) {
+                  final app = ctx.read<AppProvider>();
+                  if (!app.lateRegistrationOpen) {
+                    return const AppAlertBanner(
+                      type: AppAlertType.error,
+                      message:
+                          'Late registration is closed. No new players can be added after the rebuy period ends.',
+                    );
+                  }
                   return const AppAlertBanner(
-                    type: AppAlertType.error,
+                    type: AppAlertType.warning,
                     message:
-                        'Late registration is closed. No new players can be added after the rebuy period ends.',
+                        'Admin override: this skips the normal guest slot flow.',
                   );
-                }
-                return const AppAlertBanner(
-                  type: AppAlertType.warning,
-                  message:
-                      'Admin override: this skips the normal guest slot flow.',
-                );
-              }),
+                },
+              ),
               const SizedBox(height: AppSpacing.lg),
               AppTextField(
                 controller: controller,
@@ -389,9 +391,9 @@ class _CheckInScreenState extends State<CheckInScreen> {
           // button below this gate, and on returning the gate must be
           // gone. A tier snapshotted in initState would still say Free.
           if (Entitlements.hostingBlockedReason(
-                    app.premiumTier,
-                    checkedIn.length,
-                  )
+                app.premiumTier,
+                checkedIn.length,
+              )
               case final blocked?) ...[
             const SizedBox(height: AppSpacing.lg),
             Container(
@@ -444,7 +446,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.sm,
+                  ),
                   child: Text(
                     'PENDING CHECK-IN REQUESTS',
                     style: AppTypography.bodyXs.copyWith(
@@ -489,7 +494,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.sm,
+                ),
                 child: Text(
                   'PLAYERS',
                   style: AppTypography.bodyXs.copyWith(
@@ -499,6 +507,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   ),
                 ),
               ),
+<<<<<<< Updated upstream
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadius.lg),
                 child: Container(
@@ -583,10 +592,97 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                   ),
                                 ),
                             ],
+=======
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    for (final p in players.where((p) => !p.isGuest))
+                      Container(
+                        key: ValueKey('player-${p.id}'),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.sm,
+                          horizontal: AppSpacing.md,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: AppColors.border),
+>>>>>>> Stashed changes
                           ),
                         ),
-                    ],
-                  ),
+                        child: Row(
+                          children: [
+                            AppAvatar(name: p.name, size: AppAvatarSize.sm),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p.name,
+                                    style: AppTypography.bodySm.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (p.rsvp != null)
+                                    Text(
+                                      '${p.rsvp!.label} RSVP',
+                                      style: AppTypography.bodyXs.copyWith(
+                                        color: AppColors.mutedForeground,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (p.checkedIn && p.confirmed)
+                              const AppBadge(
+                                label: 'Checked in',
+                                variant: AppBadgeVariant.green,
+                              )
+                            else if (p.checkedIn)
+                              AppButton(
+                                size: AppButtonSize.sm,
+                                variant: AppButtonVariant.secondary,
+                                onPressed: game.checkInClosed
+                                    ? null
+                                    : () => _acceptWithBuyIn(
+                                        context,
+                                        app,
+                                        game,
+                                        p,
+                                      ),
+                                child: Text(
+                                  game.checkInClosed
+                                      ? 'Check-in closed'
+                                      : game.hasPaid(p.id, PaymentPurpose.buyIn)
+                                      ? 'Accept check-in'
+                                      : 'Take buy-in',
+                                ),
+                              )
+                            else if (p.id == app.user?.id)
+                              AppButton(
+                                size: AppButtonSize.sm,
+                                variant: AppButtonVariant.secondary,
+                                onPressed: game.checkInClosed
+                                    ? null
+                                    : () => app.checkInPlayer(p.id),
+                                child: Text(
+                                  game.checkInClosed
+                                      ? 'Check-in closed'
+                                      : 'Mark me in',
+                                ),
+                              )
+                            else
+                              Text(
+                                'Not checked in yet',
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
@@ -668,9 +764,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     // choosing WHO sits where is the advanced part.
                     for (final mode in SeatingMode.values)
                       PremiumLock(
-                        tier: PremiumBoundary.freeSeatingModes
-                                .contains(mode.name)
-                            ? PremiumTier.premium // never locked
+                        tier:
+                            PremiumBoundary.freeSeatingModes.contains(mode.name)
+                            ? PremiumTier
+                                  .premium // never locked
                             : app.premiumTier,
                         feature: PremiumFeature.advancedSeating,
                         child: _SeatingOption(
@@ -781,7 +878,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                                       : null,
                                                 ),
                                           ),
+<<<<<<< Updated upstream
                                           const SizedBox(height: 2),
+=======
+                                          const SizedBox(
+                                            height: AppSpacing.xxs,
+                                          ),
+>>>>>>> Stashed changes
                                           Text(
                                             p.name,
                                             style: AppTypography.bodySm
@@ -851,7 +954,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   AppAlertBanner(
                     type: AppAlertType.warning,
-                    message: 'Late registration is permanently closed. No new players can be added.',
+                    message:
+                        'Late registration is permanently closed. No new players can be added.',
                   ),
                 ],
                 const SizedBox(height: AppSpacing.sm),
@@ -1150,7 +1254,6 @@ class _SeatingOption extends StatelessWidget {
   }
 }
 
-
 /// Accepts a check-in, collecting the buy-in first if it is still owed.
 ///
 /// QA case PN-DPAY-001 and section 14: money is collected, then the player is
@@ -1214,9 +1317,7 @@ class _HeadcountCard extends StatelessWidget {
               Icon(
                 isLocked ? Icons.lock_outline : Icons.lock_open_outlined,
                 size: 16,
-                color: isLocked
-                    ? AppColors.primary
-                    : AppColors.mutedForeground,
+                color: isLocked ? AppColors.primary : AppColors.mutedForeground,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(

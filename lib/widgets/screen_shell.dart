@@ -82,7 +82,8 @@ class ScreenShell extends StatelessWidget {
           return _MobileShell(child: child);
         }
         return Scaffold(
-          backgroundColor: Colors.transparent, // Background provided by ThemedAppBackground
+          backgroundColor:
+              Colors.transparent, // Background provided by ThemedAppBackground
           body: ThemedAppBackground(
             child: Row(
               children: [
@@ -149,7 +150,8 @@ class _Gate extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xl),
                   AppButton(
                     fullWidth: true,
-                    onPressed: () => context.go('${RoutePaths.login}?next=$path'),
+                    onPressed: () =>
+                        context.go('${RoutePaths.login}?next=$path'),
                     child: const Text('Sign in'),
                   ),
                   AppButton(
@@ -172,11 +174,55 @@ class _MobileShell extends StatelessWidget {
   const _MobileShell({required this.child});
 
   final Widget child;
+<<<<<<< Updated upstream
+=======
+  final String requiredPath;
+
+  static const _hasNoBottomNavPaths = {
+    RoutePaths.createTournament,
+    RoutePaths.checkIn,
+    RoutePaths.adminDashboard,
+    RoutePaths.playerLive,
+    RoutePaths.invitation,
+    RoutePaths.structureReview,
+    RoutePaths.rebuySettlement,
+    RoutePaths.finalTable,
+    RoutePaths.completeTournament,
+    RoutePaths.resultPodium,
+  };
+
+  static const _hasCustomTopBarPaths = {
+    RoutePaths.home,
+    RoutePaths.group,
+    RoutePaths.chat,
+    RoutePaths.members,
+    RoutePaths.polls,
+    RoutePaths.notifications,
+    RoutePaths.history,
+    RoutePaths.joinGroup,
+    RoutePaths.createTournament,
+    RoutePaths.checkIn,
+    RoutePaths.adminDashboard,
+    RoutePaths.playerLive,
+    RoutePaths.invitation,
+    RoutePaths.structureReview,
+    RoutePaths.rebuySettlement,
+    RoutePaths.finalTable,
+    RoutePaths.completeTournament,
+    RoutePaths.resultPodium,
+  };
+>>>>>>> Stashed changes
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+<<<<<<< Updated upstream
+=======
+    final hasCustomBar = _hasCustomTopBarPaths.contains(requiredPath);
+    final hideBottomNav = _hasNoBottomNavPaths.contains(requiredPath);
+
+>>>>>>> Stashed changes
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ThemedAppBackground(
@@ -190,13 +236,30 @@ class _MobileShell extends StatelessWidget {
                   // screen clearance equal to the nav's height (64 + inset)
                   // and nothing — like a chat composer — hides behind it.
                   child: Padding(
+<<<<<<< Updated upstream
                     padding: EdgeInsets.only(bottom: 64 + bottomInset),
                     child: child,
+=======
+                    padding: EdgeInsets.only(
+                      bottom: hideBottomNav
+                          ? 0
+                          : kBottomNavHeight + bottomInset,
+                    ),
+                    child: hasCustomBar
+                        ? SafeArea(bottom: false, child: child)
+                        : child,
+>>>>>>> Stashed changes
                   ),
                 ),
               ],
             ),
-            const Positioned(left: 0, right: 0, bottom: 0, child: BottomNav()),
+            if (!hideBottomNav)
+              const Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: BottomNav(),
+              ),
             const NavDrawer(),
           ],
         ),
@@ -270,6 +333,5 @@ class _MobileTopBar extends StatelessWidget {
         ),
       ),
     );
-
   }
 }

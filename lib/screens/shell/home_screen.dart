@@ -190,6 +190,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: AppSpacing.lg),
               ],
 
+<<<<<<< Updated upstream
               // Primary actions (User Flow §4.1)
               if (isAdmin) ...[
                 Row(
@@ -201,6 +202,40 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: const AppIconLabel(
                           label: 'New Game',
                           icon: Icons.add,
+=======
+              // Quick action buttons side-by-side: + New game & Cash game
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => context.go(RoutePaths.createTournament),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF18181A),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFF28282C)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.add, color: Color(0xFFE5797A), size: 18),
+                            SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                'New game',
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+>>>>>>> Stashed changes
                         ),
                       ),
                     ),

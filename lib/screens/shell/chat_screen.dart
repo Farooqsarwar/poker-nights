@@ -83,6 +83,7 @@ class _ChatScreenState extends State<ChatScreen> {
           Row(
             children: [
               Expanded(
+<<<<<<< Updated upstream
                 child: Text(
                   messages.isEmpty
                       ? 'No messages yet'
@@ -90,6 +91,43 @@ class _ChatScreenState extends State<ChatScreen> {
                   style: AppTypography.bodyXs.copyWith(
                     color: AppColors.mutedForeground,
                   ),
+=======
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.name.isEmpty ? 'Chat' : group.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.circle,
+                          size: 6,
+                          color: Color(0xFF4ADE80),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            '${group.members.length} members · 3 online',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              color: Color(0xFF8E8E93),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+>>>>>>> Stashed changes
                 ),
               ),
               if (unread > 0)

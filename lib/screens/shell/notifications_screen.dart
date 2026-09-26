@@ -135,6 +135,7 @@ class NotificationsScreen extends StatelessWidget {
         children: [
           Row(
             children: [
+<<<<<<< Updated upstream
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,6 +146,62 @@ class NotificationsScreen extends StatelessWidget {
                         size: AppFontSizes.xxxl,
                         weight: FontWeight.w700,
                       ),
+=======
+              InkWell(
+                onTap: () => context.go(RoutePaths.home),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141416),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF242428)),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              // With a nonzero unread count the row also carries a pill and
+              // a "Mark all read" action after the Spacer -- at a 320px
+              // phone all four together (back button, title, pill, action)
+              // no longer fit unless the title itself can give up space
+              // first. The action and the back button stay full-size; the
+              // title is the one purely decorative element here.
+              Flexible(
+                child: Text(
+                  'Notifications',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (unreadCount > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E2024),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$unreadCount unread',
+                    style: const TextStyle(
+                      color: Color(0xFF8E8E93),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+>>>>>>> Stashed changes
                     ),
                     if (unreadCount > 0)
                       Text(

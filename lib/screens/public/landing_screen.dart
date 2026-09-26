@@ -63,17 +63,112 @@ class _LandingScreenState extends State<LandingScreen> {
       ),
       child: Row(
         children: [
+<<<<<<< Updated upstream
           const PokerNightLogo(size: 40),
           const Spacer(),
           AppButton(
             variant: AppButtonVariant.secondary,
+=======
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD53032),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x55D53032),
+                        blurRadius: 10,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Text(
+                    '♠',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      height: 1,
+                    ),
+                  ),
+                ),
+                // A hard-coded font size on the wordmark did not shrink with
+                // a scaled-up device text setting the way the rest of the
+                // header (buttons, spacing) implicitly does via AppScale.sp,
+                // so a larger text-scale factor could make this the widest
+                // element in the row while everything else stayed put. Below
+                // this app's 390px design floor, `AppScale.sp` never shrinks
+                // text further (by design — see AppScale.minSizeScale's
+                // doc), so at a 320px phone the two auth buttons alone
+                // already claim nearly the whole header width; the wordmark
+                // is decorative branding text, not a control, so it is the
+                // one thing safe to drop rather than force a RenderFlex
+                // overflow nothing can actually see anyway.
+                if (!isMobile) ...[
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      'Poker Night',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: AppTypography.display(
+                        size: 17,
+                        weight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const Spacer(),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              backgroundColor: const Color(0xFF161618),
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Color(0xFF28282C)),
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 8 : 14,
+                vertical: 8,
+              ),
+              minimumSize: const Size(0, 36),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+>>>>>>> Stashed changes
             onPressed: () => context.go(RoutePaths.login),
             child: const Text('Sign in'),
           ),
+<<<<<<< Updated upstream
           const SizedBox(width: AppSpacing.md),
           AppButton(
             variant: AppButtonVariant.primary,
             size: AppButtonSize.sm,
+=======
+          SizedBox(width: isMobile ? 4 : 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD53032),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 8 : 14,
+                vertical: 8,
+              ),
+              minimumSize: const Size(0, 36),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+>>>>>>> Stashed changes
             onPressed: () => context.go(RoutePaths.register),
             child: const Text('Create Account'),
           ),
@@ -153,6 +248,7 @@ class _LandingScreenState extends State<LandingScreen> {
                   ),
                 ),
               ),
+<<<<<<< Updated upstream
               const SizedBox(height: AppSpacing.xl),
 
               // Feature pills
@@ -160,6 +256,117 @@ class _LandingScreenState extends State<LandingScreen> {
                 alignment: WrapAlignment.center,
                 spacing: AppSpacing.sm,
                 runSpacing: AppSpacing.sm,
+=======
+              const SizedBox(height: 20),
+              // Feature pills. A fixed two-per-row Row (not a Wrap) forced
+              // every pill to keep its natural, unshrinkable text width even
+              // when the hero's own padding left under 300px to work with at
+              // a phone width — the pair simply didn't fit and overflowed.
+              // Wrap reflows to one per row on its own with no breakpoint
+              // logic needed.
+              const Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _FeaturePill(label: 'AUTO BLIND STRUCTURE'),
+                  _FeaturePill(label: 'LIVE TIMER'),
+                  _FeaturePill(label: 'SEATING & REDRAWS'),
+                  _FeaturePill(label: 'TV MODE'),
+                  _FeaturePill(label: 'CASH GAME TRACKER'),
+                  _FeaturePill(label: 'GROUP CHAT'),
+                ],
+              ),
+              const SizedBox(height: 24),
+              // Two buttons side by side in a row!
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x66D53032),
+                            blurRadius: 16,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFD53032),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () => context.go(RoutePaths.register),
+                        child: const Text(
+                          'Create account',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: const Color(0xFF161618),
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFF28282C)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: _openJoin,
+                        child: const Text(
+                          'Join with a code',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Free for up to 9 players. No card, nothing to install.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF9A9AA6), fontSize: 11),
+              ),
+              const SizedBox(height: 20),
+              Container(height: 1, color: const Color(0xFF1E1E22)),
+              const SizedBox(height: 20),
+              const Text(
+                'Runs in any browser today',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Host, player and TV views all open from a link — nothing to download.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF9A9AA6), fontSize: 11),
+              ),
+              const SizedBox(height: 16),
+              Row(
+>>>>>>> Stashed changes
                 children: const [
                   _FeaturePill(label: 'Auto blind structure'),
                   _FeaturePill(label: 'Live timer'),
@@ -342,8 +549,328 @@ class _FeaturePill extends StatelessWidget {
         border: Border.all(color: AppColors.border),
       ),
       child: Text(
+<<<<<<< Updated upstream
         label,
         style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+=======
+        label.toUpperCase(),
+        style: AppTypography.bodyXs.copyWith(
+          color: AppColors.mutedForeground,
+          letterSpacing: 0.6,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+class _StepCard extends StatelessWidget {
+  const _StepCard({
+    required this.step,
+    required this.title,
+    required this.body,
+  });
+
+  final String step;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            step,
+            style: AppTypography.display(
+              size: AppFontSizes.xxl,
+              weight: FontWeight.w700,
+              color: AppColors.primaryText,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            title,
+            style: AppTypography.bodyStyle.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            body,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhaseCard extends StatelessWidget {
+  const _PhaseCard({
+    required this.phase,
+    required this.headline,
+    required this.items,
+  });
+
+  final String phase;
+  final String headline;
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: 4,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(color: AppColors.primarySoftBorder),
+            ),
+            child: Text(
+              phase.toUpperCase(),
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.primaryText,
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            headline,
+            style: AppTypography.bodyStyle.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Icon(
+                      Icons.check,
+                      size: 14,
+                      color: AppColors.primaryText,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToolCard extends StatelessWidget {
+  const _ToolCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 22, color: AppColors.primaryText),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            title,
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            body,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Open →',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.primaryText,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Collapsed by default: a wall of open answers buries the questions, and the
+/// point of an FAQ is that somebody can find THEIR question quickly.
+class _FaqItem extends StatefulWidget {
+  const _FaqItem({required this.question, required this.answer});
+
+  final String question;
+  final String answer;
+
+  @override
+  State<_FaqItem> createState() => _FaqItemState();
+}
+
+class _FaqItemState extends State<_FaqItem> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: AppCard(
+        onTap: () => setState(() => _open = !_open),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.question,
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _open ? Icons.remove : Icons.add,
+                  size: 18,
+                  color: AppColors.mutedForeground,
+                ),
+              ],
+            ),
+            if (_open) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                widget.answer,
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A store badge for an app that does not exist yet.
+///
+/// Shaped like the real thing — platform mark, small line over a larger
+/// wordmark — so the section reads as a proper download row rather than an
+/// apology. But it is deliberately INERT and says "Coming soon" where the
+/// real badge says "Download on the": a badge that goes nowhere, or implies a
+/// store listing that is not there, is the one landing-page claim that costs
+/// real trust rather than just polish.
+///
+/// NOTE FOR LAUNCH: Apple's and Google's official badges are trademarked
+/// artwork governed by their brand guidelines (fixed proportions, clear
+/// space, approved wording). These are Material's platform glyphs standing in
+/// for them. Replace with the official assets when the apps actually ship.
+class _StoreBadge extends StatelessWidget {
+  const _StoreBadge({required this.icon, required this.store});
+
+  final IconData icon;
+  final String store;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: 0.75,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.card.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.border),
+        ),
+        // This half of the hero's two-badge row is only ~180px wide (two
+        // Expanded children splitting a 520px-capped hero minus the gap and
+        // padding), and the icon + label column previously had nothing
+        // shrinkable in it — `mainAxisSize: min` only stops the Row from
+        // growing past its content, it does not let content shrink to fit a
+        // tighter parent. `Flexible` + ellipsis on the label column gives it
+        // somewhere to give before the Row overflows.
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 26, color: AppColors.foreground),
+            const SizedBox(width: AppSpacing.sm),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Coming soon',
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.onSurfaceHint,
+                      height: 1.1,
+                    ),
+                  ),
+                  Text(
+                    store,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+>>>>>>> Stashed changes
       ),
     );
   }

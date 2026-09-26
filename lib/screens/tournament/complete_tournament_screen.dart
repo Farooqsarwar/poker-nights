@@ -49,17 +49,15 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
       ..sort(
         (a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0),
       );
-    final ok = app.recordFinishOrder(
-      [...eliminated.map((p) => p.id), ..._order],
-    );
+    final ok = app.recordFinishOrder([
+      ...eliminated.map((p) => p.id),
+      ..._order,
+    ]);
     if (!ok) {
       // Surface why finishing failed instead of falsely showing "complete".
       final msg = app.completionError ?? 'Could not finish the tournament.';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          duration: const Duration(seconds: 4),
-        ),
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 4)),
       );
       return;
     }
@@ -413,7 +411,8 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                 title: 'Edit Deal / Chop',
                                 child: _EditPrizesModal(
                                   initialPrizes: prizes,
-                                  onSave: (newPrizes) => app.updatePrizes(newPrizes),
+                                  onSave: (newPrizes) =>
+                                      app.updatePrizes(newPrizes),
                                 ),
                               );
                             },
@@ -461,11 +460,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.emoji_events,
-                    size: 16,
-                    color: AppColors.icon,
-                  ),
+                  Icon(Icons.emoji_events, size: 16, color: AppColors.icon),
                   const SizedBox(width: 6),
                   Text(
                     unranked.isEmpty
@@ -509,7 +504,6 @@ class _RankedPlayer {
   final int pos;
   final Prize? prize;
 }
-
 
 class _EditPrizesModal extends StatefulWidget {
   const _EditPrizesModal({required this.initialPrizes, required this.onSave});
@@ -579,12 +573,18 @@ class _EditPrizesModalState extends State<_EditPrizesModal> {
             final newPrizes = <Prize>[];
             int totalNew = 0;
             for (var i = 0; i < widget.initialPrizes.length; i++) {
-              final amt = int.tryParse(_controllers[i].text.replaceAll(',', '')) ?? 0;
+              final amt =
+                  int.tryParse(_controllers[i].text.replaceAll(',', '')) ?? 0;
               totalNew += amt;
-              newPrizes.add(Prize(place: widget.initialPrizes[i].place, amount: amt));
+              newPrizes.add(
+                Prize(place: widget.initialPrizes[i].place, amount: amt),
+              );
             }
-            
-            final totalOriginal = widget.initialPrizes.fold<int>(0, (sum, p) => sum + p.amount);
+
+            final totalOriginal = widget.initialPrizes.fold<int>(
+              0,
+              (sum, p) => sum + p.amount,
+            );
             if (totalNew != totalOriginal) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -597,7 +597,7 @@ class _EditPrizesModalState extends State<_EditPrizesModal> {
               );
               return;
             }
-            
+
             widget.onSave(newPrizes);
             Navigator.of(context).pop();
           },

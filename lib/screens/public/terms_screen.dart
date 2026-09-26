@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../app/colors.dart';
 import '../../constants/app_constants.dart';
+import '../../widgets/app_button.dart';
 
 class TermsScreen extends StatelessWidget {
   const TermsScreen({super.key});

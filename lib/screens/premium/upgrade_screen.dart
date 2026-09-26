@@ -10,6 +10,7 @@ import '../../providers/app_provider.dart';
 import '../../services/payment_service.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/icon_tile.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/glass_styles.dart';
 
@@ -96,6 +97,14 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: AppSpacing.lg),
+          const Center(
+            child: IconTile(
+              icon: Icons.workspace_premium_rounded,
+              size: 64,
+              tone: IconTileTone.gold,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             'Poker Night Pro',
             textAlign: TextAlign.center,
@@ -127,9 +136,9 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                         Icon(
                           Icons.check_circle,
                           size: 16,
-                          // Gold marks the value on this screen; crimson is
-                          // reserved for the commit action below.
-                          color: AppColors.gold,
+                          // Green ticks, as drawn: gold is kept for the
+                          // plan price and saving, crimson for the action.
+                          color: AppColors.successText,
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
@@ -410,12 +419,14 @@ class _PlanCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
+          // Gold marks the value: the chosen plan is outlined and tinted
+          // gold; crimson stays with the commit button.
           color: selected
-              ? AppColors.primarySoft
+              ? AppColors.gold.withValues(alpha: 0.08)
               : Glass.solidTint(AppColors.secondary),
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
+            color: selected ? AppColors.gold : AppColors.border,
             width: selected ? 2 : 1,
           ),
         ),
@@ -465,6 +476,7 @@ class _PlanCard extends StatelessWidget {
               style: AppTypography.display(
                 size: AppFontSizes.xxl,
                 weight: FontWeight.w700,
+                color: selected ? AppColors.gold : null,
               ),
             ),
             Text(

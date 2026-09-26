@@ -138,7 +138,9 @@ void main() {
     final host = MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: theme,
-      home: screen,
+      // Shell routes (the ones needing the provider) get their Scaffold from
+      // ScreenShell in the app; without one they render an error panel here.
+      home: needsProvider ? Scaffold(body: screen) : screen,
     );
 
     AppProvider? app;

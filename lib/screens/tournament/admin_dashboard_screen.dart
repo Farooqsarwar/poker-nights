@@ -597,7 +597,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           // the other true-admin (not co-admin-delegable) actions on this
           // screen -- hence `isTrueAdmin` rather than the `isAdmin` local
           // (which is `canRunCurrentGame` and also covers an assigned TO).
-          if (isShootout && isTrueAdmin) ...[
+          if (isShootout && app.isAdmin) ...[
             if (shootoutStage == ShootoutStage.stageA)
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.lg),

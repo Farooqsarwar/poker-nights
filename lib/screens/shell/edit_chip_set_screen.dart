@@ -421,7 +421,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
       // which is what the body below assumes. Under `onReorder` the index is
       // the one *before* removal, so dragging a chip downward dropped it one
       // slot past where it was released.
-      onReorder: (oldIndex, newIndex) {
+      onReorderItem: (oldIndex, newIndex) {
         setState(() {
           final chip = _chips.removeAt(oldIndex);
           _chips.insert(newIndex, chip);

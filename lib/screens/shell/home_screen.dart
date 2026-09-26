@@ -10,7 +10,6 @@ import '../../constants/app_constants.dart';
 import '../../models/app_notification.dart';
 import '../../models/group.dart';
 import '../../models/live_game.dart';
-import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../utils/main_button.dart';

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
+import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_empty_state.dart';
@@ -17,8 +18,7 @@ class StatsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    final user = app.user;
+    final user = context.select<AppProvider, AppUser?>((a) => a.user);
 
     if (user == null) {
       return AppPage(

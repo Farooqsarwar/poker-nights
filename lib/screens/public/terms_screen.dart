@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../app/colors.dart';
 import '../../constants/app_constants.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_eyebrow.dart';
 import '../../widgets/legal_page.dart';
@@ -68,6 +71,14 @@ class TermsScreen extends StatelessWidget {
     ),
   ];
 
+  void _back(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RoutePaths.home);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return LegalPage(
@@ -88,6 +99,12 @@ class TermsScreen extends StatelessWidget {
           _TermCard(title: s.title, body: s.body),
           const SizedBox(height: AppSpacing.md),
         ],
+        const SizedBox(height: AppSpacing.sm),
+        AppButton(
+          fullWidth: true,
+          onPressed: () => _back(context),
+          child: const Text('I understand'),
+        ),
       ],
     );
   }

@@ -769,7 +769,7 @@ class _LandingScreenState extends State<LandingScreen> {
       children: [
         for (final entry in links.entries)
           InkWell(
-            onTap: () => context.go(entry.value),
+            onTap: () => context.push(entry.value),
             borderRadius: BorderRadius.circular(AppRadius.sm),
             child: Padding(
               // A comfortable tap target without inventing horizontal gaps

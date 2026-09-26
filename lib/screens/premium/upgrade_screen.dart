@@ -158,7 +158,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
           const SizedBox(height: AppSpacing.lg),
           AppButton(
             fullWidth: true,
-            size: AppButtonSize.lg,
+            size: AppButtonSize.xl,
             onPressed: () => context.push(
               RoutePaths.checkout,
               extra: _selectedPlanId,

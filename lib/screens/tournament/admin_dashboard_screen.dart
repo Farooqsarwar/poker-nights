@@ -595,9 +595,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           // Shootout stage indicator (§11.4 / boundary #9). Admin-only, like
           // the other true-admin (not co-admin-delegable) actions on this
-          // screen -- hence `app.isAdmin` rather than the `isAdmin` local
+          // screen -- hence `isTrueAdmin` rather than the `isAdmin` local
           // (which is `canRunCurrentGame` and also covers an assigned TO).
-          if (isShootout && app.isAdmin) ...[
+          if (isShootout && isTrueAdmin) ...[
             if (shootoutStage == ShootoutStage.stageA)
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.lg),

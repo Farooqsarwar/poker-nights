@@ -50,8 +50,10 @@ class TournamentTimerCard extends StatelessWidget {
         border: Border.all(color: AppColors.borderSubtle, width: 1),
         boxShadow: [
           BoxShadow(
-            color: AppColors.shadowSoft,
-            blurRadius: 16,
+            color: (!isPaused && !isBreak) 
+                ? AppColors.primary.withValues(alpha: 0.15) 
+                : AppColors.shadowSoft,
+            blurRadius: 24,
             offset: Offset(0, 4),
           ),
         ],

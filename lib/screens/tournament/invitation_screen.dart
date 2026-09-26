@@ -2307,7 +2307,7 @@ class _RsvpChipState extends State<_RsvpChip>
             ),
             decoration: BoxDecoration(
               color: widget.active ? AppColors.primary : AppColors.card,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
+              borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(
                 color: widget.active ? AppColors.primary : AppColors.border,
               ),

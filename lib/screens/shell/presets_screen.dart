@@ -13,6 +13,7 @@ import '../../utils/mock_data.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
@@ -161,6 +162,17 @@ class _PresetsScreenState extends State<PresetsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppBackButton(onTap: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(RoutePaths.home);
+              }
+            }),
+          ),
+          const SizedBox(height: AppSpacing.md),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

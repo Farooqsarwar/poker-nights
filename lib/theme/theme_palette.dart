@@ -214,9 +214,9 @@ class ThemePalettes {
     // never the surfaces at all: BoxDecoration silently drops `color` when a
     // `gradient` is present, so every filled button was painting only its
     // sheen (fixed in widgets/app_button.dart).
-    card: Color(0xFF111111),
+    card: Color(0xFF141416),
     cardForeground: Color(0xFFFFFFFF),
-    secondary: Color(0xFF222222),
+    secondary: Color(0xFF18181A),
     secondaryForeground: Color(0xFFEDEDF0),
     muted: Color(0xFF1A1A1A),
     // Was A1A1AA (7.4:1 on card). Lifted to B8B8C2 — 9.6:1 — because this is
@@ -224,7 +224,7 @@ class ThemePalettes {
     mutedForeground: Color(0xFFB8B8C2),
     accent: Color(0xFFD53032),
     accentForeground: Color(0xFFFFFFFF),
-    border: Color(0xFF333333),
+    border: Color(0xFF28282C),
     ring: Color(0xFFD53032),
     // Was 71717A, which measured 3.9:1 on a card — under the 4.5:1 WCAG AA
     // floor for body text, and this token is used for input hints, dropdown

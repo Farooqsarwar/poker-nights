@@ -22,7 +22,7 @@ class AppCard extends StatefulWidget {
     this.margin,
     this.color,
     this.borderColor,
-    this.radius = AppRadius.lg,
+    this.radius = AppRadius.md,
   });
 
   final Widget child;

@@ -66,7 +66,7 @@ class _AppBackButtonState extends State<AppBackButton> {
                     child: Icon(
                       Icons.chevron_left,
                       size: 22,
-                      color: AppColors.foreground,
+                      color: AppColors.primary,
                     ),
                   ),
                 ),

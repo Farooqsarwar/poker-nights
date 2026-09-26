@@ -283,7 +283,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                     ),
                     Text(
-                      '${_plan.name} (${_plan.period}) · 7-day free trial',
+                      '${_plan.name} (${_plan.period})',
                       style: AppTypography.bodyXs.copyWith(
                         color: AppColors.mutedForeground,
                       ),
@@ -333,7 +333,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     // build that grants nothing is the kind of small lie that costs a
     // demo its credibility the moment somebody taps through to the feature.
     final granted =
-        context.watch<AppProvider>().premiumTier == PremiumTier.premium;
+        context.select<AppProvider, PremiumTier>((p) => p.premiumTier) ==
+        PremiumTier.premium;
     return AppPage(
       maxWidth: 480,
       child: Column(

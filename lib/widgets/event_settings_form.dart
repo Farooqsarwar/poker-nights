@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
+import '../responsive/responsive.dart';
 import '../models/chip_color.dart';
 import '../models/tournament_format.dart';
 import '../models/live_game.dart';
@@ -1225,35 +1226,46 @@ class _EditRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = AppBreakpoints.deviceOf(context).isMobile;
+    
+    final textColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTypography.bodySm.copyWith(
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          subtitle,
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+      ],
+    );
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
+      child: isMobile 
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  subtitle,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
+                textColumn,
+                const SizedBox(height: AppSpacing.sm),
+                trailing,
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: textColumn),
+                const SizedBox(width: AppSpacing.sm),
+                trailing,
               ],
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          trailing,
-        ],
-      ),
     );
   }
 }
@@ -1273,33 +1285,50 @@ class _ToggleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = AppBreakpoints.deviceOf(context).isMobile;
+
+    final textColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTypography.bodySm.copyWith(
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          subtitle,
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+      ],
+    );
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
+      child: isMobile
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  subtitle,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: textColumn),
+                    AppToggle(value: value, onChanged: onChanged),
+                  ],
                 ),
               ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: textColumn),
+                const SizedBox(width: AppSpacing.sm),
+                AppToggle(value: value, onChanged: onChanged),
+              ],
             ),
-          ),
-          AppToggle(value: value, onChanged: onChanged),
-        ],
-      ),
     );
   }
 }

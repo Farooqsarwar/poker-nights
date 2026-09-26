@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -641,9 +641,10 @@ class _ChipRowState extends State<_ChipRow> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ColorPicker(
-                pickerColor: pickerColor,
+                color: pickerColor,
                 onColorChanged: (color) {
                   pickerColor = color;
+                  nameController.text = ColorTools.nameThatColor(color);
                 },
               ),
               const SizedBox(height: AppSpacing.md),

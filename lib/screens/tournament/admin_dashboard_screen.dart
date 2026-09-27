@@ -1355,7 +1355,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ],
             const SizedBox(height: 16),
-            // Pill Tabs (Players 18, Eliminated 6, Prizes)
+            // Pill tabs. Must offer the same five destinations as the desktop
+            // AppTabs: the bodies below already render Seating and Audit, but
+            // without a pill to select them `_tab` could never reach those
+            // values, so both were unreachable on a phone.
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
@@ -1363,15 +1366,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.borderSubtle),
               ),
-              child: Row(
-                children: [
-                  _buildPillTab('players', 'Players ${activePlayers.length}'),
-                  _buildPillTab(
-                    'eliminated',
-                    'Eliminated ${eliminatedPlayers.length}',
-                  ),
-                  _buildPillTab('prize', 'Prizes'),
-                ],
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildPillTab('players', 'Players ${activePlayers.length}'),
+                    _buildPillTab(
+                      'eliminated',
+                      'Eliminated ${eliminatedPlayers.length}',
+                    ),
+                    _buildPillTab('seating', 'Seating'),
+                    _buildPillTab('prize', 'Prizes'),
+                    _buildPillTab('audit', 'Audit Log'),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 14),
@@ -1523,25 +1531,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  /// One pill in the mobile tab strip. Sized to its label rather than an equal
+  /// share of the row — the strip carries the same five tabs as the desktop
+  /// [AppTabs] and five equal columns do not fit a 360px screen, so the strip
+  /// scrolls horizontally instead.
   Widget _buildPillTab(String id, String label) {
     final active = _tab == id;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _tab = id),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: active ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: active ? AppColors.foreground : AppColors.mutedForeground,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              fontSize: 13,
-            ),
+    return GestureDetector(
+      onTap: () => setState(() => _tab = id),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 40),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? AppColors.foreground : AppColors.mutedForeground,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            fontSize: 13,
           ),
         ),
       ),

@@ -12,6 +12,7 @@ import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../models/tournament_format.dart';
 import '../../providers/app_provider.dart';
+import '../../services/payment_service.dart';
 import '../../widgets/premium_gate.dart';
 import '../../services/entitlements.dart';
 import '../../responsive/responsive.dart';
@@ -3172,10 +3173,9 @@ class _EliminatedTab extends StatelessWidget {
                         ),
                       ),
                     if (isAdmin) ...[
-                      if (context.watch<AppProvider>().lastUndoablePlayerAction(
-                            p.id,
-                          ) !=
-                          null)
+                      if (context.select<AppProvider, bool>(
+                        (a) => a.lastUndoablePlayerAction(p.id) != null,
+                      ))
                         Padding(
                           padding: const EdgeInsets.only(left: AppSpacing.xs),
                           child: AppButton(
@@ -3453,7 +3453,7 @@ class _TableCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final game = context.watch<AppProvider>().currentGame;
+    final game = context.select<AppProvider, LiveGame?>((a) => a.currentGame);
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
@@ -3790,7 +3790,9 @@ class _PrizeTab extends StatelessWidget {
           // planning" is Premium. The PLAN is gated here; performing the
           // colour-up during rebuy settlement is operation and stays free.
           PremiumLock(
-            tier: context.watch<AppProvider>().premiumTier,
+            tier: context.select<AppProvider, PremiumTier>(
+              (a) => a.premiumTier,
+            ),
             feature: PremiumFeature.chipOptimisation,
             child: AppCard(
               padding: const EdgeInsets.all(AppSpacing.lg),

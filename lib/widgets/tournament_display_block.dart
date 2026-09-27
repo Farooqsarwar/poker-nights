@@ -162,7 +162,9 @@ class _WideLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final offset = context.watch<AppProvider>().serverTimeOffset;
+    final offset = context.select<AppProvider, Duration>(
+      (a) => a.serverTimeOffset,
+    );
     final data = _GameValues(game, offset);
 
     return LayoutBuilder(
@@ -802,7 +804,9 @@ class _CompactLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final offset = context.watch<AppProvider>().serverTimeOffset;
+    final offset = context.select<AppProvider, Duration>(
+      (a) => a.serverTimeOffset,
+    );
     final data = _GameValues(game, offset);
 
     return ColoredBox(

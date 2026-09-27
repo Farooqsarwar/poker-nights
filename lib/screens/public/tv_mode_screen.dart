@@ -10,6 +10,7 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
+import '../../services/payment_service.dart';
 import '../../services/tv_display_settings.dart';
 import '../../widgets/premium_gate.dart';
 import '../../widgets/app_modal.dart';
@@ -1068,7 +1069,9 @@ class _TvSettingsSheetState extends State<_TvSettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final tier = context.watch<AppProvider>().premiumTier;
+    final tier = context.select<AppProvider, PremiumTier>(
+      (a) => a.premiumTier,
+    );
 
     return PremiumGate(
       tier: tier,

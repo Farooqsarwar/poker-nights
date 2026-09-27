@@ -199,7 +199,9 @@ class _LiveTimerBuilderState extends State<LiveTimerBuilder>
 
   @override
   Widget build(BuildContext context) {
-    final offset = context.watch<AppProvider>().serverTimeOffset;
+    final offset = context.select<AppProvider, Duration>(
+      (a) => a.serverTimeOffset,
+    );
     return widget.builder(context, widget.game.currentSecondsRemaining(offset));
   }
 }

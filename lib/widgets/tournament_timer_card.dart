@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app/colors.dart';
 
 import '../app/typography.dart';
+import '../constants/app_constants.dart';
 import '../models/live_game.dart';
 import '../utils/formatters.dart';
 import 'app_timer.dart';
@@ -46,7 +47,7 @@ class TournamentTimerCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: AppColors.borderSubtle, width: 1),
         boxShadow: [
           BoxShadow(

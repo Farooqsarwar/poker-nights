@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/colors.dart';
+import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
@@ -241,7 +242,17 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
     final id =
         widget.chipSetId ?? 'cs-${DateTime.now().millisecondsSinceEpoch}';
     app.saveChipSet(id, name, _chips);
-    context.pop();
+    _leave();
+  }
+
+  /// Returns to the chip set list. Deep links and refreshes can land here with
+  /// nothing beneath on the stack, where a bare pop strands the editor.
+  void _leave() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RoutePaths.chipSets);
+    }
   }
 
   @override
@@ -253,7 +264,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
         children: [
           Row(
             children: [
-              BackNavButton(onPressed: () => context.pop(), label: 'Back'),
+              BackNavButton(onPressed: _leave, label: 'Back'),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(

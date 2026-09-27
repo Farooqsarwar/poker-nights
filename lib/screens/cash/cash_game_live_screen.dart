@@ -6,6 +6,7 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
+import '../../widgets/glass_styles.dart';
 import '../../models/cash_game.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
@@ -602,13 +603,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
               decoration: BoxDecoration(
                 color: AppColors.primary,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.4),
-                    blurRadius: 18,
-                    offset: Offset(0, 4),
-                  ),
-                ],
+                boxShadow: Glass.primaryGlow,
               ),
               child: Text(
                 'Cash out & settle',

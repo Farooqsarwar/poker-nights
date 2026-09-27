@@ -226,7 +226,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           AppButton(
             fullWidth: true,
             variant: AppButtonVariant.ghost,
-            onPressed: _processing ? null : () => context.pop(),
+            onPressed: _processing
+                ? null
+                : () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(RoutePaths.upgrade);
+                    }
+                  },
             child: const Text('Cancel'),
           ),
           const SizedBox(height: AppSpacing.xxl),

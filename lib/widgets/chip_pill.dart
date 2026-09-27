@@ -85,18 +85,21 @@ class ChipPill extends StatelessWidget {
               ),
             ),
             SizedBox(width: AppSpacing.sm),
-            Text(
-              colorName,
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
+            // Flexible: colorName is free text with no max length, and this
+            // Row sits directly in a Wrap — same overflow mechanism fixed in
+            // guest_flow's _IntroLine.
+            Flexible(
+              child: Text(
+                colorName,
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ),
             SizedBox(width: AppSpacing.xs),
             Text(
               '·',
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.border,
-              ),
+              style: AppTypography.bodyXs.copyWith(color: AppColors.border),
             ),
             SizedBox(width: AppSpacing.xs),
             Text(

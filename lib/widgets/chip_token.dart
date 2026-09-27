@@ -27,54 +27,65 @@ class ChipToken extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: hex,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.shadowDark,
-                    blurRadius: 6,
-                    offset: Offset(0, 2),
+        // Expanded: without it, this inner Row (which hugs its own content
+        // via mainAxisSize.min) can still demand more width than the outer
+        // Row has once a long colorName is added, overflowing the outer Row
+        // itself since neither of ITS children was flexible before.
+        Expanded(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: hex,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    width: 2,
                   ),
-                ],
-              ),
-              child: Text(
-                label,
-                style:
-                    AppTypography.mono(
-                      size: 9,
-                      weight: FontWeight.w700,
-                      color: Colors.white,
-                    ).copyWith(
-                      shadows: [
-                        Shadow(
-                          color: AppColors.shadowDeep,
-                          blurRadius: 2,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.shadowDark,
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
                     ),
+                  ],
+                ),
+                child: Text(
+                  label,
+                  style:
+                      AppTypography.mono(
+                        size: 9,
+                        weight: FontWeight.w700,
+                        color: Colors.white,
+                      ).copyWith(
+                        shadows: [
+                          Shadow(
+                            color: AppColors.shadowDeep,
+                            blurRadius: 2,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Text(
-              colorName,
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
+              const SizedBox(width: AppSpacing.sm),
+              // Flexible: colorName is free text entered in the chip-set
+              // editor with no max length, and this inner Row sits inside an
+              // Expanded slot that hands it unbounded width otherwise.
+              Flexible(
+                child: Text(
+                  colorName,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         if (count != null)
           Text(

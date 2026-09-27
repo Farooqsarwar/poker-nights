@@ -271,9 +271,7 @@ class _GroupScreenState extends State<GroupScreen> {
             children: [
               Transform.translate(
                 offset: const Offset(-4, 0),
-                child: AppBackButton(
-                  onTap: () => context.go(RoutePaths.home),
-                ),
+                child: AppBackButton(onTap: () => context.go(RoutePaths.home)),
               ),
               PopupMenuButton<String>(
                 icon: Container(
@@ -368,7 +366,10 @@ class _GroupScreenState extends State<GroupScreen> {
               ),
               Text(
                 '${upcomingGames.length} upcoming',
-                style: TextStyle(color: AppColors.mutedForeground, fontSize: 14),
+                style: TextStyle(
+                  color: AppColors.mutedForeground,
+                  fontSize: 14,
+                ),
               ),
             ],
           ),
@@ -666,7 +667,10 @@ class _GroupCardIdentity extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 '${group.members.length} members',
-                style: TextStyle(color: AppColors.mutedForeground, fontSize: 13),
+                style: TextStyle(
+                  color: AppColors.mutedForeground,
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(height: 14),
               SizedBox(
@@ -679,10 +683,7 @@ class _GroupCardIdentity extends StatelessWidget {
                         child: Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.card,
-                              width: 2,
-                            ),
+                            border: Border.all(color: AppColors.card, width: 2),
                           ),
                           child: AppAvatar(
                             name: group.members[i].name,
@@ -699,10 +700,7 @@ class _GroupCardIdentity extends StatelessWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: AppColors.borderSubtle,
-                            border: Border.all(
-                              color: AppColors.card,
-                              width: 2,
-                            ),
+                            border: Border.all(color: AppColors.card, width: 2),
                           ),
                           alignment: Alignment.center,
                           child: Text(
@@ -787,7 +785,11 @@ class _GroupActionChips extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.qr_code, size: 14, color: AppColors.mutedForeground),
+                  Icon(
+                    Icons.qr_code,
+                    size: 14,
+                    color: AppColors.mutedForeground,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     'Invite link / QR',
@@ -819,7 +821,11 @@ class _GroupActionChips extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.tune, size: 14, color: AppColors.mutedForeground),
+                    Icon(
+                      Icons.tune,
+                      size: 14,
+                      color: AppColors.mutedForeground,
+                    ),
                     SizedBox(width: 8),
                     Text(
                       'Table settings',
@@ -920,7 +926,11 @@ class _PremiumGameCard extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.circle, size: 6, color: AppColors.successText),
+                          Icon(
+                            Icons.circle,
+                            size: 6,
+                            color: AppColors.successText,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'LIVE',
@@ -1057,10 +1067,16 @@ class _InfoChip extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: AppColors.mutedForeground),
         const SizedBox(width: AppSpacing.xs),
-        Text(
-          text,
-          style: AppTypography.bodyXs.copyWith(
-            color: AppColors.mutedForeground,
+        // Flexible: this Row sits in a Wrap that bounds it to the card's
+        // width, but a Row hands unbounded main-axis constraints to a bare
+        // Text regardless — same overflow mechanism fixed in guest_flow's
+        // _IntroLine. `text` can be a free-text location/address.
+        Flexible(
+          child: Text(
+            text,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
         ),
       ],

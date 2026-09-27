@@ -298,15 +298,21 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                                   ),
                                   const SizedBox(width: AppSpacing.xs),
                                 ],
-                                Text(
-                                  'Seat ${s.seat} · ${s.name}',
-                                  style: AppTypography.bodyXs.copyWith(
-                                    color: _dealerId == s.id
-                                        ? AppColors.primary
-                                        : AppColors.mutedForeground,
-                                    fontWeight: _dealerId == s.id
-                                        ? FontWeight.w700
-                                        : null,
+                                // Flexible: this Row sits in a Wrap bounded to
+                                // the card's width; s.name is a player name of
+                                // unbounded length (same overflow mechanism as
+                                // guest_flow's _IntroLine).
+                                Flexible(
+                                  child: Text(
+                                    'Seat ${s.seat} · ${s.name}',
+                                    style: AppTypography.bodyXs.copyWith(
+                                      color: _dealerId == s.id
+                                          ? AppColors.primary
+                                          : AppColors.mutedForeground,
+                                      fontWeight: _dealerId == s.id
+                                          ? FontWeight.w700
+                                          : null,
+                                    ),
                                   ),
                                 ),
                               ],

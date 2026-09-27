@@ -383,7 +383,12 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                     final displayName = me != null
                         ? (me.id == app.user?.id ? 'You' : me.name)
                         : 'You';
-                    final tableSeat = me != null && me.table > 0
+                    // Swaps to the finish place once eliminated, matching
+                    // desktop's "My seat" card (which reads the same fields).
+                    final tableSeat =
+                        me != null && me.eliminated && me.eliminationPos != null
+                        ? _ordinalPlace(me.eliminationPos!)
+                        : me != null && me.table > 0
                         ? 'Table ${me.table} · Seat ${me.seat}'
                         : 'Table 1 · Seat 2';
 
@@ -453,6 +458,22 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
+                                  // Eliminated/Active status — mobile had
+                                  // every other "my seat" field but this one;
+                                  // parity with desktop's "My seat" AppCard.
+                                  if (me != null)
+                                    me.eliminated
+                                        ? const AppBadge(
+                                            label: 'Eliminated',
+                                            variant: AppBadgeVariant.red,
+                                            icon: Icons.close,
+                                          )
+                                        : AppBadge(
+                                            label: 'Active',
+                                            variant: AppBadgeVariant.green,
+                                            dotColor: AppColors.success,
+                                          ),
+                                  const SizedBox(height: 4),
                                   Text(
                                     Formatters.prize(stack),
                                     style: TextStyle(
@@ -473,6 +494,43 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                               ),
                             ],
                           ),
+                          if (me != null &&
+                              (me.knockouts > 0 ||
+                                  me.rebuys > 0 ||
+                                  me.hasAddOn)) ...[
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 4,
+                              children: [
+                                if (me.knockouts > 0)
+                                  Text(
+                                    '${me.knockouts} knockout${me.knockouts > 1 ? 's' : ''}',
+                                    style: TextStyle(
+                                      color: AppColors.primaryText,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                if (me.rebuys > 0)
+                                  Text(
+                                    '${me.rebuys} rebuy${me.rebuys > 1 ? 's' : ''}',
+                                    style: TextStyle(
+                                      color: AppColors.mutedForeground,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                if (me.hasAddOn)
+                                  Text(
+                                    'Add-on taken',
+                                    style: TextStyle(
+                                      color: AppColors.mutedForeground,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     );
@@ -480,7 +538,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // ── SUB-STATS: PLAYERS LEFT | AVG STACK ──
+                // ── SUB-STATS: PLAYERS LEFT | AVG STACK | PRIZE POOL ──
                 Row(
                   children: [
                     Expanded(
@@ -515,6 +573,48 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                       ),
                     ),
                     const SizedBox(width: 10),
+                    // StackDepthRing: parity with the desktop stats row below,
+                    // which colour-codes this same card by health in BBs.
+                    Expanded(
+                      child: StackDepthRing(
+                        depth: StackDepth.of(
+                          avgStack: avgStack,
+                          bigBlind: game.currentLevelData?.bb ?? 0,
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.card,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.borderSubtle),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                Formatters.chips(avgStack),
+                                style: TextStyle(
+                                  color: AppColors.foreground,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'avg stack',
+                                style: TextStyle(
+                                  color: AppColors.mutedForeground,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Prize pool: mobile had every other dashboard stat but
+                    // this one — parity with the desktop _StatCard below.
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.all(16),
@@ -526,17 +626,25 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              Formatters.chips(avgStack),
-                              style: TextStyle(
-                                color: AppColors.foreground,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w700,
+                            // FittedBox: a third card halves this row's
+                            // per-card width versus the desktop layout this
+                            // mirrors, and a large prize pool ("$12,500")
+                            // can outgrow that width at fontSize 26.
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                Formatters.prize(game.structure.prizePool),
+                                style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'avg stack',
+                              game.prizePoolLabel,
                               style: TextStyle(
                                 color: AppColors.mutedForeground,
                                 fontSize: 12,

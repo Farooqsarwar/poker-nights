@@ -1145,7 +1145,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.primary.withValues(alpha: 0.4),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.4,
+                                  ),
                                   blurRadius: 16,
                                   offset: Offset(0, 4),
                                 ),
@@ -1186,7 +1188,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.primary.withValues(alpha: 0.4),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.4,
+                                  ),
                                   blurRadius: 16,
                                   offset: Offset(0, 4),
                                 ),
@@ -1234,7 +1238,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               boxShadow: canResume
                                   ? [
                                       BoxShadow(
-                                        color: AppColors.primary.withValues(alpha: 0.4),
+                                        color: AppColors.primary.withValues(
+                                          alpha: 0.4,
+                                        ),
                                         blurRadius: 16,
                                         offset: Offset(0, 4),
                                       ),
@@ -1317,20 +1323,46 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              // Secondary Quick Tools Row (Speed, Edit, Seats, TV)
+              // Secondary Quick Tools — full parity with desktop's Row 2
+              // (Speed Up / Slow Down / Recalculate / Edit / Restart / Seats
+              // / TV), split across two rows of the mobile-native icon-over-
+              // label button instead of desktop's side-by-side AppButton,
+              // which is sized for wider columns. Mobile previously folded
+              // Speed Up/Slow Down into one button with no direction choice,
+              // and had no Recalculate or Restart at all.
               Row(
                 children: [
                   _buildQuickToolButton(
                     icon: Icons.bolt,
                     iconColor: AppColors.primaryText,
-                    label: 'Speed',
+                    label: 'Speed Up',
                     onTap: () => _showSpeedPreview(
                       app,
                       game,
-                      game.speedRecommendation ?? SpeedRecommendation.speedUp,
+                      SpeedRecommendation.speedUp,
                     ),
                   ),
                   const SizedBox(width: 8),
+                  _buildQuickToolButton(
+                    icon: Icons.trending_down,
+                    label: 'Slow Down',
+                    onTap: () => _showSpeedPreview(
+                      app,
+                      game,
+                      SpeedRecommendation.slowDown,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildQuickToolButton(
+                    icon: Icons.timer_outlined,
+                    label: 'Recalculate',
+                    onTap: app.forceEvaluateSpeedRecommendation,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
                   _buildQuickToolButton(
                     icon: Icons.edit_outlined,
                     label: 'Edit',
@@ -1341,6 +1373,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       currentLevel,
                       settings,
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildQuickToolButton(
+                    icon: Icons.replay,
+                    label: 'Restart',
+                    onTap:
+                        status == LiveGameStatus.running ||
+                            status == LiveGameStatus.paused ||
+                            status == LiveGameStatus.rebuypause
+                        ? () => _showRestartPreview(app, game, level)
+                        : null,
                   ),
                   const SizedBox(width: 8),
                   _buildQuickToolButton(
@@ -1401,7 +1444,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 isAdmin: isAdmin,
               ),
             if (_tab == 'seating') _SeatingTab(players: activePlayers),
-            if (_tab == 'prize')
+            if (_tab == 'prize') ...[
               _PrizeTab(
                 structure: structure,
                 settings: settings,
@@ -1415,6 +1458,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     !game.timerRunning &&
                     game.secondsRemaining == 0,
               ),
+              // Host only — same guard as the desktop branch. `projectionFor`
+              // strips payments for every non-admin role, so this can never
+              // reach a player screen; mobile had every prize-tab element but
+              // this one.
+              if (isAdmin) ...[
+                const SizedBox(height: AppSpacing.lg),
+                Builder(
+                  builder: (_) {
+                    final r = app.paymentReconciliation;
+                    return PaymentLedgerCard(
+                      game: game,
+                      inPlay: r.inPlay,
+                      collected: r.collected,
+                      outstanding: r.outstanding,
+                      unpaid: app.unpaidPlayers,
+                    );
+                  },
+                ),
+              ],
+            ],
             if (_tab == 'audit') _AuditTab(auditHistory: game.auditHistory),
           ],
           const SizedBox(height: AppSpacing.xxl),
@@ -1565,9 +1628,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget _buildQuickToolButton({
     required IconData icon,
     required String label,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
     Color? iconColor,
   }) {
+    // Disabled (onTap == null) dims the icon/label the same way AppButton's
+    // disabled state does, so Restart reads as unavailable rather than dead.
+    final disabled = onTap == null;
     return Expanded(
       child: Material(
         color: Colors.transparent,
@@ -1584,7 +1650,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 22, color: iconColor ?? AppColors.foreground),
+                Icon(
+                  icon,
+                  size: 22,
+                  color: disabled
+                      ? AppColors.mutedForeground
+                      : (iconColor ?? AppColors.foreground),
+                ),
                 const SizedBox(height: 6),
                 Text(
                   label,
@@ -1701,10 +1773,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: AppColors.primary.withValues(alpha: 0.15),
+                                        color: AppColors.primary.withValues(
+                                          alpha: 0.15,
+                                        ),
                                         borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
-                                          color: AppColors.primary.withValues(alpha: 0.3),
+                                          color: AppColors.primary.withValues(
+                                            alpha: 0.3,
+                                          ),
                                         ),
                                       ),
                                       child: Text(

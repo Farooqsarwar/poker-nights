@@ -250,9 +250,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (isNinePlayers &&
         game.status == LiveGameStatus.running &&
         !_showedFinalTablePrompt) {
-      _showedFinalTablePrompt = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+          // Claimed here rather than in build(): mutating state during build
+          // is a side effect, and setting it there also burned the prompt
+          // when the route was not current — a modal open on the frame the
+          // ninth player busted meant the redraw was never offered at all.
+          // One build per frame means one callback per frame, so the flag is
+          // always set before the next build re-checks it.
+          _showedFinalTablePrompt = true;
           final dialogInsets = appDialogInsets(context);
           showDialog(
             context: context,
@@ -296,11 +302,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ),
             ),
-          ).then((_) {
-            if (mounted) {
-              // Let them re-trigger it if they want by some other means, but don't auto-show again.
-            }
-          });
+          );
         }
       });
     }
@@ -772,7 +774,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           size: AppButtonSize.lg,
                           variant: AppButtonVariant.secondary,
                           onPressed: () =>
-                              context.go(RoutePaths.rebuySettlement),
+                              context.push(RoutePaths.rebuySettlement),
                           child: const AppIconLabel(
                             label: 'Settlement',
                             trailing: Icons.arrow_forward,
@@ -787,7 +789,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: AppButton(
                           size: AppButtonSize.lg,
                           variant: AppButtonVariant.secondary,
-                          onPressed: () => context.go(RoutePaths.finalTable),
+                          onPressed: () => context.push(RoutePaths.finalTable),
                           child: const AppIconLabel(
                             label: 'Redraw Table',
                             trailing: Icons.arrow_forward,

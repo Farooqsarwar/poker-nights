@@ -1,3 +1,4 @@
+import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../app/colors.dart';
@@ -6,7 +7,9 @@ import '../constants/app_constants.dart';
 import '../models/chip_color.dart';
 import '../utils/tournament_engine.dart';
 import 'app_button.dart';
+import 'app_modal.dart';
 import 'app_select.dart';
+import 'app_text_field.dart';
 import 'chip_token.dart';
 import 'count_stepper.dart';
 import 'glass_styles.dart';
@@ -91,6 +94,146 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
     });
   }
 
+  /// Colour + name picker shared by "Add a colour" and tapping an existing
+  /// chip token. Returns null when the host cancels.
+  ///
+  /// Sized from the viewport rather than the package defaults: on a 360px
+  /// phone the stock wheel/swatch sizes overflow the dialog, which is why the
+  /// creation wizard's chips step appeared to do nothing on mobile.
+  Future<({Color color, String name})?> _showColorDialog({
+    required Color initialColor,
+    required String initialName,
+    required String title,
+    required String confirmLabel,
+  }) async {
+    var picked = initialColor;
+    final nameController = TextEditingController(text: initialName);
+    final dialogInsets = appDialogInsets(context);
+
+    // Width the dialog body actually gets, after inset padding and the
+    // AlertDialog's own 24px content padding on each side.
+    final available =
+        MediaQuery.sizeOf(context).width - dialogInsets.horizontal - 48;
+    final bodyWidth = available.clamp(220.0, kAppModalMaxWidth - 48);
+    // Swatches wrap at `width + spacing`, so shrink them on narrow screens.
+    final swatchSize = bodyWidth < 300 ? 32.0 : 38.0;
+
+    final result = await showDialog<({Color color, String name})>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        insetPadding: dialogInsets,
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        title: Text(title, style: AppTypography.bodyLg),
+        content: SizedBox(
+          width: bodyWidth,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ColorPicker(
+                  color: picked,
+                  width: swatchSize,
+                  height: swatchSize,
+                  borderRadius: swatchSize / 2,
+                  spacing: 6,
+                  runSpacing: 6,
+                  wheelDiameter: bodyWidth < 300 ? 180 : 210,
+                  enableShadesSelection: true,
+                  pickersEnabled: const {
+                    ColorPickerType.primary: true,
+                    ColorPickerType.accent: true,
+                    ColorPickerType.wheel: true,
+                    ColorPickerType.both: false,
+                  },
+                  onColorChanged: (color) {
+                    picked = color;
+                    nameController.text = ColorTools.nameThatColor(color);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+                AppTextField(
+                  controller: nameController,
+                  label: 'Colour name',
+                  placeholder: 'e.g. Red, Blue, Gold',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final typed = nameController.text.trim();
+              final hexName =
+                  '#${picked.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+              Navigator.of(dialogContext).pop(
+                (color: picked, name: typed.isEmpty ? hexName : typed),
+              );
+            },
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+
+    nameController.dispose();
+    return result;
+  }
+
+  /// Re-colours an existing chip. Looked up by identity rather than index
+  /// because [_emit] re-sorts the list by value after every change.
+  Future<void> _editColor(ChipColor chip) async {
+    final result = await _showColorDialog(
+      initialColor: Color(chip.hex),
+      initialName: chip.color,
+      title: 'Edit chip colour',
+      confirmLabel: 'Save',
+    );
+    if (result == null || !mounted) return;
+    final index = _chips.indexOf(chip);
+    if (index < 0) return;
+    _update(
+      index,
+      chip.copyWith(color: result.name, hex: result.color.toARGB32()),
+    );
+  }
+
+  /// Adds a colour only once the host has picked one — cancelling leaves the
+  /// set untouched, so there is never a stray grey "Colour 4" to clean up.
+  Future<void> _addColor() async {
+    final used = _chips.map((c) => c.value).toSet();
+    final next = _values.firstWhere(
+      (v) => !used.contains(v),
+      orElse: () => _values.last,
+    );
+    final result = await _showColorDialog(
+      initialColor: const Color(0xFF7F8C8D),
+      initialName: '',
+      title: 'Pick a chip colour',
+      confirmLabel: 'Add colour',
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _chips.add(
+        ChipColor(
+          color: result.name,
+          hex: result.color.toARGB32(),
+          value: next,
+          quantity: 50,
+        ),
+      );
+      _emit();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final dupes = _duplicateValues;
@@ -131,6 +274,7 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
             duplicate: dupes.contains(_chips[i].value),
             onValue: (v) => _update(i, _chips[i].copyWith(value: v)),
             onQuantity: (q) => _update(i, _chips[i].copyWith(quantity: q)),
+            onColor: () => _editColor(_chips[i]),
             // A one-colour set cannot make change at any blind, so the last
             // two colours are not removable.
             onRemove: _chips.length > 2
@@ -152,26 +296,7 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
         ],
         AppButton(
           variant: AppButtonVariant.ghost,
-          onPressed: _chips.length >= _values.length
-              ? null
-              : () {
-                  final used = _chips.map((c) => c.value).toSet();
-                  final next = _values.firstWhere(
-                    (v) => !used.contains(v),
-                    orElse: () => _values.last,
-                  );
-                  setState(() {
-                    _chips.add(
-                      ChipColor(
-                        color: 'Colour ${_chips.length + 1}',
-                        hex: 0xFF7F8C8D,
-                        value: next,
-                        quantity: 50,
-                      ),
-                    );
-                    _emit();
-                  });
-                },
+          onPressed: _chips.length >= _values.length ? null : _addColor,
           child: const Text('Add a colour'),
         ),
       ],
@@ -186,6 +311,7 @@ class _ChipRow extends StatelessWidget {
     required this.duplicate,
     required this.onValue,
     required this.onQuantity,
+    required this.onColor,
     required this.onRemove,
   });
 
@@ -194,6 +320,7 @@ class _ChipRow extends StatelessWidget {
   final bool duplicate;
   final ValueChanged<int> onValue;
   final ValueChanged<int> onQuantity;
+  final VoidCallback onColor;
   final VoidCallback? onRemove;
 
   @override
@@ -210,11 +337,32 @@ class _ChipRow extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ChipToken(
-            colorName: chip.color,
-            hex: chip.colorValue,
-            value: chip.value,
-            count: chip.quantity,
+          // The whole token is the tap target for re-colouring — on a phone a
+          // small swatch alone is under the 44px minimum.
+          InkWell(
+            onTap: onColor,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ChipToken(
+                      colorName: chip.color,
+                      hex: chip.colorValue,
+                      value: chip.value,
+                      count: chip.quantity,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Icon(
+                    Icons.palette_outlined,
+                    size: 18,
+                    color: AppColors.mutedForeground,
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Row(

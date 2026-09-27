@@ -1590,6 +1590,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   List<Widget> _mobilePlayersList(AppProvider app, LiveGame game) {
     final isAdmin = app.canRunCurrentGame;
+    final settings = game.settings;
     if (game.activePlayers.isEmpty) {
       return [
         Padding(
@@ -1729,27 +1730,70 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         ),
                       ],
                     ),
-                    if (isAdmin) ...[
+                    // Parity with the desktop roster (_playersTab): the same
+                    // per-player actions, reflowed for a narrow screen. Editing
+                    // the stack is the row's own onTap, so it is not repeated
+                    // here. Rebuy is deliberately absent — it only applies to
+                    // eliminated players and lives in the Eliminated tab.
+                    if (isAdmin ||
+                        (settings.addOn &&
+                            game.status == LiveGameStatus.rebuypause &&
+                            !p.hasAddOn)) ...[
                       const SizedBox(height: 10),
                       Row(
                         children: [
-                          Expanded(
-                            child: AppButton(
-                              size: AppButtonSize.sm,
-                              variant: AppButtonVariant.secondary,
-                              onPressed: () => _editPlayerStack(context, app, p),
-                              child: const Text('Edit Stack'),
+                          if (settings.addOn &&
+                              game.status == LiveGameStatus.rebuypause &&
+                              !p.hasAddOn) ...[
+                            Expanded(
+                              child: AppButton(
+                                size: AppButtonSize.sm,
+                                variant: AppButtonVariant.secondary,
+                                onPressed: () => _confirmAddOn(context, app, p),
+                                child: const Text('Add-on'),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: AppButton(
-                              size: AppButtonSize.sm,
-                              variant: AppButtonVariant.danger,
-                              onPressed: () => _showEliminateModal(context, app, p),
-                              child: const Text('Out'),
+                            const SizedBox(width: 8),
+                          ],
+                          if (isAdmin) ...[
+                            Expanded(
+                              child: AppButton(
+                                size: AppButtonSize.sm,
+                                variant: AppButtonVariant.danger,
+                                onPressed: () =>
+                                    _showEliminateModal(context, app, p),
+                                child: const Text('Out'),
+                              ),
                             ),
-                          ),
+                            if (app.lastUndoablePlayerAction(p.id) != null) ...[
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 44,
+                                child: AppButton(
+                                  size: AppButtonSize.sm,
+                                  variant: AppButtonVariant.ghost,
+                                  onPressed: () =>
+                                      _confirmUndoPlayerAction(context, app, p),
+                                  child: const Icon(Icons.undo, size: 16),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 44,
+                              child: AppButton(
+                                size: AppButtonSize.sm,
+                                variant: AppButtonVariant.ghost,
+                                onPressed: () =>
+                                    _confirmRemovePlayer(context, app, p),
+                                child: Icon(
+                                  Icons.delete_outline,
+                                  color: AppColors.destructive,
+                                  size: 16,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ],

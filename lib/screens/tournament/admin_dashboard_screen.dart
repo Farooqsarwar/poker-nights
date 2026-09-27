@@ -1638,106 +1638,121 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppColors.borderSubtle),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
-                        style: TextStyle(
-                          color: AppColors.primaryText,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: AppColors.primarySoft,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
+                            style: TextStyle(
+                              color: AppColors.primaryText,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 18,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Flexible(
-                                child: Text(
-                                  p.name,
-                                  style: TextStyle(
-                                    color: AppColors.foreground,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 15,
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      p.name,
+                                      style: TextStyle(
+                                        color: AppColors.foreground,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                  overflow: TextOverflow.ellipsis,
+                                  if (p.rebuys > 0) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: AppColors.primary.withValues(alpha: 0.3),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Rebuy ×${p.rebuys}',
+                                        style: TextStyle(
+                                          color: AppColors.primaryText,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '📍 Table ${p.table} · Seat ${p.seat}',
+                                style: TextStyle(
+                                  color: AppColors.mutedForeground,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              if (p.rebuys > 0) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.borderSubtle,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    '×${p.rebuys}',
-                                    style: TextStyle(
-                                      color: AppColors.primaryText,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                              if (p.stack != null) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  'Stack: ${Formatters.prize(p.stack!)}',
+                                  style: TextStyle(
+                                    color: AppColors.foreground,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ],
                             ],
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'Table ${p.table} · Seat ${p.seat}${p.stack != null ? ' · ${Formatters.prize(p.stack!)}' : ''}',
-                            style: TextStyle(
-                              color: AppColors.mutedForeground,
-                              fontSize: 12,
+                        ),
+                      ],
+                    ),
+                    if (isAdmin) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppButton(
+                              size: AppButtonSize.sm,
+                              variant: AppButtonVariant.secondary,
+                              onPressed: () => _editPlayerStack(context, app, p),
+                              child: const Text('Edit Stack'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: AppButton(
+                              size: AppButtonSize.sm,
+                              variant: AppButtonVariant.danger,
+                              onPressed: () => _showEliminateModal(context, app, p),
+                              child: const Text('Out'),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    if (isAdmin)
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => _showEliminateModal(context, app, p),
-                          borderRadius: BorderRadius.circular(10),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primarySoft,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: AppColors.primarySoftBorder,
-                              ),
-                            ),
-                            child: Text(
-                              'Out',
-                              style: TextStyle(
-                                color: AppColors.primaryText,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                    ],
                   ],
                 ),
               ),

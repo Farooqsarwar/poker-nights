@@ -218,6 +218,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   /// come back, even if the admin navigates back to edit details.
   bool _reachedReview = false;
 
+  /// Loading state while publishing the tournament
+  bool _isPublishing = false;
+
   static String get _todayIso {
     final now = DateTime.now();
     final m = now.month.toString().padLeft(2, '0');
@@ -656,6 +659,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     final confirmed = await _showConfirmDialog();
     if (confirmed != true || !mounted) return;
 
+    setState(() => _isPublishing = true);
+
     // Persist a custom chip set once so it can be reused next time. A set that
     // still matches a named preset is not custom.
     if (!TournamentEngine.presetNames.contains(s.chipSetName)) {
@@ -945,36 +950,27 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   }
 
   Widget _buildBottomBar(AppProvider app) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.4),
-              blurRadius: 16,
-              offset: Offset(0, 4),
+    final isLastStep = _step == 5;
+    final isLoading = isLastStep && _isPublishing;
+
+    return AppButton(
+      size: AppButtonSize.lg,
+      fullWidth: true,
+      onPressed: isLoading ? null : (isLastStep ? () => _generate(app) : _next),
+      child: isLoading
+          ? SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppColors.foreground,
+                ),
+              ),
+            )
+          : Text(
+              isLastStep ? 'Publish event' : 'Continue',
             ),
-          ],
-        ),
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: AppColors.foreground,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            elevation: 0,
-          ),
-          onPressed: _step < 5 ? _next : () => _generate(app),
-          child: Text(
-            _step == 5 ? 'Publish event' : 'Continue',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-        ),
-      ),
     );
   }
 

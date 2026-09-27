@@ -348,7 +348,7 @@ class _GroupScreenState extends State<GroupScreen> {
               const SizedBox(width: AppSpacing.sm),
               AppButton(
                 size: AppButtonSize.sm,
-                onPressed: () => context.go(RoutePaths.createTournament),
+                onPressed: () => context.push(RoutePaths.createTournament),
                 child: const Text('+ New game'),
               ),
             ],
@@ -395,7 +395,7 @@ class _GroupScreenState extends State<GroupScreen> {
             : 'No upcoming game — wait for the first game to be created.',
         action: isAdmin
             ? AppButton(
-                onPressed: () => context.go(RoutePaths.createTournament),
+                onPressed: () => context.push(RoutePaths.createTournament),
                 child: const Text('Create tournament'),
               )
             : null,

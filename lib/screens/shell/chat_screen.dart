@@ -213,7 +213,7 @@ class _Composer extends StatelessWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
-                onPressed: () => context.go(RoutePaths.createTournament),
+                onPressed: () => context.push(RoutePaths.createTournament),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.primaryText,
                   padding: const EdgeInsets.symmetric(horizontal: 4),

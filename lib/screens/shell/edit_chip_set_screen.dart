@@ -100,28 +100,85 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
   int get _totalValue => _chips.fold(0, (sum, c) => sum + c.value * c.quantity);
 
   void _addChip() {
-    setState(() {
-      if (_mode == _EditorMode.quick && _quickKind == _QuickKind.unnumbered) {
-        _chips.add(
-          const ChipColor(
+    final newChip = _mode == _EditorMode.quick && _quickKind == _QuickKind.unnumbered
+        ? const ChipColor(
             color: 'White',
             hex: 0xFFE8E4D9,
             value: 0,
             quantity: 200,
-          ),
-        );
-        _reRecommend();
-      } else {
-        _chips.add(
-          const ChipColor(
+          )
+        : const ChipColor(
             color: 'White',
             hex: 0xFFE8E4D9,
             value: 1,
             quantity: 100,
+          );
+
+    setState(() => _chips.add(newChip));
+    // Immediately open color picker for the new chip
+    _openColorPickerForNewChip(_chips.length - 1);
+  }
+
+  void _openColorPickerForNewChip(int index) {
+    Color pickerColor = Color(_chips[index].hex);
+    final nameController = TextEditingController(text: _chips[index].color);
+
+    final dialogInsets = appDialogInsets(context);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        insetPadding: dialogInsets,
+        title: const Text('Pick a color for your chip'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ColorPicker(
+                color: pickerColor,
+                onColorChanged: (color) {
+                  pickerColor = color;
+                  nameController.text = ColorTools.nameThatColor(color);
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: nameController,
+                label: 'Color Name',
+                placeholder: 'e.g. Red, Blue, Gold',
+              ),
+            ],
           ),
-        );
-      }
-    });
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Remove the chip if user cancels
+              setState(() => _chips.removeAt(index));
+            },
+          ),
+          TextButton(
+            child: const Text('Add chip'),
+            onPressed: () {
+              final hexName =
+                  '#${pickerColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+              final inputName = nameController.text.trim();
+              setState(() {
+                _chips[index] = _chips[index].copyWith(
+                  color: inputName.isEmpty ? hexName : inputName,
+                  hex: pickerColor.toARGB32(),
+                );
+                if (_mode == _EditorMode.quick && _quickKind == _QuickKind.unnumbered) {
+                  _reRecommend();
+                }
+              });
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   /// Applies the engine's value recommendation for unnumbered chips

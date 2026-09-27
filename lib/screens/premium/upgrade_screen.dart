@@ -163,11 +163,11 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
               RoutePaths.checkout,
               extra: _selectedPlanId,
             ),
-            child: const Text('Start 7-day free trial'),
+            child: const Text('Upgrade to Premium'),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Cancel anytime · billed after trial',
+            'Cancel anytime',
             textAlign: TextAlign.center,
             style: AppTypography.bodyXs.copyWith(
               color: AppColors.mutedForeground,

@@ -585,6 +585,63 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 ),
                 const SizedBox(height: 16),
 
+                // ── NEXT LEVEL ── parity with the desktop card below; mobile
+                // had every other dashboard stat but this one, styled to match
+                // its own neighbours (rounded-14 container) rather than the
+                // AppCard the desktop branch uses.
+                if (next != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.borderSubtle),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Next level',
+                          style: TextStyle(
+                            color: AppColors.mutedForeground,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Text(
+                                '${Formatters.chips(next.sb)} / ${Formatters.chips(next.bb)}',
+                                style: AppTypography.monoSm.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (next.ante != null) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                  '+ ante',
+                                  style: TextStyle(
+                                    color: AppColors.accent,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        Text(
+                          'Level ${game.currentLevel + 1}',
+                          style: TextStyle(
+                            color: AppColors.mutedForeground,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
                 if (game.status == LiveGameStatus.completed) ...[
                   AppCard(
                     padding: const EdgeInsets.all(AppSpacing.lg),

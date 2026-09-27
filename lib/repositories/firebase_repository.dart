@@ -258,8 +258,25 @@ class FirebaseRepository {
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   Stream<fa.User?> authStateChanges() => _auth.authStateChanges();
-  fa.User? get currentUser => _auth.currentUser;
-  String? get currentUid => _auth.currentUser?.uid;
+
+  /// Guarded like the constructor's own `authStateChanges()` subscription:
+  /// widget tests mount screens before `Firebase.initializeApp()` runs, and
+  /// `FirebaseAuth.instance` throws `[core/no-app]` the instant it is
+  /// touched — not just when a network call is made. Unlike that
+  /// subscription, this getter has call sites reachable straight from
+  /// `build()` (`AppProvider.isGuest`), so without a guard of its own the
+  /// same "Firebase unavailable" case that the constructor already tolerates
+  /// crashes on the first read here. Falls back to "no user", the same
+  /// answer as a fresh, unauthenticated session.
+  fa.User? get currentUser {
+    try {
+      return _auth.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? get currentUid => currentUser?.uid;
 
   /// The signed-in user's Premium entitlement, as held on the server.
   ///
@@ -281,7 +298,7 @@ class FirebaseRepository {
       return false;
     }
   }
-  bool get isSignedInAsGuest => _auth.currentUser?.isAnonymous ?? false;
+  bool get isSignedInAsGuest => currentUser?.isAnonymous ?? false;
 
   Future<fa.UserCredential> signUp({
     required String name,

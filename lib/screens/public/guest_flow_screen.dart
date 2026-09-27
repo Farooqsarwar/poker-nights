@@ -1477,9 +1477,15 @@ class _IntroLine extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: AppColors.mutedForeground),
         const SizedBox(width: 6),
-        Text(
-          text,
-          style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
+        // Flexible, not a bare Text: the parent Wrap bounds this line to the
+        // card's width, but a Row hands unbounded main-axis constraints to
+        // non-flexible children. A long venue name therefore laid out at its
+        // full intrinsic width and overflowed the line on a 320px screen.
+        Flexible(
+          child: Text(
+            text,
+            style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
+          ),
         ),
       ],
     );

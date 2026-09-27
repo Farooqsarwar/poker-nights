@@ -43,21 +43,28 @@ class AppTimer extends StatelessWidget {
     final timeStr = Formatters.time(secondsRemaining);
     final lastColonIdx = timeStr.lastIndexOf(':');
 
-    return Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            for (var i = 0; i < timeStr.length; i++)
-              _TimerDigit(
-                char: timeStr[i],
-                size: size,
-                color: (lastColonIdx != -1 && i >= lastColonIdx)
-                    ? secsColor
-                    : minsColor,
-                danger: danger,
-              ),
-          ],
+    // The digits are fixed-width and non-flexible, so a Row of them overflows
+    // the moment the parent is narrower than their intrinsic total — a half-
+    // width column on a 320px phone. Scaling down instead keeps the class's
+    // documented promise that it fits whatever width it is given.
+    return FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              for (var i = 0; i < timeStr.length; i++)
+                _TimerDigit(
+                  char: timeStr[i],
+                  size: size,
+                  color: (lastColonIdx != -1 && i >= lastColonIdx)
+                      ? secsColor
+                      : minsColor,
+                  danger: danger,
+                ),
+            ],
+          ),
         )
         .animate(
           key: ValueKey(danger ? 'danger' : 'normal'),

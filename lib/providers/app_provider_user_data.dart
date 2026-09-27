@@ -638,8 +638,13 @@ extension AppProviderUserData on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  /// Copied out rather than handed over, matching [presets] below.
+  /// [saveChipSet] and [deleteChipSet] mutate `_savedChipSets` in place, so
+  /// returning it directly gave every reader the one instance whose identity
+  /// never changes — a `context.select` on it would compare that instance to
+  /// itself, find them equal and never rebuild.
   List<({String id, String name, List<ChipColor> chips})> get savedChipSets =>
-      _savedChipSets;
+      List.unmodifiable(_savedChipSets);
 
   void saveChipSet(String id, String name, List<ChipColor> chips) {
     final dupValues = chips.map((c) => c.value).toList();

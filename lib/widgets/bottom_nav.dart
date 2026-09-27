@@ -31,8 +31,7 @@ class BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
 
-    final app = context.watch<AppProvider>();
-    final group = app.currentGroup;
+    final hasCurrentGroup = context.select<AppProvider, bool>((a) => a.hasCurrentGroup);
     final items = <_BottomItem>[
       _BottomItem(
         path: RoutePaths.home,
@@ -40,7 +39,7 @@ class BottomNav extends StatelessWidget {
         icon: Icons.home_outlined,
         activeColor: AppColors.primary,
       ),
-      if (app.hasCurrentGroup) ...[
+      if (hasCurrentGroup) ...[
         _BottomItem(
           path: RoutePaths.group,
           label: 'Games',
@@ -52,14 +51,14 @@ class BottomNav extends StatelessWidget {
           label: 'Chat',
           icon: Icons.chat_bubble_outline,
           activeColor: AppColors.primary,
-          badge: app.unreadGroupChatCount(group.id),
+          badge: context.select<AppProvider, int>((a) => a.unreadGroupChatCount(a.currentGroup.id)),
         ),
         _BottomItem(
           path: RoutePaths.members,
           label: 'Members',
           icon: Icons.person_outline,
           activeColor: AppColors.primary,
-          badge: group.members.length,
+          badge: context.select<AppProvider, int>((a) => a.currentGroup.members.length),
         ),
         _BottomItem(
           path: '#more',

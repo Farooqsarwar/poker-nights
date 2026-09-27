@@ -310,7 +310,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       variant: AppButtonVariant.secondary,
                       size: AppButtonSize.lg,
                       fullWidth: true,
-                      onPressed: () => context.go(RoutePaths.createTournament),
+                      onPressed: () => context.push(RoutePaths.createTournament),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -873,7 +873,7 @@ class _UpcomingGames extends StatelessWidget {
                   'The tables are empty. Create a tournament to get the action started.',
               action: isAdmin
                   ? AppButton(
-                      onPressed: () => context.go(RoutePaths.createTournament),
+                      onPressed: () => context.push(RoutePaths.createTournament),
                       child: const Text('Create First Game'),
                     )
                   : null,

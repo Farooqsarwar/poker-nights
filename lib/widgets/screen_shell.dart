@@ -47,9 +47,8 @@ class ScreenShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    final signedIn = app.isAuthenticated;
-    final guestOk = app.hasGuestSession && _guestAllowed.contains(requiredPath);
+    final signedIn = context.select<AppProvider, bool>((a) => a.isAuthenticated);
+    final guestOk = context.select<AppProvider, bool>((a) => a.hasGuestSession) && _guestAllowed.contains(requiredPath);
 
     // Route guard: block access when the user cannot enter this path.
     if (!signedIn && !guestOk) {

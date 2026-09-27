@@ -1119,25 +1119,29 @@ class _StoreBadge extends StatelessWidget {
           children: [
             Icon(icon, size: 22, color: AppColors.foreground),
             const SizedBox(width: AppSpacing.sm),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Coming soon',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.onSurfaceHint,
-                    height: 1.1,
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Coming soon',
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.onSurfaceHint,
+                      height: 1.1,
+                    ),
                   ),
-                ),
-                Text(
-                  store,
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w600,
-                    height: 1.2,
+                  Text(
+                    store,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),

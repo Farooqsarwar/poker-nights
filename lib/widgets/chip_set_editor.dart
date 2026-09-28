@@ -1,12 +1,13 @@
-import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/chip_color.dart';
+import '../models/chip_palette.dart';
 import '../utils/tournament_engine.dart';
 import 'app_button.dart';
+import 'chip_palette_swatch.dart';
 import 'app_modal.dart';
 import 'app_select.dart';
 import 'app_text_field.dart';
@@ -134,31 +135,38 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ColorPicker(
-                  color: picked,
-                  width: swatchSize,
-                  height: swatchSize,
-                  borderRadius: swatchSize / 2,
-                  spacing: 6,
-                  runSpacing: 6,
-                  wheelDiameter: bodyWidth < 300 ? 180 : 210,
-                  enableShadesSelection: true,
-                  pickersEnabled: const {
-                    ColorPickerType.primary: true,
-                    ColorPickerType.accent: true,
-                    ColorPickerType.wheel: true,
-                    ColorPickerType.both: false,
-                  },
-                  onColorChanged: (color) {
-                    picked = color;
-                    nameController.text = ColorTools.nameThatColor(color);
-                  },
+                // Addendum 1 §2 row 2 — the fixed palette of ten named chip
+                // colours, replacing the free colour wheel. The wheel let a
+                // host pick any hue at all (its placeholder suggested "Gold")
+                // and produced swatches matching no real chip; a named set is
+                // also what lets §B5 print the colour's NAME beside it, which
+                // §B4 rule 16 requires because colour must never carry meaning
+                // on its own.
+                StatefulBuilder(
+                  builder: (context, setSwatchState) => Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final entry in kChipPalette)
+                        ChipPaletteSwatch(
+                          entry: entry,
+                          size: swatchSize,
+                          selected: picked.toARGB32() == entry.hex,
+                          onTap: () {
+                            setSwatchState(() {
+                              picked = Color(entry.hex);
+                              nameController.text = entry.name;
+                            });
+                          },
+                        ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AppTextField(
                   controller: nameController,
                   label: 'Colour name',
-                  placeholder: 'e.g. Red, Blue, Gold',
+                  placeholder: 'e.g. Red, Blue, Green',
                 ),
               ],
             ),

@@ -223,6 +223,20 @@ Map<String, dynamic> tournamentStructureToMap(TournamentStructure s) => {
       'styleNote': s.styleNote,
       'rebuysCloseLevel': s.rebuysCloseLevel,
       'engineVersion': s.engineVersion,
+      // §F1.5 point 7 / §E17 row 88. These were computed by the engine and
+      // then dropped on the floor: the codec never wrote them, so the moment a
+      // structure was saved and read back the app could no longer tell a host
+      // that their chip case does not cover the field. That is the single most
+      // valuable thing the structure engine works out.
+      'feasible': s.feasible,
+      'depthShortfallNote': s.depthShortfallNote,
+      'maxPlayersSupported': s.maxPlayersSupported,
+      // §F1.3 `meta.pace` / `meta.fits`.
+      'pace': s.pace?.name,
+      'fits': s.fits,
+      'paceOverByMins': s.paceOverByMins,
+      // §F1.1 `explain[]` — what the "Why?" disclosures read (§B4 rule 10).
+      'explain': s.explain.map((e) => e.toMap()).toList(),
     };
 
 TournamentStructure tournamentStructureFromMap(Map<String, dynamic> m) =>
@@ -256,7 +270,28 @@ TournamentStructure tournamentStructureFromMap(Map<String, dynamic> m) =>
       colorUpInstructions:
           List<String>.from(m['colorUpInstructions'] as List? ?? const []),
       warnings: List<String>.from(m['warnings'] as List? ?? const []),
+      // A structure written before these fields existed has no opinion on
+      // feasibility, and "feasible" is the safe reading: the alternative would
+      // put a blocking card in front of every tournament created before this
+      // version.
+      feasible: (m['feasible'] as bool?) ?? true,
+      depthShortfallNote: m['depthShortfallNote'] as String?,
+      maxPlayersSupported: (m['maxPlayersSupported'] as num?)?.toInt(),
+      pace: _paceModeFromName(m['pace'] as String?),
+      fits: (m['fits'] as bool?) ?? true,
+      paceOverByMins: (m['paceOverByMins'] as num?)?.toInt() ?? 0,
+      explain: _mapList(m['explain'] as List? ?? const [])
+          .map(StructureExplanation.fromMap)
+          .toList(),
     );
+
+PaceMode? _paceModeFromName(String? name) {
+  if (name == null) return null;
+  for (final m in PaceMode.values) {
+    if (m.name == name) return m;
+  }
+  return null;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GameSettings
@@ -304,6 +339,7 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'reEntryChips': s.reEntryChips,
       'addOnChips': s.addOnChips,
       'levelDurationMins': s.levelDurationMins,
+      'pace': s.pace?.name,
       'payoutShape': s.payoutShape.name,
       'format': s.format?.name,
       'maxReEntries': s.maxReEntries,
@@ -371,6 +407,7 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
       reEntryChips: (m['reEntryChips'] as num?)?.toInt(),
       addOnChips: (m['addOnChips'] as num?)?.toInt(),
       levelDurationMins: (m['levelDurationMins'] as num?)?.toInt(),
+      pace: _paceModeFromName(m['pace'] as String?),
       payoutShape: PayoutShape.values.firstWhere(
         (v) => v.name == m['payoutShape'],
         // Every tournament created before the selector existed stored no shape

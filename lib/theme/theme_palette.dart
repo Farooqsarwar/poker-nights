@@ -1,9 +1,24 @@
 import 'package:flutter/material.dart';
 
-/// Defines a complete color palette for a single theme variant.
+/// The app's colour tokens.
 ///
-/// Every visual token the app needs lives here. Derived (alpha-blended)
-/// colours are computed as getters so palettes stay compact.
+/// **Build Spec v3.1 §B1 — "Exactly one look: black ground, crimson accent,
+/// white ink."** There is one palette, and every value below is §B1's own
+/// token table pinned as a literal.
+///
+/// The three alternative palettes (`crimsonGlass`, `cosmicAi`, `darkOrange`)
+/// were removed: §B1 does not describe a themeable app, and two of them
+/// carried banned hues outright — blue/purple and orange/amber respectively.
+///
+/// The previous `Color.lerp(base, white, 0.40)` text variants were a reasonable
+/// answer to "a fill colour cannot also be a text colour" while four palettes
+/// had to share one rule. With a single palette the spec simply states both
+/// values (`red` and `redText`), and a derivation can only drift away from
+/// them, so the derived getters are now lookups.
+///
+/// The legacy field names (`primary`, `destructive`, `warning`, …) are kept so
+/// the ~175 `AppColors.xxx` call sites keep compiling; each resolves to its
+/// §B1 token. New code should prefer the §B1 names, exposed alongside them.
 class ThemePalette {
   const ThemePalette({
     required this.id,
@@ -63,44 +78,97 @@ class ThemePalette {
   final Color warning;
   final Color warningForeground;
 
-  // ── Text-safe variants of the semantic colours ──────────────────────────
+  // ── §B1 tokens, by their spec names ─────────────────────────────────────
+
+  /// `bg` `#0A0A0A` — app ground, scoreboard ground, input fill.
+  Color get bg => background;
+
+  /// `surface` `#141414` — cards, list rows, tiles.
+  Color get surface => card;
+
+  /// `surface2` `#1C1C1C` — secondary buttons, the square back button,
+  /// steppers' inner fill, drawer rows on press.
+  Color get surface2 => secondary;
+
+  /// `borderStrong` `rgba(255,255,255,0.16)` — focused and secondary outlines,
+  /// sheet borders.
+  Color get borderStrong => const Color(0x29FFFFFF);
+
+  /// `red` `#D53032` — brand: filled buttons, the active tab pill, progress
+  /// bars, big numerals (**≥ 24 px**), the logo.
+  Color get red => primary;
+
+  /// `redText` `#F2555A` — red **text below 24 px**. §B1: *"Wherever this
+  /// document calls text below 24 px (18.66 px bold) 'red' or 'crimson' —
+  /// eyebrows, the LEVEL and ANTE labels, antes in tables, link rows, legal
+  /// headings — it means `redText`, never `red`"* (`red` measures 4.05 : 1 on
+  /// `bg` and 3.77 : 1 on `surface`, both under the AA floor).
+  Color get redText => const Color(0xFFF2555A);
+
+  /// `redDim` `rgba(213,48,50,0.16)` — tinted fills: the selected option,
+  /// avatar tints, pill backgrounds, hero cards.
+  Color get redDim => const Color(0x29D53032);
+
+  /// `redDanger` `#B23430` — destructive actions (End tournament, Delete
+  /// account). **Fill only**, with white text (6.13 : 1); as a text or outline
+  /// colour it fails at 3.23 : 1 on `bg`.
+  Color get redDanger => const Color(0xFFB23430);
+
+  /// `white` `#FFFFFF` — primary text, clock minutes.
+  Color get white => foreground;
+
+  /// `muted2` `#939399` — tertiary text, small uppercase labels
+  /// (≥ 4.6 : 1 on every surface).
+  Color get muted2 => onSurfaceHint;
+
+  /// `green` `#3FBF6B` — **only** the LIVE dot, GOING / CHECKED IN / ACTIVE
+  /// pills, and positive P&L figures (§B4 rule 9).
+  Color get green => success;
+
+  /// §B1: disabled controls are 40 % opacity of the control, with the reason
+  /// always visible as text beside them — never opacity alone.
+  static const double disabledOpacity = 0.40;
+
+  // ── Text-safe semantic colours ──────────────────────────────────────────
   //
-  // The base semantic colours are tuned as FILLS, and they are correct for
-  // that: white on `primary` measures 6.6:1, exactly what a button wants.
-  // Used as TEXT on a dark surface the same colour measures 2.6:1 — far under
-  // the 4.5:1 AA floor — which is why links ("Forgot Password?", "Back to
-  // Sign In"), status lines and coloured labels were hard to read against the
-  // card. A fill colour and a text colour are different jobs; these are the
-  // text job.
+  // §B1 splits one job into two tokens — `red` is the fill, `redText` is the
+  // text — so these are lookups, not calculations.
   //
-  // Lifting toward white rather than hardcoding per palette means every
-  // theme — red, crimson, cosmic, orange — gets a correct variant from its
-  // own hue instead of four hand-tuned constants that drift apart.
-  // 0.40 is the point the default red clears AA on both card and background
-  // (5.4:1 and 6.7:1) while still reading as red rather than pink.
-  static const double _textLift = 0.40;
-  Color get primaryText => Color.lerp(primary, Colors.white, _textLift)!;
-  Color get destructiveText =>
-      Color.lerp(destructive, Colors.white, _textLift)!;
-  Color get successText => Color.lerp(success, Colors.white, _textLift)!;
-  Color get warningText => Color.lerp(warning, Colors.white, _textLift)!;
+  // `warning` has NO §B1 token. The palette is deliberately complete and
+  // contains no amber: "There is no gold, yellow, amber or second accent
+  // anywhere (a test fails on any yellow pixel colour, T141)." The previous
+  // value was `#E65100`, a deep amber, shipping in the DEFAULT palette and
+  // used in 42 places — a T141 violation entirely separate from the
+  // `darkOrange` palette that was removed alongside it.
+  //
+  // §B4 rule 9 says what a warning should be instead: money is white, a
+  // headline may be crimson, and negative values are `redText`. So the whole
+  // `warning*` family resolves to the red tokens. The names are kept only so
+  // the existing call sites keep compiling.
+
+  Color get primaryText => redText;
+  Color get destructiveText => redText;
+  Color get warningText => redText;
+
+  /// Positive results and live status only (§B1, §B4 rule 9).
+  Color get successText => green;
 
   // ── Derived decorative colours ──────────────────────────────────────────
-  Color get primarySoft => primary.withValues(alpha: 0.15);
+  Color get primarySoft => redDim;
   Color get primarySoftBorder => primary.withValues(alpha: 0.30);
   Color get primarySoftStrong => primary.withValues(alpha: 0.50);
-  Color get destructiveSoft => destructive.withValues(alpha: 0.15);
+  Color get destructiveSoft => redDim;
+  Color get warningSoft => redDim;
+  Color get warningSoftBorder => primary.withValues(alpha: 0.30);
   Color get successSoft => success.withValues(alpha: 0.15);
   Color get successSoftBorder => success.withValues(alpha: 0.30);
-  Color get warningSoft => warning.withValues(alpha: 0.15);
-  Color get warningSoftBorder => warning.withValues(alpha: 0.30);
   Color get feltGlow => primary.withValues(alpha: 0.04);
   Color get glassOverlay => const Color(0x99000000);
   Color get hairlineWhite => const Color(0x33FFFFFF);
   Color get hairlineBorder => border.withValues(alpha: 0.30);
 
-  /// The redesign's default 1px edge on dark cards, rows and raised
-  /// controls — present but quieter than [border].
+  /// The redesign's default 1px edge on dark cards, rows and raised controls —
+  /// present but quieter than [border].
   Color get borderSubtle => border.withValues(alpha: 0.75);
   Color get blackGlow => const Color(0x99000000);
   Color get feltGlowStrong => primary.withValues(alpha: 0.20);
@@ -119,16 +187,17 @@ class ThemePalette {
     const Color(0xFF455A64),
   ];
 
-  /// Hues for the redesign's tinted avatars (a soft disc with a coloured
-  /// initial). Drawn from the semantic colours so every palette stays in
-  /// key — there is no gold anywhere in the design system (no-gold rule).
-  List<Color> get avatarTints => [primary, success, warning, mutedForeground];
+  /// Hues for the redesign's tinted avatars (T140). Drawn from the semantic
+  /// colours so everything stays in key. `warning` used to be the fourth tint
+  /// and was amber; the list is now red / green / muted, which is §B1's whole
+  /// vocabulary.
+  List<Color> get avatarTints => [primary, success, mutedForeground];
 
   Color avatarTintFor(String name) {
     final key = name.trim();
     if (key.isEmpty) return avatarTints.last;
-    // Hash the whole name, not the initial: first letters cluster ("A",
-    // "M") and gave a whole table the same colour.
+    // Hash the whole name, not the initial: first letters cluster ("A", "M")
+    // and gave a whole table the same colour.
     var h = 0;
     for (final c in key.codeUnits) {
       h = (h * 31 + c) & 0x7fffffff;
@@ -168,169 +237,73 @@ class ThemePalette {
   );
 }
 
-/// Provides the six available theme palettes and a lookup helper.
+/// The app's one look (§B1). [all] keeps its list shape so callers that iterate
+/// it still compile, but it has exactly one entry and there is no Appearance
+/// picker to choose from.
 class ThemePalettes {
   ThemePalettes._();
 
   static const String defaultId = 'red';
 
-  static const List<ThemePalette> all = [
-    red,
-    crimsonGlass,
-    cosmicAi,
-    darkOrange,
-  ];
+  static const List<ThemePalette> all = [red];
 
+  /// Any stored `paletteId` from before the one-look rule was applied —
+  /// `crimson-glass`, `cosmic-ai`, `dark-orange` — falls through to [red] via
+  /// `orElse`, so no data migration is needed for users who had picked one.
   static ThemePalette forId(String id) {
     return all.firstWhere((p) => p.id == id, orElse: () => red);
   }
 
-  // ── 1. Red (default) ────────────────────────────────────────────────────
+  // ── §B1's token table, pinned ───────────────────────────────────────────
+  //
+  // Where a previous hand-tuned value differed, the delta is noted. In each
+  // case the spec states its own contrast measurement and it clears AA.
   static const red = ThemePalette(
     id: 'red',
     name: 'Red',
-    // The three hexes below are the only colours the client's product system
-    // ("PokerNightTools — Product System") actually declares: ground #0A0A0A,
-    // accent/action #D53032, ink #FFFFFF. They were previously B71C1C on pure
-    // black — eyeballed, and noticeably darker and more muted than the spec.
-    // Everything else in this palette is ours and stays as tuned below.
+    // `red` #D53032 — brand fill, big numerals, the logo.
     primary: Color(0xFFD53032),
     onPrimary: Color(0xFFFFFFFF),
-    // Not in the spec. The old D32F2F is now within a hair of the accent
-    // itself, so hover would read as no change at all; this is a ~7% lightness
-    // step up from D53032, the smallest lift that is visibly a hover state.
+    // Not a §B1 token: the hover step. ~7 % lightness above D53032, the
+    // smallest lift that reads as a hover rather than no change at all.
     primaryHover: Color(0xFFE24446),
+    // `bg` #0A0A0A.
     background: Color(0xFF0A0A0A),
+    // `white` #FFFFFF.
     foreground: Color(0xFFFFFFFF),
-    // Surfaces and borders are deliberately left exactly as they were. The
-    // near-black card on a black page IS the look; an earlier attempt to lift
-    // it — and then the border — to force separation made the whole UI read
-    // grey and flat, which was worse than the problem it solved.
-    //
-    // The contrast the screens genuinely needed goes entirely into the TEXT
-    // tokens below. Note that what actually made buttons look washed out was
-    // never the surfaces at all: BoxDecoration silently drops `color` when a
-    // `gradient` is present, so every filled button was painting only its
-    // sheen (fixed in widgets/app_button.dart).
-    card: Color(0xFF141416),
+    // `surface` #141414. Was #141416.
+    card: Color(0xFF141414),
     cardForeground: Color(0xFFFFFFFF),
-    secondary: Color(0xFF18181A),
+    // `surface2` #1C1C1C. Was #18181A.
+    secondary: Color(0xFF1C1C1C),
     secondaryForeground: Color(0xFFEDEDF0),
     muted: Color(0xFF1A1A1A),
-    // Was A1A1AA (7.4:1 on card). Lifted to B8B8C2 — 9.6:1 — because this is
-    // the workhorse for secondary copy on every screen.
-    mutedForeground: Color(0xFFB8B8C2),
+    // `muted` #A6A6AA — secondary text, inactive tab labels. Was #B8B8C2,
+    // lifted by hand for contrast; §B1's value measures ~7.7 : 1 on `surface`,
+    // well over the 4.5 : 1 floor, so the hand-tuning no longer does any work.
+    mutedForeground: Color(0xFFA6A6AA),
     accent: Color(0xFFD53032),
     accentForeground: Color(0xFFFFFFFF),
-    border: Color(0xFF28282C),
+    // `border` rgba(255,255,255,0.08). Was the solid #28282C; §B1 specifies a
+    // translucent hairline so an edge reads the same over any surface.
+    border: Color(0x14FFFFFF),
     ring: Color(0xFFD53032),
-    // Was 71717A, which measured 3.9:1 on a card — under the 4.5:1 WCAG AA
-    // floor for body text, and this token is used for input hints, dropdown
-    // placeholders and chat metadata, i.e. text people actually need to read.
-    // 9A9AA6 measures 6.8:1 on card.
-    onSurfaceHint: Color(0xFF9A9AA6),
+    // `muted2` #939399 — tertiary text, small uppercase labels. Was #9A9AA6.
+    onSurfaceHint: Color(0xFF939399),
     surfaceHover: Color(0xFF27272A),
-    icon: Color(0xFFA1A1AA),
-    iconMuted: Color(0xFF71717A),
-    destructive: Color(0xFFE53935),
+    icon: Color(0xFFA6A6AA),
+    iconMuted: Color(0xFF939399),
+    // `redDanger` #B23430 — fill only, white text at 6.13 : 1. Was #E53935,
+    // which is not a §B1 colour at all.
+    destructive: Color(0xFFB23430),
     destructiveForeground: Color(0xFFFFFFFF),
-    success: Color(0xFF2E7D32),
+    // `green` #3FBF6B — LIVE dot, GOING / CHECKED IN / ACTIVE pills, positive
+    // P&L only. Was #2E7D32.
+    success: Color(0xFF3FBF6B),
     successForeground: Color(0xFFFFFFFF),
-    warning: Color(0xFFE65100),
-    warningForeground: Color(0xFFFFFFFF),
-  );
-
-  // ── 2. Crimson Glass — Luxury / Gaming ────────────────────────────────
-  static const crimsonGlass = ThemePalette(
-    id: 'crimson-glass',
-    name: 'Crimson Glass',
-    primary: Color(0xFFDC143C),
-    onPrimary: Color(0xFFFFFFFF),
-    primaryHover: Color(0xFFFF1744),
-    background: Color(0xFF050505),
-    foreground: Color(0xFFFFFFFF),
-    card: Color(0xBF1E1E1E),        // rgba(30,30,30,0.75) — glassmorphism
-    cardForeground: Color(0xFFFFFFFF),
-    secondary: Color(0x0DFFFFFF),    // rgba(255,255,255,0.05) — frosted surface
-    secondaryForeground: Color(0xFFB8B8C2),
-    muted: Color(0x0DFFFFFF),       // rgba(255,255,255,0.05)
-    mutedForeground: Color(0xFFB8B8C2),
-    accent: Color(0xFFFF1744),
-    accentForeground: Color(0xFFFFFFFF),
-    border: Color(0x1AFFFFFF),      // rgba(255,255,255,0.10) — glass edge
-    ring: Color(0xFFDC143C),
-    onSurfaceHint: Color(0xFF9A9AA6),
-    surfaceHover: Color(0x14FFFFFF), // rgba(255,255,255,0.08)
-    icon: Color(0xFFA1A1AA),
-    iconMuted: Color(0xFF71717A),
-    destructive: Color(0xFFE53935),
-    destructiveForeground: Color(0xFFFFFFFF),
-    success: Color(0xFF2E7D32),
-    successForeground: Color(0xFFFFFFFF),
-    warning: Color(0xFFE65100),
-    warningForeground: Color(0xFFFFFFFF),
-  );
-
-  // ── 4. Cosmic AI — Blue + Cyan + Purple ───────────────────────────────
-  static const cosmicAi = ThemePalette(
-    id: 'cosmic-ai',
-    name: 'Cosmic AI',
-    primary: Color(0xFF3B82F6),       // blue
-    onPrimary: Color(0xFFFFFFFF),
-    primaryHover: Color(0xFF60A5FA),
-    background: Color(0xFF030712),    // near-black
-    foreground: Color(0xFFF9FAFB),
-    card: Color(0xFF0F172A),          // slate-900
-    cardForeground: Color(0xFFF9FAFB),
-    secondary: Color(0xFF0F172A),     // slate-900
-    secondaryForeground: Color(0xFFDDE5EE),
-    muted: Color(0xFF1E293B),         // slate-800
-    mutedForeground: Color(0xFFAEBDCE),
-    accent: Color(0xFF8B5CF6),        // purple
-    accentForeground: Color(0xFFFFFFFF),
-    border: Color(0xFF1E293B),        // slate-800
-    ring: Color(0xFF3B82F6),
-    // Was 64748B (slate-500), 3.75:1 on card — under the AA floor.
-    onSurfaceHint: Color(0xFF94A5BB),
-    surfaceHover: Color(0xFF1E293B),
-    icon: Color(0xFF06B6D4),          // cyan
-    iconMuted: Color(0xFF22D3EE),
-    destructive: Color(0xFFE53935),
-    destructiveForeground: Color(0xFFFFFFFF),
-    success: Color(0xFF2E7D32),
-    successForeground: Color(0xFFFFFFFF),
-    warning: Color(0xFFE65100),
-    warningForeground: Color(0xFFFFFFFF),
-  );
-
-  // ── 5. Dark Orange ──────────────────────────────────────────────────────
-  static const darkOrange = ThemePalette(
-    id: 'dark-orange',
-    name: 'Dark Orange',
-    primary: Color(0xFFFF6D00),
-    onPrimary: Color(0xFFFFFFFF),
-    primaryHover: Color(0xFFFF9100),
-    background: Color(0xFF080300),
-    foreground: Color(0xFFF0ECEA),
-    card: Color(0xFF180E04),
-    cardForeground: Color(0xFFF0ECEA),
-    secondary: Color(0xFF281A08),
-    secondaryForeground: Color(0xFFE8DCC8),
-    muted: Color(0xFF120A02),
-    mutedForeground: Color(0xFFC0A98E),
-    accent: Color(0xFFFF6D00),
-    accentForeground: Color(0xFFFFFFFF),
-    border: Color(0xFF3C2810),
-    ring: Color(0xFFFF6D00),
-    onSurfaceHint: Color(0xFFA68D6E),
-    surfaceHover: Color(0xFF301E0A),
-    icon: Color(0xFFFFAB40),
-    iconMuted: Color(0xFFFFCC80),
-    destructive: Color(0xFFE53935),
-    destructiveForeground: Color(0xFFFFFFFF),
-    success: Color(0xFF2E7D32),
-    successForeground: Color(0xFFFFFFFF),
-    warning: Color(0xFFE65100),
+    // No §B1 warning token exists; see the note on `warningText`. Pointed at
+    // the brand red so nothing amber can reach the screen through this field.
+    warning: Color(0xFFD53032),
     warningForeground: Color(0xFFFFFFFF),
   );
 }

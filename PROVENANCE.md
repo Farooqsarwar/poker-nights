@@ -162,18 +162,24 @@ Fixed in Phase 0:
 | `icm_test.dart` — every stack is zero | **Stale test, correct engine.** With no live chips there is nothing to weigh anyone's chance by, so `icm.dart`'s `m == 0` branch splits the pool evenly. The old expectation of `0` came from an earlier engine and was worse: it told a host the pot was worth nothing while the money was on the table. Now pinned to `[50.0, 50.0]` |
 | `no_real_money_test.dart` — demo grant switchable | **Brittle test, correct code.** The guard exists at `app_provider.dart:326`; `dart format` wrapped the call across two lines and broke a literal substring match. Assertion is now whitespace-tolerant |
 
-### 3.1 Known-red, deferred to Phase 2 with diagnosis
+### 3.1 The three deferred failures — **all fixed in Phase 2**
 
-These three are **structure-engine defects, not stale tests**. They live in the code
-Phase 2 rewrites (P2.2 fixes the chip-supply equation, P2.3 replaces the growth
-derivation), so fixing them now would mean fixing them twice. Left red deliberately, and
-listed here so they are not mistaken for new breakage.
+These were deferred from Phase 0 as structure-engine defects rather than stale tests.
+Two turned out to share a single root cause, and the third was a test that moved two
+variables at once.
 
-| Test | Failure | Phase 2 owner |
+| Test | Diagnosis | Fix |
 | :--- | :--- | :--- |
-| `chip_payability_test.dart` — Standard 300 / 9 players is not a bucket of chips | chip count **31**, budget **30** (`maxChipsPerPlayer + 5`). Off by one chip | P2.2 |
-| `chip_payability_test.dart` — a level-9 rebuy still contains change | `chipPlanAtLevel` totals **1500** against a `rebuyStack` of **1490**; a rebuy must be worth exactly a starting stack (23-002) | P2.2 |
-| `engine_properties_test.dart` — freeze-out output is unchanged when there is no real premium | final BB **3000** against an expected **2400 ± 120**. The risk premium is changing a freeze-out ladder it should leave alone | P2.3 |
+| `chip_payability` — Standard 300 / 9 players is not a bucket of chips (31 chips against a 30 budget) | **Both of these were the same bug.** §F1.5 point 3 requires candidate stacks to be **nice numbers** (`NICE_M × 10ᵏ`). The engine instead stepped down by multiples of the big blind, then by the small blind — its own comment complained about the stacks that produced ("815, 845 and 995") without fixing the cause. At 9 players it picked **1490**: 149 BB, one big blind under the deep band, needing 21 small chips to build and impossible to rebuild once the 1s are coloured up | Nice-number candidates in both the main solve and the shortage fallback, deepest first, per §F1.5 point 3. 9 players now opens at **1200 from 19 chips** instead of 1490 from 31; 12 players at **800 from 15** instead of 845 from 20 |
+| `chip_payability` — a level-9 rebuy still contains change (plan totalled 1500 against a `rebuyStack` of 1490) | | |
+| `engine_properties` — freeze-out output is unchanged when there is no real premium (final BB 3000 against 2400 ± 120) | **Test defect, engine correct.** It compared a freeze-out against a rebuy structure to isolate the risk premium — but switching `rebuys` on also forecasts ~3 rebuys, and three extra stacks in play raise `BB_end = C / K` on their own. The ladder finished higher for a reason unrelated to the premium. Framework §5 makes the same point: two structures are not comparable if their chip supply differs | `expectedRebuys: 0` on the rebuy side, so the premium is the only variable the test moves |
+
+A subtlety worth recording, because it cost a cycle: nice-number candidates must be
+accepted only when the stack is **both** fundable and postable. Taking the deepest
+fundable nice value alone gave Standard 300 / 18 players a stack of 600, built as
+1 × 500 + 1 × 100 — no chip at or below the small blind, so the stack could not post its
+own blind (PN-045/PN-046, 10-033, 11-020). When no nice value is postable the solver
+falls through to the finer single-blind walk, which is the pre-existing behaviour.
 
 ### 3.2 Resolved by Phase 1
 

@@ -10,6 +10,7 @@ import '../../models/chip_color.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../models/tournament_preset.dart';
+import '../../models/tournament_format.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/event_settings_validation.dart';
 import '../../utils/sanitization.dart';
@@ -22,6 +23,8 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/chip_pill.dart';
 import '../../widgets/event_settings_form.dart';
+import '../../widgets/pace_cards.dart';
+import '../../widgets/structure_feasibility_card.dart';
 import '../../widgets/squircle_icon_button.dart';
 
 /// Minimum normalized score for a preset to qualify as a suggestion
@@ -687,6 +690,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         players: app.currentGroup.members.length,
         expectedPlayersOverride: s.expectedPlayersOverride,
         durationHours: s.durationHours,
+        // §F1.1 — the pace the host picked at step 4. Null keeps the legacy
+        // phased mode (§F1.13).
+        pace: s.pace,
         buyIn: s.buyIn,
         koEnabled: s.koEnabled,
         koAmount: s.koAmount,
@@ -953,10 +959,18 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     final isLastStep = _step == 5;
     final isLoading = isLastStep && _isPublishing;
 
+    // §F1.5 point 7: "**Create** stays disabled until the stack is playable."
+    // Only the chip-case failure blocks — a structure that merely runs past
+    // its finish time is a warning the host is allowed to accept, and the
+    // feasibility card says so on the same screen.
+    final blocked = isLastStep && (_draftStructure(_draft)?.feasible == false);
+
     return AppButton(
       size: AppButtonSize.lg,
       fullWidth: true,
-      onPressed: isLoading ? null : (isLastStep ? () => _generate(app) : _next),
+      onPressed: isLoading || blocked
+          ? null
+          : (isLastStep ? () => _generate(app) : _next),
       child: isLoading
           ? SizedBox(
               height: 20,
@@ -1379,24 +1393,216 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     );
   }
 
-  Widget _buildStep4(AppProvider app) {
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: EventSettingsForm(
-        key: _formKey,
-        initial: _draft,
-        // Format only (D1): KO bounty, ante, breaks and the seating override.
-        // Rebuys/add-ons fields have their own step (EventFormSection.rebuys),
-        // so this step renders none of them.
-        sections: const {EventFormSection.format},
-        onChanged: _onDraftChanged,
+  /// §F1.3 `paceOptions`, memoised.
+  ///
+  /// It runs the whole structure engine three times, so it must not be
+  /// recomputed on every rebuild — a step with a text field in it rebuilds on
+  /// each keystroke. The key covers exactly the inputs that change the answer;
+  /// anything else on the draft (the name, the location) cannot.
+  PaceOptions? _paceOptionsCache;
+  String? _paceOptionsKey;
+
+  PaceOptions _paceOptionsFor(GameSettings s) {
+    final key = [
+      s.expectedPlayersOverride ?? s.players,
+      s.durationHours,
+      s.chipSet.map((c) => '${c.value}x${c.quantity}').join(','),
+      s.rebuys,
+      s.reEntry,
+      s.addOn,
+      s.anteEnabled,
+      s.rebuysCloseLevel,
+      s.breaks.fold<int>(0, (a, b) => a + b.durationMins),
+    ].join('|');
+    if (_paceOptionsKey == key && _paceOptionsCache != null) {
+      return _paceOptionsCache!;
+    }
+    final players = s.expectedPlayersOverride ?? s.players;
+    final opts = TournamentEngine.paceOptions(
+      TournamentParams(
+        players: players < 2 ? 2 : players,
+        durationHours: s.durationHours,
+        buyIn: s.buyIn,
+        chipSet: s.chipSet,
+        rebuys: s.rebuys,
+        rebuysCloseLevel: s.rebuysCloseLevel,
+        rebuyLimit: s.rebuyLimit,
+        reEntry: s.reEntry,
+        addOn: s.addOn,
+        anteEnabled: s.anteEnabled,
+        anteAfterLevel: s.anteAfterLevel,
+        anteStyle: s.anteStyle,
+        koEnabled: s.koEnabled,
+        koAmount: s.koAmount,
+        organizerPct: s.organizerPct.clamp(0, 100),
+        rebuyCost: s.rebuyCost,
+        addOnCost: s.addOnCost,
+        breaks: List.of(s.breaks),
+        format: s.format,
       ),
     );
+    _paceOptionsKey = key;
+    _paceOptionsCache = opts;
+    return opts;
+  }
+
+  Widget _buildStep4(AppProvider app) {
+    final paceOptions = _paceOptionsFor(_draft);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // §F1.3 / C1 step 4. The pace decides the level length AND the growth
+        // the ladder is solved against, so it sits above the format details
+        // rather than among them: it is the choice that shapes the night.
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Pace',
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.foreground,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'One level length all night. The blinds climb at whatever '
+                'rate reaches the finish on time.',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              PaceCards(
+                options: paceOptions,
+                selected: _draft.pace,
+                onSelected: (p) => _onDraftChanged(_draft.copyWith(pace: p)),
+                // §F1.3's `later`: the finish time lives on step 1, so this
+                // takes the host back to it rather than guessing a new one.
+                onChooseLater: () => setState(() => _step = 1),
+                onDropAddOn: _draft.addOn
+                    ? () => _onDraftChanged(_draft.copyWith(addOn: false))
+                    : null,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: EventSettingsForm(
+            key: _formKey,
+            initial: _draft,
+            // Format only (D1): KO bounty, ante, breaks and the seating
+            // override. Rebuys/add-ons fields have their own step
+            // (EventFormSection.rebuys), so this step renders none of them.
+            sections: const {EventFormSection.format},
+            onChanged: _onDraftChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The structure the draft would actually produce, memoised on the same key
+  /// as [_paceOptionsFor] plus the chosen pace.
+  ///
+  /// Used to answer one question before the host commits: can this chip case
+  /// deal this field a playable stack? §F1.5 point 7 says a structure that
+  /// cannot is a blocking condition, not a warning.
+  TournamentStructure? _draftStructureCache;
+  String? _draftStructureKey;
+
+  TournamentStructure? _draftStructure(GameSettings s) {
+    // Memoised for the same reason as the pace options: this runs the whole
+    // engine, and the bottom bar rebuilds on every keystroke in the wizard.
+    final key = [
+      s.expectedPlayersOverride ?? s.players,
+      s.durationHours,
+      s.chipSet.map((c) => '${c.value}x${c.quantity}').join(','),
+      s.rebuys,
+      s.reEntry,
+      s.addOn,
+      s.anteEnabled,
+      s.rebuysCloseLevel,
+      s.pace?.name,
+      s.breaks.fold<int>(0, (a, b) => a + b.durationMins),
+    ].join('|');
+    if (_draftStructureKey == key) return _draftStructureCache;
+
+    final result = _generateDraftStructure(s);
+    _draftStructureKey = key;
+    _draftStructureCache = result;
+    return result;
+  }
+
+  TournamentStructure? _generateDraftStructure(GameSettings s) {
+    final players = s.expectedPlayersOverride ?? s.players;
+    try {
+      return TournamentEngine.generate(
+        TournamentParams(
+          players: players < 2 ? 2 : players,
+          durationHours: s.durationHours,
+          buyIn: s.buyIn,
+          chipSet: s.chipSet,
+          rebuys: s.rebuys,
+          rebuysCloseLevel: s.rebuysCloseLevel,
+          rebuyLimit: s.rebuyLimit,
+          reEntry: s.reEntry,
+          addOn: s.addOn,
+          anteEnabled: s.anteEnabled,
+          anteAfterLevel: s.anteAfterLevel,
+          anteStyle: s.anteStyle,
+          koEnabled: s.koEnabled,
+          koAmount: s.koAmount,
+          organizerPct: s.organizerPct.clamp(0, 100),
+          rebuyCost: s.rebuyCost,
+          addOnCost: s.addOnCost,
+          breaks: List.of(s.breaks),
+          format: s.format,
+          pace: s.pace,
+        ),
+      );
+    } on Exception {
+      // A draft that cannot be generated at all (duplicate chip values, say)
+      // is the existing validation's problem, not this card's.
+      return null;
+    }
   }
 
   Widget _buildStep5(AppProvider app) {
     final s = _draft;
-    return AppCard(
+    final structure = _draftStructure(s);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // §F1.5 point 7 / §E17 row 88: the blocking card sits ABOVE "Ready to
+        // create", because if the chip case cannot deal a playable stack the
+        // host is not ready to create.
+        if (structure != null) ...[
+          StructureFeasibilityCard(
+            structure: structure,
+            players: s.expectedPlayersOverride ?? s.players,
+            onEditChips: () => setState(() => _step = 2),
+            onFewerRebuys: () => setState(() => _step = 3),
+            onPlayFreezeOut: structure.feasible || !(s.rebuys || s.addOn)
+                ? null
+                : () => _onDraftChanged(
+                      _draft.copyWith(
+                        rebuys: false,
+                        reEntry: false,
+                        addOn: false,
+                        format: TournamentFormat.freezeOut,
+                      ),
+                    ),
+          ),
+          if (!structure.feasible || !structure.fits)
+            const SizedBox(height: AppSpacing.lg),
+        ],
+        AppCard(
       padding: const EdgeInsets.all(AppSpacing.xxl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1522,6 +1728,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           ),
         ],
       ),
+        ),
+      ],
     );
   }
 }

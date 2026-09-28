@@ -50,6 +50,7 @@ class GameSettings {
     this.reEntryChips,
     this.addOnChips,
     this.levelDurationMins,
+    this.pace,
     this.payoutShape = PayoutShape.standard,
     this.format,
     this.maxReEntries,
@@ -173,6 +174,15 @@ class GameSettings {
   final int? reEntryChips;
   final int? addOnChips;
   final int? levelDurationMins;
+
+  /// §F1.1 `pace` — the host's chosen pace (C1 step 4).
+  ///
+  /// Null keeps the legacy phased mode (§F1.13), which is what every
+  /// tournament created before pace existed uses. It is stored separately
+  /// from [levelDurationMins] because they are different decisions: the pace
+  /// sets the level length AND the growth ceiling the ladder is solved
+  /// against, while `levelDurationMins` is a bare override of the length.
+  final PaceMode? pace;
   final TournamentFormat? format;
   final int? maxReEntries;
 
@@ -259,7 +269,7 @@ class GameSettings {
       : 0;
 
   int get effectiveExpectedAddOns => addOn
-      ? math.max(0, expectedAddOns ?? (players * kExpectedAddOnRate).round())
+      ? math.max(0, expectedAddOns ?? (players * kAddOnTakeUpRate).round())
       : 0;
 
   GameSettings copyWith({
@@ -306,6 +316,7 @@ class GameSettings {
     int? reEntryChips,
     int? addOnChips,
     int? levelDurationMins,
+    PaceMode? pace,
     PayoutShape? payoutShape,
     TournamentFormat? format,
     int? maxReEntries,
@@ -389,6 +400,10 @@ class GameSettings {
       levelDurationMins: clearGenerationOverrides
           ? null
           : levelDurationMins ?? this.levelDurationMins,
+      // The pace is a host CHOICE, not a generation override: "regenerate from
+      // scratch" should re-solve the ladder at the pace they picked, not throw
+      // the pace away and fall back to the legacy mode.
+      pace: pace ?? this.pace,
       payoutShape: payoutShape ?? this.payoutShape,
       format: format ?? this.format,
       maxReEntries:

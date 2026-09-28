@@ -500,6 +500,17 @@ void main() {
       ).copyWith(
         format: TournamentFormat.rebuy,
         rebuyCost: 50, // == buyIn: maxPremium floors at its minimum, not zero
+        // Hold the CHIP SUPPLY constant so the premium is the only variable.
+        //
+        // Without this the test moved two things at once: switching `rebuys`
+        // on also forecasts `9 × 0.35 ≈ 3` rebuys, and three extra stacks in
+        // play raise `BB_end = C / K` on their own. The ladder then finished
+        // higher for a reason that has nothing to do with the premium — which
+        // is the thing under test — and the assertion failed while the engine
+        // was behaving correctly. Framework §5 is the same point from the
+        // other side: two structures with identical starting stacks are not
+        // comparable if their chip supply differs.
+        expectedRebuys: 0,
       ));
       // The floor (0.05) is not literally zero, so this asserts the DEPTH and
       // SHAPE stay governed by the same target rather than requiring byte

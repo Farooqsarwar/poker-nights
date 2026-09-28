@@ -172,6 +172,80 @@ extension AppProviderNotificationsSettings on AppProvider {
   /// opt-out lives in B9 and is separate from this account-wide switch.
   bool get keepHistoryForStructures => _keepHistoryForStructures;
 
+  /// Framework §14 — the measured nights behind the forecasts, newest first.
+  List<CalibrationRecord> get calibrationHistory =>
+      List.unmodifiable(_calibrationHistory);
+
+  /// §F1's add-on take-up, learned from the last 8 games with an add-on, or
+  /// the stated 70 % default below that.
+  double get forecastAddOnTakeUp =>
+      CalibrationForecast.addOnTakeUp(_calibrationHistory);
+
+  /// The rebuy rate on the same eight-night window.
+  double get forecastRebuyRate =>
+      CalibrationForecast.rebuyRate(_calibrationHistory);
+
+  /// Records one completed night (Framework §14).
+  ///
+  /// Gated on the D9 consent: the Settings row says the history is kept "to
+  /// improve structures", so a host who has not agreed to that must not have
+  /// their nights measured. Silently doing it anyway would make the setting a
+  /// lie.
+  void recordCalibration(LiveGame game) {
+    if (!_keepHistoryForStructures) return;
+    final record = CalibrationRecord.fromCompletedGame(game);
+    if (record == null) return;
+    // One record per game — re-recording a game that syncs twice must not
+    // double-count it in the eight-night window.
+    _calibrationHistory.removeWhere((r) => r.gameId == record.gameId);
+    _calibrationHistory.insert(0, record);
+    if (_calibrationHistory.length > AppProvider._maxCalibrationRecords) {
+      _calibrationHistory.removeRange(
+        AppProvider._maxCalibrationRecords,
+        _calibrationHistory.length,
+      );
+    }
+    _persistCalibrationHistory();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Reads the measured nights back from the device at startup.
+  ///
+  /// Failures are swallowed on purpose: a missing or corrupt calibration file
+  /// means the forecasts fall back to §F1's stated defaults, which is exactly
+  /// what a host with no history gets anyway. It is never worth failing a
+  /// launch over.
+  Future<void> hydrateCalibrationHistory() async {
+    try {
+      final doc =
+          await Localstore.instance.collection('app').doc('calibration').get();
+      final raw = doc?['records'];
+      if (raw is! List) return;
+      _calibrationHistory
+        ..clear()
+        ..addAll(
+          raw.whereType<Map>().map(
+                (m) => CalibrationRecord.fromMap(
+                  m.map((k, v) => MapEntry('$k', v)),
+                ),
+              ),
+        );
+      if (!_disposed) notifyListeners();
+    } catch (e) {
+      debugPrint('Failed to load calibration history: $e');
+    }
+  }
+
+  void _persistCalibrationHistory() {
+    try {
+      Localstore.instance.collection('app').doc('calibration').set({
+        'records': _calibrationHistory.map((r) => r.toMap()).toList(),
+      });
+    } catch (e) {
+      debugPrint('Failed to save calibration history: $e');
+    }
+  }
+
   void setKeepHistoryForStructures(bool value) {
     if (_keepHistoryForStructures == value) return;
     _keepHistoryForStructures = value;

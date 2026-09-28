@@ -91,7 +91,149 @@ enum AntePreference { recommend, none, bigBlind, individual }
 /// before.
 const double kExpectedRebuyRate = 0.35;
 const double kExpectedReEntryRate = 0.20;
-const double kExpectedAddOnRate = 0.65;
+
+/// Deprecated alias for [kAddOnTakeUpRate].
+///
+/// This was 0.65 while §F1.1 states 70 %, so the engine and the figure shown
+/// to the host disagreed by five points on the same quantity. Pointed at the
+/// one constant rather than left as a second copy — that is how the two drift.
+@Deprecated('Use kAddOnTakeUpRate — §F1.1 states 70 %.')
+const double kExpectedAddOnRate = kAddOnTakeUpRate;
+
+/// Build Spec v3.1 §F1.1 defaults for the add-on, expressed the way the spec
+/// expresses them: a multiple of the starting stack, and the share of the
+/// field expected to take it.
+///
+/// [kAddOnMultiplier] is the add-on's size as `A × X` (§F1.10, and the
+/// Structuring Framework's `A`). [kAddOnTakeUpRate] is the Framework's `q`,
+/// and §F1.1's stated default of 70 %.
+///
+/// `q` feeds the chips-in-play estimate `C` only. The chip BANK check assumes
+/// **every** player takes the add-on (§F1.5 point 1), because a bank sized on
+/// a 70 % forecast fails on the night everybody takes one. Keeping those two
+/// uses apart is what makes it safe to forecast take-up at all.
+const double kAddOnMultiplier = 1.25;
+const double kAddOnTakeUpRate = 0.7;
+
+/// §F1.1 `pace` · §F1.2 `PACE` — the host's chosen pace.
+///
+/// The owner's model (2026-09-26) is **one level length all night**: Turbo 15,
+/// Regular 20, Deep 30 minutes. The climb per level is then whatever reaches
+/// the finishing blind by the finish time, capped at the pace's `gMax`.
+///
+/// This is **not** [PaceStyle]. §F1.2 carries two separate tables and they do
+/// different jobs:
+///
+/// * `PACE` (this enum) — level length and the growth ceiling. Chosen by the
+///   host, or recommended by `paceOptions`.
+/// * `STYLE` (`PaceStyle`) — target opening depth `D`, growth `g`, level floor
+///   and the rebuy-close `M` floor. Classified from the structure itself.
+///
+/// A null pace means the legacy phased mode (§F1.13), which is what every
+/// tournament created before pace existed uses.
+enum PaceMode { turbo, regular, deep }
+
+extension PaceModeSpec on PaceMode {
+  /// §F1.2 `PACE` — minutes per level, the same for every level of the night.
+  int get levelMinutes => switch (this) {
+        PaceMode.turbo => 15,
+        PaceMode.regular => 20,
+        PaceMode.deep => 30,
+      };
+
+  /// §F1.2 `PACE` — the per-level growth ceiling for this pace.
+  double get gMax => switch (this) {
+        PaceMode.turbo => 1.6,
+        PaceMode.regular => 1.5,
+        PaceMode.deep => 1.45,
+      };
+
+  /// The label the host sees (§F1.3 `paceOptions`, C1 step 4).
+  String get label => switch (this) {
+        PaceMode.turbo => 'Turbo',
+        PaceMode.regular => 'Regular',
+        PaceMode.deep => 'Deep',
+      };
+}
+
+/// §F1.2 `PACE_G_MIN` — below +20 % a level the night simply ends early, so
+/// there is no reason to solve for a flatter climb than this.
+const double kPaceGMin = 1.2;
+
+/// One line of §F1.1's `explain [{step, text, numbers}]` — the engine's own
+/// account of a decision it made.
+///
+/// §B4 rule 10 and T138 require the long reasons to sit behind a "Why?" link
+/// with the first sentence visible. That is only possible if the engine says
+/// why at the time; reconstructing it afterwards from the output is guesswork.
+class StructureExplanation {
+  const StructureExplanation({
+    required this.step,
+    required this.text,
+    this.numbers = const {},
+  });
+
+  /// A short stable key — `stack`, `pace`, `depth`, `chipBank`, `endTarget`.
+  /// Screens key their "Why?" links off this, so it must not be prose.
+  final String step;
+
+  /// The explanation. First sentence is the visible summary; the rest is the
+  /// disclosure.
+  final String text;
+
+  /// The figures behind it, for a screen that wants to show them separately.
+  final Map<String, num> numbers;
+
+  Map<String, dynamic> toMap() => {
+        'step': step,
+        'text': text,
+        'numbers': numbers,
+      };
+
+  static StructureExplanation fromMap(Map<String, dynamic> m) =>
+      StructureExplanation(
+        step: (m['step'] as String?) ?? '',
+        text: (m['text'] as String?) ?? '',
+        numbers: ((m['numbers'] as Map?) ?? const {}).map(
+          (k, v) => MapEntry('$k', v is num ? v : 0),
+        ),
+      );
+}
+
+/// §F1.3 `clockDiff(startTime, endBy)` — minutes between two "HH:mm" times,
+/// **crossing midnight**.
+///
+/// A poker night that starts at 20:00 and ends at 00:30 is four and a half
+/// hours long, not minus nineteen and a half. Any end at or before the start
+/// is read as the next day, which is the only reading that makes sense for an
+/// evening game; the one real ambiguity — an end exactly equal to the start —
+/// is treated as a full 24 hours rather than zero, because zero would silently
+/// generate an empty structure.
+///
+/// Returns null when either string is not "HH:mm" in range, so a malformed
+/// value falls back to the stated duration rather than producing a wrong
+/// window.
+int? clockDiffMinutes(String start, String end) {
+  final s = _minutesOfDay(start);
+  final e = _minutesOfDay(end);
+  if (s == null || e == null) return null;
+  final diff = e - s;
+  return diff > 0 ? diff : diff + 24 * 60;
+}
+
+int? _minutesOfDay(String hhmm) {
+  final parts = hhmm.trim().split(':');
+  if (parts.length != 2) return null;
+  final h = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  if (h == null || m == null) return null;
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + m;
+}
+
+/// §F1.3 fit tolerance, and the same 5 minutes used by `meta.fits`: a pace
+/// fits when the night needs at most five minutes more than its window.
+const int kPaceFitToleranceMins = 5;
 
 /// §26.1's default seats per table, reused by §11.4 to split a shootout field.
 const int kDefaultTableSize = 9;
@@ -189,6 +331,13 @@ class TournamentParams {
     this.earlyArrivalBonusEnabled = false,
     this.earlyArrivalCutoffMins,
     this.earlyArrivalBonusPctOverride,
+    this.pace,
+    this.startTime,
+    this.endBy,
+    this.targetDurationMinutes,
+    this.expectedRebuyRate,
+    this.addOnMultiplier,
+    this.addOnTakeUpRate,
   });
 
   final int players;
@@ -261,6 +410,69 @@ class TournamentParams {
   final int? earlyArrivalCutoffMins;
   final double? earlyArrivalBonusPctOverride;
 
+  // ── §F1.1 inputs ────────────────────────────────────────────────────────
+  //
+  // Added in Phase 2 to bring the engine up to the specification's input
+  // contract. Every one is nullable and every one has a fallback to the
+  // pre-existing behaviour, so a structure generated without them is byte-for
+  // byte the structure the engine generated before.
+
+  /// §F1.1 `pace`. Null selects the legacy phased mode (§F1.13).
+  final PaceMode? pace;
+
+  /// §F1.1 `startTime` / `endBy` — the night's window, as "HH:mm". `T` is the
+  /// clock difference and may cross midnight ("20:00" → "00:30" is 4 h 30).
+  ///
+  /// These exist because [durationHours] alone cannot express a **late start**:
+  /// §E17 row 21 requires that `endBy` is kept and `T` shrinks, which is only
+  /// possible if the finish is stored as a time rather than a length.
+  final String? startTime;
+  final String? endBy;
+
+  /// §F1.1 `targetDurationMinutes` — used only when there is no [endBy].
+  final int? targetDurationMinutes;
+
+  /// §F1.1 `expectedRebuyRate` — rebuys per player, the Framework's `r`.
+  /// Null falls back to [kExpectedRebuyRate].
+  final double? expectedRebuyRate;
+
+  /// §F1.1 `addOn.multiplier` — the add-on as a multiple of the starting
+  /// stack, the Framework's `A`. Clamped to the spec's 1.10–1.50.
+  final double? addOnMultiplier;
+
+  /// §F1.1 `addOn.takeUpRate` — the Framework's `q`. Feeds the chips-in-play
+  /// estimate `C` only, never the bank check.
+  final double? addOnTakeUpRate;
+
+  double get effectiveExpectedRebuyRate =>
+      math.max(0, expectedRebuyRate ?? kExpectedRebuyRate);
+
+  double get effectiveAddOnMultiplier =>
+      (addOnMultiplier ?? kAddOnMultiplier).clamp(1.10, 1.50);
+
+  double get effectiveAddOnTakeUpRate =>
+      (addOnTakeUpRate ?? kAddOnTakeUpRate).clamp(0.0, 1.0);
+
+  /// §F1.3 `T` — the night's window in minutes.
+  ///
+  /// Precedence follows §F1.1: an explicit `startTime`/`endBy` pair wins,
+  /// because it is the only form that survives a late start; then
+  /// `targetDurationMinutes`; then the legacy [durationHours].
+  int get effectiveTargetMinutes {
+    final start = startTime, end = endBy;
+    if (start != null && end != null) {
+      final diff = clockDiffMinutes(start, end);
+      if (diff != null && diff > 0) return diff;
+    }
+    final stated = targetDurationMinutes;
+    if (stated != null && stated > 0) return stated;
+    return (durationHours * 60).round();
+  }
+
+  /// True when this tournament is on the §F1.3 pace path rather than the
+  /// legacy phased mode (§F1.13).
+  bool get usesPaceMode => pace != null;
+
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
 
@@ -301,7 +513,13 @@ class TournamentParams {
   /// a stale number left behind by toggling rebuys off must not keep inflating
   /// the chip count.
   int get effectiveExpectedRebuys => rebuys
-      ? math.max(0, expectedRebuys ?? (players * kExpectedRebuyRate).round())
+      ? math.max(
+          0,
+          // The host's own figure wins; otherwise the forecast rate, which is
+          // [kExpectedRebuyRate] unless a caller passed a measured one
+          // (Framework §14).
+          expectedRebuys ?? (players * effectiveExpectedRebuyRate).round(),
+        )
       : 0;
 
   int get effectiveExpectedReEntries => reEntry
@@ -309,7 +527,26 @@ class TournamentParams {
       : 0;
 
   int get effectiveExpectedAddOns => addOn
-      ? math.max(0, expectedAddOns ?? (players * kExpectedAddOnRate).round())
+      // §F1.3's `C` applies the take-up to **N**, the field:
+      //
+      //   C = S × (N + Rforecast) + addOnMult × S × N × takeUp + bonusPct × S × N
+      //
+      // even though §F1 measures take-up as `addOnsTaken /
+      // playersAliveAtTheAddOnBreak`. Those denominators genuinely differ, and
+      // applying the second to the first slightly OVER-counts add-ons. That is
+      // the specification's own choice and it errs the safe way: a larger `C`
+      // means a larger `BB_end`, a steeper climb and a night that ends sooner
+      // rather than one that drifts.
+      //
+      // The reason this is safe to do here is that §F1 keeps the two uses
+      // apart: take-up "changes only the chips-in-play estimate C … never the
+      // chip bank check, which assumes every player takes the add-on"
+      // (§F1.5 point 1). `bankReserveTier` in the engine does exactly that, so
+      // a 70 % forecast can never under-size the box.
+      ? math.max(
+          0,
+          expectedAddOns ?? (players * effectiveAddOnTakeUpRate).round(),
+        )
       : 0;
 
   /// §12.1: how many times over the box must fund one seat's worth of chips.
@@ -359,6 +596,13 @@ class TournamentParams {
     bool? earlyArrivalBonusEnabled,
     int? earlyArrivalCutoffMins,
     double? earlyArrivalBonusPctOverride,
+    PaceMode? pace,
+    String? startTime,
+    String? endBy,
+    int? targetDurationMinutes,
+    double? expectedRebuyRate,
+    double? addOnMultiplier,
+    double? addOnTakeUpRate,
   }) =>
       TournamentParams(
         players: players ?? this.players,
@@ -400,6 +644,14 @@ class TournamentParams {
             earlyArrivalCutoffMins ?? this.earlyArrivalCutoffMins,
         earlyArrivalBonusPctOverride:
             earlyArrivalBonusPctOverride ?? this.earlyArrivalBonusPctOverride,
+        pace: pace ?? this.pace,
+        startTime: startTime ?? this.startTime,
+        endBy: endBy ?? this.endBy,
+        targetDurationMinutes:
+            targetDurationMinutes ?? this.targetDurationMinutes,
+        expectedRebuyRate: expectedRebuyRate ?? this.expectedRebuyRate,
+        addOnMultiplier: addOnMultiplier ?? this.addOnMultiplier,
+        addOnTakeUpRate: addOnTakeUpRate ?? this.addOnTakeUpRate,
       );
 }
 
@@ -588,6 +840,10 @@ class TournamentStructure {
     this.feasible = true,
     this.depthShortfallNote,
     this.maxPlayersSupported,
+    this.pace,
+    this.fits = true,
+    this.paceOverByMins = 0,
+    this.explain = const [],
   });
 
   /// The rebuy cutoff this structure was actually built around.
@@ -657,6 +913,34 @@ class TournamentStructure {
   /// the engine could not compute one.
   final int? maxPlayersSupported;
 
+  /// §F1.1 `meta.pace` — the pace this structure was solved at. Null for a
+  /// structure built in the legacy phased mode (§F1.13).
+  final PaceMode? pace;
+
+  /// §F1.3 `meta.fits` — `fits && projectedEnd.minutes ≤ T + 5`.
+  ///
+  /// False means the night, as generated, runs past its window. It is NOT a
+  /// refusal: the structure is still complete and playable, and §E17 row 20
+  /// requires the host to be shown the overrun and choose, rather than have a
+  /// pace applied silently.
+  final bool fits;
+
+  /// Minutes this structure runs past its window. Zero when [fits].
+  final int paceOverByMins;
+
+  /// §F1.1 `explain [{step, text, numbers}]` — why the engine chose what it
+  /// chose. Feeds the "Why?" disclosures (§B4 rule 10, T138).
+  final List<StructureExplanation> explain;
+
+  /// The explanation for one step, or null when the engine did not record one
+  /// (every structure generated before this field existed).
+  StructureExplanation? explanationFor(String step) {
+    for (final e in explain) {
+      if (e.step == step) return e;
+    }
+    return null;
+  }
+
   final int startingStack;
   final List<ChipPlanEntry> chipPlan;
   final int rebuyStack;
@@ -687,6 +971,50 @@ class TournamentStructure {
       plannedLevels > 0 && plannedLevels <= levels.length
           ? plannedLevels
           : levels.length;
+
+  // ── Time-control architecture (Structuring Framework §13) ───────────────
+  //
+  // The Framework asks for three layers, not one schedule:
+  //
+  //   Target schedule       the structure intended to finish on time
+  //   Compression schedule  PRE-ANNOUNCED later levels that raise the
+  //                         pressure if the field is still large
+  //   Hard ceiling          a final level or settlement rule that makes an
+  //                         uncontrolled extension impossible
+  //
+  // The engine already built the middle layer — `SPARE_LEVELS` publishes four
+  // levels past the target — but treated it as private overtime insurance.
+  // The Framework's word is "pre-announced": the host and the table are
+  // entitled to see the compression before it arrives. These getters name the
+  // layers so the UI can show them; they store nothing new.
+
+  /// Framework §13, layer 1. The last level of the target schedule, 1-based.
+  int get targetScheduleLastLevel => effectivePlannedLevels;
+
+  /// Framework §13, layer 2. The first compression level, 1-based, or null
+  /// when there is no tail (a legacy structure, or one edited down).
+  int? get compressionFromLevel =>
+      levels.length > effectivePlannedLevels
+          ? effectivePlannedLevels + 1
+          : null;
+
+  /// True when [levelNumber] (1-based) is part of the compression tail rather
+  /// than the target schedule.
+  bool isCompressionLevel(int levelNumber) =>
+      levelNumber > effectivePlannedLevels && levelNumber <= levels.length;
+
+  /// Framework §13, layer 3. The hard ceiling: the last published level,
+  /// 1-based. There is no level after it, so play cannot continue past it
+  /// without a settlement.
+  ///
+  /// Reaching it is what raises `targetTimeReached` for
+  /// `PayoutsEngine.dealTrigger`, whose `targetTime` trigger is the highest
+  /// priority of the four. That is the "settlement rule" half of the
+  /// Framework's ceiling — the night ends in a chop rather than drifting.
+  int get hardCeilingLevel => levels.length;
+
+  /// True once play has reached the ceiling and the only way on is to settle.
+  bool isAtHardCeiling(int levelNumber) => levelNumber >= hardCeilingLevel;
 
   final int expectedFinishMins;
   final List<Prize> prizes;
@@ -759,6 +1087,10 @@ class TournamentStructure {
     bool? feasible,
     String? depthShortfallNote,
     int? maxPlayersSupported,
+    PaceMode? pace,
+    bool? fits,
+    int? paceOverByMins,
+    List<StructureExplanation>? explain,
   }) {
     return TournamentStructure(
       startingStack: startingStack ?? this.startingStack,
@@ -791,6 +1123,14 @@ class TournamentStructure {
       feasible: feasible ?? this.feasible,
       depthShortfallNote: depthShortfallNote ?? this.depthShortfallNote,
       maxPlayersSupported: maxPlayersSupported ?? this.maxPlayersSupported,
+      // Same reason as breaks above: a field left out here is silently reset
+      // to its default by every projection, and `fits: true` is the dangerous
+      // default — it would tell a host a night fits when the engine said it
+      // does not.
+      pace: pace ?? this.pace,
+      fits: fits ?? this.fits,
+      paceOverByMins: paceOverByMins ?? this.paceOverByMins,
+      explain: explain ?? this.explain,
     );
   }
 }

@@ -60,8 +60,12 @@ Future<void> main() async {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(
-                Icons.warning_amber_rounded,
-                color: Color(0xFFFACC15),
+                // §B1 / T141: no amber anywhere in the app's own colours.
+                // At 48 px this is a large element, so §B1 says `red`
+                // (#D53032), not `redText`. Literal rather than AppColors:
+                // this screen renders when construction has already failed.
+                Icons.error_outline_rounded,
+                color: Color(0xFFD53032),
                 size: 48,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -177,6 +181,9 @@ Future<void> main() async {
       initialThemePreference: cachedThemePref,
     );
     router = buildAppRouter(appProvider);
+    // Framework §14. Fire-and-forget: the forecasts fall back to §F1's stated
+    // defaults until it lands, so nothing waits on it.
+    unawaited(appProvider.hydrateCalibrationHistory());
   } catch (e, stack) {
     // ignore: avoid_print
     print('[Boot] fatal during app construction: $e\n$stack');
@@ -229,10 +236,14 @@ class _BootFailureApp extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(
-                  Icons.warning_amber_rounded,
-                  color: Color(0xFFFACC15),
-                  size: 48,
-                ),
+                // §B1 / T141: no amber anywhere in the app's own colours.
+                // At 48 px this is a large element, so §B1 says `red`
+                // (#D53032), not `redText`. Literal rather than AppColors:
+                // this screen renders when construction has already failed.
+                Icons.error_outline_rounded,
+                color: Color(0xFFD53032),
+                size: 48,
+              ),
                 const SizedBox(height: AppSpacing.lg),
                 const Text(
                   "Poker Night couldn't start",

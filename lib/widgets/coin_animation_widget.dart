@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import '../app/colors.dart';
 
 class CoinAnimationWidget extends StatefulWidget {
   const CoinAnimationWidget({
@@ -123,11 +124,13 @@ class _CoinAnimationWidgetState extends State<CoinAnimationWidget>
   }
 
   Widget _buildDefaultChipStack() {
+    // §B1 / T141 — the app's own decoration, so no yellow and no second
+    // accent. See the note in `coin_shuffle_animation.dart`.
     final colors = [
-      Colors.blue[600]!,
-      Colors.yellow[700]!,
-      Colors.red[600]!,
-      Colors.white,
+      AppColors.primary,
+      AppColors.white,
+      AppColors.primary,
+      AppColors.surface2,
     ];
 
     return Column(

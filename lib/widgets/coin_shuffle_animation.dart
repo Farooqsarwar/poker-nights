@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../app/colors.dart';
 
 class CoinShuffleAnimation extends StatefulWidget {
   const CoinShuffleAnimation({super.key});
@@ -12,14 +13,23 @@ class _CoinShuffleAnimationState extends State<CoinShuffleAnimation>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
-  // The colors for our 6 chips
+  // The colours for our 6 chips.
+  //
+  // These are the app's OWN decoration, not a swatch of a real chip, so §B1
+  // applies in full: black ground, crimson accent, white ink, and "no gold,
+  // yellow, amber or second accent anywhere" (T141). The previous list had
+  // both a yellow and a blue in it.
+  //
+  // Addendum 1 §2 row 2 is the exception that proves the rule — yellow is
+  // legal in an F5 chip swatch, because a swatch depicts a physical chip.
+  // A shuffling animation depicts nothing; it is decoration.
   final List<Color> _chipColors = [
-    Colors.blue[600]!, // Chip 0 (Left)
-    Colors.yellow[700]!, // Chip 1 (Right)
-    Colors.red[600]!, // Chip 2 (Left)
-    Colors.white, // Chip 3 (Right)
-    Colors.blue[600]!, // Chip 4 (Left)
-    Colors.red[600]!, // Chip 5 (Right)
+    AppColors.primary, // Chip 0 (Left)
+    AppColors.white, // Chip 1 (Right)
+    AppColors.primary, // Chip 2 (Left)
+    AppColors.surface2, // Chip 3 (Right)
+    AppColors.white, // Chip 4 (Left)
+    AppColors.primary, // Chip 5 (Right)
   ];
 
   @override

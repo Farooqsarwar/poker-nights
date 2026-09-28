@@ -523,6 +523,7 @@ extension AppProviderGame on AppProvider {
             reEntryChips: s.reEntryChips,
             addOnChips: s.addOnChips,
             levelDurationMins: s.levelDurationMins,
+            pace: s.pace,
             payoutShape: s.payoutShape,
             format: s.format,
             maxReEntries: s.maxReEntries,

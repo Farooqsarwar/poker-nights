@@ -55,7 +55,69 @@ class ShootoutPlan {
 
 /// Spec v3.1 §F1.2 STYLE — turbo/standard/deep. (The spec defines exactly
 /// these three; there is no "fast" fourth tier here.)
+///
+/// Not to be confused with [PaceMode], which is §F1.2's OTHER table, `PACE`.
+/// STYLE sets the target opening depth and growth; PACE sets level length and
+/// the growth ceiling, and is chosen by the host.
 enum PaceStyle { turbo, standard, deep }
+
+/// The result of [TournamentEngine.solveUniformLevels] (§F1.3).
+typedef PaceSolveResult = ({
+  /// `e` — levels to the target finish, excluding the spare tail.
+  int levels,
+
+  /// `g` — the growth applied per level, one value for the whole night.
+  double growth,
+
+  /// `L` — minutes per level.
+  int levelMinutes,
+
+  /// §F1.3 `fits`. False means the night runs over, and `paceOptions` must
+  /// warn rather than silently accept it.
+  bool fits,
+
+  /// Minutes the structure needs, levels only.
+  int minutesNeeded,
+
+  /// Minutes over the window; zero when it fits.
+  int overBy,
+});
+
+/// One pace's offer in [TournamentEngine.paceOptions] (§F1.3, C1 step 4).
+typedef PaceOption = ({
+  PaceMode pace,
+  int openingBB,
+  int openingSB,
+
+  /// Starting depth in big blinds — `D0 = X / B0` (Framework §3).
+  double startingDepthBB,
+  int levels,
+  int levelMinutes,
+  bool fits,
+  int overBy,
+
+  /// Minutes from the start to the projected finish, breaks included.
+  int finishMins,
+
+  /// True when the chip bank can actually supply this option.
+  bool bankOk,
+});
+
+/// §F1.3 `paceOptions` — the three offers plus the recommendation, or a
+/// warning with named choices when nothing fits.
+typedef PaceOptions = ({
+  List<PaceOption> options,
+
+  /// The slowest of Deep, then Regular that fits AND whose bank is OK.
+  /// Null when nothing qualifies — turbo is never recommended.
+  PaceMode? recommended,
+
+  /// Set only when no pace fits. The host picks; nothing is applied silently.
+  String? warning,
+
+  /// §F1.3's named choices: `later`, `noAddOn`, `turbo`.
+  List<String> choices,
+});
 
 /// A host-fixed level for [TournamentEngine.resolveAroundPins] (Build Spec
 /// v3.1 §F1.12) — an editor pins a level's own sb/bb and the ladder around it
@@ -171,12 +233,33 @@ class TournamentEngine {
   /// Entries are filtered against the live denominations at generation time so
   /// every blind is actually postable (11-004).
   static const List<List<int>> validBlindLevels = [
+    // The low rungs a 1-value chip can post. §F1.6 derives blinds as nice
+    // multiples of `2 × cmin` rather than from a fixed table, and this table
+    // started at 5/10 — so a chip set holding 1s could never open below 10,
+    // and a 100 BB stack had to be 1,000 chips instead of 200.
+    //
+    // §F1.15's demo night is the case in point: White 1 · Red 5 · Green 25 ·
+    // Black 100, ten players, regular pace, specified to open at **1/2** with
+    // a 200 stack. Without these rungs the engine opened at 5/10 and 60 BB —
+    // turbo depth for a regular night.
+    //
+    // A set whose smallest chip is 25 still skips every one of these: the
+    // selection loop rejects any rung where `sb % minChip != 0`, so no
+    // structure can be handed a blind its chips cannot post.
+    [1, 2],
+    [2, 4],
+    [3, 6],
+    [4, 8],
     [5, 10],
+    [6, 12],
     [10, 20],
+    [15, 30],
     [20, 40],
     [20, 50],
     [25, 50],
+    [40, 80],
     [50, 100],
+    [60, 120],
     [75, 150],
     [100, 200],
     [150, 300],
@@ -230,7 +313,22 @@ class TournamentEngine {
   /// Allowance for the end-of-rebuy settlement pause (User Flow section 4.13).
   /// It has no clock of its own but it is real elapsed time, so 11-031 counts
   /// it in the duration model.
-  static const int settlementBreakMins = 15;
+  ///
+  /// Build Spec v3.1 §F1.2: "Rebuy pause | 10 min (rebuy and re-entry formats)
+  /// | the settlement hold". Was 15, and was added to every format — so a
+  /// freeze-out, which has no rebuys to settle, was charged a quarter of an
+  /// hour it never spends. Use [settlementPauseFor] rather than this constant
+  /// directly; the format is what decides whether it applies at all.
+  static const int settlementBreakMins = 10;
+
+  /// §F1.2 — the settlement hold in minutes for a given format. Zero for a
+  /// freeze-out and a shootout: there is nothing to settle.
+  static int settlementPauseFor(TournamentFormat format) =>
+      switch (format) {
+        TournamentFormat.rebuy || TournamentFormat.reEntry =>
+          settlementBreakMins,
+        _ => 0,
+      };
 
   /// Standard blind level lengths. Short events get 10-minute levels so the
   /// admin's speed up/slow down can nudge them to 15/20 later (12-078).
@@ -1741,8 +1839,13 @@ class TournamentEngine {
     final warnings = <String>[];
     // The host's choice wins; the duration-derived bucket is the fallback for
     // every tournament that never made one.
+    // §F1.3: on the pace path the level length IS the pace — one length all
+    // night, Turbo 15 / Regular 20 / Deep 30. An explicit host override still
+    // wins over both, because §E8 makes every generated field overridable.
+    final pace = params.pace;
     final levelDuration = params.levelDurationMins
             ?.clamp(kMinLevelDurationMins, kMaxLevelDurationMins) ??
+        pace?.levelMinutes ??
         _levelDurationFor(params.durationHours);
     // Full target, not 90% of it. The old 0.9 factor meant a 3.5 h event only
     // ever generated ~3 h 09 m of levels, which both understated the finish
@@ -1755,12 +1858,30 @@ class TournamentEngine {
     // what stops a 4-hour night with two breaks from actually running 4h20.
     final scheduledBreakMins =
         params.breaks.fold<int>(0, (a, b) => a + b.durationMins);
+
+    // §F1.3 `P = max(30, T − breaks.total − rebuyPause)`. `T` comes from the
+    // start/end window when there is one, which is what lets a late start
+    // shrink the night while keeping `endBy` (§E17 row 21); otherwise it is
+    // the stated duration, exactly as before.
+    final paceTargetMinutes = params.effectiveTargetMinutes;
+    final pacePlayMinutes = playMinutesFor(
+      targetMinutes: paceTargetMinutes,
+      scheduledBreakMins: scheduledBreakMins,
+      format: params.effectiveFormat,
+    );
+
     final playingMinutes =
         math.max(60.0, params.durationHours * 60 - scheduledBreakMins);
     // Levels that actually fit the target. Everything that models PACE uses
     // this; the spare tail below is overtime insurance, not part of the plan.
-    final plannedLevels = math.max(6, (playingMinutes / levelDuration).ceil());
-    final numLevels = plannedLevels + _spareLevels;
+    //
+    // On the pace path this is a PROVISIONAL count — `eFit`, the levels the
+    // window holds. It is refined to §F1.3's `e` once `BB_end` is known, which
+    // cannot happen until the stack is solved.
+    var plannedLevels = pace != null
+        ? math.max(2, pacePlayMinutes ~/ levelDuration)
+        : math.max(6, (playingMinutes / levelDuration).ceil());
+    var numLevels = plannedLevels + _spareLevels;
 
     // Build Spec v3.1 §F1.2/§F1.18: the admissible opening-depth band is
     // keyed by STYLE (turbo 50-70, standard 85-130, deep >=150), not one
@@ -1770,10 +1891,35 @@ class TournamentEngine {
     // asking for, that raw value is classified into a style via
     // [paceStyleFor], and only THEN clamped into that style's own band —
     // rather than clamping every style into the same [80, 240] range.
-    final rawTargetBBDepth = 125 +
-        28 * (params.durationHours - 3.5) -
-        2.5 * math.max(0, params.players - 8);
-    final paceStyle = paceStyleFor(rawTargetBBDepth);
+    // §F1.3: `BB1 = niceBB(S / STYLE[style].D, cmin)`, and on the pace path
+    // the style is not inferred at all — it follows the pace the host picked.
+    // §F1.2's two tables line up one to one:
+    //
+    //   PACE.turbo   → STYLE.turbo    D  60   DEPTH_BAND [50, 70]
+    //   PACE.regular → STYLE.standard D 100   DEPTH_BAND [85, 130]
+    //   PACE.deep    → STYLE.deep     D 160   DEPTH_BAND [150, ∞)
+    //
+    // The legacy formula below stays for the phased mode (§F1.13), which has
+    // no pace to read. It was being applied to paced structures too, and got
+    // them wrong: the §F1.15 demo night — 10 players, 20:00–00:30, regular —
+    // is specified to open at 1/2 with a 100 BB stack, and the continuous
+    // formula produced a 60 BB opening, i.e. TURBO depth for a REGULAR night.
+    final rawTargetBBDepth = pace != null
+        ? switch (pace) {
+            PaceMode.turbo => _turboAim,
+            PaceMode.regular => _standardAim,
+            PaceMode.deep => _deepAim,
+          }
+        : 125 +
+            28 * (params.durationHours - 3.5) -
+            2.5 * math.max(0, params.players - 8);
+    final paceStyle = pace != null
+        ? switch (pace) {
+            PaceMode.turbo => PaceStyle.turbo,
+            PaceMode.regular => PaceStyle.standard,
+            PaceMode.deep => PaceStyle.deep,
+          }
+        : paceStyleFor(rawTargetBBDepth);
     // The band this particular tournament must land in. Derived, not imposed.
     final depthBand = admissibleDepthBand(paceStyle);
     final targetBBDepth = math.max(
@@ -1818,7 +1964,13 @@ class TournamentEngine {
     // case, not just the average case itself. Prepended ahead of the
     // existing point-estimate tiers, which remain as the less conservative
     // fallbacks if the box cannot fund this one.
-    final rebuyRateMean = params.rebuys ? params.players * 0.35 : 0.0;
+    // §F1.5 point 1: `Rbank = PoissonQuantile(mean = Rforecast, 0.90)`. The
+    // mean is the FORECAST, so a host whose nights genuinely rebuy more than
+    // average gets a bank sized for their game — the 0.35 here was hardcoded,
+    // which meant the measured rate reached the blind curve but never reached
+    // the box that has to fund it.
+    final rebuyRateMean =
+        params.rebuys ? params.players * params.effectiveExpectedRebuyRate : 0.0;
     final poissonReserveDraws = poissonQuantile90(rebuyRateMean);
     final bankReserveTier = params.players +
         poissonReserveDraws +
@@ -1902,21 +2054,59 @@ class TournamentEngine {
         final floor = (depthBand.min * bb / sb).ceil() * sb;
         int? chosen;
         List<ChipPlanEntry>? chosenPlan;
-        for (final step in [bb * 10, bb * 5, sb]) {
-          if (step <= 0) continue;
-          var candidate = (targetBBDepth * bb / step).floor() * step;
-          while (candidate >= floor) {
-            final plan = planFor(candidate, divisor, sb);
-            if (covers(candidate, plan) && hasChange(plan, sb)) {
-              chosen = candidate;
-              chosenPlan = plan;
-              break;
-            }
-            final next = candidate - step;
-            if (next <= 0) break;
-            candidate = next;
+
+        // §F1.5 point 3: "Candidate S values: **nice numbers** ≤ S_max,
+        // deepest first; evaluate up to 20."
+        //
+        // The blind-multiple grid below was an attempt at the same goal —
+        // its own comment complains about stacks like 815, 845 and 995 — but a
+        // multiple of the big blind is not a nice number, so it only helped
+        // when the blind happened to be round. At 9 players it fell through to
+        // single-blind steps and picked **1490**, which is bad twice over:
+        //
+        //   * it needs 21 small chips to build, blowing the 25-chip target
+        //     (§F1.5 `scoreComposition`, "total chips n"), and
+        //   * it cannot be rebuilt after colour-up. A rebuy at level 9 has no
+        //     1-chips left to make the last 40, so the handout came to 1500
+        //     and a rebuy stopped being worth a starting stack (23-002).
+        //
+        // Nice values fix both at the source: 1500 builds from 25 chips and
+        // survives every colour-up, because nice numbers are exactly the ones
+        // the surviving denominations can still express.
+        final niceCandidates =
+            niceValuesInRange(sb, floor.toDouble(), targetBBDepth * bb)
+                .reversed // deepest first
+                .take(20)
+                .toList();
+        for (final candidate in niceCandidates) {
+          final plan = planFor(candidate, divisor, sb);
+          if (covers(candidate, plan) && hasChange(plan, sb)) {
+            chosen = candidate;
+            chosenPlan = plan;
+            break;
           }
-          if (chosen != null) break;
+        }
+
+        // Fall back to the old grid only when no nice value fits the box at
+        // all. A slightly awkward stack the case can actually supply beats
+        // refusing to generate a structure.
+        if (chosen == null) {
+          for (final step in [bb * 10, bb * 5, sb]) {
+            if (step <= 0) continue;
+            var candidate = (targetBBDepth * bb / step).floor() * step;
+            while (candidate >= floor) {
+              final plan = planFor(candidate, divisor, sb);
+              if (covers(candidate, plan) && hasChange(plan, sb)) {
+                chosen = candidate;
+                chosenPlan = plan;
+                break;
+              }
+              final next = candidate - step;
+              if (next <= 0) break;
+              candidate = next;
+            }
+            if (chosen != null) break;
+          }
         }
         if (chosen == null || chosenPlan == null) continue;
         final candidate = chosen;
@@ -1974,7 +2164,43 @@ class TournamentEngine {
         // shortage warning above already tells the host why.
         final fallbackFloor = (kMinPlayableDepthBB * bb).round();
         List<ChipPlanEntry>? plan;
-        while (candidate >= fallbackFloor) {
+
+        // §F1.5 point 3 applies here too. Point 5 says that when nothing
+        // reaches the band "only the closest ones" compete — closest among the
+        // NICE candidates, not among every multiple of the small blind.
+        //
+        // This is the branch that produced 1490. Walking down by `sb` from the
+        // target lands on whatever multiple of 5 happens to be fundable, and
+        // 1490 was fundable, so it won at 149 BB — one big blind under the
+        // deep band, and unbuildable after colour-up. The deepest nice value
+        // the box can actually fund is the honest answer: a little shallower,
+        // countable at the table, and still a stack after the 1s are gone.
+        // A nice value is taken only when it is BOTH fundable and postable.
+        //
+        // Accepting one on coverage alone is worse than not using nice values
+        // here at all: at Standard 300 with 18 players the deepest fundable
+        // nice value is 600, which builds as 1 × 500 + 1 × 100 and has no chip
+        // at or below the small blind — a stack that cannot post its own blind
+        // (10-033, 11-020, PN-045/PN-046). Below spec on DEPTH is a warning;
+        // below spec on PAYABILITY is unplayable.
+        //
+        // So when no nice value is postable, control falls through to the
+        // single-blind walk below, which is finer-grained and finds a stack
+        // that is. That is the pre-existing behaviour, unchanged.
+        for (final v in niceValuesInRange(
+          sb,
+          fallbackFloor.toDouble(),
+          candidate.toDouble(),
+        ).reversed) {
+          final p = planFor(v, params.players, sb);
+          if (covers(v, p) && hasChange(p, sb)) {
+            plan = p;
+            candidate = v;
+            break;
+          }
+        }
+
+        while (plan == null && candidate >= fallbackFloor) {
           final p = planFor(candidate, params.players, sb);
           if (covers(candidate, p)) {
             plan = p;
@@ -2110,14 +2336,58 @@ class TournamentEngine {
     // blind ladder, the sequence stays strictly monotonically increasing, and
     // the ladder itself extends in practical +200/+400 steps if a very large
     // field needs blinds beyond its printed end.
+    // Build Spec v3.1 §F1.3:
+    //
+    //   C = S × (N + Rforecast) + addOnMult × S × N × takeUp + bonusPct × S × N
+    //
+    // and the Structuring Framework §4, which is the same equation with the
+    // early bonus dropped because the Framework is general:
+    //
+    //   C = N·X + R·rebuy_size + S·add_on_size,  i.e.  C/X = N(1 + r + Aq)
+    //
+    // The early-arrival bonus term was missing. Every player who checks in
+    // before the scheduled start receives `effectiveEarlyArrivalPct × S` extra
+    // chips (D6, §E17 row 16), and those are chips in play exactly like a
+    // rebuy's: they must be in `C`, or `BB_end = C / K` is solved against a
+    // chip total the night does not have and the ladder finishes too shallow.
+    //
+    // The re-entry term keeps its `max(0, reEntryStack − stack)` shape: a
+    // re-entry replaces a busted stack rather than adding a fresh one, so only
+    // the excess over the starting stack is genuinely new chips. §F1.3 has no
+    // re-entry term because it folds re-entries into `Rforecast`; this is the
+    // same quantity, spelled out.
+    final earlyBonusChips =
+        params.effectiveEarlyArrivalPct * stack * params.players;
     final expectedTotalChips =
         stack * params.players +
         rebuyStack * expectedRebuysTotal +
         math.max(0, reEntryStack - stack) * expectedReEntriesTotal +
-        addOnStack * expectedAddOnsTotal;
+        addOnStack * expectedAddOnsTotal +
+        earlyBonusChips;
     final endTargetK =
         params.anteEnabled ? kEndTargetKWithAnte : kEndTargetKNoAnte;
     final targetFinalBB = expectedTotalChips / endTargetK;
+
+    // ── §F1.3 pace solve ────────────────────────────────────────────────────
+    //
+    // Now that `BB_end` is known, replace the provisional level count with
+    // §F1.3's `e` and take its single growth rate `g`. This is the point where
+    // the pace path diverges from the legacy phased mode: below, `gBase` is
+    // solved from `targetFinalBB` over `plannedLevels`, which is the same
+    // arithmetic — the difference is that `e` here is capped by what the
+    // WINDOW holds, so the night is fitted to its finish time rather than the
+    // finish time being whatever the ladder happens to take.
+    PaceSolveResult? paceSolve;
+    if (pace != null) {
+      paceSolve = solveUniformLevels(
+        openingBB: openingBB,
+        endBB: targetFinalBB,
+        pace: pace,
+        playMinutes: pacePlayMinutes,
+      );
+      plannedLevels = paceSolve.levels;
+      numLevels = plannedLevels + _spareLevels;
+    }
     // Technical section 8.4: the exponent is `1 / max(1, plannedLevels - 1)`.
     // Using `numLevels` here spread the curve across the spare tail as well,
     // so blinds grew ~30% slower per level than the formula intends and the
@@ -2147,26 +2417,64 @@ class TournamentEngine {
       premiumGrowthFactor *= 1 + rebuyPremium(l);
     }
 
-    final gBase = math
-        .pow(
-          math.max(targetFinalBB, openingBB.toDouble()) /
-              (openingBB * premiumGrowthFactor),
-          1 / math.max(1, plannedLevels - 1),
-        )
-        .toDouble();
+    // On the pace path the growth is the solver's, not a re-derivation.
+    //
+    // It has to be taken rather than recomputed because §F1.3 CLAMPS it — to
+    // `gMax` when the climb is steeper than the pace allows, and to
+    // `PACE_G_MIN` when it is flatter than is worth solving. Re-deriving
+    // `targetFinalBB / openingBB` over `plannedLevels` here would quietly undo
+    // both clamps and let a Deep night climb at a Turbo rate.
+    //
+    // The premium divisor is the same trick the legacy path uses, read the
+    // other way: the ladder must land on `BB1 × g^(e−1)`, and the premium
+    // multiplies the curve by `premiumGrowthFactor` along the way, so the base
+    // is handed back the premium's per-level share.
+    final gBase = paceSolve != null
+        ? paceSolve.growth /
+            math.pow(
+              math.max(1e-9, premiumGrowthFactor),
+              1 / math.max(1, plannedLevels - 1),
+            )
+        : math
+            .pow(
+              math.max(targetFinalBB, openingBB.toDouble()) /
+                  (openingBB * premiumGrowthFactor),
+              1 / math.max(1, plannedLevels - 1),
+            )
+            .toDouble();
 
     // The growth a Freeze Out with these same chips would have used — the
     // reference the premium is measured AGAINST. Identical to `gBase` bit for
     // bit whenever `premiumGrowthFactor` is 1, which is every structure with
     // no premium (§39 deviation 10, boundary 7).
-    final gFreezeOut = math
-        .pow(
-          math.max(targetFinalBB, openingBB.toDouble()) / openingBB,
-          1 / math.max(1, plannedLevels - 1),
-        )
-        .toDouble();
+    // The reference walk must use the SAME clamped growth, or `premiumRatio`
+    // below stops being 1.0 on a structure with no premium at all: the printed
+    // ladder would then be nudged off the reference by the clamp itself, which
+    // is exactly the boundary-7 regression the ratio exists to avoid.
+    final gFreezeOut = paceSolve != null
+        ? paceSolve.growth
+        : math
+            .pow(
+              math.max(targetFinalBB, openingBB.toDouble()) / openingBB,
+              1 / math.max(1, plannedLevels - 1),
+            )
+            .toDouble();
 
-    final ladder = [...validBlindLevels];
+    // Only the rungs this chip set can actually post.
+    //
+    // The opening rung was already filtered this way, but the CLIMB was not —
+    // it walked the whole table. Adding the low rungs (1/2 … 6/12) exposed
+    // that: a Home Set whose smallest chip is 5 opened legally at 5/10 and
+    // then climbed to 6/12, which no combination of its chips can post
+    // (23-001). §F1.6 avoids this by generating each level as a multiple of
+    // `2 × cmin` rather than from a fixed table; filtering the table by the
+    // starting chip is the same guarantee within the table.
+    final ladder = [
+      for (final pair in validBlindLevels)
+        if (minChip > 0 && pair[0] % minChip == 0 && pair[1] % minChip == 0)
+          pair,
+    ];
+    if (ladder.isEmpty) ladder.addAll(validBlindLevels);
     final levels = <BlindLevel>[];
     // Two walks over the same ladder. `cursor` is the Freeze Out reference —
     // it is exactly the walk this engine has always done, and it alone decides
@@ -2382,10 +2690,12 @@ class TournamentEngine {
     for (var i = 0; i < plannedLevels && i < levels.length; i++) {
       plannedMins += levels[i].durationMins;
     }
-    // `settlementBreakMins` is a DIFFERENT thing -- the post-rebuy settlement
-    // pause -- so the two are summed separately rather than conflated.
+    // The settlement pause is a DIFFERENT thing from a scheduled break -- it
+    // is the post-rebuy hold -- so the two are summed separately rather than
+    // conflated. §F1.2 scopes it to the rebuy and re-entry formats.
+    final settlementPause = settlementPauseFor(params.effectiveFormat);
     final expectedFinishMins =
-        plannedMins + settlementBreakMins + scheduledBreakMins;
+        plannedMins + settlementPause + scheduledBreakMins;
 
     // Resolve break placement now that the level count is known. A break
     // carrying `afterLevel: 0` means "organizer turned breaks on but left the
@@ -2438,7 +2748,80 @@ class TournamentEngine {
       warnings.add('Very small field — consider a shorter structure.');
     }
 
+    // §F1.1 `explain [{step, text, numbers}]`.
+    //
+    // Each entry leads with one plain sentence — that is the part §B4 rule 10
+    // shows on screen — and puts the reasoning after it, behind the "Why?"
+    // link. The five steps are the ones §B4 names: pace, starting depth, the
+    // chip bank, the end target, and the paid curve (which §F2 owns and adds
+    // when payouts run).
+    final openingDepth =
+        levels.isNotEmpty && levels.first.bb > 0 ? stack / levels.first.bb : 0.0;
+    final explain = <StructureExplanation>[
+      StructureExplanation(
+        step: 'stack',
+        text: 'Everyone starts with $stack in chips, about '
+            '${openingDepth.round()} big blinds deep. '
+            'The stack is chosen, not typed: it is the deepest round number '
+            'your chip case can actually deal to ${params.players} players — '
+            'including the chips set aside for forecast rebuys and add-ons — '
+            'while still leaving every player small chips to post a blind '
+            'with.',
+        numbers: {
+          'startingStack': stack,
+          'openingDepthBB': openingDepth,
+          'players': params.players,
+        },
+      ),
+      if (pace != null)
+        StructureExplanation(
+          step: 'pace',
+          text: '${pace.label} pace: ${pace.levelMinutes}-minute levels, '
+              '$plannedLevels of them to the finish. '
+              'One level length runs all night; what changes is how fast the '
+              'blinds climb, and that is solved backwards from when you want '
+              'to finish rather than picked from a table.',
+          numbers: {
+            'levelMinutes': pace.levelMinutes,
+            'plannedLevels': plannedLevels,
+            'playMinutes': pacePlayMinutes,
+            'growth': paceSolve?.growth ?? 0,
+          },
+        ),
+      StructureExplanation(
+        step: 'endTarget',
+        text: 'Blinds are built to reach ${targetFinalBB.round()} by the '
+            'planned finish. '
+            'That target is the total chips expected in play divided by '
+            '$endTargetK — the point at which the last few players are short '
+            'enough for the night to end rather than drift. '
+            '${params.anteEnabled ? 'An ante is in play, so the divisor is larger: antes cost every player each orbit, which ends the night sooner at the same blind.' : ''}',
+        numbers: {
+          'targetFinalBB': targetFinalBB,
+          'expectedTotalChips': expectedTotalChips,
+          'K': endTargetK,
+        },
+      ),
+      StructureExplanation(
+        step: 'chipBank',
+        text: depthFeasible
+            ? 'Your chip case covers this field. '
+                'It was checked against a busy night, not an average one: '
+                'every player taking the add-on and the early bonus, and more '
+                'rebuys than forecast.'
+            : 'Your chip case cannot deal a playable stack to '
+                '${params.players} players. '
+                'A stack has to be at least $kMinPlayableDepthBB big blinds or '
+                'everyone is short from the first hand.',
+        numbers: {
+          'players': params.players,
+          if (maxPlayersSupported case final int m) 'maxPlayersSupported': m,
+        },
+      ),
+    ];
+
     return TournamentStructure(
+      explain: explain,
       breaks: resolvedBreaks,
       styleNote: styleNote,
       rebuysCloseLevel: optimisedRebuyClose,
@@ -2462,6 +2845,21 @@ class TournamentEngine {
       depthShortfallNote: depthShortfallNote,
       maxPlayersSupported: maxPlayersSupported,
       engineVersion: engineVersion,
+      pace: pace,
+      // §F1.3: `meta.fits = fits && projectedEnd.minutes ≤ T + 5`. Both halves
+      // are needed — the solver can report a growth that fits while the
+      // finish, once breaks and the settlement pause are added back, still
+      // lands past the window.
+      fits: paceSolve == null
+          ? true
+          : paceSolve.fits &&
+              expectedFinishMins <= paceTargetMinutes + kPaceFitToleranceMins,
+      paceOverByMins: paceSolve == null
+          ? 0
+          : math.max(
+              paceSolve.overBy,
+              math.max(0, expectedFinishMins - paceTargetMinutes),
+            ),
     );
   }
 
@@ -3063,14 +3461,199 @@ class TournamentEngine {
     return (feasible: true, bbLadder: resultBB, sbLadder: sbLadder, error: null);
   }
 
-  // TODO(spec §F1.3 solveUniformLevels / paceOptions): not implemented.
-  // The spec's pace-mode fitting picks a single growth rate g across the
-  // WHOLE night from a discrete menu (turbo/regular/deep), each with its own
-  // minimum g, and reports 2-3 alternatives with their own finish estimates.
-  // This engine has no `pace` input anywhere in [TournamentParams] at all —
-  // it derives a per-game growth factor from duration/players continuously
-  // instead (see `growthFactor` in [generate]) — so there is no menu of
-  // discrete pace options to fit or offer. Adding one is a real feature (a
-  // new params field, new UI, a genuine alternate code path through
-  // [generate]), not a bug fix, and is out of scope for this pass.
+  // ── §F1.3 Pace mode — fitting a night to its finish time ────────────────
+  //
+  // The owner's model (2026-09-26): ONE level length all night — Turbo 15,
+  // Regular 20, Deep 30. The climb per level is whatever reaches the finishing
+  // blind by the finish time, capped at the pace's `gMax`.
+  //
+  // This is the Structuring Framework §6 ("Designing for a Fixed Finish Time")
+  // made concrete. The Framework's four levers map exactly:
+  //
+  //   * level duration controls how fast time passes      → `L`
+  //   * blind growth controls how fast depth disappears   → `g`
+  //   * chip injections decide how much depth exists      → `C`, hence `BB_end`
+  //   * breaks consume time                               → subtracted from `T`
+  //
+  // NOTE ON NOTATION. The Framework uses `L` for the NUMBER of levels and `t`
+  // for the length of one. §F1 uses `L` for the LENGTH and `e` for the count.
+  // This code follows §F1: `levelMinutes` is the length, `levels` is the
+  // count. Getting these two the wrong way round produces a plausible-looking
+  // structure that is wrong by a factor of the level count, so the names here
+  // are spelled out rather than single letters.
+
+  /// §F1.3 `solveUniformLevels(S, C, BB1, K, pace, P)`.
+  ///
+  /// [playMinutes] is `P` — the window with breaks and the settlement pause
+  /// already removed. [endBB] is `BB_end = C / K`.
+  static PaceSolveResult solveUniformLevels({
+    required int openingBB,
+    required double endBB,
+    required PaceMode pace,
+    required int playMinutes,
+  }) {
+    final levelMinutes = pace.levelMinutes;
+    final gMax = pace.gMax;
+
+    // `eFit` — the levels that fit the window at this pace. At least two: a
+    // structure with one level has no growth to solve for.
+    final eFit = math.max(2, playMinutes ~/ levelMinutes);
+
+    // The whole climb, as a ratio. A target at or below the opening blind is
+    // degenerate — a field so small the chips already sit deeper than the end
+    // target — and there is nothing to solve.
+    final ratio = endBB / math.max(1, openingBB);
+    if (!ratio.isFinite || ratio <= 1) {
+      return (
+        levels: eFit,
+        growth: kPaceGMin,
+        levelMinutes: levelMinutes,
+        fits: true,
+        minutesNeeded: eFit * levelMinutes,
+        overBy: 0,
+      );
+    }
+
+    final lnRatio = math.log(ratio);
+
+    // `gFit` — the growth that lands exactly on BB_end using every level that
+    // fits.
+    final gFit = math.pow(ratio, 1 / (eFit - 1)).toDouble();
+
+    // The levels the climb needs when growth is pinned at the ceiling. This is
+    // the shortest this pace can make the night.
+    final levelsAtGMax = math.max(2, (1 + lnRatio / math.log(gMax)).ceil());
+
+    // §F1.3: it fits if the needed growth is within the ceiling, OR if running
+    // at the ceiling overshoots the window by no more than the 5-minute
+    // tolerance — a fraction of a level over still counts as fitting.
+    final fits = gFit <= gMax ||
+        levelsAtGMax * levelMinutes <= playMinutes + kPaceFitToleranceMins;
+
+    // Below `kPaceGMin` the night just ends early, so there is no reason to
+    // solve flatter than that.
+    final growth =
+        fits ? gFit.clamp(kPaceGMin, gMax).toDouble() : gMax;
+
+    // When it fits, use the fewer of "levels that fit" and "levels the climb
+    // actually needs at this growth" — a structure that reaches its end target
+    // early should stop there rather than pad. When it does not fit, the count
+    // is whatever the ceiling demands, and the night runs over.
+    final levels = fits
+        ? math.max(2, math.min(eFit, (1 + lnRatio / math.log(growth)).ceil()))
+        : levelsAtGMax;
+
+    final minutesNeeded = levels * levelMinutes;
+    return (
+      levels: levels,
+      growth: growth,
+      levelMinutes: levelMinutes,
+      fits: fits,
+      minutesNeeded: minutesNeeded,
+      overBy: math.max(0, minutesNeeded - playMinutes),
+    );
+  }
+
+  /// §F1.3 `paceOptions(inputs)` — runs the engine three times, once per pace,
+  /// and reports what each would actually do.
+  ///
+  /// The recommendation rule is the spec's, and it is deliberately
+  /// conservative: the **slowest of Deep, then Regular** that both fits and
+  /// has a workable chip bank. **Turbo is never recommended** — it is offered
+  /// only as an explicit escape when nothing else fits, because a turbo
+  /// structure is a different game, not a slightly faster one.
+  ///
+  /// When nothing fits, this returns a `warning` and the three named
+  /// `choices`, and recommends nothing. §E17 row 20: the host picks, and
+  /// nothing is applied silently. That restraint is the Framework §16 point
+  /// too — no formula can guarantee a finish minute, so the honest move is to
+  /// show the overrun rather than quietly reshape the night around it.
+  static PaceOptions paceOptions(TournamentParams params) {
+    final options = <PaceOption>[];
+    final structures = <PaceMode, TournamentStructure>{};
+
+    for (final mode in PaceMode.values) {
+      final TournamentStructure s;
+      try {
+        s = generate(params.copyWith(pace: mode));
+      } on Exception {
+        // A pace whose structure cannot be built at all is simply not offered,
+        // rather than taking the whole menu down with it.
+        continue;
+      }
+      structures[mode] = s;
+
+      final opening = s.levels.isNotEmpty ? s.levels.first : null;
+      options.add((
+        pace: mode,
+        openingBB: opening?.bb ?? 0,
+        openingSB: opening?.sb ?? 0,
+        startingDepthBB: (opening?.bb ?? 0) > 0
+            ? s.startingStack / opening!.bb
+            : 0,
+        levels: s.effectivePlannedLevels,
+        levelMinutes: s.levelDuration,
+        fits: s.fits,
+        overBy: s.paceOverByMins,
+        finishMins: s.expectedFinishMins,
+        // A structure the chip case cannot actually supply is not a real
+        // option, however well it fits the clock.
+        bankOk: s.feasible,
+      ));
+    }
+
+    // Slowest first: Deep, then Regular. Turbo is not a candidate.
+    PaceMode? recommended;
+    for (final mode in const [PaceMode.deep, PaceMode.regular]) {
+      final o = options.where((o) => o.pace == mode).firstOrNull;
+      if (o != null && o.fits && o.bankOk) {
+        recommended = mode;
+        break;
+      }
+    }
+
+    String? warning;
+    var choices = const <String>[];
+    if (recommended == null) {
+      final regular = options.where((o) => o.pace == PaceMode.regular).firstOrNull;
+      final needed = regular?.finishMins ?? params.effectiveTargetMinutes;
+      final window = params.effectiveTargetMinutes;
+      warning =
+          'At a regular pace this field needs about ${_hhmm(needed)}; '
+          'the night has ${_hhmm(window)}.';
+      choices = [
+        'later',
+        if (params.addOn) 'noAddOn',
+        'turbo',
+      ];
+    }
+
+    return (
+      options: options,
+      recommended: recommended,
+      warning: warning,
+      choices: choices,
+    );
+  }
+
+  /// "3h20", the form §F1.3's warning copy uses.
+  static String _hhmm(int minutes) {
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    return m == 0 ? '${h}h' : '${h}h${m.toString().padLeft(2, '0')}';
+  }
+
+  /// §F1.3 `P` — minutes of actual play left in the window once the scheduled
+  /// breaks and the format's settlement pause are taken out. Floored at 30, as
+  /// the spec floors it: a window too short to play is still given a structure
+  /// rather than an empty one.
+  static int playMinutesFor({
+    required int targetMinutes,
+    required int scheduledBreakMins,
+    required TournamentFormat format,
+  }) =>
+      math.max(
+        30,
+        targetMinutes - scheduledBreakMins - settlementPauseFor(format),
+      );
 }

@@ -13,6 +13,7 @@ import 'package:localstore/localstore.dart';
 
 import '../models/app_notification.dart';
 import '../models/cash_game.dart';
+import '../models/calibration_record.dart';
 import '../models/game.dart';
 import '../models/group.dart';
 import '../models/live_game.dart';
@@ -824,6 +825,18 @@ class AppProvider extends ChangeNotifier {
   /// structures". Off unless the user turns it on — the sign-up checkbox is
   /// unchecked by default (§A4/D9), so the stored default has to match.
   bool _keepHistoryForStructures = false;
+
+  /// Measured outcomes of completed nights — the Structuring Framework §14
+  /// calibration loop. Device-local: these are this host's own nights, they
+  /// feed this host's own forecasts, and keeping them off Firestore avoids a
+  /// rules change for data nobody else reads.
+  ///
+  /// Only written when [_keepHistoryForStructures] is on (D9).
+  final List<CalibrationRecord> _calibrationHistory = [];
+
+  /// Enough nights to satisfy §F1's eight-game window several times over
+  /// without the list growing without bound.
+  static const int _maxCalibrationRecords = 24;
 
   // Audio Master (checklist 15-041/15-042/15-043, User Flow §7.4): the chosen
   // speaking device now lives on the GAME (`LiveGame.audioMasterDeviceId`) and

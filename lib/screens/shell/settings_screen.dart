@@ -8,7 +8,6 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
-import '../../theme/theme_palette.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/back_nav_button.dart';
@@ -256,21 +255,10 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // APPEARANCE (Themes)
-          Text(
-            'APPEARANCE',
-            style: AppTypography.bodyXs.copyWith(
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w600,
-              color: AppColors.onSurfaceHint,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _ThemeGrid(
-            activeId: app.colorTheme,
-            onSelect: (id) => app.setColorTheme(id),
-          ),
-          const SizedBox(height: 24),
+          // §B1 opens "Exactly one look: black ground, crimson accent, white
+          // ink." There is nothing to choose between, so the APPEARANCE
+          // section and its theme grid are gone rather than reduced to a
+          // single-option picker.
 
           // ACCOUNT Section
           Text(
@@ -579,153 +567,3 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-/// 3×2 grid of theme cards showing each palette's colours.
-class _ThemeGrid extends StatelessWidget {
-  const _ThemeGrid({required this.activeId, required this.onSelect});
-
-  final String activeId;
-  final ValueChanged<String> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderSubtle),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const gap = AppSpacing.sm;
-          final available = constraints.maxWidth;
-          var perRow = ((available + gap) / (_ThemeCard.minWidth + gap))
-              .floor();
-          perRow = perRow.clamp(1, 3);
-
-          final rows = <List<ThemePalette>>[];
-          for (var i = 0; i < ThemePalettes.all.length; i += perRow) {
-            final end = (i + perRow < ThemePalettes.all.length)
-                ? i + perRow
-                : ThemePalettes.all.length;
-            rows.add(ThemePalettes.all.sublist(i, end));
-          }
-
-          return Column(
-            children: [
-              for (final entry in rows.asMap().entries) ...[
-                Row(
-                  children: [
-                    for (final p in entry.value) ...[
-                      Expanded(
-                        child: _ThemeCard(
-                          palette: p,
-                          selected: p.id == activeId,
-                          onTap: () => onSelect(p.id),
-                        ),
-                      ),
-                      if (p != entry.value.last) const SizedBox(width: gap),
-                    ],
-                    for (var i = entry.value.length; i < perRow; i++) ...[
-                      const SizedBox(width: gap),
-                      const Expanded(child: SizedBox.shrink()),
-                    ],
-                  ],
-                ),
-                if (entry.key < rows.length - 1)
-                  const SizedBox(height: AppSpacing.sm),
-              ],
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _ThemeCard extends StatelessWidget {
-  const _ThemeCard({
-    required this.palette,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final ThemePalette palette;
-  final bool selected;
-  final VoidCallback onTap;
-
-  static const double minWidth = (16 * 4) + (4 * 3) + 16 + (AppSpacing.sm * 2);
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        decoration: BoxDecoration(
-          color: palette.background,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-            color: selected ? palette.primary : AppColors.borderSubtle,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    palette.name,
-                    style: AppTypography.bodyXs.copyWith(
-                      color: palette.foreground,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (selected)
-                  Icon(Icons.check, size: 14, color: palette.primary),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                _Swatch(palette.primary),
-                const SizedBox(width: AppSpacing.xxs),
-                _Swatch(palette.card),
-                const SizedBox(width: AppSpacing.xxs),
-                _Swatch(palette.border),
-                const SizedBox(width: AppSpacing.xxs),
-                _Swatch(palette.mutedForeground),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Swatch extends StatelessWidget {
-  const _Swatch(this.color);
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 14,
-      height: 14,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(3),
-        border: Border.all(
-          color: AppColors.foreground.withValues(alpha: 0.15),
-          width: 0.5,
-        ),
-      ),
-    );
-  }
-}

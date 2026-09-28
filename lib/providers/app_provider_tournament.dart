@@ -980,6 +980,21 @@ extension AppProviderTournament on AppProvider {
         reEntryChips: s.reEntryChips,
         addOnChips: s.addOnChips,
         levelDurationMins: s.levelDurationMins,
+        pace: s.pace,
+        // Framework §14 / §F1 — the host's own nights when there are eight or
+        // more of them, the stated default below that. An explicit host
+        // override (`s.expectedRebuys`) still wins: it is passed above and
+        // takes precedence inside `effectiveExpectedRebuys`.
+        //
+        // The add-on take-up goes in too. §F1 measures it over the players
+        // alive at the break but §F1.3 applies it to the whole field, which
+        // over-counts slightly — and does so in the safe direction, since a
+        // larger `C` ends the night sooner rather than later. It is safe
+        // because §F1.5 point 1 keeps the chip BANK on a different number
+        // entirely: every player assumed to take the add-on, so a 70 %
+        // forecast can never under-size the box.
+        expectedRebuyRate: forecastRebuyRate,
+        addOnTakeUpRate: forecastAddOnTakeUp,
         payoutShape: s.payoutShape,
         format: s.format,
         maxReEntries: s.maxReEntries,
@@ -1213,6 +1228,7 @@ extension AppProviderTournament on AppProvider {
         reEntryChips: s.reEntryChips,
         addOnChips: s.addOnChips,
         levelDurationMins: s.levelDurationMins,
+        pace: s.pace,
         payoutShape: s.payoutShape,
         format: s.format,
         maxReEntries: s.maxReEntries,
@@ -1387,6 +1403,37 @@ extension AppProviderTournament on AppProvider {
     _recalculateWithPlayers(_currentGame!.settings.players);
   }
 
+  /// §F1.5 point 7's third named escape: "play a freeze-out".
+  ///
+  /// When the chip case cannot deal a playable stack, the forecast rebuys and
+  /// add-ons are usually what tipped it — they are the chips the bank has to
+  /// cover on top of the starting stacks (Framework §11, "stress-test the chip
+  /// bank"). Dropping them frees the whole reserve, so a case that could not
+  /// fund the field very often funds it as a freeze-out.
+  ///
+  /// Turns off rebuys, re-entries and the add-on together, because a
+  /// "freeze-out" with an add-on still standing is not one, and regenerates.
+  void switchToFreezeOut() {
+    final game = _currentGame;
+    if (game == null) return;
+    final s = game.settings;
+    if (!s.rebuys && !s.reEntry && !s.addOn) return;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: s.copyWith(
+        rebuys: false,
+        reEntry: false,
+        addOn: false,
+        format: TournamentFormat.freezeOut,
+      ),
+    );
+    _recalculateWithPlayers(_currentGame!.settings.players);
+    addAnnouncement(
+      'Switched to a freeze-out — rebuys and the add-on are off.',
+      false,
+    );
+  }
+
   void _recalculateWithPlayers(int count) {
     final game = _currentGame!;
     final s = game.settings;
@@ -1420,6 +1467,7 @@ extension AppProviderTournament on AppProvider {
         reEntryChips: newSettings.reEntryChips,
         addOnChips: newSettings.addOnChips,
         levelDurationMins: newSettings.levelDurationMins,
+        pace: newSettings.pace,
         payoutShape: newSettings.payoutShape,
         format: newSettings.format,
         maxReEntries: newSettings.maxReEntries,
@@ -1861,6 +1909,10 @@ extension AppProviderTournament on AppProvider {
       actualDurationMins: measuredWallClockMins(game),
     );
     _syncGroupGame();
+    // Framework §14 — measure the night that just finished, so the next one
+    // can be forecast from it rather than from a constant. Gated on the D9
+    // consent inside [recordCalibration].
+    recordCalibration(_currentGame!);
     // This device settled the game — write my own result now (other members'
     // devices record theirs when the completed doc reaches them).
     if (_backendUp) {

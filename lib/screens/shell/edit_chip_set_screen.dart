@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +7,7 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
+import '../../models/chip_palette.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../utils/tournament_engine.dart';
@@ -15,6 +15,7 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/chip_palette_swatch.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/back_nav_button.dart';
 import '../../widgets/chip_token.dart';
@@ -135,18 +136,31 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ColorPicker(
-                color: pickerColor,
-                onColorChanged: (color) {
-                  pickerColor = color;
-                  nameController.text = ColorTools.nameThatColor(color);
-                },
+              // Addendum 1 §2 row 2 — the fixed ten-colour chip palette,
+              // replacing the free colour wheel that let any hue (including
+              // the owner's banned gold) onto a chip.
+              StatefulBuilder(
+                builder: (context, setSwatch) => Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final entry in kChipPalette)
+                      ChipPaletteSwatch(
+                        entry: entry,
+                        selected: pickerColor.toARGB32() == entry.hex,
+                        onTap: () => setSwatch(() {
+                          pickerColor = Color(entry.hex);
+                          nameController.text = entry.name;
+                        }),
+                      ),
+                  ],
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               AppTextField(
                 controller: nameController,
                 label: 'Color Name',
-                placeholder: 'e.g. Red, Blue, Gold',
+                placeholder: 'e.g. Red, Blue, Green',
               ),
             ],
           ),
@@ -710,12 +724,23 @@ class _ChipRowState extends State<_ChipRow> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ColorPicker(
-                color: pickerColor,
-                onColorChanged: (color) {
-                  pickerColor = color;
-                  nameController.text = ColorTools.nameThatColor(color);
-                },
+              // Addendum 1 §2 row 2 — as above.
+              StatefulBuilder(
+                builder: (context, setSwatch) => Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final entry in kChipPalette)
+                      ChipPaletteSwatch(
+                        entry: entry,
+                        selected: pickerColor.toARGB32() == entry.hex,
+                        onTap: () => setSwatch(() {
+                          pickerColor = Color(entry.hex);
+                          nameController.text = entry.name;
+                        }),
+                      ),
+                  ],
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               AppTextField(controller: nameController, label: 'Color Name'),

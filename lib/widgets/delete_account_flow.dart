@@ -46,12 +46,20 @@ Future<void> confirmDeleteAccount(BuildContext context, AppProvider app) async {
             ),
           ),
         ),
-        TextButton(
+        // Addendum 2 row 6 / §B1: `redDanger` is a FILL only, with white text
+        // — as a text or outline colour it measures 3.23 : 1 and fails AA. The
+        // confirm sheet's destructive button is where that fill belongs; the
+        // row that opens it uses `redText` for its icon and label.
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.redDanger,
+            foregroundColor: AppColors.white,
+          ),
           onPressed: () => Navigator.of(dialogContext).pop(true),
           child: Text(
             'Yes, delete my account',
             style: AppTypography.bodySm.copyWith(
-              color: AppColors.destructiveText,
+              color: AppColors.white,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -114,12 +122,16 @@ Future<String?> _askPassword(BuildContext context) {
             ),
           ),
         ),
-        TextButton(
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.redDanger,
+            foregroundColor: AppColors.white,
+          ),
           onPressed: () => Navigator.of(dialogContext).pop(controller.text),
           child: Text(
             'Delete account',
             style: AppTypography.bodySm.copyWith(
-              color: AppColors.destructiveText,
+              color: AppColors.white,
               fontWeight: FontWeight.w600,
             ),
           ),

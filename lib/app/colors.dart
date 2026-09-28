@@ -39,6 +39,27 @@ class AppColors {
   static Color get warning => currentPalette.warning;
   static Color get warningForeground => currentPalette.warningForeground;
 
+  // ── §B1 tokens, by their spec names ───────────────────────────────────────
+  //
+  // Prefer these in new code. The legacy accessors above resolve to the same
+  // values; these just say which §B1 token they are.
+  static Color get bg => currentPalette.bg;
+  static Color get surface => currentPalette.surface;
+  static Color get surface2 => currentPalette.surface2;
+  static Color get borderStrong => currentPalette.borderStrong;
+  static Color get red => currentPalette.red;
+
+  /// Red text **below 24 px** — eyebrows, LEVEL/ANTE labels, antes in tables,
+  /// link rows, legal headings. §B1: never `red` at that size.
+  static Color get redText => currentPalette.redText;
+  static Color get redDim => currentPalette.redDim;
+
+  /// Destructive **fill** only, with white text. Never as text or an outline.
+  static Color get redDanger => currentPalette.redDanger;
+  static Color get white => currentPalette.white;
+  static Color get muted2 => currentPalette.muted2;
+  static Color get green => currentPalette.green;
+
   // ── Derived decorative colours ─────────────────────────────────────────────
   static Color get black => Colors.black;
   static Color get onSurfaceHint => currentPalette.onSurfaceHint;

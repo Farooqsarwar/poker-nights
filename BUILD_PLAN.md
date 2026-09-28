@@ -229,7 +229,42 @@ Styling throughout used existing tokens only.
 
 </details>
 
-## 7. Phase 2 — Structure engine: §F1 + the Framework (5–7 days) · *THE BIG ONE*
+## 7. Phase 2 — Structure engine: §F1 + the Framework · **ENGINE DONE**
+
+**Status: COMPLETE**, except the "Why?" disclosures, which are Phase 4's (P4.5) and now
+have their data source. The three pre-existing engine defects from `PROVENANCE.md` §3.1
+are fixed at the source.
+
+Delivered end to end:
+
+- **P2.1–P2.3** — §F1.1's input contract, the chip-supply equation with its missing early
+  bonus term, the §F1.2 settlement hold, and `solveUniformLevels`.
+- **P2.4** — `paceOptions`, and C1 step 4's **pace cards** rendering them: three offers
+  with opening blind, depth, levels and finish clock, the SUGGESTED badge (never on
+  turbo), and the "nothing fits" warning with §F1.3's three named choices.
+- **P2.5 / P2.6** — the Framework's two added layers. Calibration records are written at
+  completion (gated on the D9 consent), read back at launch, and the measured rebuy rate
+  feeds the engine.
+- **P2.7** — feasibility persisted by the codec and surfaced on both C2 review and the
+  wizard, with **Create disabled** while the chip case cannot deal a playable stack.
+- **P2.8 / P2.9** — structure vectors, and `explain[]`.
+
+**On the add-on take-up.** An earlier pass left this unwired out of caution — §F1 measures
+take-up over *players alive at the break* while `effectiveExpectedAddOns` is a fraction of
+the whole *field*. Re-reading the specification settled it: §F1.3's own formula is
+`addOnMult × S × N × takeUp`, applying it to `N` deliberately, and §F1.5 point 1 keeps the
+chip **bank** on a different number entirely ("every player is assumed to take the
+add-on"). The over-count is the spec's choice and errs safely — a larger `C` ends the
+night sooner. It is now wired, with tests pinning both halves: take-up moves the final
+blind, and it does **not** move feasibility or the starting stack.
+
+Two related defects were found and fixed while doing it:
+
+- `kExpectedAddOnRate` was **0.65** against §F1.1's stated **70 %**, so the engine and the
+  figure shown to the host disagreed on the same quantity. Collapsed onto one constant.
+- The Poisson bank sizing hardcoded `players × 0.35` instead of the forecast rate, so a
+  measured rebuy rate reached the blind curve but never reached the box that has to fund
+  it (§F1.5 point 1: `Rbank = PoissonQuantile(mean = Rforecast, 0.90)`).
 
 Sequenced before payouts because it changes `TournamentParams`, which the wizard,
 Configure and quick-start screens all construct. Doing it after means touching those

@@ -16,6 +16,7 @@ import '../../widgets/ai_insights_panel.dart';
 import '../../utils/formatters.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_alert_banner.dart';
+import '../../widgets/structure_feasibility_card.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
@@ -100,7 +101,8 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
         .fold<int>(0, (s, l) => s + l.durationMins);
     final totalMins = structure.expectedFinishMins > 0
         ? structure.expectedFinishMins
-        : plannedMins + TournamentEngine.settlementBreakMins;
+        : plannedMins +
+            TournamentEngine.settlementPauseFor(settings.effectiveFormat);
     final anteStartLevel =
         structure.levels.indexWhere((l) => l.ante != null) + 1;
     // The host's own figures when they set them, the engine's rates when they
@@ -515,6 +517,22 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
             _PaceProposalCard(app: app),
             const SizedBox(height: AppSpacing.lg),
           ],
+          // §F1.5 point 7 / §E17 row 88, and §F1.3's overrun. Above the
+          // informational banner deliberately: if the chip case cannot deal a
+          // playable stack, that is the first thing the host needs to know,
+          // not a footnote under an "AI estimate" notice.
+          StructureFeasibilityCard(
+            structure: structure,
+            players: settings.players,
+            onEditChips: () => context.push(RoutePaths.chipSets),
+            onFewerRebuys: () => setState(() => _tab = _tabParams),
+            onPlayFreezeOut:
+                structure.feasible || !(settings.rebuys || settings.addOn)
+                    ? null
+                    : app.switchToFreezeOut,
+          ),
+          if (!structure.feasible || !structure.fits)
+            const SizedBox(height: AppSpacing.lg),
           AppAlertBanner(
             type: AppAlertType.info,
             message: game.structureConfirmed

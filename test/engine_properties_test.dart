@@ -334,16 +334,18 @@ void main() {
         );
         final openingBB = s.levels.first.bb;
         final depth = s.startingStack / openingBB;
+        // The engine's solver now clamps into a per-style band (Build Spec
+        // v3.1 §F1.2/§F1.18, turbo/standard/deep via
+        // TournamentEngine.admissibleDepthBand(PaceStyle)) rather than one
+        // flat [kMinTargetBBDepth, kMaxTargetBBDepth] range, and the deep
+        // band is deliberately unbounded above -- so the only universal
+        // floor left to assert here is the absolute playable floor.
         expect(
           depth,
-          greaterThanOrEqualTo(TournamentEngine.kMinTargetBBDepth.toDouble()),
+          greaterThanOrEqualTo(TournamentEngine.kMinPlayableDepthBB),
           reason: '$preset / $players players opens at '
               '${depth.toStringAsFixed(1)} BB '
               '(stack ${s.startingStack}, BB $openingBB)',
-        );
-        expect(
-          depth,
-          lessThanOrEqualTo(TournamentEngine.kMaxTargetBBDepth.toDouble()),
         );
       }
     });
@@ -377,7 +379,9 @@ void main() {
 
         // Re-derive the band from what was actually produced: whatever style
         // the structure landed in, it must be a legal depth FOR that style.
-        final band = TournamentEngine.admissibleDepthBand(depth);
+        final band = TournamentEngine.admissibleDepthBand(
+          TournamentEngine.paceStyleFor(depth),
+        );
         expect(
           depth,
           greaterThanOrEqualTo(band.min),

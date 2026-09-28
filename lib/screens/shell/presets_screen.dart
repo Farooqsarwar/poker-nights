@@ -9,6 +9,7 @@ import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
 import '../../models/tournament_preset.dart';
 import '../../providers/app_provider.dart';
+import '../../services/payment_service.dart';
 import '../../utils/mock_data.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
@@ -36,6 +37,15 @@ class PresetsScreen extends StatefulWidget {
 
 class _PresetsScreenState extends State<PresetsScreen> {
   void _editPreset(AppProvider app, TournamentPreset? preset) {
+    // D4: 3 saved templates free, unlimited on Premium. Editing/using an
+    // existing preset is never capped — only creating a new one past the
+    // free limit is.
+    if (preset == null &&
+        app.premiumTier != PremiumTier.premium &&
+        app.presets.length >= PremiumBoundary.freeMaxSavedPresets) {
+      _showPresetLimitPrompt(app);
+      return;
+    }
     showAppModal(
       context: context,
       title: preset == null ? 'New preset' : 'Edit preset',
@@ -49,6 +59,22 @@ class _PresetsScreenState extends State<PresetsScreen> {
           app.savePreset(p);
           Navigator.of(context).pop();
         },
+      ),
+    );
+  }
+
+  void _showPresetLimitPrompt(AppProvider app) {
+    showAppModal(
+      context: context,
+      title: 'Preset limit reached',
+      maxWidth: 560,
+      child: PremiumGate(
+        tier: app.premiumTier,
+        feature: PremiumFeature.savedPresets,
+        blurb: 'Free covers ${PremiumBoundary.freeMaxSavedPresets} saved '
+            'presets. Premium removes the limit — save as many tournament '
+            'setups as you like.',
+        child: const SizedBox.shrink(),
       ),
     );
   }
@@ -135,28 +161,9 @@ class _PresetsScreenState extends State<PresetsScreen> {
     final app = context.watch<AppProvider>();
     final presets = app.presets;
 
-    // Addendum §3 lists saved presets under Premium. Gated as a whole screen
-    // rather than per-control because there is no "basic presets" tier to
-    // fall back to -- you either have a reusable library or you do not.
-    if (!Entitlements.allows(app.premiumTier, PremiumFeature.savedPresets)) {
-      return AppPage(
-        maxWidth: 560,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: AppSpacing.xxl),
-            PremiumGate(
-              tier: app.premiumTier,
-              feature: PremiumFeature.savedPresets,
-              blurb: 'Save a tournament setup once and reuse it every week — '
-                  'buy-in, blinds, rebuys, chips and all.',
-              child: const SizedBox.shrink(),
-            ),
-          ],
-        ),
-      );
-    }
-
+    // D4: 3 saved templates free, unlimited on Premium — the library itself
+    // is never gated. See _editPreset for where the free cap is enforced,
+    // only on creating a new preset past the limit.
     return AppPage(
       maxWidth: 760,
       child: Column(

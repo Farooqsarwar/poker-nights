@@ -101,7 +101,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             child: IconTile(
               icon: Icons.workspace_premium_rounded,
               size: 64,
-              tone: IconTileTone.gold,
+              tone: IconTileTone.primary,
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -136,8 +136,9 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                         Icon(
                           Icons.check_circle,
                           size: 16,
-                          // Green ticks, as drawn: gold is kept for the
-                          // plan price and saving, crimson for the action.
+                          // Green ticks, as drawn: crimson marks the plan
+                          // price and saving, and stays with the action too
+                          // — there is no gold anywhere (no-gold rule).
                           color: AppColors.successText,
                         ),
                         const SizedBox(width: AppSpacing.sm),
@@ -281,7 +282,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                   'Premium',
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: AppColors.gold,
+                    color: AppColors.primaryText,
                   ),
                 ),
               ),
@@ -330,7 +331,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                               Icon(
                                 Icons.auto_awesome,
                                 size: 14,
-                                color: AppColors.gold,
+                                color: AppColors.primary,
                               ),
                               const SizedBox(width: AppSpacing.xs),
                               Expanded(
@@ -419,14 +420,15 @@ class _PlanCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          // Gold marks the value: the chosen plan is outlined and tinted
-          // gold; crimson stays with the commit button.
+          // Crimson marks the value: the chosen plan is outlined and tinted
+          // crimson — never gold (no-gold rule; §A5 #18: "the selected card
+          // has a crimson outline, never gold").
           color: selected
-              ? AppColors.gold.withValues(alpha: 0.08)
+              ? AppColors.primary.withValues(alpha: 0.08)
               : Glass.solidTint(AppColors.secondary),
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(
-            color: selected ? AppColors.gold : AppColors.border,
+            color: selected ? AppColors.primary : AppColors.border,
             width: selected ? 2 : 1,
           ),
         ),
@@ -451,19 +453,15 @@ class _PlanCard extends StatelessWidget {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      // Gold marks the value (the saving); crimson is
-                      // reserved for the commit action.
-                      //
-                      // Note: AppBadge's `gold` variant actually resolves to
-                      // AppColors.primary internally, so a manual container
-                      // is used here to get genuine gold.
-                      color: AppColors.gold,
+                      // Crimson marks the value (the saving) — there is no
+                      // gold anywhere in the design system (no-gold rule).
+                      color: AppColors.primary,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                     child: Text(
                       plan.saving!.toUpperCase(),
                       style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.background,
+                        color: AppColors.primaryForeground,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -476,7 +474,7 @@ class _PlanCard extends StatelessWidget {
               style: AppTypography.display(
                 size: AppFontSizes.xxl,
                 weight: FontWeight.w700,
-                color: selected ? AppColors.gold : null,
+                color: selected ? AppColors.primaryText : null,
               ),
             ),
             Text(

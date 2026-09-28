@@ -180,12 +180,12 @@ class MembersScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Gold is reserved for Premium and first place, so the admin
-              // marker uses the accent rather than the PDF's amber.
+              // No gold anywhere (no-gold rule, B4.9), so the role marker
+              // uses the crimson accent rather than the PDF's amber.
               if (isAdmin)
-                const AppTag('Admin', tone: AppTagTone.primary)
+                const AppTag('Host', tone: AppTagTone.primary)
               else if (isCoAdmin)
-                const AppTag('Co-admin'),
+                const AppTag('Co-host'),
               if (isAdmin || isCoAdmin) const SizedBox(height: AppSpacing.xs),
               Text(
                 '${m.stats.played}G · ${m.stats.wins}W',

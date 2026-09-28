@@ -110,7 +110,7 @@ class StatsScreen extends StatelessWidget {
                 _buildStatCard(
                   label: 'Wins',
                   value: '${user.stats.wins}',
-                  valueColor: AppColors.gold,
+                  valueColor: AppColors.foreground,
                 ),
                 _buildStatCard(
                   label: 'Podium',
@@ -130,7 +130,7 @@ class StatsScreen extends StatelessWidget {
                 _buildStatCard(
                   label: 'Win rate',
                   value: winRate,
-                  valueColor: AppColors.gold,
+                  valueColor: AppColors.foreground,
                 ),
               ],
             ),

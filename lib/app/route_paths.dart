@@ -68,7 +68,7 @@ abstract final class RoutePaths {
 
   static const String invitation = '/invitation';
   static const String checkIn = '/check-in';
-  static const String adminDashboard = '/admin-dashboard';
+  static const String hostDashboard = '/host-dashboard';
   static const String playerLive = '/player-live';
   static const String rebuySettlement = '/rebuy-settlement';
   static const String finalTable = '/final-table';

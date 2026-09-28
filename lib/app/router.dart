@@ -69,12 +69,12 @@ const _publicPaths = {
   RoutePaths.toolQuickBlind,
 };
 
-/// Admin-only routes — non-admins are bounced to invitation (if a game exists)
+/// Host-only routes — non-hosts are bounced to invitation (if a game exists)
 /// or home.
 const _adminPaths = {
   RoutePaths.createTournament,
   RoutePaths.checkIn,
-  RoutePaths.adminDashboard,
+  RoutePaths.hostDashboard,
   RoutePaths.finalTable,
   RoutePaths.rebuySettlement,
   RoutePaths.completeTournament,
@@ -181,7 +181,7 @@ GoRouter buildAppRouter(AppProvider app) {
       return path == RoutePaths.splash ? null : RoutePaths.splash;
     }
 
-    // Admin-only routes: bounce non-admins away before the screen renders.
+    // Host-only routes: bounce non-hosts away before the screen renders.
     if (_adminPaths.contains(path) && !app.isAdmin) {
       return app.currentGame != null ? RoutePaths.invitation : RoutePaths.home;
     }
@@ -203,7 +203,7 @@ GoRouter buildAppRouter(AppProvider app) {
         game != null &&
         game.status.isActiveLive &&
         (path == RoutePaths.structureReview)) {
-      return RoutePaths.adminDashboard;
+      return RoutePaths.hostDashboard;
     }
 
     final guestOk = app.hasGuestSession && _guestAllowed.contains(path);
@@ -460,8 +460,8 @@ GoRouter buildAppRouter(AppProvider app) {
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const CheckInScreen(), path: RoutePaths.checkIn)),
     ),
     GoRoute(
-      path: RoutePaths.adminDashboard,
-      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const AdminDashboardScreen(), path: RoutePaths.adminDashboard)),
+      path: RoutePaths.hostDashboard,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const AdminDashboardScreen(), path: RoutePaths.hostDashboard)),
     ),
     GoRoute(
       path: RoutePaths.playerLive,

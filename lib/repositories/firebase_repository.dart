@@ -1437,7 +1437,7 @@ class FirebaseRepository {
             throw fa.FirebaseException(
               plugin: 'cloud_firestore',
               code: 'aborted',
-              message: 'Another admin is actively editing this game.',
+              message: 'Another host is actively editing this game.',
             );
           }
         }

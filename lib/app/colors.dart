@@ -60,7 +60,6 @@ class AppColors {
   static Color get successSoftBorder => currentPalette.successSoftBorder;
   static Color get warningSoft => currentPalette.warningSoft;
   static Color get warningSoftBorder => currentPalette.warningSoftBorder;
-  static Color get gold => currentPalette.gold;
   static Color get feltGlow => currentPalette.feltGlow;
   static Color get glassOverlay => currentPalette.glassOverlay;
   static Color get hairlineWhite => currentPalette.hairlineWhite;

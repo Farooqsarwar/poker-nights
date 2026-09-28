@@ -1513,7 +1513,7 @@ extension AppProviderTournament on AppProvider {
     _currentGame = game.copyWith(
       structure: _structureWithLevels(game.structure, levels),
     );
-    addAnnouncement('Level structure updated by admin.', false);
+    addAnnouncement('Level structure updated by host.', false);
   }
 
   /// Replaces the future levels (everything from the current level onward)
@@ -1561,7 +1561,7 @@ extension AppProviderTournament on AppProvider {
       'Future levels updated: ${renumbered.length} future level'
           '${renumbered.length == 1 ? '' : 's'} (was ${(game.structure.levels.length - prefix.length).clamp(0, 999)})',
     );
-    addAnnouncement('Level structure updated by admin.', false);
+    addAnnouncement('Level structure updated by host.', false);
   }
 
   /// Inserts one intermediate future level directly after [afterLevel]

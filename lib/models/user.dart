@@ -15,37 +15,42 @@ class UserStats {
   final int knockouts;
 }
 
-enum UserRole { admin, player, guest }
+enum UserRole { host, player, guest }
 
-/// A member's role within a specific group. The owner always has full
-/// Host/Admin authority regardless of this value (tracked separately via
+/// A member's role within a specific group. The owner always has full Host
+/// authority regardless of this value (tracked separately via
 /// `Group.ownerId`). Mirrors the `role` string stored in Firestore
-/// (`member` / `coadmin` / `admin`).
+/// (`member` / `coadmin` / `admin` — the wire format is unchanged so existing
+/// documents keep reading correctly; only the Dart-side names and the
+/// user-facing labels changed. "Admin" is not a role in this app: it is
+/// always host or co-host).
 ///
-/// - [admin]: Host/Admin — full control (members, roles, tournaments,
-///   blinds, table-split settings).
-/// - [coAdmin]: Co-Admin — can add members directly and grant rebuys, but
-///   cannot advance the tournament or touch blinds/seating settings.
+/// - [host]: Host — full control (members, roles, tournaments, blinds,
+///   table-split settings).
+/// - [coHost]: Co-host — can add members directly and grant rebuys, but
+///   cannot advance the tournament or touch blinds/seating settings (D15:
+///   exactly one co-host role, never structure/payouts/organiser
+///   contribution).
 /// - [member]: normal member — chat, polls/RSVP, joins tournaments, sees
 ///   their seat once assigned.
-enum GroupRole { member, coAdmin, admin }
+enum GroupRole { member, coHost, host }
 
 extension GroupRoleStorage on GroupRole {
   String get storageValue => switch (this) {
         GroupRole.member => 'member',
-        GroupRole.coAdmin => 'coadmin',
-        GroupRole.admin => 'admin',
+        GroupRole.coHost => 'coadmin',
+        GroupRole.host => 'admin',
       };
 
   static GroupRole fromStorage(String? value) => switch (value) {
-        'admin' => GroupRole.admin,
-        'coadmin' => GroupRole.coAdmin,
+        'admin' => GroupRole.host,
+        'coadmin' => GroupRole.coHost,
         _ => GroupRole.member,
       };
 
   String get label => switch (this) {
-        GroupRole.admin => 'Admin',
-        GroupRole.coAdmin => 'Co-Admin',
+        GroupRole.host => 'Host',
+        GroupRole.coHost => 'Co-host',
         GroupRole.member => 'Member',
       };
 }
@@ -69,11 +74,11 @@ class AppUser {
   final UserStats stats;
   final List<String> fcmTokens;
 
-  /// True when this membership holds the elevated "Co-Admin" role: can add
+  /// True when this membership holds the elevated "Co-host" role: can add
   /// members directly and grant rebuys, but cannot advance the tournament or
-  /// touch blinds/seating settings (Host/Admin-only). Mutually exclusive
+  /// touch blinds/seating settings (Host-only). Mutually exclusive
   /// with [isAdmin] in practice — a member's group role is one of
-  /// member/coadmin/admin, never more than one at a time.
+  /// member/co-host/host, never more than one at a time.
   final bool isCoAdmin;
 
   String get initials {

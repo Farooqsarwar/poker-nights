@@ -72,7 +72,7 @@ class PaymentLedgerCard extends StatelessWidget {
                 ),
               ),
               Text(
-                'Admin only',
+                'Host only',
                 style: AppTypography.bodyXs.copyWith(
                   color: AppColors.mutedForeground,
                 ),

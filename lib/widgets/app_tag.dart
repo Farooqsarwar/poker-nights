@@ -4,16 +4,17 @@ import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 
-enum AppTagTone { neutral, primary, success, warning, danger, gold }
+enum AppTagTone { neutral, primary, success, warning, danger }
 
 /// Small uppercase, tracked tag — the redesign's feature chips
-/// ("AUTO BLIND STRUCTURE"), status markers ("LIVE", "ADMIN", "OPEN") and
+/// ("AUTO BLIND STRUCTURE"), status markers ("LIVE", "HOST", "OPEN") and
 /// parameter chips ("15 MIN LEVELS").
 ///
 /// Distinct from [AppBadge], which is a sentence-case, fully rounded status
 /// pill. A tag is squarer and set in the eyebrow type.
 ///
-/// [AppTagTone.gold] is reserved for Premium/value and first place.
+/// There is no gold tone: the design system has no gold anywhere. Premium
+/// and first place use [AppTagTone.primary] (crimson) instead.
 class AppTag extends StatelessWidget {
   const AppTag(
     this.label, {
@@ -57,11 +58,6 @@ class AppTag extends StatelessWidget {
         AppColors.destructiveSoft,
         AppColors.destructive.withValues(alpha: 0.30),
         AppColors.destructiveText,
-      ),
-      AppTagTone.gold => (
-        AppColors.gold.withValues(alpha: 0.14),
-        AppColors.gold.withValues(alpha: 0.35),
-        AppColors.gold,
       ),
     };
 

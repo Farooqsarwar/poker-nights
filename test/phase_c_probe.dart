@@ -233,7 +233,7 @@ void main() {
     // does not have; the host view is the renderable one.
     'c4_checkin': (RoutePaths.checkIn, const CheckInScreen(),
         game(LiveGameStatus.checkin, checkedIn: 14), host),
-    'c5_dashboard': (RoutePaths.adminDashboard, const AdminDashboardScreen(),
+    'c5_dashboard': (RoutePaths.hostDashboard, const AdminDashboardScreen(),
         game(LiveGameStatus.running, out: 6), host),
     'c6_rebuy': (RoutePaths.rebuySettlement, const RebuySettlementScreen(),
         game(LiveGameStatus.rebuypause, out: 2), host),

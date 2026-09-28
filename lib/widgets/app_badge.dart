@@ -6,7 +6,7 @@ import '../app/typography.dart';
 import '../responsive/responsive.dart';
 import 'glass_styles.dart';
 
-enum AppBadgeVariant { default_, gold, green, red, muted, accent }
+enum AppBadgeVariant { default_, highlight, green, red, muted, accent }
 
 /// Badge mirroring the web `Badge` component — upgraded with glassmorphism.
 ///
@@ -49,7 +49,7 @@ class AppBadge extends StatelessWidget {
         AppColors.secondaryForeground,
         AppColors.primary,
       ),
-      AppBadgeVariant.gold => (
+      AppBadgeVariant.highlight => (
         AppColors.primary.withValues(alpha: Glass.badgeOpacity),
         AppColors.primary,
         AppColors.primary,

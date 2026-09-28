@@ -2222,7 +2222,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           if (p.reEntries > 0)
                             AppBadge(
                               label: 'Re-entry ×${p.reEntries}',
-                              variant: AppBadgeVariant.gold,
+                              variant: AppBadgeVariant.highlight,
                             ),
                           if (p.hasAddOn)
                             const AppBadge(
@@ -2234,7 +2234,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           if (p.earlyArrivalBonusChips != null)
                             AppBadge(
                               label: 'Early bird +${p.earlyArrivalBonusChips}',
-                              variant: AppBadgeVariant.gold,
+                              variant: AppBadgeVariant.highlight,
                             )
                           else if (p.earlyArrivalBonusEligible)
                             const AppBadge(
@@ -3650,7 +3650,7 @@ class _PrizeTab extends StatelessWidget {
                 const AppAlertBanner(
                   type: AppAlertType.info,
                   message:
-                      'Prize amounts are private — only visible to you as admin.',
+                      'Prize amounts are private — only visible to you as host.',
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Icon(
@@ -3746,7 +3746,7 @@ class _PrizeTab extends StatelessWidget {
               const AppAlertBanner(
                 type: AppAlertType.warning,
                 message:
-                    'Prize amounts are private — only visible to you as admin.',
+                    'Prize amounts are private — only visible to you as host.',
               ),
               const SizedBox(height: AppSpacing.md),
               Row(

@@ -19,7 +19,7 @@ enum JourneyStep {
   invites(route: RoutePaths.invitation),
   checkin(route: RoutePaths.checkIn),
   seating(route: RoutePaths.checkIn),
-  start(route: RoutePaths.adminDashboard);
+  start(route: RoutePaths.hostDashboard);
 
   const JourneyStep({required this.route});
 

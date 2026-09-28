@@ -74,8 +74,8 @@ class ThemePalette {
   // text job.
   //
   // Lifting toward white rather than hardcoding per palette means every
-  // theme — red, crimson, yellow, cosmic, orange — gets a correct variant
-  // from its own hue instead of five hand-tuned constants that drift apart.
+  // theme — red, crimson, cosmic, orange — gets a correct variant from its
+  // own hue instead of four hand-tuned constants that drift apart.
   // 0.40 is the point the default red clears AA on both card and background
   // (5.4:1 and 6.7:1) while still reading as red rather than pink.
   static const double _textLift = 0.40;
@@ -94,7 +94,6 @@ class ThemePalette {
   Color get successSoftBorder => success.withValues(alpha: 0.30);
   Color get warningSoft => warning.withValues(alpha: 0.15);
   Color get warningSoftBorder => warning.withValues(alpha: 0.30);
-  Color get gold => const Color(0xFFFFC107);
   Color get feltGlow => primary.withValues(alpha: 0.04);
   Color get glassOverlay => const Color(0x99000000);
   Color get hairlineWhite => const Color(0x33FFFFFF);
@@ -122,7 +121,7 @@ class ThemePalette {
 
   /// Hues for the redesign's tinted avatars (a soft disc with a coloured
   /// initial). Drawn from the semantic colours so every palette stays in
-  /// key; gold is left out, as it is reserved for first place and Premium.
+  /// key — there is no gold anywhere in the design system (no-gold rule).
   List<Color> get avatarTints => [primary, success, warning, mutedForeground];
 
   Color avatarTintFor(String name) {
@@ -178,7 +177,6 @@ class ThemePalettes {
   static const List<ThemePalette> all = [
     red,
     crimsonGlass,
-    darkYellow,
     cosmicAi,
     darkOrange,
   ];
@@ -265,37 +263,6 @@ class ThemePalettes {
     surfaceHover: Color(0x14FFFFFF), // rgba(255,255,255,0.08)
     icon: Color(0xFFA1A1AA),
     iconMuted: Color(0xFF71717A),
-    destructive: Color(0xFFE53935),
-    destructiveForeground: Color(0xFFFFFFFF),
-    success: Color(0xFF2E7D32),
-    successForeground: Color(0xFFFFFFFF),
-    warning: Color(0xFFE65100),
-    warningForeground: Color(0xFFFFFFFF),
-  );
-
-  // ── 3. Dark Yellow ──────────────────────────────────────────────────────
-  static const darkYellow = ThemePalette(
-    id: 'dark-yellow',
-    name: 'Dark Yellow',
-    primary: Color(0xFFF9A825),
-    onPrimary: Color(0xFF1A1400),
-    primaryHover: Color(0xFFFFC107),
-    background: Color(0xFF080600),
-    foreground: Color(0xFFEFEEE8),
-    card: Color(0xFF161200),
-    cardForeground: Color(0xFFEFEEE8),
-    secondary: Color(0xFF242000),
-    secondaryForeground: Color(0xFFE6E2D8),
-    muted: Color(0xFF120F00),
-    mutedForeground: Color(0xFFBEB49C),
-    accent: Color(0xFFF9A825),
-    accentForeground: Color(0xFF1A1400),
-    border: Color(0xFF383000),
-    ring: Color(0xFFF9A825),
-    onSurfaceHint: Color(0xFFA2977E),
-    surfaceHover: Color(0xFF2A2400),
-    icon: Color(0xFFFFD54F),
-    iconMuted: Color(0xFFFFE082),
     destructive: Color(0xFFE53935),
     destructiveForeground: Color(0xFFFFFFFF),
     success: Color(0xFF2E7D32),

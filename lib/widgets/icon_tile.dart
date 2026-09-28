@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../app/colors.dart';
 import '../app/typography.dart';
 
-/// [IconTileTone.gold] is for Premium only, per the gold rule.
-enum IconTileTone { primary, soft, success, danger, warning, neutral, gold }
+/// There is no gold tone: the design system has no gold anywhere (no-gold
+/// rule). Premium uses [IconTileTone.primary] (crimson) instead.
+enum IconTileTone { primary, soft, success, danger, warning, neutral }
 
 /// Rounded square carrying a glyph, an icon, initials or a small widget —
 /// the redesign's crimson ♠ tile (A6/A7), the group-initials tile (A8), and
@@ -68,15 +69,9 @@ class IconTile extends StatelessWidget {
         AppColors.borderSubtle,
         AppColors.mutedForeground,
       ),
-      IconTileTone.gold => (
-        AppColors.gold,
-        Colors.white.withValues(alpha: 0.18),
-        AppColors.background,
-      ),
     };
-    final showGlow =
-        glow ?? (tone == IconTileTone.primary || tone == IconTileTone.gold);
-    final glowColor = tone == IconTileTone.gold ? AppColors.gold : AppColors.primary;
+    final showGlow = glow ?? (tone == IconTileTone.primary);
+    final glowColor = AppColors.primary;
 
     final Widget content;
     if (child != null) {

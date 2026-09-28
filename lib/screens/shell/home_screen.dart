@@ -276,7 +276,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   message:
                       'Local offline progress detected that is out of sync with the cloud. Would you like to keep the local offline data or revert to cloud?',
                   actionLabel: 'Review Conflict',
-                  onAction: () => context.go(RoutePaths.adminDashboard),
+                  onAction: () => context.go(RoutePaths.hostDashboard),
                 ).animate().fadeIn(duration: 400.ms),
                 const SizedBox(height: AppSpacing.xl),
               ] else if (app.restoredFromRecovery && activeGame != null) ...[
@@ -562,10 +562,10 @@ class _GroupStats extends StatelessWidget {
         const SizedBox(width: 8),
         _MetricCard(value: '$cash', label: 'cash\ngames'),
         const SizedBox(width: 8),
+        // Money is white, not gold (no-gold rule, B4.9).
         _MetricCard(
           value: volumeStr,
           label: 'volume',
-          valueColor: AppColors.gold,
         ),
       ],
       ),
@@ -577,12 +577,10 @@ class _MetricCard extends StatelessWidget {
   const _MetricCard({
     required this.value,
     required this.label,
-    this.valueColor,
   });
 
   final String value;
   final String label;
-  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
@@ -605,7 +603,7 @@ class _MetricCard extends StatelessWidget {
                 style: AppTypography.mono(
                   size: AppFontSizes.xxl,
                   weight: FontWeight.w700,
-                  color: valueColor ?? AppColors.foreground,
+                  color: AppColors.foreground,
                 ),
               ),
             ),

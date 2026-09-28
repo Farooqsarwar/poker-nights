@@ -84,7 +84,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
     if (game == null) {
       // No game in provider — redirect back to a safe screen.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.go(RoutePaths.adminDashboard);
+        if (mounted) context.go(RoutePaths.hostDashboard);
       });
       return const SizedBox.shrink();
     }
@@ -127,7 +127,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
         children: [
           Row(
             children: [
-              AppBackButton(onTap: () => context.go(RoutePaths.adminDashboard)),
+              AppBackButton(onTap: () => context.go(RoutePaths.hostDashboard)),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -288,7 +288,7 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                   );
                 }
                 app.confirmSettlement();
-                context.go(RoutePaths.adminDashboard);
+                context.go(RoutePaths.hostDashboard);
               },
             ),
           ],

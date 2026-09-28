@@ -16,14 +16,12 @@ import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../services/entitlements.dart';
-import '../../services/payment_service.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/event_day_checklist.dart';
 import '../../widgets/journey_progress.dart';
-import '../../widgets/premium_gate.dart';
 import '../../models/payment_record.dart';
 import '../../models/live_game.dart';
 import '../../widgets/dummy_payment_sheet.dart';
@@ -159,7 +157,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
             children: [
               Text(
                 'Register someone who showed up without an RSVP or a guest slot. '
-                'This is an admin override \u2014 the normal guest invite flow is bypassed. '
+                'This is a host override \u2014 the normal guest invite flow is bypassed. '
                 'They are checked in immediately and seated with the next seating generation.',
                 style: AppTypography.bodySm.copyWith(
                   color: AppColors.mutedForeground,
@@ -181,7 +179,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 return const AppAlertBanner(
                   type: AppAlertType.warning,
                   message:
-                      'Admin override: this skips the normal guest slot flow.',
+                      'Host override: this skips the normal guest slot flow.',
                 );
               }),
               const SizedBox(height: AppSpacing.lg),
@@ -664,25 +662,16 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   crossAxisSpacing: AppSpacing.sm,
                   childAspectRatio: 2.4,
                   children: [
-                    // Addendum §3 "advanced table balancing and seating
-                    // controls". PremiumBoundary draws the line: a random
-                    // draw seats a night perfectly well and stays free;
-                    // choosing WHO sits where is the advanced part.
+                    // D4: seating and TDA balancing are part of the free
+                    // tournament engine — never Premium-gated.
                     for (final mode in SeatingMode.values)
-                      PremiumLock(
-                        tier: PremiumBoundary.freeSeatingModes
-                                .contains(mode.name)
-                            ? PremiumTier.premium // never locked
-                            : app.premiumTier,
-                        feature: PremiumFeature.advancedSeating,
-                        child: _SeatingOption(
-                          label: mode.label,
-                          active: _seatingMode == mode,
-                          onTap: () {
-                            setState(() => _seatingMode = mode);
-                            app.generateSeating(mode.tableMode);
-                          },
-                        ),
+                      _SeatingOption(
+                        label: mode.label,
+                        active: _seatingMode == mode,
+                        onTap: () {
+                          setState(() => _seatingMode = mode);
+                          app.generateSeating(mode.tableMode);
+                        },
                       ),
                   ],
                 ),
@@ -980,7 +969,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                           if (!mounted) return;
                           setState(() => _starting = false);
                           if (context.mounted) {
-                            context.go(RoutePaths.adminDashboard);
+                            context.go(RoutePaths.hostDashboard);
                           }
                         }
                       : null,

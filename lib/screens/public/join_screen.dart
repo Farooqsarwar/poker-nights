@@ -175,7 +175,7 @@ class _JoinScreenState extends State<JoinScreen> {
             title: 'Join a game or group',
             subtitle:
                 'Enter an invite code, paste an invite link, or scan a QR '
-                'code from your admin.',
+                'code from your host.',
           ),
           const SizedBox(height: AppSpacing.xl),
           AppCard(

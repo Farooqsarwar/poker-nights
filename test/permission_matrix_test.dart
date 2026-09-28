@@ -9,23 +9,23 @@ import 'package:poker_night/services/permissions.dart';
 /// a subtle difference nobody notices until an organizer deletes a group.
 void main() {
   // §28, exactly as written. Rows are actions, columns Member / Organizer /
-  // Admin. The organizer column is evaluated for their ASSIGNED game.
-  const matrix = <Capability, ({bool member, bool organizer, bool admin})>{
-    Capability.viewGroup: (member: true, organizer: true, admin: true),
-    Capability.chatAndPolls: (member: true, organizer: true, admin: true),
-    Capability.createEvent: (member: true, organizer: true, admin: true),
-    Capability.rsvpOwnGuests: (member: true, organizer: true, admin: true),
-    Capability.approveMembership: (member: false, organizer: false, admin: true),
-    Capability.editGroupSettings: (member: false, organizer: false, admin: true),
-    Capability.manageAdmins: (member: false, organizer: false, admin: true),
-    Capability.runThisTournament: (member: false, organizer: true, admin: true),
+  // Host. The organizer column is evaluated for their ASSIGNED game.
+  const matrix = <Capability, ({bool member, bool organizer, bool host})>{
+    Capability.viewGroup: (member: true, organizer: true, host: true),
+    Capability.chatAndPolls: (member: true, organizer: true, host: true),
+    Capability.createEvent: (member: true, organizer: true, host: true),
+    Capability.rsvpOwnGuests: (member: true, organizer: true, host: true),
+    Capability.approveMembership: (member: false, organizer: false, host: true),
+    Capability.editGroupSettings: (member: false, organizer: false, host: true),
+    Capability.manageHosts: (member: false, organizer: false, host: true),
+    Capability.runThisTournament: (member: false, organizer: true, host: true),
     Capability.runOtherTournaments:
-        (member: false, organizer: false, admin: true),
-    Capability.rebuyAddOnOps: (member: false, organizer: true, admin: true),
-    Capability.seatingRebalance: (member: false, organizer: true, admin: true),
+        (member: false, organizer: false, host: true),
+    Capability.rebuyAddOnOps: (member: false, organizer: true, host: true),
+    Capability.seatingRebalance: (member: false, organizer: true, host: true),
     Capability.viewPrivateFinancials:
-        (member: false, organizer: true, admin: true),
-    Capability.deleteGroup: (member: false, organizer: false, admin: true),
+        (member: false, organizer: true, host: true),
+    Capability.deleteGroup: (member: false, organizer: false, host: true),
   };
 
   group('§28 — every cell of the permission matrix', () {
@@ -43,8 +43,8 @@ void main() {
         );
       });
 
-      test('$name — admin', () {
-        expect(Permissions.can(capability, Actor.admin), expected.admin);
+      test('$name — host', () {
+        expect(Permissions.can(capability, Actor.host), expected.host);
       });
     });
 
@@ -71,10 +71,10 @@ void main() {
       }
     });
 
-    test('an admin keeps everything in every game', () {
+    test('a host keeps everything in every game', () {
       for (final c in Capability.values) {
         expect(
-          Permissions.can(c, Actor.admin, isAssignedGame: false),
+          Permissions.can(c, Actor.host, isAssignedGame: false),
           isTrue,
           reason: c.name,
         );
@@ -85,7 +85,7 @@ void main() {
       for (final c in [
         Capability.approveMembership,
         Capability.editGroupSettings,
-        Capability.manageAdmins,
+        Capability.manageHosts,
         Capability.deleteGroup,
         Capability.runOtherTournaments,
       ]) {

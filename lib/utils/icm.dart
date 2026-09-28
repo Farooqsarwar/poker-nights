@@ -1,27 +1,44 @@
 import 'dart:math' as math;
 
 /// Independent Chip Model (§2's public ICM Calculator, §3's "Advanced
-/// payout/ICM").
+/// payout/ICM"; build spec §F2.5).
 ///
 /// ICM answers the question every chop argument is really about: *what is my
 /// stack worth in money, right now?* Chips are not money — a player with half
 /// the chips does not win half the prize pool, because they can still bust.
 ///
-/// The model is the standard one: a player's equity is the sum, over every
-/// finishing position, of the probability they finish there multiplied by that
-/// position's prize. The probability of finishing first is your share of the
-/// chips in play; the probability of finishing second is the chance somebody
-/// else wins and then you win what remains, and so on.
+/// The model is Malmuth–Harville: P(i finishes 1st) = stackᵢ / total, then the
+/// same question recurses for 2nd among whoever is left, and so on down to the
+/// last paid place. That recursion revisits the same "who is already placed"
+/// state through every order that reaches it — naive top-down recursion does
+/// this once per permutation (factorial blow-up); this implementation instead
+/// keeps a **frontier**: a map from the bitmask of players already placed to
+/// the total probability of reaching that mask, merging every path that lands
+/// on the same mask. The number of distinct masks visited while resolving `P`
+/// paid places among `n` players is `Σ_{k<P} C(n,k)` — the spec's own count
+/// (10 players, 3 paid → 56 states) — which is what makes the exact model
+/// tractable far past a nine-player final table.
 ///
-/// That recursion is exact and factorial in the number of players, which is
-/// fine for a final table — nine players is the realistic ceiling, and that is
-/// the only place anybody actually needs ICM. Beyond [maxExactPlayers] the
-/// recursion is capped and the remaining places are shared proportionally,
-/// because a 45-second wait to settle a chop is worse than a rounding error
-/// nobody can perceive.
+/// Above [maxStates] frontier entries the exact walk is abandoned for a
+/// seeded Monte-Carlo sample: 200,000 stack-weighted finishing orders drawn
+/// with a Park–Miller generator, so the same seed reproduces the same answer
+/// on every device (spec §F2.5).
 abstract final class Icm {
-  /// Above this, the exact recursion is abandoned for a proportional split.
+  /// Kept for the UI's own "large field" hint (the ICM calculator's add-player
+  /// cap and its "this is an estimate" copy). The real exact/Monte-Carlo
+  /// boundary is decided per call from the actual DP state count, not from a
+  /// fixed player count — see [maxStates].
   static const int maxExactPlayers = 9;
+
+  /// Above this many DP frontier states, [equity] falls back to Monte Carlo.
+  static const int maxStates = 2000000;
+
+  /// Finishing orders sampled by the Monte-Carlo fallback.
+  static const int monteCarloSamples = 200000;
+
+  /// Default Park–Miller seed. Fixed (not random) so the same inputs produce
+  /// the same equities on every device, as the spec requires.
+  static const int defaultSeed = 1;
 
   /// Each player's equity, in the same order as [stacks].
   ///
@@ -31,95 +48,215 @@ abstract final class Icm {
   static List<double> equity({
     required List<int> stacks,
     required List<int> payouts,
-  }) {
-    final live = stacks.where((s) => s > 0).length;
-    if (stacks.isEmpty || payouts.isEmpty || live == 0) {
-      return List<double>.filled(stacks.length, 0);
-    }
+  }) =>
+      compute(stacks: stacks, payouts: payouts).equity;
 
-    // One prize and one player left: no model needed.
-    if (payouts.length == 1 && live == 1) {
-      return [
-        for (final s in stacks) s > 0 ? payouts.first.toDouble() : 0.0,
-      ];
-    }
-
-    if (stacks.length > maxExactPlayers) {
-      return _proportional(stacks: stacks, payouts: payouts);
-    }
-
-    final total = stacks.fold<int>(0, (a, s) => a + s);
-    if (total <= 0) return List<double>.filled(stacks.length, 0);
-
-    final equities = List<double>.filled(stacks.length, 0);
-    _accumulate(
-      stacks: stacks.map((s) => s.toDouble()).toList(),
-      payouts: payouts,
-      place: 0,
-      probability: 1,
-      taken: List<bool>.filled(stacks.length, false),
-      into: equities,
-    );
-    return equities;
-  }
-
-  /// Walks the finishing orders, adding each one's contribution.
-  ///
-  /// [probability] is the chance of reaching this branch; [place] is the
-  /// position about to be filled. The recursion stops once every prize is
-  /// allocated — positions below the money contribute nothing, so enumerating
-  /// them would be work for no answer.
-  static void _accumulate({
-    required List<double> stacks,
-    required List<int> payouts,
-    required int place,
-    required double probability,
-    required List<bool> taken,
-    required List<double> into,
-  }) {
-    if (place >= payouts.length || probability <= 0) return;
-
-    var remaining = 0.0;
-    for (var i = 0; i < stacks.length; i++) {
-      if (!taken[i]) remaining += stacks[i];
-    }
-    if (remaining <= 0) return;
-
-    for (var i = 0; i < stacks.length; i++) {
-      if (taken[i] || stacks[i] <= 0) continue;
-      // Chance this player takes THIS place, given who is already placed.
-      final p = probability * (stacks[i] / remaining);
-      into[i] += p * payouts[place];
-
-      taken[i] = true;
-      _accumulate(
-        stacks: stacks,
-        payouts: payouts,
-        place: place + 1,
-        probability: p,
-        taken: taken,
-        into: into,
-      );
-      taken[i] = false;
-    }
-  }
-
-  /// Fallback for fields too large to enumerate.
-  ///
-  /// Deliberately crude and deliberately labelled: it splits the pool by chip
-  /// share, which is what ICM exists to correct. It only applies above nine
-  /// players, where nobody is settling a chop anyway.
-  static List<double> _proportional({
+  /// As [equity], but also reports which model produced the numbers
+  /// (`'exact'` or `'montecarlo'`) — the build spec's `result.method`.
+  static IcmResult compute({
     required List<int> stacks,
     required List<int> payouts,
+    int seed = defaultSeed,
   }) {
-    final total = stacks.fold<int>(0, (a, s) => a + s);
-    final pool = payouts.fold<int>(0, (a, p) => a + p);
-    if (total <= 0) return List<double>.filled(stacks.length, 0);
-    return [for (final s in stacks) pool * (s / total)];
+    final n = stacks.length;
+    final equities = List<double>.filled(n, 0);
+    if (n == 0 || payouts.isEmpty) {
+      return IcmResult(equities, 'exact');
+    }
+
+    // Zero stacks (busted this hand) take the bottom places, split equally
+    // (§F2.5). Everyone else plays the standard model among themselves for
+    // the places that remain once the busted players' bottom places are set
+    // aside.
+    final live = <int>[];
+    final busted = <int>[];
+    for (var i = 0; i < n; i++) {
+      if (stacks[i] > 0) {
+        live.add(i);
+      } else {
+        busted.add(i);
+      }
+    }
+
+    final m = live.length;
+    final paid = payouts.length;
+    final rounds = math.min(paid, m);
+
+    if (m == 0) {
+      // Nobody has live chips: split every paid place equally — there is no
+      // stack to weigh anybody's chance by.
+      if (n == 0) return IcmResult(equities, 'exact');
+      final total = payouts.fold<double>(0, (a, p) => a + p);
+      final share = total / n;
+      for (var i = 0; i < n; i++) {
+        equities[i] = share;
+      }
+      return IcmResult(equities, 'exact');
+    }
+
+    if (rounds > 0) {
+      final liveStacks = [for (final i in live) stacks[i].toDouble()];
+      final totalLive = liveStacks.fold<double>(0, (a, b) => a + b);
+
+      final states = _frontierStates(m, rounds);
+      final method = (states <= maxStates && m <= 30)
+          ? _exactDp(
+              liveStacks: liveStacks,
+              liveOriginalIndex: live,
+              payouts: payouts,
+              rounds: rounds,
+              totalLive: totalLive,
+              into: equities,
+            )
+          : _monteCarlo(
+              liveStacks: liveStacks,
+              liveOriginalIndex: live,
+              payouts: payouts,
+              rounds: rounds,
+              totalLive: totalLive,
+              seed: seed,
+              into: equities,
+            );
+
+      if (busted.isNotEmpty && paid > m) {
+        var leftover = 0.0;
+        for (var k = m; k < paid; k++) {
+          leftover += payouts[k];
+        }
+        final share = leftover / busted.length;
+        for (final i in busted) {
+          equities[i] += share;
+        }
+      }
+      return IcmResult(equities, method);
+    }
+
+    return IcmResult(equities, 'exact');
   }
 
-  /// Whether [stacks] is small enough for the exact model.
+  /// `Σ_{k<rounds} C(m,k)` — the number of distinct "who is already placed"
+  /// bitmasks the exact DP visits. Stops counting (and reports a value beyond
+  /// [maxStates]) the moment the running total already overflows it, so a
+  /// huge `m` never spends time computing binomial coefficients nobody needs.
+  static int _frontierStates(int m, int rounds) {
+    var states = 0;
+    for (var k = 0; k < rounds; k++) {
+      final c = _choose(m, k);
+      states += c;
+      if (states > maxStates) return states;
+    }
+    return states;
+  }
+
+  static int _choose(int n, int k) {
+    if (k < 0 || k > n) return 0;
+    if (k == 0 || k == n) return 1;
+    final kk = math.min(k, n - k);
+    var result = 1;
+    for (var i = 0; i < kk; i++) {
+      result = result * (n - i) ~/ (i + 1);
+    }
+    return result;
+  }
+
+  /// The exact bitmask-frontier DP described at the top of this file.
+  ///
+  /// `frontier` maps a bitmask of already-placed live players to the summed
+  /// probability of every order that reaches that exact set — this merge is
+  /// what turns a factorial recursion into `Σ C(m,k)` states. Verified against
+  /// the build spec's own hand-worked trace: `icm([8000,5000,2000],[250,150,
+  /// 100])` must equal 197.44 / 171.61 / 130.95 — it does.
+  static String _exactDp({
+    required List<double> liveStacks,
+    required List<int> liveOriginalIndex,
+    required List<int> payouts,
+    required int rounds,
+    required double totalLive,
+    required List<double> into,
+  }) {
+    final m = liveStacks.length;
+    var frontier = <int, double>{0: 1.0};
+
+    for (var round = 0; round < rounds; round++) {
+      final prize = payouts[round].toDouble();
+      final next = <int, double>{};
+
+      for (final entry in frontier.entries) {
+        final mask = entry.key;
+        final prob = entry.value;
+
+        var taken = 0.0;
+        for (var b = 0; b < m; b++) {
+          if ((mask & (1 << b)) != 0) taken += liveStacks[b];
+        }
+        final remaining = totalLive - taken;
+        if (remaining <= 0) continue;
+
+        for (var b = 0; b < m; b++) {
+          if ((mask & (1 << b)) != 0) continue;
+          final p = prob * (liveStacks[b] / remaining);
+          into[liveOriginalIndex[b]] += p * prize;
+
+          if (round < rounds - 1) {
+            final newMask = mask | (1 << b);
+            next[newMask] = (next[newMask] ?? 0) + p;
+          }
+        }
+      }
+      frontier = next;
+    }
+    return 'exact';
+  }
+
+  /// 200,000 stack-weighted finishing orders, seeded with Park–Miller
+  /// (`s = s × 16807 mod (2³¹ − 1)`) so the same seed always gives the same
+  /// answer. Used only once the exact frontier would exceed [maxStates].
+  static String _monteCarlo({
+    required List<double> liveStacks,
+    required List<int> liveOriginalIndex,
+    required List<int> payouts,
+    required int rounds,
+    required double totalLive,
+    required int seed,
+    required List<double> into,
+  }) {
+    final m = liveStacks.length;
+    final rng = _ParkMiller(seed);
+    final accum = List<double>.filled(m, 0);
+
+    for (var s = 0; s < monteCarloSamples; s++) {
+      final pool = List<int>.generate(m, (i) => i);
+      final stackPool = [...liveStacks];
+      var remainingTotal = totalLive;
+
+      for (var place = 0; place < rounds; place++) {
+        final r = rng.nextDouble() * remainingTotal;
+        var cumulative = 0.0;
+        var chosen = stackPool.length - 1;
+        for (var k = 0; k < stackPool.length; k++) {
+          cumulative += stackPool[k];
+          if (r < cumulative) {
+            chosen = k;
+            break;
+          }
+        }
+        accum[pool[chosen]] += payouts[place].toDouble();
+        remainingTotal -= stackPool[chosen];
+        pool.removeAt(chosen);
+        stackPool.removeAt(chosen);
+      }
+    }
+
+    for (var b = 0; b < m; b++) {
+      into[liveOriginalIndex[b]] = accum[b] / monteCarloSamples;
+    }
+    return 'montecarlo';
+  }
+
+  /// Whether [stacks] is small enough that the UI can promise the exact
+  /// model. Decorative only (drives the ICM calculator's "add player" cap and
+  /// its estimate warning) — the actual per-call decision is state-count
+  /// based, see [compute].
   static bool isExact(List<int> stacks) => stacks.length <= maxExactPlayers;
 
   /// Rounds equities to whole units while preserving the total exactly.
@@ -157,5 +294,34 @@ abstract final class Icm {
       if (i > equities.length * math.max(1, total)) break;
     }
     return floors;
+  }
+}
+
+/// [Icm.compute]'s result: the equities plus which model produced them.
+class IcmResult {
+  const IcmResult(this.equity, this.method);
+
+  /// Each player's equity, same order as the `stacks` passed in.
+  final List<double> equity;
+
+  /// `'exact'` (bitmask DP) or `'montecarlo'` (seeded sample fallback).
+  final String method;
+}
+
+/// Park–Miller minimal-standard PRNG: `s = s × 16807 mod (2³¹ − 1)`. Seeded
+/// and deterministic — the same seed produces the same stream everywhere,
+/// which is the whole point of using it instead of `dart:math`'s `Random`.
+class _ParkMiller {
+  _ParkMiller(int seed) : _state = seed <= 0 ? 1 : (seed % 2147483647);
+
+  int _state;
+
+  static const int _multiplier = 16807;
+  static const int _modulus = 2147483647; // 2^31 - 1
+
+  /// Next uniform value in `[0, 1)`.
+  double nextDouble() {
+    _state = (_state * _multiplier) % _modulus;
+    return _state / _modulus;
   }
 }

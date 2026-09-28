@@ -101,7 +101,8 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
   int get _totalValue => _chips.fold(0, (sum, c) => sum + c.value * c.quantity);
 
   void _addChip() {
-    final newChip = _mode == _EditorMode.quick && _quickKind == _QuickKind.unnumbered
+    final newChip =
+        _mode == _EditorMode.quick && _quickKind == _QuickKind.unnumbered
         ? const ChipColor(
             color: 'White',
             hex: 0xFFE8E4D9,
@@ -170,7 +171,8 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
                   color: inputName.isEmpty ? hexName : inputName,
                   hex: pickerColor.toARGB32(),
                 );
-                if (_mode == _EditorMode.quick && _quickKind == _QuickKind.unnumbered) {
+                if (_mode == _EditorMode.quick &&
+                    _quickKind == _QuickKind.unnumbered) {
                   _reRecommend();
                 }
               });
@@ -484,15 +486,15 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: _chips.length,
-      // `onReorderItem`, not the deprecated `onReorder`: it hands back a
-      // newIndex already adjusted for the item being removed at oldIndex,
-      // which is what the body below assumes. Under `onReorder` the index is
-      // the one *before* removal, so dragging a chip downward dropped it one
-      // slot past where it was released.
-      onReorderItem: (oldIndex, newIndex) {
+      // `onReorder` reports newIndex as it stood *before* the dragged item is
+      // removed, so a downward drag lands one slot past where it was released
+      // unless the index is decremented first. There is no variant of this
+      // callback that adjusts for us — the `target` line below is the fix.
+      onReorder: (oldIndex, newIndex) {
         setState(() {
+          final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
           final chip = _chips.removeAt(oldIndex);
-          _chips.insert(newIndex, chip);
+          _chips.insert(target, chip);
           _reRecommend();
         });
       },

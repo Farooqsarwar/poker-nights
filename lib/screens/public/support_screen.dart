@@ -35,10 +35,11 @@ class SupportScreen extends StatelessWidget {
           'top-ups, and settle up at the end of the night.',
     ),
     (
-      q: 'How are results kept private?',
+      q: 'Who can see the prize pool and payouts?',
       a:
-          'Prize amounts and the full results table are only shown to the tournament '
-          'host. Players see their position without anyone else\'s payouts.',
+          'Everyone can — players, guests and the TV all see the prize pool and '
+          'the full payout table. The only figure kept private is the host\'s '
+          'organiser contribution.',
     ),
     (
       q: 'I found a bug. What do I do?',

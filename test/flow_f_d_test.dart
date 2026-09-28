@@ -176,13 +176,27 @@ void main() {
       expect(find.text('Account and group preferences'), findsOneWidget);
       expect(find.text('GAMEPLAY'), findsOneWidget);
       expect(find.text('Voice announcements'), findsOneWidget);
-      expect(find.text('Admin app tour'), findsOneWidget);
       expect(find.text('Push notifications'), findsOneWidget);
       expect(find.text('Compact results'), findsOneWidget);
       expect(find.text('GAME ASSETS'), findsOneWidget);
       expect(find.text('Chip sets'), findsOneWidget);
       expect(find.text('Default chip set'), findsOneWidget);
       expect(find.text('Sign out'), findsOneWidget);
+
+      // Addendum 2 correction 5: the hosting tour is not in v1. No screen or
+      // behaviour defined it, so the row, its preference and its dashboard
+      // card were removed rather than reworded.
+      expect(find.text('Admin app tour'), findsNothing);
+      expect(find.text('Host app tour'), findsNothing);
+
+      // §F2 DATA.
+      expect(find.text('DATA'), findsOneWidget);
+      expect(
+        find.text('Keep my game history to improve structures'),
+        findsOneWidget,
+      );
+      expect(find.text('Export my data'), findsOneWidget);
+      expect(find.text('Delete account'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
     },

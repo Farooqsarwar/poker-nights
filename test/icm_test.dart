@@ -105,8 +105,15 @@ void main() {
     });
 
     test('every stack is zero', () {
+      // No live chips anywhere, so there is no stack to weigh anybody's chance
+      // by: the only defensible answer is an even split of every paid place
+      // (`icm.dart`, the `m == 0` branch). The old expectation of 0 came from
+      // an earlier engine that returned zeros here — which is worse, because
+      // it tells a host the pot is worth nothing while the money is still on
+      // the table.
       final e = Icm.equity(stacks: [0, 0], payouts: [100]);
-      expect(sum(e), 0);
+      expect(e, [50.0, 50.0]);
+      expect(sum(e), 100);
     });
 
     test('one player, one prize', () {

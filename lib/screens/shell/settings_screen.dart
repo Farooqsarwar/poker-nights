@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../app/colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +12,7 @@ import '../../theme/theme_palette.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/back_nav_button.dart';
+import '../../widgets/delete_account_flow.dart';
 
 /// Settings screen matching F2_Settings mobile-first design.
 class SettingsScreen extends StatelessWidget {
@@ -160,15 +162,6 @@ class SettingsScreen extends StatelessWidget {
                   trailing: AppToggle(
                     value: app.voiceEnabled,
                     onChanged: (v) => app.setVoiceEnabled(v),
-                  ),
-                  showDivider: true,
-                ),
-                _buildSettingRow(
-                  title: 'Host app tour',
-                  subtitle: 'Step-by-step guidance during tournaments',
-                  trailing: AppToggle(
-                    value: app.showAppTour,
-                    onChanged: (v) => app.setAppTour(v),
                   ),
                   showDivider: true,
                 ),
@@ -338,6 +331,62 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
+          // DATA Section (§F2 DATA)
+          Text(
+            'DATA',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: Column(
+              children: [
+                _buildSettingRow(
+                  title: 'Keep my game history to improve structures',
+                  subtitle:
+                      'Lets pace and finish-time forecasts learn from your real '
+                      'nights. Each group can opt out separately.',
+                  trailing: AppToggle(
+                    value: app.keepHistoryForStructures,
+                    onChanged: (v) => app.setKeepHistoryForStructures(v),
+                  ),
+                  showDivider: true,
+                ),
+                _buildSettingRow(
+                  title: 'Export my data',
+                  subtitle: 'Copy everything this account owns as JSON',
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    color: AppColors.onSurfaceHint,
+                    size: 20,
+                  ),
+                  onTap: () => _exportMyData(context, app),
+                  showDivider: true,
+                ),
+                _buildSettingRow(
+                  title: 'Delete account',
+                  subtitle: 'Permanently remove your account and all data',
+                  trailing: Icon(
+                    Icons.delete_outline,
+                    color: AppColors.destructiveText,
+                    size: 20,
+                  ),
+                  onTap: () => confirmDeleteAccount(context, app),
+                  showDivider: false,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // Sign out card button (F2 design)
           InkWell(
             onTap: () => _confirmSignOut(context, app),
@@ -371,6 +420,65 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  /// §F2 DATA — "Export my data".
+  ///
+  /// Copies the export to the clipboard rather than writing a file: the app
+  /// ships no file-download or share dependency, and a `data:` URL behaves
+  /// differently on web, iOS and Android. The clipboard works identically
+  /// everywhere, so the user gets their data in one tap on every platform.
+  /// The JSON is shown as well, so nobody has to paste it somewhere to find
+  /// out what they just copied.
+  void _exportMyData(BuildContext context, AppProvider app) {
+    final json = app.exportMyData();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Your data'),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              json,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(
+              'Close',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(dialogContext);
+              await Clipboard.setData(ClipboardData(text: json));
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Your data was copied.')),
+              );
+              if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+            },
+            child: Text(
+              'Copy',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.primaryText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -143,13 +143,11 @@ extension AppProviderAuth on AppProvider {
       final prefs = await _repo.loadUserPrefs(uid);
       final voice = prefs['voiceEnabled'];
       if (voice is bool) _voiceEnabled = voice;
-      final showTour = prefs['showAppTour'];
-      if (showTour is bool) {
-        _showAppTour = showTour;
-      } else {
-        _showAppTour = true;
-        _persistPref('showAppTour', true);
-      }
+      // D9 consent. Absent means never answered, which is a "no" — the
+      // sign-up checkbox is unchecked by default, so an unset preference must
+      // not read as consent.
+      final keepHistory = prefs['keepHistoryForStructures'];
+      _keepHistoryForStructures = keepHistory is bool && keepHistory;
       final savedPendingCheckIn = prefs['pendingCheckIn'];
       if (savedPendingCheckIn is Map) {
         _pendingCheckIn.addAll(savedPendingCheckIn.cast<String, String>());

@@ -140,7 +140,15 @@ void main() {
 
     test('production builds can switch the demo grant off', () {
       final source = read('lib/providers/app_provider.dart');
-      expect(source, contains("bool.fromEnvironment('DEMO_PREMIUM'"));
+      // Whitespace-tolerant: `dart format` wraps this call across two lines
+      // once the declaration grows, and a literal substring match then fails
+      // on a purely cosmetic change. What matters is that the flag is read
+      // from the environment at all, not how it is laid out.
+      expect(
+        RegExp(r"bool\.fromEnvironment\(\s*'DEMO_PREMIUM'").hasMatch(source),
+        isTrue,
+        reason: 'the demo grant must be switchable at build time',
+      );
     });
 
     test('the deploy script makes a deliberate, documented choice', () {

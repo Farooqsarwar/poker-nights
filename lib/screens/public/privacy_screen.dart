@@ -31,9 +31,10 @@ class PrivacyScreen extends StatelessWidget {
       title: '3. Groups and sharing',
       body:
           'When you join or create a group, members of that group can see the details of '
-          'games hosted within it, including your name, results, and standing. Results '
-          'and prize information for a tournament are visible only to the tournament '
-          'host unless the host opts to publish them.',
+          'games hosted within it, including your name, results, and standing. The prize '
+          'pool and the payouts for a tournament are visible to everyone in the game — '
+          'players, guests and anyone watching the TV view. The only figure kept private '
+          'is the host\'s organiser contribution.',
     ),
     (
       title: '4. Data you can control',

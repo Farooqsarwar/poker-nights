@@ -11,6 +11,7 @@ import '../../utils/formatters.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/delete_account_flow.dart';
 import '../../widgets/squircle_icon_button.dart';
 
 /// User profile redesign matching F1_Profile mobile-first design.
@@ -263,7 +264,9 @@ class ProfileScreen extends StatelessWidget {
             runSpacing: 10,
             children: [
               _buildAchievementPill(
-                emoji: '🏆',
+                // Material's name for the trophy glyph is a misnomer — it is a
+                // vector icon from the icon set, not an emoji character.
+                icon: Icons.emoji_events_outlined,
                 title: 'FIRST WIN',
                 // Crimson, not gold (no-gold rule, B4.9): "a headline pool
                 // or win may be crimson" — exactly this case.
@@ -273,7 +276,7 @@ class ProfileScreen extends StatelessWidget {
                 active: lifetime.wins >= 1,
               ),
               _buildAchievementPill(
-                emoji: '🔥',
+                icon: Icons.local_fire_department_outlined,
                 title: '3 IN A ROW',
                 bgColor: AppColors.primarySoft,
                 borderColor: AppColors.primarySoftBorder,
@@ -281,7 +284,7 @@ class ProfileScreen extends StatelessWidget {
                 active: achievements.any((a) => a.contains('3 IN A ROW')),
               ),
               _buildAchievementPill(
-                emoji: '💰',
+                icon: Icons.payments_outlined,
                 title: '\$1K NIGHT',
                 bgColor: AppColors.successSoft,
                 borderColor: AppColors.successSoftBorder,
@@ -328,7 +331,7 @@ class ProfileScreen extends StatelessWidget {
                   subtitle: 'Permanently remove your account and all data',
                   textColor: AppColors.destructiveText,
                   iconColor: AppColors.destructiveText,
-                  onTap: () => _confirmDeleteAccount(context, app),
+                  onTap: () => confirmDeleteAccount(context, app),
                   showDivider: false,
                 ),
               ],
@@ -382,7 +385,7 @@ class ProfileScreen extends StatelessWidget {
   }
 
   static Widget _buildAchievementPill({
-    required String emoji,
+    required IconData icon,
     required String title,
     required Color bgColor,
     required Color borderColor,
@@ -401,7 +404,11 @@ class ProfileScreen extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 14)),
+            // §B4 rule 1: no emoji anywhere, not as icons and not in copy.
+            // §A5 #6 says the board's emoji achievement chips are rebuilt with
+            // icons from the app's icon set. Takes the title's colour, so the
+            // pill's palette is unchanged.
+            Icon(icon, size: 14, color: textColor),
             const SizedBox(width: 6),
             Text(
               title,
@@ -513,7 +520,7 @@ class ProfileScreen extends StatelessWidget {
 
   List<String> _achievements(AppProvider app, String? userId, int wins) {
     final earned = <String>[];
-    if (wins >= 1) earned.add('🏆  FIRST WIN');
+    if (wins >= 1) earned.add('FIRST WIN');
 
     var streak = 0, best = 0;
     for (final g in app.groups) {
@@ -527,7 +534,7 @@ class ProfileScreen extends StatelessWidget {
         }
       }
     }
-    if (best >= 3) earned.add('🔥  3 IN A ROW');
+    if (best >= 3) earned.add('3 IN A ROW');
 
     var biggestPrize = 0;
     for (final g in app.groups) {
@@ -541,7 +548,7 @@ class ProfileScreen extends StatelessWidget {
         if (prize > biggestPrize) biggestPrize = prize;
       }
     }
-    if (biggestPrize >= 1000) earned.add('💰  \$1K NIGHT');
+    if (biggestPrize >= 1000) earned.add('\$1K NIGHT');
     return earned;
   }
 
@@ -627,118 +634,6 @@ class ProfileScreen extends StatelessWidget {
             child: Text(
               'Save',
               style: AppTypography.bodySm.copyWith(color: AppColors.primary),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _confirmDeleteAccount(
-    BuildContext context,
-    AppProvider app,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final router = GoRouter.of(context);
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: const Text('Delete account?'),
-        content: Text(
-          'This permanently removes your account and invalidates any live '
-          'session. This cannot be undone.',
-          style: AppTypography.bodySm.copyWith(
-            color: AppColors.mutedForeground,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(
-              'Cancel',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(
-              'Yes, delete my account',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructiveText,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    String? password;
-    if (app.deleteNeedsPassword) {
-      if (!context.mounted) return;
-      password = await _askPassword(context);
-      if (password == null) return;
-    }
-
-    final error = await app.deleteAccount(password: password);
-    if (error != null) {
-      messenger.showSnackBar(SnackBar(content: Text(error)));
-      return;
-    }
-    router.go(RoutePaths.landing);
-  }
-
-  Future<String?> _askPassword(BuildContext context) {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: const Text('Confirm your password'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'For security, please re-enter your password to delete your '
-              'account.',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: controller,
-              obscureText: true,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Password'),
-              onSubmitted: (v) => Navigator.of(dialogContext).pop(v),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(
-              'Cancel',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: Text(
-              'Delete account',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.destructiveText,
-                fontWeight: FontWeight.w600,
-              ),
             ),
           ),
         ],

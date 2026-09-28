@@ -696,6 +696,55 @@ extension AppProviderUserData on AppProvider {
     }
   }
 
+  /// §F2 DATA — "Export my data". Gathers everything this account owns that
+  /// the app holds, as indented JSON.
+  ///
+  /// Scope is deliberately the user's OWN data: their profile, their lifetime
+  /// stats, their saved chip sets and presets, their preferences, and the
+  /// identity of the groups they belong to. It does **not** include other
+  /// members, group chat, or anyone else's results — those are other people's
+  /// data that happen to be visible to this user, which is not the same thing
+  /// as theirs to export.
+  String exportMyData() {
+    final u = _user;
+    return const JsonEncoder.withIndent('  ').convert({
+      'exportedAt': DateTime.now().toUtc().toIso8601String(),
+      'account': u == null
+          ? null
+          : {
+              'id': u.id,
+              'name': u.name,
+              'email': u.email,
+              'stats': {
+                'played': u.stats.played,
+                'wins': u.stats.wins,
+                'podium': u.stats.podium,
+                'avgFinish': u.stats.avgFinish,
+                'knockouts': u.stats.knockouts,
+              },
+            },
+      'preferences': {
+        'voiceEnabled': _voiceEnabled,
+        'notificationsEnabled': _notificationsEnabled,
+        'keepHistoryForStructures': _keepHistoryForStructures,
+      },
+      // Membership only — not the other members, and not the group's games.
+      'groups': [
+        for (final g in _groups)
+          {'id': g.id, 'name': g.name, 'isOwner': g.ownerId == u?.id},
+      ],
+      'chipSets': [
+        for (final s in savedChipSets)
+          {
+            'id': s.id,
+            'name': s.name,
+            'chips': s.chips.map(chipColorToMap).toList(),
+          },
+      ],
+      'presets': _presets.map(tournamentPresetToMap).toList(),
+    });
+  }
+
   List<TournamentPreset> get presets => List.unmodifiable(_presets);
 
   TournamentPreset? presetById(String? id) {

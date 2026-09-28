@@ -820,7 +820,10 @@ class AppProvider extends ChangeNotifier {
   // ── Voice & misc ───────────────────────────────────────────────────────────
   bool _voiceEnabled = true;
 
-  bool _showAppTour = true;
+  /// D9 consent (§F2 DATA, A4 decision D9): "Keep my game history to improve
+  /// structures". Off unless the user turns it on — the sign-up checkbox is
+  /// unchecked by default (§A4/D9), so the stored default has to match.
+  bool _keepHistoryForStructures = false;
 
   // Audio Master (checklist 15-041/15-042/15-043, User Flow §7.4): the chosen
   // speaking device now lives on the GAME (`LiveGame.audioMasterDeviceId`) and

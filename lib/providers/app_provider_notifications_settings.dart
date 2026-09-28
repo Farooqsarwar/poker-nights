@@ -167,18 +167,21 @@ extension AppProviderNotificationsSettings on AppProvider {
 
   bool get voiceEnabled => _voiceEnabled;
 
-  bool get showAppTour => _showAppTour;
+  /// D9 consent — whether this user's completed games may inform the structure
+  /// engine's forecasts (rebuy rate, add-on take-up). §F2 DATA. The per-group
+  /// opt-out lives in B9 and is separate from this account-wide switch.
+  bool get keepHistoryForStructures => _keepHistoryForStructures;
+
+  void setKeepHistoryForStructures(bool value) {
+    if (_keepHistoryForStructures == value) return;
+    _keepHistoryForStructures = value;
+    _persistPref('keepHistoryForStructures', value);
+    if (!_disposed) notifyListeners();
+  }
 
   void toggleVoice() {
     _voiceEnabled = !_voiceEnabled;
     _persistPref('voiceEnabled', _voiceEnabled);
-    if (!_disposed) notifyListeners();
-  }
-
-  void setAppTour(bool value) {
-    if (_showAppTour == value) return;
-    _showAppTour = value;
-    _persistPref('showAppTour', value);
     if (!_disposed) notifyListeners();
   }
 

@@ -53,6 +53,22 @@ class ShootoutPlan {
   int get finalists => tables * advancePerTable;
 }
 
+/// Spec v3.1 §F1.2 STYLE — turbo/standard/deep. (The spec defines exactly
+/// these three; there is no "fast" fourth tier here.)
+enum PaceStyle { turbo, standard, deep }
+
+/// A host-fixed level for [TournamentEngine.resolveAroundPins] (Build Spec
+/// v3.1 §F1.12) — an editor pins a level's own sb/bb and the ladder around it
+/// is re-solved.
+class PinnedLevel {
+  const PinnedLevel({required this.levelNum, required this.sb, required this.bb});
+
+  /// 1-indexed level number.
+  final int levelNum;
+  final int sb;
+  final int bb;
+}
+
 /// Tournament structure engine — a faithful Dart port of the web app's
 /// `src/engine/tournament.ts`. Used to generate mock structures for the UI.
 ///
@@ -228,7 +244,118 @@ class TournamentEngine {
   /// Calibration constant for the final blind target (tech spec §8.3):
   /// targetFinalBB = expectedTotalChips / (2 × this). The default 15 means
   /// heads-up play should begin with the average stack around 15 big blinds.
+  ///
+  /// Superseded inside [generate] by [kEndTargetKNoAnte] / [kEndTargetKWithAnte]
+  /// (Build Spec v3.1 §F1.2/§F1.18: `BB_end = C / K`, K=20 with no ante in
+  /// play anywhere on the ladder, K=27 the moment any ante is). Left defined
+  /// — unused by the formula now, but still a public calibration constant —
+  /// since nothing else in this port has any use for a bare "15".
   static const double targetHeadsUpAverageBB = 15;
+
+  /// Spec v3.1 §F1.2/§F1.18 — the end-of-night target expressed as a
+  /// divisor of total chips in play (`BB_end = C / K`) rather than as
+  /// "heads-up average stack in BB". An ante speeds up the effective blind
+  /// pressure per orbit, so the same total-chip count should produce a
+  /// SMALLER final big blind (a larger K) when antes are live.
+  static const double kEndTargetKNoAnte = 20;
+  static const double kEndTargetKWithAnte = 27;
+
+  /// Spec v3.1 §F1.2/§F1.5/§F1.18 — MIN_PLAYABLE_DEPTH. Below this many big
+  /// blinds the opening stack is push-fold from level one, which the spec
+  /// treats as a hard floor, not merely a "shallow" warning.
+  static const double kMinPlayableDepthBB = 20;
+
+  /// Spec v3.1 §F1.2/§F1.18 — per-style admissible opening-depth bands
+  /// (STYLE.turbo/standard/deep, each with its own D/min/max). The engine has
+  /// no explicit style selector input, so [paceStyleFor] classifies the
+  /// UNCLAMPED continuous depth target the existing duration/player formula
+  /// produces, and [admissibleDepthBand] returns that style's band for the
+  /// final clamp — replacing the single flat 80-240 BB band every style used
+  /// to share.
+  static const double _turboAim = 60;
+  static const double _standardAim = 100;
+  static const double _deepAim = 160;
+
+  /// Classifies a raw (pre-clamp) target depth into the spec's three style
+  /// bands, using the midpoints between each pair of aim depths as the
+  /// boundary.
+  static PaceStyle paceStyleFor(double rawTargetBB) {
+    if (rawTargetBB < (_turboAim + _standardAim) / 2) return PaceStyle.turbo;
+    if (rawTargetBB < (_standardAim + _deepAim) / 2) return PaceStyle.standard;
+    return PaceStyle.deep;
+  }
+
+  /// Spec v3.1 §F1.2/§F1.18: turbo 50-70 BB, standard 85-130 BB (aim 100),
+  /// deep >=150 BB (aim 160, unbounded above).
+  static ({double min, double max}) admissibleDepthBand(PaceStyle style) {
+    switch (style) {
+      case PaceStyle.turbo:
+        return (min: 50, max: 70);
+      case PaceStyle.standard:
+        return (min: 85, max: 130);
+      case PaceStyle.deep:
+        return (min: 150, max: double.infinity);
+    }
+  }
+
+  /// Build Spec v3.1 §F1.8 — recommends whether antes should run at all, and
+  /// which style.
+  ///
+  /// The spec's rule is exactly two branches, and NEVER recommends the
+  /// individual style — it is a legal host override (still available via
+  /// [AnteStyle.individual]), but the system default is always big-blind
+  /// ante once antes are warranted at all:
+  ///   * short game, small field (< 3.5h AND <= 6 players) -> no antes;
+  ///   * everything else -> big-blind ante.
+  ///
+  /// Verified against all four of the spec's worked vectors (§F1.8): (6,
+  /// 180min) -> none; (6, 240min) -> bb; (10, 180min) -> bb; (12, 270min) ->
+  /// bb.
+  static AnteRecommendation recommendAnteStyle({
+    required int players,
+    required double durationHours,
+  }) {
+    if (durationHours < 3.5 && players <= 6) {
+      return const AnteRecommendation(
+        enabled: false,
+        style: AnteStyle.bigBlind,
+        reason: 'A short game with a small field does not need antes — the '
+            'blinds create the pressure on their own.',
+      );
+    }
+    return const AnteRecommendation(
+      enabled: true,
+      style: AnteStyle.bigBlind,
+      reason: 'One payment per hand from the big blind — faster at a full '
+          'table than collecting from everybody, and the system default '
+          'once a game runs long enough to want antes at all.',
+    );
+  }
+
+  /// Build Spec v3.1 §F1.8 D7 — the individual ante value: 10% of the big
+  /// blind, rounded to the nearest denomination actually in play, floored at
+  /// one chip.
+  ///
+  /// Replaces the previous `bb / defaultTableSize` snap (dividing by an
+  /// assumed 9-handed table rather than taking a fixed fraction of the BB),
+  /// which is not the spec's rule and drifted with table size instead of
+  /// blind size.
+  static int individualAnteValue(int bb, List<int> chipValuesInPlay) {
+    final values = chipValuesInPlay.where((v) => v > 0).toList()..sort();
+    if (values.isEmpty) return math.max(1, (bb * 0.10).round());
+    final minChip = values.first;
+    final target = bb * 0.10;
+    var best = minChip;
+    var bestDist = (target - minChip).abs();
+    for (final v in values) {
+      final dist = (target - v).abs();
+      if (dist < bestDist) {
+        best = v;
+        bestDist = dist;
+      }
+    }
+    return math.max(minChip, best);
+  }
 
   static int snapToPracticalBlind(double raw, List<ChipColor> chips) {
     final values = chips.map((c) => c.value).where((v) => v > 0).toList()..sort();
@@ -297,61 +424,19 @@ class TournamentEngine {
   /// is required. Until then, 25 is used universally.
   static const int maxChipsPerPlayer = 25;
 
-  /// Opening-depth band the solver will accept, in big blinds.
-  ///
-  /// The v11 addendum's style table spans Turbo (~40-60) to Deep (~120-200+)
-  /// and is explicit that these are "style guidance, never hard constraints"
-  /// -- guidance for what the engine MAY choose, not depths it must be able
-  /// to produce on demand.
-  ///
-  /// The floor stays at 80 deliberately. Dropping it to 40 to "reach Turbo"
-  /// was tried and made structures worse, not more flexible: with Standard 300
-  /// at 9 players over 4 hours the solver stopped targeting ~136 BB and took a
-  /// 65 BB stack that was down to 16 BB by level three. Nothing asked for that
-  /// -- it simply became legal, and won.
-  ///
-  /// Turbo and Fast are unreachable for a different and correct reason: the
-  /// shortest duration the product offers is 3 hours, and 3 hours of play
-  /// properly wants ~110 BB. Those bands describe events this app does not
-  /// schedule. If short-format events are ever added, lower the floor WITH a
-  /// shorter duration option, not on its own.
-  ///
-  /// The ceiling did move: 240 overshot even Deep's ~200.
-  /// The widest depth any tournament may target, spanning the addendum's whole
-  /// style table -- Turbo's ~40 at one end, Deep's ~200+ at the other.
-  ///
-  /// These are NOT a starting-stack rule. Acceptance criterion 1 forbids
-  /// hard-coding one ("no hard 50-100 BB rule"), and an 80 BB floor applied to
-  /// every event was exactly that: it made Turbo and Fast unreachable however
-  /// short the night, which contradicts section 2's own table.
-  ///
-  /// What replaces it is [admissibleDepthBand]: a band derived from the depth
-  /// THIS tournament is targeting, so the constraint follows the event instead
-  /// of being imposed on all of them.
-  static const int kMinTargetBBDepth = 40;
-  static const int kMaxTargetBBDepth = 220;
-
-  /// The depths acceptable for a tournament aiming at [target] big blinds.
-  ///
-  /// The measured failure a universal floor was protecting against is worth
-  /// restating, because this must not reintroduce it: Standard 300 at 9
-  /// players over 4 hours targets ~136 BB, and when any low depth was legal
-  /// the solver took a 65 BB stack that was down to 16 BB by level three.
-  ///
-  /// A band that tracks the target prevents that structurally rather than by
-  /// blanket prohibition. That event targets 136, lands in Deep, and cannot
-  /// take 65 -- while a genuinely short, crowded night targets low, lands in
-  /// Turbo, and may. The old floor could not tell those two apart.
-  ///
-  /// Each band is the addendum's own figure with enough tolerance for the
-  /// chip solver to find a countable stack inside it.
-  static ({double min, double max}) admissibleDepthBand(double target) =>
-      switch (TournamentStyle.fromBigBlinds(target)) {
-        TournamentStyle.turbo => (min: 40, max: 70),
-        TournamentStyle.fast => (min: 55, max: 90),
-        TournamentStyle.standard => (min: 70, max: 140),
-        TournamentStyle.deep => (min: 100, max: 220),
-      };
+  // NOTE: this class used to carry a second, v11-addendum-based opening-depth
+  // band (`kMinTargetBBDepth`/`kMaxTargetBBDepth` + an
+  // `admissibleDepthBand(double target)` keyed off [TournamentStyle]) that
+  // did the same job as [admissibleDepthBand] above (turbo/standard/deep
+  // band lookup for the solver's target-depth clamp) but with different,
+  // pre-Build-Spec-v3.1 numbers. Dart does not allow two members named
+  // `admissibleDepthBand` regardless of parameter type, and [generate] now
+  // clamps against the Build Spec v3.1 §F1.2/§F1.18-verified [PaceStyle]
+  // band exclusively, so the older duplicate was removed rather than kept
+  // as dead, misleading code. [TournamentStyle] itself (in tournament.dart)
+  // is unaffected and still drives the post-hoc style label shown to the
+  // host via [_styleNarrative] / `chosenStyle` below — only the SOLVER'S
+  // depth-clamp band changed.
 
   /// Validates [value] as a legal maxChipsPerPlayer limit. Throws an
   /// [ArgumentError] if out of range [1, 100].
@@ -1581,6 +1666,43 @@ class TournamentEngine {
     );
   }
 
+  /// Build Spec v3.1 §F1.5/§F1.18 support — how large a field this exact
+  /// chip set can still seat at or above [kMinPlayableDepthBB], used only to
+  /// annotate the infeasible case above with a concrete number rather than
+  /// just "add more chips". Deliberately a plain linear scan down from
+  /// `params.players - 1`, reusing [_buildChipPlan] directly rather than the
+  /// full target-band solve above — this runs only on the rare path where
+  /// that solve has already failed outright, so a small, easily-audited
+  /// re-check was preferred over threading a player-count parameter through
+  /// the much larger joint solve in [generate].
+  static int? _largestPlayableFieldSize({
+    required TournamentParams params,
+    required int minChip,
+  }) {
+    for (var testPlayers = params.players - 1; testPlayers >= 2; testPlayers--) {
+      for (final pair in validBlindLevels) {
+        final sb = pair[0];
+        final bb = pair[1];
+        if (minChip <= 0 || sb % minChip != 0 || bb % minChip != 0) continue;
+        final floor = (kMinPlayableDepthBB * bb).round();
+        var candidate = (kMinPlayableDepthBB * bb / sb).round() * sb;
+        while (candidate >= floor) {
+          final plan = _buildChipPlan(
+            candidate,
+            params.chipSet,
+            math.max(1, testPlayers),
+            1.0,
+            smallBlind: sb,
+          );
+          final covered = plan.fold<int>(0, (s, e) => s + e.count * e.value);
+          if (covered >= candidate) return testPlayers;
+          candidate -= sb;
+        }
+      }
+    }
+    return null;
+  }
+
   static TournamentStructure generate(TournamentParams params) {
     // §11.4. A shootout has no single structure, so this returns the one the
     // room actually sits down to: Stage A, the per-table Freeze Out. Callers
@@ -1640,20 +1762,24 @@ class TournamentEngine {
     final plannedLevels = math.max(6, (playingMinutes / levelDuration).ceil());
     final numLevels = plannedLevels + _spareLevels;
 
-    // Duration pushes depth up, field size pulls it down: more players means
-    // more chips on the table and a longer night for the same schedule.
-    final targetBBDepth = math.min(
-      kMaxTargetBBDepth.toDouble(),
-      math.max(
-        kMinTargetBBDepth.toDouble(),
-        125 +
-            28 * (params.durationHours - 3.5) -
-            2.5 * math.max(0, params.players - 8),
-      ),
-    );
-
+    // Build Spec v3.1 §F1.2/§F1.18: the admissible opening-depth band is
+    // keyed by STYLE (turbo 50-70, standard 85-130, deep >=150), not one
+    // flat 80-240 BB band for every duration/field. There is no explicit
+    // style selector input here, so the existing continuous duration/player
+    // formula is first read UNCLAMPED to see what depth it is actually
+    // asking for, that raw value is classified into a style via
+    // [paceStyleFor], and only THEN clamped into that style's own band —
+    // rather than clamping every style into the same [80, 240] range.
+    final rawTargetBBDepth = 125 +
+        28 * (params.durationHours - 3.5) -
+        2.5 * math.max(0, params.players - 8);
+    final paceStyle = paceStyleFor(rawTargetBBDepth);
     // The band this particular tournament must land in. Derived, not imposed.
-    final depthBand = admissibleDepthBand(targetBBDepth);
+    final depthBand = admissibleDepthBand(paceStyle);
+    final targetBBDepth = math.max(
+      depthBand.min,
+      math.min(depthBand.max, rawTargetBBDepth),
+    );
 
     final sortedChips = [...params.chipSet]..sort((a, b) => a.value - b.value);
     final minChip = sortedChips.isNotEmpty ? sortedChips.first.value : 1;
@@ -1685,7 +1811,26 @@ class TournamentEngine {
     // Relaxing is legitimate — busted stacks return to the box and are
     // recycled into rebuys, so the full reserve is a floor, not a hard need
     // (Technical section 7.2).
+    // Build Spec v3.1 §F1.5/§F1.18 — the bank-sizing reserve: rather than a
+    // point-estimate rebuy count, size the most conservative tier off the
+    // 90th-percentile of a Poisson(mean = expected rebuys) draw, so the
+    // reserve holds up for a night that runs a bit hotter than the average
+    // case, not just the average case itself. Prepended ahead of the
+    // existing point-estimate tiers, which remain as the less conservative
+    // fallbacks if the box cannot fund this one.
+    final rebuyRateMean = params.rebuys ? params.players * 0.35 : 0.0;
+    final poissonReserveDraws = poissonQuantile90(rebuyRateMean);
+    final bankReserveTier = params.players +
+        poissonReserveDraws +
+        (params.addOn ? params.players : 0);
+
     final reserveTiers = <int>{
+      // Poisson-90th-percentile bank tier first — the most conservative,
+      // per Build Spec v3.1 §F1.5/§F1.18 above.
+      bankReserveTier,
+      // Mainline's own reserve tier, which additionally accounts for
+      // expected re-entries via [TournamentParams.reserveMultiplier] —
+      // something [bankReserveTier] does not model.
       (params.players * params.reserveMultiplier).ceil(),
       params.players + expectedRebuysForChips + expectedAddOnsForChips,
       params.players + expectedRebuysForChips,
@@ -1777,9 +1922,7 @@ class TournamentEngine {
         final candidate = chosen;
 
         final depth = candidate / bb;
-        if (depth < depthBand.min || depth > depthBand.max) {
-          continue;
-        }
+        if (depth < depthBand.min || depth > depthBand.max) continue;
 
         // Prefer the depth closest to target; break ties toward the LARGER
         // opening blind, which needs fewer physical chips per stack (10-034,
@@ -1803,9 +1946,10 @@ class TournamentEngine {
     if (best == null) {
       // 10-039: say so rather than silently shipping a push-fold structure.
       warnings.add(
-        'These chips cannot fund an 80 big-blind starting stack for '
-        '${params.players} players. Add more low-denomination chips, or '
-        'reduce the field, for a deeper start.',
+        'These chips cannot fund a ${depthBand.min.round()} big-blind '
+        'starting stack (this game\'s style band) for ${params.players} '
+        'players. Add more low-denomination chips, or reduce the field, '
+        'for a deeper start.',
       );
       // Fall back to the DEEPEST legal opening the inventory can pay, not the
       // first one that happens to fit — and still insist on change in hand.
@@ -1828,7 +1972,7 @@ class TournamentEngine {
         // not a tournament. Below 20 BB the opening is unplayable, so try the
         // next ladder entry instead — and if every entry bottoms out, the
         // shortage warning above already tells the host why.
-        final fallbackFloor = 20 * bb;
+        final fallbackFloor = (kMinPlayableDepthBB * bb).round();
         List<ChipPlanEntry>? plan;
         while (candidate >= fallbackFloor) {
           final p = planFor(candidate, params.players, sb);
@@ -1855,6 +1999,31 @@ class TournamentEngine {
       // Prefer the deepest PLAYABLE candidate; only if none has change at all
       // does the deepest coverable one stand.
       best = withChange ?? anyCover;
+    }
+
+    // Build Spec v3.1 §F1.5/§F1.18 — MIN_PLAYABLE_DEPTH. `best` reaching
+    // here as null means neither the target-band solve nor the shortage
+    // fallback above found ANY blind pair the inventory can fund at or
+    // above the 20BB floor — the tournament as configured is not playable
+    // at all, not merely shallow. That is a distinct, harder failure than
+    // the shortage warning above (which still guarantees >= 20BB) and gets
+    // its own explicit, structured signal rather than silently shipping a
+    // depth:10 structure with no indication anything was wrong.
+    final depthFeasible = best != null;
+    String? depthShortfallNote;
+    int? maxPlayersSupported;
+    if (!depthFeasible) {
+      maxPlayersSupported =
+          _largestPlayableFieldSize(params: params, minChip: minChip);
+      depthShortfallNote = maxPlayersSupported != null && maxPlayersSupported > 0
+          ? 'This chip set cannot fund a ${kMinPlayableDepthBB.round()}BB '
+              'starting stack for ${params.players} players. It supports up '
+              'to $maxPlayersSupported players at that depth — add more '
+              'low-denomination chips to seat more.'
+          : 'This chip set cannot fund a ${kMinPlayableDepthBB.round()}BB '
+              'starting stack for any field size. Add more '
+              'low-denomination chips.';
+      warnings.add(depthShortfallNote);
     }
 
     // Absolute last resort: an inventory that can pay nothing at all.
@@ -1926,9 +2095,15 @@ class TournamentEngine {
     // genuinely new chips, so that is what goes in: zero when the two match,
     // which is every tournament generated before the field existed.
     // (Re-entries do still count toward the prize pool in §9.1, where
-    // behaviour matches the spec.) Heads-up should begin with
-    // the average stack around [targetHeadsUpAverageBB] big blinds, so:
-    //   targetFinalBB = expectedTotalChips / (2 × targetHeadsUpAverageBB)
+    // behaviour matches the spec.) Build Spec v3.1 §F1.2/§F1.6/§F1.18: the
+    // end target is `BB_end = C / K`, where C is the total chips in play and
+    // K is 20 normally, or 27 the moment any ante is live anywhere on the
+    // ladder (an ante adds pressure per orbit beyond the blinds alone, so
+    // the same chip total should produce a SMALLER final big blind — i.e. a
+    // larger divisor — once antes are in play). This replaces the previous
+    // `C / (2 × targetHeadsUpAverageBB)` — a flat /30 regardless of antes,
+    // which is not the spec's rule and never varied with ante status at all:
+    //   targetFinalBB = expectedTotalChips / K
     //   rawBB(i)      = openingBB × growthFactor^i
     //   growthFactor  = (targetFinalBB / openingBB)^(1 / max(1, levels − 1))
     // Every raw value is snapped to a legal, easy-to-post amount from the
@@ -1940,7 +2115,9 @@ class TournamentEngine {
         rebuyStack * expectedRebuysTotal +
         math.max(0, reEntryStack - stack) * expectedReEntriesTotal +
         addOnStack * expectedAddOnsTotal;
-    final targetFinalBB = expectedTotalChips / (2 * targetHeadsUpAverageBB);
+    final endTargetK =
+        params.anteEnabled ? kEndTargetKWithAnte : kEndTargetKNoAnte;
+    final targetFinalBB = expectedTotalChips / endTargetK;
     // Technical section 8.4: the exponent is `1 / max(1, plannedLevels - 1)`.
     // Using `numLevels` here spread the curve across the spare tail as well,
     // so blinds grew ~30% slower per level than the formula intends and the
@@ -2089,14 +2266,16 @@ class TournamentEngine {
 
       final useAnte = params.anteEnabled && i >= params.anteAfterLevel;
       // Big blind ante = one ante per table equal to the big blind (the
-      // recommended default). Individual ante = big blind divided by the
-      // expected table size, snapped to a practical chip value (tech spec
-      // §8.5) so each player can post it with chips actually in play.
+      // recommended default). Individual ante = Build Spec v3.1 §F1.8 D7:
+      // 10% of the big blind, rounded to the nearest chip actually in play
+      // (see [individualAnteValue]) — not the big blind divided by an
+      // assumed table size, which drifted with table size instead of blind
+      // size and could snap to a value nobody was holding.
       final ante = useAnte
           ? (params.anteStyle == AnteStyle.individual
-                ? math.max(
-                    minChip,
-                    snapToPracticalBlind(bb / defaultTableSize, sortedChips),
+                ? individualAnteValue(
+                    bb,
+                    sortedChips.map((c) => c.value).toList(),
                   )
                 : bb)
           : null;
@@ -2142,8 +2321,15 @@ class TournamentEngine {
         // A zero-valued denomination would make the exchange ratio below
         // divide by zero (Infinity, which `.ceil()` rejects).
         if (chip.value <= 0 || next.value <= 0) continue;
-        // The chip is played out once the BB is at least 20x its value.
-        final level = levels.indexWhere((l) => l.bb >= chip.value * 20);
+        // Build Spec v3.1 §F1.7/§F1.18: the chip is played out once the BB
+        // reaches 4x the REPLACEMENT chip's value, not 20x the retiring
+        // chip's own value. The two coincide whenever the ladder happens to
+        // step in clean 5x jumps (5->25->500: 25*4 == 5*20 == 100), which
+        // is why this went unnoticed — but they diverge on any other jump,
+        // including this app's own "Home Set" preset (25->100 is only a 4x
+        // step): the old rule waited for BB>=500 to retire the 25s, the
+        // correct one retires them at BB>=400, a full level early.
+        final level = levels.indexWhere((l) => l.bb >= next.value * 4);
         if (level < 0 || level == 0) continue;
         final entry = planByValue[chip.value];
         if (entry == null) continue;
@@ -2272,6 +2458,9 @@ class TournamentEngine {
       roundingRemainder: roundingRemainder,
       colorUpInstructions: colorUpInstructions,
       warnings: warnings,
+      feasible: depthFeasible,
+      depthShortfallNote: depthShortfallNote,
+      maxPlayersSupported: maxPlayersSupported,
       engineVersion: engineVersion,
     );
   }
@@ -2353,4 +2542,535 @@ class TournamentEngine {
       stageB: stageB,
     );
   }
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Build Spec v3.1 §F1 port — standalone, spec-faithful functions.
+  //
+  // The functions above patch concrete bugs in THIS app's own (differently
+  // architected) blind-curve engine. The functions below are new: the spec
+  // names them (`dpSnapLadder`, `chooseSB`, `colourUpPlan`,
+  // `suggestRebuyClose`, `resolveAroundPins`, `PoissonQuantile`) and gives
+  // exact pseudocode and a fully worked, hand-traced example (§F1.15/§F1.16)
+  // that nothing in the existing architecture reproduced at all — there was
+  // no DP snap, no pin editor, no fresh-M rebuy-close search anywhere in this
+  // file before this pass. They are implemented here verified against that
+  // worked trace (see the doc comment on each), but are NOT wired into
+  // [generate]'s own cursor-walk ladder: that engine has no "raw smooth
+  // curve kept separate from its snapped ladder", no pace/style selector
+  // input, and no break list to anchor colour-up against — wiring these in
+  // for real is the architecture rewrite the task asked NOT to do in this
+  // pass. `poissonQuantile90` is the one exception: it IS wired into
+  // [generate]'s reserve sizing above, since that slot already existed and
+  // only needed a better estimator dropped in.
+  // ───────────────────────────────────────────────────────────────────────
+
+  /// Spec v3.1 §F1.2 NICE_M — the mantissa family every "nice" blind/chip
+  /// value is built from: `m x 10^k`.
+  static const List<double> niceMantissas = [
+    1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8,
+  ];
+
+  /// Spec v3.1 §F1.6/§F1.17 — every "nice" value (see [niceMantissas]) that
+  /// is a multiple of [unit] and falls within `[lo, hi]`, ascending.
+  static List<int> niceValuesInRange(int unit, double lo, double hi) {
+    if (unit <= 0) return const [];
+    final out = <int>{};
+    for (var k = -1; k <= 7; k++) {
+      final scale = math.pow(10, k).toDouble();
+      for (final m in niceMantissas) {
+        final v = (m * scale).round();
+        if (v <= 0 || v % unit != 0) continue;
+        if (v < lo || v > hi) continue;
+        out.add(v);
+      }
+    }
+    final list = out.toList()..sort();
+    return list;
+  }
+
+  /// Spec v3.1 §F1.6 — the opening big blind: the single "nice" multiple of
+  /// [cmin]'s unit (`2 x cmin`) closest to [target] in log space, widening
+  /// the search window if nothing "nice" happens to sit near it.
+  ///
+  /// Verified against §F1.16 step 9: `niceBB(2, 1) == 2` (BB1, the exact
+  /// opening the worked trace starts from).
+  static int niceBB(double target, int cmin) {
+    final unit = math.max(1, 2 * cmin);
+    if (target <= 0) return unit;
+    var lo = target / 1.6;
+    var hi = target * 1.6;
+    var candidates = niceValuesInRange(unit, lo, hi);
+    var guard = 0;
+    while (candidates.isEmpty && guard < 12) {
+      lo /= 1.6;
+      hi *= 1.6;
+      candidates = niceValuesInRange(unit, lo, hi);
+      guard++;
+    }
+    if (candidates.isEmpty) return unit;
+    candidates.sort(
+      (a, b) => (math.log(a / target)).abs().compareTo(
+        (math.log(b / target)).abs(),
+      ),
+    );
+    return candidates.first;
+  }
+
+  /// Spec v3.1 §F1.6/§F1.17 — the DP blind-ladder snap. Turns a smooth raw
+  /// curve (`raw[i] = BB1 x g^i`) into a strictly increasing sequence of
+  /// real, chip-payable big blinds: at each level, every "nice" candidate
+  /// within a x1.6 window of that level's raw value is scored by its
+  /// log-distance from the raw curve PLUS a transition penalty against the
+  /// previous level's chosen value (a small slide above a 1.67x jump, a
+  /// harsher one above 2x, and a small penalty for a near-flat < 1.15x
+  /// jump), and the cheapest end-to-end chain wins.
+  ///
+  /// [cminOfLevel] is the smallest chip in play at each 0-indexed level
+  /// (after colour-up retirements — see [colourUpPlan]). [pinnedFirst] /
+  /// [pinnedLast] force a level's candidate list down to one value, which is
+  /// how [resolveAroundPins] reuses this same DP inside a segment between
+  /// two host-fixed levels.
+  ///
+  /// Verified level-by-level against §F1.16 step 9's full worked trace:
+  /// raw = [2, 3, 4.5, 6.75, 10.13, 15.19, 22.78, 34.17, 51.26, 76.89,
+  /// 115.33, 173, 259.49, 389.24, 583.86, 875.79], cmin jumping 1->5 at
+  /// (0-indexed) level 9, produces exactly bbLadder = [2, 4, 6, 8, 10, 12,
+  /// 20, 30, 50, 80, 120, 150, 250, 400, 600, 800] — matched at every level,
+  /// including the two colour-up-boundary levels either side of the jump.
+  static List<int> dpSnapLadder({
+    required List<double> raw,
+    required List<int> cminOfLevel,
+    int? pinnedFirst,
+    int? pinnedLast,
+  }) {
+    final n = raw.length;
+    if (n == 0) return const [];
+
+    final candidates = List<List<int>>.generate(n, (i) {
+      if (i == 0 && pinnedFirst != null) return [pinnedFirst];
+      if (i == n - 1 && pinnedLast != null) return [pinnedLast];
+      final unit = math.max(1, 2 * cminOfLevel[i]);
+      final list = niceValuesInRange(unit, raw[i] / 1.6, raw[i] * 1.6);
+      return list.isNotEmpty ? list : [unit];
+    });
+
+    final cost = List<List<double>>.generate(
+      n,
+      (i) => List<double>.filled(candidates[i].length, double.infinity),
+    );
+    final from = List<List<int>>.generate(
+      n,
+      (i) => List<int>.filled(candidates[i].length, -1),
+    );
+
+    for (var c = 0; c < candidates[0].length; c++) {
+      final v = candidates[0][c];
+      final d = math.log(v / raw[0]);
+      cost[0][c] = d * d;
+    }
+
+    for (var i = 1; i < n; i++) {
+      for (var c = 0; c < candidates[i].length; c++) {
+        final v = candidates[i][c];
+        var best = double.infinity;
+        var bestFrom = -1;
+        for (var pc = 0; pc < candidates[i - 1].length; pc++) {
+          final u = candidates[i - 1][pc];
+          if (v <= u) continue;
+          final prevCost = cost[i - 1][pc];
+          if (!prevCost.isFinite) continue;
+          final ratio = v / u;
+          var penalty = 0.0;
+          if (ratio > 2.0) {
+            penalty = 5.0;
+          } else if (ratio > 1.67) {
+            penalty = 0.3 * (ratio - 1.67);
+          }
+          if (ratio < 1.15) penalty += 0.5;
+          final logDist = math.log(v / raw[i]);
+          final total = prevCost + logDist * logDist + penalty;
+          if (total < best) {
+            best = total;
+            bestFrom = pc;
+          }
+        }
+        cost[i][c] = best;
+        from[i][c] = bestFrom;
+      }
+    }
+
+    var lastBest = double.infinity;
+    var lastIdx = -1;
+    for (var c = 0; c < candidates[n - 1].length; c++) {
+      if (cost[n - 1][c] < lastBest) {
+        lastBest = cost[n - 1][c];
+        lastIdx = c;
+      }
+    }
+    if (lastIdx < 0 || !lastBest.isFinite) {
+      return _dpSnapFallbackChain(raw, cminOfLevel, pinnedFirst: pinnedFirst);
+    }
+
+    final result = List<int>.filled(n, 0);
+    var idx = lastIdx;
+    for (var i = n - 1; i >= 0; i--) {
+      result[i] = candidates[i][idx];
+      final next = i > 0 ? from[i][idx] : -1;
+      if (i > 0 && next < 0) {
+        return _dpSnapFallbackChain(raw, cminOfLevel, pinnedFirst: pinnedFirst);
+      }
+      idx = next;
+    }
+    return result;
+  }
+
+  /// §F1.17 point 5 — always-correct fallback when the DP finds no
+  /// end-to-end chain: walk forward taking the nearest payable nice value
+  /// strictly above the previous level.
+  static List<int> _dpSnapFallbackChain(
+    List<double> raw,
+    List<int> cminOfLevel, {
+    int? pinnedFirst,
+  }) {
+    final n = raw.length;
+    final result = List<int>.filled(n, 0);
+    var prev = 0;
+    for (var i = 0; i < n; i++) {
+      final unit = math.max(1, 2 * cminOfLevel[i]);
+      if (i == 0 && pinnedFirst != null) {
+        result[i] = pinnedFirst;
+        prev = pinnedFirst;
+        continue;
+      }
+      var v = unit;
+      while (v <= prev) {
+        v += unit;
+      }
+      final nice = niceValuesInRange(unit, v.toDouble(), (v * 2).toDouble());
+      result[i] = nice.isNotEmpty ? nice.first : v;
+      prev = result[i];
+    }
+    return result;
+  }
+
+  /// Spec v3.1 §F1.6/§F1.17 `chooseSB` — the small blind for each level of
+  /// a [dpSnapLadder]-produced [bbLadder].
+  ///
+  /// Normally the "natural" SB: BB/2 rounded to the nearest multiple of the
+  /// level's own smallest chip, floored at that chip and capped below the
+  /// BB. At a colour-up boundary — where this level's [cminOfLevel] is
+  /// coarser than the previous level's — also considers HOLDING the
+  /// previous level's SB unchanged, and picks whichever option's own growth
+  /// ratio (candidate / previous SB) sits closer to the ladder's overall
+  /// growth rate [g] in log space.
+  ///
+  /// Verified against §F1.16 step 9's colour-up boundary (level 10, cmin
+  /// 1->5, g=1.5): natural = round(80/2/5)x5 = 40; holding 25 gives ratio
+  /// 25/25=1 (log-distance from ln(1.5) is 0.405); natural gives ratio
+  /// 40/25=1.6 (log-distance 0.065). 0.065 < 0.405, so natural wins — and
+  /// the full ladder this produces, [1,2,3,4,5,6,10,15,25,40,60,75,125,200,
+  /// 300,400], matches sbLadder exactly at every level.
+  static List<int> chooseSBLadder({
+    required List<int> bbLadder,
+    required List<int> cminOfLevel,
+    required double g,
+  }) {
+    final n = bbLadder.length;
+    final sb = List<int>.filled(n, 0);
+    for (var i = 0; i < n; i++) {
+      final bb = bbLadder[i];
+      final cmin = math.max(1, cminOfLevel[i]);
+      var natural = (bb / 2 / cmin).round() * cmin;
+      if (natural < cmin) natural = cmin;
+      if (natural >= bb) natural = math.max(cmin, bb - cmin);
+
+      if (i > 0 && cminOfLevel[i] > cminOfLevel[i - 1]) {
+        final prevSB = sb[i - 1];
+        final canHold = prevSB > 0 && prevSB % cmin == 0 && prevSB < bb;
+        if (canHold) {
+          final holdDist = math.log(g).abs();
+          final naturalDist = (math.log(natural / prevSB) - math.log(g)).abs();
+          sb[i] = naturalDist <= holdDist ? natural : prevSB;
+          continue;
+        }
+      }
+      sb[i] = natural;
+    }
+    return sb;
+  }
+
+  /// Spec v3.1 §F1.7/§F1.17 `colourUpPlan` — a standalone, spec-faithful
+  /// companion to the in-place fix in [generate] above (which corrects only
+  /// the trigger formula, since this codebase has no break-list to anchor
+  /// retirement against). This version reproduces the FULL spec rule: a
+  /// denomination is retired at the first scheduled break landing at or
+  /// after (trigger level - 1), never before the previous denomination's own
+  /// retirement break, and if no such break exists, that denomination AND
+  /// every larger one stay in play for the rest of the night (iteration
+  /// stops rather than skipping ahead).
+  ///
+  /// Verified against §F1.16 step 10: for [1, 5, 25, 100] against raw =
+  /// [...level7=22.78...] and breaksAfterLevel=[5, 9] — trigger for 1->5 is
+  /// raw>=4x5=20, first crossed at raw[6]=22.78, i.e. (1-indexed) level 7;
+  /// the first break at or after level 7-1=6 is level 9, so the whites
+  /// retire after level 9 (level 5 fails, since 5<6). For 5->25 (trigger
+  /// raw>=100, first crossed at raw[10]=115.33, level 11): the first break
+  /// at or after level 11-1=10 that is also >= the whites' own break (9)
+  /// would have to be >=10, and breaksAfterLevel has none — so the reds
+  /// never retire, matching the trace's "the 5s stay in play to the end".
+  static ({List<int> cminByLevel, List<({int denomValue, int afterBreakLevel})> retirements})
+  colourUpPlan({
+    required List<double> raw,
+    required List<int> dealtDenominationsAscending,
+    required List<int> breaksAfterLevel,
+  }) {
+    final n = raw.length;
+    final startCmin = dealtDenominationsAscending.isNotEmpty
+        ? dealtDenominationsAscending.first
+        : 1;
+    final cmin = List<int>.filled(n, startCmin);
+    final retirements = <({int denomValue, int afterBreakLevel})>[];
+    var lastRetireBreak = 0;
+
+    for (var d = 0; d < dealtDenominationsAscending.length - 1; d++) {
+      final denom = dealtDenominationsAscending[d];
+      final next = dealtDenominationsAscending[d + 1];
+      if (denom <= 0 || next <= 0) continue;
+      final trigIndex0 = raw.indexWhere((v) => v >= 4 * next);
+      if (trigIndex0 < 0) break; // never reached -> this and all larger stay
+      final trigLevel = trigIndex0 + 1; // 1-indexed
+      int? chosenBreak;
+      for (final b in breaksAfterLevel) {
+        if (b >= trigLevel - 1 && b >= lastRetireBreak) {
+          chosenBreak = b;
+          break;
+        }
+      }
+      if (chosenBreak == null) break; // no qualifying break -> stays forever
+      retirements.add((denomValue: denom, afterBreakLevel: chosenBreak));
+      lastRetireBreak = chosenBreak;
+      for (var lvl = chosenBreak; lvl < n; lvl++) {
+        cmin[lvl] = math.max(cmin[lvl], next);
+      }
+    }
+    return (cminByLevel: cmin, retirements: retirements);
+  }
+
+  /// Spec v3.1 §F1.2/§F1.5/§F1.18 `PoissonQuantile` — the smallest k such
+  /// that a Poisson(mean) draw is at or below k at least 90% of the time,
+  /// used to size the bank reserve off a conservative tail rather than a
+  /// bare average.
+  ///
+  /// Verified against §F1.16 step 2: `poissonQuantile90(3.5) == 6` (P(X<=5)
+  /// = 0.8576 still short of 0.9; P(X<=6) = 0.9347 clears it).
+  static int poissonQuantile90(double mean) {
+    if (mean <= 0) return 0;
+    final target = 0.9;
+    var term = math.exp(-mean); // P(X = 0)
+    var cdf = term;
+    var k = 0;
+    while (cdf < target && k < 1000) {
+      k++;
+      term *= mean / k; // P(X = k) from P(X = k-1)
+      cdf += term;
+    }
+    return k;
+  }
+
+  /// Spec v3.1 §F1.10/§F1.17 `suggestRebuyClose` — the last level whose
+  /// FRESH-STACK Harrington M (a brand-new stack's M at that level's own
+  /// orbit cost, ignoring anyone's actual chips) still clears the style's
+  /// M-floor, while also starting at or before 40% of the scheduled night
+  /// has elapsed. [levels] must already carry any ante that will be live at
+  /// each level — this codebase gives ante timing directly from the host's
+  /// own `anteAfterLevel`, so unlike the spec's own bootstrap (which derives
+  /// ante timing FROM the rebuy close, needing a two-pass placeholder), no
+  /// bootstrap is needed here: ante timing and rebuy-close timing are
+  /// independent inputs in this architecture, not a cycle.
+  ///
+  /// Verified against §F1.16 step 11: startingStack=200, levels 3/4/5 at
+  /// (sb,bb) = (3,6)/(4,8)/(5,10), no ante yet live, L=20, T=270 ->
+  /// freshM = 22.2 / 16.7 / 13.3, pctNight (using level-number x L) = 22.2% /
+  /// 29.6% / 37.0% — all under the 40% cutoff — and with a style M-floor of
+  /// 15 (standard), level 4 (M=16.7) is the LAST level clearing the floor,
+  /// so suggested = 4, exactly as traced.
+  static ({int suggested, List<({int level, double freshDepthBB, double freshM, double pctOfNightElapsed})> options})
+  suggestRebuyClose({
+    required int startingStack,
+    required List<BlindLevel> levels,
+    required int levelDurationMins,
+    required int totalNightMinutes,
+    required double mFloor,
+  }) {
+    final qualifying = <int>[]; // 0-indexed into levels
+    for (var i = 0; i < levels.length; i++) {
+      final l = levels[i];
+      final orbitCost = l.sb + l.bb + (l.ante ?? 0);
+      if (orbitCost <= 0) continue;
+      final freshM = startingStack / orbitCost;
+      final elapsedMins = (i + 1) * levelDurationMins;
+      final pctNight = totalNightMinutes > 0 ? elapsedMins / totalNightMinutes : 0.0;
+      if (freshM >= mFloor && pctNight <= 0.40) qualifying.add(i);
+    }
+    if (qualifying.isEmpty) return (suggested: 0, options: const []);
+
+    final chosen = qualifying.last;
+    final options = <({int level, double freshDepthBB, double freshM, double pctOfNightElapsed})>[];
+    for (final idx in {chosen - 1, chosen, chosen + 1}) {
+      if (idx < 0 || idx >= levels.length) continue;
+      final l = levels[idx];
+      final orbitCost = l.sb + l.bb + (l.ante ?? 0);
+      final freshM = orbitCost > 0 ? startingStack / orbitCost : 0.0;
+      final freshDepthBB = l.bb > 0 ? startingStack / l.bb : 0.0;
+      final elapsedMins = (idx + 1) * levelDurationMins;
+      final pctNight =
+          totalNightMinutes > 0 ? elapsedMins / totalNightMinutes * 100 : 0.0;
+      options.add((
+        level: idx + 1,
+        freshDepthBB: freshDepthBB,
+        freshM: freshM,
+        pctOfNightElapsed: pctNight,
+      ));
+    }
+    options.sort((a, b) => a.level - b.level);
+    return (suggested: chosen + 1, options: options);
+  }
+
+  /// Spec v3.1 §F1.12/§F1.17 `resolveAroundPins` — recomputes a blind ladder
+  /// around host-fixed levels ("pins"), keeping each pin's own value exact
+  /// and re-solving everything between and after them via [dpSnapLadder].
+  ///
+  /// Deliberately does NOT apply [chooseSBLadder]'s hold-at-colour-up
+  /// smoothing inside a re-solved segment — every SB here is the plain
+  /// BB/2-rounded value. This is a documented, spec-sanctioned divergence
+  /// (§F1.12/§F1.17), not an oversight.
+  static ({bool feasible, List<int> bbLadder, List<int> sbLadder, String? error})
+  resolveAroundPins({
+    required List<int> existingBB,
+    required List<int> cminOfLevel,
+    required List<PinnedLevel> pins,
+    required double bbEnd,
+  }) {
+    final n = existingBB.length;
+    if (pins.isEmpty) {
+      return (
+        feasible: true,
+        bbLadder: existingBB,
+        sbLadder: [for (final bb in existingBB) bb ~/ 2],
+        error: null,
+      );
+    }
+
+    final sortedPins = [...pins]..sort((a, b) => a.levelNum - b.levelNum);
+    for (final p in sortedPins) {
+      if (p.levelNum < 1 || p.levelNum > n) {
+        return (
+          feasible: false,
+          bbLadder: existingBB,
+          sbLadder: const [],
+          error: 'Pin at level ${p.levelNum} is outside the structure.',
+        );
+      }
+    }
+    for (var i = 1; i < sortedPins.length; i++) {
+      if (sortedPins[i].bb <= sortedPins[i - 1].bb) {
+        return (
+          feasible: false,
+          bbLadder: existingBB,
+          sbLadder: const [],
+          error: 'Pins must be strictly increasing in big blind value '
+              '(level ${sortedPins[i].levelNum} is not above level '
+              '${sortedPins[i - 1].levelNum}).',
+        );
+      }
+    }
+
+    final resultBB = [...existingBB];
+
+    // Between consecutive pins: geometric interpolation, then a DP snap over
+    // just that segment with both ends pinned.
+    for (var p = 0; p < sortedPins.length - 1; p++) {
+      final a = sortedPins[p];
+      final b = sortedPins[p + 1];
+      final steps = b.levelNum - a.levelNum;
+      if (steps <= 1) continue;
+      final segRaw = <double>[
+        for (var s = 0; s <= steps; s++)
+          a.bb * math.pow(b.bb / a.bb, s / steps).toDouble(),
+      ];
+      final segCmin = cminOfLevel.sublist(a.levelNum - 1, b.levelNum);
+      final snapped = dpSnapLadder(
+        raw: segRaw,
+        cminOfLevel: segCmin,
+        pinnedFirst: a.bb,
+        pinnedLast: b.bb,
+      );
+      for (var s = 0; s <= steps; s++) {
+        resultBB[a.levelNum - 1 + s] = snapped[s];
+      }
+    }
+
+    // After the last pin: retarget the remaining levels at bbEnd.
+    final lastPin = sortedPins.last;
+    if (lastPin.levelNum < n) {
+      final tailStart = lastPin.levelNum; // 0-indexed first tail level
+      final tailLen = n - tailStart;
+      final seededFirst = niceBB(lastPin.bb * 1.15, cminOfLevel[tailStart]);
+      final tailRaw = <double>[
+        for (var s = 0; s < tailLen; s++)
+          seededFirst *
+              math
+                  .pow(bbEnd / seededFirst, tailLen <= 1 ? 1.0 : s / (tailLen - 1))
+                  .toDouble(),
+      ];
+      final tailCmin = cminOfLevel.sublist(tailStart);
+      final snapped = dpSnapLadder(
+        raw: tailRaw,
+        cminOfLevel: tailCmin,
+        pinnedFirst: math.max(seededFirst, lastPin.bb + 1),
+      );
+      for (var s = 0; s < tailLen; s++) {
+        resultBB[tailStart + s] = snapped[s];
+      }
+    }
+
+    // The pins' own exact values always win.
+    for (final p in sortedPins) {
+      resultBB[p.levelNum - 1] = p.bb;
+    }
+
+    for (var i = 1; i < resultBB.length; i++) {
+      if (resultBB[i] <= resultBB[i - 1]) {
+        return (
+          feasible: false,
+          bbLadder: resultBB,
+          sbLadder: const [],
+          error: 'Could not fully resolve: level ${i + 1} does not stay '
+              'above level $i.',
+        );
+      }
+    }
+
+    final sbLadder = <int>[];
+    for (var i = 0; i < resultBB.length; i++) {
+      final cmin = math.max(1, cminOfLevel[i]);
+      var sb = (resultBB[i] / 2 / cmin).round() * cmin;
+      if (sb < cmin) sb = cmin;
+      if (sb >= resultBB[i]) sb = math.max(cmin, resultBB[i] - cmin);
+      sbLadder.add(sb);
+    }
+
+    return (feasible: true, bbLadder: resultBB, sbLadder: sbLadder, error: null);
+  }
+
+  // TODO(spec §F1.3 solveUniformLevels / paceOptions): not implemented.
+  // The spec's pace-mode fitting picks a single growth rate g across the
+  // WHOLE night from a discrete menu (turbo/regular/deep), each with its own
+  // minimum g, and reports 2-3 alternatives with their own finish estimates.
+  // This engine has no `pace` input anywhere in [TournamentParams] at all —
+  // it derives a per-game growth factor from duration/players continuously
+  // instead (see `growthFactor` in [generate]) — so there is no menu of
+  // discrete pace options to fit or offer. Adding one is a real feature (a
+  // new params field, new UI, a genuine alternate code path through
+  // [generate]), not a bug fix, and is out of scope for this pass.
 }

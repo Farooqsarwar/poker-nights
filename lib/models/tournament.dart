@@ -585,6 +585,9 @@ class TournamentStructure {
     this.styleNote = '',
     this.rebuysCloseLevel = 0,
     this.engineVersion = '2.1.0',
+    this.feasible = true,
+    this.depthShortfallNote,
+    this.maxPlayersSupported,
   });
 
   /// The rebuy cutoff this structure was actually built around.
@@ -633,6 +636,26 @@ class TournamentStructure {
     }
     return null;
   }
+
+  /// Whether the opening stack actually clears the playable floor (Build
+  /// Spec v3.1 §F1.5 / F1.18: 20 big blinds) for the field size it was built
+  /// for.
+  ///
+  /// `true` for every structure generated before this field existed, and for
+  /// every structure the normal solve or its shortage fallback produced —
+  /// both already refuse to go below the floor. Only the engine's absolute
+  /// last-resort branch (an inventory that cannot fund even a 20BB stack for
+  /// any blind pair) can set this false.
+  final bool feasible;
+
+  /// Plain-language explanation of why the opening stack fell below the
+  /// playable floor, and what would fix it. Null unless [feasible] is false.
+  final String? depthShortfallNote;
+
+  /// The largest field size these chips/settings can seat at or above the
+  /// playable floor, when [feasible] is false. Null when feasible, or when
+  /// the engine could not compute one.
+  final int? maxPlayersSupported;
 
   final int startingStack;
   final List<ChipPlanEntry> chipPlan;
@@ -733,6 +756,9 @@ class TournamentStructure {
     String? styleNote,
     int? rebuysCloseLevel,
     String? engineVersion,
+    bool? feasible,
+    String? depthShortfallNote,
+    int? maxPlayersSupported,
   }) {
     return TournamentStructure(
       startingStack: startingStack ?? this.startingStack,
@@ -762,6 +788,9 @@ class TournamentStructure {
       styleNote: styleNote ?? this.styleNote,
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
       engineVersion: engineVersion ?? this.engineVersion,
+      feasible: feasible ?? this.feasible,
+      depthShortfallNote: depthShortfallNote ?? this.depthShortfallNote,
+      maxPlayersSupported: maxPlayersSupported ?? this.maxPlayersSupported,
     );
   }
 }

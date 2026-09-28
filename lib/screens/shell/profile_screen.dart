@@ -265,9 +265,11 @@ class ProfileScreen extends StatelessWidget {
               _buildAchievementPill(
                 emoji: '🏆',
                 title: 'FIRST WIN',
-                bgColor: AppColors.gold.withValues(alpha: 0.12),
-                borderColor: AppColors.gold.withValues(alpha: 0.33),
-                textColor: AppColors.gold,
+                // Crimson, not gold (no-gold rule, B4.9): "a headline pool
+                // or win may be crimson" — exactly this case.
+                bgColor: AppColors.primarySoft,
+                borderColor: AppColors.primarySoftBorder,
+                textColor: AppColors.primaryText,
                 active: lifetime.wins >= 1,
               ),
               _buildAchievementPill(

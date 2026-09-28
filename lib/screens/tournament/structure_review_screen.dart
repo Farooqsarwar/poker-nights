@@ -13,8 +13,6 @@ import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/ai_insights_panel.dart';
-import '../../widgets/premium_gate.dart';
-import '../../services/entitlements.dart';
 import '../../utils/formatters.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_alert_banner.dart';
@@ -742,10 +740,8 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                         ),
                       ),
                     ),
-                    PremiumLock(
-                      tier: app.premiumTier,
-                      feature: PremiumFeature.aiOptimisedStructures,
-                      child: AppButton(
+                    // D4: full level editing is free — never Premium-gated.
+                    AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
                       onPressed: () {
@@ -779,7 +775,6 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                         );
                       },
                       child: const Text('Edit'),
-                      ),
                     ),
                   ],
                 ),
@@ -1063,7 +1058,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Prize distribution (admin only)',
+                        'Prize distribution (host only)',
                         style: AppTypography.bodySm.copyWith(
                           fontWeight: FontWeight.w600,
                         ),

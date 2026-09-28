@@ -15,7 +15,6 @@ enum AppButtonVariant {
   secondary,
   danger,
   ghost,
-  gold,
   light,
   destructive,
 }
@@ -143,9 +142,7 @@ class _AppButtonState extends State<AppButton> {
                                 style: AppTypography.buttonStyle.copyWith(
                                   fontSize: sizes.fontSize,
                                   color: colors.foreground,
-                                  fontWeight: widget.variant == AppButtonVariant.gold
-                                      ? FontWeight.w700
-                                      : FontWeight.w600,
+                                  fontWeight: FontWeight.w600,
                                 ),
                                 textAlign: TextAlign.center,
                                 // Icons in the label take the label colour —
@@ -238,19 +235,6 @@ class _AppButtonState extends State<AppButton> {
                     offset: const Offset(0, 4),
                   ),
                 ],
-        );
-      case AppButtonVariant.gold:
-        return BoxDecoration(
-          borderRadius: borderRadius,
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.12),
-          ),
-          boxShadow: Glass.primaryGlow,
-          gradient: _sheenOn(
-            AppColors.primary.withValues(alpha: 0.85),
-            highlight: 0.15,
-            shade: 0.06,
-          ),
         );
       // The redesign draws secondary actions ("Join with a code", "Scan QR
       // code", "Sign in" in the top bar) as a dark raised surface one step
@@ -385,11 +369,6 @@ class _AppButtonState extends State<AppButton> {
         return _BtnColors(
           background: Colors.transparent,
           foreground: AppColors.mutedForeground,
-        );
-      case AppButtonVariant.gold:
-        return _BtnColors(
-          background: AppColors.primary,
-          foreground: AppColors.primaryForeground,
         );
       case AppButtonVariant.light:
         return _BtnColors(

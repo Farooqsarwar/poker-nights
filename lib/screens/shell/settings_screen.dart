@@ -164,7 +164,7 @@ class SettingsScreen extends StatelessWidget {
                   showDivider: true,
                 ),
                 _buildSettingRow(
-                  title: 'Admin app tour',
+                  title: 'Host app tour',
                   subtitle: 'Step-by-step guidance during tournaments',
                   trailing: AppToggle(
                     value: app.showAppTour,

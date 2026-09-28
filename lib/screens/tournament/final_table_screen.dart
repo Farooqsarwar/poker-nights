@@ -90,7 +90,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
     app.confirmFinalTable(seating: seating, dealerId: _dealerId);
     setState(() => _confirmed = true);
     Future.delayed(const Duration(milliseconds: 1500), () {
-      if (mounted) context.go(RoutePaths.adminDashboard);
+      if (mounted) context.go(RoutePaths.hostDashboard);
     });
   }
 
@@ -101,7 +101,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
     // Spec §3.3: Only admin can run final table.
     if (!app.isAdmin) {
       return const Scaffold(
-        body: Center(child: Text('Admin access required.')),
+        body: Center(child: Text('Host access required.')),
       );
     }
 
@@ -111,7 +111,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
       // No game in provider — redirect back to dashboard instead of
       // showing a blank screen dead-end.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.go(RoutePaths.adminDashboard);
+        if (mounted) context.go(RoutePaths.hostDashboard);
       });
       return const SizedBox.shrink();
     }
@@ -127,7 +127,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
             children: [
               BackNavButton(
                 label: 'Back to dashboard',
-                onPressed: () => context.go(RoutePaths.adminDashboard),
+                onPressed: () => context.go(RoutePaths.hostDashboard),
               ),
               const SizedBox(width: AppSpacing.md),
               Column(

@@ -1194,7 +1194,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
         ..add(_EditRow(
           title: 'Organizational costs',
           subtitle: 'Percentage retained for equipment, drinks & snacks — '
-              'admin only, never shown to players',
+              'host only, never shown to players',
           trailing: CountStepper(
             value: _orgPct,
             min: 0,

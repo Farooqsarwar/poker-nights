@@ -166,7 +166,7 @@ class _GroupScreenState extends State<GroupScreen> {
         ),
       );
     } else if (isAdmin && game.status.isActiveLive) {
-      context.go(RoutePaths.adminDashboard);
+      context.go(RoutePaths.hostDashboard);
     } else if (game.status == LiveGameStatus.checkin && isAdmin) {
       context.go(RoutePaths.checkIn);
     } else if (isAdmin) {
@@ -541,7 +541,7 @@ class _GroupScreenState extends State<GroupScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Default for every tournament this group runs. An admin can '
+              'Default for every tournament this group runs. A host can '
               'still override these during game creation.',
               style: AppTypography.bodyXs.copyWith(
                 color: AppColors.mutedForeground,

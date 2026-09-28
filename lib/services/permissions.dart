@@ -10,7 +10,7 @@ enum Capability {
   rsvpOwnGuests,
   approveMembership,
   editGroupSettings,
-  manageAdmins,
+  manageHosts,
   runThisTournament,
   runOtherTournaments,
   rebuyAddOnOps,
@@ -28,13 +28,13 @@ enum Actor {
   guest,
   member,
   organizer,
-  admin;
+  host;
 
   String get label => switch (this) {
         Actor.guest => 'Guest',
         Actor.member => 'Member',
         Actor.organizer => 'Tournament Organizer',
-        Actor.admin => 'Admin',
+        Actor.host => 'Host',
       };
 }
 
@@ -64,7 +64,7 @@ abstract final class Permissions {
     if (isGuestSession || user == null) return Actor.guest;
     if (group.ownerId == user.id ||
         group.members.any((m) => m.id == user.id && m.isAdmin)) {
-      return Actor.admin;
+      return Actor.host;
     }
     if (game != null && game.isOrganizer(user.id)) return Actor.organizer;
     if (group.members.any((m) => m.id == user.id)) return Actor.member;
@@ -89,26 +89,26 @@ abstract final class Permissions {
       case Capability.rsvpOwnGuests:
         return actor != Actor.guest;
 
-      // Admin only — §3: "Organizer cannot remove members, delete group, edit
-      // group settings, approve membership, manage admins".
+      // Host only — §3: "Organizer cannot remove members, delete group, edit
+      // group settings, approve membership, manage hosts".
       case Capability.approveMembership:
       case Capability.editGroupSettings:
-      case Capability.manageAdmins:
+      case Capability.manageHosts:
       case Capability.deleteGroup:
       case Capability.runOtherTournaments:
-        return actor == Actor.admin;
+        return actor == Actor.host;
 
-      // Operational control: admin anywhere, organizer in their own game.
+      // Operational control: host anywhere, organizer in their own game.
       case Capability.runThisTournament:
       case Capability.rebuyAddOnOps:
       case Capability.seatingRebalance:
-        return actor == Actor.admin ||
+        return actor == Actor.host ||
             (actor == Actor.organizer && isAssignedGame);
 
       // §28's one conditional cell: "Private financials → Organizer →
       // Assigned game".
       case Capability.viewPrivateFinancials:
-        return actor == Actor.admin ||
+        return actor == Actor.host ||
             (actor == Actor.organizer && isAssignedGame);
     }
   }

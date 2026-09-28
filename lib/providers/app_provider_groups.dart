@@ -100,8 +100,8 @@ extension AppProviderGroups on AppProvider {
     }
   }
 
-  /// Owner-only: sets a member's role (Member / Co-Admin / Admin). Co-Admin
-  /// can add members directly and grant rebuys; only Admin (or the owner)
+  /// Owner-only: sets a member's role (Member / Co-host / Host). Co-host
+  /// can add members directly and grant rebuys; only Host (or the owner)
   /// can advance the tournament or touch blinds/seating settings.
   void setGroupRole(String userId, GroupRole role) {
     if (_user?.id != _currentGroup.ownerId) return; // Only owner can do this
@@ -110,11 +110,11 @@ extension AppProviderGroups on AppProvider {
     final members = _currentGroup.members.map((m) {
       if (m.id == userId) {
         return m.copyWith(
-          isAdmin: role == GroupRole.admin,
-          isCoAdmin: role == GroupRole.coAdmin,
+          isAdmin: role == GroupRole.host,
+          isCoAdmin: role == GroupRole.coHost,
         );
       }
-      if (role == GroupRole.admin &&
+      if (role == GroupRole.host &&
           m.isAdmin &&
           m.id != _currentGroup.ownerId) {
         demoted.add(m.id);
@@ -128,7 +128,7 @@ extension AppProviderGroups on AppProvider {
       final former = _currentGroup.members.firstWhere(
           (m) => m.id == demoted.first);
       addAnnouncement(
-        '${former.name} is no longer an admin — ${promoted.name} is now the group admin.',
+        '${former.name} is no longer the host — ${promoted.name} is now the group host.',
         true,
       );
     }
@@ -140,14 +140,14 @@ extension AppProviderGroups on AppProvider {
               (Object e) => debugPrint('setMemberRole failed: $e')));
       for (final id in demoted) {
         unawaited(_repo
-            .setMemberRole(_currentGroup.id, id, GroupRole.coAdmin.storageValue)
+            .setMemberRole(_currentGroup.id, id, GroupRole.coHost.storageValue)
             .catchError(
                 (Object e) => debugPrint('setMemberRole (demote) failed: $e')));
       }
     }
   }
 
-  /// Host/Admin or Co-Admin: adds a registered user directly to the group by
+  /// Host or Co-host: adds a registered user directly to the group by
   /// email, without going through an invite link/QR/join code. Returns null
   /// on success, or a friendly error message for the UI.
   Future<String?> addMemberByEmail(String email) async {
@@ -201,7 +201,7 @@ extension AppProviderGroups on AppProvider {
     }
   }
 
-  /// Admin-only: sets (or clears, passing null) this tournament's override of
+  /// Host-only: sets (or clears, passing null) this tournament's override of
   /// the group's default table settings.
   void updateTournamentTableSettings(TableSettings? override) {
     final game = _currentGame;

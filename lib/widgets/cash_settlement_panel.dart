@@ -4,18 +4,18 @@ import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/cash_game.dart';
-import '../services/entitlements.dart';
 import '../services/payment_service.dart';
 import '../utils/cash_settlement.dart';
 import 'app_card.dart';
-import 'premium_gate.dart';
 
-/// Where the night's money actually ends up (§3 "Advanced cash-game
-/// functionality").
+/// Where the night's money actually ends up.
 ///
 /// Three things a host currently works out on the back of an envelope: who is
 /// up and who is down, whether the chips on the table match the money paid in,
 /// and — the genuinely tedious one — who hands what to whom.
+///
+/// D4: "cash games" are named in the free list, not the Premium one, so this
+/// is never gated — [tier] is kept only because callers still pass it in.
 class CashSettlementPanel extends StatelessWidget {
   const CashSettlementPanel({
     super.key,
@@ -28,13 +28,7 @@ class CashSettlementPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PremiumGate(
-      tier: tier,
-      feature: PremiumFeature.advancedCashGame,
-      blurb: 'See who is up, whether the money adds up, and exactly who pays '
-          'whom at the end — in the fewest payments.',
-      child: _Body(players: players),
-    );
+    return _Body(players: players);
   }
 }
 

@@ -563,9 +563,11 @@ class _PodiumSlot extends StatelessWidget {
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(AppRadius.lg),
               ),
+              // Crimson outline for 1st, not gold (no-gold rule, B4.9): "no
+              // metallic gold, silver or bronze".
               border: Border.all(
                 color: isFirst
-                    ? AppColors.gold.withValues(alpha: 0.5)
+                    ? AppColors.primary.withValues(alpha: 0.5)
                     : AppColors.border,
               ),
             ),

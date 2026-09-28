@@ -135,7 +135,7 @@ class _CodeEntry extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
-                          'Enter the TV code shown by the admin',
+                          'Enter the TV code shown by the host',
                           style: AppTypography.bodySm.copyWith(
                             color: AppColors.mutedForeground,
                           ),

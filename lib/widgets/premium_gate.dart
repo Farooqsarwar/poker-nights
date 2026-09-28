@@ -10,14 +10,14 @@ import '../services/payment_service.dart';
 import 'app_button.dart';
 import 'app_card.dart';
 
-/// Stands in front of a Premium feature (v11 addendum §3).
+/// Stands in front of a Premium feature (specification v3.1, decision D4).
 ///
 /// Shows [child] when the tier allows it, and an upgrade prompt naming the
 /// feature when it does not. Naming matters: "Upgrade to Premium" tells a host
 /// nothing, where "Saved presets are a Premium feature" tells them exactly
 /// what they are choosing to buy.
 ///
-/// §3's monetization principle is the boundary — the core clock, check-in and
+/// D4's monetization principle is the boundary — the core clock, check-in and
 /// basic payouts are never behind this. Only scale, intelligence and advanced
 /// control.
 ///

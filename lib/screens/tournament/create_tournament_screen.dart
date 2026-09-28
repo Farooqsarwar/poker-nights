@@ -1466,27 +1466,27 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                           : '${s.rebuyLimit} rebuys to L${s.rebuysCloseLevel}${s.rebuyCost != null ? ' @ ${s.rebuyCost}' : ''}')
                     : 'No rebuys',
                 variant: s.rebuys
-                    ? AppBadgeVariant.gold
+                    ? AppBadgeVariant.highlight
                     : AppBadgeVariant.muted,
               ),
               AppBadge(
                 label: s.reEntry ? 'Re-entry' : 'No re-entry',
                 variant: s.reEntry
-                    ? AppBadgeVariant.gold
+                    ? AppBadgeVariant.highlight
                     : AppBadgeVariant.muted,
               ),
               AppBadge(
                 label: s.addOn
                     ? 'Add-on to L${s.addOnCloseLevel}'
                     : 'No add-on',
-                variant: s.addOn ? AppBadgeVariant.gold : AppBadgeVariant.muted,
+                variant: s.addOn ? AppBadgeVariant.highlight : AppBadgeVariant.muted,
               ),
               AppBadge(
                 label: s.antePreference == AntePreference.none
                     ? 'No ante'
                     : 'Ante L${s.anteAfterLevel} (${s.antePreference == AntePreference.individual ? 'Ind' : 'BB'})',
                 variant: s.antePreference != AntePreference.none
-                    ? AppBadgeVariant.gold
+                    ? AppBadgeVariant.highlight
                     : AppBadgeVariant.muted,
               ),
               AppBadge(

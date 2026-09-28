@@ -48,7 +48,7 @@ class NotificationsScreen extends StatelessWidget {
     // For game-specific screens, ensure the current game is set in the
     // provider so the destination screen has data to display.
     const gameScreens = {
-      RoutePaths.adminDashboard,
+      RoutePaths.hostDashboard,
       RoutePaths.playerLive,
       RoutePaths.checkIn,
       RoutePaths.invitation,
@@ -97,7 +97,7 @@ class NotificationsScreen extends StatelessWidget {
       case 'check-in':
         return RoutePaths.checkIn;
       case 'admin-dashboard':
-        return RoutePaths.adminDashboard;
+        return RoutePaths.hostDashboard;
       case 'player-live':
         return RoutePaths.playerLive;
       case 'rebuy-settlement':

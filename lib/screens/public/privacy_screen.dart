@@ -33,7 +33,7 @@ class PrivacyScreen extends StatelessWidget {
           'When you join or create a group, members of that group can see the details of '
           'games hosted within it, including your name, results, and standing. Results '
           'and prize information for a tournament are visible only to the tournament '
-          'admin unless the admin opts to publish them.',
+          'host unless the host opts to publish them.',
     ),
     (
       title: '4. Data you can control',

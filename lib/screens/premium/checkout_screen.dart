@@ -301,11 +301,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
               Text(
                 _plan.price,
-                // The value, in gold (G2); the Pay button carries crimson.
+                // Money is white (no-gold rule, B4.9); the Pay button
+                // carries crimson.
                 style: AppTypography.display(
                   size: AppFontSizes.xl,
                   weight: FontWeight.w700,
-                  color: AppColors.gold,
+                  color: AppColors.foreground,
                 ),
               ),
             ],

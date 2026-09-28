@@ -10,15 +10,17 @@ rules_version = '2';
 //
 // MODEL & PRIVILEGE BOUNDARY (Role-Flows §1.2 / Tech §22)
 //  - Permissions are enforced HERE in the rules, not by hiding buttons.
-//  - Group OWNER (groups/{gid}.ownerId) and group ADMINS (role == 'admin')
-//    are the "authority": they may write whole game documents, manage
-//    membership roles, cash sessions, polls and consume the request queue.
+//  - Group OWNER (groups/{gid}.ownerId) and group HOSTS (role == 'admin' in
+//    the stored data — the wire format kept its original value; the
+//    user-facing role is "Host", never "Admin") are the "authority": they may
+//    write whole game documents, manage membership roles, cash sessions,
+//    polls and consume the request queue.
 //  - A membership row may ONLY be created with role 'member' — unless the
 //    writer is the group owner creating their own row in the same batch as
-//    the group (so no user can ever self-grant 'admin').
+//    the group (so no user can ever self-grant the host role).
 //  - Regular MEMBERS may write ONLY their own private slice of a game doc:
 //    their own `players.{uid}.rsvp` and their own guest slots. Rebuy/add-on
-//    requests go to requests/{gameId}/items, which only an admin may list, so
+//    requests go to requests/{gameId}/items, which only a host may list, so
 //    one member can never see who else asked. They cannot assign seats,
 //    confirm check-ins, record rebuys/add-ons, or alter any other player.
 //  - GUESTS are anonymous. They never touch game documents: they read

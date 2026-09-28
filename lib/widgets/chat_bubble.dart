@@ -268,7 +268,7 @@ class _EventCard extends StatelessWidget {
                                 : '${game.settings.rebuyLimit} rebuys to L${game.settings.rebuysCloseLevel}${game.settings.rebuyCost != null ? ' @ ${game.settings.rebuyCost}' : ''}')
                           : 'No rebuys',
                       variant: game.settings.rebuys
-                          ? AppBadgeVariant.gold
+                          ? AppBadgeVariant.highlight
                           : AppBadgeVariant.muted,
                     ),
                     AppBadge(
@@ -276,7 +276,7 @@ class _EventCard extends StatelessWidget {
                           ? 'Add-on to L${game.settings.addOnCloseLevel}'
                           : 'No add-on',
                       variant: game.settings.addOn
-                          ? AppBadgeVariant.gold
+                          ? AppBadgeVariant.highlight
                           : AppBadgeVariant.muted,
                     ),
                     AppBadge(
@@ -284,7 +284,7 @@ class _EventCard extends StatelessWidget {
                           ? 'Ante L${game.settings.anteAfterLevel}'
                           : 'No ante',
                       variant: game.settings.anteEnabled
-                          ? AppBadgeVariant.gold
+                          ? AppBadgeVariant.highlight
                           : AppBadgeVariant.muted,
                     ),
                   ],

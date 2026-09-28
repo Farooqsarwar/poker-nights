@@ -211,15 +211,15 @@ extension AppProviderCloudSync on AppProvider {
           final errorStr = (lastError ?? '').toString().toLowerCase();
           if (_isRetriablePermissionError(lastError ?? '')) {
             lastSaveError =
-                'Changes not saved — this account does not have admin write access to this game.';
+                'Changes not saved — this account does not have host write access to this game.';
           } else if (errorStr.contains('quota-exceeded') ||
               errorStr.contains('resource-exhausted') ||
               errorStr.contains('quota')) {
             lastSaveError =
                 'Changes not saved — database quota exceeded (free tier limit reached).';
-          } else if (errorStr.contains('another admin is actively editing')) {
+          } else if (errorStr.contains('another host is actively editing')) {
             lastSaveError =
-                'Changes not saved — another admin device is currently editing this game.';
+                'Changes not saved — another host device is currently editing this game.';
           } else if (errorStr.contains('revision mismatch')) {
             lastSaveError =
                 'Changes not saved — this game was updated on another device. Reopen it and try again.';
@@ -345,8 +345,8 @@ extension AppProviderCloudSync on AppProvider {
 
   /// This member's role in the current group, for role-picker UIs.
   GroupRole roleOf(AppUser member) => member.isAdmin
-      ? GroupRole.admin
-      : (member.isCoAdmin ? GroupRole.coAdmin : GroupRole.member);
+      ? GroupRole.host
+      : (member.isCoAdmin ? GroupRole.coHost : GroupRole.member);
 
   /// True only for the single "active editor" admin device — the one that may
   /// write the whole game document. Guests and plain members never qualify.

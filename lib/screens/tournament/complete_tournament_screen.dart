@@ -77,7 +77,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
     // Spec §3.3: Only admin can complete a tournament.
     if (!app.isAdmin) {
       return const Scaffold(
-        body: Center(child: Text('Admin access required.')),
+        body: Center(child: Text('Host access required.')),
       );
     }
 
@@ -87,7 +87,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
       // No game in provider — redirect back to dashboard instead of
       // showing a blank screen dead-end.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.go(RoutePaths.adminDashboard);
+        if (mounted) context.go(RoutePaths.hostDashboard);
       });
       return const SizedBox.shrink();
     }
@@ -129,7 +129,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
             children: [
               BackNavButton(
                 label: 'Back to dashboard',
-                onPressed: () => context.go(RoutePaths.adminDashboard),
+                onPressed: () => context.go(RoutePaths.hostDashboard),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -392,7 +392,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            'Prize distribution (admin only)',
+                            'Prize distribution (host only)',
                             style: AppTypography.bodySm.copyWith(
                               color: AppColors.mutedForeground,
                             ),

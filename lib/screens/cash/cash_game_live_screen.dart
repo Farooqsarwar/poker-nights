@@ -351,7 +351,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
 
     if (!app.isAdmin) {
       return const Scaffold(
-        body: Center(child: Text('Admin access required.')),
+        body: Center(child: Text('Host access required.')),
       );
     }
 

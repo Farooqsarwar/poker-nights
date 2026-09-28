@@ -290,7 +290,7 @@ class Sidebar extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  app.isAdmin ? 'Admin' : 'Player',
+                                  app.isAdmin ? 'Host' : 'Player',
                                   style: AppTypography.bodyXs.copyWith(
                                     color: AppColors.mutedForeground,
                                   ),

@@ -158,7 +158,7 @@ MainAction _adminAction(LiveGame game) {
       return const MainAction(
         MainActionId.manageTournament,
         'Manage Tournament',
-        route: RoutePaths.adminDashboard,
+        route: RoutePaths.hostDashboard,
       );
     case LiveGameStatus.rebuypause:
       return const MainAction(
@@ -172,7 +172,7 @@ MainAction _adminAction(LiveGame game) {
       return const MainAction(
         MainActionId.manageTournament,
         'Manage Tournament',
-        route: RoutePaths.adminDashboard,
+        route: RoutePaths.hostDashboard,
       );
     case LiveGameStatus.completed:
       return const MainAction(

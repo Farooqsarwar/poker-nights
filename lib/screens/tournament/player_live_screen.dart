@@ -163,7 +163,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
             if (game.status == LiveGameStatus.paused)
               const AppAlertBanner(
                 type: AppAlertType.warning,
-                message: 'Tournament is paused. Wait for the admin to resume.',
+                message: 'Tournament is paused. Wait for the host to resume.',
               ),
             // Header
             if (device.isMobile) ...[
@@ -1023,7 +1023,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                               if (p.id == myPlayer.id)
                                 const AppBadge(
                                   label: 'You',
-                                  variant: AppBadgeVariant.gold,
+                                  variant: AppBadgeVariant.highlight,
                                 )
                               else
                                 Text(
@@ -1178,7 +1178,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 const AppAlertBanner(
                   type: AppAlertType.info,
                   message:
-                      'Rebuy period has ended. Add-ons are available. Wait for the admin to start the next level.',
+                      'Rebuy period has ended. Add-ons are available. Wait for the host to start the next level.',
                 ),
               ],
               // Guest account prompt

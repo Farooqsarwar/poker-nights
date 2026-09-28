@@ -729,9 +729,9 @@ class _HistoryRow extends StatelessWidget {
                   ? (game.settings.addOnCost ?? game.settings.buyIn)
                   : 0);
 
-    final stripeColor = placement == 1
-        ? AppColors.gold
-        : isPodium
+    // No gold, no silver, no bronze (no-gold rule): every podium finish,
+    // including 1st, reads in the one accent — crimson.
+    final stripeColor = isPodium
         ? AppColors.primary
         : (net != null && net > 0
               ? AppColors.successText
@@ -814,9 +814,7 @@ class _HistoryRow extends StatelessWidget {
                                     vertical: 3,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: placement == 1
-                                        ? AppColors.gold.withValues(alpha: 0.15)
-                                        : isPodium
+                                    color: isPodium
                                         ? AppColors.primarySoft
                                         : AppColors.muted,
                                     borderRadius: BorderRadius.circular(6),
@@ -824,9 +822,7 @@ class _HistoryRow extends StatelessWidget {
                                   child: Text(
                                     placement == 1 ? '1st' : '#$placement',
                                     style: TextStyle(
-                                      color: placement == 1
-                                          ? AppColors.gold
-                                          : isPodium
+                                      color: isPodium
                                           ? AppColors.primaryText
                                           : AppColors.mutedForeground,
                                       fontSize: 12,

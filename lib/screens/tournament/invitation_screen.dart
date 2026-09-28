@@ -308,7 +308,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                             Text(
                               'You have $claimedSlots claimed guest slot${claimedSlots == 1 ? '' : 's'}. '
                               'Reducing your response may remove a slot already reserved by a guest. '
-                              'The admin will need to resolve any conflict.',
+                              'The host will need to resolve any conflict.',
                               style: AppTypography.bodySm.copyWith(
                                 color: AppColors.mutedForeground,
                               ),
@@ -1089,7 +1089,7 @@ void _showRsvpListModal(BuildContext context, AppProvider app, LiveGame game) {
             if (maybe > 0)
               AppBadge(
                 label: '$maybe maybe',
-                variant: AppBadgeVariant.gold,
+                variant: AppBadgeVariant.highlight,
                 border: true,
               ),
             if (cant > 0)
@@ -1545,7 +1545,7 @@ class _ContextualMainButton extends StatelessWidget {
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
-            onPressed: () => context.go(RoutePaths.adminDashboard),
+            onPressed: () => context.go(RoutePaths.hostDashboard),
             child: const Text('Manage Tournament'),
           );
         case LiveGameStatus.rebuypause:
@@ -1559,7 +1559,7 @@ class _ContextualMainButton extends StatelessWidget {
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
-            onPressed: () => context.go(RoutePaths.adminDashboard),
+            onPressed: () => context.go(RoutePaths.hostDashboard),
             child: const Text('Manage Tournament'),
           );
         case LiveGameStatus.completed:

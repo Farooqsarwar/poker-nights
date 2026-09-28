@@ -213,7 +213,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     } else {
       setState(
         () => _codeError =
-            'That code opens the TV display — ask the admin for the player code.',
+            'That code opens the TV display — ask the host for the player code.',
       );
     }
   }
@@ -494,7 +494,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           titleSize: 24,
           leading: IconTile(label: '♠', size: 52),
           title: 'Join as guest',
-          subtitle: 'Enter the code from the admin or invitation link',
+          subtitle: 'Enter the code from the host or invitation link',
         ),
         const SizedBox(height: AppSpacing.xl),
         AppCard(
@@ -762,7 +762,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           _StepTitle(
             title: 'Choose your guest slot',
             subtitle:
-                '${inviter?.name ?? 'The admin'} is bringing $availableSlots guest${availableSlots > 1 ? 's' : ''}. Which slot are you?',
+                '${inviter?.name ?? 'The host'} is bringing $availableSlots guest${availableSlots > 1 ? 's' : ''}. Which slot are you?',
           ),
           const SizedBox(height: AppSpacing.md),
           for (var slot = 1; slot <= availableSlots; slot++) ...[
@@ -838,7 +838,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           const _StepTitle(
             title: 'Enter your name',
             subtitle:
-                'This is shown to the admin and displayed on the seating plan.',
+                'This is shown to the host and displayed on the seating plan.',
           ),
           const SizedBox(height: AppSpacing.md),
           AppTextField(
@@ -911,9 +911,9 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               ),
             ),
           ),
-          title: 'Waiting for admin',
+          title: 'Waiting for host',
           message:
-              'Your check-in request has been sent. The admin will confirm you shortly.',
+              'Your check-in request has been sent. The host will confirm you shortly.',
         ),
         const SizedBox(height: AppSpacing.md),
         StatRowsCard(
@@ -1032,7 +1032,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           title: confirmed ? 'You’re confirmed!' : 'Your slot is booked',
           titleColor: AppColors.successText,
           message: confirmed
-              ? 'The admin has accepted your seat.'
+              ? 'The host has accepted your seat.'
               : (reservedName == null || reservedName.isEmpty
                     ? 'You have a reserved seat.'
                     : 'Reserved for $reservedName.'),
@@ -1058,7 +1058,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                'The tournament goes live once the admin starts it. Come back then to watch your match live.',
+                'The tournament goes live once the host starts it. Come back then to watch your match live.',
                 style: AppTypography.bodySm.copyWith(
                   color: AppColors.mutedForeground,
                 ),
@@ -1451,7 +1451,7 @@ class _SeatCard extends StatelessWidget {
           if (pending) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Seats are assigned once the admin generates the seating plan.',
+              'Seats are assigned once the host generates the seating plan.',
               style: AppTypography.bodyXs.copyWith(
                 color: AppColors.mutedForeground,
               ),

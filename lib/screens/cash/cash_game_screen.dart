@@ -467,14 +467,22 @@ class _CashGameScreenState extends State<CashGameScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Track settlement',
-                      style: TextStyle(
-                        color: AppColors.foreground,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                    // Expanded, not a bare Text: a 16px label in the test
+                    // font fallback is wider than the row has left after the
+                    // toggle, and an unconstrained Text pushes the toggle off
+                    // the card entirely at 320px.
+                    Expanded(
+                      child: Text(
+                        'Track settlement',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.foreground,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
+                    const SizedBox(width: AppSpacing.sm),
                     AppToggle(
                       value: _trackSettlement,
                       onChanged: (v) => setState(() => _trackSettlement = v),

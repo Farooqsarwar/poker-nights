@@ -47,8 +47,12 @@ abstract final class Entitlements {
   ///
   /// Named rather than boolean so call sites read as a requirement rather than
   /// a magic flag, and so the list can be audited against D4 directly.
+  ///
+  /// The members that are free are here too, and say so: §D-G is explicit that
+  /// "the owner's rule (D4) is the whole list. Anything not named as Premium is
+  /// free." A feature only reaches this switch as Premium if D4 names it.
   static bool allows(PremiumTier tier, PremiumFeature feature) =>
-      tier == PremiumTier.premium;
+      feature.requiresPremium ? tier == PremiumTier.premium : true;
 }
 
 /// Where "basic" ends and "advanced" begins.
@@ -61,9 +65,10 @@ abstract final class Entitlements {
 /// progressive/mystery bounties, unlimited saved templates (3 free), and
 /// graphs/exportable history.
 ///
-/// Everything else — anything D4 doesn't name either way — is a judgement,
-/// not a requirement, gathered here and named so the product owner can move
-/// any of them without hunting through screens.
+/// Everything else — anything D4 doesn't name either way — is free too, not a
+/// judgement call: §D-G states that D4 is the whole list. The rows below are
+/// transcribed from §D-G's free/premium table so a change to either can be
+/// checked against it line by line.
 ///
 /// | Feature | Free gets | Premium adds |
 /// |---|---|---|
@@ -71,20 +76,22 @@ abstract final class Entitlements {
 /// | Seating | All modes, TDA balancing | — (free per D4) |
 /// | Structure | Full level editing | — (free per D4) |
 /// | Payouts / ICM | Full ICM calculator, any payout shape | — (free per D4) |
-/// | Chips | Unlimited sets, colour-up during play | Colour-up optimisation/planning |
+/// | Chips | Unlimited sets, colour-up during play, colour-up planning | — (free per D4) |
 /// | Templates | 3 saved | Unlimited |
 /// | Cash games | Standings and settlement | — (free per D4) |
 /// | TV | One read-only display | Customisation, multiple displays |
 /// | Seasons | — | Seasons and points |
-/// | Bounties | — | Progressive and Mystery bounties |
+/// | Bounties | Fixed KO bounty | Progressive and Mystery bounties |
 /// | Stats | Basic standings | Graphs and exportable history |
-/// | AI | ICM calculator itself is free | Structure pacing / advanced insight |
+/// | AI | ICM calculator, pacing and recommendations | — (free per D4) |
 abstract final class PremiumBoundary {
   /// Saved templates: 3 free, unlimited on Premium (D4).
   static const int freeMaxSavedPresets = 3;
 }
 
-/// The Premium column of D4, as a type.
+/// The Premium column of D4, as a type — plus the members D4 leaves free, which
+/// only need to be here because a call site asks [Entitlements.allows] and the
+/// answer has to be somewhere.
 ///
 /// `advancedCashGame` and `advancedStats` were removed: D4 names cash games
 /// and basic standings as free with no "advanced" cash-game split, and the
@@ -96,7 +103,9 @@ enum PremiumFeature {
   savedPresets,
   tvCustomisation,
   advancedAiRecommendations,
-  seasons;
+  seasons,
+  bountyFormats,
+  exportableHistory;
 
   /// Short label for an upgrade prompt.
   String get label => switch (this) {
@@ -106,5 +115,23 @@ enum PremiumFeature {
         PremiumFeature.tvCustomisation => 'TV customisation',
         PremiumFeature.advancedAiRecommendations => 'Advanced AI recommendations',
         PremiumFeature.seasons => 'Seasons and points',
+        PremiumFeature.bountyFormats => 'Progressive and Mystery bounties',
+        PremiumFeature.exportableHistory => 'Graphs and exportable history',
+      };
+
+  /// Whether this feature is behind the paywall.
+  ///
+  /// Not every value here is Premium. Chip planning and the AI's
+  /// recommendations are ordinary tools and D4's free column opens with "every
+  /// tool" / "every public tool - the full tournament engine", so they ride in
+  /// this enum for their labels and are open to everyone.
+  ///
+  /// Stating it here rather than in [Entitlements.allows] keeps the decision
+  /// next to the feature, and lets the test assert a tier for every value
+  /// instead of assuming the enum and the paywall are the same set.
+  bool get requiresPremium => switch (this) {
+        PremiumFeature.chipOptimisation => false,
+        PremiumFeature.advancedAiRecommendations => false,
+        _ => true,
       };
 }

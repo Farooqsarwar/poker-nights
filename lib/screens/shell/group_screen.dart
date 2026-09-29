@@ -351,6 +351,19 @@ class _GroupScreenState extends State<GroupScreen> {
               ),
             ],
           ),
+          // Import past results (§B12) is host-only and rare, so it gets its
+          // own row rather than a fourth chip: the row above is already at
+          // its limit at 320px.
+          if (isAdmin) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              fullWidth: true,
+              size: AppButtonSize.sm,
+              variant: AppButtonVariant.secondary,
+              onPressed: () => context.push(RoutePaths.importResults),
+              child: const Text('Import past results'),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           // Games Section with count
           Row(

@@ -23,6 +23,9 @@ import '../screens/shell/group_screen.dart';
 import '../screens/shell/history_screen.dart';
 import '../screens/shell/home_screen.dart';
 import '../screens/shell/join_group_screen.dart';
+import '../screens/shell/group_chips_screen.dart';
+import '../screens/shell/group_settings_screen.dart';
+import '../screens/shell/import_results_screen.dart';
 import '../screens/shell/members_screen.dart';
 import '../screens/shell/notifications_screen.dart';
 import '../screens/shell/polls_screen.dart';
@@ -39,6 +42,7 @@ import '../screens/shell/presets_screen.dart';
 import '../screens/tournament/admin_dashboard_screen.dart';
 import '../screens/tournament/check_in_screen.dart';
 import '../screens/tournament/complete_tournament_screen.dart';
+import '../screens/tournament/deal_screen.dart';
 import '../screens/tournament/create_tournament_screen.dart';
 import '../screens/tournament/quick_start_screen.dart';
 import '../screens/tournament/final_table_screen.dart';
@@ -96,7 +100,21 @@ const _adminPaths = {
   RoutePaths.finalTable,
   RoutePaths.rebuySettlement,
   RoutePaths.completeTournament,
+  RoutePaths.deal,
+  RoutePaths.importResults,
+  RoutePaths.groupSettings,
+  RoutePaths.groupChips,
   RoutePaths.structureReview,
+};
+
+/// Routes a tournament co-host may open, not just the group owner.
+///
+/// Kept separate from [_adminPaths] on purpose. D15 gives a co-host the bust,
+/// rebuy, pause, clock and check-in actions, but NOT tournament creation or
+/// group settings — so widening [_adminPaths] wholesale would hand a co-host
+/// `createTournament`, `groupSettings` and `delete` rights it must not have.
+const _coHostPaths = {
+  RoutePaths.rebuySettlement,
 };
 
 /// Shell routes a guest session (no account) may enter — mirrors
@@ -123,6 +141,7 @@ class _RouterRefresh extends ChangeNotifier {
         _app.isAuthenticated,
         _app.hasGuestSession,
         _app.isAdmin,
+        _app.canOperateTheClock,
         _app.currentGame?.id,
         _app.currentGame?.status,
         _app.currentGroup.id,
@@ -224,6 +243,12 @@ GoRouter buildAppRouter(AppProvider app) {
         pendingDeepLink = state.uri.toString();
       }
       return path == RoutePaths.splash ? null : RoutePaths.splash;
+    }
+
+    // Co-host routes: D15 lets a co-host do the rebuy work, so the screen's own
+    // gate would never be reached if this bounced them first.
+    if (_coHostPaths.contains(path) && !app.canOperateTheClock) {
+      return app.currentGame != null ? RoutePaths.invitation : RoutePaths.home;
     }
 
     // Host-only routes: bounce non-hosts away before the screen renders.
@@ -418,6 +443,18 @@ GoRouter buildAppRouter(AppProvider app) {
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const MembersScreen(), path: RoutePaths.members)),
     ),
     GoRoute(
+      path: RoutePaths.importResults,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ImportResultsScreen(), path: RoutePaths.importResults)),
+    ),
+    GoRoute(
+      path: RoutePaths.groupSettings,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const GroupSettingsScreen(), path: RoutePaths.groupSettings)),
+    ),
+    GoRoute(
+      path: RoutePaths.groupChips,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const GroupChipsScreen(), path: RoutePaths.groupChips)),
+    ),
+    GoRoute(
       path: RoutePaths.polls,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const PollsScreen(), path: RoutePaths.polls)),
     ),
@@ -542,6 +579,12 @@ GoRouter buildAppRouter(AppProvider app) {
       path: RoutePaths.completeTournament,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
         const CompleteTournamentScreen(), path: RoutePaths.completeTournament,
+      )),
+    ),
+    GoRoute(
+      path: RoutePaths.deal,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        const DealScreen(), path: RoutePaths.deal,
       )),
     ),
     GoRoute(

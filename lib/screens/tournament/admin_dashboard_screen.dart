@@ -859,6 +859,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           trailing: Icons.arrow_forward,
                         ),
                       ),
+                      const SizedBox(height: AppSpacing.sm),
+                      // C-deal. A table that calls a deal is ending the night
+                      // early on agreed figures, which is a different job from
+                      // transcribing who went out in which order — so it gets
+                      // its own screen rather than a mode of this one.
+                      AppButton(
+                        size: AppButtonSize.lg,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => context.go(RoutePaths.deal),
+                        child: const AppIconLabel(
+                          label: 'Agree a deal instead',
+                          trailing: Icons.calculate_outlined,
+                        ),
+                      ),
                     ],
                   ),
                 ),

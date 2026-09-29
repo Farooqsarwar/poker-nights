@@ -30,9 +30,13 @@ import 'package:poker_night/screens/premium/upgrade_screen.dart';
 import 'package:poker_night/screens/cash/cash_game_screen.dart';
 import 'package:poker_night/screens/cash/cash_game_live_screen.dart';
 import 'package:poker_night/screens/tournament/admin_dashboard_screen.dart';
+import 'package:poker_night/screens/shell/group_chips_screen.dart';
+import 'package:poker_night/screens/shell/group_settings_screen.dart';
+import 'package:poker_night/screens/shell/import_results_screen.dart';
 import 'package:poker_night/screens/tournament/check_in_screen.dart';
 import 'package:poker_night/screens/tournament/complete_tournament_screen.dart';
 import 'package:poker_night/screens/tournament/create_tournament_screen.dart';
+import 'package:poker_night/screens/tournament/deal_screen.dart';
 import 'package:poker_night/screens/tournament/final_table_screen.dart';
 import 'package:poker_night/screens/tournament/invitation_screen.dart';
 import 'package:poker_night/screens/tournament/player_live_screen.dart';
@@ -224,6 +228,16 @@ void main() {
     'Rebuy settlement': (widget: const RebuySettlementScreen(), shelled: true),
     'Final table': (widget: const FinalTableScreen(), shelled: true),
     'Complete tournament': (widget: const CompleteTournamentScreen(), shelled: true),
+    'Deal': (widget: const DealScreen(), shelled: true),
+  'Import past results': (
+    widget: const ImportResultsScreen(),
+    shelled: true,
+  ),
+  'Group settings': (
+    widget: const GroupSettingsScreen(),
+    shelled: true,
+  ),
+  'Group chips': (widget: const GroupChipsScreen(), shelled: true),
     'Result podium': (widget: const ResultPodiumScreen(), shelled: true),
     // Cash
     'Cash game': (widget: const CashGameScreen(), shelled: true),

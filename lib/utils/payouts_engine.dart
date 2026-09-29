@@ -418,6 +418,32 @@ abstract final class PayoutsEngine {
     );
   }
 
+  /// C-deal item 4's guard: the agreed amounts must add up to exactly what is
+  /// left to pay, otherwise the deal shows
+  /// "The agreed amounts add up to 185, but 189 is left to pay. Fix them
+  /// first."
+  ///
+  /// The host edits whole currency units, so the sums arrive as doubles and
+  /// must be compared at a half-cent tolerance — [roundDeal] hands out
+  /// whole units, and forcing a coarser unit than the host is typing in would
+  /// reject a split they can see is correct.
+  static String? dealAmountsError(double agreed, double leftToPay) {
+    if ((agreed - leftToPay).abs() < 0.005) return null;
+    final a = _dealAmountText(agreed);
+    final l = _dealAmountText(leftToPay);
+    return 'The agreed amounts add up to $a, but $l is left to pay. '
+        'Fix them first.';
+  }
+
+  /// Deal figures render as the host typed them: whole units stay whole
+  /// ("185", not "185.00"), because the error text above is specified with
+  /// bare integers and a trailing ".00" would read as a different number.
+  static String _dealAmountText(double amount) {
+    final rounded = (amount * 100).round();
+    if (rounded % 100 == 0) return '${rounded ~/ 100}';
+    return (rounded / 100).toStringAsFixed(2);
+  }
+
   // ---------------------------------------------------------------------
   // F2.7 — rounding a deal, and the bubble save.
   // ---------------------------------------------------------------------

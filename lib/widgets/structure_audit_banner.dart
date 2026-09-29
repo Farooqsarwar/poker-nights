@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/live_game.dart';
+import '../providers/app_provider.dart';
 import '../utils/structure_verification.dart';
+import 'app_button.dart';
 
 /// Shows what this device concluded when it checked the structure itself
 /// (addendum §7, acceptance criterion 15).
@@ -16,6 +19,11 @@ import '../utils/structure_verification.dart';
 /// It is also silent when the check could not run. "I cannot tell" is not
 /// "something is wrong", and showing a warning for it would burn the warning's
 /// credibility on missing chip data.
+///
+/// Host-only, and the gate lives here rather than at the call site: the widget
+/// is mounted on the player live view, and §E13 is explicit that a mismatch
+/// "shows the host a banner — players see nothing alarming". A banner a player
+/// can see is the alarming thing.
 class StructureAuditBanner extends StatelessWidget {
   const StructureAuditBanner({super.key, required this.game});
 
@@ -23,6 +31,9 @@ class StructureAuditBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
+    if (!app.isAdmin) return const SizedBox.shrink();
+
     final audit = StructureVerification.audit(game);
     if (!audit.isMismatch) return const SizedBox.shrink();
 
@@ -48,7 +59,8 @@ class StructureAuditBanner extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  'This structure does not match its settings',
+                  'This structure no longer matches its settings — '
+                  'republish?',
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w700,
                     color: AppColors.foreground,
@@ -90,6 +102,16 @@ class StructureAuditBanner extends StatelessWidget {
                 ],
               ),
             ),
+          const SizedBox(height: AppSpacing.sm),
+          // Telling the host to republish and then offering no way to republish
+          // is how a warning trains people to dismiss it. The rebuild is the
+          // one the rest of the app already uses, so the published structure
+          // and the settings it claims to match cannot drift apart again.
+          AppButton(
+            size: AppButtonSize.sm,
+            onPressed: app.recalculateStructure,
+            child: const Text('Republish'),
+          ),
         ],
       ),
     );

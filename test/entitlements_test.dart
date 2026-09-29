@@ -55,10 +55,51 @@ void main() {
   });
 
   group('§3 — the Premium feature list', () {
-    test('every Premium feature is closed on free and open on Premium', () {
+    test('allows() agrees with the declared tier for every feature', () {
+      // Not every value in the enum is Premium — chip planning and the AI's
+      // recommendations are ordinary tools, and D4's free column opens with
+      // "every tool". So this asserts consistency per feature rather than
+      // assuming the enum and the paywall are the same set. A new feature
+      // added without a tier decision fails here.
       for (final f in PremiumFeature.values) {
+        expect(
+          Entitlements.allows(PremiumTier.premium, f),
+          isTrue,
+          reason: '$f must be open on Premium',
+        );
+        expect(
+          Entitlements.allows(PremiumTier.free, f),
+          f.requiresPremium ? isFalse : isTrue,
+          reason: '$f is${f.requiresPremium ? '' : ' not'} behind the paywall',
+        );
+      }
+    });
+
+    test('the tools D4 calls free are not paywalled', () {
+      // D4 free column: "every tool, one table, full level editing, ICM deal
+      // suggestions, 3 saved templates/presets, basic standings." Neither of
+      // these is a Premium-column item.
+      expect(Entitlements.allows(
+        PremiumTier.free,
+        PremiumFeature.chipOptimisation,
+      ), isTrue);
+      expect(Entitlements.allows(
+        PremiumTier.free,
+        PremiumFeature.advancedAiRecommendations,
+      ), isTrue);
+    });
+
+    test('a premium-only control stays closed on free', () {
+      // The regression this guards: a free tier user tapping a Premium control
+      // must be stopped, not let through.
+      for (final f in [
+        PremiumFeature.multiTable,
+        PremiumFeature.seasons,
+        PremiumFeature.bountyFormats,
+        PremiumFeature.exportableHistory,
+      ]) {
+        expect(f.requiresPremium, isTrue, reason: '$f is Premium');
         expect(Entitlements.allows(PremiumTier.free, f), isFalse);
-        expect(Entitlements.allows(PremiumTier.premium, f), isTrue);
       }
     });
 

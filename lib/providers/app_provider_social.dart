@@ -233,6 +233,15 @@ extension AppProviderSocial on AppProvider {
   /// The badge on the Reports row.
   int get reportCount => _reports.length;
 
+  /// Seeds the open reports without touching the backend. The reports stream
+  /// is admin-and-backend gated, so without this a host's report card can
+  /// only ever be seen empty in a test.
+  @visibleForTesting
+  void setReportsForTesting(List<ChatReport> reports) {
+    _reports = List.unmodifiable(reports);
+    if (!_disposed) notifyListeners();
+  }
+
   /// Subscribes to the group's reports once this user is known to be an admin.
   void _syncReportsSub(String gid) {
     if (!_backendUp || _currentGroupId != gid) return;
@@ -257,6 +266,31 @@ extension AppProviderSocial on AppProvider {
   /// the all-time standings and the season table (no knockouts).
   List<ImportedNight> get importedNights => List.unmodifiable(_importedNights);
 
+  /// Every date already in this season — played games and previously imported
+  /// nights alike — as `YYYY-MM-DD`.
+  ///
+  /// §B12 refuses a line whose date is "already in the season - skipped", and
+  /// that means BOTH sources. Checking only the imported list would let a host
+  /// import a night that duplicates a game the group actually played, and the
+  /// standings would then count it twice.
+  List<String> get seasonDates => [
+        for (final g in currentGroup.games)
+          if (g.settings.date.length >= 10) g.settings.date.substring(0, 10),
+        for (final n in _importedNights)
+          if (n.date.length >= 10) n.date.substring(0, 10),
+      ];
+
+  /// Members by their normalised name, for `ImportResultsParser.toNight`.
+  ///
+  /// First member wins when two share a name, which the parser's own index
+  /// also does — building it here rather than in the screen keeps the matching
+  /// rule in one place, since a second implementation is how a guest row
+  /// silently becomes a member row for some nights and not others.
+  Map<String, String> get importMemberIndex =>
+      ImportResultsParser.memberIndex([
+        for (final m in currentGroup.members) (id: m.id, name: m.name),
+      ]);
+
   /// Every member can read the imported nights (they feed the standings).
   void _syncImportedSub(String gid) {
     if (!_backendUp || _currentGroupId != gid) return;
@@ -265,6 +299,16 @@ extension AppProviderSocial on AppProvider {
       _importedNights = list;
       if (!_disposed) notifyListeners();
     }, onError: (Object e) => debugPrint('importedNights stream error: $e'));
+  }
+
+  /// Seeds already-imported nights without touching the backend. For tests
+  /// and for the recovery bundle, which restores a session's imported nights
+  /// before the Firestore stream has delivered its first value.
+  @visibleForTesting
+  void setImportedNightsForTesting(List<ImportedNight> nights) {
+    _importedNights = [...nights]
+      ..sort((a, b) => a.date.compareTo(b.date));
+    if (!_disposed) notifyListeners();
   }
 
   /// Host only. Saves [nights] and returns how many were stored; a date that
@@ -309,8 +353,19 @@ extension AppProviderSocial on AppProvider {
   /// Reports [message]. Always tells the group's host by push - Apple 1.2
   /// requires a way to report objectionable content that reaches a person, so
   /// this notification has no mute and no setting; it is not a "chat" alert.
+  ///
+  /// [reason] is the §E10 (2) choice (offensive / spam / other). It is
+  /// optional so a caller that has not asked the member yet still files a
+  /// valid report - the field is nullable and a stored report without one is
+  /// exactly what every report filed before this field existed looks like.
+  ///
+  /// §E10 (2)'s "a report not handled in 24 h is emailed to support" is a
+  /// Cloud Function on `reports/{id}` (the `createdAt` server timestamp it
+  /// orders on is written by `reportChatMessage`), not something the member's
+  /// device does.
+  ///
   /// Returns a message to show when it could not be sent.
-  Future<String?> reportMessage(ChatMessage message) async {
+  Future<String?> reportMessage(ChatMessage message, {String? reason}) async {
     final uid = _user?.id;
     if (uid == null || !canReport(message)) {
       return 'This message cannot be reported.';
@@ -326,6 +381,7 @@ extension AppProviderSocial on AppProvider {
       excerpt: message.body,
       createdAt: DateTime.now(),
       gameId: message.gameId,
+      reason: ChatReport.normalizeReason(reason),
     );
     if (_backendUp) {
       try {

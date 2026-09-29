@@ -82,6 +82,19 @@ abstract final class RoutePaths {
   static const String rebuySettlement = '/rebuy-settlement';
   static const String finalTable = '/final-table';
   static const String completeTournament = '/complete-tournament';
+  /// Spec route `/t/:id/deal` (C-deal). Flat here, like every other game
+  /// route, because the game is already the current session — there is one
+  /// live game per app, not one per id.
+  static const String deal = '/deal';
+  /// Spec route `/groups/:gid/import` (B12). Flat, like the other group
+  /// routes — the group is the current session, not an id in the path.
+  static const String importResults = '/import-results';
+  /// Spec route `/groups/:gid/settings` (B9). Every row here edits the group
+  /// itself, which is host work, so this sits in the host-only route set.
+  static const String groupSettings = '/group-settings';
+  /// Spec route `/chips` (B10). Host only — it points the group at one of the
+  /// host's own chip sets.
+  static const String groupChips = '/group-chips';
   static const String resultPodium = '/result-podium';
 
   // ── Cash game ──────────────────────────────────────────────────────────────

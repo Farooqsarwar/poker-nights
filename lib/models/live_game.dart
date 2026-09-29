@@ -12,6 +12,29 @@ import 'tournament_format.dart';
 /// the stored shape changes in a way an older build could not round-trip.
 const int kGameCodecVersion = 1;
 
+/// §C1 step 1 `bounty.kind` (technical 48: `bounty {on, amount, kind}`). How
+/// the KO bounty pot changes as the field thins out.
+///
+/// [fixed] is the free option, and it is also the only kind that existed before
+/// this field did — which is what makes it the correct reading of a stored
+/// game that carries no kind. The other two are Premium (D4) and their payout
+/// mechanics are explicitly open (O8), so v1 records and prices the choice
+/// without inventing a growth rule.
+enum BountyKind {
+  fixed,
+  progressive,
+  mystery;
+
+  String get label => switch (this) {
+        BountyKind.fixed => 'Fixed',
+        BountyKind.progressive => 'Progressive',
+        BountyKind.mystery => 'Mystery',
+      };
+
+  /// §C1 step 1: both non-fixed kinds carry the PREMIUM pill.
+  bool get isPremium => this != BountyKind.fixed;
+}
+
 /// Settings captured when creating a tournament game.
 class GameSettings {
   const GameSettings({
@@ -24,6 +47,7 @@ class GameSettings {
     required this.buyIn,
     required this.koEnabled,
     required this.koAmount,
+    this.koKind = BountyKind.fixed,
     required this.rebuys,
     required this.rebuysCloseLevel,
     this.rebuyCloseChosenByOrganizer = false,
@@ -77,6 +101,11 @@ class GameSettings {
   final int buyIn;
   final bool koEnabled;
   final int koAmount;
+
+  /// How the bounty pot behaves between knockouts. Absent on every game saved
+  /// before kinds existed, and those games all ran a fixed bounty, so
+  /// [BountyKind.fixed] is the honest default rather than merely the safe one.
+  final BountyKind koKind;
   final bool rebuys;
   final int rebuysCloseLevel;
   final bool rebuyCloseChosenByOrganizer;
@@ -262,6 +291,23 @@ class GameSettings {
   int get effectiveRebuyCost => rebuyCost ?? buyIn;
   int get effectiveAddOnCost => addOnCost ?? buyIn;
 
+  /// §C1 step 1. The KO bounty's domain: 5–50 in steps of 5, default 5. The
+  /// stepper in the creation wizard is held to it; a stored figure is not
+  /// rewritten, for the same reason [effectiveOrganizerPct] does not rewrite
+  /// the org percentage.
+  static const int minBounty = 5;
+  static const int maxBounty = 50;
+  static const int bountyStep = 5;
+
+  /// The bounty collected per entry and per rebuy — zero while it is off.
+  ///
+  /// The bounty pot is on top of the buy-in and funds nothing but knockouts
+  /// (§F2.4), so an off bounty contributes nothing to anything and the amount
+  /// left behind by a toggle must not keep charging. The figure is NOT clamped
+  /// to [minBounty]/[maxBounty] here: that would make the screen quote a
+  /// smaller bounty than the elimination path actually pays.
+  int get effectiveKoAmount => koEnabled ? koAmount : 0;
+
   /// The format, resolved. Null means this game predates the field, so it is
   /// derived from the booleans that have always driven the same behaviour.
   /// Re-entry wins over rebuy when both are set, matching
@@ -302,6 +348,7 @@ class GameSettings {
     int? buyIn,
     bool? koEnabled,
     int? koAmount,
+    BountyKind? koKind,
     bool? rebuys,
     int? rebuysCloseLevel,
     bool? rebuyCloseChosenByOrganizer,
@@ -375,6 +422,7 @@ class GameSettings {
       buyIn: buyIn ?? this.buyIn,
       koEnabled: koEnabled ?? this.koEnabled,
       koAmount: koAmount ?? this.koAmount,
+      koKind: koKind ?? this.koKind,
       rebuys: rebuys ?? this.rebuys,
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
       rebuyCloseChosenByOrganizer: rebuyCloseChosenByOrganizer ?? this.rebuyCloseChosenByOrganizer,
@@ -644,6 +692,7 @@ class LiveGame {
     required this.pendingGuests,
     required this.finishOrder,
     this.speedRecommendation,
+    this.dealAmounts,
     this.settlementConfirmed = false,
     this.addOnWindowClosed = false,
     this.seatingConfirmed = false,
@@ -700,6 +749,20 @@ class LiveGame {
   final List<Player> pendingGuests;
   final List<String> finishOrder; // playerIds, first-out first
   final SpeedRecommendation? speedRecommendation;
+
+  /// What each player was actually paid, when the game ended on an agreed
+  /// deal rather than by busts (C-deal item 5, A§F2.6/F2.7).
+  ///
+  /// Null on a night that finished naturally, which is the common case: the
+  /// payout ladder and the finish order already determine the amounts then, so
+  /// this only records the one thing they cannot - what the table agreed to.
+  /// Indexed to match `finishOrder`, so entry `i` is what the player in
+  /// `finishOrder[i]` received.
+  ///
+  /// Deliberately NOT included: KO bounties. They were paid at each knockout
+  /// and are never part of a deal (C-deal rules), so they must not be folded
+  /// into these figures and re-presented as a share of the pot.
+  final List<double>? dealAmounts;
 
   /// §11.4. See [ShootoutStage].
   final ShootoutStage? shootoutStage;
@@ -1092,6 +1155,8 @@ class LiveGame {
     int? totalChipsInPlay,
     List<Player>? pendingGuests,
     List<String>? finishOrder,
+    List<double>? dealAmounts,
+    bool clearDealAmounts = false,
     List<PaymentRecord>? payments,
     List<String>? organizerIds,
     ShotClock? shotClock,
@@ -1142,6 +1207,13 @@ class LiveGame {
       totalChipsInPlay: totalChipsInPlay ?? this.totalChipsInPlay,
       pendingGuests: pendingGuests ?? this.pendingGuests,
       finishOrder: finishOrder ?? this.finishOrder,
+      // `clearDealAmounts` exists because `dealAmounts: null` cannot express
+      // "remove the deal": a null parameter means "keep what is there" in
+      // every other copyWith here, so passing null through would leave the
+      // agreed amounts attached to a projection that must not carry them.
+      dealAmounts: clearDealAmounts
+          ? null
+          : dealAmounts ?? this.dealAmounts,
       payments: payments ?? this.payments,
       organizerIds: organizerIds ?? this.organizerIds,
       shotClock: clearShotClock ? null : (shotClock ?? this.shotClock),

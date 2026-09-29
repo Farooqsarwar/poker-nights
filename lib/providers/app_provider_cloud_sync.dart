@@ -23,6 +23,10 @@ extension AppProviderCloudSync on AppProvider {
       editorClaimedAt: DateTime.now(),
     );
     _lastEditorHeartbeatAt = DateTime.now();
+    addAuditRecord(
+      clockTakeoverAuditType,
+      '${_user!.name} is running the clock on this phone.',
+    );
     addAnnouncement('You have taken control of this live game.', false);
   }
 
@@ -95,7 +99,12 @@ extension AppProviderCloudSync on AppProvider {
     // Whole-document writes are reserved for the admin/authority device
     // (locked architecture §writes). Members patch their own fields and
     // guests use the request queue instead.
-    if (!isAdmin) return;
+    //
+    // A co-host who has TAKEN THE CLOCK OVER is the whole-document writer for
+    // that game, so the authority side of the test is included: without it a
+    // co-host's next level boundary, bust or pause would live and die on their
+    // phone and the host's copy would never hear about it.
+    if (!isAdmin && !_isGameAuthority) return;
     // Content (not identity) check: a bundle re-emit hands back a fresh
     // LiveGame instance every time, so `identical` was perpetually false and
     // the admin was perpetually "dirty" — which blocked `_adoptRemoteMap` and
@@ -348,11 +357,17 @@ extension AppProviderCloudSync on AppProvider {
       ? GroupRole.host
       : (member.isCoAdmin ? GroupRole.coHost : GroupRole.member);
 
-  /// True only for the single "active editor" admin device — the one that may
+  /// True only for the single "active editor" device — the one that may
   /// write the whole game document. Guests and plain members never qualify.
   /// The editor role lives in [LiveGame.editorDeviceId]: the first admin
   /// device to open a live game claims it, which prevents two admin sessions
   /// from racing whole-document writes (the seating-confirm revert bug).
+  ///
+  /// The role gate is [canRunCurrentGame] rather than [isAdmin], because §E9
+  /// gives "run the clock" to the co-host as well as the host: a co-host who
+  /// has taken the clock over from a silent phone is the single writer for as
+  /// long as they hold it, and denying them authority would make the C-ops
+  /// take-over a button that changes nothing.
   ///
   /// Keyed on the PERSISTED device id on purpose, so a reload resumes
   /// editorship instead of waiting out the staleness window. Two tabs of the
@@ -362,7 +377,7 @@ extension AppProviderCloudSync on AppProvider {
   /// the other becomes a genuine read-only follower rather than a second
   /// writer merely converging via per-tab `sessionId` stamping.
   bool get _isGameAuthority =>
-      isAdmin &&
+      canRunCurrentGame &&
       _currentGame != null &&
       // §E2 rule 1: never take authority over a game a newer build wrote --
       // saving it whole would drop fields this build cannot see.
@@ -378,7 +393,18 @@ extension AppProviderCloudSync on AppProvider {
   /// seating plan). Never steals from an active editor.
   Future<void> _claimEditorIfNeeded() async {
     final game = _currentGame;
-    if (game == null || _user == null || !isAdmin || !_backendUp) return;
+    if (game == null || _user == null || !_backendUp) return;
+    // Automatic claiming is UNCHANGED and stays admin-only. What §E9 adds is
+    // the explicit take-over, which the co-host row of the C-ops table grants
+    // alongside the host, so the FORCED path is the only one that widens.
+    //
+    // Without this a co-host's take-over would flip the role on their own
+    // phone and never reach the document: `isAdmin` is the group role, and a
+    // tournament co-host is an organizer, not a group admin. The phone would
+    // believe it ran the clock, the other devices would keep running the
+    // previous phone's, and the co-host's first whole-document save would be
+    // refused by the very transaction that makes one writer the winner.
+    if (!isAdmin && !(forceEditorClaim && canOperateTheClock)) return;
     // A follower tab never claims or heartbeats automatically — only the
     // browser-elected leader does. An explicit forceEditorClaim (the user's
     // own "take control" action) is still honoured from any tab.
@@ -393,6 +419,14 @@ extension AppProviderCloudSync on AppProvider {
         now.difference(claimedAt) > AppProvider._editorClaimStaleWindow;
     // Another live editor is actively writing — stay read-only.
     if (editor.isNotEmpty && !sameDevice && !stale && !forceEditorClaim) return;
+    // This device was told to watch, so the staleness window is not a licence
+    // to start writing. §E9's automatic claim answers "no one has claimed
+    // this yet", not "somebody asked me and I said no".
+    if (!sameDevice &&
+        !forceEditorClaim &&
+        _clockWatchOnlyGameIds.contains(game.id)) {
+      return;
+    }
     if (sameDevice && !forceEditorClaim) {
       // Heartbeat: ours. Persist the last-active stamp so other admin devices
       // don't judge us stale — but as a TARGETED, THROTTLED field patch, never
@@ -822,4 +856,152 @@ extension AppProviderCloudSync on AppProvider {
     }).toList();
     return updated.copyWith(players: updatedPlayers);
   }
+
+  // ── Clock authority (C-ops "Take-over", T84 / §E9) ──────────────────────────
+  //
+  // The one-writer rule already lives in [_isGameAuthority]: the ticker only
+  // advances a level, fires an announcement, queues a notification or pushes an
+  // undo entry on the device whose id is in `LiveGame.editorDeviceId`. What was
+  // missing is the OTHER half — a second host/co-host phone had no way to ask
+  // who holds the clock, no way to take it, and no way to say "I'd rather
+  // watch". It therefore sat on a live game doing nothing, indistinguishable
+  // from a bug.
+
+  /// Audit type written whenever a device claims the clock. The `actor` on the
+  /// last record of this type is the only record of WHO holds the clock that
+  /// travels in the game document.
+  static const String clockTakeoverAuditType = 'clock_takeover';
+
+  /// How long the phone running the clock may go silent before the game counts
+  /// as orphaned (§E9, C-ops "Host's phone gone": 30 minutes).
+  static const Duration clockOrphanSilenceWindow = Duration(minutes: 30);
+
+  /// True when THIS device is the phone that runs the clock for the open game.
+  bool get thisDeviceRunsTheClock => _isGameAuthority;
+
+  /// Whether this signed-in user may operate the clock at all. §E9: host and
+  /// co-host, never a member, a guest or a TV.
+  bool get canOperateTheClock =>
+      _currentGame != null && !isGuest && canRunCurrentGame;
+
+  /// Who took the clock last, as far as this device can tell.
+  ///
+  /// The game document names the operator as a DEVICE, and `LiveGame` has no
+  /// field for the person behind it, so the name is read back from the audit
+  /// trail — `addAuditRecord` stamps `actor` with the taker's name. Null when
+  /// the game carries no claim record: a document written before claims were
+  /// audited, or a game nobody has ever held the clock for.
+  String? get clockOperatorName {
+    final game = _currentGame;
+    if (game == null) return null;
+    for (final record in game.auditHistory.reversed) {
+      if (record.type == clockTakeoverAuditType) return record.actor;
+    }
+    return null;
+  }
+
+  /// True when the phone running the clock has written nothing for
+  /// [clockOrphanSilenceWindow].
+  bool get clockHasGoneSilent {
+    final game = _currentGame;
+    if (game == null) return false;
+    final claimedAt = game.editorClaimedAt;
+    if (claimedAt == null) return false;
+    return DateTime.now().difference(claimedAt) >= clockOrphanSilenceWindow;
+  }
+
+  /// True while this device has answered "Watch only" for the open game.
+  bool get clockWatchingOnly {
+    final game = _currentGame;
+    if (game == null || thisDeviceRunsTheClock) return false;
+    return _clockWatchOnlyGameIds.contains(game.id);
+  }
+
+  /// The C-ops prompt: a host/co-host device is looking at a running game that
+  /// another phone already holds.
+  ///
+  /// Always offered, never only when the holder has gone stale — §E9 is
+  /// explicit that take-over is a choice, and the other phone may be perfectly
+  /// alive and simply further from the table.
+  bool get shouldOfferClockTakeover {
+    final game = _currentGame;
+    if (game == null || !canOperateTheClock || thisDeviceRunsTheClock) {
+      return false;
+    }
+    if (!game.status.isActiveLive) return false;
+    if (game.editorDeviceId.isEmpty) return false;
+    if (clockWatchingOnly) return false;
+    return true;
+  }
+
+  /// The §E9 rescue: the phone running the clock has been silent long enough
+  /// that the night could stop on its own. Deliberately ignores
+  /// [clockWatchingOnly] — "watch only" was an answer about a phone that was
+  /// still there, not a promise never to act again.
+  bool get shouldOfferOrphanedClockTakeover {
+    final game = _currentGame;
+    if (game == null || !canOperateTheClock || thisDeviceRunsTheClock) {
+      return false;
+    }
+    if (!game.status.isActiveLive) return false;
+    if (game.editorDeviceId.isEmpty) return false;
+    return clockHasGoneSilent;
+  }
+
+  /// Makes THIS device the phone that runs the clock.
+  ///
+  /// The same transactional claim the automatic path uses, forced: the write
+  /// sets `editorDeviceId = me`, and the previous phone learns of it through
+  /// the field it was already reading — its next whole-document save is then
+  /// rejected by the transaction in `FirebaseRepository.saveGame`, and it is a
+  /// viewer. There is no split brain to arbitrate because the role is a field
+  /// on the document, not a flag in a device's memory.
+  Future<bool> takeOverTheClock() async {
+    final game = _currentGame;
+    if (game == null || !canOperateTheClock) return false;
+    _clockWatchOnlyGameIds.remove(game.id);
+    if (thisDeviceRunsTheClock) return true;
+    final now = DateTime.now();
+    final name = _user?.name ?? 'A co-host';
+    forceEditorClaim = true;
+    _currentGame = game.copyWith(
+      editorDeviceId: _repo.deviceId,
+      editorClaimedAt: now,
+    );
+    _lastEditorHeartbeatAt = now;
+    addAuditRecord(
+      clockTakeoverAuditType,
+      '$name is running the clock on this phone.',
+    );
+    addAnnouncement('$name took over the clock', false);
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    await _claimEditorIfNeeded();
+    // The override is for the claim alone. Left latched it would let every
+    // later whole-document save skip the revision and editor guards.
+    forceEditorClaim = false;
+    return thisDeviceRunsTheClock;
+  }
+
+  /// Declines the clock: this device stays a live view of the game.
+  ///
+  /// It also stops this device quietly picking the role up when the other
+  /// phone falls silent. A device that was told to watch and then starts
+  /// writing the game has not been asked, and the "Watch only" the host was
+  /// offered would be a lie.
+  void watchTheClockOnly() {
+    final game = _currentGame;
+    if (game == null || !canOperateTheClock) return;
+    if (thisDeviceRunsTheClock) return;
+    _clockWatchOnlyGameIds.add(game.id);
+    if (!_disposed) notifyListeners();
+  }
 }
+
+/// Games this device has answered "Watch only" on.
+///
+/// Process-level because a Dart extension cannot own instance state, and the
+/// key space matches the thing being remembered: one device id, one decision
+/// per game. The app builds a single [AppProvider] per device, so "per process"
+/// and "per device" are the same thing outside tests.
+final Set<String> _clockWatchOnlyGameIds = <String>{};

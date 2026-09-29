@@ -314,6 +314,7 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'buyIn': s.buyIn,
       'koEnabled': s.koEnabled,
       'koAmount': s.koAmount,
+      'koKind': s.koKind.name,
       'rebuys': s.rebuys,
       'rebuysCloseLevel': s.rebuysCloseLevel,
       'rebuyCloseChosenByOrganizer': s.rebuyCloseChosenByOrganizer,
@@ -370,6 +371,10 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
       buyIn: (m['buyIn'] as num?)?.toInt() ?? 0,
       koEnabled: (m['koEnabled'] as bool?) ?? false,
       koAmount: (m['koAmount'] as num?)?.toInt() ?? 0,
+      // Absent on every game saved before bounty kinds existed, and those all
+      // ran a fixed bounty — which is the free one. An unrecognised name from a
+      // newer build lands on the same reading rather than throwing.
+      koKind: _enumByName(BountyKind.values, m['koKind'], BountyKind.fixed),
       rebuys: (m['rebuys'] as bool?) ?? false,
       rebuysCloseLevel: (m['rebuysCloseLevel'] as num?)?.toInt() ?? 0,
       rebuyCloseChosenByOrganizer: (m['rebuyCloseChosenByOrganizer'] as bool?) ?? false,
@@ -635,6 +640,10 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'totalChipsInPlay': game.totalChipsInPlay,
     'pendingGuests': game.pendingGuests.map(playerToMap).toList(),
     'finishOrder': List<String>.from(game.finishOrder),
+    // Null on a night that finished by busts, so it must round-trip as
+    // absent rather than as an empty list - an empty list would read as
+    // "agreed a deal that paid nobody".
+    'dealAmounts': game.dealAmounts?.map((a) => a.toDouble()).toList(),
     'speedRecommendation': game.speedRecommendation?.name,
     'settlementConfirmed': game.settlementConfirmed,
     'addOnWindowClosed': game.addOnWindowClosed,
@@ -713,6 +722,12 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
           .map(playerFromMap)
           .toList(),
       finishOrder: List<String>.from(map['finishOrder'] as List? ?? const []),
+      // Not `_mapList` — that casts each element to a Map, and these are bare
+      // numbers. Casting a list of doubles through it throws on read, which is
+      // how a deal recorded on one device became unreadable on the next.
+      dealAmounts: (map['dealAmounts'] as List?)
+          ?.map((e) => (e as num).toDouble())
+          .toList(),
       speedRecommendation: map['speedRecommendation'] == null
           ? null
           : _enumByName(SpeedRecommendation.values, map['speedRecommendation'],

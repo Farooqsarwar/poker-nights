@@ -191,10 +191,12 @@ void main() {
         organizerPct: 10,
         buyIn: 15,
       );
-      // The bridge rounds the organiser cut to 10, so 16.50 -> 10.
-      expect(r.organizerAmount, 10);
-      expect(r.prizePool, 155);
-      expect(r.prizes.fold<int>(0, (a, p) => a + p.amount), 155);
+      // §F2.3: the fee rounds DOWN to a whole unit, never to tens — 10 % of
+      // 165 is 16, not 10. The old expectation of 10 was the spec's own
+      // "never to tens" failure, and the engine was corrected to the clause.
+      expect(r.organizerAmount, 16);
+      expect(r.prizePool, 149);
+      expect(r.prizes.fold<int>(0, (a, p) => a + p.amount), 149);
       expect(r.roundingRemainder, 0);
     });
 

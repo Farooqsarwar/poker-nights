@@ -81,6 +81,12 @@ class ResultPodiumScreen extends StatelessWidget {
     // (checklist 14-042, 19-020). Public completed results carry no money.
     final showAmounts = app.isAdmin;
 
+    // A game that ended on an agreed deal (C-deal) was not paid out on the
+    // ladder, so the ladder's figures would be a fiction. The agreed amounts
+    // are indexed to `finishOrder`, and this loop is already walking that list,
+    // so entry `i` is the same player's slot in both.
+    final dealAmounts = game.dealAmounts;
+
     final ranked = [
       for (var i = 0; i < finishOrder.length; i++)
         if (players.where((p) => p.id == finishOrder[i]).firstOrNull
@@ -88,9 +94,19 @@ class ResultPodiumScreen extends StatelessWidget {
           _PodiumResult(
             player: player,
             pos: finishOrder.length - i,
-            prize: prizes
-                .where((pr) => pr.place == finishOrder.length - i)
-                .firstOrNull,
+            prize: dealAmounts != null
+                // A deal is only ever agreed among the players still at the
+                // table; everyone who busted earlier was paid from the plan
+                // when they went out, so the ladder still speaks for them.
+                ? (dealAmounts[i] > 0
+                    ? Prize(
+                        place: finishOrder.length - i,
+                        amount: (dealAmounts[i] * 100).round(),
+                      )
+                    : null)
+                : prizes
+                    .where((pr) => pr.place == finishOrder.length - i)
+                    .firstOrNull,
           ),
     ];
     // finishOrder is "first-out first" so ranked is worst-first. The podium

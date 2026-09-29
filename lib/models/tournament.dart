@@ -91,6 +91,16 @@ enum AntePreference { recommend, none, bigBlind, individual }
 /// before.
 const double kExpectedRebuyRate = 0.35;
 
+/// Build Spec v3.1 §F1.1 default for the re-entry, as a share of the field
+/// expected to take one.
+///
+/// The re-entry's own size is [reEntryChips]. This is the sibling of
+/// [kExpectedRebuyRate] on the re-entry side, and the pair feeds the
+/// chips-in-play estimate `C` the same way, which is why a host who sees
+/// neither the chips nor the take-up rate has no way to tell that turning
+/// re-entries off changed the forecast.
+const double kExpectedReEntryRate = 0.2;
+
 /// Deprecated alias for [kAddOnTakeUpRate].
 ///
 /// This was 0.65 while §F1.1 states 70 %, so the engine and the figure shown

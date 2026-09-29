@@ -45,6 +45,13 @@ void main() {
     'changeLog', 'organizerIds',
     // Money. PRIVATE — stripped in projectionFor, asserted next door.
     'payments',
+    // An agreed deal (C-deal). PRIVATE, and for a different reason than the
+    // ladder: `structure.prizes` is public because the whole table may see
+    // what 1st pays, but this is what each NAMED person actually received,
+    // which is the host-only decision the results screen already makes
+    // ("showAmounts = app.isAdmin"). A single amount beside a player id is
+    // the thing §23's pattern says must not travel.
+    'dealAmounts',
     // Concurrency bookkeeping — never rendered.
     'lastIdempotencyKey', 'editorDeviceId', 'editorClaimedAt',
     'audioMasterDeviceId',

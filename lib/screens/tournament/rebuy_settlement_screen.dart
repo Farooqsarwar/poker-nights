@@ -77,9 +77,12 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.isAdmin;
+    // C6's "Who" column is host, co-host — D15's co-host runs the table, and
+    // settlement is the host's job being done for them. Gating on `isAdmin`
+    // put a co-host on the invitation screen mid-break.
+    final canSettle = app.isHostOrCoHost;
 
-    if (!isAdmin) {
+    if (!canSettle) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) context.go(RoutePaths.invitation);
       });

@@ -12,6 +12,7 @@ import '../../models/tournament.dart';
 import '../../models/tournament_preset.dart';
 import '../../models/tournament_format.dart';
 import '../../providers/app_provider.dart';
+import '../../services/payment_service.dart';
 import '../../utils/event_settings_validation.dart';
 import '../../utils/sanitization.dart';
 import '../../utils/tournament_engine.dart';
@@ -21,7 +22,10 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_tag.dart';
+import '../../widgets/app_toggle.dart';
 import '../../widgets/chip_pill.dart';
+import '../../widgets/count_stepper.dart';
 import '../../widgets/event_settings_form.dart';
 import '../../widgets/pace_cards.dart';
 import '../../widgets/structure_feasibility_card.dart';
@@ -581,7 +585,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 ? '${s.breaks.length} x ${s.breaks.first.durationMins} min'
                 : 'None',
           ),
-          _ConfirmItem('Bounty', s.koEnabled ? 'Yes (${s.koAmount})' : 'No'),
+          _ConfirmItem(
+            'Bounty',
+            s.koEnabled
+                ? 'Yes, ${s.koKind.label} (${s.koAmount})'
+                : 'No',
+          ),
           _ConfirmItem(
             'Ante',
             s.antePreference == AntePreference.none
@@ -696,6 +705,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         buyIn: s.buyIn,
         koEnabled: s.koEnabled,
         koAmount: s.koAmount,
+        koKind: s.koKind,
         rebuys: s.rebuys,
         rebuysCloseLevel: s.rebuysCloseLevel,
         rebuyCloseChosenByOrganizer: s.rebuyCloseChosenByOrganizer,
@@ -1270,10 +1280,121 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ),
         const SizedBox(height: 24),
 
+        // KO bounty — the spec's Step-1 field (§C1 step 1, T37/T38/T64).
+        _buildKoBountySection(app),
+        const SizedBox(height: 24),
+
         // Step chips row
         _buildStepChipsRow(),
       ],
     );
+  }
+
+  /// §C1 step 1 — KO bounty: a toggle, and only then the amount and the type.
+  ///
+  /// Rendered unconditionally, including for a night with no prize pool. The
+  /// bounty pot is collected on top of the buy-in and funds nothing but
+  /// knockouts (§F2.4), so "Payouts: None" is precisely the night a KO bounty
+  /// is still worth turning on — hiding it there would remove the only payout
+  /// the table has.
+  Widget _buildKoBountySection(AppProvider app) {
+    final s = _draft;
+    // The stepper is the screen's authority on the 5–50 domain, so the figure
+    // it shows and the figure the caption quotes are the same number. A draft
+    // can still hold something outside the domain (the shared settings form on
+    // steps 3 and 4 takes a free-text amount, or a preset carries one), and
+    // quoting that raw here would put a bounty the spec does not allow on the
+    // screen. The first nudge writes the clamped value back to the draft.
+    final bounty =
+        s.effectiveKoAmount.clamp(GameSettings.minBounty, GameSettings.maxBounty);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('KO bounty'),
+                  const SizedBox(height: 2),
+                  Text(
+                    'On top of the buy-in, a separate pot',
+                    style: TextStyle(
+                      color: AppColors.mutedForeground,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            AppToggle(
+              value: s.koEnabled,
+              onChanged: (v) => _onDraftChanged(_draft.copyWith(koEnabled: v)),
+            ),
+          ],
+        ),
+        if (!s.koEnabled) const SizedBox.shrink() else ...[
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Bounty amount'),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Shown as "${s.buyIn} + $bounty"',
+                      style: TextStyle(
+                        color: AppColors.mutedForeground,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              CountStepper(
+                value: bounty,
+                min: GameSettings.minBounty,
+                max: GameSettings.maxBounty,
+                step: GameSettings.bountyStep,
+                semanticLabel: 'Bounty amount',
+                onChanged: (v) => _onDraftChanged(_draft.copyWith(koAmount: v)),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _buildFormFieldLabel('Bounty type'),
+          const SizedBox(height: AppSpacing.xs),
+          for (final kind in BountyKind.values) ...[
+            _BountyKindOption(
+              kind: kind,
+              selected: s.koKind == kind,
+              onTap: () => _chooseBountyKind(app, kind),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+          ],
+        ],
+      ],
+    );
+  }
+
+  /// §C1 step 1 / G1: a Premium kind is not selected by tapping it on the free
+  /// tier — the tap opens the upgrade screen, exactly as every other
+  /// Premium-only control in the app does.
+  void _chooseBountyKind(AppProvider app, BountyKind kind) {
+    if (kind.isPremium && app.premiumTier != PremiumTier.premium) {
+      context.push(RoutePaths.upgrade);
+      return;
+    }
+    _onDraftChanged(_draft.copyWith(koKind: kind));
   }
 
   /// Tech spec §6.2 — "Suggested" section shown above the form before the
@@ -2116,6 +2237,74 @@ class _SummaryStatCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One of the three KO bounty types (§C1 step 1).
+///
+/// The Premium pair carries the pill at all times rather than only on the free
+/// tier: the host has to be able to SEE that a richer bounty exists before
+/// deciding whether the night is worth it, which is what makes it a pitch
+/// rather than a wall.
+class _BountyKindOption extends StatelessWidget {
+  const _BountyKindOption({
+    required this.kind,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final BountyKind kind;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primarySoft : AppColors.card,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: selected ? AppColors.primary : AppColors.borderSubtle,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  kind.label,
+                  style: TextStyle(
+                    color: AppColors.foreground,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (kind.isPremium)
+                const AppTag('Premium', tone: AppTagTone.primary)
+              else
+                Text(
+                  'Free',
+                  style: TextStyle(
+                    color: AppColors.mutedForeground,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -96,6 +96,8 @@ LiveGame _game() => LiveGame(
   finishOrder: const [],
   rebuyRequests: const ['u1'],
   addOnRequests: const ['u2'],
+  // A game that ended on an agreed deal rather than by busts.
+  dealAmounts: const [180.0, 120.0],
   payments: [
     PaymentRecord(
       id: 'pay-1',
@@ -271,6 +273,47 @@ void main() {
       expect(back.payments, hasLength(2));
       expect(back.totalCollected, 40);
     });
+
+    test('the deal survives serialization for the host', () {
+      final back = liveGameFromMap(liveGameToMap(_game()));
+      expect(back.dealAmounts, [180.0, 120.0]);
+    });
+  });
+
+  group('C-deal - agreed amounts stay with the host', () {
+    // The payout LADDER is public ("everyone sees the prize pool and the
+    // payouts"). What each named person actually received is not, and this
+    // is the same decision the results screen makes when it gates individual
+    // amounts behind `showAmounts = app.isAdmin`.
+    for (final role in [
+      projections.GameProjectionRole.player,
+      projections.GameProjectionRole.guest,
+      projections.GameProjectionRole.tv,
+    ]) {
+      test('${role.name} receives no agreed amounts', () {
+        final projected = projections.projectionFor(_game(), role);
+        expect(
+          projected.dealAmounts,
+          isNull,
+          reason: 'the deal is what each named person was actually paid, which '
+              'is the host-only figure — not the public ladder',
+        );
+      });
+    }
+
+    test('clearing a deal is possible, and a game without one is null', () {
+      // `dealAmounts: null` alone cannot express "remove it" — a null
+      // parameter means "keep what is there" — so the clear flag is what the
+      // projection relies on, and it is worth pinning.
+      final cleared = _game().copyWith(clearDealAmounts: true);
+      expect(cleared.dealAmounts, isNull);
+
+      // A night that ended by busts never had a deal in the first place, and
+      // must read as absent rather than as an empty list: an empty list would
+      // claim the table agreed a deal that paid nobody.
+      final byBusts = _game().copyWith(clearDealAmounts: true);
+      expect(byBusts.dealAmounts, isNull);
+    });
   });
 
   group('PN-024 — the admin projection is untouched', () {
@@ -285,6 +328,7 @@ void main() {
       expect(admin.players.first.rebuys, 3);
       expect(admin.payments, hasLength(2));
       expect(admin.totalCollected, 40);
+      expect(admin.dealAmounts, [180.0, 120.0]);
     });
   });
 

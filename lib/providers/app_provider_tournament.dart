@@ -1902,6 +1902,162 @@ extension AppProviderTournament on AppProvider {
     return null;
   }
 
+  /// C-deal item 5 — "Confirm deal & end tournament".
+  ///
+  /// Takes only the agreed amounts, keyed by player id, and derives the finish
+  /// order itself. That is deliberate: `finishOrder` is first-out-first, a
+  /// player's place is its index from the END, and the results screen builds
+  /// the whole podium from that one list. A caller-supplied order would have to
+  /// reproduce that inversion exactly, and a table that dealt after two earlier
+  /// busts would drop those two players off the results entirely.
+  ///
+  /// Ends the game through the same [recordFinishOrder] path a night that ended
+  /// by busts uses, so the deal produces one completion, one undo entry and one
+  /// announcement rather than a second, parallel notion of "finished".
+  ///
+  /// Returns null on success, or the reason it was refused. The caller shows
+  /// that reason verbatim — [PayoutsEngine.dealAmountsError] already renders
+  /// the C-deal wording, and the completion validator's reasons are the same
+  /// strings the finish screen shows.
+  String? confirmDealAndEnd({required Map<String, double> amountsByPlayerId}) {
+    // Before the authority check, not after: the claim is what MAKES this
+    // device authoritative, and every other writer here (`updatePrizes`,
+    // `recordFinishOrder`) claims first. Checking first refuses the host who
+    // has just opened the game, because the claim has not happened yet.
+    _forceClaimEditor();
+    if (!_isGameAuthority) {
+      return 'Only the host of this game can agree a deal.';
+    }
+    final game = _currentGame;
+    if (game == null) return 'There is no game to deal.';
+    if (game.status == LiveGameStatus.completed) {
+      return 'This game is already over.';
+    }
+
+    final leftToPay = dealTotalLeftToPay();
+    final agreed = amountsByPlayerId.values
+        .fold<double>(0, (sum, a) => sum + a);
+    final mismatch = PayoutsEngine.dealAmountsError(agreed, leftToPay);
+    if (mismatch != null) return mismatch;
+
+    // A player still at the table who is not in the deal would silently drop
+    // money the pot was supposed to hand out. (The sum check cannot catch it:
+    // skipping one player and giving the rest more still adds up.)
+    final missing = game.activePlayers
+        .where((p) => !amountsByPlayerId.containsKey(p.id))
+        .map((p) => p.name)
+        .toList();
+    if (missing.isNotEmpty) {
+      return 'No agreed amount for ${missing.join(', ')}.';
+    }
+    // A figure for somebody who already busted is equally wrong: they were
+    // paid from the ladder when they went out, not from the deal.
+    final strays = amountsByPlayerId.keys
+        .where((id) => game.players
+            .where((p) => p.id == id)
+            .firstOrNull
+            ?.eliminated ??
+            true)
+        .toList();
+    if (strays.isNotEmpty) {
+      return 'The deal covers only the players still at the table.';
+    }
+
+    // The undo entry is pushed HERE and [recordFinishOrder] is told so, rather
+    // than pushed by both: a second push would snapshot this half-written game
+    // (deal agreed, tournament still running), so one host tap left two entries
+    // and the first Undo press landed on that half-written state instead of the
+    // night the host agreed to end. The snapshot has to be taken before the
+    // deal is written, which is why recordFinishOrder cannot own it.
+    _pushUndo();
+    final order = _dealFinishOrder(game);
+    // Set before completing: recordFinishOrder's copyWith leaves the existing
+    // value alone, so the deal rides through to the finished game. One entry
+    // per place in `order`, so the results screen can index straight into it
+    // beside its own `finishOrder[i]`.
+    _currentGame = _currentGame!.copyWith(
+      dealAmounts: [
+        for (final id in order) _agreedForPlace(game, id, amountsByPlayerId),
+      ],
+    );
+    if (!recordFinishOrder(order, undoAlreadyPushed: true)) {
+      // Undo the partial write so a refused completion cannot leave a
+      // half-recorded deal behind. The clear flag, not `[]` — an empty list
+      // would read as "a deal was agreed that paid nobody".
+      _currentGame = _currentGame!.copyWith(clearDealAmounts: true);
+      // ...and the undo entry goes with it. The deal was refused, so there is
+      // no action to reverse, and a surviving entry would offer the host an
+      // Undo that reverts a game which never changed.
+      _undoStack.removeLast();
+      _saveUndoStack();
+      return _completionError ?? 'Cannot end tournament.';
+    }
+    return null;
+  }
+
+  /// The finish order a deal produces: everyone already out, in the order they
+  /// went out, then the table sorted so the leader is LAST.
+  ///
+  /// Mirrors the reading in [_finalPositions] and [_validateCompletionState]
+  /// rather than inventing a third convention — a place is
+  /// `finishOrder.length - index`, so the first name in the list is the worst
+  /// finisher. The table is sorted by chips ascending for exactly that reason.
+  List<String> _dealFinishOrder(LiveGame game) {
+    // DESCENDING, because `eliminationPos` is the FINISHING PLACE and not an
+    // out-order: `eliminatePlayer` stamps it with the number of players still
+    // in at the bust, so the biggest value is the player who went out FIRST
+    // and is the worst finisher — exactly the slot a first-out-first list opens
+    // with. Reading it ascending would show the best of the eliminated players
+    // at the bottom of the results. Same comparator as [validateCompletion] and
+    // the C8 finish screen, which build the same list.
+    final out = game.players.where((p) => p.eliminated).toList()
+      ..sort((a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0));
+    final table = game.activePlayers.toList()
+      ..sort((a, b) => (a.stack ?? 0).compareTo(b.stack ?? 0));
+    return [
+      for (final p in out) p.id,
+      for (final p in table) p.id,
+    ];
+  }
+
+  /// What the player in that slot actually received: the agreed figure for
+  /// someone still at the table, or the ladder prize for someone who had
+  /// already busted (the deal only divides what was LEFT, and they were paid
+  /// from the plan when they went out).
+  double _agreedForPlace(
+    LiveGame game,
+    String playerId,
+    Map<String, double> amountsByPlayerId,
+  ) {
+    final agreed = amountsByPlayerId[playerId];
+    if (agreed != null) return agreed;
+    final pos = game.players
+            .where((p) => p.id == playerId)
+            .firstOrNull
+            ?.eliminationPos ??
+        0;
+    final prize = game.structure.prizes
+        .where((p) => p.place == pos)
+        .firstOrNull;
+    return (prize?.amount ?? 0) / 100;
+  }
+
+  /// C-deal item 2 — "the prizes still to pay", in currency units.
+  ///
+  /// A deal is offered with everyone still in, so the places on the table are
+  /// the first prizes the structure lists, and this is their sum. A structure
+  /// with no payout ladder pays everyone still in, which is the same list of
+  /// prizes and therefore the same total.
+  double dealTotalLeftToPay() {
+    final game = _currentGame;
+    if (game == null) return 0;
+    final activeCount = game.activePlayers.length;
+    final prizes = game.structure.prizes;
+    if (prizes.isEmpty) return 0;
+    final payable = prizes.take(min(activeCount, prizes.length));
+    return payable.fold<int>(0, (sum, p) => sum + p.amount) / 100;
+  }
+
   /// Updates the payout prizes (for custom deals/chops before finalizing results).
   void updatePrizes(List<Prize> customPrizes) {
     _forceClaimEditor();
@@ -1949,7 +2105,17 @@ extension AppProviderTournament on AppProvider {
     return mins;
   }
 
-  bool recordFinishOrder(List<String> order) {
+  /// Records [order] as the night's finish (first-out first) and completes the
+  /// game, or refuses it and leaves it running.
+  ///
+  /// [undoAlreadyPushed] is for a caller that had to write something of its own
+  /// before calling — `confirmDealAndEnd` records the agreed amounts first,
+  /// because the completion's `copyWith` preserves them — and so pushed the
+  /// undo entry before that write. Without it a single host tap would push two.
+  bool recordFinishOrder(
+    List<String> order, {
+    bool undoAlreadyPushed = false,
+  }) {
     _forceClaimEditor();
     final game = _currentGame;
     if (game == null) return false;
@@ -1972,7 +2138,7 @@ extension AppProviderTournament on AppProvider {
       return false;
     }
     _completionError = null;
-    _pushUndo();
+    if (!undoAlreadyPushed) _pushUndo();
 
     _currentGame = _currentGame!.copyWith(
       finishOrder: order,

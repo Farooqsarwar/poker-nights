@@ -103,6 +103,15 @@ LiveGame projectionFor(
     // a single record still reveals the buy-in amount alongside a player id.
     // The host sees the ledger; nobody else does.
     payments: const <PaymentRecord>[],
+    // An agreed deal (C-deal) is what each NAMED person actually received,
+    // which is the host-only decision the results screen already makes for
+    // individual payouts ("showAmounts = app.isAdmin") — not the public
+    // ladder, which the whole table is entitled to see. It sits alongside
+    // `payments` rather than with `structure.prizes` for that reason: a deal
+    // reveals the size of each person's win, and §23's pattern is that a
+    // single amount plus a player id is the thing that must not travel.
+    dealAmounts: null,
+    clearDealAmounts: true,
     chat: viewerCanSeeChat ? game.chat : const <ChatMessage>[],
     auditHistory: const <AuditRecord>[], // 14
     pendingGuests: publicPendingGuests,

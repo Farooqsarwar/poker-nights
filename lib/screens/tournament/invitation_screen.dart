@@ -9,6 +9,7 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/game.dart';
+import '../../widgets/clock_authority_notice.dart';
 import '../../models/group.dart';
 import '../../models/live_game.dart';
 import '../../models/user.dart';
@@ -143,6 +144,11 @@ class _InvitationScreenState extends State<InvitationScreen> {
                 ? () => _openEditModal(context, app, game)
                 : null,
           ),
+          // A co-host opening a running game lands here (the admin-only routes
+          // bounce them), so this is where they are told who is running the
+          // clock and given Take over / Watch only. Renders nothing for an
+          // ordinary member.
+          const ClockAuthorityNotice(),
           if (app.isAdmin && app.lastSaveError != null)
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.md),

@@ -1,4 +1,5 @@
 import '../utils/payout_bridge.dart';
+import '../utils/payouts_engine.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -20,6 +21,7 @@ import '../models/chat_report.dart';
 import '../models/game.dart';
 import '../models/group.dart';
 import '../models/imported_night.dart';
+import '../utils/import_results_parser.dart';
 import '../models/live_game.dart';
 import '../models/payment_record.dart';
 import '../models/shot_clock.dart';
@@ -997,6 +999,16 @@ class AppProvider extends ChangeNotifier {
     }
     return false;
   }
+
+  /// Whether the signed-in user runs the table: the group host, or a member
+  /// the host has made co-host.
+  ///
+  /// "Admin" is not a role here — the glossary fixes it as host or co-host —
+  /// and D15 gives the co-host the operational half of the night: bust, rebuy,
+  /// pause, approve check-ins, run the clock. So "may I run this game" is not
+  /// [isAdmin]: asking that alone shuts the co-host out of screens C6 and
+  /// C-ops explicitly open to them.
+  bool get isHostOrCoHost => isAdmin || isCoAdmin;
 
   @visibleForTesting
   void setUserForTesting(AppUser? user) {

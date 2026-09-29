@@ -90,7 +90,6 @@ enum AntePreference { recommend, none, bigBlind, individual }
 /// prefilled with, so a host who touches nothing gets exactly what they got
 /// before.
 const double kExpectedRebuyRate = 0.35;
-const double kExpectedReEntryRate = 0.20;
 
 /// Deprecated alias for [kAddOnTakeUpRate].
 ///
@@ -478,7 +477,7 @@ class TournamentParams {
       : 0;
 
   int get effectiveExpectedReEntries => reEntry
-      ? math.max(0, expectedReEntries ?? (players * kExpectedReEntryRate).round())
+      ? math.max(0, expectedReEntries ?? (players * effectiveExpectedRebuyRate).round())
       : 0;
 
   int get effectiveExpectedAddOns => addOn

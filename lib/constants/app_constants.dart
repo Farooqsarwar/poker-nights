@@ -102,10 +102,10 @@ class AppShadows {
 class AppDurations {
   AppDurations._();
 
-  static const Duration fastest = Duration(milliseconds: 100);
-  static const Duration fast = Duration(milliseconds: 150);
-  static const Duration normal = Duration(milliseconds: 300);
-  static const Duration slow = Duration(milliseconds: 500);
+  static const Duration fastest = Duration(milliseconds: 150);
+  static const Duration fast = Duration(milliseconds: 180);
+  static const Duration normal = Duration(milliseconds: 200);
+  static const Duration slow = Duration(milliseconds: 220);
 }
 
 /// Centralized font sizes (Tailwind text scale).
@@ -128,9 +128,4 @@ class AppFontSizes {
 /// Centralized asset paths.
 class AppAssets {
   AppAssets._();
-
-  static const String spade = '♠';
-  static const String heart = '♥';
-  static const String diamond = '♦';
-  static const String club = '♣';
 }

@@ -381,6 +381,69 @@ extension AppProviderTournament on AppProvider {
         game.currentLevel <= game.settings.rebuysCloseLevel;
   }
 
+  /// Spec C6, entry point 2. "End rebuys now - after Level {n}": pulls the
+  /// rebuy close forward to the end of the level being played right now.
+  ///
+  /// It does this by moving `rebuysCloseLevel` to the current level rather than
+  /// by reaching for a second copy of the rebuy-close state machine. The close
+  /// itself is then performed by the very same code that has always performed
+  /// it — `nextLevel`'s crossing test sees `currentLevel <= rebuysCloseLevel`
+  /// and `next > rebuysCloseLevel` and enters the identical `rebuypause` hold
+  /// when this level ends, whether the host presses Next or the clock runs
+  /// out. Two entry points, one transition, so the two can never drift.
+  ///
+  /// The clock is deliberately NOT stopped here. "After Level {n}" means the
+  /// current level is still played out in full; the host who wanted the game
+  /// halted has the pause button, and a host who wants out right now has the
+  /// settlement screen. Between this call and the break, the header reads
+  /// REBUYS CLOSING rather than RUNNING ([LiveGame.rebuysClosingArmed]), so the
+  /// room knows the window is about to shut.
+  ///
+  /// Returns true when it applied. Silent no-op otherwise: the model decides
+  /// visibility ([LiveGame.endRebuysNowLevel]) and this is the same gate
+  /// re-checked at the only place that can be sure.
+  bool endRebuysNow() {
+    final game = _currentGame;
+    if (game == null) return false;
+    // `canRunCurrentGame`, not `isAdmin`: an assigned tournament organizer runs
+    // this tournament without administering the group (§28).
+    if (!canRunCurrentGame) return false;
+    final level = game.endRebuysNowLevel;
+    if (level == null) return false;
+    // The game must not be rewritten underneath an in-flight action.
+    _forceClaimEditor();
+    if (_currentGame!.currentLevel != level) return false;
+
+    _pushUndo();
+    _currentGame = _currentGame!.copyWith(
+      settings: _currentGame!.settings.copyWith(
+        rebuysCloseLevel: level,
+        rebuyCloseChosenByOrganizer: true,
+      ),
+    );
+    addAnnouncement('Rebuys now close at the end of Level $level.', true);
+    addAuditRecord(
+      'rebuys_close_early',
+      'Rebuy close pulled forward to the end of level $level by the host '
+          '(was level ${game.settings.rebuysCloseLevel}).',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return true;
+  }
+
+  /// Spec C6. Whether "End rebuys now" may be offered right now — true only
+  /// to somebody who can run this tournament, and only while the level that
+  /// would be closed early is actually being played.
+  ///
+  /// Both halves are load-bearing, and kept here rather than in each caller:
+  /// [canRunCurrentGame] is the authorization half (a plain member has no
+  /// business closing the rebuy window for the table), the level is the
+  /// meaningfulness half. A screen that reads only the level and gates on its
+  /// own flag is how the two drift apart, so this is the accessor to use.
+  bool get canEndRebuysNow =>
+      canRunCurrentGame && _currentGame?.endRebuysNowLevel != null;
+
   /// Adds a registered player during late registration (12-022/12-023).
   /// The late player receives a full fresh starting stack (12-024) and is
   /// assigned to the recommended balanced table and an available seat
@@ -392,8 +455,7 @@ extension AppProviderTournament on AppProvider {
     final active =
         _currentGame!.players.where((p) => p.active && !p.eliminated).length;
     if (!canHostPlayers(active + 1)) {
-      lastRsvpError =
-          Entitlements.hostingBlockedReason(premiumTier, active + 1);
+      lastRsvpError = hostingBlockedReason(active + 1);
       if (!_disposed) notifyListeners();
       return;
     }
@@ -553,14 +615,13 @@ extension AppProviderTournament on AppProvider {
 
     // Delegate the organizer-cut and prize-split maths to the shared helper in
     // TournamentEngine so the rules stay consistent everywhere.
-    final int roundingUnit = TournamentEngine.roundingUnitFor(s.buyIn);
-
-    final recalculated = TournamentEngine.recalculatePrizes(
-      grossEligible,
-      confirmedCount,
-      s.effectiveOrganizerPct.toDouble(),
+    final recalculated = PayoutBridge.recalculate(
+      grossEligible: grossEligible,
+      players: confirmedCount,
+      organizerPct: s.effectiveOrganizerPct,
+      buyIn: s.buyIn,
       forcePaidPlaces: s.forcePaidPlaces,
-      roundingUnit: roundingUnit,
+      extraEntries: totalRebuys + totalReEntries,
     );
 
     // Patch only the financial fields; levels and all other structure data
@@ -588,6 +649,27 @@ extension AppProviderTournament on AppProvider {
     addAuditRecord(
       'structure_edit',
       'Paid places overridden to ${count ?? 'auto'}',
+    );
+    if (!_disposed) notifyListeners();
+  }
+
+  /// "Fix the count" (Addendum 2, A2-4): the host found the box holds a
+  /// different number of some colour than the set says. Changes TONIGHT'S
+  /// game only — never the saved F5 chip set — and never regenerates the
+  /// structure: a running night gets no silent re-plan (§F4). The host can
+  /// still Recalculate deliberately afterwards.
+  void fixChipCount(List<ChipColor> counts) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return;
+    final game = _currentGame;
+    if (game == null || _sameChipSet(game.settings.chipSet, counts)) return;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: game.settings.copyWith(chipSet: counts),
+    );
+    addAuditRecord(
+      'structure_edit',
+      'Chip count fixed for tonight (${counts.map((c) => '${c.color} ×${c.quantity}').join(', ')})',
     );
     if (!_disposed) notifyListeners();
   }
@@ -952,7 +1034,13 @@ extension AppProviderTournament on AppProvider {
     // the engine below through `s.levelDurationMins` like any other host
     // choice. Nothing is applied here implicitly — a proposal the host never
     // answered leaves this value untouched.
-    final s = game.settings.copyWith(players: count);
+    // The forecast is recorded with the settings so other devices can re-run
+    // the engine and reach the same structure (see structure_verification).
+    final s = game.settings.copyWith(
+      players: count,
+      forecastRebuyRate: forecastRebuyRate,
+      forecastAddOnTakeUp: forecastAddOnTakeUp,
+    );
     final structure = TournamentEngine.generate(
       TournamentParams(
         players: count,
@@ -993,9 +1081,8 @@ extension AppProviderTournament on AppProvider {
         // because §F1.5 point 1 keeps the chip BANK on a different number
         // entirely: every player assumed to take the add-on, so a 70 %
         // forecast can never under-size the box.
-        expectedRebuyRate: forecastRebuyRate,
-        addOnTakeUpRate: forecastAddOnTakeUp,
-        payoutShape: s.payoutShape,
+        expectedRebuyRate: s.forecastRebuyRate,
+        addOnTakeUpRate: s.forecastAddOnTakeUp,
         format: s.format,
         maxReEntries: s.maxReEntries,
         shootoutTables: s.shootoutTables,
@@ -1229,7 +1316,6 @@ extension AppProviderTournament on AppProvider {
         addOnChips: s.addOnChips,
         levelDurationMins: s.levelDurationMins,
         pace: s.pace,
-        payoutShape: s.payoutShape,
         format: s.format,
         maxReEntries: s.maxReEntries,
         shootoutTables: s.shootoutTables,
@@ -1388,21 +1474,6 @@ extension AppProviderTournament on AppProvider {
     _recalculateWithPlayers(_currentGame!.settings.players);
   }
 
-  /// Re-splits the prize pool on a different curve. Kept out of
-  /// [updateGenerationParams] on purpose: that method's Reset clears its whole
-  /// group, and a host resetting the blind curve should not silently lose the
-  /// payout decision they made on a different card.
-  void setPayoutShape(PayoutShape shape) {
-    final game = _currentGame;
-    if (game == null) return;
-    if (game.settings.payoutShape == shape) return;
-    _pushUndo();
-    _currentGame = game.copyWith(
-      settings: game.settings.copyWith(payoutShape: shape),
-    );
-    _recalculateWithPlayers(_currentGame!.settings.players);
-  }
-
   /// §F1.5 point 7's third named escape: "play a freeze-out".
   ///
   /// When the chip case cannot deal a playable stack, the forecast rebuys and
@@ -1468,7 +1539,8 @@ extension AppProviderTournament on AppProvider {
         addOnChips: newSettings.addOnChips,
         levelDurationMins: newSettings.levelDurationMins,
         pace: newSettings.pace,
-        payoutShape: newSettings.payoutShape,
+        expectedRebuyRate: newSettings.forecastRebuyRate,
+        addOnTakeUpRate: newSettings.forecastAddOnTakeUp,
         format: newSettings.format,
         maxReEntries: newSettings.maxReEntries,
         shootoutTables: newSettings.shootoutTables,

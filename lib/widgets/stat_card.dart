@@ -23,7 +23,6 @@ class StatCard extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
       color: AppColors.secondary,
-      radius: AppRadius.md,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

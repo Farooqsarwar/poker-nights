@@ -10,10 +10,13 @@ import '../../models/game.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
+import '../../services/entitlements.dart';
 import '../../utils/formatters.dart';
+import '../../utils/share_card.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_alert_banner.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
@@ -102,6 +105,36 @@ class ResultPodiumScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // §C9 opens with "← - Share (top right)", above the FINAL RESULTS
+          // pill. The control lives in the title bar rather than at the foot of
+          // the page because that is where the spec puts it, and because on
+          // iPad the share sheet pops from the tapping control (T93) — the
+          // origin rect is read off this button's own box.
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Row(
+              children: [
+                Transform.translate(
+                  offset: const Offset(-4, 0),
+                  child: AppBackButton(
+                    tooltip: 'Back',
+                    onTap: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go(RoutePaths.group);
+                      }
+                    },
+                  ),
+                ),
+                const Spacer(),
+                _ShareButton(
+                  onShare: (buttonContext) =>
+                      _share(context, buttonContext, app, game, showAmounts),
+                ),
+              ],
+            ),
+          ),
           // Hero header
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.lg),
@@ -280,103 +313,113 @@ class ResultPodiumScreen extends StatelessWidget {
                         ),
                         color: entry.value.player.id == user?.id
                             ? AppColors.primarySoft
-                            : (entry.key % 2 == 0 ? AppColors.card : AppColors.background),
+                            : (entry.key % 2 == 0
+                                  ? AppColors.card
+                                  : AppColors.background),
                         child: Row(
                           children: [
                             SizedBox(
-                          width: 32,
-                          child: entry.value.pos <= 3
-                              ? MedalIcon(entry.value.pos, size: AppFontSizes.lg)
-                              : Text(
-                                  '#${entry.value.pos}',
-                                  textAlign: TextAlign.center,
-                                  style: AppTypography.monoSm.copyWith(
-                                    color: AppColors.mutedForeground,
-                                  ),
-                                ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: AppColors.avatarColorFor(entry.value.player.name),
-                            shape: BoxShape.circle,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            entry.value.player.name.trim().isEmpty
-                                ? '?'
-                                : entry.value.player.name.trim()[0].toUpperCase(),
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.foreground,
-                              fontWeight: FontWeight.w700,
+                              width: 32,
+                              child: entry.value.pos <= 3
+                                  ? MedalIcon(
+                                      entry.value.pos,
+                                      size: AppFontSizes.lg,
+                                    )
+                                  : Text(
+                                      '#${entry.value.pos}',
+                                      textAlign: TextAlign.center,
+                                      style: AppTypography.monoSm.copyWith(
+                                        color: AppColors.mutedForeground,
+                                      ),
+                                    ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
+                            const SizedBox(width: AppSpacing.sm),
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: AppColors.avatarColorFor(
                                   entry.value.player.name,
-                                  style: AppTypography.bodySm.copyWith(
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                entry.value.player.name.trim().isEmpty
+                                    ? '?'
+                                    : entry.value.player.name
+                                          .trim()[0]
+                                          .toUpperCase(),
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.foreground,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              if (entry.value.player.id == user?.id) ...[
-                                const SizedBox(width: AppSpacing.xs),
-                                const AppBadge(
-                                  label: 'You',
-                                  variant: AppBadgeVariant.green,
-                                ),
-                              ],
-                              if (entry.value.player.isGuest) ...[
-                                const SizedBox(width: AppSpacing.xs),
-                                const AppBadge(
-                                  label: 'Guest',
-                                  variant: AppBadgeVariant.muted,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        if (showAmounts) ...[
-                          const SizedBox(width: AppSpacing.sm),
-                          Text(
-                            [
-                              if (entry.value.player.rebuys > 0) '${entry.value.player.rebuys}R',
-                              if (entry.value.player.hasAddOn) 'AO',
-                              if (entry.value.player.knockouts > 0)
-                                '${entry.value.player.knockouts} KO',
-                            ].join(' · '),
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
                             ),
-                          ),
-                        ],
-                        const SizedBox(width: AppSpacing.md),
-                        Text(
-                          showAmounts && entry.value.prize != null
-                              ? Formatters.chips(entry.value.prize!.amount)
-                              : '—',
-                          style: AppTypography.monoSm.copyWith(
-                            color: showAmounts && entry.value.prize != null
-                                ? AppColors.primary
-                                : AppColors.mutedForeground,
-                            fontWeight: FontWeight.w600,
-                          ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      entry.value.player.name,
+                                      style: AppTypography.bodySm.copyWith(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  if (entry.value.player.id == user?.id) ...[
+                                    const SizedBox(width: AppSpacing.xs),
+                                    const AppBadge(
+                                      label: 'You',
+                                      variant: AppBadgeVariant.green,
+                                    ),
+                                  ],
+                                  if (entry.value.player.isGuest) ...[
+                                    const SizedBox(width: AppSpacing.xs),
+                                    const AppBadge(
+                                      label: 'Guest',
+                                      variant: AppBadgeVariant.muted,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (showAmounts) ...[
+                              const SizedBox(width: AppSpacing.sm),
+                              Text(
+                                [
+                                  if (entry.value.player.rebuys > 0)
+                                    '${entry.value.player.rebuys}R',
+                                  if (entry.value.player.hasAddOn) 'AO',
+                                  if (entry.value.player.knockouts > 0)
+                                    '${entry.value.player.knockouts} KO',
+                                ].join(' · '),
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(width: AppSpacing.md),
+                            Text(
+                              showAmounts && entry.value.prize != null
+                                  ? Formatters.chips(entry.value.prize!.amount)
+                                  : '—',
+                              style: AppTypography.monoSm.copyWith(
+                                color: showAmounts && entry.value.prize != null
+                                    ? AppColors.primary
+                                    : AppColors.mutedForeground,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                ],
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.md),
           // Stats
           if (showAmounts)
@@ -470,6 +513,48 @@ class ResultPodiumScreen extends StatelessWidget {
       '#$pos',
       style: AppTypography.monoSm.copyWith(color: AppColors.mutedForeground),
     );
+  }
+
+  /// §C9's **Share**: rasterise the fixed 1,080 x 1,350 card and hand it to
+  /// the OS share sheet (T93).
+  ///
+  /// [buttonContext] is the Share control's own context, not the screen's — it
+  /// is only there to read the anchor rect the sheet pops from on iPad/Mac.
+  Future<void> _share(
+    BuildContext screenContext,
+    BuildContext buttonContext,
+    AppProvider app,
+    LiveGame game,
+    bool showAmounts,
+  ) async {
+    final box = buttonContext.findRenderObject();
+    final anchor = box is RenderBox
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
+    try {
+      await shareResults(
+        screenContext,
+        game: game,
+        // `recapFor`, not `gameRecap`: this screen can show a past game by id,
+        // not just the open one (same reason the night recap below uses it).
+        recap: app.recapFor(game),
+        showAmounts: showAmounts,
+        // §C9 puts season points on the card "when seasons are on", and D4
+        // puts seasons behind Premium — so this is the entitlement, not a
+        // per-game setting, and there is nothing to read off the game.
+        seasonsOn: Entitlements.allows(app.premiumTier, PremiumFeature.seasons),
+        sharePositionOrigin: anchor,
+      );
+    } catch (e) {
+      // A share can fail for reasons the player cannot act on — no share
+      // target, the platform channel missing, the capture failing. Say so in
+      // one line and leave the results on screen; they are not affected.
+      debugPrint('Share card failed: $e');
+      if (!screenContext.mounted) return;
+      ScaffoldMessenger.of(screenContext).showSnackBar(
+        const SnackBar(content: Text("Could not share tonight's results.")),
+      );
+    }
   }
 
   String _ordinal(int pos) {
@@ -664,6 +749,60 @@ class _RecapCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           ...rows,
         ],
+      ),
+    );
+  }
+}
+
+/// §C9's **Share** control. A button, but it owns one piece of state the
+/// screen does not: whether a share is already in flight. Two taps would
+/// rasterise the 1,080 x 1,350 card twice and open two sheets, and the second
+/// capture would race the overlay entry the first one is still holding.
+class _ShareButton extends StatefulWidget {
+  const _ShareButton({required this.onShare});
+
+  /// Given the button's own context, because the share sheet's popover anchor
+  /// is read from this control (iPad/Mac, T93).
+  final Future<void> Function(BuildContext buttonContext) onShare;
+
+  @override
+  State<_ShareButton> createState() => _ShareButtonState();
+}
+
+class _ShareButtonState extends State<_ShareButton> {
+  bool _busy = false;
+
+  Future<void> _run(BuildContext buttonContext) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.onShare(buttonContext);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Builder(
+      builder: (buttonContext) => AppButton(
+        variant: AppButtonVariant.secondary,
+        onPressed: () => _run(buttonContext),
+        // `loading` is what disables the button and swaps in the spinner
+        // (AppButton._isEnabled already folds it in), so this is the whole
+        // in-flight guard — `_run` only has to survive a double tap.
+        loading: _busy,
+        // Not const: `AppColors.icon` reads the active palette, so the icon
+        // re-tints with the rest of the app rather than freezing one palette's
+        // grey into the tree.
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.ios_share, size: 14, color: AppColors.icon),
+            const SizedBox(width: 6),
+            const Text('Share'),
+          ],
+        ),
       ),
     );
   }

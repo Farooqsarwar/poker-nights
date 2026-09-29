@@ -29,12 +29,16 @@ class ChatBubble extends StatelessWidget {
     required this.onDelete,
     required this.app,
     required this.userId,
+    this.onReport,
   });
 
   final ChatMessage message;
   final bool isMine;
   final bool canDelete;
   final VoidCallback onDelete;
+
+  /// Null when this message cannot be reported (mine, pinned, or removed).
+  final VoidCallback? onReport;
   final AppProvider app;
   final String? userId;
 
@@ -113,6 +117,24 @@ class ChatBubble extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Text(mine ? 'You · $time' : time, style: metaStyle),
                     ),
+                    if (onReport != null)
+                      Semantics(
+                        button: true,
+                        label: 'Report this message',
+                        excludeSemantics: true,
+                        child: InkWell(
+                          onTap: onReport,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          child: MinTapTarget(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              child: Text('· Report', style: metaStyle),
+                            ),
+                          ),
+                        ),
+                      ),
                     if (canDelete)
                       Semantics(
                         button: true,

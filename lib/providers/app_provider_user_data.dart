@@ -109,6 +109,13 @@ extension AppProviderUserData on AppProvider {
     },
         onError: (Object e) => debugPrint('results stream error: $e'));
 
+    _soloSub?.cancel();
+    _soloSub = _repo.soloSessionsStream(uid).listen((list) {
+      _soloHistory = list;
+      if (!_disposed) notifyListeners();
+    },
+        onError: (Object e) => debugPrint('soloGames stream error: $e'));
+
     // Free-plan: accept pending admin-by-email invites by self-writing the
     // user's own membership index (there is no Cloud Function to mirror it).
     _pendingInvitesSub?.cancel();
@@ -256,11 +263,18 @@ extension AppProviderUserData on AppProvider {
       _notificationsSub,
       _requestsSub,
       _cashSub,
+      _reportsSub,
+      _importedSub,
       _resultsSub,
+      _soloSub,
       _pendingInvitesSub,
     ]) {
       s?.cancel();
     }
+    _reportsSub = null;
+    _reports = const [];
+    _importedSub = null;
+    _importedNights = const [];
     for (final s in _groupMembersSubs.values) {
       s.cancel();
     }
@@ -297,6 +311,7 @@ extension AppProviderUserData on AppProvider {
     _requestsSub = null;
     _cashSub = null;
     _resultsSub = null;
+    _soloSub = null;
     _pendingInvitesSub = null;
     _gameSaveDebounce?.cancel();
     _projectionDebounce?.cancel();
@@ -312,9 +327,11 @@ extension AppProviderUserData on AppProvider {
     _currentGroup = AppProvider._kEmptyGroup;
     _notifications = const [];
     _cashHistory = const [];
+    _soloHistory = const [];
     _myResults = const [];
     _resultsRecorded.clear();
     _lastPushedStatsKey = null;
+    _lastInvitePreviewKey = null;
     _seenNotificationIds.clear();
     _notificationsPrimed = false;
     // Tear down the guest identity on ANY sign-out path (auth-state listener,
@@ -333,6 +350,12 @@ extension AppProviderUserData on AppProvider {
     _bundleSub?.cancel();
     _cashSub?.cancel();
     _cashSub = null;
+    _reportsSub?.cancel();
+    _reportsSub = null;
+    _reports = const [];
+    _importedSub?.cancel();
+    _importedSub = null;
+    _importedNights = const [];
     _bundleSub = null;
     _bundleLoaded = false;
     _bundleReady = Completer<void>();
@@ -395,6 +418,9 @@ extension AppProviderUserData on AppProvider {
       }
       _bundleLoaded = true;
       markReady();
+      _syncReportsSub(gid);
+      _syncImportedSub(gid);
+      _syncInvitePreview(g);
       // Catch results of games this device never followed live (e.g. the
       // player sat out or never opened the game screen).
       for (final finished in g.pastGames) {

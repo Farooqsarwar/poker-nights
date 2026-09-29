@@ -82,6 +82,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
   late double _duration;
   late int _expectedPlayers;
   late bool _expectedOverridden;
+  late int _rsvpDeadlineHours;
   late List<ChipColor> _chipSet;
   late String _chipSetName;
   late bool _rebuys;
@@ -128,6 +129,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
     _expectedOverridden = s.expectedPlayersOverride != null;
     // Chips plan from the RSVPs unless the host has overridden the figure.
     _expectedPlayers = s.expectedPlayersOverride ?? s.players;
+    _rsvpDeadlineHours = s.effectiveRsvpDeadlineHours;
     _chipSet = List.of(s.chipSet);
     _chipSetName = s.chipSetName;
     _rebuys = s.rebuys;
@@ -145,7 +147,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
     _anteAfterLevel = s.anteAfterLevel;
     _breaks = List.of(s.breaks);
     _overrideTableSettings = s.tableSettingsOverride != null;
-    _maxPerTable = s.tableSettingsOverride?.maxPerTable ?? 9;
+    _maxPerTable = (s.tableSettingsOverride?.maxPerTable ?? 9).clamp(4, 10);
     _randomizeSeating = s.tableSettingsOverride?.randomizeByDefault ?? false;
     _orgPct = s.organizerPct;
     // Only shown when rebuys are Limited; defaults to 1 per player.
@@ -251,6 +253,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
       chipSetName: _chipSetName,
       expectedPlayersOverride: _expectedOverridden ? _expectedPlayers : null,
       clearExpectedPlayersOverride: !_expectedOverridden,
+      rsvpDeadlineHours: _rsvpDeadlineHours,
       rebuys: _rebuys,
       rebuysCloseLevel: _rebuys ? _rebuysClose : 0,
       rebuyCloseChosenByOrganizer: _rebuys ? _rebuyCloseChosen : false,
@@ -466,6 +469,22 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
             ),
           ),
         ),
+      const SizedBox(height: AppSpacing.lg),
+      _EditRow(
+        title: 'RSVP deadline',
+        subtitle: '$_rsvpDeadlineHours ${_rsvpDeadlineHours == 1 ? 'hour' : 'hours'} '
+            'before the start. After that nobody new can answer Going.',
+        trailing: CountStepper(
+          value: _rsvpDeadlineHours,
+          min: 1,
+          max: 72,
+          semanticLabel: 'RSVP deadline in hours',
+          onChanged: (v) {
+            setState(() => _rsvpDeadlineHours = v);
+            _emit();
+          },
+        ),
+      ),
       const SizedBox(height: AppSpacing.lg),
       _OptionPicker(
         label: 'Target duration',
@@ -929,11 +948,11 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
       if (_overrideTableSettings) ...[
         _EditRow(
           title: 'Players per table before splitting',
-          subtitle: '6 to 12 seats per table',
+          subtitle: '4 to 10 seats per table',
           trailing: CountStepper(
             value: _maxPerTable,
-            min: 6,
-            max: 12,
+            min: 4,
+            max: 10,
             semanticLabel: 'Players per table',
             onChanged: (v) {
               setState(() => _maxPerTable = v);

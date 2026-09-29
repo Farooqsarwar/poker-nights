@@ -500,15 +500,15 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: _chips.length,
-      // `onReorder` reports newIndex as it stood *before* the dragged item is
-      // removed, so a downward drag lands one slot past where it was released
-      // unless the index is decremented first. There is no variant of this
-      // callback that adjusts for us — the `target` line below is the fix.
-      onReorder: (oldIndex, newIndex) {
+      // `onReorderItem` (the non-deprecated form) already reports `newIndex`
+      // with the dragged item's removal accounted for, so a downward drag
+      // lands on the slot it was released over and the index is used as-is.
+      // The old `onReorder` gave the pre-removal index and needed a manual
+      // `- 1` here, which is why this callback was the one that had it.
+      onReorderItem: (oldIndex, newIndex) {
         setState(() {
-          final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
           final chip = _chips.removeAt(oldIndex);
-          _chips.insert(target, chip);
+          _chips.insert(newIndex, chip);
           _reRecommend();
         });
       },
@@ -588,7 +588,7 @@ class _TotalValueCard extends StatelessWidget {
           ),
           const Spacer(),
           Text(
-            Formatters.prize(total),
+            Formatters.chips(total),
             style: AppTypography.mono(
               size: AppFontSizes.lg,
               weight: FontWeight.w700,

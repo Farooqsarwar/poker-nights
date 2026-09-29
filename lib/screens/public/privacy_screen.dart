@@ -10,65 +10,73 @@ import '../../widgets/legal_page.dart';
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
 
+  // Draft wording that follows Build Spec D-H1; the final text is the lawyer's
+  // (D13). It only states what the app really does today.
   static const _sections = <({String title, String body})>[
     (
-      title: '1. Information we collect',
+      title: '1. What we collect',
       body:
-          'We collect the information you give us directly: your name, email address, '
-          'and profile details when you create an account. We also collect tournament '
-          'and cash-game data you create on the app, such as players, results, and chip '
-          'counts. All of this data is stored locally on your device unless you choose '
-          'to share it with your group.',
+          'Your name, email address and profile photo when you create an account, and '
+          'what you create in the app: groups, games, results, chat messages and polls. '
+          'Settings such as sound and display stay on your device.',
     ),
     (
-      title: '2. How we use your information',
+      title: '2. How we use it',
       body:
-          'We use your information to run the app: signing you in, powering your game '
-          'history and statistics, sending you game invitations and notifications, and '
-          'improving the product. We never sell your personal information to third parties.',
+          'To sign you in, run your games, keep your history and statistics, and send '
+          'invitations and notifications. Past nights are used to improve blind '
+          'structures only with your consent. We never sell your personal data and we '
+          'do not use it for advertising profiles.',
     ),
     (
       title: '3. Groups and sharing',
       body:
-          'When you join or create a group, members of that group can see the details of '
-          'games hosted within it, including your name, results, and standing. The prize '
-          'pool and the payouts for a tournament are visible to everyone in the game — '
-          'players, guests and anyone watching the TV view. The only figure kept private '
-          'is the host\'s organiser contribution.',
+          'Members of a group see the group\'s games, chat and standings. Everyone in a '
+          'game sees the prize pool and the payouts. Your lifetime profit and loss and '
+          'your money history are visible only to you. The host\'s organiser'
+          'contribution is visible only to the host.',
     ),
     (
-      title: '4. Data you can control',
+      title: '4. Game history that improves structures',
       body:
-          'You can update your name and email at any time from your profile, choose which '
-          'notifications you receive from the Settings screen, and delete your account '
-          'from Settings. Deleting your account removes your profile and personal game '
-          'history from the app.',
+          'With your consent we keep bust times, the level at each bust and the final '
+          'big blind for each game, per group. You agree at sign-up and can opt out for '
+          'any group in its settings.',
     ),
     (
-      title: '5. Data security',
+      title: '5. Your choices',
       body:
-          'We use industry-standard safeguards to protect your data. Game state is stored '
-          'locally on your device for offline recovery, and nothing is transmitted to '
-          'our servers without your action.',
+          'You can edit your profile, turn notifications off, export your data as JSON '
+          'and delete your account, all from Settings. Deleting removes your account and '
+          'personal data. Your finishes stay in your groups\' history as "Former member".',
     ),
     (
-      title: '6. Children',
+      title: '6. Where data is stored',
       body:
-          'Poker Night is intended for adults. We do not knowingly collect information '
-          'from children under 18. If you believe a child has provided us information, '
-          'contact us and we will delete it.',
+          'Your data is stored with Firebase (Google Cloud) so your group can see the '
+          'same game on every phone. Some game state is also kept on your device so a '
+          'game can be recovered offline. If we add usage analytics or crash reports, '
+          'we will list them here first and ask before switching them on where the law '
+          'requires it.',
     ),
     (
-      title: '7. Changes to this policy',
+      title: '7. How long we keep it',
       body:
-          'We may update this Privacy Policy from time to time. If we make material '
-          'changes, we will notify you in the app before the changes take effect.',
+          'Game data and chat are kept while the group exists. When you delete your '
+          'account, your personal data is removed as described above.',
     ),
     (
-      title: '8. Contact',
+      title: '8. Children',
+      body:
+          'Poker Night is for adults (18+). We do not knowingly collect information '
+          'from children. If you believe a child has given us information, contact us '
+          'and we will delete it.',
+    ),
+    (
+      title: '9. Contact',
       body:
           'Questions about this policy? Email support@pokernight.app and we will get '
-          'back to you within 2 business days.',
+          'back to you within one business day.',
     ),
   ];
 

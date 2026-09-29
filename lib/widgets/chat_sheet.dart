@@ -11,6 +11,7 @@ import 'app_button.dart';
 import 'app_text_field.dart';
 import 'glass_styles.dart';
 import 'min_tap_target.dart';
+import 'report_message.dart';
 
 class ChatSheet extends StatefulWidget {
   const ChatSheet({super.key, required this.gameId});
@@ -168,6 +169,9 @@ class _ChatSheetState extends State<ChatSheet> {
                       isMine: msg.authorId == userId,
                       canDelete: (app.isAdmin) && msg.authorId != userId,
                       onDelete: () => app.deleteMessage(msg.id),
+                      onReport: app.canReport(msg)
+                          ? () => confirmReportMessage(context, app, msg)
+                          : null,
                     );
                   },
                 ),
@@ -279,12 +283,14 @@ class _ChatBubble extends StatelessWidget {
     required this.isMine,
     required this.canDelete,
     required this.onDelete,
+    this.onReport,
   });
 
   final ChatMessage message;
   final bool isMine;
   final bool canDelete;
   final VoidCallback onDelete;
+  final VoidCallback? onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -351,6 +357,26 @@ class _ChatBubble extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onReport != null)
+                  Semantics(
+                    button: true,
+                    label: 'Report this message',
+                    excludeSemantics: true,
+                    child: InkWell(
+                      onTap: onReport,
+                      child: MinTapTarget(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'report',
+                            style: AppTypography.body(size: 10).copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 if (canDelete)
                   Semantics(
                     button: true,
@@ -378,7 +404,7 @@ class _ChatBubble extends StatelessWidget {
                               onPressed: () => Navigator.of(ctx).pop(true),
                               child: Text('Delete',
                                 style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.destructive)),
+                                  color: AppColors.destructiveText)),
                             ),
                           ],
                         ),

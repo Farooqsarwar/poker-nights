@@ -35,7 +35,7 @@ class ConnectionBanner extends StatelessWidget {
         child: offline
             ? const AppAlertBanner(
                 type: AppAlertType.warning,
-                message: 'Connection interrupted — showing last known state.',
+                message: 'Offline — the clock keeps running on this phone; changes sync when you\'re back.',
                 onDismiss: null,
               )
             : AppAlertBanner(

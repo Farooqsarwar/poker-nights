@@ -11,6 +11,7 @@ import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_badge.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/page_header.dart';
 import '../../widgets/medal_icon.dart';
@@ -49,8 +50,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               PageHeader(
-                onBack: () => context.go(RoutePaths.group),
+                onBack: () => context.go(
+                  app.hasCurrentGroup ? RoutePaths.group : RoutePaths.home,
+                ),
                 title: 'History',
+                actions: [
+                  if (app.hasCurrentGroup)
+                    AppButton(
+                      variant: AppButtonVariant.secondary,
+                      size: AppButtonSize.sm,
+                      onPressed: () => context.push(RoutePaths.standings),
+                      child: const Text('Standings'),
+                    ),
+                ],
               ),
               const SizedBox(height: AppSpacing.md),
               // Filter pills row
@@ -153,11 +165,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ),
         if (_tab == 'all')
-          _buildAll(pastGames, app.cashHistory, userId, isAdmin)
+          _buildAll(pastGames, app.cashHistory, app.soloHistory, userId, isAdmin)
         else if (_tab == 'tournaments')
           _buildGames(pastGames, userId, isAdmin)
         else if (_tab == 'cash')
-          _buildCash(app.cashHistory, isAdmin)
+          _buildCash(app.cashHistory, app.soloHistory, isAdmin)
         else
           SliverToBoxAdapter(child: _buildLeaderboard(pastGames, userId)),
       ],
@@ -217,10 +229,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget _buildAll(
     List<LiveGame> pastGames,
     List<CashSession> cashHistory,
+    List<CashSession> soloHistory,
     String? userId,
     bool isAdmin,
   ) {
-    if (pastGames.isEmpty && cashHistory.isEmpty) {
+    if (pastGames.isEmpty && cashHistory.isEmpty && soloHistory.isEmpty) {
       return SliverToBoxAdapter(
         child: _emptyCard(
           icon: Icons.history,
@@ -229,7 +242,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       );
     }
     return SliverList.builder(
-      itemCount: pastGames.length + cashHistory.length,
+      itemCount: pastGames.length + cashHistory.length + soloHistory.length,
       itemBuilder: (context, i) {
         if (i < pastGames.length) {
           return Padding(
@@ -242,11 +255,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
           );
         }
         final cashIndex = i - pastGames.length;
+        final isSolo = cashIndex >= cashHistory.length;
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: _CashHistoryRow(
-            session: cashHistory[cashIndex],
-            showAmounts: isAdmin,
+            session: isSolo
+                ? soloHistory[cashIndex - cashHistory.length]
+                : cashHistory[cashIndex],
+            // A solo game has no other host: its owner always sees the money.
+            showAmounts: isAdmin || isSolo,
+            solo: isSolo,
           ),
         );
       },
@@ -275,8 +293,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  Widget _buildCash(List<CashSession> sessions, bool isAdmin) {
-    if (sessions.isEmpty) {
+  Widget _buildCash(
+    List<CashSession> groupSessions,
+    List<CashSession> soloSessions,
+    bool isAdmin,
+  ) {
+    if (groupSessions.isEmpty && soloSessions.isEmpty) {
       return SliverToBoxAdapter(
         child: _emptyCard(
           icon: Icons.payments_outlined,
@@ -285,11 +307,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
       );
     }
     return SliverList.builder(
-      itemCount: sessions.length,
-      itemBuilder: (context, i) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: _CashHistoryRow(session: sessions[i], showAmounts: isAdmin),
-      ),
+      itemCount: groupSessions.length + soloSessions.length,
+      itemBuilder: (context, i) {
+        final isSolo = i >= groupSessions.length;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _CashHistoryRow(
+            session: isSolo
+                ? soloSessions[i - groupSessions.length]
+                : groupSessions[i],
+            showAmounts: isAdmin || isSolo,
+            solo: isSolo,
+          ),
+        );
+      },
     );
   }
 
@@ -578,10 +609,17 @@ class _LbStat extends StatelessWidget {
 }
 
 class _CashHistoryRow extends StatelessWidget {
-  const _CashHistoryRow({required this.session, required this.showAmounts});
+  const _CashHistoryRow({
+    required this.session,
+    required this.showAmounts,
+    this.solo = false,
+  });
 
   final CashSession session;
   final bool showAmounts;
+
+  /// Finished with no group selected — tagged "Solo" (Addendum 1).
+  final bool solo;
 
   @override
   Widget build(BuildContext context) {
@@ -658,6 +696,10 @@ class _CashHistoryRow extends StatelessWidget {
                             ),
                           ),
                         const SizedBox(height: 4),
+                        if (solo) ...[
+                          const AppBadge(label: 'Solo'),
+                          const SizedBox(height: 4),
+                        ],
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 6,

@@ -475,7 +475,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                           ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    Formatters.prize(stack),
+                                    Formatters.chips(stack),
                                     style: TextStyle(
                                       color: AppColors.foreground,
                                       fontWeight: FontWeight.w700,
@@ -1216,158 +1216,10 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
               ],
             ],
             if (_tab == 'structure') ...[
-              // Blind schedule
-              AppCard(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Table(
-                      columnWidths: const {
-                        0: FlexColumnWidth(1),
-                        1: FlexColumnWidth(2.5),
-                        2: FlexColumnWidth(1.5),
-                        3: FlexColumnWidth(1.5),
-                      },
-                      defaultVerticalAlignment:
-                          TableCellVerticalAlignment.middle,
-                      children: [
-                        TableRow(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppSpacing.sm,
-                              ),
-                              child: Text(
-                                'Lv',
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppSpacing.sm,
-                              ),
-                              child: Text(
-                                'Blinds',
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppSpacing.sm,
-                              ),
-                              child: Text(
-                                'Ante',
-                                textAlign: TextAlign.right,
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppSpacing.sm,
-                              ),
-                              child: Text(
-                                'Time',
-                                textAlign: TextAlign.right,
-                                style: AppTypography.bodyXs.copyWith(
-                                  color: AppColors.mutedForeground,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        for (final l in game.structure.levels)
-                          TableRow(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: AppColors.border,
-                                  width: 0.5,
-                                ),
-                              ),
-                            ),
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: AppSpacing.md,
-                                ),
-                                child: Text(
-                                  '${l.level}',
-                                  style: AppTypography.monoSm.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: AppSpacing.md,
-                                ),
-                                child: Text(
-                                  '${Formatters.chips(l.sb)} / ${Formatters.chips(l.bb)}',
-                                  style: AppTypography.monoSm.copyWith(
-                                    color: AppColors.foreground,
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: AppSpacing.md,
-                                ),
-                                child: Text(
-                                  l.ante == null
-                                      ? '—'
-                                      : Formatters.chips(l.ante!),
-                                  textAlign: TextAlign.right,
-                                  style: AppTypography.monoXs.copyWith(
-                                    color: l.ante == null
-                                        ? AppColors.mutedForeground
-                                        : AppColors.accent,
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: AppSpacing.md,
-                                ),
-                                child: Text(
-                                  '${l.durationMins}m',
-                                  textAlign: TextAlign.right,
-                                  style: AppTypography.monoXs.copyWith(
-                                    color: AppColors.mutedForeground,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
-                    ),
-                    if (game.settings.rebuys) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: AppColors.primarySoft,
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                        child: Text(
-                          'Rebuys remain open until after Level ${game.settings.rebuysCloseLevel}.',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.primaryText,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+              // Blind schedule. Spec C11 — one table, shared with the host's
+              // Levels tab so the two cannot disagree about which level is
+              // running or where the breaks fall.
+              LevelsTableCard(game: game, showRebuyNote: true),
             ],
             if (_tab == 'payouts') ...[
               const SizedBox(height: AppSpacing.md),
@@ -1565,3 +1417,254 @@ class _StatCard extends StatelessWidget {
     );
   }
 }
+
+/// Spec C11. The blind schedule: one table of `LVL / BLINDS / ANTE / TIME`,
+/// with the scheduled breaks as rows of their own and the level in progress
+/// marked "now".
+///
+/// Breaks used to be invisible here — configured, counted in the estimated
+/// finish, announced out loud at the time, and absent from the only document
+/// that tells a player what the next two hours look like. They are part of
+/// the structure, so they belong in the structure table; a break after Level 6
+/// is a row saying so.
+///
+/// Shared between the player's Structure tab and the host's Levels tab so the
+/// two cannot disagree about which level is running, and live on the same
+/// model getter ([LiveGame.currentLevel]) rather than a local notion of "now".
+class LevelsTableCard extends StatelessWidget {
+  const LevelsTableCard({
+    super.key,
+    required this.game,
+    this.showRebuyNote = false,
+  });
+
+  final LiveGame game;
+
+  /// The player-facing rebuys-until line. The host's Levels tab has the
+  /// rebuy-close control instead and must not also advertise a rule it is
+  /// about to change.
+  final bool showRebuyNote;
+
+  @override
+  Widget build(BuildContext context) {
+    final structure = game.structure;
+    final current = game.currentLevel;
+    final breaks = {for (final b in structure.breaks) b.afterLevel};
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Table(
+            columnWidths: const {
+              0: FlexColumnWidth(1),
+              1: FlexColumnWidth(2.5),
+              2: FlexColumnWidth(1.5),
+              3: FlexColumnWidth(1.5),
+            },
+            defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+            children: [
+              const TableRow(
+                children: [
+                  _LevelsHeader('LVL'),
+                  _LevelsHeader('BLINDS'),
+                  _LevelsHeader('ANTE', alignEnd: true),
+                  _LevelsHeader('TIME', alignEnd: true),
+                ],
+              ),
+              for (final l in structure.levels) ...[
+                _levelRow(l, current),
+                if (breaks.contains(l.level))
+                  _breakRow(structure.breakAfter(l.level)!),
+              ],
+            ],
+          ),
+          if (showRebuyNote && game.settings.rebuys) ...[
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Text(
+                'Rebuys remain open until after Level ${game.settings.rebuysCloseLevel}.',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.primaryText,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  TableRow _levelRow(BlindLevel l, int current) {
+    final isNow = l.level == current;
+    return TableRow(
+      decoration: BoxDecoration(
+        color: isNow ? AppColors.primarySoft : null,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border, width: 0.5),
+        ),
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: Row(
+            children: [
+              Flexible(
+                child: Text.rich(
+                  TextSpan(
+                    text: '${l.level}',
+                    style: AppTypography.monoSm.copyWith(
+                      fontWeight: isNow
+                          ? FontWeight.w700
+                          : FontWeight.w600,
+                      color: isNow
+                          ? AppColors.primaryText
+                          : AppColors.foreground,
+                    ),
+                    children: [
+                      // Framework §13 layer 2: the tail past the target is
+                      // announced, not hidden.
+                      if (structureIsCompression(l.level))
+                        TextSpan(
+                          text: ' late',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (isNow) ...[
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  'now',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.primaryText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: Text(
+            '${Formatters.chips(l.sb)} / ${Formatters.chips(l.bb)}',
+            style: AppTypography.monoSm.copyWith(
+              color: isNow ? AppColors.primaryText : AppColors.foreground,
+              fontWeight: isNow ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: Text(
+            l.ante == null ? '—' : Formatters.chips(l.ante!),
+            textAlign: TextAlign.right,
+            style: AppTypography.monoXs.copyWith(
+              color: l.ante == null
+                  ? AppColors.mutedForeground
+                  : AppColors.accent,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: Text(
+            '${l.durationMins}m',
+            textAlign: TextAlign.right,
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// A break sits between two levels, so it is rendered as a full-width row
+  /// under the level it follows, with its duration in the TIME column and
+  /// dashes where blinds and ante do not apply.
+  TableRow _breakRow(ScheduledBreak b) {
+    return TableRow(
+      decoration: BoxDecoration(
+        color: AppColors.muted,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border, width: 0.5),
+        ),
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: Text(
+            'Break',
+            style: AppTypography.bodyXs.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: Text(
+            'After L${b.afterLevel}',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: Text('—', textAlign: TextAlign.right),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: Text(
+            '${b.durationMins}m',
+            textAlign: TextAlign.right,
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Framework §13 layer 2, resolved against the game this card was handed.
+  bool structureIsCompression(int level) =>
+      game.structure.isCompressionLevel(level);
+}
+
+class _LevelsHeader extends StatelessWidget {
+  const _LevelsHeader(this.label, {this.alignEnd = false});
+
+  final String label;
+  final bool alignEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Text(
+        label,
+        textAlign: alignEnd ? TextAlign.right : TextAlign.left,
+        style: AppTypography.bodyXs.copyWith(
+          color: AppColors.mutedForeground,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+}
+

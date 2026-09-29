@@ -431,15 +431,31 @@ extension AppProviderTimer on AppProvider {
         _currentGame?.status == LiveGameStatus.cancelled) {
       return;
     }
+    final resumedSettings = _settingsAfterLeavingBreak(_currentGame!);
     _currentGame = _currentGame!.copyWith(
       timerRunning: true,
       status: LiveGameStatus.running,
+      settings: resumedSettings,
       levelEndTime: _serverNow.add(
         Duration(seconds: _currentGame!.secondsRemaining),
       ),
     );
     _syncGroupGame();
     if (!_disposed) notifyListeners();
+  }
+
+  /// Addendum 2: the add-on window closes when the host presses Next in the
+  /// settlement flow. If the break ends first, play resumes and the window
+  /// stays open ("Add-on window (overtime)") until step 2 is finished, so a
+  /// slow settlement never silently forfeits anybody's add-on.
+  GameSettings _settingsAfterLeavingBreak(LiveGame game) {
+    final stillOpen = game.status == LiveGameStatus.rebuypause &&
+        game.settings.addOn &&
+        !game.settlementConfirmed &&
+        !game.addOnWindowClosed;
+    return stillOpen
+        ? game.settings.copyWith(addOnOvertime: true)
+        : game.settings;
   }
 
   /// Puts a player on the clock (§12).
@@ -649,11 +665,13 @@ extension AppProviderTimer on AppProvider {
         return;
       }
       final extLevel = _currentGame!.structure.levels[next - 1];
+      final advancedSettings = _settingsAfterLeavingBreak(_currentGame!);
       _currentGame = _currentGame!.copyWith(
         currentLevel: next,
         secondsRemaining: extLevel.durationMins * 60,
         timerRunning: true,
         status: LiveGameStatus.running,
+        settings: advancedSettings,
         speedRecommendation: null,
         clearSpeedRecommendation: true,
         levelEndTime: _serverNow.add(Duration(minutes: extLevel.durationMins)),
@@ -728,8 +746,7 @@ extension AppProviderTimer on AppProvider {
       lastIdempotencyKey: idemKey,
     );
     addAnnouncement(
-      'Level $prev. Blinds ${level.sb} and ${level.bb}'
-      '${level.ante != null ? ', ante ${level.ante}' : ''}.',
+      Formatters.levelSpoken(prev, level.sb, level.bb, level.ante),
       true,
     );
     _syncGroupGame();

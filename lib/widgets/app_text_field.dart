@@ -113,6 +113,12 @@ class _AppTextFieldState extends State<AppTextField> {
         ],
         AnimatedContainer(
           duration: AppDurations.fast,
+          // §B3 gives an input a 52–56 px height. It used to be whatever
+          // `14 + lineBox + 14` happened to add up to, which is 52 only for
+          // the current body type — a font-metric change or a 200% text scale
+          // dropped the field below the target without anything looking wrong.
+          // A floor states the requirement and lets the field grow.
+          constraints: const BoxConstraints(minHeight: 52),
           decoration: Glass.glassInput(
             focused: _isFocused,
             hasError: hasError,
@@ -140,19 +146,22 @@ class _AppTextFieldState extends State<AppTextField> {
               ),
               prefixIcon: widget.prefixIcon,
               suffixIcon: widget.suffixIcon,
+              // The icon slot is a tap target whenever the icon is a control
+              // — the password eye, the trailing clear button — so it gets the
+              // §B3 44 px floor, not the 40 it was inheriting by default.
               prefixIconConstraints: const BoxConstraints(
-                minWidth: 40,
-                minHeight: 40,
+                minWidth: 44,
+                minHeight: 44,
               ),
               suffixIconConstraints: const BoxConstraints(
-                minWidth: 40,
-                minHeight: 40,
+                minWidth: 44,
+                minHeight: 44,
               ),
               isDense: true,
               filled: true,
               fillColor: Colors.transparent, // Let Glass surface show through
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
+                horizontal: 18,
                 vertical: 14,
               ),
               border: InputBorder.none,

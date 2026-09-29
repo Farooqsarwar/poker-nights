@@ -45,9 +45,22 @@ class ScreenShell extends StatelessWidget {
   /// Routes a guest (no account) may access inside the shell.
   static const _guestAllowed = {RoutePaths.playerLive, RoutePaths.resultPodium};
 
+  /// Routes that open for a signed-out visitor (Build Spec C3): the quick
+  /// start creates its own anonymous session, and the invite link previews the
+  /// group before anyone signs in. They draw their own header, so a signed-out
+  /// visitor gets the page with no navigation chrome.
+  static const _openToSignedOut = {RoutePaths.quick, RoutePaths.joinGroup};
+
   @override
   Widget build(BuildContext context) {
     final signedIn = context.select<AppProvider, bool>((a) => a.isAuthenticated);
+
+    if (!signedIn && _openToSignedOut.contains(requiredPath)) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ThemedAppBackground(child: SafeArea(child: child)),
+      );
+    }
     final guestOk = context.select<AppProvider, bool>((a) => a.hasGuestSession) && _guestAllowed.contains(requiredPath);
 
     // Route guard: block access when the user cannot enter this path.
@@ -193,6 +206,7 @@ class _MobileShell extends StatelessWidget {
     RoutePaths.chat,
     RoutePaths.members,
     RoutePaths.polls,
+    RoutePaths.reports,
     RoutePaths.notifications,
     RoutePaths.history,
     RoutePaths.joinGroup,

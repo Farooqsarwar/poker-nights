@@ -3,8 +3,83 @@
 /// Extracted verbatim from app_provider.dart (`// ── Group ──`). Do not change business logic.
 part of 'app_provider.dart';
 
+/// What the invite screen shows before someone joins (E6). Comes from the
+/// public `joinCodes` doc, so it is readable with only the code.
+class GroupInvitePreview {
+  const GroupInvitePreview({
+    required this.gid,
+    required this.name,
+    required this.icon,
+    this.hostName,
+    this.memberCount,
+    this.gamesPlayed,
+  });
+
+  final String gid;
+  final String name;
+  final String icon;
+  final String? hostName;
+  final int? memberCount;
+  final int? gamesPlayed;
+}
+
 extension AppProviderGroups on AppProvider {
   Group get currentGroup => _currentGroup;
+
+  /// True when the signed-in user already belongs to [gid].
+  bool isMemberOfGroup(String gid) => _groups.any((g) => g.id == gid);
+
+  /// Looks up the group behind an invite [code] without joining it. Null when
+  /// the code is unknown, is not a group code, or the lookup failed.
+  Future<GroupInvitePreview?> previewInvite(String code) async {
+    if (!_backendUp) return null;
+    try {
+      final data = await _repo.peekJoinCode(code);
+      if (data == null) return null;
+      final gid = data['gid'] as String?;
+      final gameId = data['gameId'] as String?;
+      if (gid == null || (gameId != null && gameId.isNotEmpty)) return null;
+      return GroupInvitePreview(
+        gid: gid,
+        name: (data['name'] as String?) ?? '',
+        icon: (data['icon'] as String?) ?? '♠',
+        hostName: data['hostName'] as String?,
+        memberCount: (data['memberCount'] as num?)?.toInt(),
+        gamesPlayed: (data['gamesPlayed'] as num?)?.toInt(),
+      );
+    } catch (e) {
+      debugPrint('previewInvite failed: $e');
+      return null;
+    }
+  }
+
+  /// Host-side: keeps the invite preview's member and game counts current.
+  /// Skipped when nothing changed since the last write.
+  void _syncInvitePreview(Group g) {
+    final uid = _repo.currentUid;
+    if (!_backendUp || uid == null || g.joinCode.isEmpty) return;
+    if (g.ownerId != uid) return;
+    final host = g.members.where((m) => m.id == g.ownerId).firstOrNull;
+    final hostName = host?.name ?? _user?.name ?? '';
+    final played = g.pastGames.length;
+    final key =
+        '${g.joinCode}|${g.name}|${g.icon}|$hostName|${g.members.length}|$played';
+    if (key == _lastInvitePreviewKey) return;
+    _lastInvitePreviewKey = key;
+    unawaited(_repo
+        .updateInvitePreview(
+          g.joinCode,
+          name: g.name,
+          icon: g.icon,
+          hostName: hostName,
+          memberCount: g.members.length,
+          gamesPlayed: played,
+        )
+        .catchError((Object e) {
+      _lastInvitePreviewKey = null;
+      debugPrint('updateInvitePreview failed: $e');
+    }));
+  }
 
   /// Id of the selected group — set the instant a group is chosen, even before
   /// its live bundle has loaded (unlike `currentGroup.id`, which lags).
@@ -60,7 +135,7 @@ extension AppProviderGroups on AppProvider {
 
   /// Creates a new group with this account as owner. Returns null when the
   /// caller is unauthenticated or the write failed.
-  Future<Group?> createGroup(String name, {String icon = '♠️'}) async {
+  Future<Group?> createGroup(String name, {String icon = '♠'}) async {
     final user = _user;
     if (!_backendUp || user == null) return null;
     final group = Group(

@@ -84,13 +84,22 @@ void main() {
   });
 
   group('the simulation announces itself', () {
-    test('the checkout screen says no card is charged', () {
+    test('the checkout screen discloses that nothing is charged', () {
       final source = read('lib/screens/premium/checkout_screen.dart');
+      final lower = source.toLowerCase();
+      // The screen's exact wording is "Demo - nothing is charged and no card
+      // is needed" (and a matching line on the success state), so assert the
+      // two things that matter — that nothing is charged, and that no card is
+      // taken — rather than one brittle phrase that a copy edit would break.
       expect(
-        source.toLowerCase(),
-        contains('no card is charged'),
-        reason: 'a payment screen that looks real without saying it is a test '
-            'is the thing app stores reject and users reasonably resent',
+        lower,
+        anyOf(contains('nothing is charged'), contains('no card is charged')),
+        reason: 'the screen must say that no money moves',
+      );
+      expect(
+        lower,
+        anyOf(contains('no card is needed'), contains('no card is taken')),
+        reason: 'the screen must say it does not take card details',
       );
     });
 

@@ -48,6 +48,14 @@ void main() {
     // Concurrency bookkeeping — never rendered.
     'lastIdempotencyKey', 'editorDeviceId', 'editorClaimedAt',
     'audioMasterDeviceId',
+    // Document-version stamp (§E2 rule 1). Wire plumbing like the group above:
+    // no viewer benefits from seeing the build number, and it reveals nothing
+    // sensitive, so it rides through unscrubbed.
+    'codecVersion',
+    // Addendum 2 §1 add-on-window state. Play state on the same footing as
+    // `status`/`currentLevel` — every viewer benefits from knowing whether the
+    // add-on window is still open, so it is public.
+    'addOnWindowClosed',
     // §11.4. Which stage of a shootout is live — play state, same footing as
     // `status`/`currentLevel` above. Not money, not an identity: every
     // viewer benefits from knowing whether Stage A or the final table is

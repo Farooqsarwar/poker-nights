@@ -1,6 +1,5 @@
 import '../models/game.dart';
 import '../models/live_game.dart';
-import '../models/tournament.dart';
 import '../models/payment_record.dart';
 
 /// Who a game projection is addressed to. Permissions must be enforced by the
@@ -14,9 +13,10 @@ const _noOrganizerAmount = 0;
 /// Returns a copy of [game] safe for [role].
 ///
 /// The admin projection is the full object. Player/guest/TV projections strip
-/// private financial fields (organizer amount, individual payout amounts) and,
-/// for guest/TV, the group chat. The public prize-pool total is preserved for
-/// all roles.
+/// private financial fields (the organiser's own contribution, individual
+/// buy-in and rebuy figures) and, for guest/TV, the group chat. The public
+/// prize-pool total and the payout ladder itself are preserved for all roles
+/// (D2).
 LiveGame projectionFor(
   LiveGame game,
   GameProjectionRole role, {
@@ -83,11 +83,13 @@ LiveGame projectionFor(
     settings: publicSettings,
     structure: game.structure.copyWith(
       organizerAmount: _noOrganizerAmount,
-      // The amounts do not travel at all. Zeroed `Prize` rows used to, and the
-      // Firestore rules cannot iterate a list to confirm each one is 0 — so
-      // the omission rested entirely on this function (19-019). An EMPTY list
-      // plus a separate count is verifiable: `prizes.size() == 0`.
-      prizes: const <Prize>[],
+      // D2: the payout ladder is PUBLIC. "Everyone - players, guests, the TV -
+      // sees the prize pool and the payouts", and line 207 rejects the older
+      // board rule that hid the amounts from everyone but the admin. This list
+      // used to be emptied for every non-admin role, which left each player,
+      // guest and the TV looking at a blank ladder. The organiser's own
+      // contribution is the one figure that stays behind, above.
+      prizes: game.structure.prizes,
       paidPlaces: game.structure.prizes.length,
     ),
     players: publicPlayers,

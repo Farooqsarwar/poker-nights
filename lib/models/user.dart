@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show listEquals;
+
 /// Aggregated stats shown on the profile and home dashboard.
 class UserStats {
   const UserStats({
@@ -65,6 +67,7 @@ class AppUser {
     required this.stats,
     this.fcmTokens = const [],
     this.isCoAdmin = false,
+    this.blockedUserIds = const [],
   });
 
   final String id;
@@ -73,6 +76,19 @@ class AppUser {
   final bool isAdmin;
   final UserStats stats;
   final List<String> fcmTokens;
+
+  /// Members this member has blocked — spec §E10 (3) "Moderation": "**Block**
+  /// — on a member's row or message: **Block {name}** hides their messages and
+  /// polls for the blocker everywhere (stored on the blocker's user document)
+  /// until unblocked in Settings → Blocked".
+  ///
+  /// A block is a VIEW filter scoped to this one document. Nothing is deleted:
+  /// the blocked member's messages stay in `…/chat` and stay visible to
+  /// everyone else, and the blocked member is never told (H3's FAQ sells Block
+  /// as "hide their messages", not as a removal). Host, co-host and member may
+  /// all block; guests may not (§E6's matrix, "Report a chat message · block a
+  /// member": host ✓, co-host ✓, member ✓, guest —, TV —).
+  final List<String> blockedUserIds;
 
   /// True when this membership holds the elevated "Co-host" role: can add
   /// members directly and grant rebuys, but cannot advance the tournament or
@@ -86,6 +102,59 @@ class AppUser {
     return name[0].toUpperCase();
   }
 
+  /// True when [userId] is on this member's block list. An empty id is never
+  /// blocked: an authorless message is a system card, and a blank id in the
+  /// list would otherwise hide every one of them.
+  bool isBlocked(String userId) =>
+      userId.isNotEmpty && blockedUserIds.contains(userId);
+
+  /// True once anybody has been blocked — the header entry point for the
+  /// "Blocked members" list is only worth showing when this is true.
+  bool get hasBlockedUsers => blockedUserIds.isNotEmpty;
+
+  /// This member with [userId] blocked, or **this same instance** when the
+  /// call changes nothing, so a caller can tell a real change from a no-op
+  /// with `identical` and skip the write.
+  ///
+  /// No-ops, all per §E10/E6: an empty id, your own id (blocking yourself would
+  /// only hide your own messages, and §E6 gives a guest no blocking right at
+  /// all), and a member who is already blocked.
+  AppUser withBlocked(String userId) {
+    if (userId.isEmpty || userId == id || isBlocked(userId)) return this;
+    return copyWith(blockedUserIds: [...blockedUserIds, userId]);
+  }
+
+  /// This member with [userId] removed from the block list, or this same
+  /// instance when they were not blocked.
+  AppUser withoutBlocked(String userId) {
+    if (!isBlocked(userId)) return this;
+    return copyWith(
+      blockedUserIds: blockedUserIds
+          .where((id) => id != userId)
+          .toList(growable: false),
+    );
+  }
+
+  /// This member with the whole block list replaced by [ids] — the sign-in
+  /// restore of the list stored on the profile document (§E10 (3)).
+  ///
+  /// The stored list is normalised on the way in: blanks, duplicates and your
+  /// own id are dropped, so a hand-edited or half-migrated document cannot put
+  /// the member in a state the UI cannot undo. Returns this same instance when
+  /// the normalised list already matches, so an unchanged restore writes
+  /// nothing back.
+  AppUser withBlockedList(Iterable<String> ids) {
+    final seen = <String>[];
+    for (final candidate in ids) {
+      if (candidate.isEmpty || candidate == id || seen.contains(candidate)) {
+        continue;
+      }
+      seen.add(candidate);
+    }
+    if (listEquals(seen, blockedUserIds)) return this;
+    return copyWith(blockedUserIds: seen);
+  }
+
   AppUser copyWith({
     String? id,
     String? name,
@@ -94,6 +163,7 @@ class AppUser {
     UserStats? stats,
     List<String>? fcmTokens,
     bool? isCoAdmin,
+    List<String>? blockedUserIds,
   }) {
     return AppUser(
       id: id ?? this.id,
@@ -103,6 +173,7 @@ class AppUser {
       stats: stats ?? this.stats,
       fcmTokens: fcmTokens ?? this.fcmTokens,
       isCoAdmin: isCoAdmin ?? this.isCoAdmin,
+      blockedUserIds: blockedUserIds ?? this.blockedUserIds,
     );
   }
 }

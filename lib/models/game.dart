@@ -256,6 +256,34 @@ class ChatMessage {
       gameId: gameId,
     );
   }
+
+  /// §E10 (3) "Moderation", item 3: "**Block {name}** hides their messages
+  /// and polls for the blocker **everywhere**". The hiding is a read-side
+  /// filter on the blocker's own list — nothing is deleted, the rule set is
+  /// untouched and every other member still reads the message, so this is the
+  /// only place the block list touches messages.
+  /// A blank author id is never hidden even if the set somehow contains one:
+  /// an authorless message is a system card (published game, edit notice) and
+  /// `AppUser.isBlocked` already refuses to put `''` on a block list. Both
+  /// sides agree, so a hand-edited document cannot silently hide every system
+  /// card in the chat.
+  static bool isVisibleTo(ChatMessage m, Set<String> blockedUserIds) =>
+      m.authorId.isEmpty || !blockedUserIds.contains(m.authorId);
+
+  /// [messages] with every blocked author's messages removed, order untouched.
+  ///
+  /// Deliberately NOT a mutation: the underlying list still holds the muted
+  /// messages, so unblocking puts the whole conversation back in place without
+  /// a refetch and without a gap in the ordering.
+  static List<ChatMessage> visibleTo(
+    Iterable<ChatMessage> messages,
+    Set<String> blockedUserIds,
+  ) {
+    if (blockedUserIds.isEmpty) return messages.toList();
+    return messages
+        .where((m) => isVisibleTo(m, blockedUserIds))
+        .toList(growable: false);
+  }
 }
 
 /// Status of a reserved guest slot under an inviter (user-flow spec §7.1:

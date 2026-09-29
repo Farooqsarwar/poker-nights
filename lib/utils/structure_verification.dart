@@ -135,11 +135,16 @@ abstract final class StructureVerification {
           reEntryChips: s.reEntryChips,
           addOnChips: s.addOnChips,
           levelDurationMins: s.levelDurationMins,
+          // §F1.1 inputs. The pace picks the level length and the growth ceiling,
+          // and the two forecast rates feed `C`; all three change the ladder, so
+          // leaving them out failed every honest pace-mode structure.
+          pace: s.pace,
+          expectedRebuyRate: s.forecastRebuyRate,
+          addOnTakeUpRate: s.forecastAddOnTakeUp,
           // Costs nothing here — the audit below compares stacks, blinds and
           // breaks, never the prize split — but the engine consumes it, so
           // leaving it out would make this the one call that reruns the
           // generator on settings the host did not choose.
-          payoutShape: s.payoutShape,
           format: s.format,
           maxReEntries: s.maxReEntries,
           // §33, this round. A shootout generated over four tables and quietly

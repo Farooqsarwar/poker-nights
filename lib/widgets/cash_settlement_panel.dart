@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app/colors.dart';
 import '../app/typography.dart';
@@ -6,6 +7,7 @@ import '../constants/app_constants.dart';
 import '../models/cash_game.dart';
 import '../services/payment_service.dart';
 import '../utils/cash_settlement.dart';
+import '../utils/formatters.dart';
 import 'app_card.dart';
 
 /// Where the night's money actually ends up.
@@ -80,7 +82,7 @@ class _Body extends StatelessWidget {
                       ),
                       Text(
                         // The sign is the information, so it is never dropped.
-                        '${s.net >= 0 ? '+' : '−'}${s.net.abs().toStringAsFixed(2)}',
+                        '${s.net >= 0 ? '+' : '−'}${Formatters.money('', s.net.abs())}',
                         style: AppTypography.monoXs.copyWith(
                           fontWeight: FontWeight.w700,
                           color: s.net > 0
@@ -171,7 +173,7 @@ class _Body extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        t.amount.toStringAsFixed(2),
+                        Formatters.money('', t.amount),
                         style: AppTypography.monoXs.copyWith(
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary,
@@ -180,6 +182,31 @@ class _Body extends StatelessWidget {
                     ],
                   ),
                 ),
+              if (transfers.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      // T87: one line per payment, ready for the group chat.
+                      final text = transfers
+                          .map(
+                            (t) =>
+                                '${t.fromName} pays ${t.toName} '
+                                '${Formatters.money('', t.amount)}',
+                          )
+                          .join('\n');
+                      await Clipboard.setData(ClipboardData(text: text));
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Copied to clipboard.')),
+                      );
+                    },
+                    icon: const Icon(Icons.copy, size: 16),
+                    label: const Text('Copy as text'),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

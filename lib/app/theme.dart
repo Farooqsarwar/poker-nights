@@ -119,7 +119,7 @@ class AppTheme {
         backgroundColor: palette.card,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           side: BorderSide(color: palette.border),
         ),
       ),
@@ -156,9 +156,9 @@ class AppTheme {
           color: palette.secondary,
           borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
         ),
-        textStyle: TextStyle(
+        textStyle: AppTypography.body(
+          size: AppFontSizes.xs,
           color: palette.foreground,
-          fontSize: AppFontSizes.xs,
         ),
       ),
       scrollbarTheme: ScrollbarThemeData(
@@ -259,7 +259,7 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           side: const BorderSide(color: line),
         ),
       ),

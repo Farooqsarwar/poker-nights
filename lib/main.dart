@@ -29,6 +29,7 @@ import 'providers/app_provider.dart';
 import 'repositories/firebase_repository.dart';
 import 'responsive/responsive.dart';
 import 'services/push_service.dart';
+import 'services/telemetry.dart';
 import 'theme/theme_palette.dart';
 import 'constants/app_constants.dart';
 
@@ -48,6 +49,8 @@ Future<void> main() async {
     'EMULATOR_AUTH_PORT',
     defaultValue: 9099,
   );
+
+  Telemetry.install();
 
   // Production error handling — show a friendly error overlay instead of a red screen.
   ErrorWidget.builder = (FlutterErrorDetails details) {
@@ -184,6 +187,7 @@ Future<void> main() async {
     // Framework §14. Fire-and-forget: the forecasts fall back to §F1's stated
     // defaults until it lands, so nothing waits on it.
     unawaited(appProvider.hydrateCalibrationHistory());
+    unawaited(appProvider.hydrateDevicePrefs());
   } catch (e, stack) {
     // ignore: avoid_print
     print('[Boot] fatal during app construction: $e\n$stack');

@@ -1,8 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../app/colors.dart';
 import '../constants/app_constants.dart';
 import '../app/typography.dart';
+import '../responsive/responsive.dart';
 import 'glass_styles.dart';
 import 'interactive_scale.dart';
 
@@ -107,7 +110,7 @@ class _AppButtonState extends State<AppButton> {
               opacity: widget.disabled ? 0.4 : 1,
               child: SizedBox(
                 width: widget.width ?? (widget.fullWidth ? double.infinity : null),
-                height: sizes.height,
+                height: _heightFor(context, sizes),
                 child: AnimatedContainer(
                   duration: AppDurations.fast,
                   curve: Curves.easeOut,
@@ -140,7 +143,14 @@ class _AppButtonState extends State<AppButton> {
                             ? _spinner(colors)
                             : DefaultTextStyle(
                                 style: AppTypography.buttonStyle.copyWith(
-                                  fontSize: sizes.fontSize,
+                                  // `AppTypography.buttonStyle` already went
+                                  // through `AppScale.sp`; overwriting its
+                                  // fontSize with the raw design token threw
+                                  // that away, so every button in the app
+                                  // ignored viewport scaling. Keep the
+                                  // `AppScale.sp` pass and only shift the
+                                  // size up for the larger variants.
+                                  fontSize: AppScale.sp(sizes.fontSize),
                                   color: colors.foreground,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -168,8 +178,33 @@ class _AppButtonState extends State<AppButton> {
     );
   }
 
-  Widget _spinner(_BtnColors colors) {
-    return SizedBox(
+  /// The button's height: [sizes.height] as a floor, not a ceiling.
+  ///
+  /// It used to be a flat `sizes.height`, which pinned the label to 48 px and
+  /// clipped it the moment the system text scale went up — at 200% the label
+  /// needs ~66 px, so the primary call to action on every screen overflowed
+  /// inside its own button. The label's own line box, after the inherited
+  /// scaler, is the only thing that knows how tall this has to be, so it is
+  /// asked. At 100% the answer is the old number, and nothing moves.
+  double _heightFor(BuildContext context, _BtnSizes sizes) {
+    if (widget.loading) return sizes.height;
+
+    final style = AppTypography.buttonStyle.copyWith(
+      fontSize: AppScale.sp(sizes.fontSize),
+    );
+    final fontSize = style.fontSize;
+    if (fontSize == null) return sizes.height;
+
+    // `style.height` is AppTypography's own line-height multiplier; taking it
+    // from the style rather than writing 1.5 here means this cannot drift away
+    // from the type scale the label is actually rendered in.
+    final lineHeight =
+        (style.height ?? 1.0) * MediaQuery.textScalerOf(context).scale(fontSize);
+
+    return math.max(sizes.height, sizes.padding.vertical + lineHeight);
+  }
+
+  Widget _spinner(_BtnColors colors) {    return SizedBox(
       width: 14,
       height: 14,
       child: CircularProgressIndicator(

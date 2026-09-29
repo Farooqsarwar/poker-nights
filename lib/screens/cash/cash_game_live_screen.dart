@@ -122,7 +122,9 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
       }
     } else if (action.type == _CashActionType.cashOut &&
         action.playerId != null) {
-      app.cashCashOut(action.playerId!, amt);
+      // Returns a message when the cash-out is refused (a 17th open balance);
+      // the snackbar below then explains it instead of silently doing nothing.
+      error = app.cashCashOut(action.playerId!, amt);
     }
 
     if (error != null) {
@@ -894,13 +896,18 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   ) {
     return AppModal(
       open: true,
-      title: 'Settlement & Ledger',
+      title: 'Settle-up preview',
       onClose: () => setState(() => _showReconcile = false),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Text(
+              'A preview only — nothing is saved until you end the session.',
+              style: TextStyle(color: AppColors.mutedForeground),
+            ),
+            const SizedBox(height: AppSpacing.md),
             CashSettlementPanel(
               players: session.players,
               tier: app.premiumTier,
@@ -915,7 +922,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                   _showEndModal = true;
                 });
               },
-              child: const Text('End Game Session'),
+              child: const Text('End session & settle'),
             ),
           ],
         ),

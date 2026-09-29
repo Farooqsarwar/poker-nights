@@ -38,11 +38,20 @@ abstract final class RoutePaths {
   static const String chat = '/chat';
   static const String members = '/members';
   static const String polls = '/polls';
+
+  /// Reported chat messages, host only (Addendum 1 / Apple 1.2).
+  static const String reports = '/reports';
   static const String notifications = '/notifications';
   static const String history = '/history';
 
+  /// B11 -- the current group's standings and (Premium) seasons.
+  static const String standings = '/standings';
+
   // ── Tournament flow ────────────────────────────────────────────────────────
   static const String createTournament = '/create-tournament';
+
+  /// C0 -- start a game now, no RSVP step (spec section C2 `/quick`).
+  static const String quick = '/quick';
   static const String structureReview = '/structure-review';
 
   /// The `?from=` query parameter [structureReview] accepts so the back arrow
@@ -87,7 +96,7 @@ abstract final class RoutePaths {
   static const String editChipSet = '/edit-chip-set';
   static const String presets = '/presets';
 
-  // Premium (specification v11 section 3).
+  // Premium (Build Spec v3.1 D4, D12).
   static const String upgrade = '/upgrade';
   static const String checkout = '/checkout';
 }

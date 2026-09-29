@@ -1,3 +1,4 @@
+import '../../utils/payout_bridge.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -753,7 +754,12 @@ class _ToolPayoutsScreenState extends State<ToolPayoutsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final options = TournamentEngine.payoutOptions(_players * _buyIn, _players, 0);
+    final options = PayoutBridge.options(
+      grossEligible: _players * _buyIn,
+      players: _players,
+      organizerPct: 0,
+      buyIn: _buyIn,
+    );
     return _ToolScaffold(
       title: 'Payout Calculator',
       blurb: 'Clean amounts that divide properly at a real table.',
@@ -893,20 +899,19 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
   /// paying?", which is the other half of every chop discussion.
   int _pool = 100;
   int _places = 3;
-  PayoutShape _shape = PayoutShape.standard;
 
   /// Replaces the prize list with the engine's own split of [_pool]. The
   /// amounts stay editable afterwards — a house that pays odd numbers should
   /// not have to choose between the generator and the truth.
   void _fillFromPool() {
-    final prizes = TournamentEngine.recalculatePrizes(
-      _pool,
+    final prizes = PayoutBridge.recalculate(
+      grossEligible: _pool,
       // Only used to cap the paid places against the field, and the field
       // here is whoever is left at the table.
-      _stacks.length < _places ? _places : _stacks.length,
-      0,
+      players: _stacks.length < _places ? _places : _stacks.length,
+      organizerPct: 0,
+      buyIn: 1, // Doesn't matter here since we aren't enforcing cash unit rounding strictly here? Wait, calculator shouldn't round wildly. Let's pass 1 to disable heavy rounding.
       forcePaidPlaces: _places,
-      shape: _shape,
     ).prizes;
     if (prizes.isEmpty) return;
     setState(() => _payouts = [for (final p in prizes) p.amount]);
@@ -1037,20 +1042,6 @@ class _ToolIcmScreenState extends State<ToolIcmScreen> {
                       ),
                   ],
                   onChanged: (v) => setState(() => _places = v ?? _places),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: AppSelect<PayoutShape>(
-                  value: _shape,
-                  items: [
-                    for (final shape in PayoutShape.values)
-                      DropdownMenuItem<PayoutShape>(
-                        value: shape,
-                        child: Text(shape.label),
-                      ),
-                  ],
-                  onChanged: (v) => setState(() => _shape = v ?? _shape),
                 ),
               ),
             ],

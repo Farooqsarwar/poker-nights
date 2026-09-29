@@ -54,6 +54,17 @@ class AppRadius {
   static const double lg = 16;
   static const double xl = 24;
   static const double pill = 999;
+
+  // Role-specific radii from the component spec (§B3 shape tokens). These are
+  // deliberately NOT folded into the scale above: `md` is the right radius for
+  // a chip, a tile and a nav bar, and 18 is right only for a card. Folding
+  // 18 into the scale would have meant nudging `lg` and `xl`, which every
+  // hand-rolled `BorderRadius.circular(16)` in the app already reads from.
+  /// §B3 — Card radius.
+  static const double card = 18;
+
+  /// §B3 — Text input radius (paired with the 52–56 px field height).
+  static const double input = 14;
 }
 
 /// Centralized shadows (mirrors .card-glow / .card-glow-active / glass).

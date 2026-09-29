@@ -8,10 +8,57 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
+import '../../services/payment_service.dart';
+import '../../widgets/app_avatar.dart';
+import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/back_nav_button.dart';
 import '../../widgets/delete_account_flow.dart';
+
+class _CurrencyChoice extends StatelessWidget {
+  const _CurrencyChoice({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label == 'None' ? 'No currency symbol' : 'Currency $label',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 56, minHeight: 44),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primarySoft : AppColors.muted,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(
+              color: selected ? AppColors.primary : AppColors.borderSubtle,
+            ),
+          ),
+          child: Text(
+            label,
+            style: AppTypography.bodySm.copyWith(
+              fontWeight: FontWeight.w700,
+              color: selected ? AppColors.primaryText : AppColors.foreground,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /// Settings screen matching F2_Settings mobile-first design.
 class SettingsScreen extends StatelessWidget {
@@ -86,6 +133,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final user = app.user;
+    final blockedCount = app.blockedUserIds.length;
 
     final defaultSetName = app.defaultChipSetId == null
         ? 'STANDARD SET'
@@ -190,6 +238,67 @@ class SettingsScreen extends StatelessWidget {
                   showDivider: false,
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ON THIS PHONE Section (F2): choices that change how this phone
+          // shows things and are never shared with the group.
+          Text(
+            'ON THIS PHONE',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Currency',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.foreground,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'A symbol in front of money on this phone. Chip counts '
+                    'never get one.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final option in const [
+                        ('None', ''),
+                        ('€', '€'),
+                        ('\$', '\$'),
+                        ('£', '£'),
+                      ])
+                        _CurrencyChoice(
+                          label: option.$1,
+                          selected: app.currencySymbol == option.$2,
+                          onTap: () => app.setCurrencySymbol(option.$2),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -317,6 +426,63 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 10),
+
+          // §E10 (3) "until unblocked in Settings -> Blocked" / §B4 "undo in
+          // Settings -> Blocked". The row is ALWAYS visible, unlike the
+          // conditional Reports row in §B9: a block is undone here and
+          // nowhere else, and the message it hid is exactly the thing the
+          // user can no longer see. A row that vanished with the last
+          // unblock would make the undo path undiscoverable, and the empty
+          // state below is written for exactly that case.
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: _buildSettingRow(
+              title: 'Blocked',
+              // The subtitle describes the destination rather than repeating
+              // the sheet's empty state, so each string has one owner and the
+              // row still reads correctly with nothing blocked.
+              subtitle: blockedCount == 0
+                  ? 'Manage who you have blocked'
+                  : 'Their messages and polls are hidden for you',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (blockedCount > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: Text(
+                        '$blockedCount',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.primaryText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Icon(
+                    Icons.chevron_right,
+                    color: AppColors.onSurfaceHint,
+                    size: 20,
+                  ),
+                ],
+              ),
+              onTap: () => _showBlockedMembers(context, app),
+              showDivider: false,
+            ),
+          ),
           const SizedBox(height: 24),
 
           // DATA Section (§F2 DATA)
@@ -375,6 +541,81 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
+          // PLAN Section (F2): what this account has, and the way to Premium.
+          Text(
+            'PLAN',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: Column(
+              children: [
+                _buildSettingRow(
+                  title: app.premiumTier == PremiumTier.premium
+                      ? 'Premium'
+                      : 'Free',
+                  subtitle: app.premiumTier == PremiumTier.premium
+                      ? 'More tables, seasons, bounties and custom TV layouts'
+                      : 'Upgrade for more tables, seasons and bounties',
+                  trailing: Text(
+                    app.premiumTier == PremiumTier.premium
+                        ? 'Manage'
+                        : 'See Premium',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.primaryText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  onTap: () => context.push(RoutePaths.upgrade),
+                  showDivider: true,
+                ),
+                _buildSettingRow(
+                  title: 'Terms of Service',
+                  subtitle: 'The rules for using Poker Night',
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    color: AppColors.onSurfaceHint,
+                    size: 20,
+                  ),
+                  onTap: () => context.push(RoutePaths.terms),
+                  showDivider: true,
+                ),
+                _buildSettingRow(
+                  title: 'Privacy Policy',
+                  subtitle: 'What we keep and why',
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    color: AppColors.onSurfaceHint,
+                    size: 20,
+                  ),
+                  onTap: () => context.push(RoutePaths.privacy),
+                  showDivider: true,
+                ),
+                _buildSettingRow(
+                  title: 'Help & support',
+                  subtitle: 'Answers and how to reach us',
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    color: AppColors.onSurfaceHint,
+                    size: 20,
+                  ),
+                  onTap: () => context.push(RoutePaths.support),
+                  showDivider: false,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // Sign out card button (F2 design)
           InkWell(
             onTap: () => _confirmSignOut(context, app),
@@ -409,6 +650,123 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
         ],
+      ),
+    );
+  }
+
+  /// §E10 (3) / §B4 — the account-wide undo for a block.
+  ///
+  /// Reads the blocked ids from the provider on every rebuild instead of
+  /// snapshotting them once, so an unblock updates the list in place and the
+  /// empty state takes over when the last one goes. A `StatefulBuilder` is
+  /// what makes that work: this is a dialog, so it does not sit under the
+  /// `context.watch` in [build] and would not otherwise see `notifyListeners`.
+  ///
+  /// Names come from the current group's roster so a row reads as a person; a
+  /// member who has since left the group falls back to their raw id rather
+  /// than showing a blank.
+  void _showBlockedMembers(BuildContext context, AppProvider app) {
+    final group = app.currentGroup;
+    String nameOf(String id) {
+      final match = group.members.where((m) => m.id == id).firstOrNull;
+      final name = match?.name.trim() ?? '';
+      return name.isEmpty ? id : name;
+    }
+
+    showAppModal(
+      context: context,
+      title: 'Blocked members',
+      child: StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final ids = app.blockedUserIds.toList();
+          if (ids.isEmpty) {
+            return Text(
+              'Nobody is blocked.',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            );
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Their messages and polls are hidden for you. Unblocking '
+                'brings the whole conversation back.',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final id in ids)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.muted,
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                              border: Border.all(color: AppColors.borderSubtle),
+                            ),
+                            child: Row(
+                              children: [
+                                AppAvatar(
+                                  name: nameOf(id),
+                                  size: AppAvatarSize.sm,
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    nameOf(id),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.bodySm.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    if (app.unblockUser(id)) {
+                                      setSheetState(() {});
+                                      ScaffoldMessenger.maybeOf(context)
+                                        ?.showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              '${nameOf(id)} is unblocked.',
+                                            ),
+                                          ),
+                                        );
+                                    }
+                                  },
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppColors.primaryText,
+                                    visualDensity: VisualDensity.compact,
+                                    minimumSize: const Size(44, 44),
+                                  ),
+                                  child: const Text('Unblock'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

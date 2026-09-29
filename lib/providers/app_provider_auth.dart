@@ -179,6 +179,17 @@ extension AppProviderAuth on AppProvider {
           if (v is bool) _outboxPrimed[gid] = v;
         }
       }
+      // §E10 (3) "Block": the list lives on the blocker's own user document,
+      // so it has to come back with the profile or a block would evaporate on
+      // the next sign-in. `AppUser.blockedUserIds` is the same list the codec
+      // carries; an absent key means nobody blocked.
+      final blocked = prefs['blockedUserIds'];
+      if (blocked is List && _user != null) {
+        _user = _user!.withBlockedList([
+          for (final id in blocked)
+            if (id is String && id.isNotEmpty) id,
+        ]);
+      }
       if (!_disposed) notifyListeners();
     } catch (e) {
       debugPrint('loadUserPrefs failed: $e');
@@ -211,6 +222,11 @@ extension AppProviderAuth on AppProvider {
 
   /// Returns `null` on success or a friendly error message for the UI.
   Future<String?> register(String name, String email, String password) async {
+    // A guest (or quick-start host) who registers keeps their uid, so the games
+    // and results recorded so far carry over (Build Spec A2b).
+    if (_repo.isSignedInAsGuest) {
+      return convertGuestAccount(name, email, password);
+    }
     try {
       final cred = await _repo.signUp(
         name: name,
@@ -279,8 +295,9 @@ extension AppProviderAuth on AppProvider {
       return null;
     } on fa.FirebaseAuthException catch (e) {
       return switch (e.code) {
-        'user-not-found' || 'invalid-credential' =>
-          'No account found for that email.',
+        // Same answer whether or not the address has an account, so the form
+        // cannot be used to find out who is registered.
+        'user-not-found' || 'invalid-credential' => null,
         'invalid-email' => 'Enter a valid email address.',
         'network-request-failed' => 'Network error. Check your connection.',
         _ => e.message ?? 'Could not send the reset email. Please try again.',
@@ -353,6 +370,12 @@ extension AppProviderAuth on AppProvider {
     await _repo.signOut();
     RecoveryService.clearGuestSession();
     _guestSession = null;
+    // Premium belongs to the account, not the phone: drop it with the session
+    // so the next sign-in starts from its own entitlement.
+    Payments.userId = null;
+    premiumTier = PremiumTier.free;
+    premiumIsServerGranted = false;
+    notifyListeners();
   }
 
   /// Deletes the signed-in account (profile doc, membership mirrors, auth

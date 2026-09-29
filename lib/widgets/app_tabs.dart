@@ -111,8 +111,11 @@ class _TabItemState extends State<_TabItem> {
                 : AppTypography.bodySm)
             .copyWith(
           fontWeight: FontWeight.w500,
+          // §B1: text below 24 px is `redText`, never the `red` fill token.
+          // `red` measures 4.05 : 1 on the background, under the 4.5 : 1 AA
+          // floor, so the active tab label was failing contrast.
           color: isActive
-              ? AppColors.primary
+              ? AppColors.primaryText
               : _hovering
                   ? AppColors.foreground
                   : AppColors.mutedForeground,
@@ -146,7 +149,10 @@ class _TabItemState extends State<_TabItem> {
             // scale entirely. AppTypography.body(size: 10) goes through
             // AppScale.sp(), so 10 is now a floor rather than a fixed value.
             style: AppTypography.body(size: widget.stacked ? 10 : 12).copyWith(
-              color: isActive ? AppColors.primary : AppColors.mutedForeground,
+              // Same §B1 split as the label above — the badge count is text.
+              color: isActive
+                  ? AppColors.primaryText
+                  : AppColors.mutedForeground,
             ),
           ),
         ),

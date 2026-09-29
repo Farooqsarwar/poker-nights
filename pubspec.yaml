@@ -44,6 +44,7 @@ dependencies:
   # Replaces `dart:html`, which is deprecated and unavailable under Wasm.
   # Used by the two *_web.dart services (Notification API, BroadcastChannel).
   web: ^1.1.1
+  share_plus: ^12.0.2
 
 dev_dependencies:
   flutter_test:

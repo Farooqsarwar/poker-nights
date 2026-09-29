@@ -748,7 +748,7 @@ class _PresetFormState extends State<_PresetForm> {
           const SizedBox(height: AppSpacing.sm),
           Text(
             _error!,
-            style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+            style: AppTypography.bodyXs.copyWith(color: AppColors.destructiveText),
           ),
         ],
         const SizedBox(height: AppSpacing.lg),

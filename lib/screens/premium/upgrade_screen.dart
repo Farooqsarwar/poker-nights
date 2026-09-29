@@ -14,7 +14,7 @@ import '../../widgets/icon_tile.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/glass_styles.dart';
 
-/// The paywall (specification v11 §3).
+/// The paywall (Build Spec v3.1 G1, D4).
 ///
 /// The free tier is deliberately complete: a host can run a whole one-table
 /// night without paying. §3's monetization principle is explicit that the
@@ -60,10 +60,12 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
   }
 
   static const _features = <String>[
-    'Unlimited tournaments & players',
-    'TV mode & big-screen clock',
-    'ICM deals & advanced payouts',
-    'Cloud sync across devices',
+    'Multi-table tournaments',
+    'Seasons & points',
+    'Custom TV layouts & more displays',
+    'Progressive & Mystery bounties',
+    'Unlimited saved templates',
+    'Graphs & exportable history',
   ];
 
   /// §3, verbatim. Free on the left, what the money buys on the right.
@@ -71,13 +73,15 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     (free: 'Account, RSVP, event link and QR', premium: null),
     (free: 'Live view and notifications', premium: null),
     (free: 'One table, up to 9 players', premium: 'Multi-table tournaments'),
-    (free: 'Basic blind structures', premium: 'AI-optimised structures'),
-    (free: 'Check-in, seating, buy-ins', premium: 'Advanced balancing & seating'),
-    (free: 'Basic payouts', premium: 'Advanced payouts, ICM, KO/PKO'),
-    (free: 'Basic chip handling', premium: 'Chip optimisation & colour-up plans'),
-    (free: 'Basic TV display', premium: 'TV customisation & multiple displays'),
-    (free: 'Basic history', premium: 'Advanced stats, analytics, exports'),
-    (free: 'Public tools, no account', premium: 'Saved presets & advanced AI'),
+    (free: 'Full blind structures and level editing', premium: null),
+    (free: 'Check-in, seating and balancing, buy-ins', premium: null),
+    (free: 'ICM calculator, deals and payouts', premium: null),
+    (free: 'Unlimited tournaments, sync, cash games', premium: null),
+    (free: 'One TV display', premium: 'Custom TV layouts & more displays'),
+    (free: 'Basic standings', premium: 'Graphs & exportable history'),
+    (free: '3 saved templates', premium: 'Unlimited saved templates'),
+    (free: 'Fixed bounties', premium: 'Progressive & Mystery bounties'),
+    (free: 'Public tools, no account', premium: 'Seasons & points'),
   ];
 
   @override
@@ -106,7 +110,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Poker Night Pro',
+            'Poker Night Premium',
             textAlign: TextAlign.center,
             style: AppTypography.display(
               size: AppFontSizes.xxxl,
@@ -115,7 +119,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Unlimited tournaments, TV mode, ICM deals and cloud sync for '
+            'Multi-table tournaments, seasons, custom TV layouts and more for '
             'the whole group.',
             textAlign: TextAlign.center,
             style: AppTypography.bodySm.copyWith(
@@ -167,13 +171,18 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             child: const Text('Upgrade to Premium'),
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Cancel anytime',
-            textAlign: TextAlign.center,
-            style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
+          // A one-time licence never renews, so there is nothing to cancel —
+          // and no trial line either (D12).
+          if (!PremiumPlan.placeholders
+              .firstWhere((p) => p.id == _selectedPlanId)
+              .oneTime)
+            Text(
+              'Cancel anytime',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
             ),
-          ),
           const SizedBox(height: AppSpacing.xl),
           _comparisonTable(),
           const SizedBox(height: AppSpacing.lg),

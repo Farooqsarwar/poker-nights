@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/chip_color.dart';
 import 'package:poker_night/models/tournament.dart';
 import 'package:poker_night/models/tournament_format.dart';
+import 'package:poker_night/utils/payouts_engine.dart';
 import 'package:poker_night/utils/tournament_engine.dart';
 
 /// The eight engine property tests the acceptance checklist calls for
@@ -152,8 +153,15 @@ void main() {
     });
   });
 
-  group('23-006 — payouts total the pool and are multiples of 10', () {
+  group('23-006 — payouts total the pool and round to the cash unit', () {
+    // §G4 replaced v3.0's "multiples of 10 + a remainder" with "cash unit
+    // from the buy-in; 1st takes the exact remainder" (§F2.2). The sweep runs
+    // at the default buy-in of 15, so the cash unit is 5, not 10 — asserting a
+    // multiple of 10 here tested a rule the specification retired.
     test('over the full sweep', () {
+      const buyIn = 15;
+      final unit = PayoutsEngine.cashUnit(buyIn);
+
       for (final c in _sweep()) {
         final total = c.s.prizes.fold<int>(0, (a, p) => a + p.amount);
         expect(
@@ -162,9 +170,17 @@ void main() {
           reason: '${c.preset}/${c.players}p: payouts $total != pool '
               '${c.s.prizePool}',
         );
-        for (final p in c.s.prizes) {
-          expect(p.amount % 10, 0, reason: '${p.amount} is not a multiple of 10');
-          expect(p.amount % 10, isNot(5), reason: '${p.amount} ends in 5');
+        for (var i = 0; i < c.s.prizes.length; i++) {
+          final p = c.s.prizes[i];
+          // 1st absorbs the rounding remainder, so only the places below it
+          // are guaranteed whole cash units (§F2.2, §F2.12a).
+          if (i == 0) continue;
+          expect(
+            p.amount % unit,
+            0,
+            reason: '${c.preset}/${c.players}p: ${i + 1} place ${p.amount} '
+                'is not a multiple of the $unit-unit cash unit',
+          );
         }
       }
     });

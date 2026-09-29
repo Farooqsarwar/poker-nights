@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
@@ -18,7 +19,7 @@ import '../../widgets/prompt_link.dart';
 
 enum AuthMode { login, register, forgotPassword }
 
-enum _Field { name, email, password, confirm }
+enum _Field { name, email, password, confirm, terms }
 
 /// Auth screens (login / register / forgot password) mirroring `AuthPage`.
 class AuthScreen extends StatefulWidget {
@@ -48,6 +49,10 @@ class _AuthScreenState extends State<AuthScreen> {
   String? _success;
   bool _loading = false;
   bool _showPw = false;
+
+  /// A4: the 18+/Terms box is required; the D9 history box starts unchecked.
+  bool _agreedToTerms = false;
+  bool _keepHistory = false;
 
   @override
   void dispose() {
@@ -90,6 +95,10 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _handleGoogleSignIn() async {
+    if (_isRegister && !_agreedToTerms) {
+      _fieldError(_Field.terms, 'Please confirm you are 18 or older and agree to the Terms.');
+      return;
+    }
     setState(() {
       _error = null;
       _errorField = null;
@@ -138,6 +147,11 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
+    if (_isRegister && !_agreedToTerms) {
+      _fieldError(_Field.terms, 'Please confirm you are 18 or older and agree to the Terms.');
+      return;
+    }
+
     setState(() => _loading = true);
     final app = context.read<AppProvider>();
 
@@ -151,6 +165,10 @@ class _AuthScreenState extends State<AuthScreen> {
           email,
           _passwordController.text,
         );
+        // D9: recorded only once the account exists, and only if ticked.
+        if (error == null && _keepHistory) {
+          app.setKeepHistoryForStructures(true);
+        }
       case AuthMode.forgotPassword:
         error = await app.requestPasswordReset(email);
     }
@@ -167,7 +185,8 @@ class _AuthScreenState extends State<AuthScreen> {
     if (_isForgot) {
       setState(() {
         _loading = false;
-        _success = 'A password reset link has been sent to $email.';
+        _success =
+            'If an account exists for $email, a reset link is on its way.';
       });
       return;
     }
@@ -273,6 +292,38 @@ class _AuthScreenState extends State<AuthScreen> {
               error: _errorFor(_Field.confirm),
               onChanged: (_) => _onEdited(_Field.confirm),
             ),
+            const SizedBox(height: AppSpacing.md),
+            _ConsentRow(
+              value: _agreedToTerms,
+              onChanged: (v) {
+                setState(() => _agreedToTerms = v);
+                _onEdited(_Field.terms);
+              },
+              label: Text.rich(
+                TextSpan(
+                  text: "I'm 18 or older and agree to the ",
+                  children: [
+                    TextSpan(
+                      text: 'Terms',
+                      style: const TextStyle(
+                        decoration: TextDecoration.underline,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      recognizer: TapGestureRecognizer()
+                        ..onTap = () => context.push('${RoutePaths.terms}?from=signup'),
+                    ),
+                  ],
+                ),
+              ),
+              error: _errorFor(_Field.terms),
+            ),
+            _ConsentRow(
+              value: _keepHistory,
+              onChanged: (v) => setState(() => _keepHistory = v),
+              label: const Text(
+                'Keep my game history so structures and end times learn from our real nights',
+              ),
+            ),
           ],
         ],
         if (widget.mode == AuthMode.login)
@@ -363,6 +414,66 @@ class _AuthScreenState extends State<AuthScreen> {
 /// A form-level outcome line: auth/network failures in crimson, the
 /// reset-link confirmation in green. Field validation renders inline under
 /// its own input instead.
+/// One sign-up checkbox with its label, and an inline error under it.
+class _ConsentRow extends StatelessWidget {
+  const _ConsentRow({
+    required this.value,
+    required this.onChanged,
+    required this.label,
+    this.error,
+  });
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final Widget label;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Checkbox(
+              value: value,
+              onChanged: (v) => onChanged(v ?? false),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: DefaultTextStyle.merge(
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.mutedForeground,
+                    height: 1.4,
+                  ),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onChanged(!value),
+                    child: label,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 12, bottom: AppSpacing.xs),
+            child: Text(
+              error!,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.destructiveText,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _StatusLine extends StatelessWidget {
   const _StatusLine({required this.message, required this.success});
 

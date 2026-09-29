@@ -26,6 +26,8 @@ import '../screens/shell/join_group_screen.dart';
 import '../screens/shell/members_screen.dart';
 import '../screens/shell/notifications_screen.dart';
 import '../screens/shell/polls_screen.dart';
+import '../screens/shell/reports_screen.dart';
+import '../screens/shell/standings_screen.dart';
 import '../screens/shell/profile_screen.dart';
 import '../screens/shell/settings_screen.dart';
 import '../screens/shell/stats_screen.dart';
@@ -38,6 +40,7 @@ import '../screens/tournament/admin_dashboard_screen.dart';
 import '../screens/tournament/check_in_screen.dart';
 import '../screens/tournament/complete_tournament_screen.dart';
 import '../screens/tournament/create_tournament_screen.dart';
+import '../screens/tournament/quick_start_screen.dart';
 import '../screens/tournament/final_table_screen.dart';
 import '../screens/tournament/invitation_screen.dart';
 import '../screens/tournament/player_live_screen.dart';
@@ -57,6 +60,8 @@ const _publicPaths = {
   RoutePaths.forgotPassword,
   RoutePaths.tvMode,
   RoutePaths.guestFlow,
+  RoutePaths.quick,
+  RoutePaths.joinGroup,
   RoutePaths.privacy,
   RoutePaths.terms,
   RoutePaths.support,
@@ -67,6 +72,19 @@ const _publicPaths = {
   RoutePaths.toolIcm,
   RoutePaths.toolPayouts,
   RoutePaths.toolQuickBlind,
+};
+
+/// Build Spec section C2 paths that map straight onto an existing screen.
+const _specAliases = {
+  '/start': RoutePaths.landing,
+  '/forgot': RoutePaths.forgotPassword,
+  '/premium': RoutePaths.upgrade,
+  '/premium/checkout': RoutePaths.checkout,
+  '/games': RoutePaths.group,
+  '/chipsets': RoutePaths.chipSets,
+  '/tools/blinds': RoutePaths.toolBlinds,
+  '/cash/new': RoutePaths.cashGame,
+  '/t/new': RoutePaths.createTournament,
 };
 
 /// Host-only routes — non-hosts are bounced to invitation (if a game exists)
@@ -153,6 +171,33 @@ GoRouter buildAppRouter(AppProvider app) {
     if (path.startsWith('/game/')) {
       final code = path.substring('/game/'.length);
       return '${RoutePaths.join}?code=${Uri.encodeComponent(code)}';
+    }
+
+    // Path-style share links (P7.2): `/invite/:code` opens the group invite
+    // preview, `/join/:code`, `/g/:code` and `/tv/:code` open the unified join
+    // screen, which tells a game code from a TV code itself. Additive only —
+    // every existing path keeps resolving, and no Firestore path is involved.
+    for (final prefix in const ['/join/', '/g/', '/tv/', '/invite/']) {
+      if (path.startsWith(prefix) && path.length > prefix.length) {
+        final code = Uri.encodeComponent(path.substring(prefix.length));
+        return prefix == '/invite/'
+            ? '${RoutePaths.joinGroup}?code=$code'
+            : '${RoutePaths.join}?code=$code';
+      }
+    }
+
+    // `/groups/:gid/standings` -- the standings screen reads the current
+    // group, so the id only has to be well-formed.
+    if (path.startsWith('/groups/') && path.endsWith('/standings')) {
+      return RoutePaths.standings;
+    }
+
+    // Build Spec section C2 names for screens that already exist under their
+    // older flat path. The query string rides along untouched.
+    final alias = _specAliases[path];
+    if (alias != null) {
+      final query = state.uri.query.isEmpty ? '' : '?${state.uri.query}';
+      return '$alias$query';
     }
 
     // Single navigation layer: the old hub tabs are now top-level screens.
@@ -311,7 +356,9 @@ GoRouter buildAppRouter(AppProvider app) {
     ),
     GoRoute(
       path: RoutePaths.terms,
-      builder: (context, state) => const TermsScreen(),
+      builder: (context, state) => TermsScreen(
+        fromSignUp: state.uri.queryParameters['from'] == 'signup',
+      ),
     ),
     GoRoute(
       path: RoutePaths.support,
@@ -373,6 +420,14 @@ GoRouter buildAppRouter(AppProvider app) {
     GoRoute(
       path: RoutePaths.polls,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const PollsScreen(), path: RoutePaths.polls)),
+    ),
+    GoRoute(
+      path: RoutePaths.reports,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const ReportsScreen(), path: RoutePaths.reports)),
+    ),
+    GoRoute(
+      path: RoutePaths.standings,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(const StandingsScreen(), path: RoutePaths.standings)),
     ),
     GoRoute(
       path: RoutePaths.joinGroup,
@@ -443,6 +498,12 @@ GoRouter buildAppRouter(AppProvider app) {
       path: RoutePaths.createTournament,
       pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
         CreateTournamentScreen(presetId: state.uri.queryParameters['preset']), path: RoutePaths.createTournament,
+      )),
+    ),
+    GoRoute(
+      path: RoutePaths.quick,
+      pageBuilder: (context, state) => NoTransitionPage(key: ValueKey(state.uri.path), child: shell(
+        const QuickStartScreen(), path: RoutePaths.quick,
       )),
     ),
     GoRoute(

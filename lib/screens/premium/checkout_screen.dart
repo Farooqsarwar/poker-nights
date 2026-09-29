@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -12,19 +11,18 @@ import '../../services/payment_service.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/app_text_field.dart';
 import '../../widgets/glass_styles.dart';
 
 /// Checkout.
 ///
-/// The card form, validation, pending state and result screen are all real and
-/// reusable. What sits behind the Pay button is [MockPaymentService], which
-/// contacts no payment provider and moves no money — the commercial terms
-/// (price, billing period, who pays, and whether Apple and Google taking
-/// 15–30% on the native apps is acceptable) are not agreed yet.
+/// There is no payment provider behind this screen and no card is taken, so it
+/// does not ask for one. Collecting card details that go nowhere would only
+/// teach people to type them into a form that means nothing. What the button
+/// does is switch Premium on for this device through [MockPaymentService], and
+/// it is labelled that way.
 ///
-/// The banner at the top says so on screen. Every real payment sandbox shows
-/// the same thing, and it costs the demo nothing.
+/// The commercial terms (price, billing period, who pays, and whether Apple and
+/// Google taking 15–30% on the native apps is acceptable) are not agreed yet.
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key, this.planId});
 
@@ -36,54 +34,17 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _payments = Payments.instance;
-  final _name = TextEditingController();
-  final _number = TextEditingController();
-  final _expiry = TextEditingController();
-  final _cvc = TextEditingController();
 
-  final _errors = <String, String>{};
   bool _processing = false;
   PaymentResult? _result;
 
   PremiumPlan get _plan => PremiumPlan.placeholders.firstWhere(
         (p) => p.id == widget.planId,
-        orElse: () => PremiumPlan.placeholders.last,
+        orElse: () => PremiumPlan.placeholders
+            .firstWhere((p) => p.id == 'yearly'),
       );
 
-  @override
-  void dispose() {
-    for (final c in [_name, _number, _expiry, _cvc]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  String get _digits => _number.text.replaceAll(RegExp(r'\D'), '');
-
-  bool _validate() {
-    _errors.clear();
-    if (_name.text.trim().isEmpty) {
-      _errors['name'] = 'Enter the name on the card';
-    }
-    if (_digits.length < 13 || _digits.length > 19) {
-      _errors['number'] = 'Enter a valid card number';
-    }
-    final expiry = _expiry.text.trim();
-    if (!RegExp(r'^\d{2}/\d{2}$').hasMatch(expiry)) {
-      _errors['expiry'] = 'MM/YY';
-    } else {
-      final month = int.tryParse(expiry.substring(0, 2)) ?? 0;
-      if (month < 1 || month > 12) _errors['expiry'] = 'Invalid month';
-    }
-    if (_cvc.text.trim().length < 3) {
-      _errors['cvc'] = '3 digits';
-    }
-    setState(() {});
-    return _errors.isEmpty;
-  }
-
-  Future<void> _pay() async {
-    if (!_validate()) return;
+  Future<void> _activate() async {
     setState(() => _processing = true);
     final result = await _payments.purchase(_plan);
     if (!mounted) return;
@@ -114,7 +75,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           _testModeBanner(),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Checkout',
+            'Activate Premium',
             style: AppTypography.display(
               size: AppFontSizes.xxl,
               weight: FontWeight.w700,
@@ -122,104 +83,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           _orderSummary(),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            'Payment method',
-            style: AppTypography.bodySm.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppTextField(
-            controller: _name,
-            label: 'Name on card',
-            placeholder: 'A. Player',
-            error: _errors['name'],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppTextField(
-            controller: _number,
-            label: 'Card number',
-            placeholder: '4242 4242 4242 4242',
-            keyboardType: TextInputType.number,
-            error: _errors['number'],
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(19),
-              _CardNumberFormatter(),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: AppTextField(
-                  controller: _expiry,
-                  label: 'Expiry',
-                  placeholder: 'MM/YY',
-                  keyboardType: TextInputType.number,
-                  error: _errors['expiry'],
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(4),
-                    _ExpiryFormatter(),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: AppTextField(
-                  controller: _cvc,
-                  label: 'CVC',
-                  placeholder: '123',
-                  keyboardType: TextInputType.number,
-                  error: _errors['cvc'],
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(4),
-                  ],
-                ),
-              ),
-            ],
-          ),
           if (_result?.succeeded == false) ...[
             const SizedBox(height: AppSpacing.md),
             Text(
-              _result!.message ?? 'Payment could not be completed.',
+              _result!.message ?? 'Premium could not be activated.',
               style: AppTypography.bodySm.copyWith(
                 color: AppColors.destructiveText,
               ),
             ),
           ],
-          const SizedBox(height: AppSpacing.lg),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.lock_outline,
-                size: 14,
-                color: AppColors.mutedForeground,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: Text(
-                  'Secured & encrypted — we never store your card details.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.xl),
           AppButton(
             fullWidth: true,
             size: AppButtonSize.lg,
             loading: _processing,
-            onPressed: _processing ? null : _pay,
+            onPressed: _processing ? null : _activate,
             child: Text(
-              _processing ? 'Processing…' : 'Pay ${_plan.price}',
+              _processing
+                  ? 'Activating…'
+                  : 'Activate Premium (demo — no payment)',
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -260,8 +142,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              'Test mode — no card is charged and no payment provider is '
-              'contacted. Billing is not connected yet.',
+              'Demo — nothing is charged and no card is needed. Billing is '
+              'not connected yet, so this only switches Premium on for this '
+              'device.',
               style: AppTypography.bodyXs.copyWith(
                 color: AppColors.foreground,
               ),
@@ -285,7 +168,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Poker Night Pro',
+                      'Poker Night Premium',
                       style: AppTypography.bodySm.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -318,14 +201,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             children: [
               Expanded(
                 child: Text(
-                  'Due today',
+                  'Due today (demo)',
                   style: AppTypography.bodySm.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               Text(
-                _plan.price,
+                '0',
                 style: AppTypography.bodySm.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -378,12 +261,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(height: AppSpacing.sm),
           Text(
             granted
-                ? 'Multi-table tournaments, AI-optimised structures and the '
-                    'advanced tooling are unlocked on this device.'
-                : 'This is the checkout flow as it will work once billing is '
-                    'connected. Nothing was charged and Premium has not been '
-                    'granted -- on this build only a server-held entitlement '
-                    'can do that.',
+                ? 'More tables, seasons and points, custom TV layouts, '
+                    'bounties, unlimited templates and graphs and export are '
+                    'unlocked on this device. Nothing was charged.'
+                : 'Nothing was charged and Premium has not been granted -- '
+                    'this build does not switch it on from the checkout.',
             textAlign: TextAlign.center,
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
@@ -401,45 +283,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(height: AppSpacing.xxl),
         ],
       ),
-    );
-  }
-}
-
-/// Groups a card number into blocks of four as it is typed.
-class _CardNumberFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      if (i > 0 && i % 4 == 0) buffer.write(' ');
-      buffer.write(digits[i]);
-    }
-    final text = buffer.toString();
-    return TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
-  }
-}
-
-/// Inserts the slash in MM/YY.
-class _ExpiryFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
-    final text = digits.length <= 2
-        ? digits
-        : '${digits.substring(0, 2)}/${digits.substring(2)}';
-    return TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
     );
   }
 }

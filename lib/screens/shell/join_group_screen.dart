@@ -21,8 +21,9 @@ import '../../widgets/stat_rows_card.dart';
 /// Matches the A8 Join Group frame: group-invite tag, initials tile, group
 /// name, inviter, a members / games-played summary, and the actions.
 ///
-/// The join runs on open; once it succeeds the screen shows the group it
-/// joined, with "Join group" opening it and "Not now" going home.
+/// Opening the link only looks the group up (E6): the screen previews its
+/// name, host, member count and games played, and nothing happens until the
+/// person taps "Join group". "Not now" goes home without joining.
 class JoinGroupScreen extends StatefulWidget {
   const JoinGroupScreen({super.key, required this.code});
 
@@ -32,24 +33,22 @@ class JoinGroupScreen extends StatefulWidget {
   State<JoinGroupScreen> createState() => _JoinGroupScreenState();
 }
 
-enum _JoinState { working, success, failure }
+enum _JoinState { working, preview, joining, failure }
 
 class _JoinGroupScreenState extends State<JoinGroupScreen> {
   _JoinState _state = _JoinState.working;
+  GroupInvitePreview? _preview;
+  bool _joinFailed = false;
 
-  String get _groupName => context.read<AppProvider>().currentGroup.name;
+  String get _groupName => _preview?.name ?? '';
 
-  int get _memberCount =>
-      context.read<AppProvider>().currentGroup.members.length;
+  int get _memberCount => _preview?.memberCount ?? 0;
 
-  int get _gamesCount => context.read<AppProvider>().currentGroup.games.length;
+  int? get _gamesCount => _preview?.gamesPlayed;
 
   String get _invitedBy {
-    final group = context.read<AppProvider>().currentGroup;
-    final owner = group.members.where((m) => m.id == group.ownerId).firstOrNull;
-    if (owner != null && owner.name.isNotEmpty) {
-      return 'Invited by ${owner.name}';
-    }
+    final host = _preview?.hostName;
+    if (host != null && host.isNotEmpty) return 'Invited by $host';
     return 'You\'ve been invited to join';
   }
 
@@ -66,20 +65,54 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _attemptJoin());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadPreview());
   }
 
-  Future<void> _attemptJoin() async {
-    final ok = await context.read<AppProvider>().joinGroup(widget.code);
+  Future<void> _loadPreview() async {
+    final preview =
+        await context.read<AppProvider>().previewInvite(widget.code);
     if (!mounted) return;
-    setState(() => _state = ok ? _JoinState.success : _JoinState.failure);
+    setState(() {
+      _preview = preview;
+      _state = preview == null ? _JoinState.failure : _JoinState.preview;
+    });
+  }
+
+  Future<void> _join() async {
+    final app = context.read<AppProvider>();
+    final router = GoRouter.of(context);
+    // Signed out: previewing was free, joining needs an account. Register (or
+    // sign in) and come straight back to this invite.
+    if (!app.isAuthenticated) {
+      final next = Uri.encodeComponent(
+        '${RoutePaths.joinGroup}?code=${Uri.encodeComponent(widget.code)}',
+      );
+      router.go('${RoutePaths.register}?next=$next');
+      return;
+    }
+    setState(() {
+      _state = _JoinState.joining;
+      _joinFailed = false;
+    });
+    final ok = await app.joinGroup(widget.code);
+    if (!mounted) return;
+    if (ok) {
+      router.go(RoutePaths.group);
+    } else {
+      setState(() {
+        _state = _JoinState.preview;
+        _joinFailed = true;
+      });
+    }
+  }
+
+  void _leave() {
+    final signedIn = context.read<AppProvider>().isAuthenticated;
+    context.go(signedIn ? RoutePaths.home : RoutePaths.landing);
   }
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    final group = app.currentGroup;
-
     return AppPage(
       maxWidth: 480,
       child: Column(
@@ -90,7 +123,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
             child: Transform.translate(
               offset: const Offset(-4, 0),
               child: AppBackButton(
-                onTap: () => context.go(RoutePaths.home),
+                onTap: _leave,
                 tooltip: 'Back',
               ),
             ),
@@ -99,9 +132,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
           switch (_state) {
             _JoinState.working => _buildWorking(),
             _JoinState.failure => _buildFailure(),
-            _JoinState.success => _buildInvite(
-              [for (final m in group.members) m.name],
-            ),
+            _JoinState.preview || _JoinState.joining => _buildInvite(),
           },
         ],
       ),
@@ -165,7 +196,15 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     );
   }
 
-  Widget _buildInvite(List<String> memberNames) {
+  Widget _buildInvite() {
+    final app = context.watch<AppProvider>();
+    final alreadyIn =
+        _preview != null && app.isMemberOfGroup(_preview!.gid);
+    final joining = _state == _JoinState.joining;
+    final hostName = _preview?.hostName;
+    final memberNames = [
+      if (hostName != null && hostName.isNotEmpty) hostName,
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -181,25 +220,46 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         const SizedBox(height: AppSpacing.xl),
         StatRowsCard(
           rows: [
-            StatRow(
-              'Members',
-              trailing: _AvatarStack(names: memberNames, total: _memberCount),
-            ),
-            StatRow('Games played', value: '$_gamesCount'),
+            if (_memberCount > 0)
+              StatRow(
+                'Members',
+                trailing: _AvatarStack(names: memberNames, total: _memberCount),
+              ),
+            if (_gamesCount != null)
+              StatRow('Games played', value: '$_gamesCount'),
           ],
         ),
+        if (_joinFailed) ...[
+          const SizedBox(height: AppSpacing.md),
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              'Could not join. Check your connection and try again.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.destructiveText,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.xxl),
         AppButton(
           size: AppButtonSize.lg,
           fullWidth: true,
-          onPressed: () => context.go(RoutePaths.group),
-          child: const Text('Join group'),
+          onPressed: joining ? null : _join,
+          child: Text(
+            joining
+                ? 'Joining…'
+                : alreadyIn
+                    ? 'Open group'
+                    : 'Join group',
+          ),
         ),
         const SizedBox(height: AppSpacing.xs),
         PromptLink(
           action: 'Not now',
           bold: false,
-          onTap: () => context.go(RoutePaths.home),
+          onTap: _leave,
         ),
       ],
     );

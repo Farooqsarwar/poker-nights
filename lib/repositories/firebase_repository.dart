@@ -11,9 +11,11 @@ import 'package:localstore/localstore.dart' show Localstore;
 
 import '../models/app_notification.dart';
 import '../models/cash_game.dart';
+import '../models/chat_report.dart';
 import '../models/chip_color.dart';
 import '../models/game.dart';
 import '../models/group.dart';
+import '../models/imported_night.dart';
 import '../models/live_game.dart';
 import '../models/table_settings.dart';
 import '../models/tournament_preset.dart';
@@ -51,7 +53,7 @@ class GroupMembership {
       GroupMembership(
         groupId: m['groupId'] as String? ?? gid,
         name: (m['name'] as String?) ?? '',
-        icon: (m['icon'] as String?) ?? '♠️',
+        icon: (m['icon'] as String?) ?? '♠',
         pinned: (m['pinned'] as bool?) ?? false,
         role: (m['role'] as String?) ?? 'member',
       );
@@ -533,6 +535,7 @@ class FirebaseRepository {
       'chipSets',
       'notifications',
       'results',
+      'soloGames',
     ]) {
       final docs = await userDoc.collection(sub).get();
       for (final d in docs.docs) {
@@ -770,10 +773,34 @@ class FirebaseRepository {
       'kind': 'group',
       'name': group.name,
       'icon': group.icon,
+      // Shown on the invite preview before anyone joins (E6). Kept fresh by
+      // the host's device, see [updateInvitePreview].
+      'hostName': owner.name,
+      'memberCount': 1,
+      'gamesPlayed': 0,
     });
 
     await batch.commit();
   }
+
+  /// Refreshes the public numbers on a group's `joinCodes` doc so the invite
+  /// preview shows the group as it is now. Host-only by rule (there is no
+  /// Cloud Function to do it); never carries anything a code holder cannot
+  /// already see on the join screen.
+  Future<void> updateInvitePreview(
+    String code, {
+    required String name,
+    required String icon,
+    required String hostName,
+    required int memberCount,
+    required int gamesPlayed,
+  }) => _db.collection('joinCodes').doc(code.trim().toUpperCase()).update({
+    'name': name,
+    'icon': icon,
+    'hostName': hostName,
+    'memberCount': memberCount,
+    'gamesPlayed': gamesPlayed,
+  });
 
   /// Reads the raw `joinCodes/{code}` document without joining anything.
   /// Returns `{kind, gid, gameId?, name?, icon?}` or `null` when unknown.
@@ -800,7 +827,7 @@ class FirebaseRepository {
     // Read name/icon from the joinCodes doc (world-readable for signed-in users)
     // so we never have to touch groups/{gid} — non-members cannot read that doc.
     final name = (data['name'] as String?) ?? '';
-    final icon = (data['icon'] as String?) ?? '♠️';
+    final icon = (data['icon'] as String?) ?? '♠';
     // The code travels onto the membership row so the RULES can verify it
     // against `groups/{gid}.joinCode`. Checking it only here (client-side) let
     // any signed-in user — including an anonymous guest — join any group by id
@@ -991,7 +1018,7 @@ class FirebaseRepository {
     String gid,
     AppUser user, {
     String groupName = '',
-    String groupIcon = '♠️',
+    String groupIcon = '♠',
   }) async {
     final batch = _db.batch();
     batch.set(
@@ -1079,7 +1106,7 @@ class FirebaseRepository {
             name: (meta?['name'] as String?) ?? '',
             joinCode: (meta?['joinCode'] as String?) ?? '',
             ownerId: (meta?['ownerId'] as String?) ?? '',
-            icon: (meta?['icon'] as String?) ?? '♠️',
+            icon: (meta?['icon'] as String?) ?? '♠',
             members: members,
             chat: chat,
             polls: polls,
@@ -1245,6 +1272,59 @@ class FirebaseRepository {
     });
     await batch.commit();
   }
+
+  // ── Reports (groups/{gid}/reports) ─────────────────────────────────────────
+  CollectionReference<Map<String, dynamic>> _reportsCol(String gid) =>
+      _db.collection('groups').doc(gid).collection('reports');
+
+  /// Files a report. The id is `<messageId>_<reporterUid>`, so the same member
+  /// reporting the same message twice is refused by the rules (create-only)
+  /// rather than duplicated.
+  Future<void> reportChatMessage(String gid, ChatReport report) =>
+      _reportsCol(gid).doc(report.id).set({
+        ...report.toMap(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+  /// Admin-only: reads are denied to plain members by the rules.
+  Stream<List<ChatReport>> reportsStream(String gid) =>
+      _reportsCol(gid).snapshots().map((s) {
+        final list = [
+          for (final d in s.docs)
+            ChatReport.fromMap(
+              d.id,
+              d.data(),
+              (d.data()['createdAt'] as Timestamp?)?.toDate() ??
+                  DateTime.now(),
+            ),
+        ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return list;
+      });
+
+  Future<void> clearReport(String gid, String reportId) =>
+      _reportsCol(gid).doc(reportId).delete();
+
+  // ── Imported nights (groups/{gid}/importedNights, B12) ─────────────────────
+  CollectionReference<Map<String, dynamic>> _importedNightsCol(String gid) =>
+      _db.collection('groups').doc(gid).collection('importedNights');
+
+  /// Host-only (rules). One batch, so a failed import leaves nothing behind.
+  Future<void> saveImportedNights(String gid, List<ImportedNight> nights) async {
+    final batch = _db.batch();
+    for (final n in nights) {
+      batch.set(_importedNightsCol(gid).doc(n.id), n.toMap());
+    }
+    await batch.commit();
+  }
+
+  /// Readable by every member, oldest night first.
+  Stream<List<ImportedNight>> importedNightsStream(String gid) =>
+      _importedNightsCol(gid).snapshots().map((s) {
+        final list = [
+          for (final d in s.docs) ImportedNight.fromMap(d.id, d.data()),
+        ]..sort((a, b) => a.date.compareTo(b.date));
+        return list;
+      });
 
   Future<void> markChatMessageDeleted(String gid, String msgId) => _db
       .collection('groups')
@@ -1577,7 +1657,12 @@ class FirebaseRepository {
       final publicStructure = Map<String, dynamic>.from(
         publicDoc['structure'] as Map,
       );
-      publicStructure.remove('prizes');
+      // D2: "Everyone - players, guests, the TV - sees the prize pool and the
+      // payouts. Only the host's organiser contribution stays hidden." So the
+      // payout ladder stays on the member-readable document; only
+      // `organizerAmount` is removed. This reverses the earlier decision to
+      // omit the whole `prizes` list, which made every non-host see an empty
+      // ladder while the spec promises them the amounts.
       publicStructure.remove('organizerAmount');
       publicDoc['structure'] = publicStructure;
     }
@@ -1923,6 +2008,24 @@ class FirebaseRepository {
       .doc(gid)
       .collection('cashSessions')
       .where('isCompleted', isEqualTo: true)
+      .snapshots()
+      .map((s) => [for (final d in s.docs) cashSessionFromMap(d.data())]);
+
+  // ── Solo games (no group) ──────────────────────────────────────────────────
+  // A quick game finished with no group selected has nowhere under `groups/` to
+  // live, so it is kept on the host's own user doc and shown in /history tagged
+  // "Solo" (Addendum 1).
+  Future<void> saveSoloSession(String uid, CashSession session) => _db
+      .collection('users')
+      .doc(uid)
+      .collection('soloGames')
+      .doc(session.id)
+      .set(_stamp(cashSessionToMap(session)));
+
+  Stream<List<CashSession>> soloSessionsStream(String uid) => _db
+      .collection('users')
+      .doc(uid)
+      .collection('soloGames')
       .snapshots()
       .map((s) => [for (final d in s.docs) cashSessionFromMap(d.data())]);
 

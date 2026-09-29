@@ -1,3 +1,6 @@
+// A developer scratch script: printing the golden level ladders to stdout is
+// the entire point of it, so `avoid_print` does not apply.
+// ignore_for_file: avoid_print
 
 import 'package:poker_night/models/tournament.dart';
 import 'package:poker_night/utils/tournament_engine.dart';

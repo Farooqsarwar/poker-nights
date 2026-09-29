@@ -55,22 +55,6 @@ service cloud.firestore {
           );
     }
 
-    // Premium, read from the entitlement document the client can never write
-    // (see the `entitlements/{uid}` match at the end of this file). This is
-    // what lets a RULE — not app code — decide whether a paid-tier limit
-    // applies, which addendum §7 and acceptance criterion 12 ask for.
-    function isPremiumUser() {
-      return signedIn()
-          && exists(/databases/$(database)/documents/entitlements/$(request.auth.uid))
-          && get(/databases/$(database)/documents/entitlements/$(request.auth.uid))
-              .data.get('premium', false) == true;
-    }
-
-    // Addendum §3/§4: free hosting is one table, "max 9 active players".
-    function freeSeatLimit() {
-      return 9;
-    }
-
     // Validate that the caller only touched their OWN player rsvp field and
     // not any other player's state (C2 — prevents self check-in / seat /
     // rebuy / add-on / elimination forgery).  diff() on the full players
@@ -172,10 +156,16 @@ service cloud.firestore {
     // scrub is not a boundary (19-019, User Flow section 2.3) — a regression
     // there would silently publish private data to the whole group, so the
     // same omissions are required here.
+    //
+    // D2: the payout ladder is NOT one of the scrubbed fields. "Everyone -
+    // players, guests, the TV - sees the prize pool and the payouts", so
+    // `structure.prizes` stays on this document. Only the organiser's own
+    // contribution (`organizerAmount` and `settings.organizerPct`) is private,
+    // and those two are still required to be absent.
     function publicGameDocSafe() {
       let data = request.resource.data;
       let settingsSafe = !data.keys().hasAll(['settings']) || !data.settings.keys().hasAny(['organizerPct']);
-      let structureSafe = !data.keys().hasAll(['structure']) || !data.structure.keys().hasAny(['prizes', 'organizerAmount']);
+      let structureSafe = !data.keys().hasAll(['structure']) || !data.structure.keys().hasAny(['organizerAmount']);
       // Admin-only working state: the audit timeline (section 11) and the
       // request queue, whose entries name who asked (19-021). Both live in the
       // admin sidecar; an empty list is what a scrubbed document carries.
@@ -269,7 +259,32 @@ service cloud.firestore {
       // An organizer may not change who the organizers are.
       return resource != null
           && request.resource.data.get('organizerIds', [])
-              == resource.data.get('organizerIds', []);
+              == resource.data.get('organizerIds', [])
+          && organizerTermsPinned();
+    }
+
+    // Addendum 1 keeps a co-host to running the game: the clock, the control
+    // state and the ledger. It also makes `players/*`, `settings.*` and the
+    // host identity host-only. That last part conflicts with the product rule
+    // that co-hosts still bust, rebuy and check players in (BUILD_PLAN D15),
+    // and in this data model those live in `players` on the game doc -- so
+    // `players` stays writable. What a co-host can no longer touch is what
+    // identifies the game or sets what a seat costs: the group it belongs to,
+    // its join and TV codes, and the money terms in `settings`. Everything else
+    // in `settings` stays open because starting the game rewrites it (the
+    // frozen head-count), which a co-host may do.
+    function organizerTermsPinned() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let was = before.get('settings', {});
+      let now = after.get('settings', {});
+      return after.get('groupId', '') == before.get('groupId', '')
+          && after.get('publicCode', '') == before.get('publicCode', '')
+          && after.get('tvCode', '') == before.get('tvCode', '')
+          && now.get('buyIn', 0) == was.get('buyIn', 0)
+          && now.get('rebuyCost', null) == was.get('rebuyCost', null)
+          && now.get('addOnCost', null) == was.get('addOnCost', null)
+          && now.get('koAmount', 0) == was.get('koAmount', 0);
     }
 
     // Addendum section 7 requires AI structure generation to be server-side.
@@ -343,13 +358,14 @@ service cloud.firestore {
     }
 
     // The checks above apply to `games/{gameId}`, but `publicGameDocSafe()`
-    // requires `organizerPct`, `organizerAmount` and `prizes` to be ABSENT
-    // from that very document -- they are scrubbed before every write
-    // (`_publicGameDoc`). The real values live in the admin-only sidecar,
-    // `games/{gameId}/admin/privateData` (`_privateGameDoc`), which had no
-    // value validation at all beyond `isGroupAdmin(gid)` -- so a tampered
-    // admin client could declare a low `organizerPct` on paper while writing
-    // an unrelated `organizerAmount` here, and nothing checked it.
+    // requires `organizerPct` and `organizerAmount` to be ABSENT from that very
+    // document -- they are scrubbed before every write (`_publicGameDoc`). The
+    // payout ladder is NOT among them (D2: everyone sees the payouts). The real
+    // values live in the admin-only sidecar, `games/{gameId}/admin/privateData`
+    // (`_privateGameDoc`), which had no value validation at all beyond
+    // `isGroupAdmin(gid)` -- so a tampered admin client could declare a low
+    // `organizerPct` on paper while writing an unrelated `organizerAmount`
+    // here, and nothing checked it.
     //
     // Rules cannot recompute the engine's exact rounding
     // (`recalculatePrizes` in tournament_engine.dart snaps the amount to the
@@ -483,6 +499,15 @@ service cloud.firestore {
             && resultId == request.resource.data.get('gameId', '');
         allow delete: if signedIn() && request.auth.uid == uid;
       }
+
+      // Games finished with no group selected ("Solo" in History). Private to
+      // the host: there is no group to share them with.
+      match /soloGames/{sessionId} {
+        allow read, delete: if signedIn() && request.auth.uid == uid;
+        allow create, update: if signedIn()
+            && request.auth.uid == uid
+            && sessionId == request.resource.data.get('id', '');
+      }
     }
 
     // ---------- groups ----------
@@ -606,50 +631,25 @@ service cloud.firestore {
           allow delete: if isGroupAdmin(gid);
         }
 
-        // ---------- player index (free-tier seat cap) ----------
+        // ---------- player index ----------
         //
         // One document per player, plus a counter, mirrored alongside the
         // `players` map on the game document (see `_mirrorPlayerIndex`).
         //
-        // The cap could not be expressed against that map: the rules language
-        // has no loop, so it cannot count how many entries are active. Giving
-        // each player their own document makes ADDING one its own discrete
-        // write, which can be paired with the counter through `getAfter` —
-        // and a pairing is something a rule CAN check.
-        //
-        // What this does and does not guarantee, stated plainly. The counter
-        // moves by at most one per write and can never exceed nine without a
-        // premium entitlement, so a free host cannot jump the count or seat a
-        // tenth player in one step. It still cannot prove the counter matches
-        // the seats actually occupied — verifying that needs the same
-        // forbidden iteration — so a determined client that decrements the
-        // counter repeatedly over many writes could walk it down and make
-        // room. Every honest save rewrites the counter from the real field,
-        // which corrects drift immediately, so the lie has to be told
-        // continuously to hold. That is a materially higher bar than deleting
-        // one line of Dart, and it is the ceiling without a server.
+        // This used to enforce a nine-seat free cap. D5 moved the free limit
+        // to the *second table*, which is a client-side gate: the rules cannot
+        // see how many tables a game uses, and without a server an entitlement
+        // check here would only ever be a lock the client holds the key to. So
+        // the index is write-only bookkeeping again -- nothing reads it and
+        // nothing is refused because of it.
         match /meta/playerCount {
           allow read: if isMember(gid);
           allow create: if isGroupAdmin(gid)
               && request.resource.data.get('active', 0) is int
-              && request.resource.data.get('active', 0) >= 0
-              && (request.resource.data.get('active', 0) <= freeSeatLimit()
-                  || isPremiumUser());
+              && request.resource.data.get('active', 0) >= 0;
           allow update: if isGroupAdmin(gid)
               && request.resource.data.get('active', 0) is int
-              && request.resource.data.get('active', 0) >= 0
-              // At most one seat may change hands per write, so the count can
-              // never be restated wholesale.
-              && request.resource.data.get('active', 0)
-                   <= resource.data.get('active', 0) + 1
-              && request.resource.data.get('active', 0)
-                   >= resource.data.get('active', 0) - 1
-              // The cap itself. Shrinking is always allowed — a bust-out on
-              // an over-cap legacy game must never be blocked.
-              && (request.resource.data.get('active', 0) <= freeSeatLimit()
-                  || isPremiumUser()
-                  || request.resource.data.get('active', 0)
-                       <= resource.data.get('active', 0));
+              && request.resource.data.get('active', 0) >= 0;
           allow delete: if isGroupAdmin(gid);
         }
 
@@ -659,10 +659,7 @@ service cloud.firestore {
         // increment must land in one batch or the whole commit is refused.
         match /players/{playerId} {
           allow read: if isMember(gid);
-          allow create: if isGroupAdmin(gid)
-              && (isPremiumUser()
-                  || getAfter(/databases/$(database)/documents/groups/$(gid)/games/$(gameId)/meta/playerCount)
-                       .data.get('active', 0) <= freeSeatLimit());
+          allow create: if isGroupAdmin(gid);
           allow update, delete: if isGroupAdmin(gid);
         }
         match /admin/undoStack {
@@ -704,6 +701,48 @@ service cloud.firestore {
               || isGroupAdmin(gid)
             );
         allow delete: if false;
+      }
+
+      // Message reports (Addendum 1 / Apple 1.2). Any member may file ONE
+      // report per message (the id pins reporter + message, and update is
+      // refused, so a repeat is rejected rather than duplicated); only a host
+      // may read or clear them. The reporter cannot report themselves.
+      match /reports/{reportId} {
+        allow create: if isMember(gid)
+            && request.resource.data.keys().hasOnly(
+                 ['messageId', 'gameId', 'authorId', 'authorName',
+                  'reporterId', 'excerpt', 'createdAt'])
+            && request.resource.data.keys().hasAll(
+                 ['messageId', 'authorId', 'reporterId', 'excerpt', 'createdAt'])
+            && request.resource.data.reporterId == request.auth.uid
+            && request.resource.data.authorId != request.auth.uid
+            && request.resource.data.messageId is string
+            && reportId == request.resource.data.messageId + '_' + request.auth.uid
+            && request.resource.data.excerpt is string
+            && request.resource.data.excerpt.size() <= 200
+            && request.resource.data.createdAt == request.time;
+        allow read, delete: if isGroupAdmin(gid);
+        allow update: if false;
+      }
+
+      // Imported past results (Build Spec v3.1 B12). Every member reads them
+      // (they feed the standings); only a host writes. The doc id is the one
+      // the app derives from the date, and a night has 2..30 result rows.
+      match /importedNights/{nightId} {
+        function importedNightShapeOk() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['id', 'date', 'entries'])
+              && d.keys().hasAll(['id', 'date', 'entries'])
+              && d.id == nightId
+              && d.date is string
+              && d.date.size() == 10
+              && d.entries is list
+              && d.entries.size() >= 2
+              && d.entries.size() <= 30;
+        }
+        allow read: if isMember(gid);
+        allow create, update: if isGroupAdmin(gid) && importedNightShapeOk();
+        allow delete: if isGroupAdmin(gid);
       }
 
       // Polls (C5): CREATION and CLOSING are admin-only. A member may only
@@ -850,14 +889,16 @@ service cloud.firestore {
           && payload.get('rebuyRequests', []).size() == 0
           && payload.get('addOnRequests', []).size() == 0
           && payload.get('settings', {}).get('organizerPct', 0) == 0
+          // The organiser's contribution is the one payout figure that stays
+          // private (D2), and it is a scalar, so it stays checkable here.
           && payload.get('structure', {}).get('organizerAmount', 0) == 0
-          // Individual payout amounts must not travel at all. The projection
-          // used to send `Prize` rows with the amounts zeroed, which this
-          // language cannot verify — it cannot iterate a list to confirm every
-          // element is 0, so the omission rested on the client (19-019). The
-          // list is now EMPTY and the paid-place count rides alongside as a
-          // scalar, which is checkable.
-          && payload.get('structure', {}).get('prizes', []).size() == 0;
+          // D2: the payout ladder itself is PUBLIC - "everyone - players,
+          // guests, the TV - sees the prize pool and the payouts" - so it is
+          // no longer required to be empty. This language cannot walk the list
+          // to verify each amount, so the guard is its shape: a bounded number
+          // of paid places, which rejects an absurd or forged ladder without
+          // needing to inspect the money in it.
+          && payload.get('structure', {}).get('prizes', []).size() <= 100;
     }
 
     function publicProjectionsSafe() {

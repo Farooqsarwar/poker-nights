@@ -1,3 +1,4 @@
+import 'payout_bridge.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -1275,321 +1276,6 @@ class TournamentEngine {
     return placed;
   }
 
-  /// Decides how many places get paid.
-  ///
-  /// Depends on BOTH the size of the field AND the prize pool (checklist
-  /// 14-019 / 14-027):
-  ///  * base tier from unique player count: >=6 -> 2, >=10 -> 3, >=18 -> 4;
-  ///  * clamped to the reference-style pool thresholds (section 25): never pay
-  ///    3+ places under a 100 pool, never pay 4 under a 400 pool;
-  ///  * finally capped so every paid place can still receive at least the
-  ///    minimum award of 10 (`paidPlaces <= prizePool ~/ 10`), which prevents a
-  ///    "paid" place from ever landing on 0.
-  /// DOCUMENTED DEVIATION (section 25 preamble, 14-028, 25-001…25-066).
-  ///
-  /// Where the place COUNT agrees, the split matches the section-25 reference
-  /// table exactly — 0 deviations across all 67 reference pools. The counts
-  /// themselves differ for one reason: three places begin at 10 unique
-  /// players here, where the table starts them at 8. An 8-player game with a
-  /// 110 pool therefore pays 90/20 rather than 70/30/10, and 184 of 396
-  /// tested field x pool combinations differ from the table on that basis
-  /// alone.
-  ///
-  /// The justification section 25 asks for: Technical section 9.3 sets the
-  /// target at "around 15-25% of unique players, subject to a meaningful
-  /// lowest prize". Three places out of 8 is 37.5% of the field — well above
-  /// that band — and at typical home buy-ins the third prize lands at or near
-  /// the 10 minimum, which is less than the buy-in and so pays a player less
-  /// than they staked. Two places out of 8 is 25%, at the top of the band,
-  /// and keeps every paid place meaningful. Three places start at 10 players,
-  /// where 30% is closer to the band and the pool can carry a real third
-  /// prize.
-  ///
-  /// This is a calibration choice, not a defect. If the client would rather
-  /// match the reference table exactly, change the `players >= 10` threshold
-  /// below to `players >= 8` — nothing else needs to move.
-  static int _paidPlacesFor(int prizePool, int players) {
-    var places = 1;
-    if (players >= 6) places = 2;
-    if (players >= 10) places = 3;
-    if (players >= 18) places = 4;
-
-    // Clamp to the reference payout style: small pools simply do not spread
-    // across many places.
-    if (prizePool < 100 && places > 2) places = 2;
-    if (prizePool < 400 && places > 3) places = 3;
-
-    // Never promise more places than can each clear the 10 minimum.
-    final maxByPool = prizePool ~/ 10;
-    if (places > maxByPool) places = maxByPool;
-    if (places < 1) places = prizePool > 0 ? 1 : 0;
-
-    return places;
-  }
-
-  /// Splits [prizePool] across the paid places.
-  ///
-  /// Guarantees (checklist section 14):
-  ///  * 14-022 every award is a multiple of 10;
-  ///  * 14-023 no award ends in 5;
-  ///  * 14-024 the awards sum EXACTLY to [prizePool] — this is absolute;
-  ///  * 14-025 place 1 is the largest;
-  ///  * 14-026 amounts are monotonic non-increasing down the places;
-  ///  * no paid place pays 0 (paidPlaces is reduced until every place clears
-  ///    the 10 minimum).
-  ///
-  /// Approach: compute weighted amounts for places 2..N as multiples of 10,
-  /// assign place 1 the remainder, then fix any place-1 digit that lands on 5
-  /// by transferring 5 to/from an adjacent place while preserving the sum and
-  /// monotonicity.
-  ///
-  /// Tradeoff (documented): the split is computed on [prizePool] directly. The
-  /// caller normally hands us a pool that is already a multiple of 10 (the
-  /// organizer cut is snapped to a multiple of 10 before the pool is derived),
-  /// so every place comes out a clean multiple of 10. Should [prizePool] ever
-  /// carry a units digit (i.e. `prizePool % 10 != 0`), sum-exactness (14-024)
-  /// is honoured absolutely: places 2..N stay multiples of 10 and the leftover
-  /// — including the stray units — lands on place 1, which then cannot be a
-  /// multiple of 10. In that (production-unreachable) case the multiple-of-10
-  /// and no-5 rules necessarily bend for place 1 alone; the sum stays exact.
-  /// The approved reference payout schedule (checklist section 25, 25-001 …
-  /// 25-066): pool -> award for place 1, 2, … This is the intended style
-  /// (14-028); the engine uses it verbatim whenever the computed place count
-  /// matches, and falls back to the weighted approximation for pools that fall
-  /// outside the 50..700 grid or fields too small to unlock all places.
-  static const Map<int, List<int>> _referencePayouts = {
-    50: [40, 10],
-    60: [40, 20],
-    70: [50, 20],
-    80: [50, 30],
-    90: [60, 30],
-    100: [60, 30, 10],
-    110: [70, 30, 10],
-    120: [70, 40, 10],
-    130: [80, 40, 10],
-    140: [80, 40, 20],
-    150: [90, 40, 20],
-    160: [90, 50, 20],
-    170: [100, 50, 20],
-    180: [110, 50, 20],
-    190: [110, 60, 20],
-    200: [110, 60, 30],
-    210: [120, 60, 30],
-    220: [130, 60, 30],
-    230: [130, 70, 30],
-    240: [140, 70, 30],
-    250: [140, 80, 30],
-    260: [150, 80, 30],
-    270: [150, 80, 40],
-    280: [160, 80, 40],
-    290: [160, 90, 40],
-    300: [170, 90, 40],
-    310: [180, 90, 40],
-    320: [180, 100, 40],
-    330: [190, 100, 40],
-    340: [190, 100, 50],
-    350: [200, 100, 50],
-    360: [200, 110, 50],
-    370: [210, 110, 50],
-    380: [210, 120, 50],
-    390: [220, 120, 50],
-    400: [220, 120, 40, 20],
-    410: [230, 120, 40, 20],
-    420: [240, 120, 40, 20],
-    430: [240, 130, 40, 20],
-    440: [250, 130, 40, 20],
-    450: [250, 140, 40, 20],
-    460: [260, 140, 40, 20],
-    470: [260, 140, 50, 20],
-    480: [270, 140, 50, 20],
-    490: [270, 150, 50, 20],
-    500: [280, 150, 50, 20],
-    510: [290, 150, 50, 20],
-    520: [290, 160, 50, 20],
-    530: [300, 160, 50, 20],
-    540: [300, 160, 60, 20],
-    550: [310, 160, 60, 20],
-    560: [310, 170, 60, 20],
-    570: [320, 170, 60, 20],
-    580: [320, 180, 60, 20],
-    590: [330, 180, 60, 20],
-    600: [330, 180, 70, 20],
-    610: [340, 180, 70, 20],
-    620: [340, 190, 70, 20],
-    630: [350, 190, 70, 20],
-    640: [350, 190, 80, 20],
-    650: [360, 190, 80, 20],
-    660: [360, 200, 80, 20],
-    670: [370, 200, 80, 20],
-    680: [370, 210, 80, 20],
-    690: [380, 210, 80, 20],
-    700: [390, 210, 80, 20],
-  };
-
-  static List<Prize> _calcPrizes(
-    int prizePool,
-    int players, {
-    int? forcePaidPlaces,
-    int roundingUnit = 10,
-    PayoutShape shape = PayoutShape.standard,
-  }) {
-    if (prizePool <= 0) return const [];
-
-    var paidPlaces = forcePaidPlaces ?? _paidPlacesFor(prizePool, players);
-    if (paidPlaces <= 1) {
-      return [Prize(place: 1, amount: prizePool)];
-    }
-
-    // Reference style wins whenever the field size allows the same number of
-    // places the schedule intends for this pool (14-028). It is the STANDARD
-    // shape written out longhand, so a host who asked for a different curve
-    // must not be handed it — that would silently ignore their choice.
-    final reference = shape == PayoutShape.standard
-        ? _referencePayouts[prizePool]
-        : null;
-    if (forcePaidPlaces == null &&
-        reference != null &&
-        reference.length == paidPlaces) {
-      return [
-        for (var i = 0; i < reference.length; i++)
-          Prize(place: i + 1, amount: reference[i]),
-      ];
-    }
-
-    // Whether every place can, in principle, be a multiple of 10. Only false
-    // for the rare non-round pool; drives how strictly we validate below.
-    final poolIsRound = prizePool % roundingUnit == 0;
-
-    // Distribution weights approximating the section-25 reference style.
-    // Index 0 is place 1 (largest). Chosen per place count:
-    //   2 places ~ 73/27, 3 places ~ 57/30/13, 4 places ~ 56/30/10/4.
-    /// Descending payout weights for [n] places, normalised to 1.
-    ///
-    /// The `default` branch used to return a FOUR-element list for every
-    /// n > 4, so `_calcPrizes` then read `weights[i]` past the end and threw a
-    /// RangeError for 5+ paid places — reachable straight from the shipped
-    /// 1-10 dropdowns (14-027, 12-087). Beyond 4 places we fall back to the
-    /// spec's own curve: Technical section 9.4, `weight_i = exp(-lambda * i)`,
-    /// normalised to the pool.
-    ///
-    /// A non-standard [shape] replaces all of it with a plain geometric curve
-    /// — each place takes `ratio` times the one above, normalised to the pool.
-    /// The rounding, the per-place minimum and the descending check below are
-    /// shared, so every guarantee the standard shape carries holds for the
-    /// other two as well; only the starting proportions differ.
-    List<double> weightsFor(int n) {
-      if (shape != PayoutShape.standard) {
-        final raw = [
-          for (var i = 0; i < n; i++) math.pow(shape.ratio, i).toDouble(),
-        ];
-        final total = raw.reduce((a, b) => a + b);
-        return [for (final w in raw) w / total];
-      }
-      switch (n) {
-        case 2:
-          return [0.73, 0.27];
-        case 3:
-          return [0.57, 0.30, 0.13];
-        case 4:
-          return [0.56, 0.30, 0.10, 0.04];
-        default:
-          const lambda = 0.7;
-          final raw = [for (var i = 0; i < n; i++) math.exp(-lambda * i)];
-          final total = raw.reduce((a, b) => a + b);
-          return [for (final w in raw) w / total];
-      }
-    }
-
-    while (paidPlaces >= 2) {
-      final weights = weightsFor(paidPlaces);
-      final amounts = List<int>.filled(paidPlaces, 0);
-
-      // Floor every lower place (2..N) to a multiple of 10, enforcing the
-      // per-place minimum of 10 so no paid place is ever 0.
-      var allocatedToLower = 0;
-      for (var i = paidPlaces - 1; i >= 1; i--) {
-        var amt =
-            ((weights[i] * prizePool) / roundingUnit).floor() * roundingUnit;
-        if (amt < roundingUnit) amt = roundingUnit;
-        amounts[i] = amt;
-        allocatedToLower += amt;
-      }
-
-      // Place 1 absorbs the exact remainder so the total is always [prizePool].
-      amounts[0] = prizePool - allocatedToLower;
-
-      // When the pool is round, place 1 is already a multiple of 10 — but a 5
-      // digit can still surface if a lower place absorbed odd units. Fix it by
-      // transferring 5 to/from place 2, preserving the sum.
-      if (roundingUnit == 10 && poolIsRound && amounts[0] % 10 == 5) {
-        if (amounts[1] >= 15) {
-          amounts[0] += 5;
-          amounts[1] -= 5;
-        } else if (amounts[0] >= 15) {
-          amounts[0] -= 5;
-          amounts[1] += 5;
-        }
-      }
-
-      // Validate all guarantees; drop a place and retry if any fails. When the
-      // pool is not round, place 1 is exempt from the multiple-of-unit check
-      // (the documented tradeoff — sum-exactness wins).
-      var valid = amounts[0] >= amounts[1] && amounts[0] > 0;
-      for (var i = 1; i < paidPlaces - 1 && valid; i++) {
-        if (amounts[i] < amounts[i + 1]) valid = false;
-      }
-      for (var i = 0; i < paidPlaces && valid; i++) {
-        if (amounts[i] <= 0) valid = false;
-        final mustBeRound = i != 0 || poolIsRound;
-        if (mustBeRound && amounts[i] % roundingUnit != 0) valid = false;
-        // §9.4: no payout ends in 5. Only reachable at the smallest (5) unit;
-        // place 1 stays exempt so the exact-sum guarantee wins.
-        if (roundingUnit == 5 && i != 0 && amounts[i] % 10 == 5) valid = false;
-      }
-      if (!valid) {
-        paidPlaces--;
-        continue;
-      }
-
-      final prizes = <Prize>[
-        for (var i = 0; i < paidPlaces; i++)
-          Prize(place: i + 1, amount: amounts[i]),
-      ];
-      prizes.sort((a, b) => a.place - b.place);
-      return prizes;
-    }
-
-    // Fell through to a single payout.
-    return [Prize(place: 1, amount: prizePool)];
-  }
-
-  /// Test-only wrapper exposing [_calcPrizes] for the payout acceptance tests.
-  @visibleForTesting
-  static List<Prize> calcPrizesForTest(
-    int prizePool,
-    int players, {
-    PayoutShape shape = PayoutShape.standard,
-  }) =>
-      _calcPrizes(prizePool, players, roundingUnit: 10, shape: shape);
-
-  /// Recalculates the organizer amount, final prize pool, and prize distribution.
-  /// This is used dynamically when late players join or rebuys/add-ons are taken.
-  /// The unit that payouts are rounded to for this buy-in.
-  ///
-  /// The MVP spec demands every displayed payout is a multiple of 10 and
-  /// never ends in 5 (§9.4, §23.1). With an organizer cut > 0 the pool is
-  /// always snapped to a multiple of 10 (§9.2), so any buy-in of 10+ can
-  /// safely round payouts on 10 and every place stays clean. Sub-10 buy-ins
-  /// (e.g. a 5 or 7 game) fall back to unit 1 so sums stay exact; a 5-unit
-  /// would let payouts end in 5, which §9.4 forbids.
-  /// Always 10. Payouts must be multiples of 10 and must never end in 5
-  /// (14-022 / 14-023, Technical section 9.4), and that holds regardless of
-  /// buy-in size. This used to drop to 1 for sub-10 buy-ins "so sums stay
-  /// exact", which permitted amounts like 27; exactness is now preserved by
-  /// carrying the sub-10 residue out of the pool as
-  /// [TournamentStructure.roundingRemainder] instead.
-  static int roundingUnitFor(int buyIn) => 10;
-
   /// Gross eligible for the prize pool. KO bounty is EXCLUDED (it is a
   /// separate field, never part of `buyIn`, spec §9.1/§23.1).
   static int grossEligibleFor({
@@ -1606,162 +1292,6 @@ class TournamentEngine {
         (totalRebuys * effectiveRebuyCost) +
         (totalReEntries * buyIn) +
         (totalAddOns * (addOnEnabled ? effectiveAddOnCost : 0));
-  }
-
-  /// Several ways to split the pool, for the organizer to choose between
-  /// (specification sections 18 and 25).
-  ///
-  /// The engine's own recommendation — `_paidPlacesFor`, which weighs field
-  /// size against pool size — comes first and is the default. Around it sit
-  /// the neighbouring shapes, so a host who wants to pay one more or one fewer
-  /// place can see exactly what that costs the winner before deciding.
-  ///
-  /// Options that cannot produce a meaningful lowest prize are dropped rather
-  /// than offered: paying a fourth place 10 out of a 200 pool is worse than
-  /// not paying it.
-  static List<PayoutOption> payoutOptions(
-    int grossEligible,
-    int players,
-    int organizerPct, {
-    int roundingUnit = 10,
-    PayoutShape shape = PayoutShape.standard,
-  }) {
-    final recommended = recalculatePrizes(
-      grossEligible,
-      players,
-      organizerPct,
-      roundingUnit: roundingUnit,
-      shape: shape,
-    );
-    final defaultPlaces = recommended.prizes.length;
-    if (defaultPlaces == 0) return const [];
-
-    // The recommendation, then one fewer, then more — capped at 5 places
-    // (section 18's own example range) and at what the field can support.
-    final candidates = <int>{
-      defaultPlaces,
-      defaultPlaces - 1,
-      defaultPlaces + 1,
-      defaultPlaces + 2,
-    }.where((n) => n >= 1 && n <= 5 && n <= players).toList()
-      ..sort();
-
-    final options = <PayoutOption>[];
-    for (final places in candidates) {
-      final r = recalculatePrizes(
-        grossEligible,
-        players,
-        organizerPct,
-        forcePaidPlaces: places,
-        roundingUnit: roundingUnit,
-        shape: shape,
-      );
-      if (r.prizes.length != places) continue;
-      if (r.prizes.any((p) => p.amount <= 0)) continue;
-      // Drop shapes where the tail is meaningless. Rounding to clean amounts
-      // can leave three or more places sharing the same minimum award
-      // (measured: 90/30/10/10/10 from a 150 pool), which pays nobody
-      // anything worth collecting and is not a real alternative to offer.
-      if (places >= 3) {
-        final lowest = r.prizes.last.amount;
-        final atLowest = r.prizes.where((p) => p.amount == lowest).length;
-        if (atLowest >= 3) continue;
-      }
-      options.add(
-        PayoutOption(
-          paidPlaces: places,
-          prizes: r.prizes,
-          prizePool: r.prizePool,
-          roundingRemainder: r.roundingRemainder,
-          rationale: _payoutRationale(places, defaultPlaces),
-        ),
-      );
-    }
-    return options;
-  }
-
-  static String _payoutRationale(int places, int recommended) {
-    if (places == recommended) return 'Recommended for this field and pool';
-    if (places == 1) return 'Winner takes all';
-    if (places < recommended) return 'Top-heavy — bigger first prize';
-    return 'Flatter — more players get paid';
-  }
-
-  static ({
-    int organizerAmount,
-    int prizePool,
-    List<Prize> prizes,
-    int roundingRemainder,
-  })
-  recalculatePrizes(
-    int grossEligible,
-    int players,
-    num organizerPct, {
-    int? forcePaidPlaces,
-    int roundingUnit = 10,
-    PayoutShape shape = PayoutShape.standard,
-  }) {
-    // Organizer cut: computed in integer cents to avoid floating-point drift.
-    // targetOrganizer = grossEligible * organizerPct / 100, rounded half-up.
-    // The amount is then snapped to the nearest multiple of 10 that preserves
-    // the same units digit as grossEligible (so the remaining prize pool is
-    // always a clean multiple of 10 — spec §9.2).
-    final targetOrganizer = (grossEligible * organizerPct + 50) ~/ 100;
-    final mod = grossEligible % roundingUnit;
-    var organizerAmount = 0;
-
-    if (organizerPct > 0) {
-      // Two candidates that carry the correct units digit mod 10, bracketing
-      // the target. Pick the closer one; ties broken toward the smaller value.
-      //
-      // `best` is nullable on purpose. It used to be seeded at 0 and that seed
-      // was then treated as "unset" (`organizerAmount == 0 && c >= 0` accepted
-      // ANY candidate), so whenever 0 was the nearest valid amount the loop
-      // still took the upper candidate: gross 100 at 1% retained 10 against a
-      // target of 1. Technical section 9.2 wants the NEAREST amount, ties
-      // broken downward, and 14-016 prefers retaining less.
-      int? best;
-      final baseUnits = (targetOrganizer - mod).toDouble();
-      final floorCandidate = (baseUnits / roundingUnit).floor() * roundingUnit + mod;
-      final ceilCandidate = floorCandidate + roundingUnit;
-      for (final c in [floorCandidate, ceilCandidate]) {
-        if (c < 0 || c > grossEligible) continue;
-        if (best == null) {
-          best = c;
-          continue;
-        }
-        final d = (targetOrganizer - c).abs();
-        final bestD = (targetOrganizer - best).abs();
-        if (d < bestD || (d == bestD && c < best)) best = c;
-      }
-      organizerAmount = best ?? 0;
-    }
-
-    var prizePool = grossEligible - organizerAmount;
-    if (prizePool < 0) prizePool = 0;
-
-    // Carry any sub-10 residue OUT of the pool (14-022 / 14-023). A pool that
-    // is not a multiple of 10 cannot be split into payouts that are all
-    // multiples of 10, so with a 0% organizer cut — the documented default in
-    // Technical section 6.1, i.e. the common case — an 11 x 15 game produced
-    // 105/40/20 and 105 ends in 5. The residue is NOT an organizer cut and is
-    // reported separately so it is never labelled as one (14-010, 14-011).
-    final roundingRemainder = prizePool % roundingUnit;
-    prizePool -= roundingRemainder;
-
-    final prizes = _calcPrizes(
-      prizePool,
-      players,
-      forcePaidPlaces: forcePaidPlaces,
-      roundingUnit: roundingUnit,
-      shape: shape,
-    );
-    return (
-      organizerAmount: organizerAmount,
-      prizePool: prizePool,
-      prizes: prizes,
-      roundingRemainder: roundingRemainder,
-    );
   }
 
   /// Build Spec v3.1 §F1.5/§F1.18 support — how large a field this exact
@@ -1814,12 +1344,11 @@ class TournamentEngine {
     // event, not to a table.
     if (params.effectiveFormat == TournamentFormat.shootout) {
       final plan = generateShootout(params);
-      final recalculated = recalculatePrizes(
-        params.buyIn * params.players,
-        params.players,
-        params.organizerPct,
-        roundingUnit: roundingUnitFor(params.buyIn),
-        shape: params.payoutShape,
+      final recalculated = PayoutBridge.recalculate(
+        grossEligible: params.buyIn * params.players,
+        players: params.players,
+        organizerPct: params.organizerPct,
+        buyIn: params.buyIn,
       );
       return plan.stageA.copyWith(
         prizes: recalculated.prizes,
@@ -2664,14 +2193,11 @@ class TournamentEngine {
     // Determines which multiples payouts must be rounded to. The reference
     // schedule below (§4.1 — see §9.4/§23.1) is keyed on pools divisible by
     // 10, so decade buy-ins stay on unit 10 even when the pool is odd.
-    final int roundingUnit = roundingUnitFor(params.buyIn);
-
-    final recalculated = recalculatePrizes(
-      grossEligible,
-      params.players,
-      params.organizerPct,
-      roundingUnit: roundingUnit,
-      shape: params.payoutShape,
+    final recalculated = PayoutBridge.recalculate(
+      grossEligible: grossEligible,
+      players: params.players,
+      organizerPct: params.organizerPct,
+      buyIn: params.buyIn,
     );
     final organizerAmount = recalculated.organizerAmount;
     final prizePool = recalculated.prizePool;
@@ -3522,13 +3048,16 @@ class TournamentEngine {
 
     // The levels the climb needs when growth is pinned at the ceiling. This is
     // the shortest this pace can make the night.
-    final levelsAtGMax = math.max(2, (1 + lnRatio / math.log(gMax)).ceil());
+    final levelsNeeded = 1 + lnRatio / math.log(gMax);
+    final levelsAtGMax = math.max(2, levelsNeeded.ceil());
 
     // §F1.3: it fits if the needed growth is within the ceiling, OR if running
     // at the ceiling overshoots the window by no more than the 5-minute
-    // tolerance — a fraction of a level over still counts as fitting.
+    // tolerance. The test uses the FRACTIONAL `levelsNeeded`: rounding it up
+    // first charged a whole extra level for a sliver and reported a night that
+    // is within tolerance as running over.
     final fits = gFit <= gMax ||
-        levelsAtGMax * levelMinutes <= playMinutes + kPaceFitToleranceMins;
+        levelsNeeded * levelMinutes <= playMinutes + kPaceFitToleranceMins;
 
     // Below `kPaceGMin` the night just ends early, so there is no reason to
     // solve flatter than that.
@@ -3636,11 +3165,13 @@ class TournamentEngine {
     );
   }
 
-  /// "3h20", the form §F1.3's warning copy uses.
+  /// §F1.3's warning copy is written with two-digit minutes in every case:
+  /// "At a regular pace this field needs about 4h40; the night has 4h00."
+  /// So a whole hour renders "4h00", not "4h".
   static String _hhmm(int minutes) {
     final h = minutes ~/ 60;
     final m = minutes % 60;
-    return m == 0 ? '${h}h' : '${h}h${m.toString().padLeft(2, '0')}';
+    return '${h}h${m.toString().padLeft(2, '0')}';
   }
 
   /// §F1.3 `P` — minutes of actual play left in the window once the scheduled

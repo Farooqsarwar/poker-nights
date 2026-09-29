@@ -10,7 +10,11 @@ import '../../widgets/app_eyebrow.dart';
 import '../../widgets/legal_page.dart';
 
 class TermsScreen extends StatelessWidget {
-  const TermsScreen({super.key});
+  const TermsScreen({super.key, this.fromSignUp = false});
+
+  /// H2: the "I understand" button appears only when the page was opened from
+  /// sign-up; opened from anywhere else it is just a page to read.
+  final bool fromSignUp;
 
   static const _sections = <({String title, String body})>[
     (
@@ -25,33 +29,40 @@ class TermsScreen extends StatelessWidget {
       body:
           'Poker Night is a tool for organising home poker games: tournaments, cash '
           'games, player check-ins, chip counts, and results. It is provided "as is" '
-          'and "as available". We do not facilitate or encourage real-money gambling '
-          'where it is not lawful to do so; any wagering between players is a matter '
-          'for the players themselves.',
+          'and "as available". The app never holds, moves or confirms money — every '
+          'amount it shows is guidance for the people at the table to settle '
+          'themselves.',
     ),
     (
       title: '3. Your data',
       body:
           'You own the data you enter into the app. You grant us a non-exclusive, '
           'revocable licence to process that data solely to operate and improve the '
-          'service. You may delete your account and data at any time from Settings.',
+          'service. You can export your data and delete your account at any time '
+          'from Settings.',
     ),
     (
       title: '4. Acceptable use',
       body:
           'You agree not to misuse the service, attempt to access it through unauthorised '
-          'means, interfere with other users, or use it to run games where participation '
-          'is not lawful. We may suspend accounts that breach these terms.',
+          'means, or interfere with other users. You are responsible for playing only '
+          'where it is lawful. We may suspend accounts that breach these terms.',
     ),
     (
-      title: '5. Intellectual property',
+      title: '5. Premium and billing',
+      body:
+          'Premium is bought and billed through your app store, under the store\'s '
+          'terms. To cancel, use your store subscription settings.',
+    ),
+    (
+      title: '6. Intellectual property',
       body:
           'The Poker Night name, logo, and interface are protected by copyright and '
           'trademark law. You may not copy, modify, or distribute them without our '
           'written permission.',
     ),
     (
-      title: '6. Disclaimers and liability',
+      title: '7. Disclaimers and liability',
       body:
           'To the maximum extent permitted by law, Poker Night and its makers are not '
           'liable for indirect, incidental, or consequential damages arising from your '
@@ -59,14 +70,14 @@ class TermsScreen extends StatelessWidget {
           'amount you paid us in the 12 months before the claim.',
     ),
     (
-      title: '7. Changes to these terms',
+      title: '8. Changes to these terms',
       body:
           'We may update these Terms from time to time. Material changes will be '
           'announced in the app. Continued use after changes take effect means you '
           'accept the updated terms.',
     ),
     (
-      title: '8. Contact',
+      title: '9. Contact',
       body: 'Questions about these Terms? Email support@pokernight.app.',
     ),
   ];
@@ -100,11 +111,12 @@ class TermsScreen extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
         ],
         const SizedBox(height: AppSpacing.sm),
-        AppButton(
-          fullWidth: true,
-          onPressed: () => _back(context),
-          child: const Text('I understand'),
-        ),
+        if (fromSignUp)
+          AppButton(
+            fullWidth: true,
+            onPressed: () => _back(context),
+            child: const Text('I understand'),
+          ),
       ],
     );
   }

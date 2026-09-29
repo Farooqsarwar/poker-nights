@@ -35,10 +35,20 @@ class NavDrawer extends StatelessWidget {
         _DrawerItem(RoutePaths.members, 'Members', Icons.groups_outlined, group.members.length),
       ],
     ];
+    // N1/T134: "MORE label; Polls (badge), History, Cash Game, Tools,
+    // Standings, Settings" - and T135 has the drawer and the Explore sheet
+    // agree, so the same six rows appear in both.
     final moreSection = <_DrawerItem>[
       _DrawerItem(RoutePaths.polls, 'Polls', Icons.poll_outlined, null),
       _DrawerItem(RoutePaths.history, 'History', Icons.history, null),
       _DrawerItem(RoutePaths.cashGame, 'Cash Game', Icons.payments_outlined, null),
+      _DrawerItem(RoutePaths.tools, 'Tools', Icons.build_outlined, null),
+      _DrawerItem(
+        RoutePaths.standings,
+        'Standings',
+        Icons.leaderboard_outlined,
+        null,
+      ),
       _DrawerItem(RoutePaths.settings, 'Settings', Icons.settings_outlined, null),
     ];
 

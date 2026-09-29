@@ -189,22 +189,35 @@ void main() {
       () => assertSafe('guest', projections.guestProjection(_game())),
     );
 
-    test('individual payout amounts do not travel at all', () {
-      // Stronger than "zeroed": the list is empty, which the Firestore rule
-      // can actually verify (`prizes.size() == 0`). A list of zeroed rows
-      // could only be trusted, never checked.
+    test('D2: the payout ladder is visible to everyone, organiser take is not', () {
+      // D2: "Everyone - players, guests, the TV - sees the prize pool and the
+      // payouts. Only the host's organiser contribution stays hidden." The
+      // organiser's amount is checked as zero by every Firestore rule above,
+      // and stays zeroed here; the ladder itself must survive to the wire.
+      final ladder = _game().structure.prizes;
+      expect(ladder, isNotEmpty, reason: 'fixture needs a real ladder');
+
       for (final entry in {
         'tv': projections.tvProjection(_game()),
         'player': projections.playerProjection(_game(), viewerId: 'u1'),
         'guest': projections.guestProjection(_game()),
       }.entries) {
         expect(
-          entry.value.structure.prizes,
-          isEmpty,
-          reason: '${entry.key}: prize rows still on the wire',
+          entry.value.structure.prizes.map((p) => p.amount),
+          ladder.map((p) => p.amount),
+          reason: '${entry.key}: every player sees every paid place',
         );
         final map = liveGameToMap(entry.value);
-        expect(((map['structure'] as Map)['prizes'] as List), isEmpty);
+        expect(
+          (map['structure'] as Map)['organizerAmount'],
+          0,
+          reason: '${entry.key}: organiser contribution still hidden',
+        );
+        expect(
+          (map['structure'] as Map)['prizes'] as List,
+          isNotEmpty,
+          reason: '${entry.key}: ladder must actually reach Firestore',
+        );
       }
     });
 
@@ -283,7 +296,7 @@ void main() {
     // naming the two genuinely private fields) makes that whole bug class
     // structural rather than a list someone has to remember to update, so
     // this test picks fields spanning the file's whole history — one from
-    // day one (`breaks`), one from a recent round (`payoutShape`), and the
+    // day one (`breaks`), one from a recent round (`pace`), and the
     // one that actually broke (`format`) — rather than re-testing the same
     // field three times.
     final withStructuralFields = _game().copyWith(
@@ -291,7 +304,7 @@ void main() {
         format: TournamentFormat.shootout,
         shootoutTables: 3,
         breaks: const [ScheduledBreak(afterLevel: 4, durationMins: 10)],
-        payoutShape: PayoutShape.topHeavy,
+        pace: PaceMode.deep,
         levelDurationMins: 20,
       ),
     );
@@ -301,13 +314,13 @@ void main() {
       projections.GameProjectionRole.guest,
       projections.GameProjectionRole.tv,
     ]) {
-      test('${role.name}: format/breaks/payoutShape/levelDurationMins survive', () {
+      test('${role.name}: format/breaks/pace/levelDurationMins survive', () {
         final projected =
             projections.projectionFor(withStructuralFields, role);
         expect(projected.settings.format, TournamentFormat.shootout);
         expect(projected.settings.shootoutTables, 3);
         expect(projected.settings.breaks, hasLength(1));
-        expect(projected.settings.payoutShape, PayoutShape.topHeavy);
+        expect(projected.settings.pace, PaceMode.deep);
         expect(projected.settings.levelDurationMins, 20);
       });
 

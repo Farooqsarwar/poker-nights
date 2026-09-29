@@ -15,7 +15,6 @@ import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
-import '../../services/entitlements.dart';
 import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
@@ -24,7 +23,18 @@ import '../../widgets/event_day_checklist.dart';
 import '../../widgets/journey_progress.dart';
 import '../../models/payment_record.dart';
 import '../../models/live_game.dart';
+import '../../utils/formatters.dart';
 import '../../widgets/dummy_payment_sheet.dart';
+
+/// Spec C4/C4p. A 24-hour clock time, "19:50", for the moment the check-in
+/// window opens. Derived from the parsed [GameSettings.scheduledStart] rather
+/// than from the raw configured string, so a host who typed "8:00 PM" is not
+/// told the door opens at "08:00".
+String _clockTime(DateTime dt) {
+  final h = dt.hour.toString().padLeft(2, '0');
+  final m = dt.minute.toString().padLeft(2, '0');
+  return '$h:$m';
+}
 
 enum SeatingMode { random, manual, keepGuests, separateGuests }
 
@@ -128,8 +138,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 child: AppButton(
                   onPressed: () {
                     _splitPromptRespondedAtCount = checkedInCount;
-                    app.generateSeating(_seatingMode.tableMode);
-                    Navigator.of(context).pop();
+                    if (checkedInCount >= 2) {
+                                  app.generateSeating(_seatingMode.tableMode);
+                                  Navigator.of(context).pop();
+                                }
                   },
                   child: const Text('Generate seating'),
                 ),
@@ -251,6 +263,11 @@ class _CheckInScreenState extends State<CheckInScreen> {
     }
 
     final players = game.players;
+    // Spec C4/C4p — resolved once here so the banner, the countdown and the
+    // provider share one answer. `DateTime.now()` is read per build and the
+    // screen rebuilds on any provider write, so the banner cannot claim a
+    // window is shut after it opened without something prompting a frame.
+    final checkIn = game.checkInWindowAt(DateTime.now());
     final checkedIn = players.where((p) => p.checkedIn && p.confirmed).toList();
     final notCheckedIn = players
         .where((p) => !p.checkedIn && !p.isGuest)
@@ -323,6 +340,72 @@ class _CheckInScreenState extends State<CheckInScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Spec C4/C4p. The host is not the one opening the door — the window
+          // opens by itself 10 minutes before the start — so this says which
+          // side of it the room is on, and counts down, instead of leaving a
+          // host who arrived early wondering why nobody can check in yet.
+          if (checkIn.opensAt != null) ...[
+            AppCard(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    checkIn.isOpen
+                        ? Icons.lock_open_outlined
+                        : Icons.lock_outline,
+                    size: 20,
+                    color: checkIn.isOpen
+                        ? AppColors.successText
+                        : AppColors.mutedForeground,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          checkIn.isOpen
+                              ? 'Check-in is open'
+                              : 'Check-in opens at ${_clockTime(checkIn.opensAt!)}',
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: checkIn.isOpen
+                                ? AppColors.successText
+                                : AppColors.foreground,
+                          ),
+                        ),
+                        Text(
+                          checkIn.isOpen
+                              ? 'Members can check themselves in now.'
+                              : '10 minutes before the start, automatically.',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!checkIn.isOpen) ...[
+                    const SizedBox(width: AppSpacing.md),
+                    // Small red text, per the screen conventions.
+                    ExcludeSemantics(
+                      child: Text(
+                        Formatters.time(checkIn.secondsUntilOpen),
+                        style: AppTypography.monoSm.copyWith(
+                          color: AppColors.redText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // Event-day preparation (user-flow spec §4.6) — always the first
           // card so the admin never has to remember the sequence. We are on
           // the check-in screen itself, so step 2 has no open action.
@@ -393,10 +476,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
           // Read live rather than cached: the user can upgrade from the
           // button below this gate, and on returning the gate must be
           // gone. A tier snapshotted in initState would still say Free.
-          if (Entitlements.hostingBlockedReason(
-                    app.premiumTier,
-                    checkedIn.length,
-                  )
+          if (app.hostingBlockedReason(checkedIn.length)
               case final blocked?) ...[
             const SizedBox(height: AppSpacing.lg),
             Container(
@@ -670,7 +750,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                         active: _seatingMode == mode,
                         onTap: () {
                           setState(() => _seatingMode = mode);
-                          app.generateSeating(mode.tableMode);
+                          if (checkedIn.length >= 2) app.generateSeating(mode.tableMode);
                         },
                       ),
                   ],
@@ -1097,7 +1177,7 @@ class _PendingGuestRow extends StatelessWidget {
             tooltip: 'Confirm',
           ),
           IconButton(
-            icon: Icon(Icons.cancel_outlined, color: AppColors.destructive),
+            icon: Icon(Icons.cancel_outlined, color: AppColors.destructiveText),
             onPressed: onReject,
             tooltip: 'Reject',
           ),

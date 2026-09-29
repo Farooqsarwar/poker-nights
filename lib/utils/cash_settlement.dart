@@ -273,8 +273,7 @@ abstract final class CashSettlement {
   /// [CashPlayer.net] only means anything after cashing out — before that,
   /// `cashedOut` is zero and the net reads as a total loss. Mid-session the
   /// chips in front of them are what they are worth.
-  static double _netOf(CashPlayer p) =>
-      p.hasCashedOut ? p.cashedOut - p.totalBuyIns : p.stack - p.totalBuyIns;
+  static double _netOf(CashPlayer p) => p.net;
 
   /// Each player's position, largest winner first.
   static List<({String name, double net})> standings(
@@ -297,11 +296,9 @@ abstract final class CashSettlement {
     var cashedOut = 0;
     for (final p in players) {
       buyIns += _cents(p.totalBuyIns);
-      if (p.hasCashedOut) {
-        cashedOut += _cents(p.cashedOut);
-      } else {
-        onTable += _cents(p.stack);
-      }
+      // A player who rejoined has an earlier cash-out AND chips on the table.
+      cashedOut += _cents(p.cashedOut);
+      if (!p.hasCashedOut) onTable += _cents(p.stack);
     }
     return CashReconciliation(
       totalBuyIns: _money(buyIns),

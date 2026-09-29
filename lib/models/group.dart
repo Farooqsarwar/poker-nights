@@ -16,7 +16,7 @@ class Group {
     required this.chat,
     required this.polls,
     required this.notifications,
-    this.icon = '♠️',
+    this.icon = '♠',
     this.pinned = false,
     this.tableSettings = TableSettings.fallback,
     this.defaultChipSetId,

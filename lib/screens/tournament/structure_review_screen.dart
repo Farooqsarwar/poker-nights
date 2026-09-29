@@ -33,6 +33,8 @@ import '../../widgets/structure_editor.dart';
 import '../../widgets/count_stepper.dart';
 import '../../widgets/min_tap_target.dart';
 import '../../widgets/squircle_icon_button.dart';
+import '../../widgets/why_disclosure.dart';
+import '../../widgets/fix_chip_count_sheet.dart';
 
 /// Structure review mirroring the web `StructureReviewPage`.
 ///
@@ -645,6 +647,24 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                     // below already has its own editor; the stack had none, so
                     // the only way to change it was Recalculate — which throws
                     // away every manual edit. This adjusts it in place.
+                    if (isAdmin && settings.chipSet.isNotEmpty)
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.ghost,
+                        onPressed: () => showAppModal(
+                          context: context,
+                          title: 'Fix the count',
+                          maxWidth: 420,
+                          child: FixChipCountSheet(
+                            chips: settings.chipSet,
+                            onApply: (counts) {
+                              app.fixChipCount(counts);
+                              Navigator.of(context).pop();
+                            },
+                          ),
+                        ),
+                        child: const Text('Fix count'),
+                      ),
                     AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
@@ -653,6 +673,12 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                     ),
                   ],
                 ),
+                for (final step in const ['stack', 'chipBank'])
+                  if (WhyDisclosure.forStep(structure, step) case final why?)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.xs),
+                      child: why,
+                    ),
                 const SizedBox(height: AppSpacing.md),
                 for (final c in structure.chipPlan)
                   Padding(
@@ -808,6 +834,12 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                     ),
                   ),
                 ],
+                for (final step in const ['pace', 'endTarget'])
+                  if (WhyDisclosure.forStep(structure, step) case final why?)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.xs),
+                      child: why,
+                    ),
                 const SizedBox(height: AppSpacing.sm),
                 // Header
                 Padding(
@@ -968,6 +1000,19 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                                     // which rows are theirs before
                                     // recalculating rather than finding out
                                     // afterwards.
+                                    if (structure.isCompressionLevel(l.level)) ...[
+                                      const SizedBox(width: AppSpacing.xs),
+                                      Tooltip(
+                                        message:
+                                            'Compression level — only played if the night runs long',
+                                        child: Text(
+                                          'late',
+                                          style: AppTypography.bodyXs.copyWith(
+                                            color: AppColors.mutedForeground,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                     if (l.manuallyEdited) ...[
                                       const SizedBox(width: AppSpacing.xs),
                                       Tooltip(
@@ -1103,40 +1148,30 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Payout curve',
-                        style: AppTypography.bodySm,
-                      ),
-                    ),
-                    SizedBox(
-                      width: 140,
-                      child: AppSelect<PayoutShape>(
-                        value: settings.payoutShape,
-                        items: [
-                          for (final shape in PayoutShape.values)
-                            DropdownMenuItem<PayoutShape>(
-                              value: shape,
-                              child: Text(shape.label),
-                            ),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) app.setPayoutShape(v);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  settings.payoutShape.blurb,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
+                const SizedBox(height: AppSpacing.xs),
+                // §B4 rule 10: the paid-places curve and the organiser
+                // contribution each get one visible sentence and a "Why?".
+                const WhyDisclosure(
+                  explanation: StructureExplanation(
+                    step: 'paidCurve',
+                    text: 'Paid places follow the size of the field, so a '
+                        'bigger night pays deeper. '
+                        'The count comes from a fixed curve, then drops a place '
+                        'whenever the last prize would fall under 1.5 times the '
+                        'buy-in, so nobody is paid less than they put in plus a '
+                        'margin. The first prize takes what the rounding leaves.',
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
+                const WhyDisclosure(
+                  explanation: StructureExplanation(
+                    step: 'organiser',
+                    text: 'The organiser contribution comes off the pool before '
+                        'prizes are split. '
+                        'It rounds down to a whole step, never up, and only the '
+                        'host sees it.',
+                  ),
+                ),
                 if (!game.settlementConfirmed) ...[
                   const SizedBox(height: AppSpacing.md),
                   Icon(

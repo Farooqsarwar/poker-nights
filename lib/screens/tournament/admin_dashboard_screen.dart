@@ -17,6 +17,8 @@ import '../../widgets/premium_gate.dart';
 import '../../services/entitlements.dart';
 import '../../responsive/responsive.dart';
 import '../../utils/formatters.dart';
+import '../../utils/payout_bridge.dart';
+import '../../utils/payouts_engine.dart' show DealTriggerType;
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
@@ -26,6 +28,9 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
 import '../../widgets/app_tabs.dart';
+// Spec C6/C11: the Levels tab renders the same blind-schedule widget the
+// player screen does, rather than a second copy that could drift.
+import 'player_live_screen.dart' show LevelsTableCard;
 import '../../widgets/app_text_field.dart';
 import '../../widgets/code_display.dart';
 import '../../widgets/chat_sheet.dart';
@@ -395,7 +400,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'LIVE · ${status == LiveGameStatus.running ? "RUNNING" : (status == LiveGameStatus.paused ? "PAUSED" : (status == LiveGameStatus.rebuypause ? "BREAK" : status.label.toUpperCase()))}',
+                  'LIVE · ${liveStatusPillLabel(game)}',
                   style: TextStyle(
                     color: AppColors.primaryText,
                     fontSize: 11,
@@ -564,10 +569,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     'This tournament has been cancelled. Live controls are disabled.',
               ),
             ),
+          // §E2 rule 1: a newer build wrote this game, so this one reads it but
+          // will not save it back.
+          if (game.writtenByNewerBuild)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: const AppAlertBanner(
+                type: AppAlertType.warning,
+                message:
+                    'This tournament was started on a newer version of Poker '
+                    'Night. Update the app to run it — you can watch, but '
+                    'changes from this device are switched off.',
+              ),
+            ),
           // The bubble is the loudest moment of the night and the one a host
           // most often misses while running the clock. Announcing it is the
           // whole feature — there is nothing to action, so no button.
-          if (game.isOnBubble)
+          if (PayoutBridge.dealTriggerFor(game) == DealTriggerType.targetTime)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: AppAlertBanner(
+                type: AppAlertType.warning,
+                message:
+                    'Final scheduled level reached with $playersLeft left. '
+                    'There is no level after this one — settle with a deal.',
+                actionLabel: 'ICM Calculator',
+                onAction: () => context.push(RoutePaths.toolIcm),
+              ),
+            )
+          else if (game.isOnBubble)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: AppAlertBanner(
@@ -980,6 +1010,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 count: eliminatedPlayers.length,
                               ),
                               const AppTabItem(id: 'seating', label: 'Seating'),
+                              // Spec C6. The blind schedule is where the
+                              // rebuy window is managed, so the "End rebuys
+                              // now" control lives on it rather than being
+                              // buried in the quick tools.
+                              const AppTabItem(id: 'levels', label: 'Levels'),
                               const AppTabItem(
                                 id: 'prize',
                                 label: 'Prizes (private)',
@@ -1032,6 +1067,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 ),
                               if (_tab == 'seating')
                                 _SeatingTab(players: activePlayers),
+                              if (_tab == 'levels') ..._levelsTab(
+                                app: app,
+                                game: game,
+                                isAdmin: isAdmin,
+                              ),
                               if (_tab == 'prize') ...[
                                 _PrizeTab(
                                   structure: structure,
@@ -1415,6 +1455,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       'Eliminated ${eliminatedPlayers.length}',
                     ),
                     _buildPillTab('seating', 'Seating'),
+                    // Spec C6. Same five-plus-one destinations as the desktop
+                    // AppTabs: a phone host has the same rebuy control to reach.
+                    _buildPillTab('levels', 'Levels'),
                     _buildPillTab('prize', 'Prizes'),
                     _buildPillTab('audit', 'Audit Log'),
                   ],
@@ -1437,6 +1480,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 isAdmin: isAdmin,
               ),
             if (_tab == 'seating') _SeatingTab(players: activePlayers),
+            if (_tab == 'levels') ..._levelsTab(
+              app: app,
+              game: game,
+              isAdmin: isAdmin,
+            ),
             if (_tab == 'prize') ...[
               _PrizeTab(
                 structure: structure,
@@ -1614,6 +1662,101 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             fontSize: 13,
           ),
         ),
+      ),
+    );
+  }
+
+  /// Spec C6. The Levels tab: the C11 blind schedule, plus the early rebuy
+  /// close that the clause hangs off it.
+  ///
+  /// The table is the shared [LevelsTableCard] the player screen renders, so
+  /// the host and the table cannot disagree about which level is running or
+  /// where the breaks fall. The rebuy note is deliberately not repeated here —
+  /// the host is about to change that number, and a card that says "rebuys
+  /// remain open until after Level 6" directly above a button that changes it
+  /// to Level 3 is a worse way to say it than the button.
+  List<Widget> _levelsTab({
+    required AppProvider app,
+    required LiveGame game,
+    required bool isAdmin,
+  }) {
+    // Host / co-host only, and only while rebuys are still open — a null level
+    // means the model says the button would do nothing, so it is not rendered
+    // rather than rendered disabled. The spec asks for it to be hidden.
+    final endAt = endRebuysNowLevelFor(game: game, canRunGame: isAdmin);
+    final closing = game.rebuysClosingArmed;
+    return [
+      LevelsTableCard(game: game),
+      const SizedBox(height: AppSpacing.lg),
+      if (game.settings.rebuys)
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          borderColor: closing ? AppColors.warning.withValues(alpha: 0.5) : null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                closing
+                    ? 'Rebuys closing after Level ${game.currentLevel}'
+                    : 'Rebuys',
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                closing
+                    ? 'The window stays open for the rest of this level, then the '
+                          'settlement break starts.'
+                    : endAt != null
+                    ? 'Open through the end of Level $endAt. You can close the '
+                          'window early at the end of the level you are on now.'
+                    : 'The rebuy window is not currently open.',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+              if (endAt != null) ...[
+                const SizedBox(height: AppSpacing.lg),
+                AppButton(
+                  fullWidth: true,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => _confirmEndRebuysNow(
+                    context,
+                    app,
+                    endAt,
+                  ),
+                  child: AppIconLabel(
+                    label: endRebuysNowLabel(endAt),
+                    icon: Icons.lock_clock_outlined,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+    ];
+  }
+
+  /// Spec C6, entry point 2. Confirmation is not decoration here: the button
+  /// closes a window other people are still walking towards, and there is no
+  /// undo a player could be offered afterwards.
+  void _confirmEndRebuysNow(
+    BuildContext context,
+    AppProvider app,
+    int level,
+  ) {
+    showAppModal(
+      context: context,
+      title: 'End rebuys after Level $level?',
+      child: EndRebuysNowConfirm(
+        level: level,
+        previousLevel: app.currentGame?.settings.rebuysCloseLevel ?? level,
+        onKeepOpen: () => Navigator.pop(context),
+        onEnd: () {
+          Navigator.pop(context);
+          app.endRebuysNow();
+        },
       ),
     );
   }
@@ -1800,7 +1943,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               if (p.stack != null) ...[
                                 const SizedBox(height: 3),
                                 Text(
-                                  'Stack: ${Formatters.prize(p.stack!)}',
+                                  'Stack: ${Formatters.chips(p.stack!)}',
                                   style: TextStyle(
                                     color: AppColors.foreground,
                                     fontSize: 12,
@@ -3268,7 +3411,7 @@ class _EliminatedTab extends StatelessWidget {
                               .correctElimination(p.id),
                           child: Text(
                             'Correct Result',
-                            style: TextStyle(color: AppColors.destructive),
+                            style: TextStyle(color: AppColors.destructiveText),
                           ),
                         ),
                       ),
@@ -3330,8 +3473,113 @@ class _EliminatedTab extends StatelessWidget {
   }
 }
 
-class _SeatingTab extends StatelessWidget {
-  const _SeatingTab({required this.players});
+/// Spec C6. The header pill.
+///
+/// The clause is specific about the pair: the pill reads REBUYS CLOSING until
+/// the break starts, then BREAK. [LiveGame.rebuysClosingArmed] is true from
+/// the moment the current level becomes the closing level — whether that was
+/// configured up front (entry point 1) or armed from the Levels tab mid-level
+/// (entry point 2) — and `rebuysClosed` is what `rebuypause` satisfies, so the
+/// two labels can never both be true at once.
+///
+/// A function rather than an inline chain because the whole thing is a
+/// statement about ordering, and the ordering is what has to be testable.
+String liveStatusPillLabel(LiveGame game) {
+  final status = game.status;
+  if (game.settings.addOnOvertime) return 'ADD-ON WINDOW (OVERTIME)';
+  if (status == LiveGameStatus.running) {
+    return game.rebuysClosingArmed ? 'REBUYS CLOSING' : 'RUNNING';
+  }
+  if (status == LiveGameStatus.paused) return 'PAUSED';
+  if (status == LiveGameStatus.rebuypause) return 'BREAK';
+  return status.label.toUpperCase();
+}
+
+/// Spec C6, entry point 2. The clause specifies the label exactly — "End
+/// rebuys now - after Level {n}" — so it is built here rather than inlined at
+/// the call site, and a test can pin the wording the spec asked for.
+String endRebuysNowLabel(int level) => 'End rebuys now - after Level $level';
+
+/// Spec C6, entry point 2. Who is offered the early close.
+///
+/// Host and co-host only, per the clause. The model cannot know who is looking
+/// — [LiveGame.endRebuysNowLevel] answers "is this meaningful right now" and
+/// this answers "is this person allowed to ask for it" — so the two gates stay
+/// separate and the tab has to call this rather than reading the model
+/// directly. `canRunGame` is `AppProvider.canRunCurrentGame`, which is an
+/// assigned tournament organizer's right as well as a group admin's (§28).
+int? endRebuysNowLevelFor({
+  required LiveGame game,
+  required bool canRunGame,
+}) =>
+    canRunGame ? game.endRebuysNowLevel : null;
+
+/// Spec C6, entry point 2. The confirmation sheet behind that button.
+///
+/// Split out from the modal so its two exits can be tested directly: the
+/// destructive one must actually do the thing, and the safe one must be there
+/// at all. [previousLevel] is only used to say what is being changed, because
+/// "close rebuys early" with no level attached is a sentence nobody can check
+/// their understanding of.
+class EndRebuysNowConfirm extends StatelessWidget {
+  const EndRebuysNowConfirm({
+    super.key,
+    required this.level,
+    required this.previousLevel,
+    required this.onKeepOpen,
+    required this.onEnd,
+  });
+
+  /// The level that will end the rebuy window.
+  final int level;
+
+  /// The closing level as it stands now — what the host is changing away from.
+  final int previousLevel;
+
+  final VoidCallback onKeepOpen;
+  final VoidCallback onEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          previousLevel == level
+              ? 'Rebuys will close at the end of Level $level.\n\n'
+                    'Level $level is still played out in full — the clock '
+                    'keeps running. When it ends, the settlement break starts '
+                    'and no further rebuys can be taken.'
+              : 'Rebuys will close at the end of Level $level instead of '
+                    'Level $previousLevel.\n\n'
+                    'Level $level is still played out in full — the clock '
+                    'keeps running. When it ends, the settlement break starts '
+                    'and no further rebuys can be taken.',
+          style: AppTypography.bodySm,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            AppButton(
+              variant: AppButtonVariant.secondary,
+              onPressed: onKeepOpen,
+              child: const Text('Keep rebuys open'),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            AppButton(
+              onPressed: onEnd,
+              child: const Text('End rebuys'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SeatingTab extends StatelessWidget {  const _SeatingTab({required this.players});
 
   final List<Player> players;
 

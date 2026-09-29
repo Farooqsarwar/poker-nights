@@ -3,7 +3,7 @@ import 'package:localstore/localstore.dart';
 
 /// What the app got for its money.
 ///
-/// Specification v11 §3 splits the product into a genuinely usable free tier
+/// Build Spec v3.1 (D4, D12) splits the product into a genuinely usable free tier
 /// and a Premium tier that unlocks scale, intelligence and advanced control.
 enum PremiumTier {
   free,
@@ -23,12 +23,13 @@ class PremiumPlan {
     required this.price,
     required this.period,
     this.saving,
+    this.oneTime = false,
   });
 
   final String id;
   final String name;
 
-  /// Displayed as-is. Specification §24 forbids currency symbols in the
+  /// Displayed as-is. the Build Spec keeps currency symbols out of the
   /// primary UI, so this carries the number and the period carries the unit.
   final String price;
   final String period;
@@ -36,25 +37,52 @@ class PremiumPlan {
   /// e.g. "Save 20%" — shown as a badge when present.
   final String? saving;
 
+  /// Paid once, never renews (the Host licence, D12). Such a plan is not part
+  /// of the "Save n%" comparison and gets no "Cancel anytime" line.
+  final bool oneTime;
+
   /// Placeholder pricing.
   ///
   /// The specification defines WHAT is Premium (§3) but never states a price,
   /// a billing period, or who pays. These numbers exist so the screen can be
   /// designed and reviewed; they are not agreed pricing and must be replaced
   /// before any real billing is connected.
-  static const placeholders = [
+  static const _monthlyPrice = 5;
+  static const _yearlyPrice = 36;
+
+  /// The yearly plan's per-month figure and its saving against twelve monthly
+  /// payments are worked out from the two prices, so changing a price cannot
+  /// leave a stale "Save 40%" on screen.
+  static String get _yearlyPerMonth {
+    final perMonth = _yearlyPrice / 12;
+    return perMonth == perMonth.roundToDouble()
+        ? '${perMonth.round()}'
+        : perMonth.toStringAsFixed(2);
+  }
+
+  static int get _yearlySavingPct =>
+      ((1 - _yearlyPrice / (_monthlyPrice * 12)) * 100).round();
+
+  static final placeholders = [
     PremiumPlan(
       id: 'monthly',
       name: 'Monthly',
-      price: '5',
+      price: '$_monthlyPrice',
       period: 'per month',
     ),
     PremiumPlan(
       id: 'yearly',
       name: 'Yearly',
-      price: '36',
-      period: 'per year · \$3/mo',
-      saving: 'Save 40%',
+      price: '$_yearlyPrice',
+      period: 'per year · $_yearlyPerMonth/mo',
+      saving: 'Save $_yearlySavingPct%',
+    ),
+    PremiumPlan(
+      id: 'host',
+      name: 'Host licence',
+      price: '60',
+      period: 'pay once',
+      oneTime: true,
     ),
   ];
 }
@@ -120,6 +148,13 @@ abstract final class Payments {
   /// banner cannot be left on a real checkout or off a simulated one -- it
   /// follows the implementation instead of being remembered.
   static bool get isSimulated => instance is MockPaymentService;
+
+  /// Whose entitlement the device-local demo record belongs to.
+  ///
+  /// Set from the signed-in uid so a demo Premium granted to one account is
+  /// not silently inherited by the next person to sign in on the same phone.
+  /// Null (signed out, or a guest) falls back to the shared `local` record.
+  static String? userId;
 }
 
 /// A local, non-transacting implementation of [PaymentService].
@@ -132,9 +167,10 @@ abstract final class Payments {
 /// The entitlement it grants is stored on this device only. It is deliberately
 /// NOT synced to Firestore and NOT readable by security rules, so it cannot be
 /// mistaken for a real entitlement or used to unlock anything server-side.
-/// Specification v11 §7 and acceptance criterion 12 require Premium
-/// authorization to be enforced on the server; this class does not attempt
-/// that and must not be treated as satisfying it.
+/// This build has no server and takes no real payments (owner decision, Sep
+/// 2026), so Premium is a client-side, per-account demo entitlement. It does
+/// not attempt server-side authorization and must not be treated as
+/// satisfying it; a later store-billing integration replaces this class.
 class MockPaymentService implements PaymentService {
   MockPaymentService({this.latency = const Duration(milliseconds: 1400)});
 
@@ -144,7 +180,12 @@ class MockPaymentService implements PaymentService {
 
   static final _db = Localstore.instance;
   static const _collection = 'entitlements';
-  static const _docId = 'local';
+
+  /// One record per signed-in user; `local` only when nobody is signed in.
+  static String get _docId {
+    final uid = Payments.userId;
+    return uid == null || uid.isEmpty ? 'local' : 'u_$uid';
+  }
 
   @override
   Future<PremiumTier> currentTier() async {

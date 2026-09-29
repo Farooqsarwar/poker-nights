@@ -20,7 +20,10 @@ class CashPlayer {
 
   bool get isCashedOut => hasCashedOut;
 
-  double get net => cashedOut - totalBuyIns;
+  /// Where this person stands: what they took out, plus what is still in front
+  /// of them, minus what they put in -- across every stint of the session
+  /// (a rejoin does not wipe an earlier cash-out).
+  double get net => cashedOut + (hasCashedOut ? 0 : stack) - totalBuyIns;
 
   CashPlayer copyWith({
     String? id,
@@ -60,6 +63,9 @@ class CashSessionSettings {
     this.currency = '',
     required this.maxPlayers,
     this.rakePct = 0,
+    this.chipValue = 1,
+    this.trackSettlement = true,
+    this.chipSetId,
   });
 
   final String name;
@@ -72,6 +78,16 @@ class CashSessionSettings {
   final String currency;
   final int maxPlayers;
   final double rakePct;
+
+  /// What one chip unit is worth in money, per session (D1): a chip marked 25
+  /// is worth 25 x [chipValue]. Every stack x this = money.
+  final double chipValue;
+
+  /// D1 "Track settlement": auto-calculate who owes whom at the end.
+  final bool trackSettlement;
+
+  /// The chip set proposed for buy-in stacks; null = the default set.
+  final String? chipSetId;
 }
 
 /// A running / completed cash game.

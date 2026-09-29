@@ -5,23 +5,21 @@ import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/live_game.dart';
 import '../models/tournament.dart';
-import '../services/entitlements.dart';
 import '../services/payment_service.dart';
 import 'app_card.dart';
-import 'premium_gate.dart';
 
 /// What the engine decided, and why (addendum §2, §3, §6).
 ///
-/// Two tiers, and the split is not arbitrary:
+/// Both parts are free:
 ///
 ///  * The **depth explanation is free**, always. §2 requires it outright — "if
 ///    the engine chooses an unusual depth, explain why in plain language" — so
 ///    it cannot sit behind a paywall. It was already being computed and shown
 ///    nowhere, which is the gap this fixes.
-///  * The **rest is Premium**, as §3's "Advanced AI recommendations". Pace
-///    against target, why the rebuy window landed where it did, and where the
-///    chips run out are analysis, not operation, and §3's monetization
-///    principle only forbids paywalling operation.
+///  * The **pace analysis is free too** (D4, BUILD_PLAN P4.6). Pace against
+///    target, why the rebuy window landed where it did, and where the chips
+///    run out are shown to every host. [tier] is kept so callers do not
+///    change.
 class AiInsightsPanel extends StatelessWidget {
   const AiInsightsPanel({
     super.key,
@@ -78,14 +76,7 @@ class AiInsightsPanel extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
         ],
-        PremiumGate(
-          tier: tier,
-          feature: PremiumFeature.advancedAiRecommendations,
-          blurb: 'See how the night is projected to run — pace against your '
-              'target, why the rebuy window closes where it does, and where '
-              'your chips run out.',
-          child: _Analysis(structure: structure, settings: settings),
-        ),
+        _Analysis(structure: structure, settings: settings),
       ],
     );
   }

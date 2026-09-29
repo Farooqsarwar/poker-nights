@@ -8,6 +8,10 @@ import 'table_settings.dart';
 import 'tournament.dart';
 import 'tournament_format.dart';
 
+/// The document version this build writes (`_v`, §E2 rule 1). Bump it whenever
+/// the stored shape changes in a way an older build could not round-trip.
+const int kGameCodecVersion = 1;
+
 /// Settings captured when creating a tournament game.
 class GameSettings {
   const GameSettings({
@@ -26,6 +30,7 @@ class GameSettings {
     this.rebuyLimit,
     this.reEntry = false,
     required this.addOn,
+    this.addOnOvertime = false,
     this.addOnCloseLevel = 6,
     required this.anteEnabled,
     required this.anteAfterLevel,
@@ -51,7 +56,8 @@ class GameSettings {
     this.addOnChips,
     this.levelDurationMins,
     this.pace,
-    this.payoutShape = PayoutShape.standard,
+    this.forecastRebuyRate,
+    this.forecastAddOnTakeUp,
     this.format,
     this.maxReEntries,
     this.shootoutTables,
@@ -59,6 +65,7 @@ class GameSettings {
     this.earlyArrivalBonusEnabled = false,
     this.earlyArrivalCutoffMins,
     this.earlyArrivalBonusPctOverride,
+    this.rsvpDeadlineHours,
   });
 
   final String name;
@@ -82,6 +89,7 @@ class GameSettings {
   /// separately from rebuys (12-046/12-047).
   final bool reEntry;
   final bool addOn;
+  final bool addOnOvertime;
 
   /// Level after which add-ons are no longer available. Defaults to end of
   /// Level 6 (client feedback: "add-on moment, default end L6").
@@ -183,6 +191,15 @@ class GameSettings {
   /// sets the level length AND the growth ceiling the ladder is solved
   /// against, while `levelDurationMins` is a bare override of the length.
   final PaceMode? pace;
+
+  /// The rebuy rate and add-on take-up the structure was generated with (§F1.3
+  /// `Rforecast`, `takeUp`). They come from the host's own past nights
+  /// (Framework §14), which no other device can see, so they are recorded here
+  /// when the structure is built. Without them a player's phone re-running the
+  /// engine to check the host's work would use the stated defaults and report
+  /// an honest structure as a mismatch. Null means "the stated defaults".
+  final double? forecastRebuyRate;
+  final double? forecastAddOnTakeUp;
   final TournamentFormat? format;
   final int? maxReEntries;
 
@@ -197,6 +214,10 @@ class GameSettings {
   /// §25.1a. Whether players who are checked in before the cutoff start with a
   /// bonus over the printed stack.
   final bool earlyArrivalBonusEnabled;
+
+  /// Spec C-cfg §1 / O3. Whole hours before the start that RSVPs close, 1–72.
+  /// Null means the default, 24 — see [effectiveRsvpDeadlineHours].
+  final int? rsvpDeadlineHours;
 
   /// §25.1a. Minutes before [scheduledStart] a check-in must land to earn the
   /// bonus. Null uses the engine default.
@@ -220,7 +241,6 @@ class GameSettings {
   /// How steeply the prize pool falls away from first place. Not part of the
   /// generation-override group above — a Reset there must not quietly undo a
   /// payout decision that has nothing to do with the blind curve.
-  final PayoutShape payoutShape;
 
   /// Ceiling on the organizer allocation (specification §7 and §18:
   /// "0-20%").
@@ -288,6 +308,7 @@ class GameSettings {
     int? rebuyLimit,
     bool? reEntry,
     bool? addOn,
+    bool? addOnOvertime,
     int? addOnCloseLevel,
     bool? anteEnabled,
     int? anteAfterLevel,
@@ -317,7 +338,8 @@ class GameSettings {
     int? addOnChips,
     int? levelDurationMins,
     PaceMode? pace,
-    PayoutShape? payoutShape,
+    double? forecastRebuyRate,
+    double? forecastAddOnTakeUp,
     TournamentFormat? format,
     int? maxReEntries,
     int? shootoutTables,
@@ -325,6 +347,7 @@ class GameSettings {
     bool? earlyArrivalBonusEnabled,
     int? earlyArrivalCutoffMins,
     double? earlyArrivalBonusPctOverride,
+    int? rsvpDeadlineHours,
 
     /// Per-field clears. A null above means "unchanged", which is right for a
     /// partial update but leaves no way to hand one decision back to the
@@ -358,6 +381,7 @@ class GameSettings {
       rebuyLimit: rebuyLimit ?? this.rebuyLimit,
       reEntry: reEntry ?? this.reEntry,
       addOn: addOn ?? this.addOn,
+      addOnOvertime: addOnOvertime ?? this.addOnOvertime,
       addOnCloseLevel: addOnCloseLevel ?? this.addOnCloseLevel,
       anteEnabled: anteEnabled ?? this.anteEnabled,
       anteAfterLevel: anteAfterLevel ?? this.anteAfterLevel,
@@ -404,7 +428,8 @@ class GameSettings {
       // scratch" should re-solve the ladder at the pace they picked, not throw
       // the pace away and fall back to the legacy mode.
       pace: pace ?? this.pace,
-      payoutShape: payoutShape ?? this.payoutShape,
+      forecastRebuyRate: forecastRebuyRate ?? this.forecastRebuyRate,
+      forecastAddOnTakeUp: forecastAddOnTakeUp ?? this.forecastAddOnTakeUp,
       format: format ?? this.format,
       maxReEntries:
           clearMaxReEntries ? null : maxReEntries ?? this.maxReEntries,
@@ -415,6 +440,7 @@ class GameSettings {
           clearGenerationOverrides || clearShootoutTableTargetMins
               ? null
               : shootoutTableTargetMins ?? this.shootoutTableTargetMins,
+      rsvpDeadlineHours: rsvpDeadlineHours ?? this.rsvpDeadlineHours,
       earlyArrivalBonusEnabled:
           earlyArrivalBonusEnabled ?? this.earlyArrivalBonusEnabled,
       earlyArrivalCutoffMins:
@@ -442,13 +468,87 @@ class GameSettings {
   /// The scheduled start parsed from the configured date/time fields.
   DateTime? get scheduledStart => DateTime.tryParse('${date}T$time');
 
-  /// RSVPs can be changed until one hour before the scheduled start
-  /// (checklist 07-011/07-012, UAT-025). After this cutoff changes are closed.
-  DateTime? get rsvpDeadline =>
-      scheduledStart?.subtract(const Duration(hours: 1));
+  /// Spec C4/C4p. How long before the scheduled start the check-in window
+  /// opens.
+  ///
+  /// A wall-clock constant rather than a host decision, which is the entire
+  /// point of the clause: the door opens by itself, so nobody has to remember
+  /// to press anything and no member can arrive to a closed lobby.
+  static const int checkInLeadMins = 10;
+
+  /// Spec C4/C4p. The moment the check-in window opens, derived from the
+  /// scheduled start. Null when the configured date/time cannot be parsed, in
+  /// which case the window falls back to being open at
+  /// [LiveGameStatus.checkin] (see [LiveGame.isCheckInOpenAt]).
+  DateTime? get checkInOpensAt =>
+      scheduledStart?.subtract(const Duration(minutes: checkInLeadMins));
+
+  /// Spec O3: the host's RSVP deadline in whole hours, default 24, kept in the
+  /// 1–72 range the stepper allows.
+  int get effectiveRsvpDeadlineHours =>
+      (rsvpDeadlineHours ?? 24).clamp(1, 72);
+
+  /// RSVPs can be changed until [effectiveRsvpDeadlineHours] before the
+  /// scheduled start. After this cutoff nobody new can answer Going.
+  DateTime? get rsvpDeadline => scheduledStart?.subtract(
+        Duration(hours: effectiveRsvpDeadlineHours),
+      );
 
   bool get rsvpCutoffPassed =>
       rsvpDeadline != null && rsvpDeadline!.isBefore(DateTime.now());
+}
+
+/// Spec D6 / T32. Whether a check-in approved at [now] earns the
+/// early-arrival bonus: the bonus must be switched on, a scheduled start must
+/// exist, and the approval must land strictly before that start.
+///
+/// This deliberately replaces the legacy
+/// [GameSettings.effectiveEarlyArrivalCutoffMins] cutoff. The old rule asked
+/// for arrival at least 30 minutes early and so silently disqualified the
+/// exact person the bonus was written for — somebody who walked in 20 minutes
+/// before the first shuffle and was approved 30 seconds before it. D6 draws
+/// the line at the start, not at a lead time before it, and the 10-minute
+/// check-in window (C4) sits inside that line, so arriving inside the window
+/// is sufficient.
+///
+/// Recomputed on every approval rather than latched, so a player who
+/// cancels and re-checks-in after the start correctly loses eligibility.
+bool isEarlyArrivalApproved({
+  required bool bonusEnabled,
+  required DateTime? scheduledStart,
+  required DateTime now,
+}) {
+  if (!bonusEnabled || scheduledStart == null) return false;
+  return now.isBefore(scheduledStart);
+}
+
+/// Where the check-in window stands at a given instant.
+///
+/// Every surface reads this one object — the guest flow's locked card, the
+/// host's check-in screen, the bonus rule — so they cannot disagree about
+/// whether the door is open. The instant is a parameter rather than a
+/// `DateTime.now()` read inside the getter, which is what makes the exact
+/// boundary testable.
+class CheckInWindow {
+  const CheckInWindow({
+    required this.opensAt,
+    required this.isOpen,
+    required this.secondsUntilOpen,
+  });
+
+  /// When the window opens, or null when the game has no parseable scheduled
+  /// start and the window tracks [LiveGameStatus.checkin] instead.
+  final DateTime? opensAt;
+
+  /// Whether a guest may check in right now. Both gates must pass: the
+  /// lifecycle has to have reached `checkin`, and the wall clock has to be
+  /// inside the window. A document is created at `checkin` hours ahead of a
+  /// 7pm start, so the status alone was never enough.
+  final bool isOpen;
+
+  /// Whole seconds until the window opens. Zero once it is open (or when there
+  /// is no scheduled start to count down to), never negative.
+  final int secondsUntilOpen;
 }
 
 /// Lifecycle status of a tournament.
@@ -545,6 +645,7 @@ class LiveGame {
     required this.finishOrder,
     this.speedRecommendation,
     this.settlementConfirmed = false,
+    this.addOnWindowClosed = false,
     this.seatingConfirmed = false,
     this.checkInClosed = false,
     this.structureConfirmed = false,
@@ -567,7 +668,19 @@ class LiveGame {
     this.editorClaimedAt,
     this.audioMasterDeviceId = '',
     this.shootoutStage,
+    this.codecVersion = kGameCodecVersion,
   });
+
+  /// The `_v` the document was written with (§E2 rule 1). Documents that
+  /// predate versioning have none and read as version 1.
+  ///
+  /// Carried on the model, and preserved by [copyWith], so that a game a newer
+  /// build wrote can never be re-saved by this one as if it were current.
+  final int codecVersion;
+
+  /// True when a newer build wrote this game. Reading it is fine; writing it
+  /// back from here could drop fields this build does not know about.
+  bool get writtenByNewerBuild => codecVersion > kGameCodecVersion;
 
   final String id;
   final String groupId;
@@ -595,6 +708,10 @@ class LiveGame {
   /// label then changes from "Estimated Prize Pool" to "Prize Pool"
   /// (checklist 12-068, 14-038/14-039, 15-009, 15-030).
   final bool settlementConfirmed;
+
+  /// The host pressed Next on the add-on step of settlement (Addendum 2).
+  /// Ends the add-on window even if the break has already run out.
+  final bool addOnWindowClosed;
 
   /// True once the admin has confirmed the generated physical seating before
   /// play starts (checklist 13-013). Seating changes clear it again.
@@ -822,6 +939,78 @@ class LiveGame {
     return structure.levels[currentLevel];
   }
 
+  /// Spec C4/C4p. Whether the check-in window is open at [now].
+  ///
+  /// Two gates, not either. The lifecycle must have reached
+  /// [LiveGameStatus.checkin] — a game that is still `draft`/`published` has
+  /// no check-in at all, whatever the clock says — and the wall clock must be
+  /// at or after [GameSettings.checkInOpensAt]. The second gate is the clause:
+  /// a tournament document is created and published hours or days ahead, so
+  /// the status reaches `checkin` long before anybody should be let in.
+  ///
+  /// A game whose configured date/time cannot be parsed (a host who never set
+  /// one, or a restored document from before the field existed) falls back to
+  /// the status alone rather than locking the lobby shut forever.
+  bool isCheckInOpenAt(DateTime now) {
+    if (status.index < LiveGameStatus.checkin.index) return false;
+    if (status.index > LiveGameStatus.finaltable.index) return false;
+    final opensAt = settings.checkInOpensAt;
+    if (opensAt == null) return true;
+    return !now.isBefore(opensAt);
+  }
+
+  /// Spec C4/C4p. The window resolved against [now] — what the guest's locked
+  /// card and the host's banner both render.
+  CheckInWindow checkInWindowAt(DateTime now) {
+    final opensAt = settings.checkInOpensAt;
+    final isOpen = isCheckInOpenAt(now);
+    final remaining = (!isOpen && opensAt != null)
+        ? opensAt.difference(now).inSeconds
+        : 0;
+    return CheckInWindow(
+      opensAt: opensAt,
+      isOpen: isOpen,
+      secondsUntilOpen: remaining > 0 ? remaining : 0,
+    );
+  }
+
+  /// Spec C6, entry point 2. The level whose end an early rebuy close would
+  /// land on, or null when "End rebuys now" must stay hidden.
+  ///
+  /// Null (button hidden) when: the game has no rebuys; they are already
+  /// closed; the tournament is not actually being played (the settlement
+  /// break, a finished game, or a lobby); there is no later level to hand
+  /// play to; or the current level IS already the closing level, in which
+  /// case the same close happens on the next press of Next and offering a
+  /// button that changes nothing would be a lie.
+  int? get endRebuysNowLevel {
+    if (!settings.rebuys) return null;
+    if (rebuysClosed) return null;
+    if (status != LiveGameStatus.running &&
+        status != LiveGameStatus.paused) {
+      return null;
+    }
+    if (currentLevel < 1) return null;
+    if (currentLevel >= settings.rebuysCloseLevel) return null;
+    if (currentLevel >= structure.levels.length) return null;
+    return currentLevel;
+  }
+
+  /// Spec C6. True from the moment the current level becomes the closing level
+  /// — whether that was configured up front (entry point 1) or armed by the
+  /// host mid-level (entry point 2) — until the break actually starts.
+  ///
+  /// Drives the header pill: REBUYS CLOSING while the room still has a few
+  /// hands to play with the window open, BREAK once it has been shut.
+  bool get rebuysClosingArmed {
+    if (!settings.rebuys) return false;
+    if (rebuysClosed) return false;
+    if (currentLevel != settings.rebuysCloseLevel) return false;
+    return status == LiveGameStatus.running ||
+        status == LiveGameStatus.paused ||
+        status == LiveGameStatus.onBreak;
+  }
+
   /// True once no further rebuy may be recorded.
   ///
   /// The settlement break itself is NOT closed: User Flow section 4.13 and
@@ -910,6 +1099,7 @@ class LiveGame {
     SpeedRecommendation? speedRecommendation,
     TournamentStructure? structure,
     bool? settlementConfirmed,
+    bool? addOnWindowClosed,
     bool? seatingConfirmed,
     bool? checkInClosed,
     bool? structureConfirmed,
@@ -931,8 +1121,10 @@ class LiveGame {
     DateTime? editorClaimedAt,
     String? audioMasterDeviceId,
     ShootoutStage? shootoutStage,
+    int? codecVersion,
   }) {
     return LiveGame(
+      codecVersion: codecVersion ?? this.codecVersion,
       id: id ?? this.id,
       groupId: groupId ?? this.groupId,
       settings: settings ?? this.settings,
@@ -957,6 +1149,7 @@ class LiveGame {
           ? null
           : speedRecommendation ?? this.speedRecommendation,
       settlementConfirmed: settlementConfirmed ?? this.settlementConfirmed,
+      addOnWindowClosed: addOnWindowClosed ?? this.addOnWindowClosed,
       seatingConfirmed: seatingConfirmed ?? this.seatingConfirmed,
       checkInClosed: checkInClosed ?? this.checkInClosed,
       structureConfirmed: structureConfirmed ?? this.structureConfirmed,

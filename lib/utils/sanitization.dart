@@ -8,7 +8,7 @@ class Sanitization {
   static const int maxChatLength = 1000;
 
   /// Maximum length for player/guest names.
-  static const int maxNameLength = 50;
+  static const int maxNameLength = 40;
 
   /// Maximum length for tournament names (spec §6.1).
   static const int maxTournamentNameLength = 80;
@@ -17,10 +17,10 @@ class Sanitization {
   static const int maxLocationLength = 160;
 
   /// Maximum length for poll question.
-  static const int maxPollQuestionLength = 200;
+  static const int maxPollQuestionLength = 120;
 
   /// Maximum length for poll option.
-  static const int maxPollOptionLength = 100;
+  static const int maxPollOptionLength = 60;
 
   /// Strips HTML tags and script content from user input.
   /// Returns a trimmed, safe plain-text string.

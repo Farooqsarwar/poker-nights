@@ -38,9 +38,20 @@ extension AppProviderGame on AppProvider {
     final game = _currentGame;
     if (game == null) return;
     final stack = _undoStack.whereType<LiveGame>().toList();
-    _repo.saveUndoStack(game.groupId, game.id, stack).catchError((Object e) {
-      debugPrint('saveUndoStack failed: $e');
-    });
+    // The undo stack is a convenience layered on top of an action, so losing
+    // it is worth a log line and never a failed tap. `.catchError` alone only
+    // sees failures that arrive as a Future error, though - reaching
+    // `FirebaseFirestore.instance` throws SYNCHRONOUSLY when Firebase has not
+    // been initialised, before any Future exists, so that throw used to escape
+    // this method and abort the action that had already been applied
+    // in memory. Guard the call, not just its result.
+    try {
+      _repo.saveUndoStack(game.groupId, game.id, stack).catchError((Object e) {
+        debugPrint('saveUndoStack failed: $e');
+      });
+    } catch (e) {
+      debugPrint('saveUndoStack unavailable: $e');
+    }
   }
 
   void setCurrentGame(LiveGame game) {
@@ -324,10 +335,31 @@ extension AppProviderGame on AppProvider {
   /// Publishes the tournament (checklist §4.3): the game opens for RSVP, a
   /// pinned event card is posted to the group chat, every member is notified,
   /// and the published structure is snapshotted for the §12.4 live diff.
-  void publishGame() {
+  ///
+  /// [announce] false is the quick start (C0): the friends are already at the
+  /// table, so nobody is asked to RSVP and nothing is posted to the group chat
+  /// or pushed to members. The game still opens and its join code goes live.
+  void publishGame({bool announce = true}) {
     final game = _currentGame;
     if (game == null || _user == null) return;
     _pushUndo();
+
+    if (!announce) {
+      _currentGame = game.copyWith(
+        status: LiveGameStatus.published,
+        originalLevels: List.of(game.structure.levels),
+      );
+      _syncGroupGame();
+      if (_backendUp) {
+        unawaited(_repo.upsertGameCodes(_currentGame!));
+      }
+      addAuditRecord(
+        'publish',
+        'Quick start: ${game.settings.name} created at the table.',
+      );
+      if (!_disposed) notifyListeners();
+      return;
+    }
 
     final anteText = game.settings.anteEnabled
         ? 'Ante: L${game.settings.anteAfterLevel}+'
@@ -524,7 +556,6 @@ extension AppProviderGame on AppProvider {
             addOnChips: s.addOnChips,
             levelDurationMins: s.levelDurationMins,
             pace: s.pace,
-            payoutShape: s.payoutShape,
             format: s.format,
             maxReEntries: s.maxReEntries,
             shootoutTables: s.shootoutTables,
@@ -697,15 +728,34 @@ extension AppProviderGame on AppProvider {
       totalAddOns: addOns,
       effectiveAddOnCost: s.effectiveAddOnCost,
     );
-    final int roundingUnit = TournamentEngine.roundingUnitFor(s.buyIn);
-
-    return TournamentEngine.recalculatePrizes(
-      gross,
-      confirmedCount,
-      s.effectiveOrganizerPct.toDouble(),
+    return PayoutBridge.recalculate(
+      grossEligible: gross,
+      players: confirmedCount,
+      organizerPct: s.effectiveOrganizerPct,
+      buyIn: s.buyIn,
       forcePaidPlaces: s.forcePaidPlaces,
-      roundingUnit: roundingUnit,
+      extraEntries: rebuys + reEntries,
     );
+  }
+
+  /// Closes the add-on window (Addendum 2). Called when the host presses Next
+  /// on the add-on step: everyone who was not given an add-on has declined by
+  /// that point, and the "overtime" badge, if it was showing, goes away.
+  void closeAddOnWindow() {
+    final game = _currentGame;
+    if (game == null || game.addOnWindowClosed) return;
+    _currentGame = game.copyWith(
+      addOnWindowClosed: true,
+      settings: game.settings.copyWith(addOnOvertime: false),
+    );
+    addAuditRecord(
+      'addon_window_closed',
+      game.settings.addOnOvertime
+          ? 'Add-on window (overtime) closed by the host.'
+          : 'Add-on window closed by the host.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
   }
 
   void confirmSettlement() {
@@ -714,6 +764,8 @@ extension AppProviderGame on AppProvider {
     final finalPrizes = previewSettlementPrizes(0);
     _currentGame = game.copyWith(
       settlementConfirmed: true,
+      addOnWindowClosed: true,
+      settings: game.settings.copyWith(addOnOvertime: false),
       pendingGuests: const [],
       structure: game.structure.copyWith(
         organizerAmount: finalPrizes.organizerAmount,

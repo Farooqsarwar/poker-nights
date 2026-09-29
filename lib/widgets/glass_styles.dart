@@ -289,7 +289,7 @@ class Glass {
   static BoxDecoration glassCard({Color? color, Color? borderColor}) {
     return BoxDecoration(
       color: solid(color ?? AppColors.card, surfaceOpacity),
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       border: Border.all(
         color: (borderColor ?? AppColors.border)
             .withValues(alpha: borderOpacity),
@@ -384,7 +384,7 @@ class Glass {
     // input was only a faint outline on the page.
     return BoxDecoration(
       color: AppColors.card,
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderRadius: BorderRadius.circular(AppRadius.input),
       border: Border.all(color: borderColor),
       boxShadow: focused
           ? [

@@ -13,6 +13,7 @@ import '../../models/group.dart';
 import '../../models/live_game.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/formatters.dart';
 import '../../utils/event_settings_validation.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_badge.dart';
@@ -213,6 +214,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                       active: true,
                     ),
                 cutoffPassed: app.rsvpCutoffPassed,
+                deadlineLine: _rsvpDeadlineLine(game.settings),
                 onRsvp: (rsvp) {
                   HapticFeedback.lightImpact();
                   // Spec §7.1: warn if reducing guest count would remove
@@ -1664,15 +1666,26 @@ class _ContextualMainButton extends StatelessWidget {
 /// The full member RSVP section: three status chips (Going / Maybe / Can't)
 /// and, when "Going" is selected, an inline guest-count stepper (0–4).
 /// Spec §4.3: guest count is part of the Going answer, not a separate chip.
+/// Spec C3: "RSVPs close Fri 3 Oct · 18:00, 24 hours before the start."
+String? _rsvpDeadlineLine(GameSettings s) {
+  final deadline = s.rsvpDeadline;
+  if (deadline == null) return null;
+  final h = s.effectiveRsvpDeadlineHours;
+  return 'RSVPs close ${Formatters.weekdayDateTime(deadline)}, '
+      '$h ${h == 1 ? 'hour' : 'hours'} before the start.';
+}
+
 class _RsvpSection extends StatefulWidget {
   const _RsvpSection({
     required this.myPlayer,
     required this.cutoffPassed,
     required this.onRsvp,
+    this.deadlineLine,
   });
 
   final Player myPlayer;
   final bool cutoffPassed;
+  final String? deadlineLine;
   final void Function(Rsvp?) onRsvp;
 
   @override
@@ -1790,6 +1803,16 @@ class _RsvpSectionState extends State<_RsvpSection> {
               ),
             ),
         ],
+        if (!widget.cutoffPassed && widget.deadlineLine != null)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Text(
+              widget.deadlineLine!,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
         if (widget.cutoffPassed)
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.sm),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -19,27 +20,40 @@ class SupportScreen extends StatelessWidget {
     (
       q: 'How do I start a tournament?',
       a:
-          'Go to the Home screen and tap "Create Tournament". Choose a blind structure, '
-          'pick a chip set, invite players, and you are ready to check in and deal.',
+          'Tap "Start a game now" for tonight, or "New tournament" to plan one: pick '
+          'the date, the finish time and your chips; the app builds the blinds, the '
+          'payouts and the schedule.',
     ),
     (
-      q: 'I lost my tournament mid-game — can I get it back?',
+      q: 'Lost my game mid-way — recoverable?',
       a:
-          'Yes. Poker Night saves your active tournament locally and restores it '
-          'automatically the next time you open the app, right where you left off.',
+          'Yes. The running game is saved on the phone that runs the clock and synced '
+          'to your group; open the app and tap Resume.',
     ),
     (
       q: 'Can I track cash games too?',
       a:
-          'Absolutely. Start a cash game from the Home screen, track buy-ins and '
-          'top-ups, and settle up at the end of the night.',
+          'Yes — buy-ins, top-ups and cash-outs, and the fewest payments to settle at '
+          'the end.',
     ),
     (
-      q: 'Who can see the prize pool and payouts?',
+      q: 'Who sees the prizes?',
       a:
-          'Everyone can — players, guests and the TV all see the prize pool and '
-          'the full payout table. The only figure kept private is the host\'s '
-          'organiser contribution.',
+          'Everyone in the game sees the prize pool and the payouts. Only the host '
+          'sees the organiser contribution, if one is set.',
+    ),
+    (
+      q: 'Is this gambling?',
+      a:
+          'Poker Night doesn\'t take bets or move money. It is a clock and a '
+          'calculator for your own game. Check the rules where you play.',
+    ),
+    (
+      q: 'How do I report an abusive message?',
+      a:
+          'Press and hold the message and tap Report. The group\'s host is told; if '
+          'nothing happens within a day, we are too. You can also Block someone to '
+          'hide their messages.',
     ),
     (
       q: 'I found a bug. What do I do?',
@@ -50,10 +64,14 @@ class SupportScreen extends StatelessWidget {
   ];
 
   Future<void> _emailSupport() async {
-    final uri = Uri(
-      scheme: 'mailto',
-      path: _supportEmail,
-      query: 'subject=Poker Night support',
+    // H3: the platform is pre-filled where the person can read and edit it
+    // before sending; nothing personal is added behind their back.
+    final body = 'Platform: ${defaultTargetPlatform.name}\n\n'
+        'What happened:\n';
+    final uri = Uri.parse(
+      'mailto:$_supportEmail'
+      '?subject=${Uri.encodeComponent('Poker Night support')}'
+      '&body=${Uri.encodeComponent(body)}',
     );
     await launchUrl(uri);
   }

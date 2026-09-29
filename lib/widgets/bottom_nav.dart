@@ -65,10 +65,14 @@ class BottomNav extends StatelessWidget {
           label: 'More',
           icon: Icons.more_horiz,
           activeColor: AppColors.primary,
+          // T135: anything reached from Explore or the drawer lights "More"
+          // as active, not its own tab. Tools and Standings are two of them.
           activePaths: const [
             RoutePaths.polls,
             RoutePaths.history,
             RoutePaths.cashGame,
+            RoutePaths.tools,
+            RoutePaths.standings,
             RoutePaths.settings,
           ],
           onTap: () => _openMore(context),
@@ -89,6 +93,7 @@ class BottomNav extends StatelessWidget {
           activePaths: const [
             RoutePaths.history,
             RoutePaths.cashGame,
+            RoutePaths.tools,
             RoutePaths.settings,
           ],
           onTap: () => _openMore(context),
@@ -153,7 +158,7 @@ class BottomNav extends StatelessWidget {
                                 item.icon,
                                 size: 24,
                                 color: _isActive(item, location)
-                                    ? item.activeColor
+                                    ? item.activeTextColor
                                     : AppColors.mutedForeground,
                               ),
                               const SizedBox(height: AppSpacing.xxs),
@@ -163,7 +168,7 @@ class BottomNav extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTypography.bodyXs.copyWith(
                                   color: _isActive(item, location)
-                                      ? item.activeColor
+                                      ? item.activeTextColor
                                       : AppColors.mutedForeground,
                                 ),
                               ),
@@ -265,6 +270,26 @@ class BottomNav extends StatelessWidget {
                   Navigator.of(sheetContext).pop();
                   context.go(RoutePaths.cashGame);
                 },
+              ),
+              _MoreRow(
+                icon: Icons.build_outlined,
+                label: 'Tools',
+                subtitle: 'Blinds, clock, ICM & payouts',
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  context.go(RoutePaths.tools);
+                },
+              ),
+              _MoreRow(
+                icon: Icons.leaderboard_outlined,
+                label: 'Standings',
+                subtitle: 'Lifetime leaderboard',
+                onTap: hasGroup
+                    ? () {
+                        Navigator.of(sheetContext).pop();
+                        context.go(RoutePaths.standings);
+                      }
+                    : null,
               ),
               _MoreRow(
                 icon: Icons.settings_outlined,
@@ -455,10 +480,20 @@ class _BottomItem {
   final String path;
   final String label;
   final IconData icon;
+
+  /// §B3: "a 24 x 2 px crimson bar" — the active underline. A **fill**, so it
+  /// correctly takes the `red` token.
   final Color activeColor;
+
+  /// §B3: "Active item: `redText` icon and label" — and §B1 is explicit that
+  /// this is a different token from the bar, because `red` measures 4.05 : 1
+  /// on the background and `redText` 5.06 : 1. The label and icon were both
+  /// taking [activeColor] and so both were failing AA.
+  Color get activeTextColor => AppColors.primaryText;
+
   final int? badge;
   final VoidCallback? onTap;
 
   /// Additional locations that should light this item up as active.
   final List<String>? activePaths;
-}
+}

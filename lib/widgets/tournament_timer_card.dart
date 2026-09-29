@@ -98,13 +98,29 @@ class TournamentTimerCard extends StatelessWidget {
 
           // "LEVEL X" Tracking Text
           Center(
-            child: Text(
-              isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
-              style: TextStyle(
-                color: AppColors.primaryText,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 3.5,
+            child: Semantics(
+              liveRegion: true,
+              // Same words as the voice, and it only changes with the level --
+              // never with the second (Addendum 2 #2).
+              label: isBreak
+                  ? 'Break'
+                  : Formatters.levelSpoken(
+                      game.currentLevel,
+                      level?.sb ?? 0,
+                      level?.bb ?? 0,
+                      level?.ante,
+                    ),
+              child: _PulseWhenLevelChanges(
+                level: game.currentLevel,
+                child: Text(
+                  isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
+                  style: TextStyle(
+                    color: AppColors.primaryText,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 3.5,
+                  ),
+                ),
               ),
             ),
           ),
@@ -149,30 +165,33 @@ class TournamentTimerCard extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Blinds Trio: SB (white), ANTE (coral), BB (white)
-          Row(
-            children: [
-              Expanded(
-                child: _BlindColumn(
-                  label: 'SB',
-                  value: level == null ? '—' : Formatters.chips(level.sb),
-                  highlighted: false,
+          _PulseWhenLevelChanges(
+            level: game.currentLevel,
+            child: Row(
+              children: [
+                Expanded(
+                  child: _BlindColumn(
+                    label: 'SB',
+                    value: level == null ? '—' : Formatters.chips(level.sb),
+                    highlighted: false,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _BlindColumn(
-                  label: 'ANTE',
-                  value: level?.ante == null ? '—' : Formatters.chips(level!.ante!),
-                  highlighted: true,
+                Expanded(
+                  child: _BlindColumn(
+                    label: 'ANTE',
+                    value: level?.ante == null ? '—' : Formatters.chips(level!.ante!),
+                    highlighted: true,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _BlindColumn(
-                  label: 'BB',
-                  value: level == null ? '—' : Formatters.chips(level.bb),
-                  highlighted: false,
+                Expanded(
+                  child: _BlindColumn(
+                    label: 'BB',
+                    value: level == null ? '—' : Formatters.chips(level.bb),
+                    highlighted: false,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -355,6 +374,83 @@ class _SubStatItem extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+
+class _PulseWhenLevelChanges extends StatefulWidget {
+  final int level;
+  final Widget child;
+  const _PulseWhenLevelChanges({required this.level, required this.child});
+
+  @override
+  __PulseWhenLevelChangesState createState() => __PulseWhenLevelChangesState();
+}
+
+class __PulseWhenLevelChangesState extends State<_PulseWhenLevelChanges> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _animation = TweenSequence([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.5), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.5, end: 1.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.5), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.5, end: 1.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void didUpdateWidget(_PulseWhenLevelChanges oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.level != oldWidget.level && oldWidget.level > 0) {
+      // A2-3: two 300 ms pulses; with reduce-motion the pulse becomes an
+      // outline that stays for 3 seconds instead.
+      final reduceMotion = MediaQuery.of(context).disableAnimations;
+      _controller.duration = reduceMotion
+          ? const Duration(seconds: 3)
+          : const Duration(milliseconds: 600);
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Check reduce motion
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        if (reduceMotion) {
+           return Container(
+             decoration: BoxDecoration(
+               border: Border.all(
+                 color: _controller.isAnimating
+                     ? AppColors.destructiveText
+                     : Colors.transparent,
+                 width: 2,
+               ),
+             ),
+             child: child,
+           );
+        }
+        return Transform.scale(
+          scale: _animation.value,
+          child: child,
+        );
+      },
+      child: widget.child,
     );
   }
 }

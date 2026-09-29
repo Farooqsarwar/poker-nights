@@ -246,6 +246,37 @@ extension AppProviderNotificationsSettings on AppProvider {
     }
   }
 
+  /// The symbol this phone shows in front of money: '' (none), '€', '$'
+  /// or '£'. Lives on the phone only (F2, ON THIS PHONE): it is not part of
+  /// any game or account, so it is never synced.
+  String get currencySymbol => Formatters.currencySymbol;
+
+  void setCurrencySymbol(String symbol) {
+    if (Formatters.currencySymbol == symbol) return;
+    Formatters.currencySymbol = symbol;
+    try {
+      Localstore.instance.collection('app').doc('device').set({
+        'currencySymbol': symbol,
+      });
+    } catch (e) {
+      debugPrint('Failed to save currency symbol: $e');
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  Future<void> hydrateDevicePrefs() async {
+    try {
+      final doc = await Localstore.instance.collection('app').doc('device').get();
+      final symbol = doc?['currencySymbol'];
+      if (symbol is String && const {'', '€', '\$', '£'}.contains(symbol)) {
+        Formatters.currencySymbol = symbol;
+        if (!_disposed) notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Failed to load device preferences: $e');
+    }
+  }
+
   void setKeepHistoryForStructures(bool value) {
     if (_keepHistoryForStructures == value) return;
     _keepHistoryForStructures = value;

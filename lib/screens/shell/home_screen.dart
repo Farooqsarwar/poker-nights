@@ -302,6 +302,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: AppSpacing.lg),
               ],
 
+              if (isAdmin) ...[
+                AppButton(
+                  size: AppButtonSize.lg,
+                  fullWidth: true,
+                  onPressed: () => context.push(RoutePaths.quick),
+                  child: const Text('Start a game now'),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+
               // Quick action buttons side-by-side: + New game & Cash game
               Row(
                 children: [

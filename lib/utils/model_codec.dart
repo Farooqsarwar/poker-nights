@@ -79,6 +79,9 @@ Map<String, dynamic> appUserToMap(AppUser u) => {
       'stats': userStatsToMap(u.stats),
       'fcmTokens': u.fcmTokens,
       'isCoAdmin': u.isCoAdmin,
+      // §E10 (3) "stored on the blocker's user document" — carried by the one
+      // codec, so the cloud document and the device-local snapshot agree.
+      'blockedUserIds': u.blockedUserIds,
     };
 
 AppUser appUserFromMap(Map<String, dynamic> m) => AppUser(
@@ -89,6 +92,10 @@ AppUser appUserFromMap(Map<String, dynamic> m) => AppUser(
       stats: userStatsFromMap(Map<String, dynamic>.from((m['stats'] as Map?) ?? const {})),
       fcmTokens: List<String>.from(m['fcmTokens'] as List? ?? const []),
       isCoAdmin: (m['isCoAdmin'] as bool?) ?? false,
+      // Absent on every profile written before blocking existed. An absent
+      // list reads as "nobody blocked" — the backward-compatible default —
+      // so an added optional field does not need a codec `_v` bump (§E2.1).
+      blockedUserIds: List<String>.from(m['blockedUserIds'] as List? ?? const []),
     );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -313,6 +320,7 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'rebuyLimit': s.rebuyLimit,
       'reEntry': s.reEntry,
       'addOn': s.addOn,
+      'addOnOvertime': s.addOnOvertime,
       'addOnCloseLevel': s.addOnCloseLevel,
       'anteEnabled': s.anteEnabled,
       'anteAfterLevel': s.anteAfterLevel,
@@ -340,13 +348,15 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'addOnChips': s.addOnChips,
       'levelDurationMins': s.levelDurationMins,
       'pace': s.pace?.name,
-      'payoutShape': s.payoutShape.name,
+      'forecastRebuyRate': s.forecastRebuyRate,
+      'forecastAddOnTakeUp': s.forecastAddOnTakeUp,
       'format': s.format?.name,
       'maxReEntries': s.maxReEntries,
       'shootoutTables': s.shootoutTables,
       'shootoutTableTargetMins': s.shootoutTableTargetMins,
       'earlyArrivalBonusEnabled': s.earlyArrivalBonusEnabled,
       'earlyArrivalCutoffMins': s.earlyArrivalCutoffMins,
+      'rsvpDeadlineHours': s.rsvpDeadlineHours,
       'earlyArrivalBonusPctOverride': s.earlyArrivalBonusPctOverride,
     };
 
@@ -408,12 +418,8 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
       addOnChips: (m['addOnChips'] as num?)?.toInt(),
       levelDurationMins: (m['levelDurationMins'] as num?)?.toInt(),
       pace: _paceModeFromName(m['pace'] as String?),
-      payoutShape: PayoutShape.values.firstWhere(
-        (v) => v.name == m['payoutShape'],
-        // Every tournament created before the selector existed stored no shape
-        // at all, and every one of them was generated on the standard curve.
-        orElse: () => PayoutShape.standard,
-      ),
+      forecastRebuyRate: (m['forecastRebuyRate'] as num?)?.toDouble(),
+      forecastAddOnTakeUp: (m['forecastAddOnTakeUp'] as num?)?.toDouble(),
       format: _enumByNameOrNull(TournamentFormat.values, m['format']),
       maxReEntries: (m['maxReEntries'] as num?)?.toInt(),
       shootoutTables: (m['shootoutTables'] as num?)?.toInt(),
@@ -423,6 +429,7 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
       earlyArrivalBonusEnabled:
           (m['earlyArrivalBonusEnabled'] as bool?) ?? false,
       earlyArrivalCutoffMins: (m['earlyArrivalCutoffMins'] as num?)?.toInt(),
+      rsvpDeadlineHours: (m['rsvpDeadlineHours'] as num?)?.toInt(),
       earlyArrivalBonusPctOverride:
           (m['earlyArrivalBonusPctOverride'] as num?)?.toDouble(),
     );
@@ -588,6 +595,11 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
   final announcements = game.announcements;
   final audit = game.auditHistory;
   return {
+    // Never stamped lower than the document came in with: a game a newer build
+    // wrote keeps its version even if it is somehow re-encoded here.
+    '_v': game.codecVersion > kGameCodecVersion
+        ? game.codecVersion
+        : kGameCodecVersion,
     'id': game.id,
     'groupId': game.groupId,
     'settings': gameSettingsToMap(game.settings),
@@ -625,6 +637,7 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'finishOrder': List<String>.from(game.finishOrder),
     'speedRecommendation': game.speedRecommendation?.name,
     'settlementConfirmed': game.settlementConfirmed,
+    'addOnWindowClosed': game.addOnWindowClosed,
     'seatingConfirmed': game.seatingConfirmed,
     'checkInClosed': game.checkInClosed,
     'structureConfirmed': game.structureConfirmed,
@@ -649,6 +662,7 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
 }
 
 LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
+      codecVersion: (map['_v'] as num?)?.toInt() ?? 1,
       id: (map['id'] as String?) ?? '',
       groupId: (map['groupId'] as String?) ?? '',
       settings:
@@ -704,6 +718,7 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
           : _enumByName(SpeedRecommendation.values, map['speedRecommendation'],
               SpeedRecommendation.speedUp),
       settlementConfirmed: (map['settlementConfirmed'] as bool?) ?? false,
+      addOnWindowClosed: (map['addOnWindowClosed'] as bool?) ?? false,
       seatingConfirmed: (map['seatingConfirmed'] as bool?) ?? false,
       checkInClosed: (map['checkInClosed'] as bool?) ?? false,
       structureConfirmed: (map['structureConfirmed'] as bool?) ?? false,
@@ -794,6 +809,9 @@ Map<String, dynamic> cashSessionSettingsToMap(CashSessionSettings s) => {
       'currency': s.currency,
       'maxPlayers': s.maxPlayers,
       'rakePct': s.rakePct,
+      'chipValue': s.chipValue,
+      'trackSettlement': s.trackSettlement,
+      if (s.chipSetId != null) 'chipSetId': s.chipSetId,
     };
 
 CashSessionSettings cashSessionSettingsFromMap(Map<String, dynamic> m) =>
@@ -808,6 +826,9 @@ CashSessionSettings cashSessionSettingsFromMap(Map<String, dynamic> m) =>
       currency: (m['currency'] as String?) ?? '',
       maxPlayers: (m['maxPlayers'] as num?)?.toInt() ?? 10,
       rakePct: (m['rakePct'] as num?)?.toDouble() ?? 0,
+      chipValue: (m['chipValue'] as num?)?.toDouble() ?? 1,
+      trackSettlement: (m['trackSettlement'] as bool?) ?? true,
+      chipSetId: m['chipSetId'] as String?,
     );
 
 Map<String, dynamic> cashPlayerToMap(CashPlayer p) => {
@@ -971,7 +992,7 @@ Group groupFromMap(Map<String, dynamic> m) => Group(
       notifications: _mapList(m['notifications'] as List? ?? const [])
           .map(appNotificationFromMap)
           .toList(),
-      icon: (m['icon'] as String?) ?? '♠️',
+      icon: (m['icon'] as String?) ?? '♠',
       pinned: (m['pinned'] as bool?) ?? false,
       tableSettings: m['tableSettings'] == null
           ? TableSettings.fallback

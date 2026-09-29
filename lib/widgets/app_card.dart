@@ -12,6 +12,11 @@ import 'interactive_scale.dart';
 /// Uses a frosted-glass surface with semi-transparent background, subtle
 /// inner highlight, and ambient primary glow. Hover lifts the card with
 /// enhanced shadow when [onTap] is provided.
+///
+/// §B3 gives Card an 18 px radius, which [AppRadius.card] holds. It is the
+/// default here because `AppCard` is the app's one card surface — 144 call
+/// sites inherit it, and a hard-coded 12 at each of those would be the same
+/// bug 144 times over.
 class AppCard extends StatefulWidget {
   const AppCard({
     super.key,
@@ -22,7 +27,7 @@ class AppCard extends StatefulWidget {
     this.margin,
     this.color,
     this.borderColor,
-    this.radius = AppRadius.md,
+    this.radius = AppRadius.card,
   });
 
   final Widget child;

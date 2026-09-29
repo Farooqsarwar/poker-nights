@@ -242,6 +242,17 @@ class _LandingScreenState extends State<LandingScreen> {
                   },
                 ),
               ),
+              const SizedBox(height: AppSpacing.sm),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: AppButton(
+                  variant: AppButtonVariant.ghost,
+                  size: AppButtonSize.md,
+                  fullWidth: true,
+                  onPressed: () => context.go(RoutePaths.quick),
+                  child: const Text('Start a game now'),
+                ),
+              ),
               const SizedBox(height: AppSpacing.md),
 
               // The free tier, said plainly at the moment of hesitation.
@@ -573,11 +584,12 @@ class _LandingScreenState extends State<LandingScreen> {
     const faqs = [
       (
         'Is it free?',
-        'Hosting one table of up to nine active players is free, and that is '
-            'a whole tournament — the clock, check-in, seating, rebuys, '
-            'add-ons, knockouts and payouts. Premium is for scale and depth: '
-            'more tables, manual seating and balancing, saved presets, ICM '
-            'and KO payouts, advanced stats and TV customisation.',
+        'Yes, and it is a whole tournament — the clock, check-in, seating, '
+            'rebuys, add-ons, knockouts, ICM, payouts, cash games and one TV '
+            'display, with no limit on how many tournaments you run. Premium '
+            'is for scale and depth: more than one table, seasons and points, '
+            'custom TV layouts and more displays, progressive and mystery '
+            'bounties, unlimited templates and graphs and export.',
       ),
       (
         'Fifteen said yes. What if twenty turn up?',

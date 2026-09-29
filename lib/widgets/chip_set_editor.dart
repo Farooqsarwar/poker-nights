@@ -298,7 +298,7 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
           Text(
             'Two colours share the same value. Give each colour its own '
             'denomination.',
-            style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+            style: AppTypography.bodyXs.copyWith(color: AppColors.destructiveText),
           ),
           const SizedBox(height: AppSpacing.sm),
         ],

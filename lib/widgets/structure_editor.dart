@@ -134,7 +134,7 @@ class _StructureEditorState extends State<StructureEditor> {
           const SizedBox(height: AppSpacing.sm),
           Text(
             'SB and BB must be positive.',
-            style: AppTypography.bodyXs.copyWith(color: AppColors.destructive),
+            style: AppTypography.bodyXs.copyWith(color: AppColors.destructiveText),
           ),
         ],
         const SizedBox(height: AppSpacing.md),

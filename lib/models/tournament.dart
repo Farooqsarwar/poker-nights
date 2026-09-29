@@ -250,49 +250,6 @@ const double kEarlyArrivalBonusPct = 0.125;
 /// everybody.
 const int kEarlyArrivalCutoffMins = 30;
 
-/// How steeply the prize pool falls away from first place.
-///
-/// The engine already offered a choice of how MANY places to pay. It offered no
-/// choice of how the money is spread across them, so a host who wanted three
-/// paid places but a flatter split had nowhere to say it — their only lever was
-/// to pay a fourth place they did not want to pay.
-///
-/// [standard] is the client's own section-25 reference style and is left
-/// untouched: same weights, same reference table, same figures as before. The
-/// other two are geometric curves — each place gets [ratio] times the one above
-/// — which is the shape every other tournament tool uses and the one the
-/// client's spec names.
-enum PayoutShape {
-  /// The reference style (73/27, 57/30/13, 56/30/10/4). The default, and the
-  /// only shape that consults the section-25 reference table.
-  standard,
-
-  /// Steeper than standard: a bigger first prize, a thinner tail.
-  topHeavy,
-
-  /// Shallower than standard: the min-cash is worth collecting.
-  flat;
-
-  /// Decay per place for the geometric shapes. Unused by [standard], which
-  /// carries explicit per-count weights instead.
-  double get ratio => switch (this) {
-        PayoutShape.standard => 0.65,
-        PayoutShape.topHeavy => 0.50,
-        PayoutShape.flat => 0.90,
-      };
-
-  String get label => switch (this) {
-        PayoutShape.standard => 'Standard',
-        PayoutShape.topHeavy => 'Top heavy',
-        PayoutShape.flat => 'Flat',
-      };
-
-  String get blurb => switch (this) {
-        PayoutShape.standard => 'The recommended split for this field and pool.',
-        PayoutShape.topHeavy => 'More to the winner, less down the list.',
-        PayoutShape.flat => 'Closer together — the last paid place still earns.',
-      };
-}
 
 /// Parameters used to generate a tournament structure.
 class TournamentParams {
@@ -323,7 +280,6 @@ class TournamentParams {
     this.reEntryChips,
     this.addOnChips,
     this.levelDurationMins,
-    this.payoutShape = PayoutShape.standard,
     this.format,
     this.maxReEntries,
     this.shootoutTables,
@@ -400,7 +356,6 @@ class TournamentParams {
   /// How steeply the prize pool falls away from first place. Defaults to the
   /// reference style, so every tournament that predates the choice splits its
   /// pool exactly as it always did.
-  final PayoutShape payoutShape;
 
   final TournamentFormat? format;
   final int? maxReEntries;
@@ -588,7 +543,6 @@ class TournamentParams {
     int? reEntryChips,
     int? addOnChips,
     int? levelDurationMins,
-    PayoutShape? payoutShape,
     TournamentFormat? format,
     int? maxReEntries,
     int? shootoutTables,
@@ -632,7 +586,6 @@ class TournamentParams {
         reEntryChips: reEntryChips ?? this.reEntryChips,
         addOnChips: addOnChips ?? this.addOnChips,
         levelDurationMins: levelDurationMins ?? this.levelDurationMins,
-        payoutShape: payoutShape ?? this.payoutShape,
         format: format ?? this.format,
         maxReEntries: maxReEntries ?? this.maxReEntries,
         shootoutTables: shootoutTables ?? this.shootoutTables,

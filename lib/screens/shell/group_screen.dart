@@ -59,7 +59,7 @@ class _GroupScreenState extends State<GroupScreen> {
             },
             child: Text(
               'Leave',
-              style: TextStyle(color: AppColors.destructive),
+              style: TextStyle(color: AppColors.destructiveText),
             ),
           ),
         ],
@@ -530,7 +530,8 @@ class _GroupScreenState extends State<GroupScreen> {
     AppProvider app,
     Group group,
   ) {
-    var maxPerTable = group.tableSettings.maxPerTable;
+    // Build Spec G1: 4 to 10 seats per table (older groups may hold more).
+    var maxPerTable = group.tableSettings.maxPerTable.clamp(4, 10);
     var randomize = group.tableSettings.randomizeByDefault;
     showAppModal(
       context: context,
@@ -558,7 +559,7 @@ class _GroupScreenState extends State<GroupScreen> {
                 ),
                 IconButton(
                   tooltip: 'Fewer players per table',
-                  onPressed: maxPerTable <= 6
+                  onPressed: maxPerTable <= 4
                       ? null
                       : () => setState(() => maxPerTable--),
                   icon: const Icon(Icons.remove_circle_outline),
@@ -572,7 +573,7 @@ class _GroupScreenState extends State<GroupScreen> {
                 ),
                 IconButton(
                   tooltip: 'More players per table',
-                  onPressed: maxPerTable >= 12
+                  onPressed: maxPerTable >= 10
                       ? null
                       : () => setState(() => maxPerTable++),
                   icon: const Icon(Icons.add_circle_outline),

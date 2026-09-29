@@ -13,6 +13,20 @@ extension AppProviderPlayers on AppProvider {
   void eliminatePlayer(String playerId, {String? koRecipientId, String? idempotencyKey}) {
     _forceClaimEditor();
     if (!_isGameAuthority) return;
+    // A bust is idempotent (Technical section "Sync"): "a second bust for a
+    // player who is already out is a no-op - no second bounty, no second
+    // place."
+    //
+    // The auto-derived idempotency key does NOT cover this. `_claimIdempotency`
+    // folds the *expected next* revision into its key, so a second tap lands
+    // on a fresh revision and reads as a new action rather than a replay - it
+    // only ever catches the same write arriving twice over the wire. Every
+    // sibling action here (grantRebuy, grantReEntry, grantAddOn) refuses a
+    // target that is already out; this was the one that did not, so a
+    // double tap re-took the place, paid a second bounty, and wrote a second
+    // audit line for a player who had already gone home.
+    final target = _currentGame!.players.where((p) => p.id == playerId).firstOrNull;
+    if (target == null || target.eliminated) return;
     final (rev, key) =
         _claimIdempotency(idempotencyKey ?? '', action: 'eliminatePlayer', target: playerId);
     if (rev == null) return; // replayed action — already applied
@@ -736,10 +750,7 @@ extension AppProviderPlayers on AppProvider {
         .where((p) => p.checkedIn && p.confirmed && p.id != playerId)
         .length;
     if (!canHostPlayers(alreadyIn + 1)) {
-      lastRsvpError = Entitlements.hostingBlockedReason(
-        premiumTier,
-        alreadyIn + 1,
-      );
+      lastRsvpError = hostingBlockedReason(alreadyIn + 1);
       if (!_disposed) notifyListeners();
       return;
     }
@@ -747,14 +758,20 @@ extension AppProviderPlayers on AppProvider {
     // §25.1a. Eligibility only — the chip bonus itself cannot be computed
     // until the starting stack is final, which happens at Start
     // ([AppProviderTimer.startTimer]), not here. A player who checks in,
-    // cancels, and checks in again after the cutoff loses eligibility, since
+    // cancels, and checks in again after the start loses eligibility, since
     // this is recomputed fresh every call rather than sticking once true.
+    //
+    // Spec D6 / T32 draws the line at the scheduled start itself. This used to
+    // pass `settings.effectiveEarlyArrivalCutoffMins` (30) to
+    // `isEarlyArrivalEligible`, which demanded arrival 30 minutes early and so
+    // refused the bonus to someone who was approved 30 seconds before the
+    // first shuffle — inside the 10-minute check-in window, and exactly who
+    // the clause is about.
     final settings = _currentGame!.settings;
-    final earlyArrivalBonusEligible = isEarlyArrivalEligible(
+    final earlyArrivalBonusEligible = isEarlyArrivalApproved(
       bonusEnabled: settings.earlyArrivalBonusEnabled,
       scheduledStart: settings.scheduledStart,
       now: _serverNow,
-      cutoffMins: settings.effectiveEarlyArrivalCutoffMins,
     );
 
     _pushUndo();
@@ -931,6 +948,40 @@ extension AppProviderPlayers on AppProvider {
     addAnnouncement('${player.name} walked in and is checked in.', true);
     if (!_disposed) notifyListeners();
     return null;
+  }
+
+  /// Quick start (C0): seats [count] unnamed players, all checked in, in one
+  /// step. "The clock doesn't need names" -- players who join by code appear
+  /// under their own name later. Ids share one timestamp plus an index, so
+  /// adding many in a tight loop cannot collide the way [addWalkInPlayer]'s
+  /// millisecond ids would.
+  void addQuickPlayers(int count) {
+    _forceClaimEditor();
+    final game = _currentGame;
+    if (game == null || count < 1 || !_isGameAuthority) return;
+    _pushUndo();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final added = [
+      for (var i = 0; i < count; i++)
+        Player(
+          id: 'p-$stamp-$i',
+          name: 'Player ${game.players.length + i + 1}',
+          isGuest: false,
+          rsvp: null,
+          checkedIn: true,
+          confirmed: true,
+          eliminated: false,
+          rebuys: 0,
+          hasAddOn: false,
+          knockouts: 0,
+          table: 0,
+          seat: 0,
+          active: true,
+        ),
+    ];
+    _currentGame = game.copyWith(players: [...game.players, ...added]);
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
   }
 
   void confirmGuest(String guestId) {

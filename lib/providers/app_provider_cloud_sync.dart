@@ -364,6 +364,9 @@ extension AppProviderCloudSync on AppProvider {
   bool get _isGameAuthority =>
       isAdmin &&
       _currentGame != null &&
+      // §E2 rule 1: never take authority over a game a newer build wrote --
+      // saving it whole would drop fields this build cannot see.
+      !_currentGame!.writtenByNewerBuild &&
       (_currentGame!.editorDeviceId.isNotEmpty &&
           _currentGame!.editorDeviceId == _repo.deviceId) &&
       (_tabLeader?.isLeader ?? true);

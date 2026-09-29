@@ -4,35 +4,32 @@ import 'dart:math';
 class Formatters {
   Formatters._();
 
-  /// Chip COUNTS only: 12500 -> '12.5K', 1500000 -> '1.5M', 400 -> '400'.
-  ///
-  /// Never use this for money. Rounding an amount misstates it — a 1,250 prize
-  /// pool rendered as "1.3K" and a 1,150 payout as "1.2K" — which breaks the
-  /// exact reconciliation 14-024 expects a reader to be able to do. Use
-  /// [prize] for anything denominated in buy-ins.
+  /// The level-change sentence, in the words the voice uses (Addendum 2 #2):
+  /// "Level 4. Blinds 5 and 10, ante 10." One place, so the screen-reader live
+  /// region, the announcement feed and the spoken line cannot drift apart.
+  static String levelSpoken(int level, int sb, int bb, [int? ante]) =>
+      'Level $level. Blinds $sb and $bb${ante != null ? ', ante $ante' : ''}.';
+
+  /// Chip counts and blinds as plain integers with thousands separators:
+  /// 12500 -> '12,500' (Build Spec E16). Nothing is abbreviated: "k" is only for
+  /// the values printed on a chip swatch, and never for money — rounding an
+  /// amount misstates it (a 1,250 prize pool as "1.3K"), which breaks the exact
+  /// reconciliation 14-024 expects a reader to be able to do.
   static String chips(num n) {
-    final value = n.round();
-    if (value >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(1)}M';
-    }
-    if (value >= 1000) {
-      final decimals = value % 1000 == 0 ? 0 : 1;
-      return '${(value / 1000).toStringAsFixed(decimals)}K';
-    }
-    return value.toString();
+    final v = n.round();
+    return '${v < 0 ? '-' : ''}${_grouped(v.abs())}';
   }
 
-  /// Money, exactly as it is, with thousands separators and no currency
-  /// symbol (04-013, User Flow section 3.4: display "15" or "15 + 5", never
-  /// a symbol). Amounts are never abbreviated.
-  ///
-  /// Named [prize] rather than `money` because the cash module already owns a
-  /// two-argument `money(currency, amount)` for its decimal values; this one
-  /// is for whole-unit tournament figures (prize pool, payouts).
-  static String prize(num n) {
-    final v = n.round();
-    final digits = v.abs().toString();
-    final sb = StringBuffer(v < 0 ? '-' : '');
+  /// The symbol this phone prints in front of money, chosen in Settings under
+  /// ON THIS PHONE (F2). Empty by default: the spec keeps money plain ("15" or
+  /// "15 + 5") unless the person asks for a symbol, and it is never shared
+  /// with the group -- it changes how this device shows amounts, not the amounts.
+  /// Chip counts never carry it.
+  static String currencySymbol = '';
+
+  static String _grouped(int nonNegative) {
+    final digits = nonNegative.toString();
+    final sb = StringBuffer();
     for (var i = 0; i < digits.length; i++) {
       if (i > 0 && (digits.length - i) % 3 == 0) sb.write(',');
       sb.write(digits[i]);
@@ -40,10 +37,27 @@ class Formatters {
     return sb.toString();
   }
 
-  /// 725 -> '12:05'.
+  /// Money, exactly as it is, with thousands separators. No currency symbol
+  /// unless this phone chose one (04-013, User Flow section 3.4: display "15"
+  /// or "15 + 5"). Amounts are never abbreviated.
+  ///
+  /// Named [prize] rather than `money` because the cash module already owns a
+  /// two-argument `money(currency, amount)` for its decimal values; this one
+  /// is for whole-unit tournament figures (prize pool, payouts).
+  static String prize(num n) {
+    final v = n.round();
+    return '${v < 0 ? '-' : ''}$currencySymbol${_grouped(v.abs())}';
+  }
+
+  /// 725 -> '12:05'; over an hour 4800 -> '1:20:00' (Build Spec E16).
   static String time(int seconds) {
-    final m = (seconds ~/ 60).toString().padLeft(2, '0');
+    final h = seconds ~/ 3600;
     final s = (seconds % 60).toString().padLeft(2, '0');
+    if (h > 0) {
+      final m = ((seconds % 3600) ~/ 60).toString().padLeft(2, '0');
+      return '$h:$m:$s';
+    }
+    final m = (seconds ~/ 60).toString().padLeft(2, '0');
     return '$m:$s';
   }
 
@@ -73,29 +87,32 @@ class Formatters {
     return '${h}h';
   }
 
-  /// Format money without currency symbol, always 2 decimals.
-  /// [amount] is a double dollar value (cash game UI legacy — prefer [moneyCents]).
+  /// Format money without currency symbol: whole units unless the amount has
+  /// cents (Build Spec E16). [amount] is a double dollar value (cash game UI
+  /// legacy — prefer [moneyCents]).
   static String money(String currency, double amount) {
-    return amount.toStringAsFixed(2);
+    return moneyCents(currency, (amount * 100).round());
   }
 
-  /// Format money from integer cents without currency symbol.
-  /// E.g. moneyCents('', 15000) == '150.00'
+  /// Format money from integer cents without currency symbol, with thousands
+  /// separators. Whole units unless there are cents:
+  /// moneyCents('', 15000) == '150', moneyCents('', 15025) == '150.25'.
   static String moneyCents(String currency, int cents) {
-    final sign = (cents < 0 && cents > -100) ? '-' : '';
-    final dollars = cents ~/ 100;
-    final remainder = (cents % 100).abs();
-    return '$sign$dollars.${remainder.toString().padLeft(2, '0')}';
+    final sign = cents < 0 ? '-' : '';
+    final abs = cents.abs();
+    final whole = '$currencySymbol${_grouped(abs ~/ 100)}';
+    final remainder = abs % 100;
+    if (remainder == 0) return '$sign$whole';
+    return '$sign$whole.${remainder.toString().padLeft(2, '0')}';
   }
 
-  /// Signed money without currency symbol, e.g. '+20.00' / '-5.00'.
+  /// Signed money without currency symbol, e.g. '+20' / '-5.50'.
   /// [amount] is a double dollar value (cash game UI legacy — prefer [signedMoneyCents]).
   static String signedMoney(String currency, double amount) {
-    final sign = amount >= 0 ? '+' : '-';
-    return '$sign${amount.abs().toStringAsFixed(2)}';
+    return signedMoneyCents(currency, (amount * 100).round());
   }
 
-  /// Signed money from integer cents, e.g. '+20.00' / '-5.00'.
+  /// Signed money from integer cents, e.g. '+20' / '-5.50'.
   static String signedMoneyCents(String currency, int cents) {
     final sign = cents >= 0 ? '+' : '-';
     return '$sign${moneyCents(currency, cents.abs())}';
@@ -120,6 +137,18 @@ class Formatters {
     final hh = dt.hour.toString().padLeft(2, '0');
     final mm = dt.minute.toString().padLeft(2, '0');
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}, $hh:$mm';
+  }
+
+  /// 'Fri 3 Oct · 18:00', the form the RSVP deadline line uses (spec C3).
+  static String weekdayDateTime(DateTime dt) {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '${days[dt.weekday - 1]} ${dt.day} ${months[dt.month - 1]} · $hh:$mm';
   }
 
   /// Average stack rounded to nearest 100.

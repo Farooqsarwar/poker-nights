@@ -1,8 +1,10 @@
+import '../utils/payout_bridge.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
 import '../app/route_paths.dart';
+import '../utils/cash_settlement.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'
     show DocumentSnapshot, FieldValue, FirebaseException;
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -14,8 +16,10 @@ import 'package:localstore/localstore.dart';
 import '../models/app_notification.dart';
 import '../models/cash_game.dart';
 import '../models/calibration_record.dart';
+import '../models/chat_report.dart';
 import '../models/game.dart';
 import '../models/group.dart';
+import '../models/imported_night.dart';
 import '../models/live_game.dart';
 import '../models/payment_record.dart';
 import '../models/shot_clock.dart';
@@ -339,6 +343,7 @@ class AppProvider extends ChangeNotifier {
     // cannot run until the build phase has finished, so the notification is
     // always delivered from outside a build no matter which branch is taken.
     await null;
+    Payments.userId = _repo.currentUid;
     final server = _backendUp ? await _repo.fetchPremiumEntitlement() : false;
     final local = demoPremiumEnabled
         ? await Payments.instance.currentTier()
@@ -357,9 +362,21 @@ class AppProvider extends ChangeNotifier {
   /// view — can say "granted" rather than implying a purchase happened.
   bool premiumIsServerGranted = false;
 
-  /// Whether this device may host a field of [players] (addendum §3, §4).
-  bool canHostPlayers(int players) =>
-      Entitlements.canHost(premiumTier, players);
+  /// Whether this device may host a field of [players] (D4/D5): free stops at
+  /// the second table, so this is "does the field still fit one table".
+  bool canHostPlayers(int players) => Entitlements.canHost(
+    premiumTier,
+    players,
+    maxPerTable: effectiveTableSettings.maxPerTable,
+  );
+
+  /// The host-facing reason [canHostPlayers] said no, or null.
+  String? hostingBlockedReason(int players) =>
+      Entitlements.hostingBlockedReason(
+        premiumTier,
+        players,
+        maxPerTable: effectiveTableSettings.maxPerTable,
+      );
 
   String? lastRsvpError;
 
@@ -377,7 +394,10 @@ class AppProvider extends ChangeNotifier {
   StreamSubscription<List<AppNotification>>? _notificationsSub;
   StreamSubscription<List<GameRequest>>? _requestsSub;
   StreamSubscription<List<CashSession>>? _cashSub;
+  StreamSubscription<List<ChatReport>>? _reportsSub;
+  StreamSubscription<List<ImportedNight>>? _importedSub;
   StreamSubscription<List<GameResultRow>>? _resultsSub;
+  StreamSubscription<List<CashSession>>? _soloSub;
   StreamSubscription<List<Map<String, dynamic>>>? _pendingInvitesSub;
 
   /// Live member-rosters per group id, so the index-derived group list on the
@@ -394,6 +414,7 @@ class AppProvider extends ChangeNotifier {
 
   /// Signature of the last stats summary pushed to roster rows (dedupe).
   String? _lastPushedStatsKey;
+  String? _lastInvitePreviewKey;
 
   /// Browser-notification delivery bookkeeping: the first inbox emission is
   /// treated as history (never pushed); afterwards only new unread ids fire.
@@ -808,10 +829,22 @@ class AppProvider extends ChangeNotifier {
   // ── Cash game ──────────────────────────────────────────────────────────────
   CashSession? _cashSession;
 
+  /// The session as it was before the last buy-in, top-up or cash-out, so the
+  /// toast's Undo (T125) can take it back.
+  CashSession? _cashUndoSnapshot;
+
   /// Completed cash sessions shown in history (checklist 16-002). Cloud-backed
   /// per group via [completedCashSessionsStream]; locally appended when the
   /// backend is unavailable.
   List<CashSession> _cashHistory = const [];
+
+  /// Games finished with no group selected — the "Solo" rows in History.
+  /// Owned by the user, so unlike [_cashHistory] this survives group switches.
+  List<CashSession> _soloHistory = const [];
+  List<ChatReport> _reports = const [];
+
+  /// Past nights the host imported into the current group (B12).
+  List<ImportedNight> _importedNights = const [];
 
   // ── Notifications ──────────────────────────────────────────────────────────
   /// Replaced by the live inbox stream once user data is subscribed; empty

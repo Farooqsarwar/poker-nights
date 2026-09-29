@@ -968,7 +968,9 @@ class _UpcomingPanel extends StatelessWidget {
               child: Column(
                 children: [
                   Text(
-                    'L${l.level}',
+                    game.structure.isCompressionLevel(l.level)
+                        ? 'L${l.level} · LATE'
+                        : 'L${l.level}',
                     style: AppTypography.mono(
                       size: 13 * scale,
                       weight: FontWeight.w700,

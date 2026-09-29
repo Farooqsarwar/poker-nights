@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -46,6 +48,11 @@ enum _GuestStep {
   /// only things that still help.
   tooLate,
   completed,
+
+  /// Spec C4/C4p. The check-in window has not opened yet, so there is nothing
+  /// this guest may do but wait — with a countdown and the time the door
+  /// opens, rather than a message that leaves them guessing.
+  checkInLocked,
 }
 
 /// Guest join flow mirroring the web `GuestFlowPage`.
@@ -70,6 +77,15 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   int? _selectedSlot;
   bool _submittingCheckIn = false;
 
+  /// Spec C4/C4p. Drives the locked card's countdown, which has to tick with
+  /// no provider write to prompt a rebuild. Armed only while the door is shut
+  /// and stood down the moment it opens — see [_syncWindowTicker].
+  Timer? _windowTicker;
+
+  /// The second count last handed to the countdown, so a tick that changed
+  /// nothing does not rebuild the tree.
+  int? _lastWindowSeconds;
+
   @override
   void initState() {
     super.initState();
@@ -82,7 +98,12 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       _selectedSlot = session.slot;
       _nameController.text = session.name;
       final guest = _matchGuest(game, session);
-      _step = _routeAfterBooking(game, guest, sessionPending: true);
+      _step = _routeAfterBooking(
+        game,
+        guest,
+        sessionPending: true,
+        now: DateTime.now(),
+      );
     } else {
       // No saved session: show the event details first, then claim.
       _step = game == null ? _GuestStep.enterCode : _GuestStep.eventIntro;
@@ -91,15 +112,23 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
 
   /// Decides where a guest who now owns a booking should land — straight into
   /// the confirmed seat view (from where they enter the live match) when the
-  /// game is already live, or the "come back later" screen when it hasn't
-  /// started yet.
+  /// game is already live, the locked waiting card before the check-in window
+  /// opens, or the "come back later" screen when it never will.
   static _GuestStep _routeAfterBooking(
     LiveGame game,
     Player? guest, {
     bool sessionPending = false,
+    required DateTime now,
   }) {
     if (game.status == LiveGameStatus.completed) {
       return _GuestStep.completed;
+    }
+    // Spec C4/C4p. The status alone was the whole test, and it opened the door
+    // the moment the host published the game — days before a 7pm start. The
+    // window is a wall-clock fact, so it is asked of the model here rather
+    // than inferred from a status the document happens to be sitting in.
+    if (!game.isCheckInOpenAt(now)) {
+      return _GuestStep.checkInLocked;
     }
     // sessionPending: this device holds a persisted booking for this game, but
     // the row is not in the projection yet (the request is still travelling to
@@ -122,6 +151,41 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     return game.status.isActiveLive ? _GuestStep.confirmed : _GuestStep.notLive;
   }
 
+  /// Spec C4/C4p. Arms a one-second tick only while the check-in window is
+  /// still shut, and stands it down the frame the door opens.
+  ///
+  /// Without this the locked card would freeze at whatever second it was
+  /// rendered on and the guest would have to pull-to-refresh to discover the
+  /// window had opened — the clause asks for the state to resolve by itself.
+  /// Each tick rebuilds only when the displayed second actually changed, so a
+  /// member who leaves this screen open overnight does not spin the CPU.
+  void _syncWindowTicker(CheckInWindow window) {
+    if (window.isOpen || window.opensAt == null) {
+      _lastWindowSeconds = null;
+      _windowTicker?.cancel();
+      _windowTicker = null;
+      return;
+    }
+    _lastWindowSeconds = window.secondsUntilOpen;
+    _windowTicker ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final g = context.read<AppProvider>().currentGame;
+      if (g == null) return;
+      final w = g.checkInWindowAt(DateTime.now());
+      if (w.isOpen || w.opensAt == null) {
+        _windowTicker?.cancel();
+        _windowTicker = null;
+        _lastWindowSeconds = null;
+        setState(() {});
+        return;
+      }
+      if (w.secondsUntilOpen != _lastWindowSeconds) {
+        _lastWindowSeconds = w.secondsUntilOpen;
+        setState(() {});
+      }
+    });
+  }
+
   /// Renders the schedule date/time, uppercasing the time suffix so e.g.
   /// "8:00 PM" reads consistently.
   static String _formatSchedule(String date, String time) {
@@ -130,6 +194,25 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       return '$date · ${t.toUpperCase()}';
     }
     return '$date · $t';
+  }
+
+  /// Spec C4/C4p. "Opens at 19:50" — the instant the check-in window opens,
+  /// not the raw configured string, so a host who wrote "8:00 PM" and a host
+  /// who wrote "20:00" both land on a clock the guest can read.
+  ///
+  /// [GameSettings.scheduledStart] parses `DateTime.tryParse`, which only
+  /// accepts a 24-hour `HH:mm` (or `HH:mm:ss`); a 12-hour string such as
+  /// "8:00 PM" yields null, and there is then no instant to subtract ten
+  /// minutes from. In that case the configured time is shown as the host
+  /// typed it rather than a guessed, wrong "08:00".
+  static String _formatOpensAt(LiveGame game, CheckInWindow window) {
+    final opensAt = window.opensAt;
+    if (opensAt != null) {
+      final h = opensAt.hour.toString().padLeft(2, '0');
+      final m = opensAt.minute.toString().padLeft(2, '0');
+      return '$h:$m';
+    }
+    return game.settings.time.trim().toUpperCase();
   }
 
   /// Finds the guest in [game]'s player list that matches the stored session.
@@ -169,6 +252,8 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
 
   @override
   void dispose() {
+    _windowTicker?.cancel();
+    _windowTicker = null;
     _codeController.dispose();
     _nameController.dispose();
     super.dispose();
@@ -202,7 +287,12 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         final guest = _matchGuest(game, session);
         setState(() {
           _codeError = null;
-          _step = _routeAfterBooking(game, guest, sessionPending: true);
+          _step = _routeAfterBooking(
+            game,
+            guest,
+            sessionPending: true,
+            now: DateTime.now(),
+          );
         });
       } else {
         setState(() {
@@ -224,6 +314,15 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
     if (_selectedInviter == null ||
         _selectedSlot == null ||
         _nameController.text.trim().isEmpty) {
+      return;
+    }
+    // Spec C4/C4p. The locked card is the answer to a closed window, so the
+    // guard sits on the action as well as on the button that leads to it — a
+    // screen opened before the window and tapped afterwards (backgrounded tab,
+    // restored scroll, a second device) must not slip a request through.
+    final game = app.currentGame;
+    if (game != null && !game.isCheckInOpenAt(DateTime.now())) {
+      setState(() => _step = _GuestStep.checkInLocked);
       return;
     }
     setState(() => _submittingCheckIn = true);
@@ -267,12 +366,13 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
 
     // Booked (new) or confirmed (re-identified): route by whether the game is
     // live. Live -> seat view (from there they enter the match); not live ->
-    // "come back later" with the start schedule.
-    final game = app.currentGame;
+    // "come back later" with the start schedule. `game` was read above, before
+    // the await, and is re-read here only if the window closed in between.
+    final current = game ?? app.currentGame;
     final guest = _currentGuest();
     setState(() {
       _nameError = null;
-      _step = _routeAfterBooking(game!, guest);
+      _step = _routeAfterBooking(current!, guest, now: DateTime.now());
     });
   }
 
@@ -389,6 +489,37 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
       }
     }
 
+    // Spec C4/C4p. Every step whose next move would request a check-in is
+    // answered with the locked card while the window is shut, so a guest is
+    // never walked through three screens to be refused at the last one.
+    // Derived per build (plus the ticker below) rather than stored, which is
+    // what lets the door open by itself. A guest the host has already confirmed
+    // is left alone — they are done, and re-locking them would throw away a
+    // seat they legitimately hold.
+    final checkIn = game.checkInWindowAt(DateTime.now());
+    _syncWindowTicker(checkIn);
+    if (!checkIn.isOpen && !guestConfirmed) {
+      const lockable = {
+        _GuestStep.chooseInviter,
+        _GuestStep.chooseSlot,
+        _GuestStep.enterName,
+        _GuestStep.notLive,
+      };
+      if (lockable.contains(view)) view = _GuestStep.checkInLocked;
+    } else if (checkIn.isOpen && view == _GuestStep.checkInLocked) {
+      // `checkInLocked` is a display state, never a destination. Two places
+      // above do store it — the intro button and the submit guard — because
+      // they want the locked card *now*, and the window is what put them there.
+      // The one thing they must not do is leave the guest stranded on it, so
+      // this undoes them the moment the window arrives. Reached by the step
+      // the guest had actually got to, not a fixed one: someone who was
+      // refused at the door with a typed name keeps the name, and the intro
+      // button's guest starts from the top as it always would have.
+      view = _selectedInviter == null
+          ? _GuestStep.chooseInviter
+          : (_selectedSlot == null ? _GuestStep.chooseSlot : _GuestStep.enterName);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -479,6 +610,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           _GuestStep.completed => _buildCompleted(),
           _GuestStep.wrongOwner => _buildWrongOwner(),
           _GuestStep.enterCode => const SizedBox.shrink(),
+          _GuestStep.checkInLocked => _buildCheckInLocked(game, checkIn),
         },
       ],
     );
@@ -652,7 +784,15 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           AppButton(
             fullWidth: true,
             size: AppButtonSize.lg,
-            onPressed: () => setState(() => _step = _GuestStep.chooseInviter),
+            // Spec C4/C4p. The event details are worth reading hours early; the
+            // claim is not, because claiming IS the check-in. Tapping through
+            // to the locked card beats a button that greets a guest by taking
+            // them to a form they cannot yet submit.
+            onPressed: () => setState(
+              () => _step = game.isCheckInOpenAt(DateTime.now())
+                  ? _GuestStep.chooseInviter
+                  : _GuestStep.checkInLocked,
+            ),
             child: AppIconLabel(
               label: 'Claim My Guest Place',
               trailing: Icons.arrow_forward,
@@ -868,7 +1008,11 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                 (_nameController.text.trim().isEmpty || _submittingCheckIn)
                 ? null
                 : _requestCheckIn,
-            child: const Text('Confirm'),
+            // Spec C4/C4p. This step only ever becomes reachable inside the
+            // window (the claim chain is short-circuited to the locked card
+            // before it), so the button is the clause's "I'm here — check me
+            // in": the guest is standing at the door, not filling in a form.
+            child: const Text(kGuestCheckInCta),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
@@ -927,6 +1071,17 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
           ],
         ),
       ],
+    );
+  }
+
+  /// Spec C4/C4p. The check-in window has not opened, so this is the whole
+  /// screen: a lock, the time the door opens, why that time, and a live
+  /// countdown.
+  Widget _buildCheckInLocked(LiveGame game, CheckInWindow window) {
+    return GuestCheckInLockedCard(
+      game: game,
+      window: window,
+      onDone: _startOver,
     );
   }
 
@@ -1521,6 +1676,104 @@ class _BackLink extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Spec C4/C4p. The label of the call to action the clause specifies, once the
+/// window has opened: "I'm here — check me in". Named so the wording is one
+/// constant rather than a string buried in a build method.
+const String kGuestCheckInCta = 'I\'m here — check me in';
+
+/// Spec C4/C4p. The locked check-in card: a lock, the time the window opens,
+/// why that time, and a live countdown.
+///
+/// Public and standalone so the copy the clause specifies can be tested
+/// without standing up the whole guest flow (which needs a Firebase-backed
+/// AppProvider). It takes a resolved [CheckInWindow] rather than reading the
+/// clock, which is what lets the countdown be asserted second by second — the
+/// parent recomputes it on every tick instead of latching it, so the card
+/// resolves into the open state on its own when the window arrives.
+class GuestCheckInLockedCard extends StatelessWidget {
+  const GuestCheckInLockedCard({
+    super.key,
+    required this.game,
+    required this.window,
+    this.onDone,
+  });
+
+  final LiveGame game;
+  final CheckInWindow window;
+  final VoidCallback? onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _StateCard(
+          tile: const IconTile(
+            icon: Icons.lock_outline,
+            tone: IconTileTone.neutral,
+            size: 52,
+          ),
+          title: 'Check-in isn\'t open yet',
+          message:
+              'Opens at ${_GuestFlowScreenState._formatOpensAt(game, window)}',
+          footnote: '10 minutes before the start, automatically.',
+        ),
+        if (window.opensAt != null && !window.isOpen) ...[
+          const SizedBox(height: AppSpacing.lg),
+          AppCard(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'Opens in',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                // The live region is on the card message above; a screen
+                // reader does not need the same fact announced again every
+                // second.
+                ExcludeSemantics(
+                  child: AppTimer(
+                    key: ValueKey(window.secondsUntilOpen),
+                    secondsRemaining: window.secondsUntilOpen,
+                    size: 40,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        StatRowsCard(
+          rows: [
+            StatRow(
+              'Scheduled for',
+              value: _GuestFlowScreenState._formatSchedule(
+                game.settings.date,
+                game.settings.time,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        if (onDone != null)
+          AppButton(
+            variant: AppButtonVariant.secondary,
+            size: AppButtonSize.lg,
+            fullWidth: true,
+            onPressed: onDone,
+            child: const Text('Done'),
+          ),
+      ],
     );
   }
 }

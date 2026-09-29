@@ -47,6 +47,7 @@ import 'package:poker_night/models/cash_game.dart';
 import 'package:poker_night/models/chip_color.dart';
 import 'package:poker_night/models/tournament.dart';
 import 'package:poker_night/services/payment_service.dart';
+import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/utils/tournament_engine.dart';
 import 'package:provider/provider.dart';
 
@@ -65,7 +66,25 @@ import 'package:provider/provider.dart';
 void main() {
   setUp(() {
     AppColors.currentPalette = ThemePalettes.forId('red');
+
+    // Every screen here builds a real AppProvider, and the provider mirrors a
+    // live game into the device-local crash-recovery store on each change.
+    // That store is `Localstore` writing to `recovery/` in the *process
+    // working directory* - the repo root under `flutter test` - so every
+    // concurrent test in this file targets the same `recovery/active_game`
+    // document, and its delete-before-write step intermittently collides:
+    //
+    //   PathAccessException: Cannot delete file, path =
+    //   '...\recovery\active_game' (OS Error: The process cannot access the
+    //   file because it is being used by another process, errno = 32)
+    //
+    // It surfaces as a random, unrelated-looking failure in a 320px layout
+    // test, and is load-order dependent rather than reproducible. The store is
+    // genuinely device-local (it restores a guest's own check-in session), so
+    // no test here depends on it.
+    RecoveryService.enabled = false;
   });
+  tearDown(() => RecoveryService.enabled = true);
 
   /// google_fonts cannot fetch in the sandbox and throws per text style.
   /// Those are environment noise; anything else is a real failure, so they are

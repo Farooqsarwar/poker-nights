@@ -22,6 +22,11 @@ import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/chip_token.dart';
 
+/// Spec C6. The label of the control that ends the break early, given exactly
+/// as the clause writes it. Named so the wording is one constant rather than a
+/// string buried in a build method, and so a test can pin it.
+const String kConfirmAndResumeClock = 'Confirm & resume clock';
+
 /// Client feedback (07-018): the AI suggests an add-on price from the current
 /// player count, blinds and average stack. Stack depth (avg stack / big blind)
 /// drives the value of the add-on stack: the shorter stacks are, the more the
@@ -160,6 +165,53 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                 'Rebuys are now closed. No new players may join after this point.',
           ),
           const SizedBox(height: AppSpacing.lg),
+          // Spec C6. The break does not have to be played out, and the four
+          // steps below are a sequence the host can be slow at — a table
+          // waiting on somebody to work out a payout should not also be
+          // waiting on a countdown nobody asked for.
+          //
+          // `resumeTimer` is the real early end: it leaves `rebuypause`,
+          // starts the clock on the level the break interrupted, and — through
+          // the existing `_settingsAfterLeavingBreak` — flips the add-on
+          // window to overtime rather than forfeiting anybody's add-on to a
+          // host who settles after play resumes (addendum 2). Nothing here
+          // marks the settlement confirmed, so the money is still the host's
+          // to confirm afterwards.
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Ready to play on?',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  'End the break now and start Level '
+                  '${game.currentLevel} on the clock. Settlement stays open '
+                  'afterwards — you can finish it while the level runs.',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppButton(
+                  fullWidth: true,
+                  size: AppButtonSize.lg,
+                  // The label is itself the confirmation — a second "are you
+                  // sure?" under a button that already says "Confirm" reads as
+                  // the app not trusting its own copy. What it cannot undo is
+                  // spelled out above instead.
+                  onPressed: () => _confirmResumeClock(context, app),
+                  child: const Text(kConfirmAndResumeClock),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           // Progress
           Row(
             children: [
@@ -242,7 +294,10 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                   settings.copyWith(addOnCost: suggestedPrice),
                 );
               },
-              onConfirm: () => setState(() => _addOnsConfirmed = true),
+              onConfirm: () {
+                app.closeAddOnWindow();
+                setState(() => _addOnsConfirmed = true);
+              },
             ),
           ],
           // Step 3: Color-up
@@ -296,6 +351,19 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
         ],
       ),
     );
+  }
+
+  /// The escape hatch from a break nobody wants to sit through. Delegates
+  /// straight to [AppProvider.resumeTimer], which is the same call the clock
+  /// itself makes when a scheduled break runs out — so "resume the clock" is
+  /// one code path, not two that can disagree.
+  ///
+  /// Navigating straight to the dashboard rather than staying put: the level
+  /// is now on the clock, and the host's next job is watching it, not reading
+  /// a settlement form with a stale "Rebuys are now closed" banner.
+  void _confirmResumeClock(BuildContext context, AppProvider app) {
+    app.resumeTimer();
+    context.go(RoutePaths.hostDashboard);
   }
 }
 

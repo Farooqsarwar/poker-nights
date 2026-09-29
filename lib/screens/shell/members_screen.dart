@@ -10,6 +10,7 @@ import '../../models/group.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_avatar.dart';
+import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_modal.dart';
@@ -163,15 +164,8 @@ class MembersScreen extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  m.email,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
+                // No email line: members never see each other's addresses
+                // (Build Spec D-B3).
               ],
             ),
           ),
@@ -303,6 +297,46 @@ class MembersScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
+              if (app.isAdmin) ...[
+                AppCard(
+                  onTap: () => context.go(RoutePaths.reports),
+                  child: Row(
+                    children: [
+                      const IconTile(
+                        icon: Icons.flag_outlined,
+                        size: 40,
+                        tone: IconTileTone.soft,
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Reports', style: AppTypography.bodySm),
+                            Text(
+                              'Messages members have reported',
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (app.reportCount > 0)
+                        AppBadge(
+                          label: '${app.reportCount}',
+                          variant: AppBadgeVariant.red,
+                        ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Icon(
+                        Icons.chevron_right,
+                        color: AppColors.mutedForeground,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
               // Measured here, at the grid itself, so the two-column split
               // uses the page's real content width.
               LayoutBuilder(

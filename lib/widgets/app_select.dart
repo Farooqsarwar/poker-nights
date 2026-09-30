@@ -14,6 +14,7 @@ class AppSelect<T> extends StatefulWidget {
     required this.items,
     required this.onChanged,
     this.hint,
+    this.enabled = true,
   });
 
   final String? label;
@@ -21,6 +22,13 @@ class AppSelect<T> extends StatefulWidget {
   final List<DropdownMenuItem<T>> items;
   final ValueChanged<T?> onChanged;
   final String? hint;
+
+  /// When false the field is visible and readable but cannot be opened or
+  /// changed. Used where a control is shown for reference to someone who is
+  /// not allowed to edit it (D15's read-only structure view for a co-host), so
+  /// a greyed-out-but-present field is honest about what they are looking at
+  /// rather than an active control whose write is refused.
+  final bool enabled;
 
   @override
   State<AppSelect<T>> createState() => _AppSelectState<T>();
@@ -52,7 +60,7 @@ class _AppSelectState<T> extends State<AppSelect<T>> {
   @override
   Widget build(BuildContext context) {
     Theme.of(context);
-    return Column(
+    final field = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (widget.label != null) ...[
@@ -71,7 +79,7 @@ class _AppSelectState<T> extends State<AppSelect<T>> {
             focusNode: _focusNode,
             initialValue: widget.value,
             items: widget.items,
-            onChanged: widget.onChanged,
+            onChanged: widget.enabled ? widget.onChanged : null,
             isExpanded: true,
             dropdownColor: AppColors.card,
             borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -108,6 +116,14 @@ class _AppSelectState<T> extends State<AppSelect<T>> {
         ),
       ],
     );
+    // `onChanged: null` already stops the dropdown opening, but the glass
+    // surface keeps its full-contrast border, so a disabled field would still
+    // read as live at a glance. Dimming it is what makes D15's read-only view
+    // legible as read-only rather than as a control that happens to be broken.
+    if (!widget.enabled) {
+      return Opacity(opacity: 0.5, child: field);
+    }
+    return field;
   }
 }
 

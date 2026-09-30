@@ -7,6 +7,7 @@ import 'package:poker_night/models/user.dart';
 import 'package:poker_night/providers/app_provider.dart';
 import 'package:poker_night/screens/shell/group_chips_screen.dart';
 import 'package:poker_night/services/recovery_service.dart';
+import 'package:poker_night/utils/model_codec.dart';
 import 'package:provider/provider.dart';
 
 /// Spec B10 — the chip set a group starts from.
@@ -125,8 +126,15 @@ void main() {
   }
 
   /// The pointer the screen currently holds on the group.
-  GroupChipsScreenState stateOf(WidgetTester tester) =>
-      tester.state<GroupChipsScreenState>(find.byType(GroupChipsScreen));
+  /// The pointer as the PROVIDER holds it, which is the only place it can
+  /// survive the screen.
+  ///
+  /// These assertions used to read `GroupChipsScreenState.group`, the screen's
+  /// own working copy, and passed while nothing was written anywhere: the
+  /// choice reached no other screen, no other member's device, and nothing
+  /// that creates the next tournament. Reading the group the provider is
+  /// holding is what makes the test able to fail.
+  String? pointerOn(AppProvider app) => app.currentGroup.defaultChipSetId;
 
   /// Option cards run below the fold on the 800x600 test surface, so a bare
   /// tap lands on whatever is actually under the pointer.
@@ -185,10 +193,70 @@ void main() {
       await screen(tester, app, () async {
         await tapSet(tester, 'cs-club');
 
-        expect(stateOf(tester).group.defaultChipSetId, 'cs-club');
+        expect(pointerOn(app), 'cs-club');
         // An id, and only an id: the group's own copy of the chips would make
         // this a String of more than four characters.
-        expect(stateOf(tester).group.defaultChipSetId, isA<String>());
+        expect(pointerOn(app), isA<String>());
+      });
+    });
+
+    testWidgets('the Standard box is a real choice, not a clear', (tester) async {
+      // The standard box is on the option list with an id of its own, so
+      // picking it points the group at that box. "No saved set" is a different
+      // state -- a null pointer -- and the screen does not offer it; it is what
+      // a group that has never chosen looks like.
+      final app = provider(defaultChipSetId: 'cs-club');
+
+      await screen(tester, app, () async {
+        await tapSet(tester, 'preset-standard-500');
+        expect(pointerOn(app), 'preset-standard-500');
+      });
+    });
+
+    test('clearing the pointer nulls it on the group', () {
+      // The repository deletes the key and the codec omits it, so null has to
+      // be reachable. `Group.copyWith` treats a null argument as "keep", which
+      // is why this needed its own flag.
+      final app = AppProvider()
+        ..setUserForTesting(host)
+        ..setCurrentGroupForTesting(groupWith(defaultChipSetId: 'cs-club'));
+      app.setGroupDefaultChipSet(null);
+      expect(app.currentGroup.defaultChipSetId, isNull);
+    });
+
+    test('the pointer survives a codec round trip', () {
+      // B10 is a property of the group, so it has to be in the document. The
+      // codec entry existed; nothing wrote it, so this never ran against a
+      // real save.
+      final g = groupWith(defaultChipSetId: 'cs-club');
+      expect(groupFromMap(groupToMap(g)).defaultChipSetId, 'cs-club');
+    });
+
+    test('a group with no pointer omits the key entirely', () {
+      // What the repository deletes, and what the codec has to agree with.
+      final map = groupToMap(groupWith());
+      expect(map.containsKey('defaultChipSetId'), isFalse);
+      expect(groupFromMap(map).defaultChipSetId, isNull);
+    });
+
+    test('a non-owner cannot move the group pointer', () {
+      // Owner-only, like the other group settings: the chips are the host's
+      // money and the group's own box is not a member's to change.
+      final app = AppProvider()
+        ..setUserForTesting(member)
+        ..setCurrentGroupForTesting(groupWith())
+        ..saveChipSet('cs-club', 'Club night set', clubChips);
+      app.setGroupDefaultChipSet('cs-club');
+      expect(app.currentGroup.defaultChipSetId, isNull);
+    });
+
+    testWidgets('choosing the same set twice is not a second write',
+        (tester) async {
+      final app = provider(defaultChipSetId: 'cs-club');
+
+      await screen(tester, app, () async {
+        await tapSet(tester, 'cs-club');
+        expect(pointerOn(app), 'cs-club');
       });
     });
 
@@ -208,7 +276,7 @@ void main() {
         expect(find.text('DEFAULT'), findsOneWidget);
 
         await tapSet(tester, 'cs-default');
-        expect(stateOf(tester).group.defaultChipSetId, 'cs-default');
+        expect(pointerOn(app), 'cs-default');
         expect(
           find.descendant(
             of: find.byKey(const ValueKey('chipSetOption-cs-club')),
@@ -256,7 +324,7 @@ void main() {
           findsOneWidget,
         );
         // The pointer did not move, and it still points at the same set.
-        expect(stateOf(tester).group.defaultChipSetId, 'cs-club');
+        expect(pointerOn(app), 'cs-club');
       });
     });
   });

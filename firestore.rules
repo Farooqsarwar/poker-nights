@@ -55,6 +55,32 @@ service cloud.firestore {
           );
     }
 
+    // The group's owner, and only the owner. `isGroupAdmin` above also admits a
+    // member row with role 'admin' (a co-host), which is correct for the
+    // operational half of the night but wrong for the group's own identity:
+    // B9 makes the group owner the only person who can re-roll the join code or
+    // delete the group, and the provider gates both that way. Without this
+    // distinction a co-host could rewrite the group document from a raw
+    // Firestore write even though the UI and the provider refuse them.
+    function isGroupOwner(gid) {
+      return signedIn()
+          && exists(/databases/$(database)/documents/groups/$(gid))
+          && get(/databases/$(database)/documents/groups/$(gid)).data.ownerId
+              == request.auth.uid;
+    }
+
+    // The fields on the group document that define who the group belongs to and
+    // how a stranger gets in. A co-host may keep editing the rest of the meta
+    // doc, but never these: `ownerId` is the ownership itself, and `joinCode` is
+    // the group's only front door (E17 fixes its shape, and a re-roll retires
+    // the old one atomically in the repository).
+    function groupIdentityUnchanged() {
+      return request.resource.data.get('ownerId', null)
+              == resource.data.get('ownerId', null)
+          && request.resource.data.get('joinCode', null)
+              == resource.data.get('joinCode', null);
+    }
+
     // Validate that the caller only touched their OWN player rsvp field and
     // not any other player's state (C2 — prevents self check-in / seat /
     // rebuy / add-on / elimination forgery).  diff() on the full players
@@ -171,8 +197,15 @@ service cloud.firestore {
       // admin sidecar; an empty list is what a scrubbed document carries.
       let auditSafe = data.get('auditHistory', []).size() == 0;
       let requestsSafe = data.get('rebuyRequests', []).size() == 0
-          && data.get('addOnRequests', []).size() == 0;
-      return settingsSafe && structureSafe && auditSafe && requestsSafe;
+          && data.get('addOnRequests', []).size() == 0
+          && data.get('addOnDeclined', []).size() == 0;
+      // A2-1's overtime flag lives in `settings` and says the host is behind
+      // on settlement. Nothing a member reads needs it, so it is required to
+      // be absent here exactly as `organizerPct` is.
+      let overtimeSafe = !data.keys().hasAll(['settings'])
+          || !data.settings.keys().hasAny(['addOnOvertime']);
+      return settingsSafe && structureSafe && auditSafe && requestsSafe
+          && overtimeSafe;
     }
 
     // ---------- server-side value validation ----------
@@ -273,6 +306,77 @@ service cloud.firestore {
     // its join and TV codes, and the money terms in `settings`. Everything else
     // in `settings` stays open because starting the game rewrites it (the
     // frozen head-count), which a co-host may do.
+    //
+    // D15 also says a co-host "cannot change the structure, payouts or the
+    // organiser contribution". The organiser contribution was already
+    // covered -- it lives in `admin/privateData`, which is host-only -- but
+    // `structure` itself was NOT pinned, and it carries `prizes`,
+    // `paidPlaces`, `startingStack`, `rebuyStack` and `addOnStack`. So a
+    // co-host could rewrite the payout ladder, which is precisely what D15
+    // withholds. §C2 line 1892 makes the intent explicit: a co-host may open
+    // `/t/:id/levels` but is "read-only for structure".
+    //
+    // So `structure` is pinned, with one carve-out for legacy documents and one
+    // field the clock genuinely needs.
+    //
+    // The first version of this rule pinned an ALLOW-LIST of terms — the
+    // prizes, the stack sizes, the chip plans, `levelDuration` — and
+    // deliberately let `levels` move, on the theory that a co-host running the
+    // clock shifts the level list as it is played out. Both halves of that were
+    // wrong.
+    //
+    // The allow-list was an enumeration, and an enumeration has to be extended
+    // every time `structure` grows a field; the failure mode of forgetting is a
+    // silently-writable field, which is the very thing D15 exists to prevent.
+    // Everything except the ladder is now compared by whole-map equality.
+    //
+    // `levels` does have to move, though: `acceptLevelExtension` (12-082)
+    // appends to it when a night runs long, and a co-host is the person most
+    // likely to be holding the clock when that happens. It is therefore not
+    // excluded from the pin but constrained by `ladderAppendOnly` below, which
+    // is as close as a rules file can get without a server to arbitrate.
+    //
+    // What does NOT move the ladder is the clock itself: advancing writes the
+    // top-level `currentLevel`, a different field (see `completedLevelsIntact`).
+    function ladderAppendOnly() {
+      let was = resource.data.get('structure', {}).get('levels', []);
+      let now = request.resource.data.get('structure', {}).get('levels', []);
+      // Never shrink. A shorter ladder means a completed level was removed, and
+      // sections 11 and 29 say completed levels never mutate.
+      if (now.size() < was.size()) {
+        return false;
+      }
+      // Same length means nobody extended it, so it must be byte-identical --
+      // this is what stops an in-place blind edit riding in on the clock.
+      if (now.size() == was.size()) {
+        return now == was;
+      }
+      // Grown. A rules file cannot walk a list, so it cannot prove the levels
+      // that were already there are still the same levels -- the array grew, and
+      // this is the checkable part. Anything stronger needs a server.
+      return true;
+    }
+
+    function organizerStructurePinned() {
+      let before = resource.data.get('structure', {});
+      let after = request.resource.data.get('structure', {});
+      // A legacy document written before the structure carried a payout ladder
+      // compares against no `prizes` and is let through unchanged, so the pin
+      // cannot lock a game that was already in progress. The reverse case is
+      // deliberately strict: a document that had a structure must still have
+      // exactly that structure, and dropping it is a change to it.
+      if (!before.keys().hasAll(['prizes'])) {
+        return true;
+      }
+      // Everything except the ladder must match EXACTLY, with no allow-list —
+      // see the note above on why an enumeration is the wrong shape here.
+      // `removeAll` gives a copy without `levels`, so both sides are compared
+      // on the same footing and the ladder check stays in `ladderAppendOnly`.
+      let wasRest = before.removeAll(['levels']);
+      let nowRest = after.removeAll(['levels']);
+      return wasRest == nowRest && ladderAppendOnly();
+    }
+
     function organizerTermsPinned() {
       let before = resource.data;
       let after = request.resource.data;
@@ -281,10 +385,12 @@ service cloud.firestore {
       return after.get('groupId', '') == before.get('groupId', '')
           && after.get('publicCode', '') == before.get('publicCode', '')
           && after.get('tvCode', '') == before.get('tvCode', '')
+          && after.get('hostUid', '') == before.get('hostUid', '')
           && now.get('buyIn', 0) == was.get('buyIn', 0)
           && now.get('rebuyCost', null) == was.get('rebuyCost', null)
           && now.get('addOnCost', null) == was.get('addOnCost', null)
-          && now.get('koAmount', 0) == was.get('koAmount', 0);
+          && now.get('koAmount', 0) == was.get('koAmount', 0)
+          && organizerStructurePinned();
     }
 
     // Addendum section 7 requires AI structure generation to be server-side.
@@ -517,7 +623,19 @@ service cloud.firestore {
       allow read: if isMember(gid);
       allow create: if signedIn()
           && request.resource.data.ownerId == request.auth.uid;
-      allow update, delete: if isGroupAdmin(gid);
+      // B9 gives the group owner the group code and the group's removal, and
+      // both are irreversible in a way an ordinary meta edit is not: a re-roll
+      // retires the old code and link at once, and a delete destroys every
+      // game, chat message and settlement under the group. So `delete` is the
+      // owner's alone.
+      allow delete: if isGroupOwner(gid);
+      // An admin (co-host) may still edit the group's presentation fields, but
+      // not the two that decide who owns the group and how a stranger gets in.
+      // `deleteGroupRecursive` needs to walk the whole subtree as the owner, and
+      // that walk is judged per batch against pre-batch state, so the owner
+      // must still be recognised while the roster is being deleted.
+      allow update: if isGroupOwner(gid)
+          || (isGroupAdmin(gid) && groupIdentityUnchanged());
 
       // Member roster rows carry name + role. Members read each other's rows.
       // C1: a membership row may only be created as role 'member' — unless
@@ -808,7 +926,16 @@ service cloud.firestore {
             (existsAfter(/databases/$(database)/documents/groups/$(request.resource.data.gid)) &&
              getAfter(/databases/$(database)/documents/groups/$(request.resource.data.gid)).data.ownerId == request.auth.uid)
           );
-      allow update, delete: if signedIn() && isGroupAdmin(resource.data.gid);
+      // Update stays admin-level: publishing a game rewrites the game's code
+      // rows, and a co-host may publish. Delete is the owner's alone, and is
+      // not optional housekeeping: B9 destroys the group, and a group whose
+      // documents are gone must not leave a live code behind that still
+      // resolves to a name and a member count. `deleteGroupRecursive` clears
+      // the group's own row plus every game and TV code it issued, and reads
+      // `groups/{gid}` to authorise that walk, so the owner is still recognised
+      // for every batch.
+      allow update: if signedIn() && isGroupAdmin(resource.data.gid);
+      allow delete: if signedIn() && isGroupOwner(resource.data.gid);
     }
 
     // ---------- email → uid index ----------
@@ -888,6 +1015,19 @@ service cloud.firestore {
       return payload.get('auditHistory', []).size() == 0
           && payload.get('rebuyRequests', []).size() == 0
           && payload.get('addOnRequests', []).size() == 0
+          // A2-1: who declined an add-on is per-person financial intent, so it
+          // belongs with the request queues, and the overtime flag says the
+          // host is behind on settlement. Neither is anything a guest, a
+          // member or a TV needs.
+          //
+          // Checked as ZEROED, not absent, unlike `publicGameDocSafe()` on
+          // `games/{gameId}`. Both are right for their own document: the game
+          // doc is written by a client that strips the keys, so absence is
+          // enforceable there, while this payload is a fixed-key map that
+          // always carries them. Turning either of these into an absence check
+          // would reject every publish.
+          && payload.get('addOnDeclined', []).size() == 0
+          && payload.get('settings', {}).get('addOnOvertime', false) == false
           && payload.get('settings', {}).get('organizerPct', 0) == 0
           // The organiser's contribution is the one payout figure that stays
           // private (D2), and it is a scalar, so it stays checkable here.
@@ -915,7 +1055,13 @@ service cloud.firestore {
       allow update: if signedIn() && isGroupAdmin(resource.data.gid)
                     && request.resource.data.gid == resource.data.gid
                     && publicProjectionsSafe();
-      allow delete: if signedIn() && isGroupAdmin(resource.data.gid);
+      // The owner's alone, and this is a deletion that has to be possible.
+      // `publicGames` is `allow read: if true`, so a projection left behind by
+      // a deleted group is not an unreachable orphan -- it is a world-readable
+      // document still naming the group's games, dates, times and chip
+      // structure, with no game document left to resolve it against.
+      // `deleteGroupRecursive` clears one per game.
+      allow delete: if signedIn() && isGroupOwner(resource.data.gid);
     }
 
     // ---------- guest/member request queue ----------

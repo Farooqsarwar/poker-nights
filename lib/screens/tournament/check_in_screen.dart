@@ -521,6 +521,16 @@ class _CheckInScreenState extends State<CheckInScreen> {
               message:
                   '${pendingRequests.length} player${pendingRequests.length > 1 ? 's' : ''} waiting for confirmation',
             ),
+            const SizedBox(height: AppSpacing.md),
+            Align(
+              alignment: Alignment.centerRight,
+              child: AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => app.confirmAllPendingRequests(),
+                child: const Text('Confirm all'),
+              ),
+            ),
             const SizedBox(height: AppSpacing.lg),
           ],
           // Pending requests

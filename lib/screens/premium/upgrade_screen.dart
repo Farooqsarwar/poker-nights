@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/colors.dart';
-import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
@@ -29,7 +28,7 @@ class UpgradeScreen extends StatefulWidget {
 
 class _UpgradeScreenState extends State<UpgradeScreen> {
   final _payments = Payments.instance;
-  String _selectedPlanId = 'yearly';
+  String _selectedPlanId = 'console';
   PremiumTier _tier = PremiumTier.free;
   bool _loading = true;
 
@@ -164,25 +163,19 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
           AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
-            onPressed: () => context.push(
-              RoutePaths.checkout,
-              extra: _selectedPlanId,
-            ),
-            child: const Text('Upgrade to Premium'),
+            onPressed: () {
+              context.push('/checkout?plan=$_selectedPlanId');
+            },
+            child: const Text('Activate demo Premium'),
           ),
           const SizedBox(height: AppSpacing.xs),
-          // A one-time licence never renews, so there is nothing to cancel —
-          // and no trial line either (D12).
-          if (!PremiumPlan.placeholders
-              .firstWhere((p) => p.id == _selectedPlanId)
-              .oneTime)
-            Text(
-              'Cancel anytime',
-              textAlign: TextAlign.center,
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
-              ),
+          Text(
+            'No payment details are collected in-app.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
             ),
+          ),
           const SizedBox(height: AppSpacing.xl),
           _comparisonTable(),
           const SizedBox(height: AppSpacing.lg),
@@ -218,8 +211,9 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     );
   }
 
-  /// The narrowest a plan card can be drawn: its name and its "saving" pill
-  /// share one row, and the pill alone is about 114px.
+  /// Demo pricing remains so the app can exercise the upgrade path without
+  /// actually taking a real payment. The purchase is still local-only and does
+  /// not reach any real billing provider.
   static const double _minPlanCardWidth = 150;
 
   Widget _planPicker() {
@@ -230,11 +224,6 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
         final sideBySideWidth =
             (_minPlanCardWidth * plans.length) + (gap * (plans.length - 1));
 
-        // On a 320px phone three cards in a row left each one 94px — less than
-        // the "Save 20%" pill needs on its own, so the card's top row
-        // overflowed. Below the width where they genuinely fit, the plans
-        // stack instead. Three pricing cards squeezed onto a 320px screen were
-        // not readable anyway.
         if (constraints.maxWidth < sideBySideWidth) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -478,14 +467,6 @@ class _PlanCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              plan.price,
-              style: AppTypography.display(
-                size: AppFontSizes.xxl,
-                weight: FontWeight.w700,
-                color: selected ? AppColors.primaryText : null,
-              ),
-            ),
             Text(
               plan.period,
               style: AppTypography.bodyXs.copyWith(

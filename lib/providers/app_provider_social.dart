@@ -73,7 +73,7 @@ extension AppProviderSocial on AppProvider {
       return 'Message is too long — maximum ${AppProvider.maxChatMessageLength} characters.';
     }
     if (_chatRateLimited(_user!.id)) {
-      return 'You are sending messages too quickly — wait a moment and try again.';
+      return AppProvider.chatThrottleMessage;
     }
     _recordChatSend(_user!.id);
     final isGameChat = gameId != null && _currentGame?.id == gameId;
@@ -655,6 +655,15 @@ extension AppProviderSocial on AppProvider {
     _applyRsvpFor(participantId, rsvp, gameId: gameId, announce: false);
   }
 
+  List<String> _recomputeWaitlist(LiveGame game) {
+    final capacity = effectiveTableSettings.maxPerTable.clamp(1, 999);
+    final goingIds = game.players
+        .where((p) => !p.isGuest && p.rsvp?.isGoing == true)
+        .map((p) => p.id)
+        .toList();
+    return goingIds.length > capacity ? goingIds.skip(capacity).toList() : const <String>[];
+  }
+
   void _applyRsvpFor(
     String userId,
     Rsvp? rsvp, {
@@ -729,9 +738,35 @@ extension AppProviderSocial on AppProvider {
 
     final before = target;
     final after = applyRsvp(target);
+    final promotedId = before.waitlist.isNotEmpty &&
+            (mine?.rsvp?.isGoing ?? false) &&
+            !(rsvp?.isGoing ?? false)
+        ? before.waitlist.first
+        : null;
+    final promotedPlayer = promotedId == null
+        ? null
+        : after.players.where((p) => p.id == promotedId).firstOrNull;
+    final afterWithWaitlist = after.copyWith(waitlist: _recomputeWaitlist(after));
 
     if (isCurrent) {
-      _currentGame = after;
+      _currentGame = afterWithWaitlist;
+    }
+
+    if (promotedId != null && promotedPlayer != null) {
+      final former = before.players.where((p) => p.id == userId).firstOrNull;
+      final formerName = former?.name ?? 'A member';
+      final promotedName = promotedPlayer.name;
+      pushNotification(
+        AppNotification(
+          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Waitlist update',
+          body: '$formerName dropped out — $promotedName is in.',
+          type: NotificationType.rsvp,
+          link: '/invitation',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
     }
     // All paths: hold the selection locally until a remote snapshot confirms
     // it. This prevents any lagging Firebase snapshot from reverting the
@@ -772,10 +807,14 @@ extension AppProviderSocial on AppProvider {
     }
 
     // Keep the group's copy of the game in sync so hub badges update at once.
+    final syncedGroupGame = applyRsvp(_currentGroup.games
+        .where((g) => g.id == targetId)
+        .firstOrNull ??
+        target);
     _setGroup(
       _currentGroup.copyWith(
         games: _currentGroup.games
-            .map((g) => g.id == targetId ? applyRsvp(g) : g)
+            .map((g) => g.id == targetId ? syncedGroupGame.copyWith(waitlist: _recomputeWaitlist(syncedGroupGame)) : g)
             .toList(),
       ),
     );

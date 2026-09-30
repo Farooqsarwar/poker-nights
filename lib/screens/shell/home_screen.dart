@@ -52,6 +52,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return parts.map((p) => p[0].toUpperCase()).take(2).join();
   }
 
+  LiveGame? _repostCandidate(AppProvider app) {
+    final candidates = app.currentGroup.games
+        .where((g) => g.status == LiveGameStatus.completed)
+        .toList()
+      ..sort((a, b) => b.settings.scheduledStart == null
+          ? 1
+          : (a.settings.scheduledStart ?? DateTime.fromMillisecondsSinceEpoch(0))
+              .compareTo(b.settings.scheduledStart ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    final hasOpen = app.currentGroup.games.any((g) =>
+        g.status != LiveGameStatus.completed && g.status != LiveGameStatus.cancelled);
+    if (candidates.isEmpty || hasOpen) return null;
+    return candidates.first;
+  }
+
   @override
   void dispose() {
     _groupNameController.dispose();
@@ -92,6 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
         )
         .toList();
     final activeGame = games.where((g) => g.status.isActiveLive).firstOrNull;
+    final repost = app.hasCurrentGroup ? _repostCandidate(app) : null;
 
     return Stack(
       children: [
@@ -202,19 +217,91 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
-              // Screen Title: Large bold white 'Home'
-              Text(
-                'Home',
-                style: TextStyle(
-                  color: AppColors.foreground,
-                  fontSize: 32,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
+              // Show "no group yet" state when user is not in a group (spec D-A, B1).
+              // This replaces the normal "Home" + group UI.
+              if (!app.hasCurrentGroup) ...[
+                // Pill: "No account needed" for anonymous hosts
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: AppButton(
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => context.go(RoutePaths.landing),
+                    child: const Text('No account needed'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              // Group Switcher Card: Squircle card with crimson FP initials badge
-              InkWell(
+                const SizedBox(height: AppSpacing.md),
+                // Hero card: "Poker tonight?"
+                AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Poker tonight?',
+                        style: AppTypography.eyebrow(
+                          size: 11,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Friends already at the table? Start the clock now — no account, nothing to install.',
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      AppButton(
+                        fullWidth: true,
+                        onPressed: () => context.go(RoutePaths.quick),
+                        child: const Text('Start a game now'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                // Section: "Same friends every week?"
+                Text(
+                  'Same friends every week?',
+                  style: AppTypography.bodyStyle.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppButton(
+                        fullWidth: true,
+                        onPressed: () => setState(() => _showCreate = true),
+                        child: const Text('Create a group'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: AppButton(
+                        fullWidth: true,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => context.go(RoutePaths.join),
+                        child: const Text('Join a group'),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                // Screen Title: Large bold white 'Home'
+                Text(
+                  'Home',
+                  style: TextStyle(
+                    color: AppColors.foreground,
+                    fontSize: 32,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                // Group Switcher Card: Squircle card with crimson FP initials badge
+                InkWell(
                 onTap: () => showGroupSwitcher(context),
                 borderRadius: BorderRadius.circular(14),
                 child: Container(
@@ -298,6 +385,47 @@ class _HomeScreenState extends State<HomeScreen> {
                   group: group,
                   isAdmin: isAdmin,
                   onOpen: (g) => _openGame(context, app, g),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+
+              if (app.hasCurrentGroup && repost != null) ...[
+                AppCard(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Same as last time?',
+                              style: TextStyle(
+                                color: AppColors.foreground,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              'Repost ${repost.settings.name} one week later.',
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      AppButton(
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => context.push(
+                          '${RoutePaths.createTournament}?repost=${repost.id}',
+                        ),
+                        child: const Text('Repost'),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
               ],
@@ -433,6 +561,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
+              ], // close else ...[ for hasCurrentGroup normal Home UI
             ],
           ),
         ),

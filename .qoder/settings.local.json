@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(find \"D:\\\\StudioProjects\\\\poker_night\\\\lib\" -type f -name \"*.dart\" | wc -l && find \"D:\\\\StudioProjects\\\\poker_night\\\\lib\" -type d | head -50)"
-    ]
-  }
-}

@@ -307,6 +307,10 @@ Future<void> _boot(
 Future<void> _initAppCheck() async {
   const isDebugMode = bool.fromEnvironment('APP_CHECK_DEBUG');
   const siteKey = String.fromEnvironment('APP_CHECK_RECAPTCHA_SITE_KEY');
+  const allowWebBypass = bool.fromEnvironment(
+    'ALLOW_WEB_APP_CHECK_BYPASS',
+    defaultValue: false,
+  );
 
   // On Flutter WEB the ReCaptchaV3Provider requires a REAL reCAPTCHA
   // Enterprise site key — there is no "debug" web provider (unlike
@@ -315,21 +319,27 @@ Future<void> _initAppCheck() async {
   // try to load ReCAPTCHA and fail with appCheck/recaptcha-error, which blocks
   // google sign-in and Firestore locally.
   //
-  // So on web we skip activating App Check in DEBUG builds AND whenever no real
-  // site key is supplied. This project does not enforce App Check, so skipping
-  // is non-blocking; web keeps App Check only when a genuine reCAPTCHA
-  // Enterprise site key is provided via --dart-define.
-  if (kIsWeb && (kDebugMode || siteKey.isEmpty)) {
-    // ignore: avoid_print
-    print('[AppCheck] Skipped on web (debug or no site key) -- not enforced.');
-    return;
+  // A missing site key is NOT a valid production configuration. We still allow
+  // a deliberate, explicit bypass for local-only development via
+  // --dart-define=ALLOW_WEB_APP_CHECK_BYPASS=true so emulator-driven testing
+  // remains easy without turning App Check off by accident.
+  if (kIsWeb && siteKey.isEmpty) {
+    if (allowWebBypass) {
+      // ignore: avoid_print
+      print('[AppCheck] Web bypass enabled for local dev only.');
+      return;
+    }
+
+    throw StateError(
+      'App Check is required on web when no site key is configured. '
+      'Supply APP_CHECK_RECAPTCHA_SITE_KEY or set '
+      'ALLOW_WEB_APP_CHECK_BYPASS=true for local-only development.',
+    );
   }
 
   try {
     await FirebaseAppCheck.instance.activate(
-      webProvider: siteKey.isNotEmpty
-          ? ReCaptchaV3Provider(siteKey)
-          : ReCaptchaV3Provider('MISSING_SITE_KEY'),
+      webProvider: ReCaptchaV3Provider(siteKey),
       androidProvider: isDebugMode
           ? AndroidProvider.debug
           : AndroidProvider.playIntegrity,

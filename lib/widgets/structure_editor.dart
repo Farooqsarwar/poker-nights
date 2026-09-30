@@ -6,6 +6,7 @@ import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../utils/formatters.dart';
 import '../utils/tournament_engine.dart';
+import 'app_alert_banner.dart';
 import 'app_button.dart';
 import 'app_select.dart';
 import 'min_tap_target.dart';
@@ -28,7 +29,17 @@ class StructureEditor extends StatefulWidget {
     required this.onSpeedUp,
     required this.onSlowDown,
     required this.onApply,
+    this.readOnly = false,
   });
+
+  /// Whether the editor is shown but cannot be changed.
+  ///
+  /// §C2 line 1892: `/t/:id/levels` is "host, co-host (co-host read-only for
+  /// structure - D15)". A co-host may open the levels screen and read it, but
+  /// D15 withholds the structure from them, so the controls are inert rather
+  /// than absent -- the same screen, the same numbers, one role short of the
+  /// pencil.
+  final bool readOnly;
 
   final TournamentStructure structure;
   final int currentLevel;
@@ -75,6 +86,7 @@ class _StructureEditorState extends State<StructureEditor> {
         ..sort();
 
   void _insertAfter(int index) {
+    if (widget.readOnly) return;
     setState(() {
       final copy = _EditableLevel.copyOf(_levels[index]);
       _levels.insert(index + 1, copy);
@@ -103,6 +115,7 @@ class _StructureEditorState extends State<StructureEditor> {
   }
 
   void _apply() {
+    if (widget.readOnly) return;
     widget.onApply(_build());
   }
 
@@ -130,42 +143,54 @@ class _StructureEditorState extends State<StructureEditor> {
         ),
         const SizedBox(height: AppSpacing.md),
         for (var i = 0; i < _levels.length; i++) _buildRow(i),
-        if (anyInvalid) ...[
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'SB and BB must be positive.',
-            style: AppTypography.bodyXs.copyWith(color: AppColors.destructiveText),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            Expanded(
-              child: AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.danger,
-                onPressed: widget.onSpeedUp,
-                child: const Text('Speed up (-5m)'),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: AppButton(
-                size: AppButtonSize.sm,
-                variant: AppButtonVariant.secondary,
-                onPressed: widget.onSlowDown,
-                child: const Text('Slow down (+5m)'),
-              ),
+        if (!widget.readOnly) ...[
+          if (anyInvalid) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'SB and BB must be positive.',
+              style: AppTypography.bodyXs.copyWith(color: AppColors.destructiveText),
             ),
           ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        AppButton(
-          fullWidth: true,
-          disabled: anyInvalid,
-          onPressed: _apply,
-          child: const Text('Apply & close'),
-        ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.danger,
+                  onPressed: widget.onSpeedUp,
+                  child: const Text('Speed up (-5m)'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: widget.onSlowDown,
+                  child: const Text('Slow down (+5m)'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppButton(
+            fullWidth: true,
+            disabled: anyInvalid,
+            onPressed: _apply,
+            child: const Text('Apply & close'),
+          ),
+        ] else ...[
+          // D15: a co-host may read the levels, not write them. Saying so
+          // beats showing a live editor whose writes the rules would refuse.
+          const SizedBox(height: AppSpacing.md),
+          AppAlertBanner(
+            type: AppAlertType.info,
+            message:
+                'A co-host runs the clock but cannot change the structure. '
+                'Ask the host to edit levels.',
+          ),
+        ],
       ],
     );
   }
@@ -195,6 +220,7 @@ class _StructureEditorState extends State<StructureEditor> {
                 flex: 2,
                 child: AppSelect<String>(
                   value: '${l.sbValue}-${l.bbValue}',
+                  enabled: !widget.readOnly,
                   onChanged: (v) {
                     if (v == null) return;
                     final parts = v.split('-');
@@ -218,6 +244,7 @@ class _StructureEditorState extends State<StructureEditor> {
               Expanded(
                 child: AppSelect<String>(
                   value: '${l.durationMins}',
+                  enabled: !widget.readOnly,
                   onChanged: (v) => setState(() {
                     l.durationMins = int.tryParse(v ?? '') ?? 15;
                   }),
@@ -234,7 +261,9 @@ class _StructureEditorState extends State<StructureEditor> {
                   size: 18,
                   color: AppColors.primary,
                 ),
-                onPressed: () => _insertAfter(index),
+                // D15: a co-host reads the ladder, so the control is not merely
+                // refused on tap -- it is not offered.
+                onPressed: widget.readOnly ? null : () => _insertAfter(index),
               ),
             ],
           ),
@@ -244,31 +273,44 @@ class _StructureEditorState extends State<StructureEditor> {
               SizedBox(width: 48, child: const SizedBox()),
               Semantics(
                 toggled: l.anteOn,
+                // D15: the ante is part of the structure, so a co-host sees it
+                // and cannot tap it. `enabled: false` on the Semantics node is
+                // what a screen reader uses to say so, rather than announcing
+                // a checkbox that silently does nothing.
+                enabled: !widget.readOnly,
                 child: InkWell(
-                  onTap: () => setState(() => l.anteOn = !l.anteOn),
-                  child: MinTapTarget(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          l.anteOn
-                              ? Icons.check_box
-                              : Icons.check_box_outline_blank,
-                          size: 18,
-                          color: l.anteOn
-                              ? AppColors.primary
-                              : AppColors.mutedForeground,
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Text(
-                          widget.anteStyle == AnteStyle.individual
-                              ? 'Ante (individual, half BB)'
-                              : 'Ante (big blind ante)',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
+                  onTap: widget.readOnly
+                      ? null
+                      : () => setState(() => l.anteOn = !l.anteOn),
+                  child: Opacity(
+                    // Same reasoning as AppSelect's disabled state: an
+                    // active-looking control whose edit is thrown away is worse
+                    // than a visibly inert one.
+                    opacity: widget.readOnly ? 0.5 : 1,
+                    child: MinTapTarget(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            l.anteOn
+                                ? Icons.check_box
+                                : Icons.check_box_outline_blank,
+                            size: 18,
+                            color: l.anteOn
+                                ? AppColors.primary
+                                : AppColors.mutedForeground,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(
+                            widget.anteStyle == AnteStyle.individual
+                                ? 'Ante (individual, half BB)'
+                                : 'Ante (big blind ante)',
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

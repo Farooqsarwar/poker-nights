@@ -37,9 +37,13 @@ LiveGame projectionFor(
   // makes "public by default, private fields listed explicitly" the actual
   // behaviour, matching this function's own doc comment above. Only the two
   // fields §6.2's table marks private are named here.
+  // A2-1's overtime flag says the host is behind on settlement. It lives on
+  // `GameSettings`, so it is zeroed here with the other money terms rather
+  // than in the `LiveGame` copyWith below. Nothing a member reads needs it.
   final publicSettings = game.settings.copyWith(
     organizerPct: 0,
     clearForcePaidPlaces: true,
+    addOnOvertime: false,
   );
 
   // 14-045 / 05-033 / 19-021: players do not see their own investment either —
@@ -114,6 +118,12 @@ LiveGame projectionFor(
     clearDealAmounts: true,
     chat: viewerCanSeeChat ? game.chat : const <ChatMessage>[],
     auditHistory: const <AuditRecord>[], // 14
+    // A2-1's declined half: who said no to spending their own money is
+    // per-person financial intent, so it sits with the request queues rather
+    // than in the member-readable document. The overtime half is zeroed on
+    // `publicSettings` above. The visible badge is rendered from the admin's
+    // own copy, not a member's.
+    addOnDeclined: const <String>[],
     pendingGuests: publicPendingGuests,
     rebuyRequests: publicRebuyRequests,
     addOnRequests: publicAddOnRequests,

@@ -167,6 +167,12 @@ class GameResultRow {
       );
 }
 
+/// A document that lives OUTSIDE `groups/{gid}`, named without a Firestore
+/// handle so the set of them a delete must remove can be asserted in a unit
+/// test. Both fields are an existing Firestore path segment: [collection] is a
+/// top-level collection name and [id] is a non-empty document id.
+typedef ExternalRef = ({String collection, String id});
+
 /// Single Firestore access point for the whole app. Screens never touch
 /// Firestore directly; [AppProvider] calls these methods optimistically after
 /// mutating local state.
@@ -959,6 +965,340 @@ class FirebaseRepository {
         'tableSettings': tableSettingsToMap(settings),
       });
 
+  /// B10: points the group at one of the owner's saved chip sets.
+  ///
+  /// Passing null clears the pointer, which is what the Standard box on the
+  /// chips screen means by "no saved set". The field is deleted rather than
+  /// written as null so the stored document matches what `groupToMap` produces
+  /// for a null pointer -- the codec omits the key entirely, and a stored null
+  /// would come back as a key that never matches that shape.
+  Future<void> updateGroupDefaultChipSet(String gid, String? id) => _db
+      .collection('groups')
+      .doc(gid)
+      .update({
+        'defaultChipSetId': id ?? FieldValue.delete(),
+      });
+
+  /// B9: retires [oldCode] and issues [newCode] for the same group in one
+  /// commit.
+  ///
+  /// "Re-roll the code - the old code and link stop working at once" (§B9,
+  /// §3143). That "at once" is the whole requirement, and it is why this is a
+  /// transaction rather than two writes: the group document has to start
+  /// handing out the new code in the same commit that deletes the old
+  /// `joinCodes` row, or there is a window where the old invite link still
+  /// resolves a group whose own document disagrees with it.
+  ///
+  /// Returns false when [newCode] is already taken, so the caller can draw
+  /// another. The rules would refuse such a write anyway -- `joinCodes` allows
+  /// `create` but not `update` -- so this is checked to report a retry rather
+  /// than an error, and the read is inside the transaction so two hosts
+  /// re-rolling at the same moment cannot both win.
+  Future<bool> rerollGroupJoinCode({
+    required String gid,
+    required String oldCode,
+    required String newCode,
+    required String name,
+    required String icon,
+    required String hostName,
+    required int memberCount,
+    required int gamesPlayed,
+  }) =>
+      _db.runTransaction<bool>((txn) async {
+        final codes = _db.collection('joinCodes');
+        final next = newCode.toUpperCase();
+        final previous = oldCode.toUpperCase();
+        // Every read first: a transaction may not read after it has written.
+        final clash = await txn.get(codes.doc(next));
+        if (clash.exists) return false;
+
+        txn.update(_db.collection('groups').doc(gid), {'joinCode': next});
+        txn.set(codes.doc(next), {
+          'gid': gid,
+          'kind': 'group',
+          'name': name,
+          'icon': icon,
+          'hostName': hostName,
+          'memberCount': memberCount,
+          'gamesPlayed': gamesPlayed,
+        });
+        if (previous != next) txn.delete(codes.doc(previous));
+        return true;
+      });
+
+  /// The rows one game leaves behind OUTSIDE `groups/{gid}` — the only two kinds
+  /// a recursive group delete cannot reach by walking the group document.
+  ///
+  ///  * `publicGames/{gameId}` — the sanitized projection, written by
+  ///    `publishPublicProjections` and readable under `allow read: if true`,
+  ///    which is to say by anyone at all, with no group context. Delete the game
+  ///    document without it and the row still answers a GET with the group's
+  ///    gid, the event name, the date, the time and the chip structure: an
+  ///    orphan that is both unresolvable and still readable. E7 (spec line
+  ///    3143) gives the projection the lifetime of the game, and a group delete
+  ///    has to honour that for every game the group ever ran, not just the live
+  ///    one.
+  ///  * `joinCodes/{publicCode}` and `joinCodes/{tvCode}` — the lookup rows
+  ///    `upsertGameCodes` writes, under `allow get: if true` because an invite
+  ///    link and a TV QR must resolve before sign-in. A dead code keeps
+  ///    resolving to a gid and a gameId whose game no longer exists.
+  ///
+  /// A blank code yields no ref at all rather than an empty document id:
+  /// `collection('')` addresses the collection, not a document.
+  ///
+  /// A MISSING code must be just as unremarkable as a blank one. E7 releases a
+  /// game's projection and both its codes once the game is completed or
+  /// cancelled — that release is not built yet, so today these rows are simply
+  /// never removed, but the moment it is, a group with a finished night in its
+  /// history hands this function absent codes. Naming a ref that is not there is
+  /// not harmless (see [_existingRefs]), so "no such document" and "no such
+  /// code" both have to resolve to no ref.
+  ///
+  /// Pure, so the reference set can be pinned by a test without a Firestore.
+  @visibleForTesting
+  static List<ExternalRef> externalGameRefs({
+    required String gameId,
+    String? publicCode,
+    String? tvCode,
+  }) {
+    final refs = <ExternalRef>[];
+    final id = gameId.trim();
+    if (id.isNotEmpty) {
+      refs.add((collection: 'publicGames', id: id));
+    }
+    for (final code in [publicCode, tvCode]) {
+      final key = code?.trim().toUpperCase() ?? '';
+      if (key.isEmpty) continue;
+      // The public and TV codes share one namespace (E7), and a game that was
+      // never re-rolled can hold the same value in both slots. `joinCodes/{code}`
+      // is a single document, so a second delete of it is redundant work the
+      // rules would evaluate again.
+      if (refs.any((r) => r.collection == 'joinCodes' && r.id == key)) continue;
+      refs.add((collection: 'joinCodes', id: key));
+    }
+    return refs;
+  }
+
+  /// Of [refs], only the ones whose document is actually there.
+  ///
+  /// This is not an optimisation, it is a correctness requirement. A delete of
+  /// a document that does not exist is NOT a no-op in the rules engine: the
+  /// rule is still evaluated, `resource` is null, and `resource.data.gid` on a
+  /// null `resource` is a rules error, so the rule denies — and one denied
+  /// write fails the WHOLE batch. Every rule these refs are deleted under reads
+  /// `resource.data`, which is available and populated on a delete precisely
+  /// because the document is there; it is only the missing-document case that
+  /// breaks. Both collections are world-readable, so these are plain `get()`s.
+  static Future<List<DocumentReference<Map<String, dynamic>>>> _existingRefs(
+    List<DocumentReference<Map<String, dynamic>>> refs,
+  ) async {
+    // Bounded fan-out: a group with a long history yields hundreds of these and
+    // a burst that wide is its own failure mode.
+    const fanOut = 20;
+    final found = <DocumentReference<Map<String, dynamic>>>[];
+    for (var i = 0; i < refs.length; i += fanOut) {
+      final window = refs.skip(i).take(fanOut).toList();
+      final snaps = await Future.wait(window.map((r) => r.get()));
+      for (var j = 0; j < window.length; j++) {
+        if (snaps[j].exists) found.add(window[j]);
+      }
+    }
+    return found;
+  }
+
+  /// B9: deletes a group and everything under it.
+  ///
+  /// Firestore's `delete()` on a document does NOT touch its subcollections, so
+  /// a plain delete of `groups/{gid}` would leave the roster, every night, all
+  /// the chat, the reports and the imported history readable to anyone who
+  /// already had a membership row. Hence the walk.
+  ///
+  /// Two ordering facts make this a single batch rather than a loop of writes:
+  ///
+  ///  * Every rule here is `isGroupAdmin(gid)`, which reads BOTH the group doc
+  ///    and the caller's own member row. If those were deleted in separate
+  ///    writes, the second write would be evaluated against a group that no
+  ///    longer exists and would be refused -- and the owner's own row is itself
+  ///    one of the rows being deleted.
+  ///  * Firestore evaluates every rule in a batch against the state *before* the
+  ///    batch commits, so one batch authorises cleanly whatever the order
+  ///    inside it. The group doc is queued last anyway so a partial failure
+  ///    leaves the group intact rather than a headless one.
+  ///
+  /// The rows OUTSIDE the group are not optional extras, and they carry the same
+  /// ordering constraint as everything else. `publicGames/{gameId}` and
+  /// `joinCodes/{code}` delete under `isGroupOwner(resource.data.gid)` (or, for a
+  /// code, `request.auth.uid == resource.data.ownerId`), and `isGroupOwner`
+  /// reads `groups/{gid}` -- so they authorise only while the group document
+  /// still exists. That is why they are queued above the final
+  /// `deletes.add(groupRef)`, and why they may never be moved below it.
+  ///
+  /// `resource.data` is available on a delete of a document that is there, which
+  /// is what every rule here reads, and is null for one that is not -- so the
+  /// hand-named rows outside the group are presence-checked first ([_existingRefs])
+  /// rather than deleted blind. A rules error in any one write denies the whole
+  /// batch it is in, and a denied batch leaves the group half-deleted.
+  ///
+  /// `groups/{gid}` stays the very last element of [deletes], which makes it the
+  /// last element of the LAST chunk. That is what makes the 500-per-batch
+  /// chunking below safe for a group of any size: every earlier chunk is
+  /// evaluated while `groups/{gid}` still exists, and within the final chunk
+  /// every rule is evaluated against the pre-batch state, so the group document
+  /// authorizes its own delete. Only the caller's OWN member row is a second
+  /// dependency, and `deleteGroup` is owner-only
+  /// (`AppProvider.deleteGroup` compares the uid against `group.ownerId`), so
+  /// `isGroupAdmin` short-circuits on the `ownerId` disjunct for the whole walk
+  /// — deleting the roster in an earlier chunk cannot strand a later one.
+  ///
+  /// Chunked at 500 writes, the batch limit.
+  Future<void> deleteGroupRecursive(String gid, {String? joinCode}) async {
+    final groupRef = _db.collection('groups').doc(gid);
+    final deletes = <DocumentReference>[];
+
+    Future<void> addAll(DocumentReference parent, String collection) async {
+      final snap = await parent.collection(collection).get();
+      for (final doc in snap.docs) {
+        deletes.add(doc.reference);
+      }
+    }
+
+    /// A collection that may itself hold subcollections.
+    Future<void> addTree(
+      DocumentReference parent,
+      String collection,
+      List<String> nested, {
+      void Function(DocumentSnapshot<Map<String, dynamic>> doc)? onDoc,
+    }) async {
+      final snap = await parent.collection(collection).get();
+      for (final doc in snap.docs) {
+        deletes.add(doc.reference);
+        onDoc?.call(doc);
+        for (final sub in nested) {
+          await addAll(doc.reference, sub);
+        }
+      }
+    }
+
+    // Every row OUTSIDE the group, named by hand rather than walked. Collected
+    // here rather than lazily, because after the walk the game documents are
+    // about to be deleted and their codes are the only remaining record of them.
+    final external = <ExternalRef>[];
+
+    /// A code read off a stored game, tolerating both a document that never had
+    /// one and one that carries a non-string. A bad cast here would abort the
+    /// whole walk and orphan every row this call exists to clean up — the one
+    /// place where being lenient costs nothing and being strict is expensive.
+    String? codeOf(DocumentSnapshot<Map<String, dynamic>> doc, String key) {
+      final value = doc.data()?[key];
+      return value is String ? value : null;
+    }
+
+    // Groups with real history have games with their own subcollections; the
+    // list mirrors the nesting in firestore.rules.
+    await addTree(groupRef, 'games', const [
+      'memberViews',
+      'players',
+      'chat',
+      'admin',
+      'meta',
+    ], onDoc: (doc) {
+      external.addAll(externalGameRefs(
+        gameId: doc.id,
+        publicCode: codeOf(doc, 'publicCode'),
+        tvCode: codeOf(doc, 'tvCode'),
+      ));
+    });
+    for (final collection in const [
+      'members',
+      'chat',
+      'reports',
+      'importedNights',
+      'polls',
+      'cashSessions',
+      'notifications',
+    ]) {
+      await addAll(groupRef, collection);
+    }
+
+    // The request queue is top-level and keyed by GAME, not by group, so the
+    // walk above never sees it. Each item is a guest slot claim or a member's
+    // rebuy/add-on/check-in request, and it carries the requester's name — so
+    // an orphaned queue is personal data belonging to a group that no longer
+    // exists, readable by the person who made the claim and by nobody who could
+    // now clear it.
+    //
+    // This one is a QUERY rather than a hand-named row, and the rules allow it:
+    // `requests/{gameId}/items/{reqId}` has `allow list: if isGroupAdmin(gid)`
+    // evaluated per returned document, so constraining on `gid` proves the
+    // result set, and `allow delete: if isGroupAdmin(gid)` authorises the
+    // deletes. The caller is the owner, so both hold.
+    final requestSnaps = await _db
+        .collection('requests')
+        .where('gid', isEqualTo: gid)
+        .get();
+    for (final requestDoc in requestSnaps.docs) {
+      await addAll(requestDoc.reference, 'items');
+    }
+
+    // `pendingInvites/{inviteId}` is deliberately NOT cleaned here, and this is
+    // a rules limit rather than an oversight. Every row's read rule is
+    // `resource.data.uid == request.auth.uid`, so a `where('gid', ...)` query
+    // can only ever return the CALLER's own invitations -- the owner has no way
+    // to enumerate, let alone delete, invitations the group admin sent to
+    // somebody else. There is no client-side fix: it needs either the rows to
+    // live under `groups/{gid}` (a data-model migration) or a server-side
+    // sweep, which is out of scope. The residue is a dead invitation pointing
+    // at a group that no longer exists, readable only by the person it was sent
+    // to.
+
+    // The public invite row outlives the group otherwise, and the code would
+    // still resolve to a name and a member count for a group nobody can enter.
+    if (joinCode != null && joinCode.trim().isNotEmpty) {
+      external.add((
+        collection: 'joinCodes',
+        id: joinCode.trim().toUpperCase(),
+      ));
+    }
+
+    // A game's projection and its two codes are the same leak one level up: the
+    // projection is readable by anyone, and each code still resolves to a
+    // group and a game that are being deleted in this same walk. As is the
+    // group's own invite row above.
+    //
+    // Every one of these is named rather than walked, so every one of them may
+    // ALREADY be gone — E7 releases a game's projection and both its codes once
+    // the game completes or is cancelled, and `updateGroupJoinCode` deletes the
+    // previous row. A delete of a document that is not there is not a no-op in
+    // the rules engine: the rule is still evaluated, `resource` is null, and
+    // `resource.data.gid` on a null `resource` is a rules error, so the rule
+    // denies — and one denied write fails the WHOLE batch, including every
+    // other row queued with it. `resource.data` is available and populated for
+    // every row that IS there, which is the only case that reaches a rule.
+    // Both collections are `allow get: if true`, so the presence check is a
+    // plain read and needs no authority of its own.
+    //
+    // A Set, so a code that two games somehow share — or a game code equal to
+    // the group's invite code — is one delete rather than the same rule
+    // evaluated twice for one document.
+    if (external.isNotEmpty) {
+      deletes.addAll(await _existingRefs([
+        for (final ref in external.toSet())
+          _db.collection(ref.collection).doc(ref.id),
+      ]));
+    }
+
+    // MUST STAY LAST — see the ordering notes above.
+    deletes.add(groupRef);
+
+    for (var i = 0; i < deletes.length; i += 500) {
+      final batch = _db.batch();
+      for (final ref in deletes.skip(i).take(500)) {
+        batch.delete(ref);
+      }
+      await batch.commit();
+    }
+  }
+
   /// Atomically transfers group ownership to [newOwnerId]: updates the group
   /// doc's `ownerId` field and promotes the new owner's member row to `admin`.
   Future<void> transferGroupOwnership(
@@ -1646,11 +1986,18 @@ class FirebaseRepository {
     publicDoc['auditHistory'] = const <Map<String, dynamic>>[];
     publicDoc['rebuyRequests'] = const <String>[];
     publicDoc['addOnRequests'] = const <String>[];
+    // A2-1: who declined an add-on is per-person financial intent, so it sits
+    // with the request queues rather than in the member-readable document.
+    publicDoc['addOnDeclined'] = const <String>[];
 
     final publicSettings = Map<String, dynamic>.from(
       publicDoc['settings'] as Map? ?? {},
     );
     publicSettings.remove('organizerPct');
+    // The overtime badge is host-side settlement state, not play state. The
+    // rules require this to be absent (publicGameDocSafe), so the client has
+    // to strip it too or every authority write is refused.
+    publicSettings.remove('addOnOvertime');
     publicDoc['settings'] = publicSettings;
 
     if (publicDoc['structure'] != null) {

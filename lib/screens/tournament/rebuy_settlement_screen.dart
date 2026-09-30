@@ -81,6 +81,13 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
     // settlement is the host's job being done for them. Gating on `isAdmin`
     // put a co-host on the invitation screen mid-break.
     final canSettle = app.isHostOrCoHost;
+    // D15 withholds payouts from a co-host, and `confirmSettlement()` writes
+    // `prizes`, `prizePool` and `organizerAmount` -- terms the rules now pin
+    // against a co-host. So the co-host keeps the operational steps (check the
+    // field, grant rebuys, take add-ons, call colour-up) and the host signs the
+    // money. Without this the last step is co-host reachable and the write
+    // would be refused by the rules after the UI had already said yes.
+    final isHost = app.isAdmin;
 
     if (!canSettle) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -254,7 +261,11 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
                   )
                 : null,
             onConfirm: () {
-              app.applyRecommendedAddOnStack();
+              // D15 withholds the structure from a co-host, and the rules now
+              // pin `structure` for a co-host, so applying the add-on chip
+              // recommendation is the host's call. The rest of the step --
+              // checking the field, granting rebuys -- stays shared.
+              if (app.isAdmin) app.applyRecommendedAddOnStack();
               setState(() => _playersConfirmed = true);
             },
           ),
@@ -272,7 +283,19 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
               addOnChipPlan: app.liveAddOnChipPlan,
               selections: _addOnSelections,
               onToggle: (id) => setState(() {
-                if (!_addOnSelections.remove(id)) _addOnSelections.add(id);
+                final taking = !_addOnSelections.remove(id);
+                if (taking) {
+                  _addOnSelections.add(id);
+                  // Taking it settles the question, so any earlier decline is
+                  // withdrawn rather than left to contradict the selection.
+                  app.undeclineAddOn(id);
+                } else {
+                  // Unticking means "no add-on" — which A2-1 counts as an
+                  // answer, so the overtime close can stop waiting on this
+                  // player. Before addOnDeclined existed a decline was just
+                  // an absence and the window could never close on its own.
+                  app.declineAddOn(id);
+                }
               }),
               totalAddOns: totalAddOns,
               addOnChips: addOnChips,
@@ -327,28 +350,59 @@ class _RebuySettlementScreenState extends State<RebuySettlementScreen> {
           // said yes.
           if (_colorUpConfirmed) ...[
             const SizedBox(height: AppSpacing.md),
-            _ConfirmPrizePoolStep(
-              organizerAmount: preview.organizerAmount,
-              prizePool: preview.prizePool,
-              roundingRemainder: preview.roundingRemainder,
-              prizes: preview.prizes,
-              addOnsTaken: settings.addOn
-                  ? game.players.where((p) => p.hasAddOn).length +
-                        _addOnSelections.length
-                  : 0,
-              organizerPct: settings.effectiveOrganizerPct,
-              onConfirm: () {
-                for (final id in _addOnSelections) {
-                  app.grantAddOn(
-                    id,
-                    idempotencyKey:
-                        'addon-$id-${DateTime.now().microsecondsSinceEpoch}',
-                  );
-                }
-                app.confirmSettlement();
-                context.go(RoutePaths.hostDashboard);
-              },
-            ),
+            if (isHost)
+              _ConfirmPrizePoolStep(
+                organizerAmount: preview.organizerAmount,
+                prizePool: preview.prizePool,
+                roundingRemainder: preview.roundingRemainder,
+                prizes: preview.prizes,
+                addOnsTaken: settings.addOn
+                    ? game.players.where((p) => p.hasAddOn).length +
+                          _addOnSelections.length
+                    : 0,
+                organizerPct: settings.effectiveOrganizerPct,
+                onConfirm: () {
+                  for (final id in _addOnSelections) {
+                    app.grantAddOn(
+                      id,
+                      idempotencyKey:
+                          'addon-$id-${DateTime.now().microsecondsSinceEpoch}',
+                    );
+                  }
+                  app.confirmSettlement();
+                  context.go(RoutePaths.hostDashboard);
+                },
+              )
+            else
+              // Read-only for a co-host rather than hidden: they still need to
+              // see the numbers they just helped produce.
+              AppCard(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Prize pool',
+                      style: AppTypography.bodySm
+                          .copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Pool ${preview.prizePool}, organiser '
+                      '${preview.organizerAmount}, rounding '
+                      '${preview.roundingRemainder}.',
+                      style: AppTypography.bodySm,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'A co-host runs the table but cannot confirm payouts. '
+                      'The host confirms the prize pool.',
+                      style: AppTypography.bodyXs
+                          .copyWith(color: AppColors.mutedForeground),
+                    ),
+                  ],
+                ),
+              ),
           ],
           const SizedBox(height: AppSpacing.xxl),
         ],

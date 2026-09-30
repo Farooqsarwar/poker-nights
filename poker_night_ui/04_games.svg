@@ -1,0 +1,88 @@
+<!-- Poker Night Games Screen (B2) - §B2 -->
+<!-- Background: bg #0A0A0A -->
+<!-- Elements: red #D53032, white #FFFFFF, muted #A6A6AA, surface #141414, surface2 #1C1C1C -->
+<!-- Spec Mapping: -->
+<!-- §B2: Games — the group page ✅ -->
+<!-- §E17 Row 1: RSVP seating & waitlist queue — (n+1)th Going → waitlist ✅ -->
+<!-- §E17 Row 2: Waitlist promotion on drop — automatic ✅ -->
+<!-- §E17 Row 3: RSVP deadline lock — wall clock reaches deadline ✅ -->
+<!-- §E17 Row 4: Second-table Premium prompt (D5) — when count exceeds maxPerTable ✅ -->
+<!-- §E17 Row 5: "Same as last time?" repost suggestion — state check only ✅ -->
+<!-- §E17 Row 6: Code generation — 6 chars from crypto RNG ✅ -->
+<!-- §E17 Row 7: Code normalisation & resolution ✅ -->
+<!-- §E17 Row 8: Code-lookup rate limit — 10 lookups/min ✅ -->
+<!-- §E17 Row 9: Rebuy-rate learning pre-fill — from last 8 games ✅ -->
+<!-- §E17 Row 10: Pace-learning callout — from last 5 games ✅ -->
+<!-- §E17 Row 11: Template/preset pre-fill — pre-fills wizard ✅ -->
+<!-- §B2 Item 4: Host-only row — Table settings, Presets, + New game ✅ -->
+<!-- §B2 Item 5: Games list with game cards showing status pill (LIVE, RSVP OPEN/CLOSED/FINISHED) ✅ -->
+<!-- §B2 Empty state: "No game running right now" with Start a game now / Run a cash game / Plan one in a group ✅ -->
+<!-- §B4 Rule 10: Abbreviations fine in dense tables (L6, BB) but not in field host is setting ("Level 6") ✅ -->
+<!-- §B4 Rule 13: Focus — 2px red ring 2px outside bounds on focus ✅ -->
+<svg width="393" height="844" viewBox="0 0 393 844" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow"><feGaussianBlur stdDeviation="10" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="393" height="844" fill="#0A0A0A"/>
+  <!-- App bar -->
+  <rect x="0" y="0" width="393" height="80" fill="#141414"/>
+  <circle cx="35" cy="40" r="18" fill="#D53032"/>
+  <text x="55" y="43" fill="#FFFFFF" font-family="Space Grotesk" font-size="14" font-weight="600">Alexey</text>
+  <text x="55" y="62" fill="#A6A6AA" font-family="Space Grotesk" font-size="10" font-weight="600">Members 12</text>
+  <!-- Page title -->
+  <text x="196.5" y="100" text-anchor="middle" fill="#FFFFFF" font-family="Space Grotesk" font-size="17" font-weight="600" letter-spacing="0.16em">Games</text>
+  <!-- App bar right actions -->
+  <g transform="translate(280, 30)">
+    <circle cx="12" cy="12" r="6" fill="#D53032"/>
+    <text x="20" y="16" fill="#FFFFFF" font-family="Space Grotesk" font-size="8">⋮</text>
+  </g>
+  <!-- Group hero card -->
+  <g transform="translate(20, 130)">
+    <rect x="20" y="40" width="353" height="100" rx="18" fill="#1C1C1C"/>
+    <text x="196.5" y="65" fill="#FFFFFF" font-family="Space Grotesk" font-size="16" font-weight="500">Friday Poker</text>
+    <text x="196.5" y="90" fill="#A6A6AA" font-family="Space Grotesk" font-size="10">12 members · 3 initials</text>
+  </g>
+  <!-- Group code & actions -->
+  <g transform="translate(20, 180)">
+    <rect x="20" y="40" width="353" height="50" rx="18" fill="#141414"/>
+    <text x="196.5" y="55" fill="#D53032" font-family="Space Grotesk" font-size="11" font-weight="600" letter-spacing="0.16em">Group code · Q4MT7R</text>
+    <text x="23" y="30" fill="#A6A6AA" font-family="Space Grotesk" font-size="9">Invite link / QR</text>
+  </g>
+  <!-- Action pills -->
+  <g transform="translate(20, 250)">
+    <rect x="20" y="40" width="130" height="40" rx="13" fill="#1C1C1C"/>
+    <text x="85" y="62" fill="#FFFFFF" font-family="Space Grotesk" font-size="11">TABLE SETTINGS</text>
+    <rect x="170" y="40" width="133" height="40" rx="13" fill="#D53032"/>
+    <text x="231.5" y="62" fill="#FFFFFF" font-family="Space Grotesk" font-size="11">+ NEW GAME</text>
+  </g>
+  <!-- Games list section -->
+  <g transform="translate(20, 290)">
+    <text x="20" y="30" fill="#FFFFFF" font-family="Space Grotesk" font-size="11" font-weight="500" letter-spacing="0.16em">Games</text>
+    <text x="20" y="50" fill="#A6A6AA" font-family="Space Grotesk" font-size="9">n upcoming</text>
+  </g>
+  <!-- Placeholder game cards -->
+  <g transform="translate(20, 330)">
+    <g transform="translate(0, 0)">
+      <rect x="0" y="0" width="353" height="80" rx="18" fill="#1C1C1C"/>
+      <text x="20" y="25" fill="#FFFFFF" font-family="Space Grotesk" font-size="13">Friday Poker</text>
+      <text x="20" y="45" fill="#3FBF6B" font-family="Space Grotesk" font-size="10" font-weight="600">GOING 7</text>
+      <text x="20" y="62" fill="#A6A6AA" font-family="Space Grotesk" font-size="9">· 20:00 · 15 buy-in</text>
+    </g>
+    <g transform="translate(0, 90)">
+      <rect x="0" y="0" width="353" height="80" rx="18" fill="#1C1C1C"/>
+      <text x="20" y="25" fill="#FFFFFF" font-family="Space Grotesk" font-size="13">Friday Poker</text>
+      <text x="20" y="45" fill="#A6A6AA" font-family="Space Grotesk" font-size="10">RSVP CLOSED</text>
+    </g>
+  </g>
+  <!-- Empty state -->
+  <g transform="translate(20, 440)">
+    <text x="196.5" y="60" fill="#FFFFFF" font-family="Space Grotesk" font-size="18" font-weight="500" text-anchor="middle">No game running right now</text>
+    <text x="196.5" y="80" fill="#A6A6AA" font-family="Space Grotesk" font-size="14" text-anchor="middle">This tab switches straight to the live clock the moment a game you're in kicks off.</text>
+    <g transform="translate(0, 110)">
+      <rect x="80" y="40" width="233" height="52" rx="28" fill="#D53032"/>
+      <text x="201.5" y="69" text-anchor="middle" fill="#FFFFFF" font-family="Space Grotesk" font-size="16" font-weight="600">Start a game now</text>
+      <rect x="80" y="110" width="233" height="52" rx="28" fill="#1C1C1C"/>
+      <text x="201.5" y="133" text-anchor="middle" fill="#FFFFFF" font-family="Space Grotesk" font-size="14" font-weight="500">Run a cash game</text>
+    </g>
+  </g>
+</svg>

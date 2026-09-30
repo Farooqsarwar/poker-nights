@@ -42,6 +42,7 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _exitAnimation; // fade out before routing
 
   Timer? _timer;
+  Timer? _authTimeoutTimer;
   bool _navigated = false;
 
   @override
@@ -109,18 +110,34 @@ class _SplashScreenState extends State<SplashScreen>
 
     // ...with a safety net in case a frame stalls and the status never fires.
     _timer = Timer(_totalDuration + const Duration(milliseconds: 400), _goNext);
+
+    // 5s auth timeout fallback: if auth not resolved, continue to /start
+    // and retry silently in the background (§A1 rule).
+    _authTimeoutTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted || _navigated) return;
+      _navigated = true;
+      final authed = context.read<AppProvider>().isAuthenticated;
+      context.go(authed ? RoutePaths.home : RoutePaths.landing);
+    });
   }
 
   void _goNext() {
     if (_navigated || !mounted) return;
     _navigated = true;
-    final authed = context.read<AppProvider>().isAuthenticated;
-    context.go(authed ? RoutePaths.home : RoutePaths.landing);
+    final app = context.read<AppProvider>();
+    // If previous game was running and we can resume, do so
+    if (app.canResumePreviousGame) {
+      context.go(RoutePaths.invitation); // TODO: replace with actual resume route
+      return;
+    }
+    if (!app.authReady) return;
+    context.go(app.isAuthenticated ? RoutePaths.home : RoutePaths.landing);
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _authTimeoutTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }

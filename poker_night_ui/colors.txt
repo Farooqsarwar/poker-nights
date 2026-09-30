@@ -1,0 +1,12 @@
+# Color Tokens from §B1
+# Use exact these hex values in all SVGs and UI design
+bg:#0A0A0A              # App ground; scoreboard ground; input fill
+surface:#141414         # Cards, list rows, tiles
+surface2:#1C1C1C        # Secondary buttons, steppers, drawer rows
+red:#D53032             # Filled buttons, active tab, logo, progress bars
+redText:#F2555A         # Text below 24px (LEVEL, ANTE labels, Antes in tables)
+white:#FFFFFF           # Primary text, clock minutes
+muted:#A6A6AA           # Secondary text, inactive tab labels
+green:#3FBF6B           # LIVE dot, GOING/CHECKED IN/ACTIVE pills
+border:rgba(255,255,255,0.08)  # Card and row borders
+borderStrong:rgba(255,255,255,0.16)  # Focus outlines

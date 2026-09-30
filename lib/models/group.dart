@@ -63,6 +63,7 @@ class Group {
     bool? pinned,
     TableSettings? tableSettings,
     String? defaultChipSetId,
+    bool clearDefaultChipSetId = false,
   }) {
     return Group(
       id: id,
@@ -77,7 +78,12 @@ class Group {
       icon: icon ?? this.icon,
       pinned: pinned ?? this.pinned,
       tableSettings: tableSettings ?? this.tableSettings,
-      defaultChipSetId: defaultChipSetId ?? this.defaultChipSetId,
+      // A null means "keep", so clearing the chip-set pointer needs its own
+      // flag -- otherwise picking the Standard box on the chips screen would
+      // silently keep the saved set it was meant to replace.
+      defaultChipSetId: clearDefaultChipSetId
+          ? null
+          : defaultChipSetId ?? this.defaultChipSetId,
     );
   }
 }

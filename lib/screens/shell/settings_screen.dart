@@ -213,6 +213,15 @@ class SettingsScreen extends StatelessWidget {
                   showDivider: true,
                 ),
                 _buildSettingRow(
+                  title: 'Haptics',
+                  subtitle: 'Short vibration on level change',
+                  trailing: AppToggle(
+                    value: app.hapticsEnabled,
+                    onChanged: (v) => app.setHapticsEnabled(v),
+                  ),
+                  showDivider: true,
+                ),
+                _buildSettingRow(
                   title: 'Push notifications',
                   subtitle: 'Tournament, RSVP and result alerts',
                   trailing: AppToggle(

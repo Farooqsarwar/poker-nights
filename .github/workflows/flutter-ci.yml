@@ -1,0 +1,37 @@
+﻿name: Flutter CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  # One place to bump. 3.44.7 is the stable release this project was last
+  # verified against; pubspec.lock asks for Dart >=3.10.3 <4.0.0 and
+  # Flutter >=3.38.4, so any stable at or above 3.38.4 satisfies the project.
+  FLUTTER_VERSION: "3.44.7"
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      # --fatal-infos makes an info-level lint a build failure, which is the
+      # point of running the analyzer in CI at all.
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+      - name: Run tests
+        run: flutter test

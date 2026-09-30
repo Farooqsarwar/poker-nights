@@ -7,6 +7,8 @@ import 'package:poker_night/models/user.dart';
 import 'package:poker_night/providers/app_provider.dart';
 import 'package:poker_night/screens/shell/group_settings_screen.dart';
 import 'package:poker_night/services/recovery_service.dart';
+import 'package:poker_night/widgets/app_button.dart';
+import 'package:poker_night/widgets/app_text_field.dart';
 import 'package:provider/provider.dart';
 
 /// Spec B9 — group settings.
@@ -307,31 +309,147 @@ void main() {
       });
     });
 
-    testWidgets('an owner cannot leave, and Delete group says why',
+    testWidgets('an owner cannot leave, and is offered Delete group',
         (tester) async {
       final app = provider(members: [host, member]);
 
       await screen(tester, app, () async {
         expect(find.text('Delete group'), findsOneWidget);
         expect(find.text('Leave group'), findsNothing);
-        // There is no provider method behind a group delete, so the row ships
-        // inert with the reason on screen instead of a dialog over a write
-        // nobody has written.
-        expect(find.textContaining('not wired up'), findsOneWidget);
+        // Live now, not inert: there is a write behind it.
+        final button = tester.widget<AppButton>(find.ancestor(
+          of: find.text('Delete group'),
+          matching: find.byType(AppButton),
+        ));
+        expect(button.onPressed, isNotNull);
+      });
+    });
+
+    testWidgets('Delete group names the consequence and needs the name typed',
+        (tester) async {
+      final app = provider(members: [host, member]);
+
+      await screen(tester, app, () async {
+        await tap(tester, 'Delete group');
+        await tester.pumpAndSettle();
+
+        // §B9: "confirm with the consequence". It goes for everyone, and the
+        // nights are named rather than implied.
+        expect(find.textContaining('cannot be undone'), findsOneWidget);
+        expect(find.textContaining('for everyone'), findsOneWidget);
+
+        // Nothing deleted while the dialog is merely open.
+        expect(app.currentGroup.id, 'g1');
+
+        // The confirm action is refused until the name matches.
+        final confirm = tester.widget<TextButton>(
+          find.widgetWithText(TextButton, 'Delete permanently'),
+        );
+        expect(confirm.onPressed, isNull);
+
+        await tester.enterText(find.byType(AppTextField), 'Friday Poker Club');
+        await tester.pumpAndSettle();
+        final armed = tester.widget<TextButton>(
+          find.widgetWithText(TextButton, 'Delete permanently'),
+        );
+        expect(armed.onPressed, isNotNull);
+      });
+    });
+
+    testWidgets('cancelling Delete group leaves the group alone',
+        (tester) async {
+      final app = provider(members: [host, member]);
+
+      await screen(tester, app, () async {
+        await tap(tester, 'Delete group');
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(AppTextField), 'Friday Poker Club');
+        await tester.pumpAndSettle();
+        await tap(tester, 'Cancel');
+        await tester.pumpAndSettle();
+        expect(app.currentGroup.id, 'g1');
       });
     });
   });
 
+  group('deleting', () {
+    test('a non-owner cannot delete the group', () {
+      // The provider is the boundary, not the card. A co-host can open this
+      // screen and must still be refused.
+      final app = provider(user: coHost, members: [host, coHost]);
+      expect(app.deleteGroup(), completion(isFalse));
+      expect(app.currentGroup.id, 'g1');
+    });
+
+    test('a signed-out user cannot delete the group', () {
+      final app = AppProvider()..setCurrentGroupForTesting(groupWith());
+      expect(app.deleteGroup(), completion(isFalse));
+      expect(app.currentGroup.id, 'g1');
+    });
+  });
+
   group('group code', () {
-    testWidgets('the code is shown and the re-roll is inert', (tester) async {
+    testWidgets('the code is shown and the host can re-roll it',
+        (tester) async {
       final app = provider();
 
       await screen(tester, app, () async {
         expect(find.text('FP2608'), findsOneWidget);
-        expect(find.text('Re-roll the code'), findsOneWidget);
-        // Both unwired actions say so on screen, not only in a code review.
-        expect(find.textContaining('Not available yet'), findsNWidgets(2));
+        final button = tester.widget<AppButton>(find.ancestor(
+          of: find.text('Re-roll the code'),
+          matching: find.byType(AppButton),
+        ));
+        expect(button.onPressed, isNotNull);
+        // Nothing claims to be missing any more.
+        expect(find.textContaining('Not available yet'), findsNothing);
       });
+    });
+
+    testWidgets('re-rolling says the old code dies at once', (tester) async {
+      final app = provider();
+
+      await screen(tester, app, () async {
+        await tap(tester, 'Re-roll the code');
+        await tester.pumpAndSettle();
+
+        // "the old code and link stop working at once" -- anyone already
+        // holding the old one is about to have a dead link.
+        expect(find.textContaining('stop working immediately'), findsOneWidget);
+        expect(app.currentGroup.joinCode, 'FP2608',
+            reason: 'nothing is retired before the host confirms');
+
+        await tap(tester, 'Cancel');
+        await tester.pumpAndSettle();
+        expect(app.currentGroup.joinCode, 'FP2608');
+      });
+    });
+
+    testWidgets('a non-owner sees the code but cannot re-roll it',
+        (tester) async {
+      // The code is how a member gets in, so it is shown; retiring it is the
+      // host's call.
+      final app = provider(user: coHost, members: [host, coHost]);
+
+      await screen(tester, app, () async {
+        expect(find.text('FP2608'), findsOneWidget);
+        final button = tester.widget<AppButton>(find.ancestor(
+          of: find.text('Re-roll the code'),
+          matching: find.byType(AppButton),
+        ));
+        expect(button.onPressed, isNull);
+      });
+    });
+
+    test('a non-owner cannot re-roll the code', () {
+      final app = provider(user: coHost, members: [host, coHost]);
+      expect(app.rerollGroupJoinCode(), completion(isFalse));
+      expect(app.currentGroup.joinCode, 'FP2608');
+    });
+
+    test('a signed-out user cannot re-roll the code', () {
+      final app = AppProvider()..setCurrentGroupForTesting(groupWith());
+      expect(app.rerollGroupJoinCode(), completion(isFalse));
+      expect(app.currentGroup.joinCode, 'FP2608');
     });
   });
 }

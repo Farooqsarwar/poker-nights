@@ -1,0 +1,49 @@
+<!-- Poker Night Splash Screen (A1) - §A1 -->
+<!-- Background: bg #0A0A0A -->
+<!-- Elements: red #D53032, white #FFFFFF, muted #A6A6AA, surface #141414 -->
+<!-- Spec Mapping: -->
+<!-- §C3 Route guard: /splash holds while auth resolves (steps 1-3) ✅ -->
+<!-- §C3 Step 1: /game/{CODE} → /join/{CODE} rewrite ✅ -->
+<!-- §C3 Step 2: /group?tab=X → tab route rewrite ✅ -->
+<!-- §C3 Step 3: !authReady → hold at /splash (deep link stored once) ✅ -->
+<!-- §C3 Step 4: public routes allow everyone ✅ -->
+<!-- §C3 Step 5: actor(game) not in route's Who list → /t/:id or /home ✅ -->
+<!-- §C3 Step 6: member on /t/:id while running → /t/:id/live (auto-follow) ✅ -->
+<!-- §C3 Step 7: host on running → /t/:id/dashboard (no back-nav) ✅ -->
+<!-- §C3 Step 8: !authed && !guestSession → signed-out guard card ✅ -->
+<!-- §C3 Step 9: pending deep link → consume it ✅ -->
+<!-- §C3 Step 10: authed on /splash/start/login/register/forgot → ?next or /home ✅ -->
+<!-- §A2b: First-night-without-account mode ✅ -->
+<!-- §E17 Row 12: Check-in window auto-opens (time-triggered) ✅ -->
+<!-- §E17 Row 13: No-show gate (at start evaluation) ✅ -->
+<!-- §E17 Row 17: Late-arrival registration (before cutoff) ✅ -->
+<!-- Splash never a dead end; retries silently in background after 5s ✅ -->
+<svg width="393" height="844" viewBox="0 0 393 844" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow"><feGaussianBlur stdDeviation="10" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="393" height="844" fill="#0A0A0A"/>
+  <circle cx="196.5" cy="280" r="48" fill="#D53032"/>
+  <text x="196.5" y="262" text-anchor="middle" fill="#FFFFFF" font-family="Space Grotesk" font-size="40" font-weight="700">Poker Night</text>
+  <text x="196.5" y="302" text-anchor="middle" fill="#FFFFFF" font-family="Space Grotesk" font-size="14" font-weight="400">Scan. Trade. Track. Win.</text>
+  <circle cx="196.5" cy="280" r="60" fill="rgba(213,48,50,0.15)" filter="url(#glow)"/>
+  <g transform="translate(0, 450)">
+    <text x="196.5" y="440" text-anchor="middle" fill="#A6A6AA" font-family="Space Grotesk" font-size="11" font-weight="600" letter-spacing="0.16em">PRIVATE HOME POKER</text>
+    <text x="196.5" y="465" text-anchor="middle" fill="#FFFFFF" font-family="Space Grotesk" font-size="18" font-weight="400">Run your best poker night</text>
+    <text x="196.5" y="490" text-anchor="middle" fill="#FFFFFF" font-family="Space Grotesk" font-size="16" font-weight="400">One host, one app. Tournament structure generated from your real chips.</text>
+  </g>
+  <g transform="translate(0, 540)">
+    <rect x="20" y="10" width="353" height="110" rx="66" fill="#141414"/>
+    <text x="23" y="42" fill="#A6A6AA" font-family="Space Grotesk" font-size="10" font-weight="600" letter-spacing="0.16em">AUTO BLIND STRUCTURE</text>
+    <text x="173" y="42" fill="#A6A6AA" font-family="Space Grotesk" font-size="10" font-weight="600" letter-spacing="0.16em">LIVE TIMER</text>
+    <text x="303" y="42" fill="#A6A6AA" font-family="Space Grotesk" font-size="10" font-weight="600" letter-spacing="0.16em">SEATING & REDRAWS</text>
+    <text x="23" y="67" fill="#A6A6AA" font-family="Space Grotesk" font-size="10" font-weight="600" letter-spacing="0.16em">TV MODE</text>
+    <text x="173" y="67" fill="#A6A6AA" font-family="Space Grotesk" font-size="10" font-weight="600" letter-spacing="0.16em">CASH GAME TRACKER</text>
+  </g>
+  <g transform="translate(0, 670)">
+    <rect x="80" y="40" width="233" height="56" rx="28" fill="#D53032"/>
+    <text x="201.5" y="69" text-anchor="middle" fill="#FFFFFF" font-family="Space Grotesk" font-size="18" font-weight="600">Start a game now</text>
+    <circle cx="333" cy="40" r="28" fill="#F2555A"/>
+    <text x="333" y="58" text-anchor="middle" fill="#0A0A0A" font-family="Space Grotesk" font-size="14" font-weight="600">Sign In</text>
+  </g>
+</svg>

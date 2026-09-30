@@ -610,6 +610,10 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'settings': gameSettingsToMap(game.settings),
     'structure': tournamentStructureToMap(game.structure),
     'payments': game.payments.map(paymentRecordToMap).toList(),
+    // The per-game co-host list, copied from the group's co-hosts (E4). Kept
+    // as a plain List, NOT folded into the id-keyed map treatment below: it is
+    // a set of uids, not rows, and `isTournamentOrganizer` in firestore.rules
+    // reads it with `resource.data.get('organizerIds', [])` on every update.
     'organizerIds': List<String>.from(game.organizerIds),
     'shotClock': game.shotClock == null
         ? null
@@ -639,6 +643,7 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
         : audit.map(auditRecordToMap).toList(),
     'totalChipsInPlay': game.totalChipsInPlay,
     'pendingGuests': game.pendingGuests.map(playerToMap).toList(),
+    'waitlist': List<String>.from(game.waitlist),
     'finishOrder': List<String>.from(game.finishOrder),
     // Null on a night that finished by busts, so it must round-trip as
     // absent rather than as an empty list - an empty list would read as
@@ -647,6 +652,9 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'speedRecommendation': game.speedRecommendation?.name,
     'settlementConfirmed': game.settlementConfirmed,
     'addOnWindowClosed': game.addOnWindowClosed,
+    // A2-1's second edge. Ids of players who said no at the break, so the
+    // overtime close can tell "declined" apart from "not asked yet".
+    'addOnDeclined': game.addOnDeclined,
     'seatingConfirmed': game.seatingConfirmed,
     'checkInClosed': game.checkInClosed,
     'structureConfirmed': game.structureConfirmed,
@@ -679,8 +687,10 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       payments: _mapList(map['payments'] as List? ?? const [])
           .map(paymentRecordFromMap)
           .toList(),
-      // Absent on every tournament written before the role existed, which
-      // reads correctly as "admin only".
+      // The per-game co-host list. Absent on every tournament written before
+      // the role existed, which reads correctly as "admin only" — and a missing
+      // key must stay that way rather than throwing, because a decode failure
+      // here loses the whole game, not just this field.
       organizerIds:
           List<String>.from(map['organizerIds'] as List? ?? const []),
       shotClock: map['shotClock'] == null
@@ -721,6 +731,7 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       pendingGuests: _mapList(map['pendingGuests'] as List? ?? const [])
           .map(playerFromMap)
           .toList(),
+      waitlist: List<String>.from(map['waitlist'] as List? ?? const []),
       finishOrder: List<String>.from(map['finishOrder'] as List? ?? const []),
       // Not `_mapList` — that casts each element to a Map, and these are bare
       // numbers. Casting a list of doubles through it throws on read, which is
@@ -734,6 +745,7 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
               SpeedRecommendation.speedUp),
       settlementConfirmed: (map['settlementConfirmed'] as bool?) ?? false,
       addOnWindowClosed: (map['addOnWindowClosed'] as bool?) ?? false,
+      addOnDeclined: List<String>.from(map['addOnDeclined'] as List? ?? const []),
       seatingConfirmed: (map['seatingConfirmed'] as bool?) ?? false,
       checkInClosed: (map['checkInClosed'] as bool?) ?? false,
       structureConfirmed: (map['structureConfirmed'] as bool?) ?? false,

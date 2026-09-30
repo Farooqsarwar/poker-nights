@@ -290,7 +290,11 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
     setState(() => _starting = false);
     await _showJoinCode(app.currentGame?.publicCode);
     if (!mounted) return;
-    context.go(RoutePaths.hostDashboard);
+    if (app.isAdmin) {
+      context.go(RoutePaths.hostDashboard);
+    } else {
+      context.go(RoutePaths.playerLive);
+    }
   }
 
   /// C0: the clock is running; show the join code before the dashboard so the

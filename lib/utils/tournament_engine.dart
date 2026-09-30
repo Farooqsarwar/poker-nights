@@ -210,6 +210,107 @@ class TournamentEngine {
   /// most, not automatically the absolute lowest value (10-024).
   static const List<int> valueLadder = [5, 25, 100, 500, 1000, 5000];
 
+  /// Build Spec v3.1 §F1.5 step 2 — bank-aware S_max ceiling.
+  static double sMax({
+    required int bankValue,
+    required int draws,
+    required int players,
+    double addOnMult = 1.25,
+    double bonusPct = 0.125,
+  }) {
+    final denom = draws + (addOnMult * players) + (bonusPct * players);
+    if (denom <= 0) return 0;
+    return bankValue / denom;
+  }
+
+  /// Build Spec v3.1 §F1.11 — fewest chips to make an amount, largest-chip-first.
+  static Map<int, int> fewestChips(
+    int amount,
+    List<int> values, {
+    Map<int, int>? limits,
+  }) {
+    if (amount <= 0) return const {};
+    final unique = <int>[];
+    for (final v in [...values.where((v) => v > 0)]..sort((a, b) => b.compareTo(a))) {
+      if (!unique.contains(v)) unique.add(v);
+    }
+    if (unique.isEmpty) return const {};
+
+    var bestCount = 2147483647; // int.max, safe for JavaScript number representation
+    final best = <int, int>{};
+    final counts = <int, int>{for (final v in unique) v: 0};
+
+    void dfs(int index, int remaining, int used) {
+      if (remaining == 0) {
+        if (used < bestCount) {
+          bestCount = used;
+          best.clear();
+          for (final entry in counts.entries) {
+            if (entry.value > 0) best[entry.key] = entry.value;
+          }
+        }
+        return;
+      }
+      if (index >= unique.length) return;
+      if (used + (remaining / unique[index]).ceil() >= bestCount) return;
+
+      final value = unique[index];
+      final maxByValue = limits != null && limits.containsKey(value)
+          ? limits[value]!
+          : (remaining ~/ value) + 1;
+      final maxTake = maxByValue.clamp(0, remaining ~/ value);
+      for (var take = maxTake; take >= 0; take--) {
+        counts[value] = take;
+        final nextRemaining = remaining - (take * value);
+        if (nextRemaining < 0) continue;
+        final nextUsed = used + take;
+        if (take > 0 || index == unique.length - 1) {
+          dfs(index + 1, nextRemaining, nextUsed);
+        } else {
+          dfs(index + 1, nextRemaining, nextUsed);
+        }
+      }
+      counts[value] = 0;
+    }
+
+    dfs(0, amount, 0);
+    return best;
+  }
+
+  /// Build Spec v3.1 §F1.5 — score one composition, lower is better.
+  static double scoreComposition(List<int> counts, List<int> values, int totalChips) {
+    if (counts.isEmpty || values.isEmpty || totalChips <= 0) return double.infinity;
+    final used = <int, int>{};
+    for (var i = 0; i < counts.length; i++) {
+      if (counts[i] > 0) used[values[i]] = counts[i];
+    }
+    if (used.isEmpty) return double.infinity;
+
+    var smallestPair = 0.0;
+    final present = used.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+    if (present.length >= 2) {
+      final low = present.first.key;
+      final next = present[1].key;
+      smallestPair = math.pow(((low - next) / 2), 2).toDouble() + 25;
+    }
+
+    var changeCoverage = 0.0;
+    final denomValues = present.map((e) => e.key).toList();
+    for (final value in denomValues) {
+      if (value < 10) changeCoverage += 15;
+      if (value == 25) changeCoverage += 15;
+    }
+
+    var chipCountPenalty = 0.0;
+    final totalUsed = present.fold<int>(0, (sum, e) => sum + e.value);
+    chipCountPenalty = 3 * (totalChips - totalUsed).abs() + 2;
+
+    var parityBonus = 0.0;
+    if (present.length % 2 == 0) parityBonus = -1.0;
+
+    return smallestPair + changeCoverage + chipCountPenalty + parityBonus;
+  }
+
   /// Recommends unique values for unnumbered chips ordered from most-available
   /// to least-available. Keeps printed ordering and existing quantities.
   static List<ChipColor> recommendUnnumberedChipSet(List<ChipColor> ordered) {

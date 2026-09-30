@@ -68,6 +68,22 @@ void main() {
     // viewer benefits from knowing whether Stage A or the final table is
     // running, so it rides through unscrubbed like the rest of this group.
     'shootoutStage',
+    // A2-1's declined-add-on ids. PRIVATE, and like `pendingGuests` above this
+    // is a per-person record of a financial decision: who refused to buy an
+    // add-on is nobody else's business, so it is stripped in projectionFor and
+    // asserted in projection_boundary_test.dart. (The paired `addOnOvertime`
+    // flag is on GameSettings and is zeroed there with the other money terms.)
+    'addOnDeclined',
+    // §C3 the RSVP seating queue. PUBLIC, and structurally identical to
+    // `finishOrder`: an ordered list of rsvp/player ids carrying no money and
+    // nothing derived from what anyone paid, so there is nothing here to
+    // withhold. The screens need it — the RSVP screen lists "Waitlist (#1,
+    // #2.)" to any member, the game card renders a player's own "WAITLIST #n"
+    // pill, and promotion on a drop (T89) is only meaningful if the order is
+    // legible to the table. `pendingGuests` is scrubbed above for a different
+    // reason: it is the approval queue, and a non-guest must not see other
+    // people's unapproved bookings.
+    'waitlist',
   };
 
   test('no field joins LiveGame without a projection decision', () {

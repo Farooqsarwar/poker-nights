@@ -173,6 +173,36 @@ extension AppProviderGame on AppProvider {
     return _currentGame?.id == id ? _currentGame : null;
   }
 
+  /// The uids that get to OPERATE this tournament, derived from the group.
+  ///
+  /// This is the client-side mirror of the specification's `coHostUids` on the
+  /// game document — "copied from the group's co-hosts at posting" (E4) — under
+  /// the name this codebase and `firestore.rules` use for it, `organizerIds`.
+  ///
+  /// The group roster stays the ONLY source of truth: this is a derived copy,
+  /// recomputed at the points below, never stored or edited anywhere else. The
+  /// alternative (letting a screen append to the game's own list) is a second
+  /// list to keep in step with the roster, and it is the one the rules already
+  /// forbid: `organizerWriteSafe` pins `organizerIds` unchanged on a
+  /// non-admin write, so a game document's list can only ever be written whole
+  /// by the host.
+  ///
+  /// Co-hosts only, never the host. The owner already resolves to `Actor.host`
+  /// first in `Permissions.actorFor`, so listing them buys nothing and would
+  /// make the rules treat the host as one of their own co-hosts.
+  ///
+  /// Why this matters: `canRunCurrentGame` is the gate on `_isGameAuthority`,
+  /// i.e. on who may write the whole game document, and `canRunCurrentGame` is
+  /// `Permissions.can(runThisTournament, currentActor)`. A co-host is
+  /// `isAdmin: false`, so before this list existed `actorFor` fell through to
+  /// `Actor.member`, `runThisTournament` was false, and a co-host was never the
+  /// single writer for a game whose clock they had taken over — which is exactly
+  /// what §E9 grants them.
+  List<String> _groupCoOrganizerIds() => [
+        for (final member in _currentGroup.members)
+          if (member.isCoAdmin) member.id,
+      ];
+
   LiveGame createGame(GameSettings settings) {
     // Client flow: creating an event does NOT generate the structure. The AI
     // finalises stacks/blinds/levels when the Admin taps "Generate Final
@@ -223,6 +253,9 @@ extension AppProviderGame on AppProvider {
       status: LiveGameStatus.draft,
       publicCode: Formatters.generateCode(),
       tvCode: Formatters.generateCode(),
+      // Seeded here rather than at publish so a night that is started without
+      // ever being published still knows who may run it.
+      organizerIds: _groupCoOrganizerIds(),
       currentLevel: 1,
       timerRunning: false,
       secondsRemaining: structure.levelDuration * 60,
@@ -348,6 +381,9 @@ extension AppProviderGame on AppProvider {
       _currentGame = game.copyWith(
         status: LiveGameStatus.published,
         originalLevels: List.of(game.structure.levels),
+        // Re-derived at posting, per E4: a co-host promoted between creating
+        // the event and posting it runs this night.
+        organizerIds: _groupCoOrganizerIds(),
       );
       _syncGroupGame();
       if (_backendUp) {
@@ -390,6 +426,9 @@ extension AppProviderGame on AppProvider {
       status: LiveGameStatus.published,
       chat: [...game.chat, card],
       originalLevels: List.of(game.structure.levels),
+      // Re-derived at posting, per E4: a co-host promoted between creating the
+      // event and posting it runs this night.
+      organizerIds: _groupCoOrganizerIds(),
     );
     _setGroup(
       _currentGroup.copyWith(
@@ -756,6 +795,81 @@ extension AppProviderGame on AppProvider {
     );
     _syncGroupGame();
     if (!_disposed) notifyListeners();
+  }
+
+  /// Records that a player declined the add-on at the break (A2-1).
+  ///
+  /// A decline is not the same as a take, and before [addOnDeclined] existed
+  /// the two were indistinguishable: a player who said no simply never entered
+  /// the selection set. The overtime close needs to know the difference, so
+  /// this writes the id out and then re-checks whether the window can close
+  /// itself.
+  void declineAddOn(String playerId) {
+    final game = _currentGame;
+    if (game == null || game.addOnDeclined.contains(playerId)) return;
+    _currentGame = game.copyWith(
+      addOnDeclined: [...game.addOnDeclined, playerId],
+    );
+    _maybeCloseAddOnWindowOvertime();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Takes back a decline, returning the player to the un-answered state.
+  ///
+  /// Re-opens a window that had closed itself, because a withdrawn decline
+  /// puts an unanswered player back in the room. This cannot fight the host's
+  /// own Next press: settlement step 2 is only reachable while it is
+  /// unconfirmed, and the screen collapses that step on Next, so no further
+  /// toggle can arrive after a manual close.
+  void undeclineAddOn(String playerId) {
+    final game = _currentGame;
+    if (game == null || !game.addOnDeclined.contains(playerId)) return;
+    _currentGame = game.copyWith(
+      addOnDeclined: game.addOnDeclined.where((id) => id != playerId).toList(),
+      addOnWindowClosed: false,
+      settings: game.settings.copyWith(addOnOvertime: true),
+    );
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Whether the player answered the add-on offer either way.
+  bool hasAnsweredAddOn(String playerId) =>
+      (_currentGame?.players.any((p) => p.id == playerId && p.hasAddOn) ??
+          false) ||
+      (_currentGame?.addOnDeclined.contains(playerId) ?? false);
+
+  /// A2-1's second edge: the window closes itself once every player from
+  /// settlement step 1 has either taken an add-on or declined one.
+  ///
+  /// C6 step 1 is "Who's still in" -- one row per player, In or Busted, and
+  /// "Paused players are already Out". So the set that has to answer is the
+  /// players still in, which is exactly what `activePlayers` means and exactly
+  /// what the step 1 screen itself lists.
+  ///
+  /// This used to walk `game.players`, which is every player who ever entered.
+  /// A busted player can never take or decline an add-on, so that set can never
+  /// be fully answered and the overtime window hung open forever, holding the
+  /// prize pool unlocked -- the precise failure C6 line 2204 is written to
+  /// prevent. Only acts while the window is in overtime: pressing Next stays
+  /// the normal exit, and a window that is merely open with players still to
+  /// ask must not close on them.
+  void _maybeCloseAddOnWindowOvertime() {
+    final game = _currentGame;
+    if (game == null || game.addOnWindowClosed) return;
+    if (!game.settings.addOnOvertime) return;
+    final stillIn = game.activePlayers;
+    if (stillIn.isEmpty) return;
+    if (stillIn.every((p) => hasAnsweredAddOn(p.id))) {
+      _currentGame = game.copyWith(
+        addOnWindowClosed: true,
+        settings: game.settings.copyWith(addOnOvertime: false),
+      );
+      addAuditRecord(
+        'addon_window_closed',
+        'Add-on window (overtime) closed — everyone has answered.',
+      );
+      _syncGroupGame();
+    }
   }
 
   void confirmSettlement() {

@@ -793,24 +793,17 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
     ];
   }
 
-  /// Format decisions only — KO bounty, ante, breaks (and the seating-mode
-  /// override the format feeds). The wizard's "Format" step mounts this, so
-  /// format fields never repeat on the rebuys step.
+  /// Format decisions only — ante, breaks (and the seating-mode override the
+  /// format feeds). The wizard's "Format" step mounts this.
+  ///
+  /// The KO bounty is deliberately absent. The spec puts it on step 1 and only
+  /// step 1: "KO bounty | toggle→then amount + type" (technical 48, §C1 step
+  /// 1). Step 4 lists pace, hard finish, ante, tables, payouts and organiser
+  /// contribution — no bounty. Rendering a second Yes/No here would let a host
+  /// turn the bounty on at step 4 with no amount or type in front of them, and
+  /// the two controls would disagree.
   List<Widget> _formatFields() {
     return [
-      _EditRow(
-        title: 'KO bounty',
-        subtitle: 'Side payment for eliminating a player',
-        trailing: _OptionPicker(
-          options: const ['Yes', 'No'],
-          selected: _koEnabled ? 'Yes' : 'No',
-          onChanged: (v) {
-            setState(() => _koEnabled = v == 'Yes');
-            _emit();
-          },
-        ),
-      ),
-      Divider(color: AppColors.border),
       _EditRow(
         title: 'Ante',
         subtitle: 'How the ante is posted',
@@ -1154,8 +1147,14 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
   // ---- Money ----
 
   List<Widget> _moneyFields() {
-    final errors = validateEventSettings(_buildSettings(strict: true));
     final fields = <Widget>[];
+    // Spec "Rebuy price | = buy-in (+ bounty)": the default already carries the
+    // bounty, so the placeholder has to say so or the host reads "15" and pays
+    // "15 + 5". The bounty itself is a step-1 control, so this is the one place
+    // the derived price surfaces it.
+    final defaultRebuy = _koEnabled
+        ? '${int.tryParse(_buyIn.text.trim()) ?? 0} + ${_koAmount.text.trim()}'
+        : _buyIn.text;
     if (_rebuys) {
       fields
         ..add(_EditRow(
@@ -1166,7 +1165,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
             child: AppTextField(
               controller: _rebuyCost,
               keyboardType: TextInputType.number,
-              placeholder: 'Default (${_buyIn.text})',
+              placeholder: 'Default ($defaultRebuy)',
               onChanged: (_) => _emit(),
             ),
           ),
@@ -1184,24 +1183,6 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
               controller: _addOnCost,
               keyboardType: TextInputType.number,
               placeholder: 'Default (${_buyIn.text})',
-              onChanged: (_) => _emit(),
-            ),
-          ),
-        ))
-        ..add(const SizedBox(height: AppSpacing.md));
-    }
-    if (_koEnabled) {
-      fields
-        ..add(_EditRow(
-          title: 'Bounty amount',
-          subtitle: 'Shown as "${_buyIn.text} + bounty". Bounty does not enter '
-              'the prize pool.',
-          trailing: SizedBox(
-            width: 130,
-            child: AppTextField(
-              controller: _koAmount,
-              keyboardType: TextInputType.number,
-              error: errors['koAmount'],
               onChanged: (_) => _emit(),
             ),
           ),

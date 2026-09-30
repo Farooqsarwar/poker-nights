@@ -549,7 +549,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
                           child: AppButton(
-                            onPressed: app.acceptLevelExtension,
+                            // `acceptLevelExtension` appends a level to
+                            // `structure.levels`. §C2 line 1892 makes a
+                            // co-host read-only for structure, so the approval
+                            // is the host's even though the suggestion that
+                            // triggered it is the clock's. "Not now" stays
+                            // available to either, because declining changes
+                            // nothing.
+                            onPressed: app.isAdmin
+                                ? app.acceptLevelExtension
+                                : null,
                             child: const Text('Add level & continue'),
                           ),
                         ),
@@ -2803,13 +2812,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     int currentLevel,
     GameSettings settings,
   ) {
+    // §C2 line 1892: "/t/:id/levels ... host, co-host (co-host read-only for
+    // structure - D15)". `canRunCurrentGame` is true for a co-host, which is
+    // right for the clock and wrong for the pencil, so the two are separated
+    // here rather than at the button.
+    final readOnly = !app.isAdmin;
     showAppModal(
       context: context,
-      title: 'Edit future structure',
+      title: readOnly ? 'Levels (read-only)' : 'Edit future structure',
       child: StructureEditor(
         structure: structure,
         currentLevel: currentLevel,
         anteStyle: settings.anteStyle,
+        readOnly: readOnly,
         onSpeedUp: () {
           Navigator.pop(context);
           _showSpeedPreview(app, game, SpeedRecommendation.speedUp);

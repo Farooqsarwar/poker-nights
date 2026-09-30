@@ -17,6 +17,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
+import '../../widgets/app_text_field.dart';
 import '../../widgets/count_stepper.dart';
 import '../../widgets/icon_tile.dart';
 import '../../widgets/page_header.dart';
@@ -172,7 +173,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
             const SizedBox(height: AppSpacing.lg),
           ],
 
-          _GroupCodeCard(joinCode: group.joinCode),
+          _GroupCodeCard(joinCode: group.joinCode, canReroll: isOwner),
           const SizedBox(height: AppSpacing.lg),
 
           isOwner ? const _DeleteGroupCard() : _LeaveGroupCard(),
@@ -392,6 +393,13 @@ class _Report extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(report.excerpt, style: AppTypography.bodySm),
           const SizedBox(height: AppSpacing.xs),
+          // The closed-list reason the member picked (§E10 (2)), so the host
+          // judges the message on the same wording every time. Conditional
+          // because reports filed before the field existed have none.
+          if (report.reason != null) ...[
+            AppBadge(label: report.reason!, variant: AppBadgeVariant.red),
+            const SizedBox(height: AppSpacing.xs),
+          ],
           Text(
             'Reported by ${reporter ?? 'a member'} · '
             '${Formatters.relativeTime(report.createdAt)}'
@@ -447,9 +455,12 @@ class _Report extends StatelessWidget {
 
 /// §B9 group code, and the re-roll that retires it.
 class _GroupCodeCard extends StatelessWidget {
-  const _GroupCodeCard({required this.joinCode});
+  const _GroupCodeCard({required this.joinCode, required this.canReroll});
 
   final String joinCode;
+
+  /// Host-only: the re-roll retires the group's code for everyone.
+  final bool canReroll;
 
   @override
   Widget build(BuildContext context) {
@@ -483,27 +494,82 @@ class _GroupCodeCard extends StatelessWidget {
             fullWidth: true,
             size: AppButtonSize.lg,
             variant: AppButtonVariant.secondary,
-            disabled: true,
-            onPressed: null,
+            onPressed:
+                canReroll ? () => _reroll(context) : null,
             child: const Text('Re-roll the code'),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          // The row above is inert on purpose, so the reason is on the screen
-          // rather than only in a code review.
-          const AppAlertBanner(
-            type: AppAlertType.info,
-            message: 'Not available yet. A re-roll has to retire the old code '
-                'and its invite link in the same write — until that exists, '
-                'the code below stays the group\'s only one.',
           ),
         ],
       ),
     );
   }
+
+  /// B9: "the old code and link stop working at once", so the dialog says that
+  /// rather than asking a bare "are you sure?" -- anyone who has already shared
+  /// the old one is about to be holding a dead link.
+  Future<void> _reroll(BuildContext context) async {
+    final app = context.read<AppProvider>();
+    final router = GoRouter.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text(
+          'Re-roll ${app.currentGroup.name}\'s code?',
+          style: TextStyle(color: AppColors.foreground),
+        ),
+        content: Text(
+          'The current code and its invite link stop working immediately. '
+          'Anyone who already has the old one will not get in with it, and '
+          'you will need to share the new code yourself.',
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'Re-roll',
+              style: TextStyle(
+                color: AppColors.foreground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final ok = await app.rerollGroupJoinCode();
+    if (ok) return;
+    // The code on screen is unchanged, so say why rather than leaving the host
+    // wondering whether the tap registered.
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Could not re-roll the code. Try again.'),
+      ),
+    );
+    router.go(RoutePaths.groupSettings);
+  }
 }
 
-/// §B9 "Delete group". There is no provider method for it, so this is inert
-/// rather than a dialog over a write nobody has written.
+/// B9 "Delete group" — "confirm with the consequence".
+///
+/// Owner-only, and the only way an owner leaves a group. The card states what
+/// goes: the nights, the chat and the standings, for every member, not just the
+/// person tapping. That is why it asks for the group name rather than offering
+/// a bare "are you sure?".
 class _DeleteGroupCard extends StatelessWidget {
   const _DeleteGroupCard();
 
@@ -528,17 +594,107 @@ class _DeleteGroupCard extends StatelessWidget {
             fullWidth: true,
             size: AppButtonSize.lg,
             variant: AppButtonVariant.destructive,
-            disabled: true,
-            onPressed: null,
+            onPressed: () => _confirmDelete(context),
             child: const Text('Delete group'),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          const AppAlertBanner(
-            type: AppAlertType.info,
-            message: 'Not available yet — deleting a group is not wired up.',
           ),
         ],
       ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context) {
+    final app = context.read<AppProvider>();
+    final group = app.currentGroup;
+    final router = GoRouter.of(context);
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final nameCtrl = TextEditingController();
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final matches = nameCtrl.text.trim() == group.name;
+            return AlertDialog(
+              backgroundColor: AppColors.card,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(
+                  color: AppColors.destructive.withValues(alpha: 0.30),
+                ),
+              ),
+              title: Text(
+                'Delete ${group.name}?',
+                style: TextStyle(color: AppColors.foreground),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'This cannot be undone. It removes the group for everyone, '
+                    'along with its ${group.games.length} past '
+                    'night${group.games.length == 1 ? '' : 's'}, its chat and '
+                    'its standings. Members keep their own results.',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Type the group name to confirm',
+                    style: AppTypography.bodySm,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppTextField(
+                    controller: nameCtrl,
+                    autofocus: true,
+                    placeholder: group.name,
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(
+                    'Cancel',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: !matches
+                      ? null
+                      : () async {
+                          Navigator.of(dialogContext).pop();
+                          final ok = await app.deleteGroup();
+                          if (!ok) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Could not delete the group. Try again.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          router.go(RoutePaths.home);
+                        },
+                  child: Text(
+                    'Delete permanently',
+                    style: TextStyle(
+                      color: AppColors.destructiveText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

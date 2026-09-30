@@ -15,7 +15,7 @@ enum PremiumTier {
   };
 }
 
-/// One purchasable plan.
+/// One purchasable plan for the demo flow.
 class PremiumPlan {
   const PremiumPlan({
     required this.id,
@@ -28,60 +28,34 @@ class PremiumPlan {
 
   final String id;
   final String name;
-
-  /// Displayed as-is. the Build Spec keeps currency symbols out of the
-  /// primary UI, so this carries the number and the period carries the unit.
   final String price;
   final String period;
-
-  /// e.g. "Save 20%" — shown as a badge when present.
   final String? saving;
-
-  /// Paid once, never renews (the Host licence, D12). Such a plan is not part
-  /// of the "Save n%" comparison and gets no "Cancel anytime" line.
   final bool oneTime;
 
-  /// Placeholder pricing.
-  ///
-  /// The specification defines WHAT is Premium (§3) but never states a price,
-  /// a billing period, or who pays. These numbers exist so the screen can be
-  /// designed and reviewed; they are not agreed pricing and must be replaced
-  /// before any real billing is connected.
-  static const _monthlyPrice = 5;
-  static const _yearlyPrice = 36;
-
-  /// The yearly plan's per-month figure and its saving against twelve monthly
-  /// payments are worked out from the two prices, so changing a price cannot
-  /// leave a stale "Save 40%" on screen.
-  static String get _yearlyPerMonth {
-    final perMonth = _yearlyPrice / 12;
-    return perMonth == perMonth.roundToDouble()
-        ? '${perMonth.round()}'
-        : perMonth.toStringAsFixed(2);
-  }
-
-  static int get _yearlySavingPct =>
-      ((1 - _yearlyPrice / (_monthlyPrice * 12)) * 100).round();
-
-  static final placeholders = [
+  /// Demo plans are intentionally fake and local-only. They are not used for a
+  /// real store purchase; they only let the product design and QA flow test the
+  /// premium upgrade path without charging anything.
+  static const placeholders = [
     PremiumPlan(
-      id: 'monthly',
-      name: 'Monthly',
-      price: '$_monthlyPrice',
-      period: 'per month',
+      id: 'demo-monthly',
+      name: 'Demo Monthly',
+      price: '£5',
+      period: 'month',
+      saving: 'Save 40%',
     ),
     PremiumPlan(
-      id: 'yearly',
-      name: 'Yearly',
-      price: '$_yearlyPrice',
-      period: 'per year · $_yearlyPerMonth/mo',
-      saving: 'Save $_yearlySavingPct%',
+      id: 'demo-yearly',
+      name: 'Demo Yearly',
+      price: '£36',
+      period: 'year',
+      saving: 'Save 40%',
     ),
     PremiumPlan(
-      id: 'host',
-      name: 'Host licence',
-      price: '60',
-      period: 'pay once',
+      id: 'demo-host',
+      name: 'Demo Host',
+      price: '£60',
+      period: 'once',
       oneTime: true,
     ),
   ];

@@ -30,13 +30,13 @@ import '../../widgets/why_disclosure.dart';
 /// set in F5 has to reach every group pointing at it — storing the chips here
 /// would freeze the group on whatever the set looked like today.
 ///
-/// No `AppProvider` method writes `Group.defaultChipSetId` yet (the model field
-/// and the codec entry exist, the write does not), so the choice is held on
-/// the screen's working copy of the group. Everything downstream of the
-/// pointer — the option list, the totals, the starting-stack preview — is read
-/// from `AppProvider.savedChipSets` on every build, which is what makes the
-/// "editing the set updates every group that points at it" behaviour real
-/// rather than asserted.
+/// The pointer is written through `AppProvider.setGroupDefaultChipSet()`, which
+/// updates the group document — there is no local-only copy, so a choice made
+/// here reaches the tournament wizard and every other member's device.
+/// Everything downstream of the pointer — the option list, the totals, the
+/// starting-stack preview — is read from `AppProvider.savedChipSets` on every
+/// build, which is what makes the "editing the set updates every group that
+/// points at it" behaviour real rather than asserted.
 class GroupChipsScreen extends StatefulWidget {
   const GroupChipsScreen({super.key});
 
@@ -78,6 +78,13 @@ class GroupChipsScreenState extends State<GroupChipsScreen> {
     // A different group selected underneath (the sidebar is reachable from
     // here) discards the pointer chosen for the old one.
     if (_group.id != app.currentGroup.id) _group = app.currentGroup;
+    // The pointer is the group's, not the screen's, so it is re-read from the
+    // provider on every build rather than mirrored here. Holding a working copy
+    // meant the choice died with the screen: it reached no other screen, no
+    // other member's device, and nothing that creates the next tournament.
+    if (_group.defaultChipSetId != app.currentGroup.defaultChipSetId) {
+      _group = app.currentGroup;
+    }
 
     if (!app.isAdmin) {
       return _NotHost(
@@ -180,7 +187,9 @@ class GroupChipsScreenState extends State<GroupChipsScreen> {
   /// strand the group on today's version of the set (see the class comment).
   void _select(String id) {
     if (_group.defaultChipSetId == id) return;
-    setState(() => _group = _group.copyWith(defaultChipSetId: id));
+    // Written through the provider so it reaches the group document; the
+    // screen's own copy is refreshed from there on the next build.
+    context.read<AppProvider>().setGroupDefaultChipSet(id);
   }
 
   static ({String id, String name, List<ChipColor> chips})? _byId(

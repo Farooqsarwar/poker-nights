@@ -9,6 +9,7 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
+import '../../models/chip_color.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
@@ -660,6 +661,12 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                             onApply: (counts) {
                               app.fixChipCount(counts);
                               Navigator.of(context).pop();
+                              // A2-4's second half: on later registration, offer
+                              // to keep the corrected inventory. Tonight's game
+                              // already has it; this is the only route by which
+                              // a real-world box discrepancy reaches the saved
+                              // set, and it is an offer, never a silent write.
+                              _offerSaveChipSet(context, app, counts);
                             },
                           ),
                         ),
@@ -1588,6 +1595,61 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
 /// (the whole night runs long or short). Blinds, prizes and paid places are
 /// deliberately left alone — a host who wants those rebuilt has Recalculate
 /// right next to this.
+/// A2-4, second half: after a "Fix the count" is applied, offer to keep the
+/// corrected inventory as a saved chip set.
+///
+/// The sheet itself changes tonight's game only, which is right for a night
+/// mid-flight but means a genuine box discrepancy is lost the moment the
+/// tournament is over. This is the offer that captures it — and only an offer:
+/// §F4's rule that nothing is applied silently applies to the saved set as
+/// much as to the structure, so declining leaves the saved set untouched.
+void _offerSaveChipSet(
+  BuildContext context,
+  AppProvider app,
+  List<ChipColor> counts,
+) {
+  final name = '${app.currentGame?.settings.chipSetName ?? 'My'} set';
+  showAppModal(
+    context: context,
+    title: 'Save these chips?',
+    maxWidth: 420,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'The count you just set applies to tonight only. Save it as '
+          '"$name" and the next game starts from what is really in the box.',
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          onPressed: () {
+            app.saveChipSet(
+              // A new set, never an overwrite: the host is saving what the box
+              // really holds, which is a different thing from the set they
+              // picked tonight.
+              'cs-${DateTime.now().millisecondsSinceEpoch}',
+              name,
+              counts,
+            );
+            Navigator.of(context).pop();
+          },
+          child: const Text('Save as my chips'),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AppButton(
+          variant: AppButtonVariant.secondary,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Just tonight'),
+        ),
+      ],
+    ),
+  );
+}
+
 void _showAdjustModal(
   BuildContext context,
   AppProvider app,

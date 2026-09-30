@@ -4,6 +4,7 @@ import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/live_game.dart';
+import '../utils/automations_service.dart';
 import '../utils/formatters.dart';
 import 'app_timer.dart';
 
@@ -127,6 +128,8 @@ class TournamentTimerCard extends StatelessWidget {
           const SizedBox(height: 8),
 
           // Giant Digital Timer: White Minutes & Red Seconds
+          // Rule 15 visual twin: last 5s stay large with live-region semantics
+          // (spoken 5-4-3-2-1 already fires in AppProviderTimer). Client-only.
           LiveTimerBuilder(
             game: game,
             builder: (context, remaining) {
@@ -134,29 +137,34 @@ class TournamentTimerCard extends StatelessWidget {
               final colonIndex = formatted.lastIndexOf(':');
               final minutesPart = colonIndex >= 0 ? formatted.substring(0, colonIndex + 1) : formatted;
               final secondsPart = colonIndex >= 0 ? formatted.substring(colonIndex + 1) : '';
+              final urgency = AutomationsService.isCountdownUrgency(remaining);
 
-              return FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.center,
-                child: RichText(
-                  text: TextSpan(
-                    style: const TextStyle(
-                      fontFamily: AppTypography.monoFamily,
-                      fontSize: 82,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -2,
-                      height: 1.0,
+              return Semantics(
+                liveRegion: urgency,
+                label: urgency ? '$remaining' : null,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: RichText(
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontFamily: AppTypography.monoFamily,
+                        fontSize: urgency ? 96 : 82,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -2,
+                        height: 1.0,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: minutesPart,
+                          style: TextStyle(color: AppColors.foreground),
+                        ),
+                        TextSpan(
+                          text: secondsPart,
+                          style: TextStyle(color: AppColors.primary),
+                        ),
+                      ],
                     ),
-                    children: [
-                      TextSpan(
-                        text: minutesPart,
-                        style: TextStyle(color: AppColors.foreground),
-                      ),
-                      TextSpan(
-                        text: secondsPart,
-                        style: TextStyle(color: AppColors.primary),
-                      ),
-                    ],
                   ),
                 ),
               );

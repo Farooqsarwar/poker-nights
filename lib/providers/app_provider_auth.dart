@@ -143,6 +143,8 @@ extension AppProviderAuth on AppProvider {
       final prefs = await _repo.loadUserPrefs(uid);
       final voice = prefs['voiceEnabled'];
       if (voice is bool) _voiceEnabled = voice;
+      final haptics = prefs['hapticsEnabled'];
+      if (haptics is bool) _hapticsEnabled = haptics;
       // D9 consent. Absent means never answered, which is a "no" — the
       // sign-up checkbox is unchecked by default, so an unset preference must
       // not read as consent.
@@ -166,6 +168,8 @@ extension AppProviderAuth on AppProvider {
       if (colorTheme is String) _colorTheme = colorTheme;
       final themePref = prefs['themePreference'];
       if (themePref is String) _themePreference = themePref;
+      final defaultChipSet = prefs['defaultChipSetId'];
+      if (defaultChipSet is String) _defaultChipSetId = defaultChipSet;
       // Restore per-group notification-mirror cursors so history isn't
       // re-mirrored on every sign-in.
       for (final entry in prefs.entries) {

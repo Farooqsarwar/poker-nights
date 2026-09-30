@@ -9,6 +9,7 @@ import '../../constants/app_constants.dart';
 import '../../models/chat_report.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
+import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
@@ -115,6 +116,21 @@ class _ReportCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(report.excerpt, style: AppTypography.bodySm),
           const SizedBox(height: AppSpacing.xs),
+          // §E10 (2): the reason is the closed list a member picked, and the
+          // whole point of a closed list is that the host reads the same three
+          // words. Absent on a report filed before the field existed, so this
+          // row is conditional rather than showing an empty badge.
+          if (report.reason != null) ...[
+            Row(
+              children: [
+                AppBadge(
+                  label: report.reason!,
+                  variant: AppBadgeVariant.red,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+          ],
           Text(
             'Reported by ${reporter ?? 'a member'} · '
             '${Formatters.relativeTime(report.createdAt)}'

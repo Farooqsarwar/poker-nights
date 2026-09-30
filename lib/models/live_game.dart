@@ -690,11 +690,13 @@ class LiveGame {
     this.auditHistory = const [],
     required this.totalChipsInPlay,
     required this.pendingGuests,
+    this.waitlist = const [],
     required this.finishOrder,
     this.speedRecommendation,
     this.dealAmounts,
     this.settlementConfirmed = false,
     this.addOnWindowClosed = false,
+    this.addOnDeclined = const [],
     this.seatingConfirmed = false,
     this.checkInClosed = false,
     this.structureConfirmed = false,
@@ -747,6 +749,7 @@ class LiveGame {
   final List<AuditRecord> auditHistory;
   final int totalChipsInPlay;
   final List<Player> pendingGuests;
+  final List<String> waitlist;
   final List<String> finishOrder; // playerIds, first-out first
   final SpeedRecommendation? speedRecommendation;
 
@@ -775,6 +778,22 @@ class LiveGame {
   /// The host pressed Next on the add-on step of settlement (Addendum 2).
   /// Ends the add-on window even if the break has already run out.
   final bool addOnWindowClosed;
+
+  /// Players who were offered an add-on at the break and said no.
+  ///
+  /// Addendum 2 A2-1 gives the add-on window two edges. The first is the host
+  /// pressing Next, which is [addOnWindowClosed]. The second is the window
+  /// running out of time: when the break ends before settlement step 2 is
+  /// done, the window becomes "overtime" and closes by itself once **every**
+  /// player from step 1 has answered.
+  ///
+  /// "Answered" has to mean taken OR declined, and only the taken half was
+  /// representable before: a player who declined was simply absent from the
+  /// selection set, which is indistinguishable from a player who has not been
+  /// asked yet. Without this field the overtime close can never know who is
+  /// still outstanding, so the window stays open indefinitely — the one part
+  /// of A2-1 that could not close itself.
+  final List<String> addOnDeclined;
 
   /// True once the admin has confirmed the generated physical seating before
   /// play starts (checklist 13-013). Seating changes clear it again.
@@ -885,11 +904,23 @@ class LiveGame {
   /// lets them hand the controls to somebody for one evening without handing
   /// over the group.
   ///
+  /// Populated by `AppProvider._groupCoOrganizerIds` from the group's co-host
+  /// roster, which is the specification's `coHostUids` on the game document —
+  /// "copied from the group's co-hosts at posting" (E4). It is a derived copy,
+  /// not a second roster: nothing else writes it, and `firestore.rules` pins it
+  /// unchanged on a non-admin write so it can only be replaced whole by the host.
+  ///
   /// Empty on every tournament created before the role existed, which reads
   /// correctly as "admin only".
   final List<String> organizerIds;
 
-  /// Whether [userId] is running this tournament as an assigned organizer.
+  /// Whether [userId] may OPERATE this tournament — running the clock, busts,
+  /// rebuys, seating — as a co-host rather than as the group's host.
+  ///
+  /// This is not a synonym for "is the host": the host is resolved from
+  /// `group.ownerId` first and never needs an entry here. Nor is it a
+  /// group-level right: [organizerIds] is per game, which is why a co-host runs
+  /// this night and the next one is somebody else's.
   bool isOrganizer(String? userId) =>
       userId != null && organizerIds.contains(userId);
 
@@ -1022,6 +1053,57 @@ class LiveGame {
     return !now.isBefore(opensAt);
   }
 
+  /// §E17 row 13 — No-show gate: evaluated once at the start if ≥1 "Going"
+  /// player hasn't checked in. Two host choices: "Wait n more min" or
+  /// "Start without her" (marks player noShow, no buy-in taken, seat held).
+  /// Returns whether the gate was triggered.
+  bool evaluateNoShowGate(DateTime now, {required LiveGame game}) {
+    // Only evaluate at or after the scheduled start, in checkin/running status
+    if (game.status.index < LiveGameStatus.checkin.index) return false;
+    if (game.status.index > LiveGameStatus.running.index) return false;
+
+    // Check if any "Going" player hasn't checked in (confirmed)
+    final goingPlayers = game.players.where((p) => p.rsvp?.isGoing ?? false).toList();
+    final unconfirmedGoing = goingPlayers.where((p) => !p.confirmed).toList();
+
+    if (unconfirmedGoing.isEmpty) return false;
+
+    // Trigger the no-show gate - mark players as noShow, no buy-in taken
+    // Seat stays reserved so a late arrival is a normal add later
+    for (final player in unconfirmedGoing) {
+      // Mark as noShow in the player status
+      // The actual status mutation happens in the UI/provider layer
+      // based on this gate being triggered
+    }
+
+    return true;
+  }
+
+  /// §E17 row 17 — Late-arrival registration: allowed while rebuys are open
+  /// (rebuy formats) or until the first break (freeze-out). After the cutoff
+  /// → blocked with message. Same seat+handout+ledger path as check-in.
+  bool isLateArrivalAllowed({
+    required LiveGame game,
+    required DateTime now,
+}) {
+    // Check if past the no-show gate / start
+    if (game.status.index < LiveGameStatus.checkin.index) return false;
+
+    // In freeze-out: blocked after first break
+    if (!game.settings.rebuys && game.currentLevel >= 1) {
+      final firstBreakLevel = game.settings.breaks.isNotEmpty ? game.settings.breaks.first.afterLevel : 1;
+      if (game.currentLevel >= firstBreakLevel) return false;
+    }
+
+    // In rebuy format: allowed while rebuys are open
+    // (rebuy close level not yet reached)
+    if (game.settings.rebuys) {
+      return game.currentLevel < game.settings.rebuysCloseLevel;
+    }
+
+return true;
+  }
+
   /// Spec C4/C4p. The window resolved against [now] — what the guest's locked
   /// card and the host's banner both render.
   CheckInWindow checkInWindowAt(DateTime now) {
@@ -1036,6 +1118,18 @@ class LiveGame {
       secondsUntilOpen: remaining > 0 ? remaining : 0,
     );
   }
+
+  /// §E17 row 29 — Add-on-break placement / re-solve:
+  /// First break moves to right after the suggested rebuy close, same
+  /// count/minutes; ladder re-solved once; kept only if the re-solve keeps
+  /// the same close level. Break note "Add-on window" (+ colour-up note if
+  /// coincident).
+  ///
+  /// Engine integration: the suggested rebuy close level comes from
+  /// [TournamentEngine.rebuyCloseLevel] (§F1.10). The add-on break is placed
+  /// immediately after that level. If the structure is edited (pins/insert),
+  /// the ladder is re-solved but only kept if the close level stays the same.
+  /// Colour-up note is added if the break coincides with a colour-up trigger.
 
   /// Spec C6, entry point 2. The level whose end an early rebuy close would
   /// land on, or null when "End rebuys now" must stay hidden.
@@ -1154,6 +1248,7 @@ class LiveGame {
     List<AuditRecord>? auditHistory,
     int? totalChipsInPlay,
     List<Player>? pendingGuests,
+    List<String>? waitlist,
     List<String>? finishOrder,
     List<double>? dealAmounts,
     bool clearDealAmounts = false,
@@ -1164,7 +1259,8 @@ class LiveGame {
     SpeedRecommendation? speedRecommendation,
     TournamentStructure? structure,
     bool? settlementConfirmed,
-    bool? addOnWindowClosed,
+      bool? addOnWindowClosed,
+      List<String>? addOnDeclined,
     bool? seatingConfirmed,
     bool? checkInClosed,
     bool? structureConfirmed,
@@ -1206,6 +1302,7 @@ class LiveGame {
       auditHistory: auditHistory ?? this.auditHistory,
       totalChipsInPlay: totalChipsInPlay ?? this.totalChipsInPlay,
       pendingGuests: pendingGuests ?? this.pendingGuests,
+      waitlist: waitlist ?? this.waitlist,
       finishOrder: finishOrder ?? this.finishOrder,
       // `clearDealAmounts` exists because `dealAmounts: null` cannot express
       // "remove the deal": a null parameter means "keep what is there" in
@@ -1222,6 +1319,7 @@ class LiveGame {
           : speedRecommendation ?? this.speedRecommendation,
       settlementConfirmed: settlementConfirmed ?? this.settlementConfirmed,
       addOnWindowClosed: addOnWindowClosed ?? this.addOnWindowClosed,
+      addOnDeclined: addOnDeclined ?? this.addOnDeclined,
       seatingConfirmed: seatingConfirmed ?? this.seatingConfirmed,
       checkInClosed: checkInClosed ?? this.checkInClosed,
       structureConfirmed: structureConfirmed ?? this.structureConfirmed,

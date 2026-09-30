@@ -28,8 +28,11 @@ extension AppProviderTimer on AppProvider {
     final level = game.currentLevel;
     final mark = '$level';
 
-    if (remaining <= 60 &&
-        remaining > 5 &&
+    // Client-side only: AutomationsService.isOneMinuteWarning defines the
+    // exact moment; the window guards missed ticks (background/offline) so
+    // the warning still fires once per level. Behaviour unchanged.
+    if ((AutomationsService.isOneMinuteWarning(remaining) ||
+            (remaining <= 60 && remaining > 5)) &&
         !_levelAnnouncementMarks.contains('$mark:60')) {
       _levelAnnouncementMarks.add('$mark:60');
       final next = game.currentLevel < game.structure.levels.length
@@ -44,7 +47,8 @@ extension AppProviderTimer on AppProvider {
 
     // Section 17's audible countdown. Spoken one number per second so it
     // lands with the clock rather than as a single burst.
-    if (remaining <= 5 && remaining >= 1) {
+    // Same predicate as AutomationsService.isCountdownUrgency.
+    if (AutomationsService.isCountdownUrgency(remaining)) {
       final key = '$mark:count:$remaining';
       if (!_levelAnnouncementMarks.contains(key)) {
         _levelAnnouncementMarks.add(key);
@@ -534,6 +538,13 @@ extension AppProviderTimer on AppProvider {
     final next = _currentGame!.currentLevel + 1;
     _pushUndo();
     _levelAnnouncementMarks.clear();
+    // E17 Rule 12 + 15, client-side only: haptics on host phone + visual twin.
+    // No Cloud Functions; UI pulses via levelFlashSeq / clockPulseSeq.
+    if (_isGameAuthority && _hapticsEnabled) {
+      unawaited(HapticFeedback.lightImpact());
+    }
+    _levelFlashSeq++;
+    _clockPulseSeq++;
 
     // Section 8 / addendum section 5: a scheduled break is a real state, not
     // a manual pause. If one falls after the level that just finished, the

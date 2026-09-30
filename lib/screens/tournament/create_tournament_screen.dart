@@ -161,11 +161,19 @@ String _hoursLabel(double hours) =>
 
 /// 5-step tournament creation wizard mirroring the web `CreateTournamentPage`.
 class CreateTournamentScreen extends StatefulWidget {
-  const CreateTournamentScreen({super.key, this.presetId});
+  const CreateTournamentScreen({
+    super.key,
+    this.presetId,
+    this.repostGameId,
+  });
 
   /// Optional `?preset=` query param: pre-fills the form from a saved
   /// tournament preset (checklist 09-006).
   final String? presetId;
+
+  /// Optional `?repost=` query param: pre-fills the form from a previous
+  /// completed game, shifted one week later.
+  final String? repostGameId;
 
   @override
   State<CreateTournamentScreen> createState() => _CreateTournamentScreenState();
@@ -360,6 +368,63 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         });
       }
 
+      // §E17 row 9: rebuy-rate learning pre-fills the expected take-up from the
+      // last eight completed nights, while the add-on take-up path already
+      // reuses the same calibration flow. Keep it local and transparent so the
+      // host can still override the suggestion before publishing.
+      final rebuyForecast = app.forecastRebuyRate.clamp(0.0, 1.0);
+      final addOnForecast = app.forecastAddOnTakeUp.clamp(0.0, 1.0);
+      final forecastPlayers = _derivedExpectedPlayers.clamp(2, 2000);
+      setState(() {
+        _draft = _draft.copyWith(
+          expectedRebuys: _draft.expectedRebuys ??
+              (forecastPlayers * rebuyForecast).round(),
+          expectedAddOns: _draft.expectedAddOns ??
+              (forecastPlayers * addOnForecast).round(),
+        );
+        _seedTick++;
+      });
+
+      final repostGame = widget.repostGameId == null
+          ? null
+          : app.currentGroup.games
+              .where((g) => g.id == widget.repostGameId)
+              .firstOrNull;
+      if (repostGame != null) {
+        final nextDate = (repostGame.settings.scheduledStart ?? DateTime.now())
+            .add(const Duration(days: 7));
+        final next = _draft.copyWith(
+          name: repostGame.settings.name,
+          date: '${nextDate.year}-${nextDate.month.toString().padLeft(2, '0')}-${nextDate.day.toString().padLeft(2, '0')}',
+          time: repostGame.settings.time,
+          location: repostGame.settings.location,
+          buyIn: repostGame.settings.buyIn,
+          durationHours: repostGame.settings.durationHours,
+          koEnabled: repostGame.settings.koEnabled,
+          koAmount: repostGame.settings.koAmount,
+          rebuys: repostGame.settings.rebuys,
+          rebuysCloseLevel: repostGame.settings.rebuysCloseLevel,
+          rebuyLimit: repostGame.settings.rebuyLimit,
+          reEntry: repostGame.settings.reEntry,
+          addOn: repostGame.settings.addOn,
+          addOnCloseLevel: repostGame.settings.addOnCloseLevel,
+          anteEnabled: repostGame.settings.anteEnabled,
+          anteAfterLevel: repostGame.settings.anteAfterLevel,
+          organizerPct: repostGame.settings.organizerPct,
+          chipSet: List.of(repostGame.settings.chipSet),
+          chipSetName: repostGame.settings.chipSetName,
+          breaks: List.of(repostGame.settings.breaks),
+          rsvpDeadlineHours: repostGame.settings.rsvpDeadlineHours,
+          pace: repostGame.settings.pace,
+          expectedPlayersOverride: null,
+          clearExpectedPlayersOverride: true,
+        );
+        setState(() {
+          _draft = _withBountyInDomain(next);
+          _seedTick++;
+        });
+      }
+
       if (widget.presetId != null) {
         final preset = app.presetById(widget.presetId);
         if (preset != null) {
@@ -410,9 +475,26 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   /// own field state, so nothing needs re-seeding) and the §6.2 preset
   /// suggestions are recomputed from the new base inputs.
   void _onDraftChanged(GameSettings next) {
-    setState(() => _draft = next);
+    setState(() => _draft = _withBountyInDomain(next));
     _syncControllers();
     _refreshPresetMatches(context.read<AppProvider>());
+  }
+
+  /// Forces the KO bounty amount back into the spec's 5–50 step-5 domain.
+  ///
+  /// The step-1 stepper is the only control that edits it now — the free-text
+  /// "Bounty amount" that used to sit on step 3 is gone, because the spec puts
+  /// the bounty on step 1 only. So an out-of-domain value can only arrive with
+  /// a preset or a repost, and it has to be corrected where it enters the
+  /// draft rather than left for a validation gate: the wizard's `_errors` map
+  /// gates advancing but is never rendered on step 1, so a gate on `koAmount`
+  /// would block the host on a message they cannot see. Clamping here means
+  /// the value on screen is always one the stepper can show and the spec allows.
+  GameSettings _withBountyInDomain(GameSettings s) {
+    final amount =
+        s.koAmount.clamp(GameSettings.minBounty, GameSettings.maxBounty);
+    if (amount == s.koAmount) return s;
+    return s.copyWith(koAmount: amount);
   }
 
   /// Tech spec §6.2 — recomputes which of the administrator's saved presets
@@ -467,30 +549,33 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   /// — presets store none of those. Changing [_appliedPresetId] remounts the
   /// mounted step's shared form so it re-seeds from the updated draft.
   void _applyPreset(TournamentPreset p) {
-    _draft = _draft.copyWith(
-      name: p.name,
-      buyIn: p.buyIn,
-      durationHours: p.durationHours,
-      rebuys: p.rebuys,
-      rebuysCloseLevel: p.rebuysCloseLevel,
-      rebuyLimit: p.rebuyLimit,
-      rebuyCost: p.rebuyCost,
-      reEntry: p.reEntry,
-      addOn: p.addOn,
-      addOnCloseLevel: p.addOnCloseLevel,
-      breaks: List.of(p.breaks),
-      addOnCost: p.addOnCost,
-      koEnabled: p.koEnabled,
-      koAmount: p.koAmount,
-      antePreference: p.anteEnabled
-          ? AntePreference.bigBlind
-          : AntePreference.none,
-      anteEnabled: p.anteEnabled,
-      anteAfterLevel: p.anteAfterLevel,
-      anteStyle: p.anteEnabled ? AnteStyle.bigBlind : AnteStyle.individual,
-      organizerPct: p.organizerPct.clamp(0, GameSettings.maxOrganizerPct),
-      chipSet: List.of(p.chipSet),
-      chipSetName: p.chipSetName,
+    _draft = _withBountyInDomain(
+      _draft.copyWith(
+        name: p.name,
+        buyIn: p.buyIn,
+        durationHours: p.durationHours,
+        rebuys: p.rebuys,
+        rebuysCloseLevel: p.rebuysCloseLevel,
+        rebuyLimit: p.rebuyLimit,
+        rebuyCost: p.rebuyCost,
+        reEntry: p.reEntry,
+        addOn: p.addOn,
+        addOnCloseLevel: p.addOnCloseLevel,
+        breaks: List.of(p.breaks),
+        addOnCost: p.addOnCost,
+        koEnabled: p.koEnabled,
+        koAmount: p.koAmount,
+        antePreference: p.anteEnabled
+            ? AntePreference.bigBlind
+            : AntePreference.none,
+        anteEnabled: p.anteEnabled,
+        anteAfterLevel: p.anteAfterLevel,
+        anteStyle:
+            p.anteEnabled ? AnteStyle.bigBlind : AnteStyle.individual,
+        organizerPct: p.organizerPct.clamp(0, GameSettings.maxOrganizerPct),
+        chipSet: List.of(p.chipSet),
+        chipSetName: p.chipSetName,
+      ),
     );
     _appliedPresetId = p.id;
   }
@@ -498,9 +583,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   void _next() {
     // Only the steps whose fields carry validation keys gate on the shared
     // validator. Chips (step 2) and Format (step 4) have no keys of their own.
+    // `koAmount` gates nothing: the bounty amount is a step-1 stepper over a
+    // fixed domain and `_withBountyInDomain` keeps the draft inside it, and the
+    // wizard's `_errors` map is never rendered on step 1, so a gate on it would
+    // stop the host on a message they cannot see.
     const stepKeys = <int, Set<String>>{
       1: {'name', 'date', 'time', 'location', 'buyIn'},
-      3: {'rebuyLimit', 'koAmount'},
+      3: {'rebuyLimit'},
     };
     final keys = stepKeys[_step] ?? const <String>{};
     final hit = keys.isEmpty
@@ -1301,12 +1390,15 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     final s = _draft;
     // The stepper is the screen's authority on the 5–50 domain, so the figure
     // it shows and the figure the caption quotes are the same number. A draft
-    // can still hold something outside the domain (the shared settings form on
-    // steps 3 and 4 takes a free-text amount, or a preset carries one), and
-    // quoting that raw here would put a bounty the spec does not allow on the
-    // screen. The first nudge writes the clamped value back to the draft.
-    final bounty =
-        s.effectiveKoAmount.clamp(GameSettings.minBounty, GameSettings.maxBounty);
+    // can still hold something outside the domain (a preset or a repost of an
+    // older game carries one), and quoting that raw here would put a bounty the
+    // spec does not allow on the screen. `_withBountyInDomain` has already
+    // clamped it where it entered the draft; the clamp below is the belt to
+    // that braces, and the first nudge writes the value back either way.
+    final bounty = s.effectiveKoAmount.clamp(
+      GameSettings.minBounty,
+      GameSettings.maxBounty,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1506,8 +1598,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         initial: _draft,
         // Rebuys & add-ons only (D1): the fine-grained rebuys section owns
         // the rebuys/re-entry/limit/close and add-on decisions; the money
-        // section carries their prices. Format decisions (KO, ante, breaks)
-        // live on the Format step, so nothing here is shown twice.
+        // section carries their prices. The KO bounty is a step-1 control and
+        // ante/breaks are format decisions, so nothing here is shown twice.
         sections: const {EventFormSection.rebuys, EventFormSection.money},
         onChanged: _onDraftChanged,
       ),
@@ -1617,9 +1709,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           child: EventSettingsForm(
             key: _formKey,
             initial: _draft,
-            // Format only (D1): KO bounty, ante, breaks and the seating
-            // override. Rebuys/add-ons fields have their own step
-            // (EventFormSection.rebuys), so this step renders none of them.
+            // Format only (D1): ante, breaks and the seating override.
+            // Rebuys/add-ons fields have their own step
+            // (EventFormSection.rebuys), and the KO bounty is step 1's, so
+            // this step renders none of them.
             sections: const {EventFormSection.format},
             onChanged: _onDraftChanged,
           ),

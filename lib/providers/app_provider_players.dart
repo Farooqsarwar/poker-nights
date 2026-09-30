@@ -389,6 +389,11 @@ extension AppProviderPlayers on AppProvider {
       '${player.name} took the add-on for '
           '${game.settings.effectiveAddOnCost} — $addOnStack chips added.',
     );
+    // Taking an add-on is an answer too. C6 line 2204 closes the overtime
+    // window once every player from step 1 "has taken or declined it", so the
+    // last player taking one has to be able to close the window -- otherwise
+    // the group that all said yes stays in overtime with nobody left to ask.
+    _maybeCloseAddOnWindowOvertime();
   }
 
   /// Registers a player's request for an add-on from the live view. The admin
@@ -723,6 +728,27 @@ extension AppProviderPlayers on AppProvider {
     }
     _syncGroupGame();
     if (!_disposed) notifyListeners();
+  }
+
+  void confirmAllPendingRequests() {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return;
+    final game = _currentGame;
+    if (game == null) return;
+    final pending = game.players
+        .where(
+          (p) => !p.confirmed && (p.checkedIn || (p.isGuest && p.name.isNotEmpty)),
+        )
+        .toList();
+    if (pending.isEmpty) return;
+
+    for (final player in pending) {
+      if (player.isGuest) {
+        confirmGuest(player.id);
+      } else {
+        checkInPlayer(player.id);
+      }
+    }
   }
 
   void checkInPlayer(String playerId) {

@@ -8,7 +8,6 @@ import 'package:poker_night/app/theme.dart';
 import 'package:poker_night/models/group.dart';
 import 'package:poker_night/models/user.dart';
 import 'package:poker_night/providers/app_provider.dart';
-import 'package:poker_night/screens/premium/checkout_screen.dart';
 import 'package:poker_night/screens/premium/upgrade_screen.dart';
 import 'package:poker_night/theme/theme_palette.dart';
 import 'package:poker_night/widgets/screen_shell.dart';
@@ -58,7 +57,6 @@ void main() {
 
   final screens = <String, (String, Widget)>{
     'g1_upgrade': (RoutePaths.upgrade, const UpgradeScreen()),
-    'g2_checkout': (RoutePaths.checkout, const CheckoutScreen()),
   };
 
   Future<void> shoot(

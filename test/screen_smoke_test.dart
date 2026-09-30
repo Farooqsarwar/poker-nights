@@ -25,7 +25,6 @@ import 'package:poker_night/screens/shell/presets_screen.dart';
 import 'package:poker_night/screens/shell/profile_screen.dart';
 import 'package:poker_night/screens/shell/settings_screen.dart';
 import 'package:poker_night/screens/shell/stats_screen.dart';
-import 'package:poker_night/screens/premium/checkout_screen.dart';
 import 'package:poker_night/screens/premium/upgrade_screen.dart';
 import 'package:poker_night/screens/cash/cash_game_screen.dart';
 import 'package:poker_night/screens/cash/cash_game_live_screen.dart';
@@ -244,7 +243,6 @@ void main() {
     'Cash game live': (widget: const CashGameLiveScreen(), shelled: true),
     // Premium
     'Upgrade': (widget: const UpgradeScreen(), shelled: true),
-    'Checkout': (widget: const CheckoutScreen(), shelled: true),
   };
 
   /// The viewports every screen has to survive.

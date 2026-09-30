@@ -11,6 +11,7 @@ import 'package:cloud_firestore/cloud_firestore.dart'
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import 'package:localstore/localstore.dart';
 
@@ -39,6 +40,7 @@ import '../utils/formatters.dart';
 import '../utils/live_play_rules.dart';
 import '../utils/mock_data.dart';
 import '../utils/model_codec.dart';
+import '../utils/automations_service.dart';
 import '../utils/sanitization.dart';
 import '../utils/tournament_engine.dart';
 import '../utils/voice_service.dart';
@@ -242,6 +244,24 @@ class AppProvider extends ChangeNotifier {
   bool _backendUp = true;
   bool _disposed = false;
 
+  /// True while a game was running when the app closed — used to offer resume
+  /// on splash restart (§A1 rule / T86). Client-side only, persisted via
+  /// RecoveryService, no Cloud Functions.
+  // ignore: prefer_final_fields
+  bool _previousGameRunning = false;
+
+  /// Timestamp of when the app closed, so resume can be offered within a
+  /// reasonable window (e.g. 30 minutes).
+  DateTime? _previousGameClosedAt;
+
+  /// Records that a game was running at close, for splash resume offer.
+  /// Called from app lifecycle (paused/detached) — pure client-side.
+  void recordGameRunningForResume(bool running) {
+    _previousGameRunning = running;
+    _previousGameClosedAt = running ? DateTime.now() : null;
+    notifyListeners();
+  }
+
   /// Firebase auth session subscription — cancelled on dispose.
   StreamSubscription<fa.User?>? _authSub;
 
@@ -334,6 +354,16 @@ class AppProvider extends ChangeNotifier {
     'DEMO_PREMIUM',
     defaultValue: false,
   );
+
+  /// True if a game was running when the app last closed and enough time has
+  /// not yet passed to consider it stale. Used to offer resume on splash
+  /// restart (§A1 rule / T86).
+  bool get canResumePreviousGame {
+    final closedAt = _previousGameClosedAt;
+    return _previousGameRunning &&
+        closedAt != null &&
+        DateTime.now().difference(closedAt).inMinutes < 30;
+  }
 
   Future<void> loadPremiumTier() async {
     // Both awaits below sit behind a ternary: with the backend down and
@@ -483,6 +513,17 @@ class AppProvider extends ChangeNotifier {
   bool get restoredFromRecovery => _restoredFromRecovery;
   DateTime? _recoveryTime;
   DateTime? get recoveryTime => _recoveryTime;
+
+  /// Restore a game that was saved locally when the app closed (§E9 "Restore",
+  /// Tech §20.1). Keeps the local state and resolves any conflicts with the
+  /// host's current game state.
+  void resolveOfflineConflict({required bool keepLocal}) {
+    _restoredFromRecovery = true;
+    _recoveryTime = keepLocal
+        ? DateTime.now().subtract(const Duration(hours: 24))
+        : null;
+    notifyListeners();
+  }
 
   /// Timestamp of the last non-clock data sync. TV/player/guest views use it
   /// to show "last updated" and distinguish a live feed from a stale one
@@ -856,6 +897,34 @@ class AppProvider extends ChangeNotifier {
   // ── Voice & misc ───────────────────────────────────────────────────────────
   bool _voiceEnabled = true;
 
+  /// Rule 12 haptics: short vibration on level change on host phone.
+  /// Setting, default on (T107). Pure client-side, persisted per user.
+  bool _hapticsEnabled = true;
+  bool get hapticsEnabled => _hapticsEnabled;
+  void setHapticsEnabled(bool value) {
+    if (_hapticsEnabled == value) return;
+    _hapticsEnabled = value;
+    _persistPref('hapticsEnabled', value);
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Visual-twin sequence counters (Rule 15, client-side only).
+  /// Incremented on level change / warnings; UI listens via notifyListeners
+  /// and pulses clock seconds / flashes level label. Never sound alone.
+  int _levelFlashSeq = 0;
+  int get levelFlashSeq => _levelFlashSeq;
+  int _clockPulseSeq = 0;
+  int get clockPulseSeq => _clockPulseSeq;
+  void bumpLevelFlash() {
+    _levelFlashSeq++;
+    if (!_disposed) notifyListeners();
+  }
+
+  void bumpClockPulse() {
+    _clockPulseSeq++;
+    if (!_disposed) notifyListeners();
+  }
+
   /// D9 consent (§F2 DATA, A4 decision D9): "Keep my game history to improve
   /// structures". Off unless the user turns it on — the sign-up checkbox is
   /// unchecked by default (§A4/D9), so the stored default has to match.
@@ -909,6 +978,14 @@ class AppProvider extends ChangeNotifier {
   // ── App-wide constants ─────────────────────────────────────────────────────
   /// Maximum message length (checklist 08-009).
   static const int maxChatMessageLength = 1000;
+
+  /// What §G2.3 row 6's throttle says when it refuses a message (spec §22).
+  ///
+  /// Named rather than inlined at the refusal because it is also what the UI
+  /// shows and what the tests assert, and a hand-copied literal in either place
+  /// drifts — it already had drifted once, on the dash.
+  static const String chatThrottleMessage =
+      'You are sending messages too quickly — wait a moment and try again.';
 
   // ── Admin verdict (shared by every domain; the class body needs it too) ────
   /// True when the signed-in user administers the current group (owner or a

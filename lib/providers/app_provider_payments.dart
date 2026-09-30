@@ -74,7 +74,16 @@ extension AppProviderPayments on AppProvider {
     }
 
     final record = PaymentRecord(
-      id: 'pay-${DateTime.now().microsecondsSinceEpoch}',
+      // Keyed on the idempotency key, which is already unique per logical
+      // payment and is what the replay check above matches on. It used to be
+      // `DateTime.now().microsecondsSinceEpoch`, which is not unique: two
+      // payments inside the same microsecond got the same id. The ledger is a
+      // list so nothing was overwritten in memory, but these rows are written
+      // under `games/{id}/payments/{paymentId}`, where a collision is one
+      // player's rebuy silently replacing their buy-in. Deriving the id from the
+      // key also makes a replay reproduce the same id, which is the property the
+      // key was introduced for.
+      id: 'pay-$idempotencyKey',
       playerId: playerId,
       purpose: purpose,
       amount: amountFor(purpose),

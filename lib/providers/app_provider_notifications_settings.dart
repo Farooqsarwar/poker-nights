@@ -404,11 +404,19 @@ extension AppProviderNotificationsSettings on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  /// The user's own default chip set, used when the current group has not
+  /// chosen one of its own (`create_tournament_screen` and `quick_start_screen`
+  /// both fall back to this). Distinct from `Group.defaultChipSetId`, which is
+  /// the group's B10 pointer.
   String? get defaultChipSetId => _defaultChipSetId;
 
   void setDefaultChipSet(String? id) {
     if (_defaultChipSetId == id) return;
     _defaultChipSetId = id;
+    // Persisted like every other preference in this block. Without it the
+    // user's default survived only until the app was closed, while the theme
+    // and voice settings next to it came back.
+    _persistPref('defaultChipSetId', id);
     if (!_disposed) notifyListeners();
   }
 

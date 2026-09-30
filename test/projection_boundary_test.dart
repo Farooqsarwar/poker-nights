@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/game.dart';
 import 'package:poker_night/models/live_game.dart';
@@ -49,6 +51,9 @@ const _settings = GameSettings(
   organizerPct: 12,
   chipSet: [],
   chipSetName: 'Home',
+  // A2-1: the fixture must actually carry the flag, or the assertion below is
+  // asserting a default rather than a scrub.
+  addOnOvertime: true,
 );
 
 Player _p(String id) => Player(
@@ -96,6 +101,8 @@ LiveGame _game() => LiveGame(
   finishOrder: const [],
   rebuyRequests: const ['u1'],
   addOnRequests: const ['u2'],
+  // A2-1: u1 took theirs, u2 said no. Both halves must not travel.
+  addOnDeclined: const ['u2'],
   // A game that ended on an agreed deal rather than by busts.
   dealAmounts: const [180.0, 120.0],
   payments: [
@@ -166,6 +173,20 @@ void main() {
         0,
         reason: '$label: add-on request identities present',
       );
+      // A2-1: who declined an add-on is per-person financial intent, and the
+      // overtime flag says the host is behind on settlement. `projectionSafe()`
+      // checks both as ZEROED, which is the convention for this payload -- the
+      // game doc on `games/{gameId}` is the one that requires absence.
+      expect(
+        (map['addOnDeclined'] as List).length,
+        0,
+        reason: '$label: declined add-on identities present',
+      );
+      expect(
+        (map['settings'] as Map)['addOnOvertime'],
+        isFalse,
+        reason: '$label: add-on overtime flag present',
+      );
       expect(
         (map['settings'] as Map)['organizerPct'],
         0,
@@ -190,6 +211,56 @@ void main() {
       'guest',
       () => assertSafe('guest', projections.guestProjection(_game())),
     );
+
+    test('the rules actually enforce what this mirror checks', () {
+      // The mirror above existed before the rules checked these two fields, so
+      // a projection could have leaked a declined add-on or the overtime flag
+      // with every test still green. These assertions exist to stop the two
+      // drifting apart again.
+      final rules = File('firestore.rules').readAsStringSync();
+      final start = rules.indexOf('function projectionSafe(key)');
+      expect(start, greaterThan(-1), reason: 'projectionSafe() is gone');
+      final body = rules.substring(
+        start,
+        rules.indexOf('function publicProjectionsSafe()'),
+      );
+
+      expect(
+        body,
+        contains("payload.get('addOnDeclined', []).size() == 0"),
+        reason: 'a declined add-on could reach a world-readable projection',
+      );
+      expect(
+        body,
+        contains("get('addOnOvertime', false) == false"),
+        reason: 'the overtime flag could reach a world-readable projection',
+      );
+      // And they must stay ZEROED here. `publicGameDocSafe()` on
+      // `games/{gameId}` uses absence, which is correct for that document --
+      // but this payload is a fixed-key map, so an absence check would reject
+      // every publish.
+      expect(
+        body,
+        isNot(contains("hasAny(['addOnOvertime'])")),
+        reason: 'absence is wrong for a fixed-key projection payload',
+      );
+    });
+
+    test('the game doc still requires absence, the projection requires zero', () {
+      // The two documents have different shapes and therefore different
+      // conventions, and swapping them would either leak or break publishing.
+      final rules = File('firestore.rules').readAsStringSync();
+      final start = rules.indexOf('function publicGameDocSafe()');
+      final body = rules.substring(
+        start,
+        rules.indexOf('function publicGameDocSafe()') + 4000,
+      );
+      expect(
+        body,
+        contains("hasAny(['addOnOvertime'])"),
+        reason: 'the game doc is stripped by the client, so absence is enforceable',
+      );
+    });
 
     test('D2: the payout ladder is visible to everyone, organiser take is not', () {
       // D2: "Everyone - players, guests, the TV - sees the prize pool and the

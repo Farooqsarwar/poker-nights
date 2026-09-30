@@ -276,6 +276,28 @@ extension AppProviderGroups on AppProvider {
     }
   }
 
+  /// Owner-only: points the group at one of the owner's saved chip sets, or
+  /// clears the pointer by passing null (the Standard box).
+  ///
+  /// B10 keeps a pointer rather than a copy of the chips, so this is the only
+  /// thing that has to be written: editing a set in F5 reaches every group
+  /// pointing at it without touching the group at all.
+  void setGroupDefaultChipSet(String? id) {
+    if (_user?.id != _currentGroup.ownerId) return;
+    if (_currentGroup.defaultChipSetId == id) return;
+    _setGroup(_currentGroup.copyWith(
+      defaultChipSetId: id,
+      clearDefaultChipSetId: id == null,
+    ));
+    if (!_disposed) notifyListeners();
+    if (_backendUp) {
+      unawaited(_repo
+          .updateGroupDefaultChipSet(_currentGroup.id, id)
+          .catchError((Object e) =>
+              debugPrint('setGroupDefaultChipSet failed: $e')));
+    }
+  }
+
   /// Host-only: sets (or clears, passing null) this tournament's override of
   /// the group's default table settings.
   void updateTournamentTableSettings(TableSettings? override) {
@@ -328,6 +350,87 @@ extension AppProviderGroups on AppProvider {
   }
 
   /// Non-owner members may leave a group voluntarily.
+  /// B9: retires the group's join code and issues a new one.
+  ///
+  /// Owner-scoped, like the other group settings. Returns false when there is
+  /// no backend to write to or every candidate code was taken, so the UI can
+  /// leave the code alone rather than showing a new one that does not work.
+  Future<bool> rerollGroupJoinCode() async {
+    final user = _user;
+    if (user == null || user.id != _currentGroup.ownerId) return false;
+    if (!_backendUp) return false;
+
+    final gid = _currentGroup.id;
+    final oldCode = _currentGroup.joinCode;
+    // Codes are 6 characters from a 32-character alphabet, so a clash is
+    // rare; eight draws is generous and still instant.
+    for (var attempt = 0; attempt < 8; attempt++) {
+      final candidate = Formatters.generateCode();
+      if (candidate.toUpperCase() == oldCode.toUpperCase()) continue;
+      try {
+        final ok = await _repo.rerollGroupJoinCode(
+          gid: gid,
+          oldCode: oldCode,
+          newCode: candidate,
+          name: _currentGroup.name,
+          icon: _currentGroup.icon,
+          hostName: user.name,
+          memberCount: _currentGroup.members.length,
+          gamesPlayed: _currentGroup.games.length,
+        );
+        if (!ok) continue;
+        _setGroup(_currentGroup.copyWith(joinCode: candidate));
+        if (!_disposed) notifyListeners();
+        return true;
+      } catch (e) {
+        debugPrint('rerollGroupJoinCode failed: $e');
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /// B9: deletes the group for good. Owner-only.
+  ///
+  /// A host cannot leave their own group, so this is the only way out of one
+  /// and it is not reversible -- the UI says so before calling it. Returns
+  /// whether the delete was started, so a caller can hold the dialog open and
+  /// report a refusal instead of pretending it worked.
+  Future<bool> deleteGroup() async {
+    final userId = _user?.id;
+    if (userId == null || userId != _currentGroup.ownerId) return false;
+
+    final gid = _currentGroup.id;
+    final code = _currentGroup.joinCode;
+    if (_backendUp && gid.isNotEmpty) {
+      try {
+        await _repo.deleteGroupRecursive(gid, joinCode: code);
+      } catch (e) {
+        debugPrint('deleteGroup failed: $e');
+        return false;
+      }
+    }
+
+    // Same teardown as leaving, taken from the session's point of view: the
+    // group is gone, so the bundle watching it has to stop either way.
+    _bundleSub?.cancel();
+    _bundleSub = null;
+    _cashSub?.cancel();
+    _cashSub = null;
+    _currentGroupId = null;
+    _bundleLoaded = false;
+    _bundleReady = null;
+    _groups = _groups.where((g) => g.id != gid).toList();
+    final next = orderedGroups.firstOrNull;
+    if (next != null) {
+      _selectGroup(next.id);
+    } else {
+      _currentGroup = AppProvider._kEmptyGroup;
+    }
+    if (!_disposed) notifyListeners();
+    return true;
+  }
+
   void leaveGroup() {
     final userId = _user?.id;
     if (userId == null || userId == _currentGroup.ownerId) return;

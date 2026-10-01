@@ -11,6 +11,7 @@ import '../../widgets/app_eyebrow.dart';
 import '../../widgets/app_tag.dart';
 import '../../widgets/backgrounds.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/brand_lockup.dart';
 import '../../widgets/icon_tile.dart';
 
 /// Public landing page mirroring the web `LandingPage`.
@@ -881,20 +882,9 @@ class _Wordmark extends StatelessWidget {
     return Semantics(
       label: 'Poker Night',
       excludeSemantics: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const IconTile(label: '♠', size: 30, glow: false),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            'Poker Night',
-            style: AppTypography.display(
-              size: AppFontSizes.md,
-              weight: FontWeight.w700,
-              letterSpacing: -0.2,
-            ),
-          ),
-        ],
+      child: const PokerNightBrand(
+        logoSize: 28,
+        fontSize: 18,
       ),
     );
   }

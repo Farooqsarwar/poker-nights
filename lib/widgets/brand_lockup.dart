@@ -10,7 +10,6 @@ class PokerNightLogo extends StatelessWidget {
   final Color? spadeColor;
   final bool showWordmark;
   final double wordmarkFontSize;
-  final Color? color;
 
   const PokerNightLogo({
     super.key,
@@ -19,7 +18,6 @@ class PokerNightLogo extends StatelessWidget {
     this.spadeColor,
     this.showWordmark = true,
     this.wordmarkFontSize = 28,
-    this.color,
   });
 
   @override
@@ -31,85 +29,59 @@ class PokerNightLogo extends StatelessWidget {
       logoPath,
       width: size,
       height: size,
-      color: color,
-      colorBlendMode: color != null ? BlendMode.srcIn : null,
       fit: BoxFit.contain,
     );
   }
 }
 
-/// The "pokernighttools" brand lockup matching WhatsApp mockup.
-/// Renders:
-///   LOGO (eyebrow)
-///   [ ♠ ] (white logo)  pokernight (white) + tools (primary crimson)
+/// The "pokernighttools" brand lockup featuring the real asset logo according to theme.
 class PokerNightBrand extends StatelessWidget {
   const PokerNightBrand({
     super.key,
     this.logoSize = 28,
     this.fontSize = 20,
-    this.showEyebrow = false,
   });
 
   final double logoSize;
   final double fontSize;
-  final bool showEyebrow;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        if (showEyebrow) ...[
-          Text(
-            'LOGO',
-            style: GoogleFonts.spaceGrotesk(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.mutedForeground.withValues(alpha: 0.7),
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            PokerNightLogo(
-              size: logoSize,
-              color: Colors.white,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Flexible(
-              child: Text.rich(
+        PokerNightLogo(
+          size: logoSize,
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Flexible(
+          child: Text.rich(
+            TextSpan(
+              children: [
                 TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'pokernight',
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: fontSize,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    TextSpan(
-                      text: 'tools',
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: fontSize,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ],
+                  text: 'pokernight',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+                TextSpan(
+                  text: 'tools',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
             ),
-          ],
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );

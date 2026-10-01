@@ -394,7 +394,6 @@ class _MobileTopBar extends StatelessWidget {
                   const PokerNightBrand(
                     logoSize: 22,
                     fontSize: 16,
-                    showEyebrow: false,
                   ),
                   const Spacer(),
                   const SizedBox(width: AppSpacing.sm),

@@ -229,14 +229,6 @@ class _HomeScreenState extends State<HomeScreen> {
               // This replaces the normal "Home" + group UI.
               if (!app.hasCurrentGroup) ...[
                 // Pill: "No account needed" for anonymous hosts
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: AppButton(
-                    variant: AppButtonVariant.secondary,
-                    onPressed: () => context.go(RoutePaths.landing),
-                    child: const Text('No account needed'),
-                  ),
-                ),
                 const SizedBox(height: AppSpacing.md),
                 // Hero card: "Poker tonight?"
                 AppCard(

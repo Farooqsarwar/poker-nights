@@ -18,6 +18,7 @@ import '../../services/entitlements.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/backgrounds.dart';
+import '../../widgets/brand_lockup.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/tournament_display_block.dart';
 import '../../utils/formatters.dart';
@@ -129,7 +130,7 @@ class _CodeEntry extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.style, size: 60, color: AppColors.primary),
+                        const PokerNightLogo(size: 60),
                         const SizedBox(width: AppSpacing.md),
                         Text(
                           'POKER NIGHT',

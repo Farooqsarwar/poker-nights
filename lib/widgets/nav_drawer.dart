@@ -98,7 +98,6 @@ class NavDrawer extends StatelessWidget {
             child: const PokerNightBrand(
               logoSize: 32,
               fontSize: 22,
-              showEyebrow: true,
             ),
           ),
           if (user != null)

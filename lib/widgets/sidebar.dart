@@ -89,7 +89,6 @@ class Sidebar extends StatelessWidget {
               child: const PokerNightBrand(
                 logoSize: 26,
                 fontSize: 18,
-                showEyebrow: false,
               ),
             ),
             // Nav items

@@ -16,6 +16,7 @@ import '../../providers/app_provider.dart';
 import '../../services/recovery_service.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/brand_lockup.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_eyebrow.dart';
@@ -553,7 +554,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         FormScreenHeader(
           centered: true,
           titleSize: AppFontSizes.xxl,
-          leading: const IconTile(label: '♠', size: 40),
+          leading: const PokerNightLogo(size: 40),
           title: game.settings.name,
           subtitle: showAddress
               ? '${game.settings.date} · ${game.settings.location}'
@@ -624,7 +625,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
         const FormScreenHeader(
           centered: true,
           titleSize: 24,
-          leading: IconTile(label: '♠', size: 52),
+          leading: PokerNightLogo(size: 52),
           title: 'Join as guest',
           subtitle: 'Enter the code from the host or invitation link',
         ),

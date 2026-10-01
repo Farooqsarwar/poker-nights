@@ -13,9 +13,9 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/app_eyebrow.dart';
+import '../../widgets/brand_lockup.dart';
 import '../../widgets/code_input.dart';
 import '../../widgets/form_screen_header.dart';
-import '../../widgets/icon_tile.dart';
 import '../../widgets/onboarding_scaffold.dart';
 import '../../widgets/prompt_link.dart';
 
@@ -171,7 +171,7 @@ class _JoinScreenState extends State<JoinScreen> {
           const FormScreenHeader(
             centered: true,
             titleSize: 24,
-            leading: IconTile(label: '♠', size: 52),
+            leading: PokerNightLogo(size: 52),
             title: 'Join a game or group',
             subtitle:
                 'Enter an invite code, paste an invite link, or scan a QR '

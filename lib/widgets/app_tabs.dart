@@ -26,10 +26,12 @@ class AppTabs extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 600;
+        final hasCounts = tabs.any((t) => t.count != null);
+        final shouldStack = hasCounts && constraints.maxWidth < 420;
 
         return Container(
           width: double.infinity,
-          height: isMobile ? 58 : 46, // Slightly taller on mobile to fit stacked text
+          height: shouldStack ? 56 : 46,
           decoration: Glass.glassTabBar(),
           child: Row(
             // On mobile, expand to fill the screen evenly (no scroll).
@@ -42,7 +44,7 @@ class AppTabs extends StatelessWidget {
                 tab: tab,
                 isActive: active == tab.id,
                 onTap: () => onChanged(tab.id),
-                stacked: isMobile,
+                stacked: shouldStack,
               );
 
               if (isMobile) {
@@ -84,10 +86,10 @@ class _TabItemState extends State<_TabItem> {
   List<Widget> _buildContent(bool isActive) {
     return [
       if (isActive && !widget.stacked)
-        // Glowing indicator above the text (accent dot)
+        // Glowing indicator beside the text (accent dot)
         Container(
-          width: 4,
-          height: 4,
+          width: 5,
+          height: 5,
           margin: const EdgeInsets.only(right: 6),
           decoration: BoxDecoration(
             color: AppColors.primary,
@@ -171,38 +173,44 @@ class _TabItemState extends State<_TabItem> {
         onEnter: (_) => setState(() => _hovering = true),
         onExit: (_) => setState(() => _hovering = false),
         cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: AppDurations.fast,
-            curve: Curves.easeOut,
-            padding: EdgeInsets.symmetric(
-              horizontal: widget.stacked ? 2 : AppSpacing.lg,
-            ),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: isActive
-                  ? AppColors.primary.withValues(alpha: 0.05)
-                  : _hovering
-                      ? AppColors.card.withValues(alpha: 0.20)
-                      : Colors.transparent,
-              border: Border(
-                bottom: BorderSide(
-                  width: 2,
-                  color: isActive ? AppColors.primary : Colors.transparent,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            splashColor: AppColors.primarySoft,
+            highlightColor: AppColors.primarySoft,
+            child: AnimatedContainer(
+              duration: AppDurations.fast,
+              curve: Curves.easeOut,
+              padding: EdgeInsets.symmetric(
+                horizontal: widget.stacked ? 4 : AppSpacing.md,
+              ),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isActive
+                    ? AppColors.primary.withValues(alpha: 0.08)
+                    : _hovering
+                        ? AppColors.card.withValues(alpha: 0.20)
+                        : Colors.transparent,
+                border: Border(
+                  bottom: BorderSide(
+                    width: 2,
+                    color: isActive ? AppColors.primary : Colors.transparent,
+                  ),
                 ),
               ),
+              child: widget.stacked
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: _buildContent(isActive),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: _buildContent(isActive),
+                    ),
             ),
-            child: widget.stacked
-                ? Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: _buildContent(isActive),
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: _buildContent(isActive),
-                  ),
           ),
         ),
       ),

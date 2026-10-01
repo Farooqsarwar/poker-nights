@@ -2073,6 +2073,237 @@ extension AppProviderTournament on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  // ── C-bubble: hand-for-hand, bubble save, tied busts ─────────────────────
+  // All client-side. The three synced fields live on the game doc
+  // (host writes pass `gameValuesSafe`, which only checks invariants), and
+  // projections carry them untouched, so players and the TV see the banner.
+
+  /// Table numbers still in play, ascending.
+  List<int> get handForHandTables {
+    final game = _currentGame;
+    if (game == null) return const [];
+    final tables = <int>{};
+    for (final p in game.activePlayers) {
+      if (p.table > 0) tables.add(p.table);
+    }
+    final sorted = tables.toList()..sort();
+    return sorted;
+  }
+
+  /// Starts hand-for-hand: pauses the clock (C-bubble) and opens hand 1.
+  /// Returns null on success, or the reason it was refused.
+  String? startHandForHand() {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return 'Only the host can start hand-for-hand.';
+    final game = _currentGame;
+    if (game == null) return 'There is no game running.';
+    if (game.handForHandActive) return null;
+    if (!game.isOnBubble) {
+      return 'Hand-for-hand starts on the bubble.';
+    }
+    if (handForHandTables.length < 2) {
+      return 'Hand-for-hand needs at least two tables.';
+    }
+    _pushUndo();
+    _currentGame = game.copyWith(
+      handForHandActive: true,
+      handForHandHand: 1,
+      handForHandDoneTables: const [],
+    );
+    pauseTimer();
+    addAnnouncement(
+      'Hand-for-hand. Hand 1. '
+      'Waiting for ${handForHandTables.map((t) => 'Table $t').join(' and ')} '
+      'to finish hand 1.',
+      true,
+    );
+    addAuditRecord('hand_for_hand_start', 'Hand-for-hand started on the bubble.');
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
+  /// Marks one table done with the current hand. When every table is done,
+  /// the next hand opens. Returns null on success, or the refusal reason.
+  String? markHandForHandTableDone(int table) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return 'Only the host can mark hands done.';
+    final game = _currentGame;
+    if (game == null || !game.handForHandActive) return null;
+    if (game.handForHandDoneTables.contains(table)) return null;
+    _pushUndo();
+    final done = [...game.handForHandDoneTables, table];
+    final tables = handForHandTables;
+    if (tables.every(done.contains)) {
+      final next = game.handForHandHand + 1;
+      _currentGame = game.copyWith(
+        handForHandHand: next,
+        handForHandDoneTables: const <int>[],
+      );
+      addAnnouncement(
+        'All tables finished — deal hand $next.',
+        true,
+      );
+      addAuditRecord('hand_for_hand_hand', 'Hand ${game.handForHandHand} done — hand $next.');
+    } else {
+      _currentGame = game.copyWith(handForHandDoneTables: done);
+      if (!_disposed) notifyListeners();
+    }
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
+  /// Stops hand-for-hand at any time (a mis-tap, a table breaking).
+  void stopHandForHand({bool auto = false}) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return;
+    final game = _currentGame;
+    if (game == null || !game.handForHandActive) return;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      handForHandActive: false,
+      handForHandDoneTables: const <int>[],
+    );
+    if (auto) {
+      addAnnouncement('Everyone left is in the money.', true);
+      addAuditRecord('hand_for_hand_end', 'Hand-for-hand ended automatically — in the money.');
+    } else {
+      addAuditRecord('hand_for_hand_end', 'Hand-for-hand stopped by the host.');
+    }
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Offers the bubble save (D10): the bubble gets its buy-in back, every
+  /// paid place contributes pro-rata in whole units, 1st pays the remainder.
+  /// Records the new ladder via the same path as the finish-screen edit, so
+  /// payouts, TV and every player's view update with one Undo.
+  /// Returns null on success, or the reason it was refused.
+  String? recordBubbleSave() {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return 'Only the host can record a bubble save.';
+    final game = _currentGame;
+    if (game == null) return 'There is no game running.';
+    if (!game.isOnBubble) return 'A bubble save is offered on the bubble.';
+    if (game.bubbleSaveRecorded) return 'The bubble save is already recorded.';
+    final prizes = game.structure.prizes;
+    if (prizes.isEmpty) return 'There is no payout ladder to save from.';
+    final unit = PayoutsEngine.cashUnit(game.settings.buyIn) * 100;
+    late final List<int> ladder;
+    try {
+      ladder = PayoutsEngine.bubbleSave(
+        [for (final p in prizes) p.amount],
+        game.settings.buyIn * 100,
+        'proRata',
+        unit,
+      );
+    } on ArgumentError catch (e) {
+      return e.message;
+    } on StateError catch (e) {
+      return e.message;
+    }
+    _pushUndo();
+    _currentGame = game.copyWith(
+      structure: game.structure.copyWith(
+        prizes: [
+          for (var i = 0; i < ladder.length; i++)
+            Prize(place: i + 1, amount: ladder[i]),
+        ],
+      ),
+      bubbleSaveRecorded: true,
+    );
+    final bubble = ladder.last;
+    addAnnouncement(
+      'Bubble save recorded — the bubble gets ${AutomationsService.formatMoney(bubble ~/ 100)} back.',
+      true,
+    );
+    addAuditRecord(
+      'bubble_save',
+      'Bubble save recorded: ${ladder.map((a) => '${a ~/ 100}').join('/')} '
+      '(places 1-${ladder.length}).',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
+  /// Busts several players "in the same hand" (hand-for-hand across tables).
+  /// The covered places' prizes are added and split equally with `roundDeal`
+  /// (leftover unit to the biggest starting stack), the ladder rewritten so
+  /// the finish screen pays exactly that with no further edits, then each
+  /// player busts smallest-stack-first so places land worst-first.
+  /// Returns null on success, or the reason it was refused.
+  String? recordTiedBusts(List<String> playerIds) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return 'Only the host can record busts.';
+    final game = _currentGame;
+    if (game == null) return 'There is no game running.';
+    final unique = playerIds.toSet().toList();
+    if (unique.length < 2) return 'Pick at least two players for a tie.';
+    final targets = <Player>[];
+    for (final id in unique) {
+      final p = game.players.where((x) => x.id == id).firstOrNull;
+      if (p == null || p.eliminated || !p.active) {
+        return 'Every tied player must still be at the table.';
+      }
+      targets.add(p);
+    }
+    if (targets.map((p) => p.table).toSet().length < 2) {
+      return 'Same table — order them by starting chips instead, no tie.';
+    }
+    final remaining = game.activePlayers.length;
+    final k = targets.length;
+    final prizes = game.structure.prizes;
+    final unit = PayoutsEngine.cashUnit(game.settings.buyIn) * 100;
+    // Covered places, worst-first: R-k+1 .. R (0 past the ladder = unpaid).
+    final covered = [for (var i = 0; i < k; i++) remaining - k + 1 + i];
+    final amounts = [
+      for (final place in covered)
+        place <= prizes.length ? prizes[place - 1].amount : 0,
+    ];
+    final total = amounts.fold<int>(0, (a, b) => a + b);
+    // Biggest starting stack first, so a leftover unit lands on them (TDA).
+    final ordered = targets.toList()
+      ..sort((a, b) => (b.stack ?? 0).compareTo(a.stack ?? 0));
+    late final List<int> split;
+    try {
+      split = PayoutsEngine.roundDeal(amounts, unit, total, total);
+    } on ArgumentError catch (e) {
+      return e.message;
+    }
+    // Best stack takes the best covered place; ladder rewritten so the
+    // finish screen pays the split with no correction step.
+    final sortedSplit = split.toList()..sort((a, b) => b.compareTo(a));
+    final newPrizes = [
+      for (final p in prizes)
+        covered.contains(p.place)
+            ? Prize(
+                place: p.place,
+                amount: sortedSplit[covered.indexOf(p.place)],
+              )
+            : p,
+    ];
+    _pushUndo();
+    _currentGame = game.copyWith(
+      structure: game.structure.copyWith(prizes: newPrizes),
+    );
+    // Bust worst-first so eliminationPos lands worst-first too.
+    for (final p in ordered.reversed) {
+      eliminatePlayer(p.id);
+    }
+    final names = ordered.map((p) => p.name).join(', ');
+    addAnnouncement('Tied bust — $names share one hand.', true);
+    addAuditRecord(
+      'tied_bust',
+      'Tied bust in one hand ($names): places ${covered.first}-${covered.last} '
+      'split ${sortedSplit.map((a) => '${a ~/ 100}').join('/')} via roundDeal.',
+    );
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+    return null;
+  }
+
   /// §3's `actualDurationMins`: WALL-CLOCK minutes from the first level to the
   /// final hand — "levelEndTime of the last played level − scheduledStart".
   ///
@@ -2146,7 +2377,17 @@ extension AppProviderTournament on AppProvider {
       timerRunning: false,
       actualDurationMins: measuredWallClockMins(game),
     );
+    RecoveryService.clearGame();
     _syncGroupGame();
+    if (!hasCurrentGroup || _currentGroup.id.isEmpty) {
+      _soloTournaments = [_currentGame!, ..._soloTournaments];
+      final uid = user?.id;
+      if (uid != null) {
+        unawaited(_repo.saveSoloTournament(uid, _currentGame!).catchError(
+          (Object e) => debugPrint('saveSoloTournament failed: $e'),
+        ));
+      }
+    }
     // Framework §14 — measure the night that just finished, so the next one
     // can be forecast from it rather than from a constant. Gated on the D9
     // consent inside [recordCalibration].

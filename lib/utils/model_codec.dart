@@ -659,6 +659,10 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'checkInClosed': game.checkInClosed,
     'structureConfirmed': game.structureConfirmed,
     'finalTableRedrawCompleted': game.finalTableRedrawCompleted,
+    'handForHandActive': game.handForHandActive,
+    'handForHandHand': game.handForHandHand,
+    'handForHandDoneTables': List<int>.from(game.handForHandDoneTables),
+    'bubbleSaveRecorded': game.bubbleSaveRecorded,
     'dealerPlayerId': game.dealerPlayerId,
     'guestSlots': game.guestSlots.map(guestSlotToMap).toList(),
     'originalLevels': game.originalLevels?.map(blindLevelToMap).toList(),
@@ -750,6 +754,13 @@ LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
       checkInClosed: (map['checkInClosed'] as bool?) ?? false,
       structureConfirmed: (map['structureConfirmed'] as bool?) ?? false,
       finalTableRedrawCompleted: (map['finalTableRedrawCompleted'] as bool?) ?? false,
+      handForHandActive: (map['handForHandActive'] as bool?) ?? false,
+      handForHandHand: (map['handForHandHand'] as num?)?.toInt() ?? 1,
+      handForHandDoneTables: (map['handForHandDoneTables'] as List?)
+              ?.map((e) => (e as num).toInt())
+              .toList() ??
+          const [],
+      bubbleSaveRecorded: (map['bubbleSaveRecorded'] as bool?) ?? false,
       dealerPlayerId: map['dealerPlayerId'] as String?,
       guestSlots: _mapList(map['guestSlots'] as List? ?? const [])
           .map(guestSlotFromMap)

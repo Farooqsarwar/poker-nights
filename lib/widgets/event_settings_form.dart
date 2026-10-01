@@ -12,6 +12,8 @@ import '../models/live_game.dart';
 import '../models/table_settings.dart';
 import '../models/tournament.dart';
 import '../utils/event_settings_validation.dart';
+import 'app_button.dart';
+import 'app_modal.dart';
 import 'app_text_field.dart';
 import 'app_toggle.dart';
 import 'chip_set_editor.dart';
@@ -101,6 +103,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
   late int _maxPerTable;
   late bool _randomizeSeating;
   late int _orgPct;
+  bool _legalAccepted = false;
   late final TextEditingController _rebuyLimit;
   late final TextEditingController _rebuyCost;
   late final TextEditingController _addOnCost;
@@ -1093,8 +1096,10 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
                           _emit();
                         },
                       ),
-                      SizedBox(
-                        width: 120,
+                      // No fixed width: CountStepper needs ~152px min
+                      // (48px buttons + 56px value). A 120px box overflows.
+                      Align(
+                        alignment: Alignment.centerLeft,
                         child: CountStepper(
                           value: _breaks[i].durationMins,
                           min: 1,
@@ -1201,15 +1206,55 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
             max: _orgPctCeiling,
             suffix: '%',
             semanticLabel: 'Organizational costs percentage',
-            onChanged: (v) {
-              setState(() => _orgPct = v);
-              _emit();
-            },
+            onChanged: _handleOrgPctChanged,
           ),
         ))
         ..add(const SizedBox(height: AppSpacing.md));
     }
     return fields;
+  }
+
+  Future<void> _handleOrgPctChanged(int v) async {
+    if (v > 0 && !_legalAccepted && _orgPct == 0) {
+      var confirmed = false;
+      await showAppModal(
+        context: context,
+        title: 'Organiser fee compliance',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'In some countries (including Portugal), retaining any money from a game can be treated as operating unlicensed gaming. By enabling this, you confirm that you comply with your local gaming laws and that this contribution is used solely to cover actual costs (equipment, drinks, snacks).',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(
+              fullWidth: true,
+              onPressed: () {
+                confirmed = true;
+                Navigator.of(context).pop();
+              },
+              child: const Text('I confirm and accept'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              fullWidth: true,
+              variant: AppButtonVariant.ghost,
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+      if (!confirmed) return;
+      _legalAccepted = true;
+    }
+    setState(() => _orgPct = v);
+    _emit();
   }
 }
 
@@ -1249,13 +1294,15 @@ class _EditRow extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: isMobile 
+      child: isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 textColumn,
                 const SizedBox(height: AppSpacing.sm),
-                trailing,
+                // Wrap-in-Column stretches full width: a fixed-width child
+                // (stepper) stays left, a Wrap (option pills) uses the width.
+                Align(alignment: Alignment.centerLeft, child: trailing),
               ],
             )
           : Row(
@@ -1263,7 +1310,15 @@ class _EditRow extends StatelessWidget {
               children: [
                 Expanded(child: textColumn),
                 const SizedBox(width: AppSpacing.sm),
-                trailing,
+                // A Wrap pill group inside a Row gets unbounded width and
+                // overflows instead of wrapping. Flexible bounds it to the
+                // remaining space so pills wrap; Align keeps steppers right.
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: trailing,
+                  ),
+                ),
               ],
             ),
     );

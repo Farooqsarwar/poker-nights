@@ -400,7 +400,7 @@ class TournamentEngine {
   /// fixed before the level COUNT was known, so a 4-hour target could only ever
   /// be approximated: 16 levels of 15 is 4h00 by luck, 3h30 is not reachable at
   /// all. Choosing the length directly is what lets the two line up.
-  static const List<int> validLevelDurations = [10, 15, 20];
+  static const List<int> validLevelDurations = [10, 15, 20, 30];
 
   /// Bounds on a host-chosen level length. Below 3 minutes the blinds move
   /// faster than a hand plays out; above an hour the structure stops being one.

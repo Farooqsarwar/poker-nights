@@ -336,6 +336,7 @@ extension AppProviderGame on AppProvider {
       status: LiveGameStatus.cancelled,
       timerRunning: false,
     );
+    RecoveryService.clearGame();
     final pinnedCard = _currentGroup.chat
         .where((c) => c.pinned && c.gameId == game.id && !c.deleted)
         .firstOrNull;

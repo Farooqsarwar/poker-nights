@@ -168,7 +168,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '⚠️ Event updated',
+                    'Event updated',
                     style: AppTypography.bodySm.copyWith(
                       fontWeight: FontWeight.w700,
                       color: AppColors.primary,

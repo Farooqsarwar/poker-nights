@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -35,7 +35,7 @@ class Sidebar extends StatelessWidget {
 
     final primaryNavItems = [
       _NavSpec(RoutePaths.home, 'Home', Icons.home_outlined, 0, null),
-      if (app.hasCurrentGroup) ...[
+      if (app.hasCurrentGroup && !app.isGuest) ...[
         _NavSpec(RoutePaths.group, 'Games', Icons.sports_esports_outlined, 0, null),
         _NavSpec(RoutePaths.chat, 'Chat', Icons.chat_bubble_outline, 0, app.unreadGroupChatCount(group.id)),
         _NavSpec(RoutePaths.members, 'Members', Icons.groups_outlined, 0, group.members.length),
@@ -86,21 +86,10 @@ class Sidebar extends StatelessWidget {
                   ],
                 ),
               ),
-              child: Row(
-                children: [
-                  const PokerNightLogo(size: 24),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      'Poker Night',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.crimsonShimmer(
-                        size: AppFontSizes.lg,
-                      ),
-                    ),
-                  ),
-                ],
+              child: const PokerNightBrand(
+                logoSize: 26,
+                fontSize: 18,
+                showEyebrow: false,
               ),
             ),
             // Nav items
@@ -110,7 +99,13 @@ class Sidebar extends StatelessWidget {
                 children: [
                   // Current group — the single group selector (IA §10).
                   InkWell(
-                    onTap: () => showGroupSwitcher(context),
+                    onTap: () {
+                      if (!app.isGuest && app.hasCurrentGroup) {
+                        showGroupSwitcher(context);
+                      } else {
+                        openCreateGroupDialog(context);
+                      }
+                    },
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     child: Container(
                       margin: const EdgeInsets.only(

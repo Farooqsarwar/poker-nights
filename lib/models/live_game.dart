@@ -701,6 +701,10 @@ class LiveGame {
     this.checkInClosed = false,
     this.structureConfirmed = false,
     this.finalTableRedrawCompleted = false,
+    this.handForHandActive = false,
+    this.handForHandHand = 1,
+    this.handForHandDoneTables = const [],
+    this.bubbleSaveRecorded = false,
     this.dealerPlayerId,
     this.guestSlots = const [],
     this.originalLevels,
@@ -829,6 +833,19 @@ class LiveGame {
 
   /// True once the final table redraw has been triggered and completed (BR-020).
   final bool finalTableRedrawCompleted;
+
+  /// Hand-for-hand on the bubble with 2+ tables (C-bubble, §F3).
+  /// While active the host marks each table done per hand; all devices and
+  /// the TV see the banner from these synced fields. [handForHandHand] is
+  /// the current hand number (starts at 1); [handForHandDoneTables] holds
+  /// the table numbers done with the current hand.
+  final bool handForHandActive;
+  final int handForHandHand;
+  final List<int> handForHandDoneTables;
+
+  /// True once a bubble save was recorded (C-bubble D10). The payout ladder
+  /// already carries the bubble place then, so the offer hides itself.
+  final bool bubbleSaveRecorded;
 
   /// True once the firm, one-time structure recalculation at T-minus-10-
   /// minutes (using the final "Going" headcount) has run. Set once by
@@ -1070,7 +1087,7 @@ class LiveGame {
 
     // Trigger the no-show gate - mark players as noShow, no buy-in taken
     // Seat stays reserved so a late arrival is a normal add later
-    for (final player in unconfirmedGoing) {
+    for (final _ in unconfirmedGoing) {
       // Mark as noShow in the player status
       // The actual status mutation happens in the UI/provider layer
       // based on this gate being triggered
@@ -1265,6 +1282,10 @@ return true;
     bool? checkInClosed,
     bool? structureConfirmed,
     bool? finalTableRedrawCompleted,
+    bool? handForHandActive,
+    int? handForHandHand,
+    List<int>? handForHandDoneTables,
+    bool? bubbleSaveRecorded,
     String? dealerPlayerId,
     List<GuestSlot>? guestSlots,
     List<BlindLevel>? originalLevels,
@@ -1324,6 +1345,10 @@ return true;
       checkInClosed: checkInClosed ?? this.checkInClosed,
       structureConfirmed: structureConfirmed ?? this.structureConfirmed,
       finalTableRedrawCompleted: finalTableRedrawCompleted ?? this.finalTableRedrawCompleted,
+      handForHandActive: handForHandActive ?? this.handForHandActive,
+      handForHandHand: handForHandHand ?? this.handForHandHand,
+      handForHandDoneTables: handForHandDoneTables ?? this.handForHandDoneTables,
+      bubbleSaveRecorded: bubbleSaveRecorded ?? this.bubbleSaveRecorded,
       dealerPlayerId: dealerPlayerId ?? this.dealerPlayerId,
       guestSlots: guestSlots ?? this.guestSlots,
       originalLevels: originalLevels ?? this.originalLevels,

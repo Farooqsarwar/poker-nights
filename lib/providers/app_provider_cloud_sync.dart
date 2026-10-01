@@ -762,7 +762,14 @@ extension AppProviderCloudSync on AppProvider {
       // the content, the signature differs and the authority still saves it.
       _lastSavedSignature = _gameSignature(remote);
       // Crash-resume snapshots are the admin's (see [_dropRecoveryIfNotAuthority]).
-      if (isAdmin) RecoveryService.saveGame(remote);
+      if (isAdmin) {
+        if (remote.status == LiveGameStatus.completed ||
+            remote.status == LiveGameStatus.cancelled) {
+          RecoveryService.clearGame();
+        } else {
+          RecoveryService.saveGame(remote);
+        }
+      }
       // A foreign writer (e.g. the admin's whole-doc save) may have wiped this
       // member's just-written RSVP — re-write it rather than only masking it
       // with the overlay, so a page reload keeps the selection.

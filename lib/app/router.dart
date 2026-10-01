@@ -47,6 +47,7 @@ import '../screens/tournament/create_tournament_screen.dart';
 import '../screens/tournament/quick_start_screen.dart';
 import '../screens/tournament/final_table_screen.dart';
 import '../screens/tournament/invitation_screen.dart';
+import '../screens/tournament/payouts_screen.dart';
 import '../screens/tournament/player_live_screen.dart';
 import '../screens/tournament/rebuy_settlement_screen.dart';
 import '../screens/tournament/result_podium_screen.dart';
@@ -116,16 +117,19 @@ const _coHostPaths = {
 
 /// Shell routes a guest session (no account) may enter — mirrors
 /// `ScreenShell._guestAllowed`, which is the set that actually draws the guest
-/// shell, and is deliberately not widened here on its own.
+/// shell. The two sets are kept identical on purpose: widening one alone
+/// would pass the router guard and then be refused by `ScreenShell`'s gate
+/// a frame later (or vice versa).
 ///
-/// C3 also lists `/t/:id/me` (C4p, "guest shell for guests") as a guest route,
-/// so `/t/:id/me` folds onto `RoutePaths.invitation` and a guest deep link to it
-/// is bounced to sign-in. That matches what `/invitation` already does for a
-/// guest, and the two sets are kept identical on purpose: adding
-/// `RoutePaths.invitation` here alone would pass the router guard and then be
-/// refused by `ScreenShell`'s gate a frame later. Fixing it properly means the
-/// guest shell has to allow the invitation too, which is `screen_shell.dart`.
-const _guestAllowed = {RoutePaths.playerLive, RoutePaths.resultPodium};
+/// C3 lists `/t/:id/me` (C4p, "guest shell for guests") as a guest route, so
+/// `/t/:id/me` folds onto `RoutePaths.invitation` and both sets admit it. The
+/// builder below still sends link guests to the guest flow — the invitation
+/// screen itself stays member-oriented.
+const _guestAllowed = {
+  RoutePaths.playerLive,
+  RoutePaths.resultPodium,
+  RoutePaths.invitation,
+};
 
 /// Builds the app router wired to [app] so the auth guard re-evaluates on
 /// every provider change (sign-in/out and the initial `authReady` flip).
@@ -379,11 +383,12 @@ GoRouter buildAppRouter(AppProvider app) {
     ),
 
     // D3 — the TV pairing code, deep-linkable. `/tv-mode` is the screen itself;
-    // `/tv/:code` is the link a host shares, so the code is what has to survive
-    // the hop. See the note on `/g/:gameCode` above for why it lands on `/join`.
+    // `/tv/:code` is the link a host shares: it opens the scoreboard directly
+    // (read-only, no account) with the code pre-filled and auto-connecting.
+    // Game/player codes (`/g/:code`, `/game/`, `/j/`) still land on `/join`.
     GoRoute(
       path: SpecRoutes.tvCode,
-      builder: (context, state) => JoinScreen(
+      builder: (context, state) => TVModeScreen(
         initialCode: state.pathParameters[SpecRoutes.codeParam],
       ),
     ),
@@ -721,8 +726,8 @@ GoRouter buildAppRouter(AppProvider app) {
     // C2 — the invitation, the RSVP and the waitlist. Also `/t/:id/me`, C4p:
     // the player's own check-in, which this screen draws as its primary action
     // (locked until the window opens, then "Check In", then "Waiting for
-    // Confirmation", then the seat). C4p also says "guest shell for guests",
-    // which a guest cannot get here yet — see [_guestAllowed].
+    // Confirmation", then the seat). A link guest (session, no account) gets
+    // the guest flow instead — the invitation screen stays member-oriented.
     GoRoute(
       path: SpecRoutes.tournament,
       pageBuilder: (context, state) => NoTransitionPage(
@@ -734,7 +739,12 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentMe,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(const InvitationScreen(), path: RoutePaths.invitation),
+        child: shell(
+          app.hasGuestSession && !app.isAuthenticated
+              ? const GuestFlowScreen()
+              : const InvitationScreen(),
+          path: RoutePaths.invitation,
+        ),
       ),
     ),
 
@@ -804,9 +814,7 @@ GoRouter buildAppRouter(AppProvider app) {
       ),
     ),
 
-    // C10 · C11 — the player's live view. C2 notes that the Payouts tab
-    // navigates to `/t/:id/payouts`, so that path is a sibling of `/t/:id/live`
-    // and opens the same view.
+    // C10 · C11 — the player's live view.
     GoRoute(
       path: SpecRoutes.tournamentLive,
       pageBuilder: (context, state) => NoTransitionPage(
@@ -814,11 +822,14 @@ GoRouter buildAppRouter(AppProvider app) {
         child: shell(const PlayerLiveScreen(), path: RoutePaths.playerLive),
       ),
     ),
+    // C-payouts — its own screen (pool, entries, medal rows, KO pot, host
+    // view toggle). Same shell path as the live view, so nav highlighting
+    // and guards behave exactly as before.
     GoRoute(
       path: SpecRoutes.tournamentPayouts,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(const PlayerLiveScreen(), path: RoutePaths.playerLive),
+        child: shell(const PayoutsScreen(), path: RoutePaths.playerLive),
       ),
     ),
 

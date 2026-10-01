@@ -18,7 +18,7 @@ import '../../services/entitlements.dart';
 import '../../responsive/responsive.dart';
 import '../../utils/formatters.dart';
 import '../../utils/payout_bridge.dart';
-import '../../utils/payouts_engine.dart' show DealTriggerType;
+import '../../utils/payouts_engine.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
@@ -105,6 +105,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final app = context.read<AppProvider>();
+      if (app.restoredFromRecovery && !app.hasOfflineConflict) {
+        // Automatically adopt the restored local state when the admin is on the dashboard
+        app.resolveOfflineConflict(keepLocal: true);
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _announcementController.dispose();
     super.dispose();
@@ -115,6 +128,51 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (text.isEmpty) return;
     app.addAnnouncement(text);
     _announcementController.clear();
+  }
+
+  void _confirmExitGame(BuildContext context, AppProvider app) {
+    showAppModal(
+      context: context,
+      title: 'Leave game?',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Your tournament clock will continue running on this device. You can create an account to save tonight\'s results permanently, or exit to the landing screen.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(
+            fullWidth: true,
+            onPressed: () {
+              Navigator.pop(context);
+              context.go(RoutePaths.register);
+            },
+            child: const Text('Create account to save'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.secondary,
+            onPressed: () {
+              Navigator.pop(context);
+              context.go(RoutePaths.landing);
+            },
+            child: const Text('Exit to start'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.ghost,
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Keep playing'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _confirmStartTimer(BuildContext context, AppProvider app) {
@@ -413,6 +471,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: 6),
             Row(
               children: [
+                if (app.isGuest) ...[
+                  SquircleIconButton(
+                    icon: Icons.close,
+                    size: 40,
+                    iconSize: 20,
+                    borderRadius: 12,
+                    tooltip: 'Leave game',
+                    onPressed: () => _confirmExitGame(context, app),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                ],
                 Expanded(
                   child: Text(
                     settings.name,
@@ -425,6 +494,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                if (app.isGuest) ...[
+                  TextButton(
+                    onPressed: () => context.go(RoutePaths.register),
+                    child: Text(
+                      'Save game',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
                 SquircleIconButton(
                   icon: Icons.more_vert,
                   size: 40,
@@ -449,6 +531,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 Wrap(
                   spacing: AppSpacing.sm,
                   children: [
+                    if (app.isGuest) ...[
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.ghost,
+                        onPressed: () => _confirmExitGame(context, app),
+                        child: const AppIconLabel(
+                          label: 'Exit',
+                          icon: Icons.close,
+                        ),
+                      ),
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.primary,
+                        onPressed: () => context.go(RoutePaths.register),
+                        child: const AppIconLabel(
+                          label: 'Save game',
+                          icon: Icons.save_outlined,
+                        ),
+                      ),
+                    ],
                     AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
@@ -461,23 +563,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
-                      onPressed: () => ChatSheet.show(context, game.id),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const AppIconLabel(
-                            label: 'Chat',
-                            icon: Icons.chat_bubble_outline,
-                          ),
-                          if (app.unreadGameChatCount(game.id) > 0) ...[
-                            const SizedBox(width: AppSpacing.xs),
-                            ChatUnreadBadge(
-                              count: app.unreadGameChatCount(game.id),
-                            ),
-                          ],
-                        ],
+                      onPressed: () => _showJoinCodeDialog(context, game.publicCode),
+                      child: const AppIconLabel(
+                        label: 'Join Code',
+                        icon: Icons.qr_code,
                       ),
                     ),
+                    if (!app.isGuest && app.hasCurrentGroup && app.currentGroup.id.isNotEmpty)
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.ghost,
+                        onPressed: () => ChatSheet.show(context, game.id),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const AppIconLabel(
+                              label: 'Chat',
+                              icon: Icons.chat_bubble_outline,
+                            ),
+                            if (app.unreadGameChatCount(game.id) > 0) ...[
+                              const SizedBox(width: AppSpacing.xs),
+                              ChatUnreadBadge(
+                                count: app.unreadGameChatCount(game.id),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     AppButton(
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
@@ -606,16 +718,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 onAction: () => context.push(RoutePaths.toolIcm),
               ),
             )
+          else if (game.handForHandActive)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: _HandForHandCard(app: app),
+            )
           else if (game.isOnBubble)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-              child: AppAlertBanner(
-                type: AppAlertType.warning,
-                message:
-                    'On the bubble — $playersLeft left, $paidPlaces paid. '
-                    'The next player out wins nothing.',
-                actionLabel: 'ICM Calculator',
-                onAction: () => context.push(RoutePaths.toolIcm),
+              child: _BubbleCard(
+                app: app,
+                playersLeft: playersLeft,
+                paidPlaces: paidPlaces,
               ),
             )
           else if (inTheMoney)
@@ -841,6 +955,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       status == LiveGameStatus.paused ||
                       status == LiveGameStatus.finaltable ||
                       status == LiveGameStatus.rebuypause) &&
+                  game.currentLevel >= game.structure.levels.length &&
+                  game.structure.levels.isNotEmpty &&
+                  game.currentLevel > 0 &&
                   !game.timerRunning &&
                   game.secondsRemaining == 0) ...[
                 AppCard(
@@ -1167,12 +1284,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.lg),
-                      _AnnouncementCard(
-                        controller: _announcementController,
-                        announcements: game.announcements,
-                        onSend: () => _sendAnnouncement(app),
-                      ),
+                      if (!app.isGuest && app.hasCurrentGroup) ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        _AnnouncementCard(
+                          controller: _announcementController,
+                          announcements: game.announcements,
+                          onSend: () => _sendAnnouncement(app),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1564,26 +1683,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ),
             ),
-          // Record finish order — shown once heads-up (≤3 players) while the
-          // clock is still running. The structure-ended case is surfaced by the
-          // prominent CTA above the controls.
+          // Record finish order — shown once heads-up (≤3 players).
+          // Host can record finish order or declare winner whether the timer
+          // is running or paused (e.g. host pauses clock when hand finishes).
           if (isAdmin &&
               status != LiveGameStatus.completed &&
               status != LiveGameStatus.cancelled &&
-              activePlayers.length <= 3 &&
-              game.timerRunning)
+              activePlayers.length <= 3) ...[
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.md),
               child: AppButton(
                 size: AppButtonSize.md,
-                variant: AppButtonVariant.secondary,
+                variant: activePlayers.length == 1
+                    ? AppButtonVariant.primary
+                    : AppButtonVariant.secondary,
                 onPressed: () => context.go(RoutePaths.completeTournament),
-                child: const AppIconLabel(
-                  label: 'Record finish order',
+                child: AppIconLabel(
+                  label: activePlayers.length == 1
+                      ? 'Declare ${activePlayers.first.name} Winner'
+                      : 'Record finish order',
                   icon: Icons.emoji_events_outlined,
                 ),
               ),
             ),
+            if (activePlayers.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: AppButton(
+                  size: AppButtonSize.md,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => context.go(RoutePaths.deal),
+                  child: const AppIconLabel(
+                    label: 'Agree a deal instead',
+                    icon: Icons.calculate_outlined,
+                  ),
+                ),
+              ),
+          ],
           // Danger zone: cancel tournament (spec §12 — confirmation + reason).
           // Host/Admin only.
           if (isAdmin &&
@@ -1639,7 +1775,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 const AppAlertBanner(
                   type: AppAlertType.warning,
                   message:
-                      'You have local offline progress that differs from the cloud state. Please choose which state to keep.',
+                      'Someone else updated the game or remote changes conflict with local progress. Please choose which state to keep.',
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 AppButton(
@@ -1850,7 +1986,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ];
     }
     return [
-      if (app.canRunCurrentGame && game.status.isActiveLive)
+      if (AppFeatureFlags.enableShotClock && app.canRunCurrentGame && game.status.isActiveLive)
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: _ShotClockBar(app: app, game: game),
@@ -1914,14 +2050,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               Row(
                                 children: [
                                   Flexible(
-                                    child: Text(
-                                      p.name,
-                                      style: TextStyle(
-                                        color: AppColors.foreground,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15,
+                                    child: InkWell(
+                                      onTap: () => _showRenamePlayerDialog(context, app, p),
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              p.name,
+                                              style: TextStyle(
+                                                color: AppColors.foreground,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 15,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Icon(
+                                            Icons.edit_outlined,
+                                            size: 13,
+                                            color: AppColors.mutedForeground,
+                                          ),
+                                        ],
                                       ),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   if (p.rebuys > 0) ...[
@@ -1956,7 +2109,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '📍 Table ${p.table} · Seat ${p.seat}',
+                                'Table ${p.table} · Seat ${p.seat}',
                                 style: TextStyle(
                                   color: AppColors.mutedForeground,
                                   fontSize: 13,
@@ -2093,22 +2246,81 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     fontSize: 18,
                   ),
                 ),
-                const SizedBox(height: 12),
-                ListTile(
-                  leading: Icon(
-                    Icons.chat_bubble_outline,
-                    color: AppColors.foreground,
+                if (app.isGuest) ...[
+                  ListTile(
+                    leading: Icon(
+                      Icons.person_add_outlined,
+                      color: AppColors.primary,
+                    ),
+                    title: Text(
+                      'Keep Tonight\'s Results',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Create an account to save this tournament permanently',
+                      style: TextStyle(
+                        color: AppColors.mutedForeground,
+                        fontSize: 12,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.go(RoutePaths.register);
+                    },
                   ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.exit_to_app,
+                      color: AppColors.foreground,
+                    ),
+                    title: Text(
+                      'Leave Game',
+                      style: TextStyle(color: AppColors.foreground),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _confirmExitGame(context, app);
+                    },
+                  ),
+                  Divider(color: AppColors.border),
+                ],
+                if (!app.isGuest && app.hasCurrentGroup && app.currentGroup.id.isNotEmpty)
+                  ListTile(
+                    leading: Icon(
+                      Icons.chat_bubble_outline,
+                      color: AppColors.foreground,
+                    ),
+                    title: Text(
+                      'Chat',
+                      style: TextStyle(color: AppColors.foreground),
+                    ),
+                    trailing: app.unreadGameChatCount(game.id) > 0
+                        ? ChatUnreadBadge(count: app.unreadGameChatCount(game.id))
+                        : null,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      ChatSheet.show(context, game.id);
+                    },
+                  ),
+                ListTile(
+                  leading: Icon(Icons.qr_code, color: AppColors.foreground),
                   title: Text(
-                    'Chat',
+                    'Join Code & QR',
                     style: TextStyle(color: AppColors.foreground),
                   ),
-                  trailing: app.unreadGameChatCount(game.id) > 0
-                      ? ChatUnreadBadge(count: app.unreadGameChatCount(game.id))
-                      : null,
+                  subtitle: Text(
+                    'Game Code: ${game.publicCode} • Players connect without an account',
+                    style: TextStyle(
+                      color: AppColors.mutedForeground,
+                      fontSize: 12,
+                    ),
+                  ),
                   onTap: () {
                     Navigator.pop(ctx);
-                    ChatSheet.show(context, game.id);
+                    _showJoinCodeDialog(context, game.publicCode);
                   },
                 ),
                 ListTile(
@@ -2166,21 +2378,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       _showUndoPreview(app);
                     },
                   ),
-                ListTile(
-                  leading: Icon(
-                    Icons.campaign_outlined,
-                    color: AppColors.foreground,
+                if (!app.isGuest && app.hasCurrentGroup)
+                  ListTile(
+                    leading: Icon(
+                      Icons.campaign_outlined,
+                      color: AppColors.foreground,
+                    ),
+                    title: Text(
+                      'Announcements',
+                      style: TextStyle(color: AppColors.foreground),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showAnnouncementsModal(context, app, game);
+                    },
                   ),
-                  title: Text(
-                    'Announcements',
-                    style: TextStyle(color: AppColors.foreground),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showAnnouncementsModal(context, app, game);
-                  },
-                ),
-                if (app.canRunCurrentGame && game.status.isActiveLive)
+                if (AppFeatureFlags.enableShotClock && app.canRunCurrentGame && game.status.isActiveLive)
                   ListTile(
                     leading: Icon(
                       Icons.timer_outlined,
@@ -2195,7 +2408,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       _showShotClockModal(context, app, game);
                     },
                   ),
-                if (app.isAdmin && game.players.any((p) => p.table > 1))
+                if (app.isAdmin &&
+                    (game.activePlayers.length <= 9 ||
+                        game.players.any((p) => p.table > 1)))
                   ListTile(
                     leading: Icon(
                       Icons.table_chart_outlined,
@@ -2205,11 +2420,108 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       'Final Table Redraw',
                       style: TextStyle(color: AppColors.foreground),
                     ),
+                    subtitle: Text(
+                      'Redraw random seating for remaining players',
+                      style: TextStyle(
+                        color: AppColors.mutedForeground,
+                        fontSize: 12,
+                      ),
+                    ),
                     onTap: () {
                       Navigator.pop(ctx);
                       context.push(RoutePaths.finalTable);
                     },
                   ),
+                if (app.isAdmin && game.status.isActiveLive) ...[
+                  ListTile(
+                    leading: Icon(Icons.bolt, color: AppColors.foreground),
+                    title: Text(
+                      'Speed Up Tournament',
+                      style: TextStyle(color: AppColors.foreground),
+                    ),
+                    subtitle: Text(
+                      'Shorten future blind level durations',
+                      style: TextStyle(
+                        color: AppColors.mutedForeground,
+                        fontSize: 12,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showSpeedPreview(app, game, SpeedRecommendation.speedUp);
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.trending_down,
+                      color: AppColors.foreground,
+                    ),
+                    title: Text(
+                      'Slow Down Tournament',
+                      style: TextStyle(color: AppColors.foreground),
+                    ),
+                    subtitle: Text(
+                      'Lengthen future blind level durations',
+                      style: TextStyle(
+                        color: AppColors.mutedForeground,
+                        fontSize: 12,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showSpeedPreview(app, game, SpeedRecommendation.slowDown);
+                    },
+                  ),
+                ],
+                if (app.isAdmin &&
+                    game.status != LiveGameStatus.completed &&
+                    game.status != LiveGameStatus.cancelled) ...[
+                  ListTile(
+                    leading: Icon(
+                      Icons.emoji_events_outlined,
+                      color: AppColors.primary,
+                    ),
+                    title: Text(
+                      'Declare Winner / Record Finish',
+                      style: TextStyle(
+                        color: AppColors.foreground,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Record final player positions and complete tournament',
+                      style: TextStyle(
+                        color: AppColors.mutedForeground,
+                        fontSize: 12,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.go(RoutePaths.completeTournament);
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.calculate_outlined,
+                      color: AppColors.foreground,
+                    ),
+                    title: Text(
+                      'Agree a Deal (ICM Deal Maker)',
+                      style: TextStyle(color: AppColors.foreground),
+                    ),
+                    subtitle: Text(
+                      'Split remaining prize pool among active players',
+                      style: TextStyle(
+                        color: AppColors.mutedForeground,
+                        fontSize: 12,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.go(RoutePaths.deal);
+                    },
+                  ),
+                ],
                 if (app.isAdmin &&
                     game.status != LiveGameStatus.completed &&
                     game.status != LiveGameStatus.cancelled) ...[
@@ -2330,7 +2642,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       // Section 12's soft shot clock. Lives at the top of the players tab
       // because that is where the host already is when somebody starts
       // tanking -- looking at the list of who is still in.
-      if (app.canRunCurrentGame && game.status.isActiveLive)
+      if (AppFeatureFlags.enableShotClock && app.canRunCurrentGame && game.status.isActiveLive)
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.md),
           child: _ShotClockBar(app: app, game: game),
@@ -2362,10 +2674,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         runSpacing: AppSpacing.xs,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          Text(
-                            p.name,
-                            style: AppTypography.bodySm.copyWith(
-                              fontWeight: FontWeight.w500,
+                          InkWell(
+                            onTap: () => _showRenamePlayerDialog(context, app, p),
+                            borderRadius: BorderRadius.circular(4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  p.name,
+                                  style: AppTypography.bodySm.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.edit_outlined,
+                                  size: 13,
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ],
                             ),
                           ),
                           if (p.isGuest)
@@ -2872,6 +3199,93 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  void _showRenamePlayerDialog(BuildContext context, AppProvider app, Player p) {
+    final ctrl = TextEditingController(text: p.name);
+    showAppModal(
+      context: context,
+      title: 'Rename Player',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Change the display name for seating, standings and payouts.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            controller: ctrl,
+            placeholder: 'Player name',
+            autofocus: true,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: AppButton(
+                  onPressed: () {
+                    final newName = ctrl.text.trim();
+                    if (newName.isNotEmpty) {
+                      app.renamePlayer(p.id, newName);
+                    }
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showJoinCodeDialog(BuildContext context, String code) {
+    if (code.isEmpty) return;
+    showAppModal(
+      context: context,
+      title: 'Game Join Code',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Join code · Players and the TV. No account, no app.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Center(child: CodeDisplay(code: code, label: 'Game Join Code')),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Players can open the app or website on their phone and tap "Join with a code" to view the live timer, blinds, seating, and payouts.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppButton(
+            fullWidth: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmAddOn(BuildContext context, AppProvider app, Player p) {
     showAppModal(
       context: context,
@@ -2973,6 +3387,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 Navigator.of(context).pop();
               }
             : null,
+        // Hand-for-hand across tables: tied busts share one hand (C-bubble).
+        handForHandActive: game.handForHandActive,
+        sameHandOptions: options.where((p) => p.table != player.table).toList(),
+        onConfirmTied: (ids) {
+          final err = app.recordTiedBusts([player.id, ...ids]);
+          Navigator.of(context).pop();
+          if (err != null && context.mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(err)));
+          }
+        },
       ),
     );
   }
@@ -3052,6 +3478,274 @@ class _AnnouncementCard extends StatelessWidget {
                 .animate(key: ValueKey(a.id))
                 .fadeIn(duration: 260.ms)
                 .slideY(begin: -0.25, end: 0, curve: Curves.easeOut),
+        ],
+      ),
+    );
+  }
+}
+
+/// C5 item 9 — the bubble card: Open ICM deal, Start hand-for-hand (2+ tables),
+/// Offer a bubble save. Client-side only; the provider refuses non-authority
+/// devices with a message shown as a snackbar.
+class _BubbleCard extends StatelessWidget {
+  const _BubbleCard({
+    required this.app,
+    required this.playersLeft,
+    required this.paidPlaces,
+  });
+
+  final AppProvider app;
+  final int playersLeft;
+  final int paidPlaces;
+
+  void _snack(BuildContext context, String? message) {
+    if (message == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final game = app.currentGame;
+    final tables = app.handForHandTables;
+    final canSave =
+        game != null && !game.bubbleSaveRecorded && game.structure.prizes.isNotEmpty;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      borderColor: AppColors.primary.withValues(alpha: 0.5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'On the bubble — $playersLeft left, $paidPlaces paid',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'One more elimination and everyone left is paid. Equity is highest '
+            'right now: a good moment to talk about a deal before a marginal '
+            'all-in, not after.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              AppButton(
+                size: AppButtonSize.sm,
+                onPressed: () => context.push(RoutePaths.deal),
+                child: const Text('Open ICM deal'),
+              ),
+              if (tables.length >= 2)
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () =>
+                      _snack(context, app.startHandForHand()),
+                  child: const Text('Start hand-for-hand'),
+                ),
+              if (canSave)
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => showAppModal(
+                    context: context,
+                    title: 'Offer a bubble save',
+                    child: _BubbleSaveSheet(app: app),
+                  ),
+                  child: const Text('Offer a bubble save'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The bubble-save offer sheet (C-bubble D10): the new ladder preview, then
+/// Record. "Only if the whole table agrees — nothing changes until you
+/// record it."
+class _BubbleSaveSheet extends StatelessWidget {
+  const _BubbleSaveSheet({required this.app});
+
+  final AppProvider app;
+
+  List<int>? _preview() {
+    final game = app.currentGame;
+    if (game == null || game.structure.prizes.isEmpty) return null;
+    try {
+      return PayoutsEngine.bubbleSave(
+        [for (final p in game.structure.prizes) p.amount],
+        game.settings.buyIn * 100,
+        'proRata',
+        PayoutsEngine.cashUnit(game.settings.buyIn) * 100,
+      );
+    } on ArgumentError {
+      return null;
+    } on StateError {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ladder = _preview();
+    if (ladder == null) {
+      return Text(
+        'The bubble save does not fit this ladder.',
+        style: AppTypography.bodySm.copyWith(
+          color: AppColors.mutedForeground,
+        ),
+      );
+    }
+    final old = app.currentGame!.structure.prizes;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'The bubble gets its buy-in back. Every paid place pays in '
+          'proportion to its prize in whole units, 1st takes the rounding.',
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        for (var i = 0; i < ladder.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    i < old.length ? '${i + 1}${i == 0 ? 'st' : i == 1 ? 'nd' : i == 2 ? 'rd' : 'th'}' : 'Bubble',
+                    style: AppTypography.bodySm,
+                  ),
+                ),
+                if (i < old.length)
+                  Text(
+                    '${Formatters.chips(old[i].amount ~/ 100)} → ',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                Text(
+                  Formatters.chips(ladder[i] ~/ 100),
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primaryText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'Only if the whole table agrees — nothing changes until you record it.',
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          fullWidth: true,
+          onPressed: () {
+            final err = app.recordBubbleSave();
+            if (!context.mounted) return;
+            Navigator.of(context).pop();
+            if (err != null) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(err)));
+            }
+          },
+          child: const Text('Record the bubble save'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Hand-for-hand live card (C-bubble, §F3): the current hand, one button per
+/// table ("Table 1: hand done"), and Stop. Players and the TV see the same
+/// banner from the synced fields.
+class _HandForHandCard extends StatelessWidget {
+  const _HandForHandCard({required this.app});
+
+  final AppProvider app;
+
+  @override
+  Widget build(BuildContext context) {
+    final game = app.currentGame;
+    if (game == null) return const SizedBox.shrink();
+    final hand = game.handForHandHand;
+    final tables = app.handForHandTables;
+    final done = game.handForHandDoneTables;
+    final waiting = tables.where((t) => !done.contains(t)).toList();
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      borderColor: AppColors.primary.withValues(alpha: 0.5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Hand-for-hand · hand $hand',
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            waiting.isEmpty
+                ? 'Dealing hand $hand.'
+                : 'Waiting for ${waiting.map((t) => 'Table $t').join(' and ')} '
+                    'to finish hand $hand.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final t in tables)
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: done.contains(t)
+                      ? AppButtonVariant.ghost
+                      : AppButtonVariant.secondary,
+                  onPressed: done.contains(t)
+                      ? null
+                      : () {
+                          final err = app.markHandForHandTableDone(t);
+                          if (err != null && context.mounted) {
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text(err)));
+                          }
+                        },
+                  child: Text(
+                    done.contains(t) ? 'Table $t: done' : 'Table $t: hand done',
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          InkWell(
+            onTap: () => app.stopHandForHand(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+              child: Text(
+                'Stop hand-for-hand',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.destructiveText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -4292,6 +4986,9 @@ class _EliminateContent extends StatefulWidget {
     required this.onConfirm,
     this.canRebuy = false,
     this.onEliminateAndRebuy,
+    this.handForHandActive = false,
+    this.sameHandOptions = const [],
+    this.onConfirmTied,
   });
 
   final String playerName;
@@ -4301,15 +4998,24 @@ class _EliminateContent extends StatefulWidget {
   final bool canRebuy;
   final void Function(String? koRecipientId)? onEliminateAndRebuy;
 
+  /// Hand-for-hand tie flow (C-bubble): players at other tables out in the
+  /// same hand. They tie for one place and split its prizes.
+  final bool handForHandActive;
+  final List<Player> sameHandOptions;
+  final void Function(List<String> otherIds)? onConfirmTied;
+
   @override
   State<_EliminateContent> createState() => _EliminateContentState();
 }
 
 class _EliminateContentState extends State<_EliminateContent> {
   String? _koRecipient;
+  final Set<String> _sameHand = {};
 
   @override
   Widget build(BuildContext context) {
+    final showTie =
+        widget.handForHandActive && widget.sameHandOptions.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -4336,6 +5042,60 @@ class _EliminateContentState extends State<_EliminateContent> {
             onChanged: (v) => setState(() => _koRecipient = v),
           ),
         ],
+        if (showTie) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Busted in the same hand as…',
+            style: AppTypography.bodySm.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Only across tables — at the same table the bigger starting stack finishes higher.',
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final p in widget.sameHandOptions)
+                GestureDetector(
+                  onTap: () => setState(() {
+                    if (_sameHand.contains(p.id)) {
+                      _sameHand.remove(p.id);
+                    } else {
+                      _sameHand.add(p.id);
+                    }
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _sameHand.contains(p.id)
+                          ? AppColors.primary
+                          : AppColors.secondary.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: Text(
+                      '${p.name} · T${p.table}',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: _sameHand.contains(p.id)
+                            ? AppColors.foreground
+                            : AppColors.mutedForeground,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
         const SizedBox(height: AppSpacing.xl),
         Row(
           children: [
@@ -4350,8 +5110,12 @@ class _EliminateContentState extends State<_EliminateContent> {
             Expanded(
               child: AppButton(
                 variant: AppButtonVariant.danger,
-                onPressed: () => widget.onConfirm(_koRecipient),
-                child: const Text('Eliminate'),
+                onPressed: _sameHand.isEmpty
+                    ? () => widget.onConfirm(_koRecipient)
+                    : () => widget.onConfirmTied?.call(_sameHand.toList()),
+                child: Text(
+                  _sameHand.isEmpty ? 'Eliminate' : 'Record tied bust',
+                ),
               ),
             ),
           ],

@@ -201,57 +201,90 @@ class _LandingScreenState extends State<LandingScreen> {
               ),
               const SizedBox(height: AppSpacing.xxl),
 
-              // Both doors, side by side as equal halves: hosts create an
-              // account, invited players just came for a code. Capped so the
-              // pair stays button-sized on a wide screen; below ~300px of
-              // content they stack instead of squeezing the labels.
+              // 1. HeroCard — "Poker tonight?" (no account needed):
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                    final create = AppButton(
-                      variant: AppButtonVariant.primary,
-                      size: AppButtonSize.md,
-                      fullWidth: true,
-                      onPressed: () => context.go(RoutePaths.register),
-                      child: const Text('Create account'),
-                    );
-                    final join = AppButton(
+                child: AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Poker tonight?',
+                        style: AppTypography.display(
+                          size: AppFontSizes.xl,
+                          weight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Friends already at the table? Start the clock now — no account, nothing to install.',
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      AppButton(
+                        variant: AppButtonVariant.primary,
+                        size: AppButtonSize.md,
+                        fullWidth: true,
+                        onPressed: () => context.go(RoutePaths.quick),
+                        child: const Text('Start a game now'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+
+              // 2. Joining someone else's game — with explanatory text written above the join button:
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Joining someone else\'s game? No account needed:',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppButton(
                       variant: AppButtonVariant.secondary,
                       size: AppButtonSize.md,
                       fullWidth: true,
                       onPressed: _openJoin,
                       child: const Text('Join with a code'),
-                    );
-                    if (c.maxWidth < 300) {
-                      return Column(
-                        children: [
-                          create,
-                          const SizedBox(height: AppSpacing.sm),
-                          join,
-                        ],
-                      );
-                    }
-                    return Row(
-                      children: [
-                        Expanded(child: create),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(child: join),
-                      ],
-                    );
-                  },
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.sm),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: AppButton(
-                  variant: AppButtonVariant.ghost,
-                  size: AppButtonSize.md,
-                  fullWidth: true,
-                  onPressed: () => context.go(RoutePaths.quick),
-                  child: const Text('Start a game now'),
-                ),
+              const SizedBox(height: AppSpacing.lg),
+
+              // 3. League / account creation option:
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    'Planning a recurring league? ',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => context.go(RoutePaths.register),
+                    child: Text(
+                      'Create account',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.md),
 
@@ -265,12 +298,6 @@ class _LandingScreenState extends State<LandingScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.xxl),
-              Container(
-                height: 1,
-                constraints: const BoxConstraints(maxWidth: 440),
-                color: AppColors.border.withValues(alpha: 0.6),
-              ),
-              const SizedBox(height: AppSpacing.xl),
 
               // Native apps are not built yet. Saying so plainly — rather than
               // shipping store badges that lead nowhere — keeps the promise
@@ -1161,6 +1188,7 @@ class _StoreBadge extends StatelessWidget {
     );
   }
 }
+
 
 class _FeatureCard extends StatelessWidget {
   const _FeatureCard({

@@ -10,11 +10,8 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/app_alert_banner.dart';
-import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/back_nav_button.dart';
 
 class _SeatEntry {
   _SeatEntry({required this.id, required this.name, required this.seat});
@@ -24,7 +21,7 @@ class _SeatEntry {
   int seat;
 }
 
-/// Final table redraw mirroring the web `FinalTablePage`.
+/// Final table redraw matching spec C7 and mockup `03_07_final_table.png`.
 class FinalTableScreen extends StatefulWidget {
   const FinalTableScreen({super.key});
 
@@ -36,6 +33,9 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
   final _random = Random();
   List<_SeatEntry> _seating = [];
   bool _confirmed = false;
+
+  /// Selected seat ID for inspection, dealer assignment, and tap-to-swap.
+  String? _selectedId;
 
   /// Initial dealer-button position for the final table — picked randomly
   /// with the redraw and adjustable by the admin before confirming
@@ -58,6 +58,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
       _dealerId = finalists.isEmpty
           ? null
           : finalists[_random.nextInt(finalists.length)].id;
+      _selectedId = _dealerId ?? (_seating.isNotEmpty ? _seating.first.id : null);
     }
   }
 
@@ -70,6 +71,18 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
       final draggedSeat = dragged.seat;
       dragged.seat = target.seat;
       target.seat = draggedSeat;
+      _selectedId = target.id;
+    });
+  }
+
+  void _onSeatTapped(String seatId) {
+    setState(() {
+      if (_selectedId == null || _selectedId == seatId) {
+        _selectedId = seatId;
+      } else {
+        // Tap another seat while one is selected -> swap them!
+        _swapSeats(_selectedId!, seatId);
+      }
     });
   }
 
@@ -82,6 +95,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
       _seating = arr;
       // A fresh redraw picks a fresh random dealer position.
       _dealerId = arr.isEmpty ? null : arr[_random.nextInt(arr.length)].id;
+      _selectedId = _dealerId ?? (_seating.isNotEmpty ? _seating.first.id : null);
     });
   }
 
@@ -117,62 +131,119 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
     }
 
     final tooMany = game.activePlayers.length > 9;
+    final selectedEntry = _seating.where((s) => s.id == _selectedId).firstOrNull;
 
     return AppPage(
-      maxWidth: 560,
+      maxWidth: 500,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              BackNavButton(
-                label: 'Back to dashboard',
-                onPressed: () => context.go(RoutePaths.hostDashboard),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Final Table Redraw',
-                    style: AppTypography.display(
-                      size: AppFontSizes.xxxl,
-                      weight: FontWeight.w700,
+          // Top row: Back button (matching 03_07_final_table.png top-left chevron box)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Semantics(
+              button: true,
+              label: 'Back to dashboard',
+              child: InkWell(
+                onTap: () => context.go(RoutePaths.hostDashboard),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1C1C1E),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF2C2C30)),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.chevron_left_rounded,
+                      color: AppColors.primary,
+                      size: 24,
                     ),
                   ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Eyebrow badge: Trophy icon + FINAL TABLE (amber pill badge per 03_07_final_table.png)
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0x28F59E0B),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0x60F59E0B)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.emoji_events_outlined,
+                    size: 15,
+                    color: Color(0xFFF59E0B),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
                   Text(
-                    '${_seating.length} players · random seating',
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
+                    'FINAL TABLE',
+                    style: AppTypography.eyebrow(
+                      color: const Color(0xFFF59E0B),
+                      weight: FontWeight.w800,
                     ),
                   ),
                 ],
               ),
-            ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Title: Redraw the seats
+          Text(
+            'Redraw the seats',
+            textAlign: TextAlign.center,
+            style: AppTypography.display(
+              size: AppFontSizes.xxxl,
+              weight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+
+          // Subtitle: 9 players remain
+          Text(
+            '${_seating.length} players remain',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          const AppAlertBanner(
-            type: AppAlertType.info,
-            message:
-                'All remaining players draw new seats at the final table. This cannot be undone.',
-          ),
+
           if (tooMany) ...[
-            const SizedBox(height: AppSpacing.md),
             const AppAlertBanner(
               type: AppAlertType.warning,
               message:
                   'More than 9 players are still in. The final table holds a maximum of 9 seats.',
             ),
+            const SizedBox(height: AppSpacing.md),
           ],
-          const SizedBox(height: AppSpacing.lg),
-          if (_confirmed)
+
+          if (_confirmed) ...[
             AppCard(
               glow: true,
               padding: const EdgeInsets.all(AppSpacing.xxxl),
               child: Column(
                 children: [
                   Icon(
-                    Icons.casino,
+                    Icons.emoji_events_outlined,
                     color: AppColors.primary,
                     size: AppFontSizes.displayLg,
                   ),
@@ -190,218 +261,372 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                   ),
                 ],
               ),
-            )
-          else ...[
-            // Seating visual
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Column(
-                children: [
-                  Text(
-                    'Final Table Seating',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    'Drag a seat onto another to swap them.',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          mainAxisSpacing: AppSpacing.sm,
-                          crossAxisSpacing: AppSpacing.sm,
-                          // Tall enough for "Seat N" over a name at phone
-                          // width; 1.6 clipped the name line.
-                          childAspectRatio: 1.25,
-                        ),
-                    itemCount: _seating.length,
-                    itemBuilder: (context, i) {
-                      final s = _seating[i];
-                      return _DraggableSeatTile(entry: s, onSwap: _swapSeats);
-                    },
-                  ),
-                ],
+            ),
+          ] else ...[
+            // Central Poker Table Ring Graphic matching 03_07_final_table.png
+            Center(
+              child: _PokerTableVisual(
+                seating: _seating,
+                selectedId: _selectedId,
+                dealerId: _dealerId,
+                onSeatTapped: _onSeatTapped,
+                onSwap: _swapSeats,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            // Initial dealer position (Tech spec §12.3: the redraw also picks
-            // the dealer-button position; the admin can adjust it).
-            // Shown as a list — no graphical poker table (User Flow §4.15).
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Initial dealer position',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Picked randomly with the redraw — tap to change.',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      for (final s in [
-                        ..._seating,
-                      ]..sort((a, b) => a.seat.compareTo(b.seat)))
-                        InkWell(
-                          onTap: () => setState(() => _dealerId = s.id),
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md,
-                              vertical: AppSpacing.sm,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _dealerId == s.id
-                                  ? AppColors.primarySoft
-                                  : AppColors.secondary,
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                              border: Border.all(
-                                color: _dealerId == s.id
-                                    ? AppColors.primary
-                                    : AppColors.border,
-                                width: _dealerId == s.id ? 1.5 : 1,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (_dealerId == s.id) ...[
-                                  Icon(
-                                    Icons.style,
-                                    size: 14,
-                                    color: AppColors.primary,
-                                  ),
-                                  const SizedBox(width: AppSpacing.xs),
-                                ],
-                                // Flexible: this Row sits in a Wrap bounded to
-                                // the card's width; s.name is a player name of
-                                // unbounded length (same overflow mechanism as
-                                // guest_flow's _IntroLine).
-                                Flexible(
-                                  child: Text(
-                                    'Seat ${s.seat} · ${s.name}',
-                                    style: AppTypography.bodyXs.copyWith(
-                                      color: _dealerId == s.id
-                                          ? AppColors.primary
-                                          : AppColors.mutedForeground,
-                                      fontWeight: _dealerId == s.id
-                                          ? FontWeight.w700
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+            const SizedBox(height: AppSpacing.lg),
+
+            // Active Seat Card: Player assignment & Dealer toggle
+            if (selectedEntry != null)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${selectedEntry.seat}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
                           ),
                         ),
-                    ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            selectedEntry.name,
+                            style: AppTypography.bodySm.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.foreground,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            _dealerId == selectedEntry.id
+                                ? 'Dealer button (D)'
+                                : 'Tap another seat to swap',
+                            style: AppTypography.bodyXs.copyWith(
+                              color: _dealerId == selectedEntry.id
+                                  ? const Color(0xFFF59E0B)
+                                  : AppColors.mutedForeground,
+                              fontWeight: _dealerId == selectedEntry.id
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _dealerId = selectedEntry.id;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: AppSpacing.xs,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _dealerId == selectedEntry.id
+                              ? const Color(0x30F59E0B)
+                              : AppColors.card,
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(
+                            color: _dealerId == selectedEntry.id
+                                ? const Color(0xFFF59E0B)
+                                : AppColors.borderSubtle,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _dealerId == selectedEntry.id
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                              size: 14,
+                              color: _dealerId == selectedEntry.id
+                                  ? const Color(0xFFF59E0B)
+                                  : AppColors.mutedForeground,
+                            ),
+                            const SizedBox(width: AppSpacing.xxs),
+                            Text(
+                              'Dealer',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _dealerId == selectedEntry.id
+                                    ? const Color(0xFFF59E0B)
+                                    : AppColors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: AppSpacing.xl),
+
+            // Bottom CTA: Primary crimson button "Assign seats & continue"
+            SizedBox(
+              height: 52,
+              child: ElevatedButton(
+                onPressed: tooMany ? null : () => _confirm(app),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
+                  foregroundColor: Colors.white,
+                  elevation: 6,
+                  shadowColor: AppColors.primary.withValues(alpha: 0.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                ],
+                ),
+                child: Text(
+                  tooMany ? 'Eliminate to 9 first' : 'Assign seats & continue',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: AppButton(
-                    variant: AppButtonVariant.secondary,
-                    onPressed: _redraw,
-                    child: const AppIconLabel(
-                      label: 'Redraw',
-                      icon: Icons.refresh,
-                    ),
+            const SizedBox(height: AppSpacing.sm),
+
+            // Secondary link: "Shuffle again"
+            Center(
+              child: TextButton(
+                onPressed: _redraw,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  minimumSize: const Size(120, 44),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.sm,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: AppButton(
-                    disabled: tooMany,
-                    onPressed: () => _confirm(app),
-                    child: AppIconLabel(
-                      label: tooMany
-                          ? 'Eliminate to 9 first'
-                          : 'Confirm seating',
-                      icon: tooMany ? null : Icons.event_seat,
-                    ),
+                child: const Text(
+                  'Shuffle again',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFE53935),
                   ),
                 ),
-              ],
+              ),
             ),
           ],
-          const SizedBox(height: AppSpacing.xxl),
+          const SizedBox(height: AppSpacing.lg),
         ],
       ),
     );
   }
 }
 
-class _DraggableSeatTile extends StatefulWidget {
-  const _DraggableSeatTile({required this.entry, required this.onSwap});
+/// Circular poker table graphic rendering the red glowing ring with seat nodes
+/// arranged radially around the circumference, precisely matching `03_07_final_table.png`.
+class _PokerTableVisual extends StatelessWidget {
+  const _PokerTableVisual({
+    required this.seating,
+    required this.selectedId,
+    required this.dealerId,
+    required this.onSeatTapped,
+    required this.onSwap,
+  });
 
-  final _SeatEntry entry;
+  final List<_SeatEntry> seating;
+  final String? selectedId;
+  final String? dealerId;
+  final ValueChanged<String> onSeatTapped;
   final void Function(String draggedId, String targetId) onSwap;
 
   @override
-  State<_DraggableSeatTile> createState() => _DraggableSeatTileState();
-}
+  Widget build(BuildContext context) {
+    const double tableSize = 290.0;
+    const double nodeSize = 44.0;
+    const double ringRadius = 100.0;
+    const double centerOffset = tableSize / 2;
 
-class _DraggableSeatTileState extends State<_DraggableSeatTile> {
-  Widget _tile({bool dimmed = false, Color? borderColor, Color? background}) {
-    final s = widget.entry;
-    return Opacity(
-      opacity: dimmed ? 0.35 : 1,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
-        ),
-        decoration: BoxDecoration(
-          color: background ?? AppColors.secondary,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: borderColor ?? AppColors.border),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Seat ${s.seat}',
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
+    final sorted = [...seating]..sort((a, b) => a.seat.compareTo(b.seat));
+    final count = sorted.length;
+
+    return SizedBox(
+      width: tableSize,
+      height: tableSize,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Outer subtle dark glow felt background
+          Container(
+            width: ringRadius * 2,
+            height: ringRadius * 2,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF111113),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.22),
+                  blurRadius: 36,
+                  spreadRadius: 4,
+                ),
+              ],
+            ),
+          ),
+
+          // Crimson red ring boundary
+          Container(
+            width: ringRadius * 2,
+            height: ringRadius * 2,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.primary,
+                width: 2.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.4),
+                  blurRadius: 18,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+          ),
+
+          // Center text: "Seat 1–9" (or 1–N) in crimson red
+          Center(
+            child: Text(
+              count > 0 ? 'Seat 1–$count' : 'Final Table',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFFE53935),
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
               ),
             ),
-            const SizedBox(height: AppSpacing.xxs),
-            Text(
-              s.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+          ),
+
+          // Seat nodes distributed clockwise around the ring
+          for (var i = 0; i < count; i++) ...[
+            Builder(
+              builder: (context) {
+                final s = sorted[i];
+                // Start from top (12 o'clock = -pi/2), then distribute clockwise
+                final angle = -pi / 2 + (2 * pi * i / count);
+                final x = centerOffset + ringRadius * cos(angle) - (nodeSize / 2);
+                final y = centerOffset + ringRadius * sin(angle) - (nodeSize / 2);
+
+                final isSelected = s.id == selectedId;
+                final isDealer = s.id == dealerId;
+                // Highlight if selected or dealer (e.g. seat 1 and 7 in mockup)
+                final isHighlighted = isSelected || isDealer;
+
+                return Positioned(
+                  left: x,
+                  top: y,
+                  width: nodeSize,
+                  height: nodeSize,
+                  child: _RadialSeatNode(
+                    entry: s,
+                    nodeSize: nodeSize,
+                    isHighlighted: isHighlighted,
+                    isDealer: isDealer,
+                    onTap: () => onSeatTapped(s.id),
+                    onSwap: onSwap,
+                  ),
+                );
+              },
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RadialSeatNode extends StatelessWidget {
+  const _RadialSeatNode({
+    required this.entry,
+    required this.nodeSize,
+    required this.isHighlighted,
+    required this.isDealer,
+    required this.onTap,
+    required this.onSwap,
+  });
+
+  final _SeatEntry entry;
+  final double nodeSize;
+  final bool isHighlighted;
+  final bool isDealer;
+  final VoidCallback onTap;
+  final void Function(String draggedId, String targetId) onSwap;
+
+  Widget _nodeCircle({bool dimmed = false, bool isHovering = false}) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: nodeSize,
+      height: nodeSize,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isHovering
+            ? AppColors.primarySoft
+            : isHighlighted
+                ? const Color(0xFFE53935)
+                : const Color(0xFF222226),
+        border: Border.all(
+          color: isHovering
+              ? AppColors.primary
+              : isHighlighted
+                  ? const Color(0xFFFF5252)
+                  : const Color(0xFF35353A),
+          width: isHighlighted || isHovering ? 2.0 : 1.2,
+        ),
+        boxShadow: isHighlighted
+            ? [
+                BoxShadow(
+                  color: const Color(0xFFE53935).withValues(alpha: 0.6),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      ),
+      child: Center(
+        child: Text(
+          '${entry.seat}',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w600,
+            fontSize: 16,
+          ),
         ),
       ),
     );
@@ -409,51 +634,29 @@ class _DraggableSeatTileState extends State<_DraggableSeatTile> {
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.entry;
     return Draggable<_SeatEntry>(
-      data: s,
+      data: entry,
       feedback: Material(
         color: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          decoration: BoxDecoration(
-            color: AppColors.secondary,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: AppColors.primary, width: 2),
-            boxShadow: AppShadows.cardGlowActive,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Seat ${s.seat}',
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xxs),
-              Text(
-                s.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodySm.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
+        child: _nodeCircle(),
       ),
-      childWhenDragging: _tile(dimmed: true),
+      childWhenDragging: Opacity(
+        opacity: 0.3,
+        child: _nodeCircle(dimmed: true),
+      ),
       child: DragTarget<_SeatEntry>(
-        onWillAcceptWithDetails: (details) => details.data.id != s.id,
-        onAcceptWithDetails: (details) => widget.onSwap(details.data.id, s.id),
+        onWillAcceptWithDetails: (details) => details.data.id != entry.id,
+        onAcceptWithDetails: (details) => onSwap(details.data.id, entry.id),
         builder: (context, candidates, rejected) {
-          final hovering = candidates.isNotEmpty;
-          return _tile(
-            borderColor: hovering ? AppColors.primary : AppColors.border,
-            background: hovering ? AppColors.primarySoft : AppColors.secondary,
+          final isHovering = candidates.isNotEmpty;
+          return Semantics(
+            button: true,
+            label: 'Seat ${entry.seat}: ${entry.name}${isDealer ? ', Dealer' : ''}',
+            child: InkWell(
+              onTap: onTap,
+              customBorder: const CircleBorder(),
+              child: _nodeCircle(isHovering: isHovering),
+            ),
           );
         },
       ),

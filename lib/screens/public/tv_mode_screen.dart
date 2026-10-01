@@ -23,8 +23,15 @@ import '../../widgets/tournament_display_block.dart';
 import '../../utils/formatters.dart';
 
 /// Full-screen TV display mirroring the web `TVModePage`.
+///
+/// [initialCode] pre-fills the pairing code from a shared `/tv/:code` link
+/// and auto-connects once, so a TV opened from the link shows the scoreboard
+/// straight away (read-only, no account). A bad code falls back to manual
+/// entry rather than stranding the screen.
 class TVModeScreen extends StatefulWidget {
-  const TVModeScreen({super.key});
+  const TVModeScreen({super.key, this.initialCode});
+
+  final String? initialCode;
 
   @override
   State<TVModeScreen> createState() => _TVModeScreenState();
@@ -33,6 +40,22 @@ class TVModeScreen extends StatefulWidget {
 class _TVModeScreenState extends State<TVModeScreen> {
   final TextEditingController _codeController = TextEditingController();
   String? _codeError;
+  bool _autoConnected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final code = widget.initialCode;
+    if (code != null && code.isNotEmpty) {
+      _codeController.text = code;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_autoConnected) {
+          _autoConnected = true;
+          _connect();
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -314,6 +337,30 @@ class _TVLayoutState extends State<_TVLayout> {
           // Event identity + TV code, so whoever is standing at the screen
           // can confirm it is showing the right game at a glance.
           _TVHeader(name: game.settings.name, tvCode: game.tvCode),
+          // State strip: bubble and hand-for-hand reach the room (C-bubble).
+          if (game.handForHandActive || game.isOnBubble)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.xs,
+                AppSpacing.lg,
+                0,
+              ),
+              child: Text(
+                game.handForHandActive
+                    ? 'HAND-FOR-HAND · HAND ${game.handForHandHand}'
+                    : 'ON THE BUBBLE — ${game.activePlayers.length} LEFT, '
+                        '${game.structure.paidPlacesForDisplay} PAID',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.primary,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           // Reconnection banner for TV mode (tech spec §4.2).
           Consumer<AppProvider>(
             builder: (_, app, x) {

@@ -129,3 +129,11 @@ class AppFontSizes {
 class AppAssets {
   AppAssets._();
 }
+
+/// Centralized feature flags.
+class AppFeatureFlags {
+  AppFeatureFlags._();
+
+  /// Spec §A2 & §G3 O13: Soft shot clock is explicitly out of scope for v1.
+  static const bool enableShotClock = false;
+}

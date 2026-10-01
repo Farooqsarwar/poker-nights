@@ -137,6 +137,9 @@ extension AppProviderCodesCash on AppProvider {
     return [..._soloHistory]..sort((a, b) => b.startTime.compareTo(a.startTime));
   }
 
+  /// Tournaments finished with no group selected, newest first (History tags them "Solo").
+  List<LiveGame> get soloTournaments => List.unmodifiable(_soloTournaments);
+
   void startCashGame(CashSessionSettings settings, List<String> playerNames) {
     _cashUndoSnapshot = null;
     _cashSession = CashSession(

@@ -21,6 +21,7 @@ import '../../widgets/code_display.dart';
 import '../../widgets/count_stepper.dart';
 import '../../widgets/page_header.dart';
 import '../../widgets/pace_cards.dart';
+import '../../widgets/app_text_field.dart';
 
 /// C0 -- "Start a game now". Friends are already at the table: four answers
 /// and one tap, and the clock runs.
@@ -58,6 +59,25 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
   bool _seeded = false;
   bool _starting = false;
   String? _error;
+  bool _showNameInputs = false;
+  final List<TextEditingController> _nameControllers = [];
+
+  void _syncNameControllers() {
+    while (_nameControllers.length < _players) {
+      _nameControllers.add(TextEditingController());
+    }
+    while (_nameControllers.length > _players) {
+      _nameControllers.removeLast().dispose();
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final c in _nameControllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
 
   PaceOptions? _optionsCache;
   String? _optionsKey;
@@ -280,7 +300,9 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
     // A quick game is the people at the table, not the group roster.
     app.setCurrentGame(created.copyWith(players: const []));
     app.publishGame(announce: false);
-    app.addQuickPlayers(_players);
+    final customNames = _nameControllers.map((c) => c.text.trim()).toList();
+    final hasAnyCustomName = customNames.any((n) => n.isNotEmpty);
+    app.addQuickPlayers(_players, names: hasAnyCustomName ? customNames : null);
     app.generateFinalStructure(_players);
     app.confirmStructure();
     app.generateSeating(TableSeatingMode.random);
@@ -409,6 +431,7 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
                   onChanged: (v) => setState(() {
                     _players = v;
                     _pace = null;
+                    _syncNameControllers();
                   }),
                 ),
                 if (last != null) ...[
@@ -423,6 +446,73 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
                     'One table seats up to $cap on the free plan. For two '
                     'tables, plan the night from New tournament.',
                   ),
+                ],
+                const SizedBox(height: AppSpacing.md),
+                InkWell(
+                  onTap: () {
+                    _syncNameControllers();
+                    setState(() => _showNameInputs = !_showNameInputs);
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _showNameInputs
+                              ? Icons.keyboard_arrow_up
+                              : Icons.keyboard_arrow_down,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _showNameInputs
+                              ? 'Hide player names'
+                              : 'Add player names (optional)',
+                          style: AppTypography.bodySm.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_showNameInputs) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Enter your friends’ names for the scoreboard and seating (or leave blank for Player 1, Player 2...)',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (var i = 0; i < _players; i++) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 28,
+                            child: Text(
+                              '${i + 1}.',
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.mutedForeground,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: AppTextField(
+                              controller: _nameControllers[i],
+                              placeholder: 'Player ${i + 1} name (e.g. Alex)',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ],
             ),
@@ -556,6 +646,7 @@ class _QuickCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

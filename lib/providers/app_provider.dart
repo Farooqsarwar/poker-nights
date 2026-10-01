@@ -430,6 +430,7 @@ class AppProvider extends ChangeNotifier {
   StreamSubscription<List<ImportedNight>>? _importedSub;
   StreamSubscription<List<GameResultRow>>? _resultsSub;
   StreamSubscription<List<CashSession>>? _soloSub;
+  StreamSubscription<List<LiveGame>>? _soloTournamentsSub;
   StreamSubscription<List<Map<String, dynamic>>>? _pendingInvitesSub;
 
   /// Live member-rosters per group id, so the index-derived group list on the
@@ -514,15 +515,9 @@ class AppProvider extends ChangeNotifier {
   DateTime? _recoveryTime;
   DateTime? get recoveryTime => _recoveryTime;
 
-  /// Restore a game that was saved locally when the app closed (§E9 "Restore",
-  /// Tech §20.1). Keeps the local state and resolves any conflicts with the
-  /// host's current game state.
-  void resolveOfflineConflict({required bool keepLocal}) {
-    _restoredFromRecovery = true;
-    _recoveryTime = keepLocal
-        ? DateTime.now().subtract(const Duration(hours: 24))
-        : null;
-    notifyListeners();
+  @visibleForTesting
+  void setRestoredFromRecoveryForTesting(bool value) {
+    _restoredFromRecovery = value;
   }
 
   /// Timestamp of the last non-clock data sync. TV/player/guest views use it
@@ -884,6 +879,7 @@ class AppProvider extends ChangeNotifier {
   /// Games finished with no group selected — the "Solo" rows in History.
   /// Owned by the user, so unlike [_cashHistory] this survives group switches.
   List<CashSession> _soloHistory = const [];
+  List<LiveGame> _soloTournaments = const [];
   List<ChatReport> _reports = const [];
 
   /// Past nights the host imported into the current group (B12).
@@ -1179,7 +1175,9 @@ class AppProvider extends ChangeNotifier {
     AppProviderCloudSync(this)._syncGameToCloud();
     AppProviderCloudSync(this)._ensureRequestsSubscription();
     final game = _currentGame;
-    if (game == null) {
+    if (game == null ||
+        game.status == LiveGameStatus.completed ||
+        game.status == LiveGameStatus.cancelled) {
       RecoveryService.clearGame();
     } else if (isAdmin) {
       // Crash-resume snapshots belong to the ADMIN only — they are the device

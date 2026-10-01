@@ -130,6 +130,16 @@ extension AppProviderPlayers on AppProvider {
           '${p.eliminationPos != null ? ' in position ${p.eliminationPos}' : ''}'
           '${koRecipientId != null && bounty > 0 ? ' — $bounty bounty awarded' : ''}.',
     );
+    // C-bubble: hand-for-hand ends itself the moment everyone left is paid.
+    // Guarded on the flag (new, default false), so settled nights behave
+    // exactly as before.
+    final after = _currentGame!;
+    if (after.handForHandActive) {
+      final paid = after.structure.paidPlacesForDisplay;
+      if (paid > 0 && after.activePlayers.length <= paid) {
+        stopHandForHand(auto: true);
+      }
+    }
   }
 
   /// Manual trigger for final table state (small tournaments that never
@@ -976,12 +986,10 @@ extension AppProviderPlayers on AppProvider {
     return null;
   }
 
-  /// Quick start (C0): seats [count] unnamed players, all checked in, in one
-  /// step. "The clock doesn't need names" -- players who join by code appear
-  /// under their own name later. Ids share one timestamp plus an index, so
-  /// adding many in a tight loop cannot collide the way [addWalkInPlayer]'s
-  /// millisecond ids would.
-  void addQuickPlayers(int count) {
+  /// Quick start (C0): seats [count] players, all checked in, in one
+  /// step. If [names] are provided, players receive their configured names;
+  /// otherwise they default to "Player 1", "Player 2", etc.
+  void addQuickPlayers(int count, {List<String>? names}) {
     _forceClaimEditor();
     final game = _currentGame;
     if (game == null || count < 1 || !_isGameAuthority) return;
@@ -991,7 +999,9 @@ extension AppProviderPlayers on AppProvider {
       for (var i = 0; i < count; i++)
         Player(
           id: 'p-$stamp-$i',
-          name: 'Player ${game.players.length + i + 1}',
+          name: (names != null && names.length > i && names[i].trim().isNotEmpty)
+              ? names[i].trim()
+              : 'Player ${game.players.length + i + 1}',
           isGuest: false,
           rsvp: null,
           checkedIn: true,
@@ -1006,6 +1016,25 @@ extension AppProviderPlayers on AppProvider {
         ),
     ];
     _currentGame = game.copyWith(players: [...game.players, ...added]);
+    _syncGroupGame();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Renames a registered player in the active tournament.
+  void renamePlayer(String playerId, String newName) {
+    _forceClaimEditor();
+    if (!_isGameAuthority) return;
+    final game = _currentGame;
+    if (game == null) return;
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+    final idx = game.players.indexWhere((p) => p.id == playerId);
+    if (idx == -1) return;
+    _pushUndo();
+    final updated = List<Player>.from(game.players);
+    updated[idx] = updated[idx].copyWith(name: trimmed);
+    _currentGame = game.copyWith(players: updated);
+    addAuditRecord('rename_player', 'Renamed player to $trimmed');
     _syncGroupGame();
     if (!_disposed) notifyListeners();
   }

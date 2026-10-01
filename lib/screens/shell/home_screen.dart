@@ -118,23 +118,31 @@ class _HomeScreenState extends State<HomeScreen> {
               // Top Header Row
               Row(
                 children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.primarySoftBorder),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      user?.name.isNotEmpty == true
-                          ? user!.name[0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                        color: AppColors.foreground,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                  Semantics(
+                    label: 'Open navigation menu',
+                    button: true,
+                    child: InkWell(
+                      onTap: app.toggleDrawer,
+                      borderRadius: BorderRadius.circular(21),
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.primarySoftBorder),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          user?.name.isNotEmpty == true
+                              ? user!.name[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                            color: AppColors.foreground,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -356,12 +364,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              // Offline Conflict Banner
+              // Offline Conflict Banner (remote changes supersede local writes)
               if (app.hasOfflineConflict) ...[
                 AppAlertBanner(
                   type: AppAlertType.warning,
                   message:
-                      'Local offline progress detected that is out of sync with the cloud. Would you like to keep the local offline data or revert to cloud?',
+                      'Remote cloud changes conflict with your local offline progress. Please choose which state to keep.',
                   actionLabel: 'Review Conflict',
                   onAction: () => context.go(RoutePaths.hostDashboard),
                 ).animate().fadeIn(duration: 400.ms),

@@ -2376,6 +2376,20 @@ class FirebaseRepository {
       .snapshots()
       .map((s) => [for (final d in s.docs) cashSessionFromMap(d.data())]);
 
+  Future<void> saveSoloTournament(String uid, LiveGame game) => _db
+      .collection('users')
+      .doc(uid)
+      .collection('soloTournaments')
+      .doc(game.id)
+      .set(_stamp(liveGameToMap(game)));
+
+  Stream<List<LiveGame>> soloTournamentsStream(String uid) => _db
+      .collection('users')
+      .doc(uid)
+      .collection('soloTournaments')
+      .snapshots()
+      .map((s) => [for (final d in s.docs) liveGameFromMap(d.data())]);
+
   // ── Presets / chip sets ────────────────────────────────────────────────────
   Future<void> savePreset(String uid, TournamentPreset preset) => _db
       .collection('users')

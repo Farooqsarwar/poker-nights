@@ -379,8 +379,11 @@ void main() {
       // step. If this ever comes back as a list of `get('...')` comparisons then
       // something has to own the list, and these tests stop covering the terms
       // nobody thought of.
+      // (The legacy `prizes` bypass folds into a ternary around the same
+      // comparison — the rules compiler rejects `if` inside functions — so
+      // this asserts the comparison itself rather than the whole line.)
       expect(body, contains("before.removeAll(['levels'])"));
-      expect(body, contains('return wasRest == nowRest && ladderAppendOnly();'));
+      expect(body, contains('wasRest == nowRest && ladderAppendOnly()'));
       for (final key in mirrored) {
         // Still worth knowing the term is part of the structure being compared:
         // if a term moved out of `structure` and into `settings`, this stops

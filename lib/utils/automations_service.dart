@@ -1,8 +1,8 @@
 // E17 — Automations: every automatic behaviour, client-side only.
-///
-/// No Cloud Functions. All visuals, haptics triggers, announcements and
-/// formatting are pure Dart so offline host phones behave identically.
-/// UI listens to AppProvider.levelFlashSeq / clockPulseSeq via notifyListeners.
+//
+// No Cloud Functions. All visuals, haptics triggers, announcements and
+// formatting are pure Dart so offline host phones behave identically.
+// UI listens to AppProvider.levelFlashSeq / clockPulseSeq via notifyListeners.
 
 class AutomationsService {
   const AutomationsService._();

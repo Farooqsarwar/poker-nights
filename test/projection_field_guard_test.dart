@@ -74,6 +74,12 @@ void main() {
     // asserted in projection_boundary_test.dart. (The paired `addOnOvertime`
     // flag is on GameSettings and is zeroed there with the other money terms.)
     'addOnDeclined',
+    // C-bubble hand-for-hand state + bubble-save flag. PUBLIC play state on
+    // the same footing as `status`/`currentLevel`: players, guests and the TV
+    // render their banners from these fields, and they carry no money and no
+    // identities — so they ride through unscrubbed like the rest of this group.
+    'handForHandActive', 'handForHandHand', 'handForHandDoneTables',
+    'bubbleSaveRecorded',
     // §C3 the RSVP seating queue. PUBLIC, and structurally identical to
     // `finishOrder`: an ordered list of rsvp/player ids carrying no money and
     // nothing derived from what anyone paid, so there is nothing here to

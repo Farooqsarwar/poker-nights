@@ -2574,9 +2574,10 @@ class _StructureReviewIssuesState extends State<_StructureReviewIssues> {
               ),
               child: Row(
                 children: [
-                  Text(
-                    '⚠',
-                    style: AppTypography.bodySm.copyWith(color: foreground),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 16,
+                    color: foreground,
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(

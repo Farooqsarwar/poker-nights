@@ -9,6 +9,7 @@ import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 import 'app_avatar.dart';
+import 'app_button.dart';
 import 'brand_lockup.dart';
 import 'create_group_dialog.dart';
 import 'glass_styles.dart';
@@ -29,7 +30,7 @@ class NavDrawer extends StatelessWidget {
     final group = app.currentGroup;
     final groupSection = <_DrawerItem>[
       _DrawerItem(RoutePaths.home, 'Home', Icons.home_outlined, null),
-      if (app.hasCurrentGroup) ...[
+      if (app.hasCurrentGroup && !app.isGuest) ...[
         _DrawerItem(RoutePaths.group, 'Games', Icons.sports_esports_outlined, null),
         _DrawerItem(RoutePaths.chat, 'Chat', Icons.chat_bubble_outline, app.unreadGroupChatCount(group.id)),
         _DrawerItem(RoutePaths.members, 'Members', Icons.groups_outlined, group.members.length),
@@ -94,48 +95,47 @@ class NavDrawer extends StatelessWidget {
                 ],
               ),
             ),
-            child: Row(
-              children: [
-                const PokerNightLogo(size: AppFontSizes.xxxl),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Poker Night',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.crimsonShimmer(size: AppFontSizes.lg),
-                  ),
-                ),
-              ],
+            child: const PokerNightBrand(
+              logoSize: 32,
+              fontSize: 22,
+              showEyebrow: true,
             ),
           ),
           if (user != null)
             InkWell(
               onTap: () {
                 app.closeDrawer();
-                context.go(RoutePaths.profile);
+                if (app.isGuest) {
+                  context.go(RoutePaths.register);
+                } else {
+                  context.go(RoutePaths.profile);
+                }
               },
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.xl),
                 child: Row(
                   children: [
-                    AppAvatar(name: user.name),
+                    AppAvatar(name: app.isGuest ? 'Guest' : user.name),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            user.name,
+                            app.isGuest ? 'Guest Host' : user.name,
                             style: AppTypography.bodySm.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           Text(
-                            app.isAdmin ? 'Host' : 'Player',
+                            app.isGuest
+                                ? 'No account · Tap to register'
+                                : (app.isAdmin ? 'Host' : 'Player'),
                             style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
+                              color: app.isGuest
+                                  ? AppColors.primary
+                                  : AppColors.mutedForeground,
                             ),
                           ),
                         ],
@@ -143,6 +143,51 @@ class NavDrawer extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+            ),
+          if (app.isGuest)
+            Container(
+              margin: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                0,
+                AppSpacing.lg,
+                AppSpacing.md,
+              ),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Keep tonight\'s results',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Create an account to save your games permanently and start a recurring group.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    onPressed: () {
+                      app.closeDrawer();
+                      context.go(RoutePaths.register);
+                    },
+                    child: const Text('Create account'),
+                  ),
+                ],
               ),
             ),
           Divider(color: AppColors.border, height: 1),
@@ -173,7 +218,7 @@ class NavDrawer extends StatelessWidget {
                 InkWell(
                   onTap: () {
                     app.closeDrawer();
-                    if (app.hasCurrentGroup) {
+                    if (!app.isGuest && app.hasCurrentGroup) {
                       showGroupSwitcher(context);
                     } else {
                       openCreateGroupDialog(context);

@@ -139,83 +139,89 @@ class _PaceCard extends StatelessWidget {
             ? 'Runs ${_mins(option.overBy)} over'
             : null;
 
-    return InkWell(
-      onTap: onTap,
+    return Material(
+      color: isSelected ? AppColors.primarySoft : AppColors.card,
       borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primarySoft : AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.primarySoftBorder
-                : AppColors.borderSubtle,
-            width: isSelected ? 2 : 1,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.primarySoftBorder
+                  : AppColors.borderSubtle,
+              width: isSelected ? 2 : 1,
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    option.pace.label,
-                    style: AppTypography.bodySm.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: isSelected
-                          ? AppColors.primaryText
-                          : AppColors.foreground,
-                    ),
-                  ),
-                ),
-                if (isRecommended)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      border: Border.all(color: AppColors.primarySoftBorder),
-                    ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
                     child: Text(
-                      'SUGGESTED',
-                      style: AppTypography.bodyXs.copyWith(
-                        fontSize: 9,
-                        letterSpacing: 0.8,
+                      option.pace.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySm.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: AppColors.primaryText,
+                        color: isSelected
+                            ? AppColors.primaryText
+                            : AppColors.foreground,
                       ),
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '${option.levelMinutes}-min levels',
-              style: AppTypography.bodyXs.copyWith(
-                color: AppColors.mutedForeground,
+                  if (isRecommended)
+                    Container(
+                      margin: const EdgeInsets.only(left: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySoft,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        border: Border.all(color: AppColors.primarySoftBorder),
+                      ),
+                      child: Text(
+                        'SUGGESTED',
+                        style: AppTypography.bodyXs.copyWith(
+                          fontSize: 9,
+                          letterSpacing: 0.8,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryText,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _Line('Start', '${option.openingSB}/${option.openingBB}'),
-            _Line('Depth', '${option.startingDepthBB.round()} BB'),
-            _Line('Levels', '${option.levels}'),
-            _Line('Finish', _mins(option.finishMins)),
-            if (problem != null) ...[
               const SizedBox(height: 6),
               Text(
-                problem,
+                '${option.levelMinutes}-min levels',
                 style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.warningText,
-                  fontWeight: FontWeight.w600,
+                  color: AppColors.mutedForeground,
                 ),
               ),
+              const SizedBox(height: AppSpacing.sm),
+              _Line('Start', '${option.openingSB}/${option.openingBB}'),
+              _Line('Depth', '${option.startingDepthBB.round()} BB'),
+              _Line('Levels', '${option.levels}'),
+              _Line('Finish', _mins(option.finishMins)),
+              if (problem != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  problem,
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.warningText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -248,11 +254,17 @@ class _Line extends StatelessWidget {
               color: AppColors.onSurfaceHint,
             ),
           ),
-          Text(
-            value,
-            style: AppTypography.bodyXs.copyWith(
-              color: AppColors.foreground,
-              fontWeight: FontWeight.w600,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.foreground,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

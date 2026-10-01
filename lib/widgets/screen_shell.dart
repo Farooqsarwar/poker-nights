@@ -43,7 +43,18 @@ class ScreenShell extends StatelessWidget {
   final String requiredPath;
 
   /// Routes a guest (no account) may access inside the shell.
-  static const _guestAllowed = {RoutePaths.playerLive, RoutePaths.resultPodium};
+  ///
+  /// C4p (`/t/:id/me`) rides along: a link guest opens their own check-in
+  /// (GuestFlowScreen) in this minimal shell, never the member invitation.
+  static const _guestAllowed = {
+    RoutePaths.playerLive,
+    RoutePaths.resultPodium,
+    RoutePaths.invitation,
+    RoutePaths.hostDashboard,
+    RoutePaths.structureReview,
+    RoutePaths.deal,
+    RoutePaths.completeTournament,
+  };
 
   /// Routes that open for a signed-out visitor (Build Spec C3): the quick
   /// start creates its own anonymous session, and the invite link previews the
@@ -51,41 +62,102 @@ class ScreenShell extends StatelessWidget {
   /// visitor gets the page with no navigation chrome.
   static const _openToSignedOut = {RoutePaths.quick, RoutePaths.joinGroup};
 
+  static void _showExitDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        title: Text(
+          'Leave live game?',
+          style: AppTypography.display(
+            size: AppFontSizes.lg,
+            weight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'Your game will continue running on this device. You can create an account to save your results permanently, or exit.',
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Keep playing'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              GoRouter.of(context).go(RoutePaths.register);
+            },
+            child: const Text('Create account'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              GoRouter.of(context).go(RoutePaths.landing);
+            },
+            child: Text(
+              'Exit to start',
+              style: TextStyle(color: AppColors.destructive),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final signedIn = context.select<AppProvider, bool>((a) => a.isAuthenticated);
+    final isRegisteredUser = context.select<AppProvider, bool>(
+      (a) => a.isAuthenticated && !a.isGuest,
+    );
+    final isGuest = context.select<AppProvider, bool>(
+      (a) => a.isGuest || a.hasGuestSession,
+    );
 
-    if (!signedIn && _openToSignedOut.contains(requiredPath)) {
+    if (!isRegisteredUser && _openToSignedOut.contains(requiredPath)) {
       return Scaffold(
         backgroundColor: Colors.transparent,
         body: ThemedAppBackground(child: SafeArea(child: child)),
       );
     }
-    final guestOk = context.select<AppProvider, bool>((a) => a.hasGuestSession) && _guestAllowed.contains(requiredPath);
+    final guestOk = isGuest && _guestAllowed.contains(requiredPath);
 
     // Route guard: block access when the user cannot enter this path.
-    if (!signedIn && !guestOk) {
+    if (!isRegisteredUser && !guestOk) {
       return _Gate(path: requiredPath);
     }
 
-    // Guests get a minimal scaffold: no full nav chrome (every nav button
-    // would be a dead end) but we DO show a top-bar with an exit/back button
-    // so guests are never stranded with no way to leave (audit finding P1).
-    if (!signedIn && guestOk) {
+    // Guests get a minimal scaffold: no member bottom nav, no group drawer,
+    // and no member desktop sidebar (Spec §A2b, §C4).
+    if (!isRegisteredUser && guestOk) {
+      final isDashboard = requiredPath == RoutePaths.hostDashboard;
       return Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            tooltip: 'Exit',
-            onPressed: () {
-              GoRouter.of(context).go(RoutePaths.join);
-            },
-          ),
-        ),
+        appBar: isDashboard
+            ? null
+            : AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                automaticallyImplyLeading: false,
+                leading: IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Exit',
+                  onPressed: () {
+                    final app = context.read<AppProvider>();
+                    if (app.isGuest &&
+                        app.currentGame?.status.isActiveLive == true) {
+                      _showExitDialog(context);
+                    } else {
+                      GoRouter.of(context).go(RoutePaths.landing);
+                    }
+                  },
+                ),
+              ),
         body: ThemedAppBackground(child: child),
       );
     }
@@ -141,12 +213,15 @@ class _Gate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
+    final hasActiveGame = app.currentGame?.status.isActiveLive == true;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ThemedAppBackground(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
+            constraints: const BoxConstraints(maxWidth: 380),
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.xl),
               child: Column(
@@ -160,13 +235,15 @@ class _Gate extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    'Signed out',
+                    app.isGuest ? 'Account needed' : 'Signed out',
                     textAlign: TextAlign.center,
                     style: AppTypography.display(size: AppFontSizes.xl),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'This page needs a signed-in account. Guests can only watch the live game.',
+                    app.isGuest
+                        ? 'To create groups, join group chat, and view club standings, create a free account.'
+                        : 'This page needs a signed-in account. Guests can only watch or run the live game.',
                     textAlign: TextAlign.center,
                     style: AppTypography.bodySm.copyWith(
                       color: AppColors.mutedForeground,
@@ -175,9 +252,21 @@ class _Gate extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xl),
                   AppButton(
                     fullWidth: true,
-                    onPressed: () => context.go('${RoutePaths.login}?next=$path'),
-                    child: const Text('Sign in'),
+                    onPressed: () => context.go(RoutePaths.register),
+                    child: const Text('Create account'),
                   ),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (hasActiveGame) ...[
+                    AppButton(
+                      fullWidth: true,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () => context.go(
+                        app.isAdmin ? RoutePaths.hostDashboard : RoutePaths.playerLive,
+                      ),
+                      child: const Text('Return to live game'),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                   AppButton(
                     fullWidth: true,
                     variant: AppButtonVariant.ghost,
@@ -301,15 +390,11 @@ class _MobileTopBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.md),
-                  const PokerNightLogo(size: AppFontSizes.xxl),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    'Poker Night',
-                    style: AppTypography.crimsonShimmer(
-                      size: AppFontSizes.md,
-                      weight: FontWeight.w700,
-                    ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const PokerNightBrand(
+                    logoSize: 22,
+                    fontSize: 16,
+                    showEyebrow: false,
                   ),
                   const Spacer(),
                   const SizedBox(width: AppSpacing.sm),

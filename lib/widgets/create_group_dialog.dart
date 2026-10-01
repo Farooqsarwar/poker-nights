@@ -14,6 +14,42 @@ import 'app_text_field.dart';
 
 /// Opens the "create group" dialog: name + icon picker, then creates the group.
 Future<void> openCreateGroupDialog(BuildContext context) {
+  final app = context.read<AppProvider>();
+  if (app.isGuest || !app.isAuthenticated) {
+    return showAppModal(
+      context: context,
+      title: 'Account needed',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'To create and manage a recurring poker group, invite members, and track season leaderboards, please create a free account.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(
+            fullWidth: true,
+            onPressed: () {
+              Navigator.pop(context);
+              context.go(RoutePaths.register);
+            },
+            child: const Text('Create account'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.ghost,
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Not now'),
+          ),
+        ],
+      ),
+    );
+  }
+
   final controller = TextEditingController();
   String selectedIconName = 'Card';
   bool isCreating = false;

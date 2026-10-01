@@ -32,7 +32,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final group = app.currentGroup;
-    final pastGames = group.pastGames;
+    final pastGames = [
+      ...group.pastGames,
+      ...app.soloTournaments,
+    ];
     final userId = app.user?.id;
     final isAdmin = app.isAdmin;
 
@@ -245,12 +248,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
       itemCount: pastGames.length + cashHistory.length + soloHistory.length,
       itemBuilder: (context, i) {
         if (i < pastGames.length) {
+          final g = pastGames[i];
+          final isSolo = g.groupId.isEmpty ||
+              context.read<AppProvider>().soloTournaments.any((sg) => sg.id == g.id);
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: _HistoryRow(
-              game: pastGames[i],
+              game: g,
               userId: userId,
-              showAmounts: isAdmin,
+              showAmounts: isAdmin || isSolo,
+              solo: isSolo,
             ),
           );
         }
@@ -280,16 +287,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
       );
     }
+    final app = context.read<AppProvider>();
     return SliverList.builder(
       itemCount: pastGames.length,
-      itemBuilder: (context, i) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: _HistoryRow(
-          game: pastGames[i],
-          userId: userId,
-          showAmounts: isAdmin,
-        ),
-      ),
+      itemBuilder: (context, i) {
+        final g = pastGames[i];
+        final isSolo = g.groupId.isEmpty ||
+            app.soloTournaments.any((sg) => sg.id == g.id);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _HistoryRow(
+            game: g,
+            userId: userId,
+            showAmounts: isAdmin || isSolo,
+            solo: isSolo,
+          ),
+        );
+      },
     );
   }
 
@@ -737,11 +751,13 @@ class _HistoryRow extends StatelessWidget {
     required this.game,
     required this.userId,
     required this.showAmounts,
+    this.solo = false,
   });
 
   final LiveGame game;
   final String? userId;
   final bool showAmounts;
+  final bool solo;
 
   @override
   Widget build(BuildContext context) {
@@ -811,14 +827,24 @@ class _HistoryRow extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  game.settings.name,
-                                  style: TextStyle(
-                                    color: AppColors.foreground,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        game.settings.name,
+                                        style: TextStyle(
+                                          color: AppColors.foreground,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (solo) ...[
+                                      const SizedBox(width: 8),
+                                      const AppBadge(label: 'Solo'),
+                                    ],
+                                  ],
                                 ),
                                 const SizedBox(height: 4),
                                 Text(

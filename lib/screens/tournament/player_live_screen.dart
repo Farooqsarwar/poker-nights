@@ -330,7 +330,19 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
               ),
               const SizedBox(height: AppSpacing.lg),
             ],
-            if (game.isOnBubble)
+            if (game.handForHandActive)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                child: AppAlertBanner(
+                  type: AppAlertType.info,
+                  message:
+                      'Hand-for-hand · hand ${game.handForHandHand}. '
+                      'Wait for every table to finish before the next hand.',
+                  actionLabel: 'ICM Calculator',
+                  onAction: () => context.push(RoutePaths.toolIcm),
+                ),
+              )
+            else if (game.isOnBubble)
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                 child: AppAlertBanner(

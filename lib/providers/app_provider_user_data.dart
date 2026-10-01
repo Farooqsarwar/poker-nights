@@ -116,6 +116,13 @@ extension AppProviderUserData on AppProvider {
     },
         onError: (Object e) => debugPrint('soloGames stream error: $e'));
 
+    _soloTournamentsSub?.cancel();
+    _soloTournamentsSub = _repo.soloTournamentsStream(uid).listen((list) {
+      _soloTournaments = list;
+      if (!_disposed) notifyListeners();
+    },
+        onError: (Object e) => debugPrint('soloTournaments stream error: $e'));
+
     // Free-plan: accept pending admin-by-email invites by self-writing the
     // user's own membership index (there is no Cloud Function to mirror it).
     _pendingInvitesSub?.cancel();
@@ -267,6 +274,7 @@ extension AppProviderUserData on AppProvider {
       _importedSub,
       _resultsSub,
       _soloSub,
+      _soloTournamentsSub,
       _pendingInvitesSub,
     ]) {
       s?.cancel();
@@ -312,6 +320,7 @@ extension AppProviderUserData on AppProvider {
     _cashSub = null;
     _resultsSub = null;
     _soloSub = null;
+    _soloTournamentsSub = null;
     _pendingInvitesSub = null;
     _gameSaveDebounce?.cancel();
     _projectionDebounce?.cancel();
@@ -328,6 +337,7 @@ extension AppProviderUserData on AppProvider {
     _notifications = const [];
     _cashHistory = const [];
     _soloHistory = const [];
+    _soloTournaments = const [];
     _myResults = const [];
     _resultsRecorded.clear();
     _lastPushedStatsKey = null;
@@ -597,9 +607,14 @@ extension AppProviderUserData on AppProvider {
   Future<void> _loadRecovery() async {
     final recovered = await RecoveryService.loadGame();
     if (recovered != null) {
-      _currentGame = recovered;
-      _restoredFromRecovery = true;
-      _recoveryTime = DateTime.now();
+      if (recovered.status == LiveGameStatus.completed ||
+          recovered.status == LiveGameStatus.cancelled) {
+        RecoveryService.clearGame();
+      } else {
+        _currentGame = recovered;
+        _restoredFromRecovery = true;
+        _recoveryTime = DateTime.now();
+      }
     }
     final cash = await RecoveryService.loadCashSession();
     if (cash != null && !cash.isCompleted) {
@@ -612,16 +627,27 @@ extension AppProviderUserData on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
-  /// True if the locally recovered game state differs from the "cloud" state.
-  /// Compares multiple fields to detect real conflicts, not just audit count.
+  /// True if a remote cloud game has superseded our local recovered state
+  /// (e.g. someone else took over the clock while this device was offline, §E9, Row 82).
   bool get hasOfflineConflict {
     if (_currentGame == null || !_restoredFromRecovery) return false;
+    if (_currentGame!.status == LiveGameStatus.completed ||
+        _currentGame!.status == LiveGameStatus.cancelled) {
+      return false;
+    }
     final cloudGame = _currentGroup.games
         .where((g) => g.id == _currentGame!.id)
         .firstOrNull;
     if (cloudGame == null) return false;
-    return _currentGame!.revision > cloudGame.revision ||
-        _currentGame!.auditHistory.length > cloudGame.auditHistory.length;
+
+    // Only a conflict if cloud has strictly advanced past local or another
+    // device took over the clock authority while this device was offline.
+    final cloudIsAhead = cloudGame.revision > _currentGame!.revision;
+    final otherDeviceTookClock = cloudGame.editorDeviceId.isNotEmpty &&
+        cloudGame.editorDeviceId != _repo.currentUid &&
+        cloudGame.revision >= _currentGame!.revision;
+
+    return cloudIsAhead || otherDeviceTookClock;
   }
 
   void resolveOfflineConflict({required bool keepLocal}) {

@@ -343,18 +343,16 @@ service cloud.firestore {
       let now = request.resource.data.get('structure', {}).get('levels', []);
       // Never shrink. A shorter ladder means a completed level was removed, and
       // sections 11 and 29 say completed levels never mutate.
-      if (now.size() < was.size()) {
-        return false;
-      }
       // Same length means nobody extended it, so it must be byte-identical --
       // this is what stops an in-place blind edit riding in on the clock.
-      if (now.size() == was.size()) {
-        return now == was;
-      }
       // Grown. A rules file cannot walk a list, so it cannot prove the levels
       // that were already there are still the same levels -- the array grew, and
       // this is the checkable part. Anything stronger needs a server.
-      return true;
+      // Single-expression return: the rules compiler rejects `if` statements
+      // inside functions, so the three branches fold into one ternary.
+      return now.size() < was.size()
+        ? false
+        : (now.size() == was.size() ? now == was : true);
     }
 
     function organizerStructurePinned() {
@@ -365,16 +363,17 @@ service cloud.firestore {
       // cannot lock a game that was already in progress. The reverse case is
       // deliberately strict: a document that had a structure must still have
       // exactly that structure, and dropping it is a change to it.
-      if (!before.keys().hasAll(['prizes'])) {
-        return true;
-      }
       // Everything except the ladder must match EXACTLY, with no allow-list —
       // see the note above on why an enumeration is the wrong shape here.
       // `removeAll` gives a copy without `levels`, so both sides are compared
       // on the same footing and the ladder check stays in `ladderAppendOnly`.
+      // Single-expression return: the rules compiler rejects `if` statements
+      // inside functions, so the legacy bypass folds into one ternary.
       let wasRest = before.removeAll(['levels']);
       let nowRest = after.removeAll(['levels']);
-      return wasRest == nowRest && ladderAppendOnly();
+      return !before.keys().hasAll(['prizes'])
+        ? true
+        : (wasRest == nowRest && ladderAppendOnly());
     }
 
     function organizerTermsPinned() {

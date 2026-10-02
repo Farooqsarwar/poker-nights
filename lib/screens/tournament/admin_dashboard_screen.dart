@@ -344,15 +344,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       'Exactly 9 players remain. It is time for the final table redraw.',
                     ),
                     const SizedBox(height: AppSpacing.xl),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    // Wrap, not Row: both buttons side by side overflow a
+                    // 320px dialog once modal padding is subtracted.
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: AppSpacing.md,
+                      runSpacing: AppSpacing.sm,
                       children: [
                         AppButton(
                           variant: AppButtonVariant.secondary,
                           onPressed: () => Navigator.pop(ctx),
                           child: const Text('Not Yet'),
                         ),
-                        const SizedBox(width: AppSpacing.md),
                         AppButton(
                           onPressed: () {
                             Navigator.pop(ctx);

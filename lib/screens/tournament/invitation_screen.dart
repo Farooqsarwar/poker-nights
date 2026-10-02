@@ -350,17 +350,22 @@ class _InvitationScreenState extends State<InvitationScreen> {
               children: [
                 Row(
                   children: [
-                    Text(
-                      'Expected: $memberSeats players',
-                      style: AppTypography.bodySm.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.success,
+                    Expanded(
+                      child: Text(
+                        'Expected: $memberSeats players',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.success,
+                        ),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     SizedBox(
                       height: 24,
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           for (
                             var i = 0;
@@ -2104,37 +2109,45 @@ class _PremiumEventHeader extends StatelessWidget {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.foreground,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          settings.date.isNotEmpty && settings.time.isNotEmpty
-                              ? '${settings.date.split(',').first.toUpperCase()} · ${settings.time}'
-                              : 'FRI · 8:00 PM',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.foreground,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            settings.date.isNotEmpty && settings.time.isNotEmpty
+                                ? '${settings.date.split(',').first.toUpperCase()} · ${settings.time}'
+                                : 'FRI · 8:00 PM',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.shadowSoft,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.foreground.withValues(alpha: 0.2)),
-                        ),
-                        child: Text(
-                          '\$${settings.buyIn.toInt()} BUY-IN',
-                          style: TextStyle(
-                            color: AppColors.foreground,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.shadowSoft,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.foreground.withValues(alpha: 0.2)),
+                          ),
+                          child: Text(
+                            '\$${settings.buyIn.toInt()} BUY-IN',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.foreground,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                       ),

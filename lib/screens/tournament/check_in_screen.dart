@@ -429,22 +429,28 @@ class _CheckInScreenState extends State<CheckInScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _InlineStat(
-                  label: 'Checked in',
-                  value: '${checkedIn.length}/${players.length}',
-                  color: AppColors.success,
+                Expanded(
+                  child: _InlineStat(
+                    label: 'Checked in',
+                    value: '${checkedIn.length}/${players.length}',
+                    color: AppColors.success,
+                  ),
                 ),
                 Container(width: 1, height: 24, color: AppColors.border),
-                _InlineStat(
-                  label: 'Pending',
-                  value: '${pendingRequests.length}',
-                  color: AppColors.warning,
+                Expanded(
+                  child: _InlineStat(
+                    label: 'Pending',
+                    value: '${pendingRequests.length}',
+                    color: AppColors.warning,
+                  ),
                 ),
                 Container(width: 1, height: 24, color: AppColors.border),
-                _InlineStat(
-                  label: 'Not arrived',
-                  value: '${notCheckedIn.length}',
-                  color: AppColors.mutedForeground,
+                Expanded(
+                  child: _InlineStat(
+                    label: 'Not arrived',
+                    value: '${notCheckedIn.length}',
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ],
             ),
@@ -819,7 +825,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                         crossAxisCount: 3,
                                         mainAxisSpacing: AppSpacing.sm,
                                         crossAxisSpacing: AppSpacing.sm,
-                                        childAspectRatio: 1.6,
+                                        // Taller than square: label + name (+ guest
+                                        // line) must fit at 320px without a
+                                        // bottom overflow.
+                                        childAspectRatio: 1.1,
                                       ),
                                   itemCount: byTable[table]!.length,
                                   itemBuilder: (context, i) {
@@ -846,6 +855,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                         ),
                                       ),
                                       child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Text(
                                             isDealer
@@ -1108,9 +1119,13 @@ class _InlineStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
           value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: AppTypography.monoXl.copyWith(
             fontWeight: FontWeight.w700,
             color: color,
@@ -1119,6 +1134,9 @@ class _InlineStat extends StatelessWidget {
         const SizedBox(height: AppSpacing.xxs),
         Text(
           label.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: AppTypography.bodyXs.copyWith(
             color: AppColors.mutedForeground,
             letterSpacing: 1.0,

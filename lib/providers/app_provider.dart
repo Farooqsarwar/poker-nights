@@ -1098,6 +1098,18 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  @visibleForTesting
+  void setCurrentGameForTesting(LiveGame? game) {
+    _currentGame = game;
+    if (!_disposed) notifyListeners();
+  }
+
+  @visibleForTesting
+  void setCashSessionForTesting(CashSession? session) {
+    _cashSession = session;
+    if (!_disposed) notifyListeners();
+  }
+
   /// Application-level UI state (no business logic / backend).
   AppProvider({String? initialColorTheme, String? initialThemePreference}) {
     if (initialColorTheme != null) {

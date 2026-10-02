@@ -100,7 +100,9 @@ class StatsScreen extends StatelessWidget {
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
-              childAspectRatio: 0.95,
+              // Taller than square: 28px value + two-line label + padding
+              // must fit at 320px without a bottom overflow.
+              childAspectRatio: 0.85,
               children: [
                 _buildStatCard(
                   label: 'Games\nplayed',

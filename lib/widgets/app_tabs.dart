@@ -33,30 +33,40 @@ class AppTabs extends StatelessWidget {
           width: double.infinity,
           height: shouldStack ? 56 : 46,
           decoration: Glass.glassTabBar(),
-          child: Row(
-            // On mobile, expand to fill the screen evenly (no scroll).
-            // On web, left-align them with padding.
-            mainAxisAlignment: isMobile
-                ? MainAxisAlignment.spaceEvenly
-                : MainAxisAlignment.start,
-            children: tabs.map((tab) {
-              Widget child = _TabItem(
-                tab: tab,
-                isActive: active == tab.id,
-                onTap: () => onChanged(tab.id),
-                stacked: shouldStack,
-              );
-
-              if (isMobile) {
-                return Expanded(child: child);
-              } else {
-                return Padding(
-                  padding: const EdgeInsets.only(right: AppSpacing.sm),
-                  child: child,
-                );
-              }
-            }).toList(),
-          ),
+          // On wide layouts tabs are left-aligned at intrinsic width, so a
+          // long set (admin: Players/Eliminated/Seating/Levels/Prizes/Audit)
+          // scrolled instead of overflowing. Mobile stays evenly expanded.
+          child: isMobile
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: tabs.map((tab) {
+                    return Expanded(
+                      child: _TabItem(
+                        tab: tab,
+                        isActive: active == tab.id,
+                        onTap: () => onChanged(tab.id),
+                        stacked: shouldStack,
+                      ),
+                    );
+                  }).toList(),
+                )
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: tabs.map((tab) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: AppSpacing.sm),
+                        child: _TabItem(
+                          tab: tab,
+                          isActive: active == tab.id,
+                          onTap: () => onChanged(tab.id),
+                          stacked: shouldStack,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
         );
       },
     );
@@ -83,7 +93,36 @@ class _TabItem extends StatefulWidget {
 class _TabItemState extends State<_TabItem> {
   bool _hovering = false;
 
-  List<Widget> _buildContent(bool isActive) {
+  /// The label, flexed in the horizontal (Row) layout so it ellipsizes inside
+  /// its slot instead of overflowing it. A bare Text in a min-sized Row is
+  /// measured with unbounded width, so its own maxLines/ellipsis never fires
+  /// — that was the 320px overflow. In the stacked (Column) layout the width
+  /// is already bounded, so no flex is used there (flex + unbounded height
+  /// would throw instead).
+  Widget _buildLabel(bool isActive, {required bool flexible}) {
+    final label = Text(
+      widget.tab.label,
+      // Sized through AppTypography (AppScale.sp inside), never a raw
+      // fontSize override — a raw number would bypass the scale floor.
+      style: (widget.stacked ? AppTypography.bodyXs : AppTypography.bodySm)
+          .copyWith(
+        fontWeight: FontWeight.w500,
+        // §B1: text below 24 px is `redText`, never the `red` fill token.
+        // `red` measures 4.05 : 1 on the background, under the 4.5 : 1 AA
+        // floor, so the active tab label was failing contrast.
+        color: isActive
+            ? AppColors.primaryText
+            : _hovering
+                ? AppColors.foreground
+                : AppColors.mutedForeground,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    return flexible ? Flexible(child: label) : label;
+  }
+
+  List<Widget> _buildContent(bool isActive, {required bool flexibleLabel}) {
     return [
       if (isActive && !widget.stacked)
         // Glowing indicator beside the text (accent dot)
@@ -102,29 +141,7 @@ class _TabItemState extends State<_TabItem> {
             ],
           ),
         ),
-      Text(
-        widget.tab.label,
-        // Sized through AppTypography, never via a raw `fontSize:` override —
-        // copyWith(fontSize: 12) replaces the value AppScale.sp() already
-        // computed, so the label would ignore the scale floor and render tiny
-        // on short viewports. Pick the style, not the number.
-        style: (widget.stacked
-                ? AppTypography.bodyXs
-                : AppTypography.bodySm)
-            .copyWith(
-          fontWeight: FontWeight.w500,
-          // §B1: text below 24 px is `redText`, never the `red` fill token.
-          // `red` measures 4.05 : 1 on the background, under the 4.5 : 1 AA
-          // floor, so the active tab label was failing contrast.
-          color: isActive
-              ? AppColors.primaryText
-              : _hovering
-                  ? AppColors.foreground
-                  : AppColors.mutedForeground,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+      _buildLabel(isActive, flexible: flexibleLabel),
       if (widget.tab.count != null) ...[
         SizedBox(
           width: widget.stacked ? 0 : 6,
@@ -203,12 +220,13 @@ class _TabItemState extends State<_TabItem> {
               child: widget.stacked
                   ? Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: _buildContent(isActive),
+                      children: _buildContent(isActive, flexibleLabel: false),
                     )
                   : Row(
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: _buildContent(isActive),
+                      children:
+                          _buildContent(isActive, flexibleLabel: true),
                     ),
             ),
           ),

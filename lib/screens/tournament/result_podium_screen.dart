@@ -205,7 +205,9 @@ class ResultPodiumScreen extends StatelessWidget {
           // Podium visual
           if (podium.isNotEmpty)
             SizedBox(
-              height: 220,
+              // Fits the winner column (medal + 150px block + amounts) with
+              // real font metrics; 220 overflowed by 3px on every viewport.
+              height: 228,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -672,7 +674,11 @@ class _PodiumSlot extends StatelessWidget {
                     : AppColors.border,
               ),
             ),
-            height: heights[result.pos - 1],
+            // Minimum heights, not fixed: name + place + prize must fit even
+            // in the shortest (3rd-place) block at 320px.
+            constraints: BoxConstraints(
+              minHeight: heights[result.pos - 1],
+            ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [

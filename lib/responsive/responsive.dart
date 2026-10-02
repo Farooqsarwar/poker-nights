@@ -113,6 +113,14 @@ class AppScale {
   /// during a live tournament halved the size of every number on the screen.
   static const double minTextScale = 1.0;
 
+  static bool get _isDesktop {
+    try {
+      return ScreenUtil().screenWidth >= AppBreakpoints.desktop;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static double _rawOr(double Function() compute, num value) {
     try {
       return compute();
@@ -135,36 +143,45 @@ class AppScale {
   }
 
   /// Fluid width (clamped to avoid runaway growth on desktop).
-  static double w(num value) => _rawOr(
-    () => _clamped(
+  static double w(num value) {
+    if (_isDesktop) return value.toDouble();
+    return _rawOr(
+      () => _clamped(
+        value,
+        ScreenUtil().setWidth(value),
+        maxWidthScale,
+        minScale: minSizeScale,
+      ),
       value,
-      ScreenUtil().setWidth(value),
-      maxWidthScale,
-      minScale: minSizeScale,
-    ),
-    value,
-  );
+    );
+  }
 
   /// Fluid height (clamped).
-  static double h(num value) => _rawOr(
-    () => _clamped(
+  static double h(num value) {
+    if (_isDesktop) return value.toDouble();
+    return _rawOr(
+      () => _clamped(
+        value,
+        ScreenUtil().setHeight(value),
+        maxHeightScale,
+        minScale: minSizeScale,
+      ),
       value,
-      ScreenUtil().setHeight(value),
-      maxHeightScale,
-      minScale: minSizeScale,
-    ),
-    value,
-  );
+    );
+  }
 
   /// Fluid font size, held between [minTextScale] and [maxScale] times the
   /// design value.
-  static double sp(num value, {double maxScale = maxTextScale}) => _rawOr(
-    () => _clamped(
+  static double sp(num value, {double maxScale = maxTextScale}) {
+    if (_isDesktop) return value.toDouble();
+    return _rawOr(
+      () => _clamped(
+        value,
+        ScreenUtil().setSp(value),
+        maxScale,
+        minScale: minTextScale,
+      ),
       value,
-      ScreenUtil().setSp(value),
-      maxScale,
-      minScale: minTextScale,
-    ),
-    value,
-  );
+    );
+  }
 }

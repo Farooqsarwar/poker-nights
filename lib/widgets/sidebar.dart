@@ -11,7 +11,9 @@ import '../providers/app_provider.dart';
 import 'app_avatar.dart';
 import 'app_button.dart';
 import 'app_icon_label.dart';
+import 'app_tag.dart';
 import 'brand_lockup.dart';
+import '../services/payment_service.dart';
 import 'create_group_dialog.dart';
 import 'glass_styles.dart';
 import 'glass_surface.dart';
@@ -42,9 +44,13 @@ class Sidebar extends StatelessWidget {
       ],
     ];
     final secondaryNavItems = [
+      _NavSpec(RoutePaths.standings, 'Standings & Seasons', Icons.leaderboard_outlined, 0, null),
+      _NavSpec(RoutePaths.presets, 'Presets', Icons.list_alt_outlined, 0, null),
       _NavSpec(RoutePaths.polls, 'Polls', Icons.poll_outlined, 0, null),
       _NavSpec(RoutePaths.history, 'History', Icons.history, 0, null),
       _NavSpec(RoutePaths.cashGame, 'Cash Game', Icons.payments_outlined, 0, null),
+      _NavSpec(RoutePaths.tools, 'Public Tools', Icons.build_outlined, 0, null),
+      _NavSpec(RoutePaths.upgrade, 'Premium', Icons.workspace_premium_outlined, 0, null),
       _NavSpec(
         RoutePaths.settings,
         'Settings',
@@ -67,7 +73,7 @@ class Sidebar extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.lg,
-                vertical: AppSpacing.lg,
+                vertical: AppSpacing.md,
               ),
               decoration: BoxDecoration(
                 border: Border(
@@ -113,7 +119,7 @@ class Sidebar extends StatelessWidget {
                       ),
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.md,
-                        vertical: 10,
+                        vertical: 8,
                       ),
                       decoration: BoxDecoration(
                         color: app.hasCurrentGroup
@@ -172,7 +178,7 @@ class Sidebar extends StatelessWidget {
                   ),
                   for (final item in primaryNavItems)
                     _NavTile(item: item, location: location),
-                  Divider(color: AppColors.border, height: 24),
+                  Divider(color: AppColors.border, height: 16),
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm,
@@ -192,53 +198,13 @@ class Sidebar extends StatelessWidget {
                 ],
               ),
             ),
-            // Top-level quick actions, pinned above the account section.
+            // Pinned footer: New Group button + Compact User Profile row
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.xs,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
               ),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: AppColors.border.withValues(
-                      alpha: Glass.borderOpacity,
-                    ),
-                  ),
-                ),
-              ),
-              child: Column(
-                children: [
-                  AppButton(
-                    fullWidth: true,
-                    size: AppButtonSize.sm,
-                    onPressed: () => openCreateGroupDialog(context),
-                    child: const AppIconLabel(
-                      label: 'New Group',
-                      icon: Icons.group_add_outlined,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  AppButton(
-                    fullWidth: true,
-                    size: AppButtonSize.sm,
-                    variant: AppButtonVariant.secondary,
-                    onPressed: () => context.go(RoutePaths.cashGame),
-                    child: const AppIconLabel(
-                      label: 'Cash Game',
-                      icon: Icons.sports_esports_outlined,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // User section
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
                 border: Border(
                   top: BorderSide(
@@ -257,74 +223,88 @@ class Sidebar extends StatelessWidget {
                 ),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  AppButton(
+                    fullWidth: true,
+                    size: AppButtonSize.sm,
+                    onPressed: () => openCreateGroupDialog(context),
+                    child: const AppIconLabel(
+                      label: 'New Group',
+                      icon: Icons.group_add_outlined,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
                   InkWell(
                     onTap: () => context.go(RoutePaths.profile),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: AppSpacing.sm,
+                        horizontal: AppSpacing.xs,
+                        vertical: 4,
                       ),
                       child: Row(
                         children: [
-                          if (user != null) AppAvatar(name: user.name),
-                          const SizedBox(width: AppSpacing.md),
+                          if (user != null)
+                            AppAvatar(
+                              name: user.name,
+                              size: AppAvatarSize.sm,
+                            ),
+                          const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
                                   user?.name ?? '—',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTypography.bodySm.copyWith(
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
                                   ),
                                 ),
-                                Text(
-                                  app.isAdmin ? 'Host' : 'Player',
-                                  style: AppTypography.bodyXs.copyWith(
-                                    color: AppColors.mutedForeground,
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      app.isAdmin ? 'Host' : 'Player',
+                                      style: AppTypography.bodyXs.copyWith(
+                                        color: AppColors.mutedForeground,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSpacing.xs),
+                                    AppTag(
+                                      app.premiumTier == PremiumTier.premium
+                                          ? 'PREMIUM'
+                                          : 'FREE',
+                                      tone: app.premiumTier == PremiumTier.premium
+                                          ? AppTagTone.primary
+                                          : AppTagTone.neutral,
+                                    ),
+                                  ],
                                 ),
                               ],
+                            ),
+                          ),
+                          Tooltip(
+                            message: 'Sign out',
+                            child: IconButton(
+                              icon: const Icon(Icons.logout, size: 16),
+                              color: AppColors.mutedForeground,
+                              hoverColor: AppColors.surfaceHover,
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(
+                                minWidth: 28,
+                                minHeight: 28,
+                              ),
+                              onPressed: app.logout,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Divider(
-                    color: AppColors.border.withValues(
-                      alpha: Glass.borderOpacity,
-                    ),
-                    height: 1,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      InkWell(
-                        onTap: app.logout,
-                        hoverColor: AppColors.surfaceHover,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                            vertical: 4,
-                          ),
-                          child: Text(
-                            'Sign out',
-                            style: AppTypography.bodyXs.copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
@@ -377,7 +357,7 @@ class _NavTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md - 3,
-            vertical: 10,
+            vertical: 8,
           ),
           decoration: BoxDecoration(
             border: Border(
@@ -408,6 +388,8 @@ class _NavTile extends StatelessWidget {
                   ),
                 ),
               ),
+              if (item.path == RoutePaths.upgrade)
+                const AppTag('PREMIUM', tone: AppTagTone.primary),
               if (item.badge != null && item.badge! > 0)
                 Container(
                   width: 20,

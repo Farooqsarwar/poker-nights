@@ -7,9 +7,11 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../models/user.dart';
 import '../../providers/app_provider.dart';
+import '../../services/payment_service.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_tag.dart';
 import '../../widgets/back_nav_button.dart';
 
 /// Statistics screen matching F3_Stats mobile-first design.
@@ -146,27 +148,55 @@ class StatsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: AppColors.borderSubtle, width: 1),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Padding(
-                    padding: EdgeInsets.only(top: 2),
-                    child: Icon(
-                      Icons.workspace_premium_outlined,
-                      color: AppColors.destructiveText,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      'Finishing positions over time, knockout records and exportable history are part of Premium. Your basic stats stay free.',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.mutedForeground,
-                        height: 1.4,
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.workspace_premium_outlined,
+                        color: AppColors.primary,
+                        size: 20,
                       ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Advanced Graphs & History',
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      AppTag(
+                        context.watch<AppProvider>().premiumTier ==
+                                PremiumTier.premium
+                            ? 'UNLOCKED'
+                            : 'PREMIUM',
+                        tone: context.watch<AppProvider>().premiumTier ==
+                                PremiumTier.premium
+                            ? AppTagTone.success
+                            : AppTagTone.primary,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Finishing positions over time, knockout records and exportable history are part of Premium. Your basic stats stay free.',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                      height: 1.4,
                     ),
                   ),
+                  if (context.watch<AppProvider>().premiumTier !=
+                      PremiumTier.premium) ...[
+                    const SizedBox(height: 12),
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () => context.push(RoutePaths.upgrade),
+                      child: const Text('See Premium Details'),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -10,9 +10,11 @@ import '../../models/cash_game.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
+import '../../services/payment_service.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_tag.dart';
 import '../../widgets/page_header.dart';
 import '../../widgets/medal_icon.dart';
 import '../../responsive/responsive.dart';
@@ -58,13 +60,47 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
                 title: 'History',
                 actions: [
-                  if (app.hasCurrentGroup)
+                  if (app.hasCurrentGroup) ...[
+                    AppButton(
+                      variant: AppButtonVariant.secondary,
+                      size: AppButtonSize.sm,
+                      onPressed: () {
+                        if (app.premiumTier == PremiumTier.premium) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Tournament history exported.'),
+                            ),
+                          );
+                        } else {
+                          context.push(RoutePaths.upgrade);
+                        }
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.download_outlined, size: 14),
+                          const SizedBox(width: 4),
+                          const Text('Export'),
+                          const SizedBox(width: 6),
+                          AppTag(
+                            app.premiumTier == PremiumTier.premium
+                                ? 'UNLOCKED'
+                                : 'PREMIUM',
+                            tone: app.premiumTier == PremiumTier.premium
+                                ? AppTagTone.success
+                                : AppTagTone.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
                     AppButton(
                       variant: AppButtonVariant.secondary,
                       size: AppButtonSize.sm,
                       onPressed: () => context.push(RoutePaths.standings),
                       child: const Text('Standings'),
                     ),
+                  ],
                 ],
               ),
               const SizedBox(height: AppSpacing.md),

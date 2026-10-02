@@ -23,7 +23,7 @@ class AppCard extends StatefulWidget {
     required this.child,
     this.glow = false,
     this.onTap,
-    this.padding,
+    this.padding = const EdgeInsets.all(AppSpacing.lg),
     this.margin,
     this.color,
     this.borderColor,

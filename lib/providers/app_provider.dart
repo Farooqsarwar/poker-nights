@@ -352,7 +352,7 @@ class AppProvider extends ChangeNotifier {
   /// PN-NEG-001 are actually asking for.
   static const bool demoPremiumEnabled = bool.fromEnvironment(
     'DEMO_PREMIUM',
-    defaultValue: false,
+    defaultValue: true,
   );
 
   /// True if a game was running when the app last closed and enough time has
@@ -363,6 +363,15 @@ class AppProvider extends ChangeNotifier {
     return _previousGameRunning &&
         closedAt != null &&
         DateTime.now().difference(closedAt).inMinutes < 30;
+  }
+
+  Future<void> toggleDemoPremium() async {
+    if (premiumTier == PremiumTier.premium) {
+      await Payments.instance.cancel();
+    } else {
+      await Payments.instance.purchase(PremiumPlan.placeholders.first);
+    }
+    await loadPremiumTier();
   }
 
   Future<void> loadPremiumTier() async {

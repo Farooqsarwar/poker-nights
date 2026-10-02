@@ -1700,7 +1700,64 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 variant: activePlayers.length == 1
                     ? AppButtonVariant.primary
                     : AppButtonVariant.secondary,
-                onPressed: () => context.go(RoutePaths.completeTournament),
+                onPressed: () {
+                  if (activePlayers.length == 1) {
+                    final winner = activePlayers.first;
+                    showAppModal(
+                      context: context,
+                      title: 'Declare Winner',
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.emoji_events,
+                            size: 48,
+                            color: AppColors.icon,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            'Declare ${winner.name} as the tournament champion and finalize results?',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.bodySm,
+                          ),
+                          const SizedBox(height: AppSpacing.xl),
+                          AppButton(
+                            fullWidth: true,
+                            onPressed: () {
+                              Navigator.pop(context);
+                              final eliminated = game.players
+                                  .where((p) => p.eliminated)
+                                  .toList()
+                                ..sort(
+                                  (a, b) => (b.eliminationPos ?? 0)
+                                      .compareTo(a.eliminationPos ?? 0),
+                                );
+                              final ok = app.recordFinishOrder([
+                                ...eliminated.map((p) => p.id),
+                                winner.id,
+                              ]);
+                              if (ok) {
+                                context.go(RoutePaths.resultPodium);
+                              } else {
+                                context.go(RoutePaths.completeTournament);
+                              }
+                            },
+                            child: const Text('Declare Winner & Show Results'),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          AppButton(
+                            fullWidth: true,
+                            variant: AppButtonVariant.ghost,
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Cancel'),
+                          ),
+                        ],
+                      ),
+                    );
+                  } else {
+                    context.go(RoutePaths.completeTournament);
+                  }
+                },
                 child: AppIconLabel(
                   label: activePlayers.length == 1
                       ? 'Declare ${activePlayers.first.name} Winner'

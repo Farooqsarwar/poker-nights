@@ -23,6 +23,7 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/chip_token.dart';
 import '../../services/entitlements.dart';
+import '../../widgets/app_tag.dart';
 import '../../widgets/premium_gate.dart';
 
 /// Tournament preset manager (checklist §9.1): create, edit, delete and use
@@ -187,16 +188,31 @@ class _PresetsScreenState extends State<PresetsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Presets',
-                      style: AppTypography.display(
-                        size: AppFontSizes.xxl,
-                        weight: FontWeight.w700,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          'Presets',
+                          style: AppTypography.display(
+                            size: AppFontSizes.xxl,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        AppTag(
+                          app.premiumTier == PremiumTier.premium
+                              ? 'UNLIMITED'
+                              : '${presets.length}/3 FREE',
+                          tone: app.premiumTier == PremiumTier.premium
+                              ? AppTagTone.success
+                              : AppTagTone.neutral,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'One-tap tournament setups.',
+                      app.premiumTier == PremiumTier.premium
+                          ? 'One-tap tournament setups · Unlimited on Premium'
+                          : 'One-tap tournament setups · 3 saved templates free (${presets.length}/3 used)',
                       style: AppTypography.bodySm.copyWith(
                         color: AppColors.mutedForeground,
                       ),

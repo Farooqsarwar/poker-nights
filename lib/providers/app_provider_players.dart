@@ -101,6 +101,14 @@ extension AppProviderPlayers on AppProvider {
           timestamp: DateTime.now(),
         ),
       );
+    } else if (remaining <= 1) {
+      // When 1 player remains, the tournament is decided: pause the clock!
+      _currentGame = _currentGame!.copyWith(
+        players: updated,
+        timerRunning: false,
+        revision: rev,
+        lastIdempotencyKey: key,
+      );
     } else {
       _currentGame = _currentGame!.copyWith(
         players: updated,

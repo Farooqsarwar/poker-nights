@@ -31,6 +31,15 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
   final List<String> _order = [];
   bool _confirmed = false;
 
+  @override
+  void initState() {
+    super.initState();
+    final game = context.read<AppProvider>().currentGame;
+    if (game != null && game.activePlayers.length == 1) {
+      _order.add(game.activePlayers.first.id);
+    }
+  }
+
   void _finishPlayer(String playerId) {
     setState(() {
       if (!_order.contains(playerId)) _order.add(playerId);

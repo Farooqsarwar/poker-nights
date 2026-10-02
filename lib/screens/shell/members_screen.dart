@@ -20,6 +20,15 @@ import '../../widgets/icon_tile.dart';
 import '../../widgets/page_header.dart';
 import '../../widgets/app_text_field.dart';
 
+/// Menu actions on a member card that are not role assignments.
+///
+/// Carried as the selected value through [PopupMenuButton.onSelected] so the
+/// handler runs with the screen's context. Handling them in
+/// [PopupMenuItem.onTap] with the `itemBuilder` context instead looks the
+/// same but never works: the tap dismisses the menu route first, leaving a
+/// deactivated context, and the confirm dialog never appears.
+enum _MemberMenuAction { remove }
+
 /// Group members as a full screen (single navigation layer — the Members item
 /// lives on the navbar, not duplicated in a hub tab bar).
 class MembersScreen extends StatelessWidget {
@@ -192,7 +201,10 @@ class MembersScreen extends StatelessWidget {
             ],
           ),
           if (canEditRoles)
-            PopupMenuButton<GroupRole>(
+            // Typed as Object (not GroupRole) so the Remove action can ride
+            // through onSelected with the screen's context — see
+            // _MemberMenuAction. Role entries still carry GroupRole values.
+            PopupMenuButton<Object>(
               tooltip: 'Member options',
               icon: Icon(
                 Icons.more_vert,
@@ -204,21 +216,27 @@ class MembersScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 side: BorderSide(color: AppColors.borderSubtle),
               ),
-              onSelected: (role) => app.setGroupRole(m.id, role),
+              onSelected: (value) {
+                if (value is GroupRole) {
+                  app.setGroupRole(m.id, value);
+                } else if (value == _MemberMenuAction.remove) {
+                  _confirmRemoveMember(context, m);
+                }
+              },
               itemBuilder: (context) => [
                 for (final role in GroupRole.values)
-                  CheckedPopupMenuItem(
+                  CheckedPopupMenuItem<Object>(
                     value: role,
                     checked: app.roleOf(m) == role,
                     child: Text(role.label),
                   ),
-                PopupMenuItem<GroupRole>(
+                PopupMenuItem<Object>(
                   enabled: false,
                   height: 8,
                   child: Divider(color: AppColors.borderSubtle, height: 1),
                 ),
-                PopupMenuItem<GroupRole>(
-                  onTap: () => _confirmRemoveMember(context, m),
+                PopupMenuItem<Object>(
+                  value: _MemberMenuAction.remove,
                   child: Text(
                     'Remove from Group',
                     style: TextStyle(color: AppColors.destructiveText),
@@ -294,6 +312,21 @@ class MembersScreen extends StatelessWidget {
                       onPressed: () => _showAddMemberDialog(context),
                       child: const Text('+ Add member'),
                     ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  const AppTag('UNLIMITED', tone: AppTagTone.neutral),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'Groups have unlimited member capacity on both Free and Premium tiers.',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),

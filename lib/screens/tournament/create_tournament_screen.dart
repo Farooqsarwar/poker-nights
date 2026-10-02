@@ -1362,12 +1362,123 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _expectedPlayers <= 9
+                        ? '1 table (1–9 players · standard hosting)'
+                        : '${(_expectedPlayers / 9).ceil()} tables needed (multi-table)',
+                    style: TextStyle(
+                      color: _expectedPlayers > 9 &&
+                              app.premiumTier != PremiumTier.premium
+                          ? AppColors.primaryText
+                          : AppColors.mutedForeground,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 6),
+        Text(
+          'Group members: unlimited on all plans. Tournament capacity: 1 table (up to 9 players) is Free; 2+ tables is Premium.',
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        if (_expectedPlayers > 9) ...[
+          if (app.premiumTier != PremiumTier.premium)
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.primarySoftBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const AppTag('PREMIUM', tone: AppTagTone.primary),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'Two or more tables',
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '$_expectedPlayers going and your tables seat 9, so this night needs a second table — that is Premium. Free hosting covers one table up to 9 players.',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        onPressed: () => context.push(RoutePaths.upgrade),
+                        child: const Text('See Premium'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.primarySoftBorder),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 20,
+                    color: AppColors.successText,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Multi-Table Tournament Active',
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          '$_expectedPlayers players across ${(_expectedPlayers / 9).ceil()} tables with automated TDA balancing & redraws.',
+                          style: AppTypography.bodyXs.copyWith(
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  const AppTag('UNLOCKED', tone: AppTagTone.success),
+                ],
+              ),
+            ),
+        ],
 
         // KO bounty — the spec's Step-1 field (§C1 step 1, T37/T38/T64).
         _buildKoBountySection(app),
@@ -1913,6 +2024,16 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 label: 'Chips: ${s.chipSetName}',
                 variant: AppBadgeVariant.default_,
               ),
+              AppBadge(
+                label: _expectedPlayers > 9
+                    ? '${(_expectedPlayers / 9).ceil()} Tables · ${app.premiumTier == PremiumTier.premium ? "PREMIUM ACTIVE" : "REQUIRES PREMIUM"}'
+                    : '1 Table · FREE',
+                variant: _expectedPlayers > 9
+                    ? (app.premiumTier == PremiumTier.premium
+                        ? AppBadgeVariant.highlight
+                        : AppBadgeVariant.red)
+                    : AppBadgeVariant.default_,
+              ),
               if (s.locationPrivate)
                 const AppBadge(
                   label: 'Private Address',
@@ -2385,7 +2506,7 @@ class _BountyKindOption extends StatelessWidget {
                 ),
               ),
               if (kind.isPremium)
-                const AppTag('Premium', tone: AppTagTone.primary)
+                const AppTag('PREMIUM', tone: AppTagTone.primary)
               else
                 Text(
                   'Free',

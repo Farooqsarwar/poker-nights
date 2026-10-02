@@ -10,6 +10,7 @@ import '../../models/imported_night.dart';
 import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../services/entitlements.dart';
+import '../../services/payment_service.dart';
 import '../../utils/payouts_engine.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -17,6 +18,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_eyebrow.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_tabs.dart';
+import '../../widgets/app_tag.dart';
 import '../../widgets/page_header.dart';
 import '../../widgets/premium_gate.dart';
 
@@ -194,14 +196,15 @@ class _StandingsScreenState extends State<StandingsScreen> {
             subtitle: app.hasCurrentGroup ? app.currentGroup.name : null,
           ),
           const SizedBox(height: AppSpacing.lg),
-          if (table.isEmpty)
+          if (table.isEmpty) ...[
             const AppEmptyState(
               icon: Icons.emoji_events_outlined,
               title: 'No finished games yet',
               description:
                   'Standings fill in as the group finishes tournaments.',
-            )
-          else ...[
+            ),
+            const SizedBox(height: AppSpacing.xl),
+          ] else ...[
             const AppEyebrow('All time', muted: true),
             const SizedBox(height: AppSpacing.sm),
             AppCard(
@@ -216,21 +219,32 @@ class _StandingsScreenState extends State<StandingsScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.xl),
-            AppEyebrow('Season $year · points', muted: true),
-            const SizedBox(height: AppSpacing.sm),
-            PremiumGate(
-              tier: app.premiumTier,
-              feature: PremiumFeature.seasons,
-              blurb:
-                  'Season tables score every night by finish and field size.',
-              child: _SeasonBlock(
-                formula: _formula,
-                onFormula: (f) => setState(() => _formula = f),
-                standings: _season(app, nights, imported, year),
-                explanation: _explanation,
-              ),
-            ),
           ],
+          Row(
+            children: [
+              AppEyebrow('Season $year · points', muted: true),
+              const SizedBox(width: AppSpacing.sm),
+              AppTag(
+                app.premiumTier == PremiumTier.premium ? 'UNLOCKED' : 'PREMIUM',
+                tone: app.premiumTier == PremiumTier.premium
+                    ? AppTagTone.success
+                    : AppTagTone.primary,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          PremiumGate(
+            tier: app.premiumTier,
+            feature: PremiumFeature.seasons,
+            blurb:
+                'Season tables score every night by finish and field size.',
+            child: _SeasonBlock(
+              formula: _formula,
+              onFormula: (f) => setState(() => _formula = f),
+              standings: _season(app, nights, imported, year),
+              explanation: _explanation,
+            ),
+          ),
           if (app.isAdmin) ...[
             const SizedBox(height: AppSpacing.xl),
             const AppEyebrow('Host tools', muted: true),

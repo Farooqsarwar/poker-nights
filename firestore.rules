@@ -572,13 +572,16 @@ service cloud.firestore {
       }
 
       // Membership index mirror (one doc per joined group). The user manages
-      // their own rows; a group's admin may also write the mirror row for a
-      // member of THAT group (the "add member by email" flow — no Cloud
-      // Function). Scoped tightly: users write only their own index entries,
-      // and admins can write entries for members of groups they administer.
+      // their own rows; a group's admin may also DELETE the mirror row for
+      // a member of THAT group: `deleteMember` batches the roster-row delete
+      // with this mirror-row delete, and one denied write rejects the whole
+      // batch — without this exception the roster row is never deleted and
+      // the removed member pops back in on the next bundle snapshot.
       match /groups/{gid} {
         allow read: if signedIn() && request.auth.uid == uid;
-        allow write: if signedIn() && request.auth.uid == uid;
+        allow create, update: if signedIn() && request.auth.uid == uid;
+        allow delete: if signedIn() && request.auth.uid == uid
+            || isGroupAdmin(gid);
       }
 
       // Personal tournament results (one doc per settled game; spec §5.1

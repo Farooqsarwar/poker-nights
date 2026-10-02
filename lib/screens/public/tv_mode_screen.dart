@@ -17,6 +17,7 @@ import '../../widgets/app_modal.dart';
 import '../../services/entitlements.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_alert_banner.dart';
+import '../../widgets/app_tag.dart';
 import '../../widgets/backgrounds.dart';
 import '../../widgets/brand_lockup.dart';
 import '../../widgets/medal_icon.dart';
@@ -1132,6 +1133,20 @@ class _TvSettingsSheetState extends State<_TvSettingsSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Custom TV Display',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const AppTag('UNLOCKED', tone: AppTagTone.success),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
           Text(
             'Text size',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),

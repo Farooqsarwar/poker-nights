@@ -9,6 +9,7 @@ import '../services/entitlements.dart';
 import '../services/payment_service.dart';
 import 'app_button.dart';
 import 'app_card.dart';
+import 'app_tag.dart';
 
 /// Stands in front of a Premium feature (specification v3.1, decision D4).
 ///
@@ -67,6 +68,8 @@ class PremiumGate extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: AppSpacing.xs),
+              const AppTag('PREMIUM', tone: AppTagTone.primary),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -150,7 +153,7 @@ class PremiumLock extends StatelessWidget {
                       ),
                       const SizedBox(width: AppSpacing.xxs),
                       Text(
-                        'Premium',
+                        'PREMIUM',
                         style: AppTypography.bodyXs.copyWith(
                           color: AppColors.background,
                           fontWeight: FontWeight.w700,

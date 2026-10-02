@@ -10,7 +10,9 @@ import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 import 'app_avatar.dart';
 import 'app_button.dart';
+import 'app_tag.dart';
 import 'brand_lockup.dart';
+import '../services/payment_service.dart';
 import 'create_group_dialog.dart';
 import 'glass_styles.dart';
 import 'glass_surface.dart';
@@ -40,16 +42,13 @@ class NavDrawer extends StatelessWidget {
     // Standings, Settings" - and T135 has the drawer and the Explore sheet
     // agree, so the same six rows appear in both.
     final moreSection = <_DrawerItem>[
+      _DrawerItem(RoutePaths.standings, 'Standings & Seasons', Icons.leaderboard_outlined, null),
+      _DrawerItem(RoutePaths.presets, 'Presets', Icons.list_alt_outlined, null),
       _DrawerItem(RoutePaths.polls, 'Polls', Icons.poll_outlined, null),
       _DrawerItem(RoutePaths.history, 'History', Icons.history, null),
       _DrawerItem(RoutePaths.cashGame, 'Cash Game', Icons.payments_outlined, null),
       _DrawerItem(RoutePaths.tools, 'Tools', Icons.build_outlined, null),
-      _DrawerItem(
-        RoutePaths.standings,
-        'Standings',
-        Icons.leaderboard_outlined,
-        null,
-      ),
+      _DrawerItem(RoutePaths.upgrade, 'Premium Features', Icons.workspace_premium_outlined, null),
       _DrawerItem(RoutePaths.settings, 'Settings', Icons.settings_outlined, null),
     ];
 
@@ -127,15 +126,30 @@ class NavDrawer extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          Text(
-                            app.isGuest
-                                ? 'No account · Tap to register'
-                                : (app.isAdmin ? 'Host' : 'Player'),
-                            style: AppTypography.bodyXs.copyWith(
-                              color: app.isGuest
-                                  ? AppColors.primary
-                                  : AppColors.mutedForeground,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                app.isGuest
+                                    ? 'No account · Tap to register'
+                                    : (app.isAdmin ? 'Host' : 'Player'),
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: app.isGuest
+                                      ? AppColors.primary
+                                      : AppColors.mutedForeground,
+                                ),
+                              ),
+                              if (!app.isGuest) ...[
+                                const SizedBox(width: AppSpacing.xs),
+                                AppTag(
+                                  app.premiumTier == PremiumTier.premium
+                                      ? 'PREMIUM'
+                                      : 'FREE',
+                                  tone: app.premiumTier == PremiumTier.premium
+                                      ? AppTagTone.primary
+                                      : AppTagTone.neutral,
+                                ),
+                              ],
+                            ],
                           ),
                         ],
                       ),

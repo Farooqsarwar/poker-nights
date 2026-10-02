@@ -10,6 +10,7 @@ import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
 import '../../services/payment_service.dart';
 import '../../widgets/app_avatar.dart';
+import '../../widgets/app_tag.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
@@ -573,18 +574,101 @@ class SettingsScreen extends StatelessWidget {
                       ? 'Premium'
                       : 'Free',
                   subtitle: app.premiumTier == PremiumTier.premium
-                      ? 'More tables, seasons, bounties and custom TV layouts'
-                      : 'Upgrade for more tables, seasons and bounties',
-                  trailing: Text(
-                    app.premiumTier == PremiumTier.premium
-                        ? 'Manage'
-                        : 'See Premium',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.primaryText,
-                      fontWeight: FontWeight.w700,
-                    ),
+                      ? 'Two or more tables, seasons, custom TV layouts and more'
+                      : 'Upgrade for two or more tables, seasons and bounties',
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppTag(
+                        app.premiumTier == PremiumTier.premium
+                            ? 'PREMIUM'
+                            : 'FREE',
+                        tone: app.premiumTier == PremiumTier.premium
+                            ? AppTagTone.primary
+                            : AppTagTone.neutral,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        app.premiumTier == PremiumTier.premium
+                            ? 'Manage'
+                            : 'See Premium',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.primaryText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                   onTap: () => context.push(RoutePaths.upgrade),
+                  showDivider: true,
+                ),
+                if (Payments.isSimulated)
+                  _buildSettingRow(
+                    title: 'Demo mode tier switcher',
+                    subtitle: app.premiumTier == PremiumTier.premium
+                        ? 'Currently simulated Premium. Tap to test Free tier.'
+                        : 'Currently simulated Free. Tap to test Premium tier.',
+                    trailing: AppTag(
+                      app.premiumTier == PremiumTier.premium
+                          ? 'SWITCH TO FREE'
+                          : 'SWITCH TO PREMIUM',
+                      tone: app.premiumTier == PremiumTier.premium
+                          ? AppTagTone.neutral
+                          : AppTagTone.primary,
+                    ),
+                    onTap: () async {
+                      await app.toggleDemoPremium();
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            app.premiumTier == PremiumTier.premium
+                                ? 'Demo Premium active — all advanced features unlocked.'
+                                : 'Switched to Free tier.',
+                          ),
+                        ),
+                      );
+                    },
+                    showDivider: true,
+                  ),
+                _buildSettingRow(
+                  title: 'Export data & history',
+                  subtitle: app.premiumTier == PremiumTier.premium
+                      ? 'Download tournaments, sessions and JSON audit records'
+                      : 'Audit logs, net cash settlement, and CSV exports (Premium)',
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppTag(
+                        app.premiumTier == PremiumTier.premium
+                            ? 'UNLOCKED'
+                            : 'PREMIUM',
+                        tone: app.premiumTier == PremiumTier.premium
+                            ? AppTagTone.success
+                            : AppTagTone.primary,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Icon(
+                        Icons.chevron_right,
+                        color: AppColors.onSurfaceHint,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    if (app.premiumTier == PremiumTier.premium) {
+                      final json = app.exportMyData();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Account data exported (${json.length} bytes).',
+                          ),
+                        ),
+                      );
+                    } else {
+                      context.push(RoutePaths.upgrade);
+                    }
+                  },
                   showDivider: true,
                 ),
                 _buildSettingRow(

@@ -417,27 +417,27 @@ class _AppButtonState extends State<AppButton> {
     switch (widget.size) {
       case AppButtonSize.sm:
         return const _BtnSizes(
-          fontSize: AppFontSizes.sm,
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          height: 48,
+          fontSize: AppFontSizes.xs,
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          height: 34,
         );
       case AppButtonSize.md:
         return const _BtnSizes(
           fontSize: AppFontSizes.sm,
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           height: 48,
         );
       case AppButtonSize.lg:
         return const _BtnSizes(
           fontSize: AppFontSizes.md,
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 11),
           height: 48,
         );
       case AppButtonSize.xl:
         return const _BtnSizes(
           fontSize: AppFontSizes.lg,
-          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          height: 52,
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 13),
+          height: 54,
         );
     }
   }

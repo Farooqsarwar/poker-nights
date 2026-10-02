@@ -65,9 +65,11 @@ Future<void> openCreateGroupDialog(BuildContext context) {
           AppTextField(
             controller: controller,
             label: 'Group name',
+            placeholder: 'e.g. Friday Poker Club',
             autofocus: true,
             enabled: !isCreating,
-            onSubmitted: isCreating
+            onChanged: (_) => setState(() {}),
+            onSubmitted: isCreating || controller.text.trim().length < 2
                 ? null
                 : (_) async {
                     setState(() => isCreating = true);
@@ -161,8 +163,8 @@ Future<void> openCreateGroupDialog(BuildContext context) {
           const SizedBox(height: AppSpacing.xl),
           AppButton(
             fullWidth: true,
-            disabled: isCreating,
-            onPressed: isCreating
+            disabled: isCreating || controller.text.trim().length < 2,
+            onPressed: isCreating || controller.text.trim().length < 2
                 ? null
                 : () async {
                     setState(() => isCreating = true);

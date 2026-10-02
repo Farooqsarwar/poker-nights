@@ -180,23 +180,23 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                 vertical: AppSpacing.xs,
               ),
               decoration: BoxDecoration(
-                color: const Color(0x28F59E0B),
+                color: AppColors.redDim,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0x60F59E0B)),
+                border: Border.all(color: AppColors.primarySoftBorder),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.emoji_events_outlined,
                     size: 15,
-                    color: Color(0xFFF59E0B),
+                    color: AppColors.redText,
                   ),
                   const SizedBox(width: AppSpacing.xs),
                   Text(
                     'FINAL TABLE',
                     style: AppTypography.eyebrow(
-                      color: const Color(0xFFF59E0B),
+                      color: AppColors.redText,
                       weight: FontWeight.w800,
                     ),
                   ),
@@ -327,7 +327,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                                 : 'Tap another seat to swap',
                             style: AppTypography.bodyXs.copyWith(
                               color: _dealerId == selectedEntry.id
-                                  ? const Color(0xFFF59E0B)
+                                  ? AppColors.redText
                                   : AppColors.mutedForeground,
                               fontWeight: _dealerId == selectedEntry.id
                                   ? FontWeight.w600
@@ -351,12 +351,12 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                         ),
                         decoration: BoxDecoration(
                           color: _dealerId == selectedEntry.id
-                              ? const Color(0x30F59E0B)
+                              ? AppColors.redDim
                               : AppColors.card,
                           borderRadius: BorderRadius.circular(AppRadius.md),
                           border: Border.all(
                             color: _dealerId == selectedEntry.id
-                                ? const Color(0xFFF59E0B)
+                                ? AppColors.primarySoftBorder
                                 : AppColors.borderSubtle,
                           ),
                         ),
@@ -369,7 +369,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                                   : Icons.radio_button_unchecked,
                               size: 14,
                               color: _dealerId == selectedEntry.id
-                                  ? const Color(0xFFF59E0B)
+                                  ? AppColors.redText
                                   : AppColors.mutedForeground,
                             ),
                             const SizedBox(width: AppSpacing.xxs),
@@ -379,7 +379,7 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: _dealerId == selectedEntry.id
-                                    ? const Color(0xFFF59E0B)
+                                    ? AppColors.redText
                                     : AppColors.mutedForeground,
                               ),
                             ),

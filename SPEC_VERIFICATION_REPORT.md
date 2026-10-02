@@ -409,17 +409,21 @@ Full suites: `test/icm_test.dart`, `test/payouts_engine_test.dart`, `test/cash_s
 
 ### Honest capture notes (v3)
 
+- Every board screenshot shows populated dummy data (Friday-night session: 9 players, live +
+  finished games, chat, poll with votes, 2 inbox notifications, 5-player cash ledger, TV scoreboard).
 - **01_08 join-group** shows the exact offline branch ("couldn't find that group"): the club preview
   card requires the `joinCodes/{CODE}` backend lookup (`previewInvite`, `app_provider_groups.dart:34`),
   unreachable in a test harness. The requirement still maps to `JoinGroupScreen` + that lookup;
   verify the preview card on a device with network via `/invite/<CODE>`.
+- Test-only enabler (no production effect): `setCurrentGroupForTesting` now marks the injected bundle
+  loaded, and inbox notifications are seeded via `pushNotification` — otherwise hub screens spin on
+  bundle-loading forever offline.
+- Letter *shapes* are the shipped **Space Grotesk** (all 5 weights): google_fonts resolves them
+  from the bundled `assets/google_fonts/` files even in tests, and the harness preloads the same
+  files as belt-and-braces. Layout, weight, size and colour are pixel-faithful to the code.
 - **03_09 podium** logs a 3.0 px bottom `RenderFlex` overflow on both sizes — a test-font-metrics
   artifact (fallback fonts run wider than shipped fonts; production type likely fits). Zero
   stripe pixels in the captures; visually clean. Worth one real-device check with a 9-player game.
-- Letter *shapes* are the shipped **Space Grotesk** (all 5 weights): google_fonts resolves them
-  from the bundled `assets/google_fonts/` files even in tests (verified in the google_fonts
-  sources + byte-identical registered-vs-unregistered probe runs), and the harness preloads the
-  same files as belt-and-braces. Layout, weight, size and colour are pixel-faithful to the code.
 
 ## Appendix A — Route map (app route → spec route)
 

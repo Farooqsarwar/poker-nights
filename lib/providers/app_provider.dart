@@ -1093,6 +1093,9 @@ class AppProvider extends ChangeNotifier {
   void setCurrentGroupForTesting(Group group) {
     _currentGroup = group;
     _currentGroupId = group.id;
+    // A test hands over a complete bundle, so it counts as loaded: otherwise
+    // every hub screen renders its bundle-loading state forever in tests.
+    _bundleLoaded = true;
     if (!_disposed) {
       notifyListeners();
     }

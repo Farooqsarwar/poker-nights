@@ -24,7 +24,7 @@ from generate_clean_spec_boards import (  # noqa: F401  (helpers only)
     DIM, CYAN, SEPARATOR, font, text_w, wrap, ellipsize, FLOW_DEFS,
 )
 from generate_spec_maps import SPEC_MAP
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageChops
 
 PROJECT_ROOT = r"D:\StudioProjects\poker_night"
 BOARDS_ROOT = os.path.join(PROJECT_ROOT, "spec_boards")
@@ -47,6 +47,29 @@ BEZEL = (26, 28, 38)
 BEZEL_EDGE = (58, 62, 84)
 CHROME_BG = (22, 24, 34)
 HOME_BAR = (120, 124, 140)
+
+
+def fit_crop(shot, pad=48):
+    """Trim void margins around real content (bbox + padding).
+
+    Exact pixels are kept — only empty background outside the content box is
+    removed, so narrow centered layouts don't render as oceans of dark space
+    on the boards. Full frames stay untouched in captures/.
+    """
+    rgb = shot.convert("RGB")
+    bg = Image.new("RGB", rgb.size, rgb.getpixel((5, 5)))
+    bbox = ImageChops.difference(rgb, bg).convert("L").point(
+        lambda p: 255 if p > 12 else 0).getbbox()
+    if not bbox:
+        return shot, (0, 0) + shot.size
+    l, t, r, b = bbox
+    l = max(0, l - pad)
+    t = max(0, t - pad)
+    r = min(shot.size[0], r + pad)
+    b = min(shot.size[1], b + pad)
+    if r - l < 200 or b - t < 200:
+        return shot, (0, 0) + shot.size
+    return shot.crop((l, t, r, b)), (l, t, r, b)
 
 
 def frame_shot(shot, kind, route):

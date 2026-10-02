@@ -11,6 +11,7 @@ import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../services/entitlements.dart';
+import '../../services/payment_service.dart';
 import '../../utils/formatters.dart';
 import '../../utils/share_card.dart';
 import '../../widgets/app_badge.dart';
@@ -21,6 +22,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/app_tag.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/medal_icon.dart';
 
@@ -489,6 +491,56 @@ class ResultPodiumScreen extends StatelessWidget {
                 ),
               ],
             ),
+          const SizedBox(height: AppSpacing.lg),
+          // Seasons upsell: season points ride on the shared card only when
+          // the seasons entitlement allows, so free-tier hosts would
+          // otherwise never learn they exist. Same PREMIUM/UNLOCKED tag
+          // convention as the standings screen.
+          Builder(
+            builder: (context) {
+              final unlocked =
+                  app.premiumTier == PremiumTier.premium;
+              return AppCard(
+                onTap: unlocked
+                    ? null
+                    : () => context.push(RoutePaths.upgrade),
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Season points',
+                            style: AppTypography.bodySm.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(
+                            unlocked
+                                ? 'Added to your shared result cards.'
+                                : 'Season points on shared result cards are Premium.',
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.mutedForeground,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    AppTag(
+                      unlocked ? 'UNLOCKED' : 'PREMIUM',
+                      tone: unlocked
+                          ? AppTagTone.success
+                          : AppTagTone.primary,
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [

@@ -117,6 +117,10 @@ class _InvitationScreenState extends State<InvitationScreen> {
     final maybeCount = members.where((p) => p.rsvp == Rsvp.maybe).length;
     final cantCount = members.where((p) => p.rsvp == Rsvp.cant).length;
     final noResponseCount = members.where((p) => p.rsvp == null).length;
+    final waitlistPlayers = game.waitlist
+        .map((id) => game.players.where((p) => p.id == id).firstOrNull)
+        .whereType<Player>()
+        .toList();
     // Private addresses are hidden until the viewer is confirmed (11-015).
     final showAddress =
         !settings.locationPrivate ||
@@ -268,7 +272,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                                 const SizedBox(width: AppSpacing.md),
                                 Expanded(
                                   child: AppButton(
-                                    variant: AppButtonVariant.danger,
+                                    variant: AppButtonVariant.destructive,
                                     onPressed: () {
                                       app.setRSVP(rsvp);
                                       Navigator.of(context).pop();
@@ -332,9 +336,76 @@ class _InvitationScreenState extends State<InvitationScreen> {
                   const SizedBox(width: AppSpacing.md),
                   AppButton(
                     size: AppButtonSize.sm,
-                    variant: AppButtonVariant.danger,
+                    variant: AppButtonVariant.destructive,
                     onPressed: () => _confirmCancelGame(context, app, game),
                     child: const Text('Cancel game'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          if (app.isAdmin &&
+              !app.isPremium &&
+              memberSeats > app.currentGroup.tableSettings.maxPerTable) ...[
+            const SizedBox(height: AppSpacing.md),
+            AppCard(
+              borderColor: AppColors.primary,
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          "That's a second table",
+                          style: AppTypography.bodyBold,
+                        ),
+                      ),
+                      const AppBadge(
+                        label: 'PREMIUM',
+                        variant: AppBadgeVariant.highlight,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '$memberSeats going and your tables seat ${app.currentGroup.tableSettings.maxPerTable}, so this night needs a second table — that is Premium. Sort it now, days before the game, never at the door.',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.primary,
+                        onPressed: () => context.push(RoutePaths.upgrade),
+                        child: const Text('See Premium'),
+                      ),
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () {
+                          final currentGroup = app.currentGroup;
+                          app.updateGroupTableSettings(
+                            currentGroup.tableSettings.copyWith(
+                              maxPerTable: 10,
+                            ),
+                          );
+                          app.updateTournamentTableSettings(
+                            app.effectiveTableSettings.copyWith(
+                              maxPerTable: 10,
+                            ),
+                          );
+                        },
+                        child: const Text('Seat 10 at one table instead (free)'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -409,6 +480,12 @@ class _InvitationScreenState extends State<InvitationScreen> {
                       : '0',
                   highlight: true,
                 ),
+                if (waitlistPlayers.isNotEmpty)
+                  _AttendanceRow(
+                    label: 'Waitlist',
+                    value: '${waitlistPlayers.length} waiting',
+                    highlight: true,
+                  ),
                 _AttendanceRow(label: 'Maybe', value: '$maybeCount'),
                 _AttendanceRow(label: 'Can\u2019t come', value: '$cantCount'),
                 _AttendanceRow(label: 'No response', value: '$noResponseCount'),
@@ -419,7 +496,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
           // Event-day preparation checklist (spec §4.6) — admin only, pre-live.
           // Uses the shared [EventDayChecklist]; step 2 ("Open check-in")
           // auto-derives through the [onOpenCheckIn] action.
-          if (app.isAdmin &&
+          if (app.canRunCurrentGame &&
               game.status != LiveGameStatus.running &&
               game.status != LiveGameStatus.paused &&
               game.status != LiveGameStatus.finaltable &&
@@ -627,7 +704,17 @@ class _InvitationScreenState extends State<InvitationScreen> {
                         Expanded(
                           child: Text(p.name, style: AppTypography.bodySm),
                         ),
-                        RSVPBadge(rsvp: p.rsvp),
+                        Builder(
+                          builder: (_) {
+                            final wlIdx = game.waitlist.indexOf(p.id);
+                            final waitlistNumber =
+                                wlIdx >= 0 ? wlIdx + 1 : null;
+                            return RSVPBadge(
+                              rsvp: p.rsvp,
+                              waitlistNumber: waitlistNumber,
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -656,6 +743,60 @@ class _InvitationScreenState extends State<InvitationScreen> {
               ],
             ),
           ),
+          if (waitlistPlayers.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Waitlist (${waitlistPlayers.length})',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'Promotes in order if someone drops',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (var i = 0; i < waitlistPlayers.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.xs,
+                      ),
+                      child: Row(
+                        children: [
+                          AppAvatar(
+                            name: waitlistPlayers[i].name,
+                            size: AppAvatarSize.sm,
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Text(
+                              waitlistPlayers[i].name,
+                              style: AppTypography.bodySm,
+                            ),
+                          ),
+                          AppBadge(
+                            label: 'Waitlist #${i + 1}',
+                            variant: AppBadgeVariant.highlight,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           // Admin RSVP review — every guest awaiting a decision, with
           // Accept / Decline. The event cannot move forward to check-in while
@@ -734,7 +875,7 @@ class _InvitationScreenState extends State<InvitationScreen> {
                                 const SizedBox(width: AppSpacing.xs),
                                 AppButton(
                                   size: AppButtonSize.sm,
-                                  variant: AppButtonVariant.danger,
+                                  variant: AppButtonVariant.destructive,
                                   onPressed: () => app.rejectGuest(g.id),
                                   child: const Text('Decline'),
                                 ),
@@ -1452,9 +1593,9 @@ class _ContextualMainButton extends StatelessWidget {
   Widget build(BuildContext context) {
     if (user == null) return const SizedBox.shrink();
     final app = context.read<AppProvider>();
-    final isAdmin = app.isAdmin;
+    final canRun = app.canRunCurrentGame;
 
-    if (isAdmin) {
+    if (canRun) {
       switch (game.status) {
         case LiveGameStatus.draft:
           return AppButton(
@@ -1482,7 +1623,14 @@ class _ContextualMainButton extends StatelessWidget {
           return AppButton(
             fullWidth: true,
             size: AppButtonSize.xl,
-            onPressed: blocked == null ? app.startTournament : null,
+            onPressed: blocked == null
+                ? () async {
+                    await app.startTournament();
+                    if (context.mounted) {
+                      context.go(RoutePaths.hostDashboard);
+                    }
+                  }
+                : null,
             child: Text(blocked ?? 'Start Tournament'),
           );
         case LiveGameStatus.running:
@@ -1998,7 +2146,7 @@ class _CancelGameFormState extends State<_CancelGameForm> {
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: AppButton(
-                variant: AppButtonVariant.danger,
+                variant: AppButtonVariant.destructive,
                 onPressed: reason.isEmpty
                     ? null
                     : () => widget.onCancel(reason),

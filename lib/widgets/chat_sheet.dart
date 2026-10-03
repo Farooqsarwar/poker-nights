@@ -4,13 +4,11 @@ import 'package:provider/provider.dart';
 import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
-import '../models/game.dart';
 import '../providers/app_provider.dart';
-import 'app_avatar.dart';
 import 'app_button.dart';
 import 'app_text_field.dart';
+import 'chat_bubble.dart';
 import 'glass_styles.dart';
-import 'min_tap_target.dart';
 import 'report_message.dart';
 
 class ChatSheet extends StatefulWidget {
@@ -164,11 +162,13 @@ class _ChatSheetState extends State<ChatSheet> {
                   itemCount: messages.length,
                   itemBuilder: (context, i) {
                     final msg = messages[messages.length - 1 - i];
-                    return _ChatBubble(
+                    return ChatBubble(
                       message: msg,
                       isMine: msg.authorId == userId,
                       canDelete: (app.isAdmin) && msg.authorId != userId,
                       onDelete: () => app.deleteMessage(msg.id),
+                      app: app,
+                      userId: userId,
                       onReport: app.canReport(msg)
                           ? () => confirmReportMessage(context, app, msg)
                           : null,
@@ -272,166 +272,6 @@ class ChatUnreadBadge extends StatelessWidget {
         style: AppTypography.body(size: 10).copyWith(
           color: AppColors.destructiveForeground,
         ),
-      ),
-    );
-  }
-}
-
-class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({
-    required this.message,
-    required this.isMine,
-    required this.canDelete,
-    required this.onDelete,
-    this.onReport,
-  });
-
-  final ChatMessage message;
-  final bool isMine;
-  final bool canDelete;
-  final VoidCallback onDelete;
-  final VoidCallback? onReport;
-
-  @override
-  Widget build(BuildContext context) {
-    final avatar = AppAvatar(name: message.authorName, size: AppAvatarSize.sm);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Row(
-        mainAxisAlignment: isMine
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isMine) ...[
-            avatar,
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment: isMine
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isMine ? 'You' : message.authorName,
-                  style: AppTypography.body(size: 10).copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isMine
-                        ? AppColors.primary
-                        : Glass.solid(AppColors.card, Glass.surfaceOpacity),
-                    borderRadius: BorderRadius.circular(AppRadius.lg).copyWith(
-                      topRight: isMine ? const Radius.circular(2) : null,
-                      topLeft: !isMine ? const Radius.circular(2) : null,
-                    ),
-                    border: isMine
-                        ? null
-                        : Border.all(
-                            color: AppColors.border.withValues(alpha: Glass.borderOpacity),
-                          ),
-                    boxShadow: isMine
-                        ? [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.25),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Text(
-                    message.body,
-                    style: AppTypography.bodySm.copyWith(
-                      color: isMine
-                          ? AppColors.primaryForeground
-                          : AppColors.foreground,
-                    ),
-                  ),
-                ),
-                if (onReport != null)
-                  Semantics(
-                    button: true,
-                    label: 'Report this message',
-                    excludeSemantics: true,
-                    child: InkWell(
-                      onTap: onReport,
-                      child: MinTapTarget(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            'report',
-                            style: AppTypography.body(size: 10).copyWith(
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                if (canDelete)
-                  Semantics(
-                    button: true,
-                    label: 'Delete this message',
-                    excludeSemantics: true,
-                    child: InkWell(
-                    onTap: () async {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          backgroundColor: AppColors.card,
-                          title: const Text('Delete message?'),
-                          content: Text(
-                            'This message will be removed from the chat.',
-                            style: AppTypography.bodySm,
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(ctx).pop(false),
-                              child: Text('Cancel',
-                                style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.mutedForeground)),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.of(ctx).pop(true),
-                              child: Text('Delete',
-                                style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.destructiveText)),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirmed == true) onDelete();
-                    },
-                    child: MinTapTarget(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          'delete',
-                          style: AppTypography.body(size: 10).copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ),
-                    ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (isMine) ...[
-            const SizedBox(width: AppSpacing.sm),
-            avatar,
-          ],
-        ],
       ),
     );
   }

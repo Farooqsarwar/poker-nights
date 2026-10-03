@@ -154,6 +154,8 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
             draft: draft,
             dirty: dirty,
             canEdit: isOwner,
+            learningOptOut: group.learningOptOut,
+            onLearningOptOutChanged: (optOut) => app.setGroupLearningOptOut(optOut),
             onChanged: (next) => _edit(stored, next),
             onSave: () {
               app.updateGroupTableSettings(draft);
@@ -207,6 +209,8 @@ class _TableSettingsCard extends StatelessWidget {
     required this.draft,
     required this.dirty,
     required this.canEdit,
+    required this.learningOptOut,
+    required this.onLearningOptOutChanged,
     required this.onChanged,
     required this.onSave,
   });
@@ -214,6 +218,8 @@ class _TableSettingsCard extends StatelessWidget {
   final TableSettings draft;
   final bool dirty;
   final bool canEdit;
+  final bool learningOptOut;
+  final ValueChanged<bool> onLearningOptOutChanged;
   final ValueChanged<TableSettings> onChanged;
   final VoidCallback onSave;
 
@@ -265,6 +271,19 @@ class _TableSettingsCard extends StatelessWidget {
               label: 'Randomise seats by default',
               onChanged: canEdit
                   ? (v) => onChanged(draft.copyWith(randomizeByDefault: v))
+                  : (_) {},
+            ),
+          ),
+          const _Divider(),
+          _Row(
+            icon: Icons.psychology_outlined,
+            title: 'Group pace adaptation',
+            subtitle: 'Learn from historical games to adjust level schedules',
+            trailing: AppToggle(
+              value: !learningOptOut,
+              label: 'Group pace adaptation',
+              onChanged: canEdit
+                  ? (v) => onLearningOptOutChanged(!v)
                   : (_) {},
             ),
           ),
@@ -415,7 +434,7 @@ class _Report extends StatelessWidget {
             children: [
               AppButton(
                 size: AppButtonSize.sm,
-                variant: AppButtonVariant.danger,
+                variant: AppButtonVariant.destructive,
                 onPressed: () {
                   _tellReporter();
                   app.resolveReport(report, removeMessage: true);
@@ -723,7 +742,7 @@ class _LeaveGroupCard extends StatelessWidget {
           AppButton(
             fullWidth: true,
             size: AppButtonSize.lg,
-            variant: AppButtonVariant.danger,
+            variant: AppButtonVariant.destructive,
             onPressed: () => _confirmLeave(context, app),
             child: const Text('Leave group'),
           ),

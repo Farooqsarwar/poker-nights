@@ -17,7 +17,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/chip_palette_swatch.dart';
 import '../../widgets/app_text_field.dart';
-import '../../widgets/back_nav_button.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/chip_token.dart';
 import '../../widgets/count_stepper.dart';
 
@@ -280,7 +280,7 @@ class _EditChipSetScreenState extends State<EditChipSetScreen> {
         children: [
           Row(
             children: [
-              BackNavButton(onPressed: _leave, label: 'Back'),
+              AppBackButton(onPressed: _leave, label: 'Back'),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(

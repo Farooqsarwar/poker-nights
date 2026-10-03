@@ -202,7 +202,7 @@ void main() {
 
     test('an organizer percentage above the cap is rejected', () {
       expect(
-        validateEventSettings(settings(organizerPct: 25), now: _noon),
+        validateEventSettings(settings(organizerPct: 35), now: _noon),
         {'orgPct': 'Must be 0-${GameSettings.maxOrganizerPct}'},
       );
     });
@@ -230,7 +230,8 @@ void main() {
           koAmount: -1,
           rebuys: true,
           rebuyLimit: -1,
-          organizerPct: 30,
+          // Above the G1 cap of 30 (a boundary value would now be valid).
+          organizerPct: 31,
         ),
         now: _noon,
       );

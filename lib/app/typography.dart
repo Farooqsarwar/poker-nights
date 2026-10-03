@@ -35,6 +35,18 @@ class AppTypography {
     FontFeature.slashedZero(),
   ];
 
+  /// Standard font fallbacks for offline execution and emojis (Spec E9).
+  static const List<String> offlineFontFallbacks = [
+    'Roboto',
+    'Segoe UI',
+    'Helvetica Neue',
+    'Arial',
+    'sans-serif',
+    'Noto Color Emoji',
+    'Apple Color Emoji',
+    'Segoe UI Emoji',
+  ];
+
   static TextStyle display({
     double size = AppFontSizes.lg,
     FontWeight weight = FontWeight.w700,
@@ -50,15 +62,8 @@ class AppTypography {
       // Space Grotesk display headers look premium with tighter tracking
       letterSpacing: letterSpacing ?? (size >= AppFontSizes.xl ? -0.8 : -0.3),
     ).copyWith(
-      // Tabular, slashed-zero figures everywhere, not just in [mono] — the
-      // redesign states "all numerals", and a count inside a heading or a
-      // sentence should line up the same way the clock does.
       fontFeatures: numericFeatures,
-      fontFamilyFallback: const [
-        'Noto Color Emoji',
-        'Apple Color Emoji',
-        'Segoe UI Emoji',
-      ],
+      fontFamilyFallback: offlineFontFallbacks,
     );
   }
 
@@ -78,11 +83,7 @@ class AppTypography {
       letterSpacing: letterSpacing ?? 0.2,
     ).copyWith(
       fontFeatures: numericFeatures,
-      fontFamilyFallback: const [
-        'Noto Color Emoji',
-        'Apple Color Emoji',
-        'Segoe UI Emoji',
-      ],
+      fontFamilyFallback: offlineFontFallbacks,
     );
   }
 
@@ -101,11 +102,7 @@ class AppTypography {
       letterSpacing: letterSpacing,
     ).copyWith(
       fontFeatures: numericFeatures,
-      fontFamilyFallback: const [
-        'Noto Color Emoji',
-        'Apple Color Emoji',
-        'Segoe UI Emoji',
-      ],
+      fontFamilyFallback: offlineFontFallbacks,
     );
   }
 
@@ -160,14 +157,17 @@ class AppTypography {
   static TextStyle crimsonShimmer({
     double size = AppFontSizes.lg,
     FontWeight weight = FontWeight.w700,
+    Rect? bounds,
   }) {
+    final scaled = AppScale.sp(size);
+    final rect = bounds ?? Rect.fromLTWH(0, 0, scaled * 8, scaled * 1.6);
     return GoogleFonts.spaceGrotesk(
-      fontSize: AppScale.sp(size),
+      fontSize: scaled,
       fontWeight: weight,
       foreground: Paint()
-        ..shader = AppColors.crimsonShimmer.createShader(
-          const Rect.fromLTWH(0, 0, 240, 48),
-        ),
+        ..shader = AppColors.crimsonShimmer.createShader(rect),
+    ).copyWith(
+      fontFamilyFallback: offlineFontFallbacks,
     );
   }
 

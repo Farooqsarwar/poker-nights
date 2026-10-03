@@ -128,28 +128,27 @@ LiveGame _game() => LiveGame(
 );
 
 void main() {
-  group('PN-013 — no player sees any investment figure, their own included', () {
+  group('PN-013 — Spec E6 projection boundaries', () {
     for (final entry in {
       'player': projections.playerProjection(_game(), viewerId: 'u1'),
       'guest': projections.guestProjection(_game()),
       'tv': projections.tvProjection(_game()),
     }.entries) {
-      test('${entry.key} projection zeroes every per-player counter', () {
+      test('${entry.key} projection hides add-ons and re-entries per Spec E6', () {
         for (final p in entry.value.players) {
-          expect(p.rebuys, 0, reason: '${p.id} rebuys leaked');
           expect(p.reEntries, 0, reason: '${p.id} reEntries leaked');
           expect(p.hasAddOn, isFalse, reason: '${p.id} hasAddOn leaked');
-          expect(p.knockouts, 0, reason: '${p.id} knockouts leaked');
         }
       });
     }
 
-    test('the viewer is NOT exempt', () {
+    test('rebuys and knockouts are preserved for standings per Spec E6', () {
       final me = projections
           .playerProjection(_game(), viewerId: 'u1')
           .players
           .firstWhere((p) => p.id == 'u1');
-      expect(me.rebuys, 0);
+      expect(me.rebuys, 3);
+      expect(me.knockouts, 4);
       expect(me.hasAddOn, isFalse);
     });
   });
@@ -312,7 +311,6 @@ void main() {
     // ledger hands all three back — plus "gross collected" — to anybody who
     // sums it, which would defeat that scrubbing entirely.
     for (final entry in {
-      'player': projections.playerProjection(_game(), viewerId: 'u1'),
       'guest': projections.guestProjection(_game()),
       'tv': projections.tvProjection(_game()),
     }.entries) {
@@ -336,6 +334,13 @@ void main() {
         expect(entry.value.hasPaid('u1', PaymentPurpose.buyIn), isFalse);
       });
     }
+
+    test('player receives only own payment records per Spec E6', () {
+      final projected = projections.playerProjection(_game(), viewerId: 'u1');
+      expect(projected.payments.length, 1);
+      expect(projected.payments.first.playerId, 'u1');
+      expect(projected.hasPaid('u2', PaymentPurpose.rebuy), isFalse);
+    });
 
     test('the ledger survives serialization for the host', () {
       // Stripping it from the projection must not mean losing it on the way

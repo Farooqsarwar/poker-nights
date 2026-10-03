@@ -68,22 +68,30 @@ class ChatReport {
         'excerpt': excerpt.length > maxExcerptLength
             ? excerpt.substring(0, maxExcerptLength)
             : excerpt,
+        'createdAt': createdAt.toIso8601String(),
         if (gameId != null) 'gameId': gameId,
         if (reason != null) 'reason': reason,
       };
 
-  static ChatReport fromMap(String id, Map<String, dynamic> m, DateTime at) =>
-      ChatReport(
-        id: id,
-        messageId: (m['messageId'] as String?) ?? '',
-        authorId: (m['authorId'] as String?) ?? '',
-        authorName: (m['authorName'] as String?) ?? 'Member',
-        reporterId: (m['reporterId'] as String?) ?? '',
-        excerpt: (m['excerpt'] as String?) ?? '',
-        gameId: m['gameId'] as String?,
-        reason: _reasonFrom(m),
-        createdAt: at,
-      );
+  static ChatReport fromMap(String id, Map<String, dynamic> m, [DateTime? at]) {
+    DateTime parsedAt;
+    if (m['createdAt'] is String) {
+      parsedAt = DateTime.tryParse(m['createdAt'] as String) ?? (at ?? DateTime.now());
+    } else {
+      parsedAt = at ?? DateTime.now();
+    }
+    return ChatReport(
+      id: id,
+      messageId: (m['messageId'] as String?) ?? '',
+      authorId: (m['authorId'] as String?) ?? '',
+      authorName: (m['authorName'] as String?) ?? 'Member',
+      reporterId: (m['reporterId'] as String?) ?? '',
+      excerpt: (m['excerpt'] as String?) ?? '',
+      gameId: m['gameId'] as String?,
+      reason: _reasonFrom(m),
+      createdAt: parsedAt,
+    );
+  }
 
   /// Reads `reason` off a stored document. Absent, blank or non-textual all
   /// mean "this report predates the reason field" rather than an error - the

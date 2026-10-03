@@ -59,7 +59,7 @@ class _CodeDisplayState extends State<CodeDisplay> {
               style: AppTypography.mono(
                 size: AppFontSizes.xl,
                 weight: FontWeight.w700,
-                color: AppColors.primary,
+                color: AppColors.primaryText,
                 letterSpacing: 3.2,
               ),
             ),

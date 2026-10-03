@@ -60,20 +60,21 @@ bool _isLive(LiveGameStatus s) =>
     s == LiveGameStatus.running ||
     s == LiveGameStatus.paused ||
     s == LiveGameStatus.rebuypause ||
+    s == LiveGameStatus.onBreak ||
     s == LiveGameStatus.finaltable;
 
-/// True once door check-in has opened (status moved past RSVP-only phases).
+/// True once door check-in has opened before the tournament starts (Spec E8).
 bool _checkInOpen(LiveGame game) {
   if (game.checkInClosed) return false;
   switch (game.status) {
     case LiveGameStatus.checkin:
     case LiveGameStatus.ready:
+      return true;
     case LiveGameStatus.running:
     case LiveGameStatus.paused:
     case LiveGameStatus.rebuypause:
     case LiveGameStatus.onBreak:
     case LiveGameStatus.finaltable:
-      return true;
     case LiveGameStatus.draft:
     case LiveGameStatus.published:
     case LiveGameStatus.completed:

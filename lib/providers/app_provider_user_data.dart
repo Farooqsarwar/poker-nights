@@ -644,7 +644,7 @@ extension AppProviderUserData on AppProvider {
     // device took over the clock authority while this device was offline.
     final cloudIsAhead = cloudGame.revision > _currentGame!.revision;
     final otherDeviceTookClock = cloudGame.editorDeviceId.isNotEmpty &&
-        cloudGame.editorDeviceId != _repo.currentUid &&
+        cloudGame.editorDeviceId != _repo.deviceId &&
         cloudGame.revision >= _currentGame!.revision;
 
     return cloudIsAhead || otherDeviceTookClock;
@@ -779,6 +779,10 @@ extension AppProviderUserData on AppProvider {
         'voiceEnabled': _voiceEnabled,
         'notificationsEnabled': _notificationsEnabled,
         'keepHistoryForStructures': _keepHistoryForStructures,
+        'soundsEnabled': _soundsEnabled,
+        'compactSummary': _compactSummary,
+        'smsEnabled': _smsEnabled,
+        'avatarColor': _avatarColorIndex,
       },
       // Membership only — not the other members, and not the group's games.
       'groups': [
@@ -807,11 +811,23 @@ extension AppProviderUserData on AppProvider {
     return null;
   }
 
+  /// Presets the host saved themselves — the ones the free tier's
+  /// "3 saved templates/presets" budget (spec D4) counts. The four app-shipped
+  /// starter presets (§B6/F6, ids `starter-*`) are content, not saved slots:
+  /// counting them made a brand-new free account show the upgrade prompt
+  /// before its host had saved anything at all.
+  int get userSavedPresetCount =>
+      _presets.where((p) => !p.id.startsWith('starter-')).length;
+
   void savePreset(TournamentPreset preset) {
     final idx = _presets.indexWhere((p) => p.id == preset.id);
     if (idx >= 0) {
       _presets[idx] = preset;
     } else {
+      if (premiumTier != PremiumTier.premium &&
+          userSavedPresetCount >= PremiumBoundary.freeMaxSavedPresets) {
+        return;
+      }
       _presets.add(preset);
     }
     if (!_disposed) notifyListeners();

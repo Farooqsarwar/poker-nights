@@ -14,7 +14,7 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/back_nav_button.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/glass_styles.dart';
 
@@ -49,6 +49,14 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
   void _undo() {
     if (_order.isEmpty) return;
     setState(() => _order.removeLast());
+  }
+
+  void _moveOrder(int from, int to) {
+    if (from < 0 || from >= _order.length || to < 0 || to >= _order.length) return;
+    setState(() {
+      final id = _order.removeAt(from);
+      _order.insert(to, id);
+    });
   }
 
   void _confirm(AppProvider app) {
@@ -136,7 +144,7 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
         children: [
           Row(
             children: [
-              BackNavButton(
+              AppBackButton(
                 label: 'Back to dashboard',
                 onPressed: () => context.go(RoutePaths.hostDashboard),
               ),
@@ -374,6 +382,32 @@ class _CompleteTournamentScreenState extends State<CompleteTournamentScreen> {
                                     ),
                                   ),
                                 ),
+                                if (r.player != null && _order.contains(r.player!.id)) ...[
+                                  IconButton(
+                                    icon: const Icon(Icons.arrow_upward, size: 14),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                    tooltip: 'Move up',
+                                    onPressed: _order.indexOf(r.player!.id) < _order.length - 1
+                                        ? () => _moveOrder(
+                                              _order.indexOf(r.player!.id),
+                                              _order.indexOf(r.player!.id) + 1,
+                                            )
+                                        : null,
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.arrow_downward, size: 14),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                    tooltip: 'Move down',
+                                    onPressed: _order.indexOf(r.player!.id) > 0
+                                        ? () => _moveOrder(
+                                              _order.indexOf(r.player!.id),
+                                              _order.indexOf(r.player!.id) - 1,
+                                            )
+                                        : null,
+                                  ),
+                                ],
                                 if (r.prize != null)
                                   Text(
                                     Formatters.chips(r.prize!.amount),
@@ -525,13 +559,62 @@ class _EditPrizesModal extends StatefulWidget {
 
 class _EditPrizesModalState extends State<_EditPrizesModal> {
   late final List<TextEditingController> _controllers;
+  late int _pool;
+  late int _placeCount;
 
   @override
   void initState() {
     super.initState();
+    _placeCount = widget.initialPrizes.length.clamp(1, 6);
+    _pool = widget.initialPrizes.fold<int>(0, (sum, p) => sum + p.amount);
     _controllers = widget.initialPrizes
         .map((p) => TextEditingController(text: p.amount.toString()))
         .toList();
+    if (_controllers.isEmpty) {
+      _controllers.add(TextEditingController(text: '$_pool'));
+    }
+  }
+
+  void _applyPlaceCount(int places, {bool equalSplit = false}) {
+    setState(() {
+      _placeCount = places;
+      final newAmounts = <int>[];
+      if (equalSplit) {
+        final share = _pool ~/ places;
+        var rem = _pool - (share * places);
+        for (var i = 0; i < places; i++) {
+          newAmounts.add(share + (i == 0 ? rem : 0));
+        }
+      } else {
+        // Standard ladder curves
+        final fractions = switch (places) {
+          1 => [1.0],
+          2 => [0.65, 0.35],
+          3 => [0.50, 0.30, 0.20],
+          4 => [0.45, 0.25, 0.18, 0.12],
+          5 => [0.40, 0.25, 0.18, 0.11, 0.06],
+          _ => [0.38, 0.23, 0.16, 0.11, 0.07, 0.05],
+        };
+        var running = 0;
+        for (var i = 0; i < places; i++) {
+          if (i == places - 1) {
+            newAmounts.add(_pool - running);
+          } else {
+            final amt = (_pool * fractions[i]).round();
+            running += amt;
+            newAmounts.add(amt);
+          }
+        }
+      }
+
+      for (final c in _controllers) {
+        c.dispose();
+      }
+      _controllers.clear();
+      for (final a in newAmounts) {
+        _controllers.add(TextEditingController(text: a.toString()));
+      }
+    });
   }
 
   @override
@@ -548,14 +631,63 @@ class _EditPrizesModalState extends State<_EditPrizesModal> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < widget.initialPrizes.length; i++)
+        Text(
+          'Total prize pool: ${Formatters.prize(_pool)}',
+          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text('Paid places (Spec A2):', style: AppTypography.bodyXs.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            for (var p = 1; p <= 6; p++)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: AppButton(
+                    size: AppButtonSize.sm,
+                    variant: _placeCount == p ? AppButtonVariant.primary : AppButtonVariant.secondary,
+                    onPressed: () => _applyPlaceCount(p),
+                    child: Text('$p'),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => _applyPlaceCount(_placeCount, equalSplit: false),
+                child: const Text('Ladder Split'),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => _applyPlaceCount(_placeCount, equalSplit: true),
+                child: const Text('Chop Equally'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        const Divider(),
+        const SizedBox(height: AppSpacing.sm),
+        for (var i = 0; i < _controllers.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
-                    'Place ${widget.initialPrizes[i].place}',
+                    'Place ${i + 1}',
                     style: AppTypography.bodySm,
                   ),
                 ),
@@ -566,8 +698,6 @@ class _EditPrizesModalState extends State<_EditPrizesModal> {
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       isDense: true,
-                      // 04-013 / User Flow 3.4: money is shown WITHOUT a
-                      // currency symbol anywhere in the app.
                       isCollapsed: false,
                     ),
                   ),
@@ -580,30 +710,28 @@ class _EditPrizesModalState extends State<_EditPrizesModal> {
           onPressed: () {
             final newPrizes = <Prize>[];
             int totalNew = 0;
-            for (var i = 0; i < widget.initialPrizes.length; i++) {
+            for (var i = 0; i < _controllers.length; i++) {
               final amt = int.tryParse(_controllers[i].text.replaceAll(',', '')) ?? 0;
               totalNew += amt;
-              newPrizes.add(Prize(place: widget.initialPrizes[i].place, amount: amt));
+              newPrizes.add(Prize(place: i + 1, amount: amt));
             }
-            
-            final totalOriginal = widget.initialPrizes.fold<int>(0, (sum, p) => sum + p.amount);
-            if (totalNew != totalOriginal) {
+
+            if (totalNew != _pool && _pool > 0) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    'Payouts sum to $totalNew, but the prize pool is '
-                    '$totalOriginal.',
+                    'Payouts sum to $totalNew, but the prize pool is $_pool.',
                   ),
                   backgroundColor: AppColors.destructive,
                 ),
               );
               return;
             }
-            
+
             widget.onSave(newPrizes);
             Navigator.of(context).pop();
           },
-          child: const Text('Save Custom Deal'),
+          child: const Text('Save Payouts'),
         ),
       ],
     );

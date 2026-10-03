@@ -17,6 +17,7 @@ import '../../widgets/brand_lockup.dart';
 import '../../widgets/code_input.dart';
 import '../../widgets/form_screen_header.dart';
 import '../../widgets/onboarding_scaffold.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/prompt_link.dart';
 
 /// Unified join screen: enter an invite **code**, paste an invite **link**, or
@@ -113,7 +114,8 @@ class _JoinScreenState extends State<JoinScreen> {
           final ok = await app.joinGroup(res.code);
           if (!mounted) return;
           if (ok) {
-            context.go(RoutePaths.members);
+            AppToast.show(context, "You're in");
+            context.go(RoutePaths.home);
           } else {
             _fail("Couldn't join that group — the code may have changed.");
           }

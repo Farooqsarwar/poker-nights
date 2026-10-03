@@ -75,13 +75,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           context.push(RoutePaths.upgrade);
                         }
                       },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 4,
+                        runSpacing: 2,
                         children: [
                           const Icon(Icons.download_outlined, size: 14),
-                          const SizedBox(width: 4),
                           const Text('Export'),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 2),
                           AppTag(
                             app.premiumTier == PremiumTier.premium
                                 ? 'UNLOCKED'
@@ -157,8 +158,39 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   _MiniStat(label: 'KOs', value: '${myStats.knockouts}'),
                 ],
               ),
-              // Admin P&L row
+              // Admin Host KPI tiles and P&L row (Spec B7)
               if (isAdmin) ...[
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'HOST OVERVIEW',
+                  style: AppTypography.monoXs.copyWith(
+                    letterSpacing: 1.2,
+                    color: AppColors.mutedForeground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                GridView.count(
+                  crossAxisCount: 3,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: AppSpacing.sm,
+                  crossAxisSpacing: AppSpacing.sm,
+                  childAspectRatio: isMobile ? 1.4 : 2.0,
+                  children: [
+                    _MiniStat(label: 'Nights hosted', value: '${pastGames.length}'),
+                    _MiniStat(
+                      label: 'Players seen',
+                      value: '${pastGames.expand((g) => g.players.map((p) => p.name)).toSet().length}',
+                    ),
+                    _MiniStat(
+                      label: 'Prizes awarded',
+                      value: Formatters.prize(
+                        pastGames.fold<int>(0, (sum, g) => sum + g.structure.prizePool),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),

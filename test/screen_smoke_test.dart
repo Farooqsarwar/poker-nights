@@ -49,7 +49,6 @@ import 'package:poker_night/widgets/structure_audit_banner.dart';
 import 'package:poker_night/models/cash_game.dart';
 import 'package:poker_night/models/chip_color.dart';
 import 'package:poker_night/models/tournament.dart';
-import 'package:poker_night/services/payment_service.dart';
 import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/utils/tournament_engine.dart';
 import 'package:provider/provider.dart';
@@ -338,7 +337,6 @@ void main() {
             child: AiInsightsPanel(
               structure: structure,
               settings: settings,
-              tier: PremiumTier.free,
             ),
           ),
         ),
@@ -354,7 +352,6 @@ void main() {
             child: AiInsightsPanel(
               structure: structure,
               settings: settings,
-              tier: PremiumTier.premium,
             ),
           ),
         ),
@@ -368,7 +365,6 @@ void main() {
         Scaffold(
           body: SingleChildScrollView(
             child: CashSettlementPanel(
-              tier: PremiumTier.premium,
               players: const [
                 CashPlayer(
                   id: 'a',
@@ -399,7 +395,6 @@ void main() {
         t,
         const Scaffold(
           body: CashSettlementPanel(
-            tier: PremiumTier.premium,
             players: [],
           ),
         ),

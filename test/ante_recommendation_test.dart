@@ -173,26 +173,13 @@ void main() {
     });
   });
 
-  group('FINDING — the retired v3.0 rule is still in the codebase', () {
-    // `TournamentEngine.recommendAnte` (`lib/utils/tournament_engine.dart:1050`)
-    // is the old function the spec renamed. §F1.8 says "implement it as
-    // `recommendAnte(players, nightMinutes)`", so the NAME still belongs to
-    // this rule — and the function carrying that name implements the opposite
-    // one, suggesting Individual for every field of six or fewer.
-    //
-    // It has no callers in `lib/` or `test/`, so nothing in the app is wrong
-    // today. It is recorded here because the next person to be handed §F1.8 and
-    // the name `recommendAnte` would wire up this function and ship the retired
-    // rule. This is a change-detector on dead code, not a claim that the
-    // behaviour is correct.
-
-    test('the dead function still suggests Individual for a small field', () {
+  group('Spec §F1.8 — recommendAnte matches recommendAnteStyle', () {
+    test('recommendAnte delegates to Spec §F1.8 rule', () {
       final r = TournamentEngine.recommendAnte(players: 5, durationHours: 4);
-      expect(r.style, AnteStyle.individual);
+      expect(r.style, AnteStyle.bigBlind);
     });
 
-    test('and it disagrees with the implemented rule for every vector it '
-        'shares', () {
+    test('and it agrees with the implemented rule for every vector', () {
       for (final v in [(6, 3.0), (6, 4.0), (10, 3.0), (12, 4.5)]) {
         expect(
           TournamentEngine.recommendAnte(players: v.$1, durationHours: v.$2)
@@ -203,8 +190,7 @@ void main() {
       }
       expect(
         TournamentEngine.recommendAnte(players: 6, durationHours: 4).style,
-        AnteStyle.individual,
-        reason: 'and disagree on which ante, which is the part that posts chips',
+        AnteStyle.bigBlind,
       );
       expect(rule(6, 4).style, AnteStyle.bigBlind);
     });

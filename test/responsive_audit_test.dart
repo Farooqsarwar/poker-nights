@@ -3,11 +3,12 @@
 ///
 /// Never fails. Report: spec_boards/responsive_audit.txt
 /// Run: flutter test test/responsive_audit_test.dart
+library;
+
 // ignore_for_file: avoid_print
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';

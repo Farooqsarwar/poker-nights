@@ -443,10 +443,18 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     String chipSetName, {
     required int expectedPlayers,
   }) {
+    final now = DateTime.now();
+    var time = '20:00';
+    final todayStart = DateTime(now.year, now.month, now.day, 20, 0);
+    if (!now.isBefore(todayStart)) {
+      final next = now.add(const Duration(hours: 1));
+      time =
+          '${next.hour.toString().padLeft(2, '0')}:${next.minute.toString().padLeft(2, '0')}';
+    }
     return GameSettings(
       name: '',
       date: _todayIso,
-      time: '20:00',
+      time: time,
       location: '',
       players: expectedPlayers,
       durationHours: 3.5, // Spec §4.3: default target duration is 3.5 hours.
@@ -459,10 +467,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       reEntry: true,
       addOn: true,
       addOnCloseLevel: 6,
-      anteEnabled: false,
+      anteEnabled: true,
       anteAfterLevel: 6,
-      anteStyle: AnteStyle.individual,
-      antePreference: AntePreference.none,
+      anteStyle: AnteStyle.bigBlind,
+      antePreference: AntePreference.recommend,
       organizerPct: 10,
       chipSet: List.of(TournamentEngine.getPreset(chipSetName)),
       chipSetName: chipSetName,
@@ -491,10 +499,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   /// would block the host on a message they cannot see. Clamping here means
   /// the value on screen is always one the stepper can show and the spec allows.
   GameSettings _withBountyInDomain(GameSettings s) {
-    final amount =
+    final clamped =
         s.koAmount.clamp(GameSettings.minBounty, GameSettings.maxBounty);
-    if (amount == s.koAmount) return s;
-    return s.copyWith(koAmount: amount);
+    final stepped = ((clamped / GameSettings.bountyStep).round() *
+            GameSettings.bountyStep)
+        .clamp(GameSettings.minBounty, GameSettings.maxBounty);
+    if (stepped == s.koAmount) return s;
+    return s.copyWith(koAmount: stepped);
   }
 
   /// Tech spec §6.2 — recomputes which of the administrator's saved presets
@@ -549,47 +560,73 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   /// — presets store none of those. Changing [_appliedPresetId] remounts the
   /// mounted step's shared form so it re-seeds from the updated draft.
   void _applyPreset(TournamentPreset p) {
-    _draft = _withBountyInDomain(
-      _draft.copyWith(
-        name: p.name,
-        buyIn: p.buyIn,
-        durationHours: p.durationHours,
-        rebuys: p.rebuys,
-        rebuysCloseLevel: p.rebuysCloseLevel,
-        rebuyLimit: p.rebuyLimit,
-        rebuyCost: p.rebuyCost,
-        reEntry: p.reEntry,
-        addOn: p.addOn,
-        addOnCloseLevel: p.addOnCloseLevel,
-        breaks: List.of(p.breaks),
-        addOnCost: p.addOnCost,
-        koEnabled: p.koEnabled,
-        koAmount: p.koAmount,
-        antePreference: p.anteEnabled
-            ? AntePreference.bigBlind
-            : AntePreference.none,
-        anteEnabled: p.anteEnabled,
-        anteAfterLevel: p.anteAfterLevel,
-        anteStyle:
-            p.anteEnabled ? AnteStyle.bigBlind : AnteStyle.individual,
-        organizerPct: p.organizerPct.clamp(0, GameSettings.maxOrganizerPct),
-        chipSet: List.of(p.chipSet),
-        chipSetName: p.chipSetName,
-      ),
-    );
+    setState(() {
+      _draft = _withBountyInDomain(
+        _draft.copyWith(
+          name: p.name,
+          buyIn: p.buyIn,
+          durationHours: p.durationHours,
+          rebuys: p.rebuys,
+          rebuysCloseLevel: p.rebuysCloseLevel,
+          rebuyCloseChosenByOrganizer: p.rebuyCloseChosenByOrganizer,
+          rebuyLimit: p.rebuyLimit,
+          rebuyCost: p.rebuyCost,
+          reEntry: p.reEntry,
+          addOn: p.addOn,
+          addOnOvertime: p.addOnOvertime,
+          addOnCloseLevel: p.addOnCloseLevel,
+          breaks: List.of(p.breaks),
+          addOnCost: p.addOnCost,
+          koEnabled: p.koEnabled,
+          koAmount: p.koAmount,
+          koKind: p.koKind,
+          antePreference: p.antePreference,
+          anteEnabled: p.anteEnabled,
+          anteAfterLevel: p.anteAfterLevel,
+          anteStyle: p.anteStyle,
+          organizerPct: p.organizerPct.clamp(0, GameSettings.maxOrganizerPct),
+          chipSet: List.of(p.chipSet),
+          chipSetName: p.chipSetName,
+          format: p.format,
+          maxReEntries: p.maxReEntries,
+          earlyArrivalBonusEnabled: p.earlyArrivalBonusEnabled,
+          earlyArrivalCutoffMins: p.earlyArrivalCutoffMins,
+          earlyArrivalBonusPctOverride: p.earlyArrivalBonusPctOverride,
+          rsvpDeadlineHours: p.rsvpDeadlineHours,
+          hardFinishEnabled: p.hardFinishEnabled,
+          hardFinishMinsAfterFinish: p.hardFinishMinsAfterFinish,
+          hardFinishSplit: p.hardFinishSplit,
+          levelDurationMins: p.levelDurationMins,
+          pace: p.pace,
+          shootoutTables: p.shootoutTables,
+          shootoutTableTargetMins: p.shootoutTableTargetMins,
+          announceEliminations: p.announceEliminations,
+          locationPrivate: p.locationPrivate,
+          forcePaidPlaces: p.forcePaidPlaces,
+          rebuyChips: p.rebuyChips,
+          reEntryChips: p.reEntryChips,
+          addOnChips: p.addOnChips,
+          tableSettingsOverride: p.tableSettingsOverride,
+          lockedExpectedPlayers: p.lockedExpectedPlayers,
+          expectedRebuys: p.expectedRebuys,
+          expectedReEntries: p.expectedReEntries,
+          expectedAddOns: p.expectedAddOns,
+          forecastRebuyRate: p.forecastRebuyRate,
+          forecastAddOnTakeUp: p.forecastAddOnTakeUp,
+        ),
+      );
+      _syncControllers();
+      _seedTick++;
+    });
     _appliedPresetId = p.id;
   }
 
   void _next() {
     // Only the steps whose fields carry validation keys gate on the shared
     // validator. Chips (step 2) and Format (step 4) have no keys of their own.
-    // `koAmount` gates nothing: the bounty amount is a step-1 stepper over a
-    // fixed domain and `_withBountyInDomain` keeps the draft inside it, and the
-    // wizard's `_errors` map is never rendered on step 1, so a gate on it would
-    // stop the host on a message they cannot see.
     const stepKeys = <int, Set<String>>{
       1: {'name', 'date', 'time', 'location', 'buyIn'},
-      3: {'rebuyLimit'},
+      3: {'rebuyLimit', 'maxReEntries', 'koAmount', 'orgPct'},
     };
     final keys = stepKeys[_step] ?? const <String>{};
     final hit = keys.isEmpty
@@ -696,6 +733,50 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
   void _generate(AppProvider app) async {
     final s = _draft;
+    final errs = validateEventSettings(s);
+    if (errs.isNotEmpty) {
+      final stepFor = {
+        'name': 1,
+        'date': 1,
+        'time': 1,
+        'location': 1,
+        'buyIn': 1,
+        'rebuyLimit': 3,
+        'maxReEntries': 3,
+        'koAmount': 1,
+        'orgPct': 4,
+      };
+      final first = errs.keys.first;
+      setState(() {
+        _errors
+          ..clear()
+          ..addAll(errs);
+        _step = stepFor[first] ?? _step;
+      });
+      await showAppModal(
+        context: context,
+        title: 'Check the details',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              errs.values.first,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(
+              fullWidth: true,
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Fix details'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     if (s.chipSet.isEmpty) {
       await showAppModal(
         context: context,
@@ -762,6 +843,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
 
     setState(() => _isPublishing = true);
 
+    try {
     // Persist a custom chip set once so it can be reused next time. A set that
     // still matches a named preset is not custom.
     if (!TournamentEngine.presetNames.contains(s.chipSetName)) {
@@ -776,50 +858,28 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     // Client flow: the event is created and published straight away so the
     // group can RSVP. The structure is NOT generated here — it is generated
     // by the Admin during check-in from confirmed actual attendance.
+    // Carry the full draft (not a field subset) so format/forecasts/chips/
+    // bonus/hard-finish choices survive publish.
     final game = app.createGame(
-      GameSettings(
+      s.copyWith(
         name: Sanitization.sanitizeTournamentName(s.name.trim()),
-        date: s.date.trim(),
-        time: s.time.trim(),
         location: Sanitization.sanitizeLocation(s.location.trim()),
         // Roster size — the working head-count still comes from RSVPs and
         // check-in; `expectedPlayersOverride` below is what lets the host say
         // "plan for more than replied" (Tech 6.1).
-        players: app.currentGroup.members.length,
-        expectedPlayersOverride: s.expectedPlayersOverride,
-        durationHours: s.durationHours,
-        // §F1.1 — the pace the host picked at step 4. Null keeps the legacy
-        // phased mode (§F1.13).
-        pace: s.pace,
-        buyIn: s.buyIn,
-        koEnabled: s.koEnabled,
-        koAmount: s.koAmount,
-        koKind: s.koKind,
-        rebuys: s.rebuys,
-        rebuysCloseLevel: s.rebuysCloseLevel,
-        rebuyCloseChosenByOrganizer: s.rebuyCloseChosenByOrganizer,
+        players: _expectedPlayers,
         rebuyLimit: s.rebuys ? s.rebuyLimit : null,
-        rebuyCost: s.rebuyCost,
-        reEntry: s.reEntry,
-        addOn: s.addOn,
-        addOnCloseLevel: s.addOnCloseLevel,
-        breaks: List.of(s.breaks),
-        addOnCost: s.addOnCost,
-        anteEnabled: s.anteEnabled,
-        anteAfterLevel: s.anteAfterLevel,
-        anteStyle: s.anteStyle,
-        antePreference: s.antePreference,
-        organizerPct: s.organizerPct.clamp(0, 100),
-        chipSet: s.chipSet,
-        chipSetName: s.chipSetName,
-        locationPrivate: s.locationPrivate,
-        tableSettingsOverride: s.tableSettingsOverride,
+        organizerPct: s.organizerPct.clamp(0, GameSettings.maxOrganizerPct),
       ),
     );
     app.setCurrentGame(game);
     app.publishGame();
 
+    if (!mounted) return;
     context.go(RoutePaths.invitation);
+    } finally {
+      if (mounted) setState(() => _isPublishing = false);
+    }
   }
 
   @override
@@ -969,6 +1029,22 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     );
   }
 
+  Widget _fieldError(String key) {
+    final msg = _errors[key];
+    if (msg == null || msg.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        msg,
+        style: TextStyle(
+          color: AppColors.destructiveText,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String placeholder,
@@ -1016,7 +1092,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         children: [
           for (var i = 0; i < _steps.length; i++) ...[
             InkWell(
-              onTap: () => setState(() => _step = i + 1),
+              onTap: () {
+                final target = i + 1;
+                if (target <= _step) {
+                  setState(() => _step = target);
+                } else {
+                  _next();
+                }
+              },
               borderRadius: BorderRadius.circular(20),
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -1054,6 +1137,17 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     );
   }
 
+  /// Single publish gate shared by the bottom bar and the review card:
+  /// blocked while publishing, on validation errors, or when the chip case
+  /// cannot build the stack. Null structure (engine exception) also blocks.
+  bool get _canPublish {
+    if (_isPublishing) return false;
+    if (validateEventSettings(_draft).isNotEmpty) return false;
+    final structure = _draftStructure(_draft);
+    if (structure == null || structure.feasible == false) return false;
+    return true;
+  }
+
   Widget _buildBottomBar(AppProvider app) {
     final isLastStep = _step == 5;
     final isLoading = isLastStep && _isPublishing;
@@ -1062,7 +1156,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     // Only the chip-case failure blocks — a structure that merely runs past
     // its finish time is a warning the host is allowed to accept, and the
     // feasibility card says so on the same screen.
-    final blocked = isLastStep && (_draftStructure(_draft)?.feasible == false);
+    final blocked = isLastStep && !_canPublish;
 
     return AppButton(
       size: AppButtonSize.lg,
@@ -1123,6 +1217,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             _onDraftChanged(_draft.copyWith(name: val));
           },
         ),
+        _fieldError('name'),
         const SizedBox(height: 16),
 
         // Date & Time side-by-side row
@@ -1141,8 +1236,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       final picked = await showDatePicker(
                         context: context,
                         initialDate: current,
-                        firstDate: DateTime.now().subtract(
-                          const Duration(days: 30),
+                        firstDate: DateTime(
+                          DateTime.now().year,
+                          DateTime.now().month,
+                          DateTime.now().day,
                         ),
                         lastDate: DateTime.now().add(const Duration(days: 365)),
                       );
@@ -1228,6 +1325,14 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             ),
           ],
         ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _fieldError('date')),
+            const SizedBox(width: 12),
+            Expanded(child: _fieldError('time')),
+          ],
+        ),
         const SizedBox(height: 16),
 
         // Location
@@ -1240,6 +1345,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             _onDraftChanged(_draft.copyWith(location: val));
           },
         ),
+        _fieldError('location'),
         const SizedBox(height: 16),
 
         // Buy-in & Expected players side-by-side row
@@ -1300,6 +1406,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       ],
                     ),
                   ),
+                  _fieldError('buyIn'),
                 ],
               ),
             ),
@@ -1425,12 +1532,32 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Row(
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
                     children: [
                       AppButton(
                         size: AppButtonSize.sm,
                         onPressed: () => context.push(RoutePaths.upgrade),
                         child: const Text('See Premium'),
+                      ),
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () {
+                          final currentGroup = app.currentGroup;
+                          app.updateGroupTableSettings(
+                            currentGroup.tableSettings.copyWith(
+                              maxPerTable: 10,
+                            ),
+                          );
+                          app.updateTournamentTableSettings(
+                            app.effectiveTableSettings.copyWith(
+                              maxPerTable: 10,
+                            ),
+                          );
+                        },
+                        child: const Text('Seat 10 at one table instead (free)'),
                       ),
                     ],
                   ),
@@ -1758,7 +1885,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         anteStyle: s.anteStyle,
         koEnabled: s.koEnabled,
         koAmount: s.koAmount,
-        organizerPct: s.organizerPct.clamp(0, 100),
+        organizerPct: s.organizerPct.clamp(0, GameSettings.maxOrganizerPct),
         rebuyCost: s.rebuyCost,
         addOnCost: s.addOnCost,
         breaks: List.of(s.breaks),
@@ -1811,6 +1938,148 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                     ? () => _onDraftChanged(_draft.copyWith(addOn: false))
                     : null,
               ),
+              const SizedBox(height: AppSpacing.lg),
+              Divider(color: AppColors.border),
+              const SizedBox(height: AppSpacing.md),
+              // ── §D6 EARLY-ARRIVAL BONUS ──
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  'Early arrival bonus',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  'Extra starting chips for players checked in and approved before the scheduled start (opens 10 min before)',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                value: _draft.earlyArrivalBonusEnabled,
+                onChanged: (v) => _onDraftChanged(
+                  _draft.copyWith(earlyArrivalBonusEnabled: v),
+                ),
+              ),
+              if (_draft.earlyArrivalBonusEnabled) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    Text(
+                      'Bonus chips:',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    DropdownButton<double>(
+                      value: _draft.earlyArrivalBonusPctOverride ?? 0.125,
+                      dropdownColor: AppColors.card,
+                      items: const [
+                        DropdownMenuItem(value: 0.025, child: Text('+2.5%')),
+                        DropdownMenuItem(value: 0.05, child: Text('+5%')),
+                        DropdownMenuItem(value: 0.075, child: Text('+7.5%')),
+                        DropdownMenuItem(value: 0.10, child: Text('+10%')),
+                        DropdownMenuItem(value: 0.125, child: Text('+12.5% (default)')),
+                        DropdownMenuItem(value: 0.15, child: Text('+15%')),
+                        DropdownMenuItem(value: 0.175, child: Text('+17.5%')),
+                        DropdownMenuItem(value: 0.20, child: Text('+20%')),
+                        DropdownMenuItem(value: 0.225, child: Text('+22.5%')),
+                        DropdownMenuItem(value: 0.25, child: Text('+25%')),
+                      ],
+                      onChanged: (pct) {
+                        if (pct != null) {
+                          _onDraftChanged(
+                            _draft.copyWith(earlyArrivalBonusPctOverride: pct),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              Divider(color: AppColors.border),
+              const SizedBox(height: AppSpacing.md),
+              // ── §F4 / C-cfg §7 HARD FINISH ──
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  'Hard finish',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  'Fixed time ceiling agreed before posting. Splits prizes if reached.',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                value: _draft.hardFinishEnabled,
+                onChanged: (v) => _onDraftChanged(
+                  _draft.copyWith(hardFinishEnabled: v),
+                ),
+              ),
+              if (_draft.hardFinishEnabled) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    Text(
+                      'Latest finish:',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    DropdownButton<int>(
+                      value: _draft.hardFinishMinsAfterFinish,
+                      dropdownColor: AppColors.card,
+                      items: const [
+                        DropdownMenuItem(value: 45, child: Text('+45 min')),
+                        DropdownMenuItem(value: 60, child: Text('+1 hour (default)')),
+                        DropdownMenuItem(value: 90, child: Text('+1.5 hours')),
+                        DropdownMenuItem(value: 120, child: Text('+2 hours')),
+                        DropdownMenuItem(value: 180, child: Text('+3 hours')),
+                      ],
+                      onChanged: (mins) {
+                        if (mins != null) {
+                          _onDraftChanged(
+                            _draft.copyWith(hardFinishMinsAfterFinish: mins),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    Text(
+                      'If still playing:',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    DropdownButton<String>(
+                      value: _draft.hardFinishSplit,
+                      dropdownColor: AppColors.card,
+                      items: const [
+                        DropdownMenuItem(value: 'icm', child: Text('Split by ICM')),
+                        DropdownMenuItem(value: 'chips', child: Text('Split by chips')),
+                      ],
+                      onChanged: (split) {
+                        if (split != null) {
+                          _onDraftChanged(
+                            _draft.copyWith(hardFinishSplit: split),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -1883,7 +2152,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           anteStyle: s.anteStyle,
           koEnabled: s.koEnabled,
           koAmount: s.koAmount,
-          organizerPct: s.organizerPct.clamp(0, 100),
+          organizerPct: s.organizerPct.clamp(0, GameSettings.maxOrganizerPct),
           rebuyCost: s.rebuyCost,
           addOnCost: s.addOnCost,
           breaks: List.of(s.breaks),
@@ -2055,7 +2324,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           AppButton(
             size: AppButtonSize.lg,
             fullWidth: true,
-            onPressed: () => _generate(app),
+            onPressed: _canPublish ? () => _generate(app) : null,
             child: const AppIconLabel(
               label: 'Create event',
               trailing: Icons.arrow_forward,

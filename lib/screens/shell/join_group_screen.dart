@@ -16,6 +16,7 @@ import '../../widgets/form_screen_header.dart';
 import '../../widgets/icon_tile.dart';
 import '../../widgets/prompt_link.dart';
 import '../../widgets/stat_rows_card.dart';
+import '../../widgets/app_toast.dart';
 
 /// Landing page for a group invite link/QR code (`/join-group?code=...`).
 /// Matches the A8 Join Group frame: group-invite tag, initials tile, group
@@ -97,7 +98,8 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     final ok = await app.joinGroup(widget.code);
     if (!mounted) return;
     if (ok) {
-      router.go(RoutePaths.group);
+      AppToast.show(context, "You're in");
+      router.go(RoutePaths.home);
     } else {
       setState(() {
         _state = _JoinState.preview;

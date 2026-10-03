@@ -2,7 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poker_night/models/chip_color.dart';
 import 'package:poker_night/models/live_game.dart';
 
-/// Specification §7 and §18: the organizer allocation is "0–20%".
+/// Spec G1 (and the C-cfg organiser-contribution stepper, spec line 2014):
+/// the fee is "percent 0–30 %, step 1". The original §7/§18 wording said
+/// "0–20%"; G1 supersedes it, and [GameSettings.maxOrganizerPct] follows the
+/// newer figure.
 ///
 /// A review found the cap existed only in the entry forms — the model, engine
 /// and providers had none, so a preset, a restored document or a direct
@@ -30,16 +33,16 @@ void main() {
         chipSetName: 'Test',
       );
 
-  group('§7 / §18 — calculations never exceed 20%', () {
-    for (final pct in [0, 5, 10, 20]) {
+  group('G1 — calculations never exceed 30%', () {
+    for (final pct in [0, 5, 10, 20, 30]) {
       test('$pct% passes through untouched', () {
         expect(settings(pct).effectiveOrganizerPct, pct);
       });
     }
 
-    for (final pct in [21, 35, 50, 99, 100]) {
-      test('$pct% is capped at 20 for calculation', () {
-        expect(settings(pct).effectiveOrganizerPct, 20);
+    for (final pct in [31, 35, 50, 99, 100]) {
+      test('$pct% is capped at 30 for calculation', () {
+        expect(settings(pct).effectiveOrganizerPct, 30);
       });
     }
 
@@ -58,21 +61,21 @@ void main() {
         35,
         reason: 'the stored figure is history and must not change meaning',
       );
-      expect(s.effectiveOrganizerPct, 20);
+      expect(s.effectiveOrganizerPct, 30);
     });
 
     test('copyWith does not clamp either', () {
       expect(settings(10).copyWith(organizerPct: 90).organizerPct, 90);
       expect(
         settings(10).copyWith(organizerPct: 90).effectiveOrganizerPct,
-        20,
+        30,
       );
     });
   });
 
   group('the cap is named, not a magic number', () {
     test('maxOrganizerPct matches the specification', () {
-      expect(GameSettings.maxOrganizerPct, 20);
+      expect(GameSettings.maxOrganizerPct, 30);
     });
   });
 }

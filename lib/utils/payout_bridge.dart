@@ -1,18 +1,29 @@
+import 'dart:math' as math;
+
 import 'package:poker_night/models/live_game.dart';
 import 'package:poker_night/models/tournament.dart';
 import 'package:poker_night/utils/payouts_engine.dart';
 
 class PayoutBridge {
-  /// Which deal prompt (if any) the room should see right now (§F2.8).
+  static String? lastHostAlert;
+  static final List<String> hostAlerts = [];
+
+  /// Framework §13 / Spec F2.8: Hard-ceiling finish check.
+  /// True when hard finish is enabled and the elapsed minutes from start reaches
+  /// or exceeds expectedFinishMins + hardFinishMinsAfterFinish.
+  static bool isAtHardCeiling(LiveGame game) {
+    if (!game.settings.hardFinishEnabled || game.startedAt == null) return false;
+    final elapsed = DateTime.now().difference(game.startedAt!).inMinutes;
+    final cutoff = game.structure.expectedFinishMins +
+        game.settings.hardFinishMinsAfterFinish;
+    return elapsed >= cutoff;
+  }
+
+  /// Which deal prompt (if any) the room should see right now (§F2.8, §F4).
   ///
   /// Priority is the engine's: targetTime > bubble > inTheMoney > headsUp.
-  /// `targetTime` is raised by the Framework §13 hard ceiling — the last
-  /// published level — so play cannot drift past the schedule without the
-  /// host being offered a settlement. Nothing is applied automatically; the
-  /// result only selects a banner. [suggestFrom] is the host's "suggest a deal
-  /// from" setting (2..5, engine default 5) and [alreadyFired] the prompts the
-  /// room has already seen — each type fires once per game. No screen sets
-  /// either yet, so callers get the engine defaults.
+  /// `targetTime` fires once the target finish time has elapsed (or target
+  /// planned levels exceeded, or hard finish ceiling reached) with ≥ 2 players left.
   static DealTriggerType? dealTriggerFor(
     LiveGame game, {
     int suggestFrom = 5,
@@ -29,11 +40,16 @@ class PayoutBridge {
       default:
         break;
     }
+    final bool targetTimeReached = isAtHardCeiling(game) ||
+        (game.startedAt != null &&
+            DateTime.now().difference(game.startedAt!).inMinutes >=
+                game.structure.expectedFinishMins) ||
+        (game.currentLevel > game.structure.targetScheduleLastLevel);
     return PayoutsEngine.dealTrigger(
       DealTriggerState(
         remainingPlayers: game.activePlayers.length,
         paidPlaces: game.structure.paidPlacesForDisplay,
-        targetTimeReached: game.structure.isAtHardCeiling(game.currentLevel),
+        targetTimeReached: targetTimeReached,
         suggestFrom: suggestFrom,
         alreadyFired: alreadyFired,
       ),
@@ -70,7 +86,7 @@ class PayoutBridge {
       defaultPlaces - 1,
       defaultPlaces + 1,
       defaultPlaces + 2,
-    }.where((n) => n >= 1 && n <= 5 && n <= players).toList()
+    }.where((n) => n >= 1 && n <= 6 && n <= players).toList()
       ..sort();
 
     final result = <PayoutOption>[];
@@ -126,7 +142,7 @@ class PayoutBridge {
       return (organizerAmount: 0, prizePool: 0, prizes: const [], roundingRemainder: 0);
     }
     
-    final pct = organizerPct.clamp(0, 20).toDouble();
+    final pct = organizerPct.clamp(0, 30).toDouble();
     PayoutPlanResult result;
     
     try {
@@ -149,13 +165,22 @@ class PayoutBridge {
         ),
       );
     } on ArgumentError {
-      // A fee that reached the pool. A night with no organiser cut beats a crash
-      // between the rebuy break and the first payout.
+      // Spec §F2.3: If fee >= pool, lower the fee to pool - 1 unit and record host alert
+      final unit = PayoutsEngine.cashUnit(buyIn);
+      final adjustedFee = math.max(0, grossEligible - unit);
+      final alert = 'Organiser fee reached the prize pool and was lowered to $adjustedFee ($grossEligible - 1 cash unit).';
+      lastHostAlert = alert;
+      hostAlerts.add(alert);
       result = PayoutsEngine.payoutPlan(
         players,
         grossEligible,
         PayoutPlanOptions(
           buyIn: buyIn,
+          organiser: OrganiserFeeConfig(
+            mode: adjustedFee > 0 ? OrganiserFeeMode.fixed : OrganiserFeeMode.none,
+            value: adjustedFee.toDouble(),
+            roundTo: 1,
+          ),
           rebuys: extraEntries,
           forcePlaces: forcePaidPlaces,
           shape: 'owner',

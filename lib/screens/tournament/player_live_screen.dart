@@ -101,11 +101,12 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
     if (myPlayer == null && app.guestSession != null) {
       final s = app.guestSession!;
       if (s.gameId == game.id) {
+        final want = s.name.trim().toLowerCase();
         myPlayer = game.players
             .where(
               (p) =>
                   p.isGuest &&
-                  p.name == s.name &&
+                  p.name.trim().toLowerCase() == want &&
                   p.inviterId == s.inviterId &&
                   p.guestSlot == s.slot,
             )
@@ -166,31 +167,36 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 message: 'Tournament is paused. Wait for the host to resume.',
               ),
             // Header
-            if (device.isMobile) ...[
+            if (device.isCompact) ...[
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: AppColors.successText,
-                          shape: BoxShape.circle,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: AppColors.successText,
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'PLAYER VIEW · LEVEL ${game.currentLevel}',
-                        style: TextStyle(
-                          color: AppColors.primaryText,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.5,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'PLAYER VIEW · LEVEL ${game.currentLevel}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.primaryText,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   if (!isGuest)
                     Material(
@@ -200,8 +206,8 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         borderRadius: BorderRadius.circular(8),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                            horizontal: 12,
+                            vertical: 12,
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -330,6 +336,19 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
               ),
               const SizedBox(height: AppSpacing.lg),
             ],
+            if (game.settings.hardFinishEnabled &&
+                game.startedAt != null &&
+                DateTime.now().difference(game.startedAt!).inMinutes >=
+                    game.structure.expectedFinishMins +
+                        game.settings.hardFinishMinsAfterFinish)
+              const Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.lg),
+                child: AppAlertBanner(
+                  type: AppAlertType.error,
+                  message:
+                      'Hard finish reached — the host will split the remaining prizes.',
+                ),
+              ),
             if (game.handForHandActive)
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -365,14 +384,14 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 const AppTabItem(id: 'dashboard', label: 'Dashboard'),
                 if (!isGuest)
                   const AppTabItem(id: 'structure', label: 'Structure'),
-                if (isAdmin) const AppTabItem(id: 'payouts', label: 'Payouts'),
+                const AppTabItem(id: 'payouts', label: 'Payouts'),
               ],
               active: _tab,
               onChanged: (t) => setState(() => _tab = t),
             ),
             const SizedBox(height: AppSpacing.lg),
             if (_tab == 'dashboard') ...[
-              if (device.isMobile) ...[
+              if (device.isCompact) ...[
                 // ── C10 SCOREBOARD TIMER (white mins, crimson secs, coral ANTE) ──
                 TournamentTimerCard(game: game, showSubStats: false),
                 const SizedBox(height: 14),
@@ -383,12 +402,8 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                     final bb = (game.currentLevelData?.bb ?? 0) > 0
                         ? game.currentLevelData!.bb
                         : 1;
-                    final stack =
-                        me?.stack ??
-                        (activePlayers.isEmpty
-                            ? 0
-                            : game.totalChipsInPlay ~/ activePlayers.length);
-                    final bbCount = stack ~/ bb;
+                    final stack = me?.stack;
+                    final bbCount = stack != null ? stack ~/ bb : null;
                     final initial = me?.name.isNotEmpty == true
                         ? me!.name[0].toUpperCase()
                         : 'A';
@@ -486,22 +501,32 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                             dotColor: AppColors.success,
                                           ),
                                   const SizedBox(height: 4),
-                                  Text(
-                                    Formatters.chips(stack),
-                                    style: TextStyle(
-                                      color: AppColors.foreground,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 22,
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      stack != null
+                                          ? Formatters.chips(stack)
+                                          : '—',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: AppColors.foreground,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 22,
+                                      ),
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '$bbCount BB',
-                                    style: TextStyle(
-                                      color: AppColors.mutedForeground,
-                                      fontSize: 12,
+                                  if (bbCount != null) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '$bbCount BB',
+                                      style: TextStyle(
+                                        color: AppColors.mutedForeground,
+                                        fontSize: 12,
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ],
                               ),
                             ],
@@ -555,7 +580,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                   children: [
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.card,
                           borderRadius: BorderRadius.circular(14),
@@ -564,12 +589,18 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '${activePlayers.length}',
-                              style: TextStyle(
-                                color: AppColors.foreground,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w700,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '${activePlayers.length}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: AppColors.foreground,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -594,7 +625,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                           bigBlind: game.currentLevelData?.bb ?? 0,
                         ),
                         child: Container(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: AppColors.card,
                             borderRadius: BorderRadius.circular(14),
@@ -603,12 +634,18 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                Formatters.chips(avgStack),
-                                style: TextStyle(
-                                  color: AppColors.foreground,
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w700,
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  Formatters.chips(avgStack),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: AppColors.foreground,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -629,7 +666,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                     // this one — parity with the desktop _StatCard below.
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.card,
                           borderRadius: BorderRadius.circular(14),
@@ -730,10 +767,14 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         Expanded(
                           child: Row(
                             children: [
-                              Text(
-                                '${Formatters.chips(next.sb)} / ${Formatters.chips(next.bb)}',
-                                style: AppTypography.monoSm.copyWith(
-                                  fontWeight: FontWeight.w600,
+                              Flexible(
+                                child: Text(
+                                  '${Formatters.chips(next.sb)} / ${Formatters.chips(next.bb)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.monoSm.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                               if (next.ante != null) ...[
@@ -1303,7 +1344,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                                 ),
                               ),
                               Text(
-                                isAdmin ? Formatters.prize(p.amount) : '—',
+                                game.structure.prizes.isNotEmpty
+                                    ? Formatters.prize(p.amount)
+                                    : '—',
                                 style: AppTypography.monoSm.copyWith(
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.primary,
@@ -1323,7 +1366,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                         ),
                         const Spacer(),
                         Text(
-                          isAdmin
+                          game.structure.prizePool > 0
                               ? Formatters.prize(game.structure.prizePool)
                               : '—',
                           style: AppTypography.monoXs.copyWith(
@@ -1571,6 +1614,8 @@ class LevelsTableCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
           child: Text(
             '${Formatters.chips(l.sb)} / ${Formatters.chips(l.bb)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: AppTypography.monoSm.copyWith(
               color: isNow ? AppColors.primaryText : AppColors.foreground,
               fontWeight: isNow ? FontWeight.w600 : FontWeight.w400,

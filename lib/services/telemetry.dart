@@ -63,4 +63,33 @@ class Telemetry {
 
   static void event(String name, [Map<String, Object?> params = const {}]) =>
       _sink.logEvent(name, params);
+
+  static void tournamentStarted({int? players, String? format}) {
+    final params = <String, Object?>{};
+    if (players != null) params['players'] = players;
+    if (format != null) params['format'] = format;
+    event('tournament_started', params);
+  }
+
+  static void tournamentPaused() => event('tournament_paused');
+
+  static void tournamentResumed() => event('tournament_resumed');
+
+  static void levelAdvanced(int level) => event('level_advanced', {'level': level});
+
+  static void rebuyGranted() => event('rebuy_granted');
+
+  static void addOnGranted() => event('add_on_granted');
+
+  static void eliminationRecorded({int? remaining}) {
+    final params = <String, Object?>{};
+    if (remaining != null) params['remaining'] = remaining;
+    event('elimination_recorded', params);
+  }
+
+  static void seatingDrawn(String mode) => event('seating_drawn', {'mode': mode});
+
+  static void groupCreated() => event('group_created');
+
+  static void groupJoined() => event('group_joined');
 }

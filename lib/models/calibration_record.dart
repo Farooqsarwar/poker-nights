@@ -152,15 +152,15 @@ class CalibrationRecord {
     final reEntries = players.fold<int>(0, (a, Player p) => a + p.reEntries);
     final addOnsTaken = players.where((p) => p.hasAddOn).length;
 
-    // Who could actually have taken the add-on. The window opens at the
-    // settlement break, so anyone still in at that point was eligible; a
-    // player who busted earlier never had the choice and must not drag the
-    // measured take-up down. Without a per-level bust record the best
-    // available reading is "still in at the end, plus everyone who did take
-    // one" — which never understates eligibility.
-    final stillIn = players.where((p) => !p.eliminated).length;
-    final aliveAtAddOnBreak =
-        addOnsTaken > stillIn ? addOnsTaken : stillIn;
+    final closeLevel = game.settings.addOnCloseLevel;
+    final aliveAtAddOnBreak = players.where((p) {
+      if (p.hasAddOn) return true;
+      if (!p.eliminated) return true;
+      if (p.eliminatedAtLevel != null && p.eliminatedAtLevel! > closeLevel) {
+        return true;
+      }
+      return false;
+    }).length.clamp(addOnsTaken, entrants);
 
     final levelsPlayed = game.currentLevel.clamp(1, structure.levels.length);
     final finalBigBlind = structure.levels[levelsPlayed - 1].bb;
@@ -169,6 +169,14 @@ class CalibrationRecord {
         structure.rebuyStack * rebuys +
         structure.rebuyStack * reEntries +
         structure.addOnStack * addOnsTaken;
+
+    final actualMins = game.actualDurationMins ??
+        (game.startedAt != null
+            ? DateTime.now().difference(game.startedAt!).inMinutes
+            : null);
+    if (actualMins == null) return null;
+
+    final stillIn = players.where((p) => !p.eliminated).length;
 
     return CalibrationRecord(
       gameId: game.id,
@@ -182,7 +190,7 @@ class CalibrationRecord {
       startingStack: structure.startingStack,
       totalChips: totalChips,
       targetMinutes: structure.expectedFinishMins,
-      actualMinutes: game.actualDurationMins ?? structure.expectedFinishMins,
+      actualMinutes: actualMins,
       plannedLevels: structure.effectivePlannedLevels,
       levelsPlayed: levelsPlayed,
       finalBigBlind: finalBigBlind,
@@ -247,7 +255,7 @@ abstract final class CalibrationForecast {
   /// forecast fails on the night everybody takes one.
   static double addOnTakeUp(List<CalibrationRecord> history) {
     final withAddOn = history
-        .where((r) => r.aliveAtAddOnBreak > 0 && r.addOnsTaken > 0)
+        .where((r) => r.aliveAtAddOnBreak > 0)
         .toList()
       ..sort((a, b) => b.finishedAt.compareTo(a.finishedAt));
     if (withAddOn.length < 8) return kAddOnTakeUpRate;
@@ -269,6 +277,6 @@ abstract final class CalibrationForecast {
     final last8 = withRebuys.take(8);
     final mean =
         last8.fold<double>(0, (a, r) => a + r.rebuyRate) / last8.length;
-    return mean < 0 ? 0 : mean;
+    return mean.clamp(0.0, 2.0);
   }
 }

@@ -1,11 +1,13 @@
 /// Spec-board capture harness: screenshots the REAL widgets, SEEDED with a
 /// realistic Friday-night session (see board_fixtures.dart), at two viewports.
 ///
-/// Mobile  = 390x844 logical @2x  -> spec_boards/mobile/captures/<id>.png
-/// Desktop = 1440x900 logical @1x -> spec_boards/desktop/captures/<id>.png
+/// Mobile  = 390x844 logical @2x  -> spec_boards/mobile/captures/`<id>`.png
+/// Desktop = 1440x900 logical @1x -> spec_boards/desktop/captures/`<id>`.png
 ///
 /// Never fails: per-screen exceptions go to spec_boards/capture_log.txt for
 /// review. Run explicitly: flutter test tool/capture_boards_test.dart
+library;
+
 // ignore_for_file: avoid_print
 import 'dart:io';
 import 'dart:ui' as ui;

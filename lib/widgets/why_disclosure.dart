@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/colors.dart';
 import '../app/typography.dart';
 import '../models/tournament.dart';
+import 'min_tap_target.dart';
 
 /// §B4 rule 10 / T138: a reason is one visible sentence, and the rest sits
 /// behind a "Why?" link.
@@ -54,17 +55,18 @@ class _WhyDisclosureState extends State<WhyDisclosure> {
               children: [
                 if (rest.isNotEmpty)
                   WidgetSpan(
-                    alignment: PlaceholderAlignment.baseline,
-                    baseline: TextBaseline.alphabetic,
-                    child: InkWell(
-                      onTap: () => setState(() => _open = !_open),
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 6),
-                        child: Text(
-                          _open ? 'Hide' : 'Why?',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.primaryText,
-                            fontWeight: FontWeight.w600,
+                    alignment: PlaceholderAlignment.middle,
+                    child: MinTapTarget(
+                      child: InkWell(
+                        onTap: () => setState(() => _open = !_open),
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: Text(
+                            _open ? 'Less' : 'Why?',
+                            style: AppTypography.bodyXs.copyWith(
+                              color: AppColors.primaryText,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),

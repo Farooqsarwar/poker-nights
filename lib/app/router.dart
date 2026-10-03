@@ -3,6 +3,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
 import '../constants/app_constants.dart';
+import '../models/group.dart';
+import '../models/live_game.dart';
 import '../providers/app_provider.dart';
 import 'typography.dart';
 
@@ -125,11 +127,7 @@ const _coHostPaths = {
 /// `/t/:id/me` folds onto `RoutePaths.invitation` and both sets admit it. The
 /// builder below still sends link guests to the guest flow — the invitation
 /// screen itself stays member-oriented.
-const _guestAllowed = {
-  RoutePaths.playerLive,
-  RoutePaths.resultPodium,
-  RoutePaths.invitation,
-};
+const _guestAllowed = ScreenShell.guestAllowed;
 
 /// Builds the app router wired to [app] so the auth guard re-evaluates on
 /// every provider change (sign-in/out and the initial `authReady` flip).
@@ -176,9 +174,115 @@ class _RouterRefresh extends ChangeNotifier {
   }
 }
 
+Widget _buildNotFoundPage(BuildContext context, Uri uri) => Scaffold(
+  backgroundColor: AppColors.background,
+  body: Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.error_outline, color: AppColors.mutedForeground, size: 48),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          'Page not found',
+          style: AppTypography.body(
+            size: 20,
+            weight: FontWeight.w600,
+          ).copyWith(color: AppColors.foreground),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          uri.toString(),
+          textAlign: TextAlign.center,
+          style: AppTypography.body(size: 12).copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        TextButton(
+          style: TextButton.styleFrom(
+            minimumSize: const Size(44, 44),
+          ),
+          onPressed: () => context.go(RoutePaths.home),
+          child: const Text('Go to Home'),
+        ),
+      ],
+    ),
+  ),
+);
+
 GoRouter buildAppRouter(AppProvider app) {
   // Preserve deep-link paths that arrive before Firebase resolves.
   String? pendingDeepLink;
+
+  Widget buildGroupRoute(
+    BuildContext context,
+    GoRouterState state,
+    Widget child,
+    String flatPath,
+  ) {
+    final gid = state.pathParameters['gid'];
+    if (gid != null && gid.isNotEmpty) {
+      if (app.hasCurrentGroup && app.currentGroup.id == gid) {
+        return shell(child, path: flatPath);
+      }
+      final matching = app.groups.where((g) => g.id == gid).firstOrNull;
+      if (matching != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!app.hasCurrentGroup || app.currentGroup.id != matching.id) {
+            app.setCurrentGroup(matching);
+          }
+        });
+        return shell(child, path: flatPath);
+      }
+      return _buildNotFoundPage(context, state.uri);
+    }
+    return shell(child, path: flatPath);
+  }
+
+  Widget buildGameRoute(
+    BuildContext context,
+    GoRouterState state,
+    Widget child,
+    String flatPath,
+  ) {
+    final id = state.pathParameters['id'];
+    if (id != null && id.isNotEmpty) {
+      if (app.currentGame != null && app.currentGame!.id == id) {
+        return shell(child, path: flatPath);
+      }
+      LiveGame? matching;
+      Group? parentGroup;
+      if (app.hasCurrentGroup) {
+        matching = app.currentGroup.games.where((g) => g.id == id).firstOrNull;
+        if (matching != null) parentGroup = app.currentGroup;
+      }
+      if (matching == null) {
+        for (final g in app.groups) {
+          final found = g.games.where((gm) => gm.id == id).firstOrNull;
+          if (found != null) {
+            matching = found;
+            parentGroup = g;
+            break;
+          }
+        }
+      }
+      if (matching != null) {
+        final targetGame = matching;
+        final targetGroup = parentGroup;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (targetGroup != null && (!app.hasCurrentGroup || app.currentGroup.id != targetGroup.id)) {
+            app.setCurrentGroup(targetGroup);
+          }
+          if (app.currentGame?.id != targetGame.id) {
+            app.setCurrentGame(targetGame);
+          }
+        });
+        return shell(child, path: flatPath);
+      }
+      return _buildNotFoundPage(context, state.uri);
+    }
+    return shell(child, path: flatPath);
+  }
 
   return GoRouter(
   initialLocation: RoutePaths.splash,
@@ -266,23 +370,26 @@ GoRouter buildAppRouter(AppProvider app) {
       return app.currentGame != null ? RoutePaths.invitation : RoutePaths.home;
     }
 
-    // Auto-redirect members from invitation to live game when game goes live.
-    // GoRouter re-evaluates redirect on every notifyListeners() call, so this
-    // fires automatically when the admin starts the tournament (P1 fix).
+    // Auto-redirect members AND link guests from invitation to live game
+    // when game goes live. GoRouter re-evaluates redirect on every
+    // notifyListeners() call, so this fires automatically when the admin
+    // starts the tournament (P1 fix).
     final game = app.currentGame;
-    if (authed &&
-        !app.isAdmin &&
-        flat == RoutePaths.invitation &&
+    if (flat == RoutePaths.invitation &&
         game != null &&
-        game.status.isActiveLive) {
+        game.status.isActiveLive &&
+        ((authed && !app.isAdmin) || app.hasGuestSession)) {
       return RoutePaths.playerLive;
     }
-    // Guard: prevent admin from back-navigating to pre-game screens during live tournament.
+    // Guard: prevent admin from back-navigating to pre-game screens during live tournament (Spec C3).
     if (authed &&
         app.isAdmin &&
         game != null &&
         game.status.isActiveLive &&
-        (flat == RoutePaths.structureReview)) {
+        (flat == RoutePaths.structureReview ||
+         flat == RoutePaths.createTournament ||
+         flat == RoutePaths.quick ||
+         flat == RoutePaths.checkIn)) {
       return RoutePaths.hostDashboard;
     }
 
@@ -320,39 +427,7 @@ GoRouter buildAppRouter(AppProvider app) {
     }
     return null;
   },
-  // Catch bad/unknown routes and show a friendly page instead of a red crash.
-  errorBuilder: (context, state) => Scaffold(
-    backgroundColor: AppColors.background,
-    body: Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.error_outline, color: AppColors.mutedForeground, size: 48),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Page not found',
-            style: AppTypography.body(
-              size: 20,
-              weight: FontWeight.w600,
-            ).copyWith(color: AppColors.foreground),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            state.uri.toString(),
-            textAlign: TextAlign.center,
-            style: AppTypography.body(size: 12).copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          TextButton(
-            onPressed: () => context.go(RoutePaths.home),
-            child: const Text('Go to Home'),
-          ),
-        ],
-      ),
-    ),
-  ),
+  errorBuilder: (context, state) => _buildNotFoundPage(context, state.uri),
   routes: [
     GoRoute(
       path: RoutePaths.splash,
@@ -505,21 +580,16 @@ GoRouter buildAppRouter(AppProvider app) {
     // B9, B11, B12 and B10 are the four rows under a group in C2's table. Each
     // builds the same widget as its flat twin and reports that flat path to
     // `ScreenShell.requiredPath`, so the host gate, the custom mobile top bar
-    // and the nav all behave identically whichever name the URL used.
-    //
-    // `:gid` is not read: the app holds one *current* group, and every one of
-    // these screens reads it from the provider. That is the honest behaviour for
-    // this app — a link for a group you are not in cannot silently switch the
-    // session — but it does mean `/groups/<other-gid>/settings` opens the
-    // current group's settings rather than an error. Noted in the route matrix
-    // report.
+    // `:gid` is validated against the active or user groups; unknown groups show not-found.
     GoRoute(
       path: SpecRoutes.groupSettings,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(
+        child: buildGroupRoute(
+          context,
+          state,
           const GroupSettingsScreen(),
-          path: RoutePaths.groupSettings,
+          RoutePaths.groupSettings,
         ),
       ),
     ),
@@ -527,9 +597,11 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.groupStandings,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(
+        child: buildGroupRoute(
+          context,
+          state,
           const StandingsScreen(),
-          path: RoutePaths.standings,
+          RoutePaths.standings,
         ),
       ),
     ),
@@ -537,9 +609,11 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.groupImport,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(
+        child: buildGroupRoute(
+          context,
+          state,
           const ImportResultsScreen(),
-          path: RoutePaths.importResults,
+          RoutePaths.importResults,
         ),
       ),
     ),
@@ -547,9 +621,11 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.groupChips,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(
+        child: buildGroupRoute(
+          context,
+          state,
           const GroupChipsScreen(),
-          path: RoutePaths.groupChips,
+          RoutePaths.groupChips,
         ),
       ),
     ),
@@ -716,10 +792,7 @@ GoRouter buildAppRouter(AppProvider app) {
     // `ScreenShell`, so `context.go('/host-dashboard')` and a shared
     // `/t/9f3a/dashboard` land on one screen under one guard.
     //
-    // `:id` is not read by any of them. The app holds one *current* game rather
-    // than one per id, so each screen reads `AppProvider.currentGame`; a link
-    // for a game that is not loaded opens the current game's screen. Recorded
-    // in the route matrix report.
+    // `:id` is validated against current or stored games; unknown games show not-found.
     //
     // `/t/new` is declared above, before `/t/:id`, so the literal segment wins.
 
@@ -732,18 +805,20 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournament,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(const InvitationScreen(), path: RoutePaths.invitation),
+        child: buildGameRoute(context, state, const InvitationScreen(), RoutePaths.invitation),
       ),
     ),
     GoRoute(
       path: SpecRoutes.tournamentMe,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(
+        child: buildGameRoute(
+          context,
+          state,
           app.hasGuestSession && !app.isAuthenticated
               ? const GuestFlowScreen()
               : const InvitationScreen(),
-          path: RoutePaths.invitation,
+          RoutePaths.invitation,
         ),
       ),
     ),
@@ -753,9 +828,11 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentReview,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(
+        child: buildGameRoute(
+          context,
+          state,
           const StructureReviewScreen(),
-          path: RoutePaths.structureReview,
+          RoutePaths.structureReview,
         ),
       ),
     ),
@@ -763,9 +840,11 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentLevels,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(
+        child: buildGameRoute(
+          context,
+          state,
           const StructureReviewScreen(),
-          path: RoutePaths.structureReview,
+          RoutePaths.structureReview,
         ),
       ),
     ),
@@ -775,12 +854,14 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentConfigure,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(
+        child: buildGameRoute(
+          context,
+          state,
           CreateTournamentScreen(
             presetId: state.uri.queryParameters['preset'],
             repostGameId: state.uri.queryParameters['repost'],
           ),
-          path: RoutePaths.createTournament,
+          RoutePaths.createTournament,
         ),
       ),
     ),
@@ -791,14 +872,14 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentCheckIn,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(const CheckInScreen(), path: RoutePaths.checkIn),
+        child: buildGameRoute(context, state, const CheckInScreen(), RoutePaths.checkIn),
       ),
     ),
     GoRoute(
       path: SpecRoutes.tournamentPlayers,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(const CheckInScreen(), path: RoutePaths.checkIn),
+        child: buildGameRoute(context, state, const CheckInScreen(), RoutePaths.checkIn),
       ),
     ),
 
@@ -807,9 +888,11 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentDashboard,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(
+        child: buildGameRoute(
+          context,
+          state,
           const AdminDashboardScreen(),
-          path: RoutePaths.hostDashboard,
+          RoutePaths.hostDashboard,
         ),
       ),
     ),
@@ -819,7 +902,7 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentLive,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(const PlayerLiveScreen(), path: RoutePaths.playerLive),
+        child: buildGameRoute(context, state, const PlayerLiveScreen(), RoutePaths.playerLive),
       ),
     ),
     // C-payouts — its own screen (pool, entries, medal rows, KO pot, host
@@ -829,7 +912,7 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentPayouts,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(const PayoutsScreen(), path: RoutePaths.playerLive),
+        child: buildGameRoute(context, state, const PayoutsScreen(), RoutePaths.playerLive),
       ),
     ),
 
@@ -838,9 +921,11 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentRebuys,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(
+        child: buildGameRoute(
+          context,
+          state,
           const RebuySettlementScreen(),
-          path: RoutePaths.rebuySettlement,
+          RoutePaths.rebuySettlement,
         ),
       ),
     ),
@@ -850,7 +935,7 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentFinalTable,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(const FinalTableScreen(), path: RoutePaths.finalTable),
+        child: buildGameRoute(context, state, const FinalTableScreen(), RoutePaths.finalTable),
       ),
     ),
 
@@ -859,9 +944,11 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentFinish,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(
+        child: buildGameRoute(
+          context,
+          state,
           const CompleteTournamentScreen(),
-          path: RoutePaths.completeTournament,
+          RoutePaths.completeTournament,
         ),
       ),
     ),
@@ -871,7 +958,7 @@ GoRouter buildAppRouter(AppProvider app) {
       path: SpecRoutes.tournamentResults,
       pageBuilder: (context, state) => NoTransitionPage(
         key: ValueKey(state.uri.path),
-        child: shell(const ResultPodiumScreen(), path: RoutePaths.resultPodium),
+        child: buildGameRoute(context, state, const ResultPodiumScreen(), RoutePaths.resultPodium),
       ),
     ),
     GoRoute(

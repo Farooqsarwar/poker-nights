@@ -24,7 +24,7 @@ import 'app_card.dart';
 ///
 /// Steps are either **auto-derived** — completed purely from the [LiveGame]
 /// state, shown with a green check and not tappable — or **manual toggles**
-/// the admin taps to confirm (user-flow spec §4.6). Manual ticks are session
+/// the host taps to confirm (user-flow spec §4.6). Manual ticks are session
 ///-local by design: the checklist is a run-of-show aid, nothing is persisted.
 ///
 /// The card only applies while the event sits in the pre-live window
@@ -48,10 +48,10 @@ class EventDayChecklist extends StatelessWidget {
   /// step falls back to a manual toggle so it can still be ticked off.
   final VoidCallback? onOpenCheckIn;
 
-  /// Fired when the admin taps step 7 ("Open TV Mode if required").
+  /// Fired when the host taps step 7 ("Open TV Mode if required").
   final VoidCallback? onOpenTvMode;
 
-  /// Fired when the admin taps step 8 ("Test voice announcements").
+  /// Fired when the host taps step 8 ("Test voice announcements").
   final VoidCallback? onTestVoice;
 
   /// True while the event is inside the event-day preparation window

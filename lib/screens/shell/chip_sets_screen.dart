@@ -9,7 +9,7 @@ import '../../constants/app_constants.dart';
 import '../../providers/app_provider.dart';
 import '../../models/chip_color.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/back_nav_button.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/squircle_icon_button.dart';
 
 /// Chip sets screen matching mobile-first design.
@@ -77,7 +77,7 @@ class ChipSetsScreen extends StatelessWidget {
           // Header with Squircle Back button & New button
           Row(
             children: [
-              BackNavButton(
+              AppBackButton(
                 onPressed: () {
                   if (context.canPop()) {
                     context.pop();

@@ -22,14 +22,14 @@ int? sampledLowestStackBB({
   return existing;
 }
 
-/// §25.1a. Whether a check-in landing at [now] earns the early-arrival bonus:
+/// §25.1a / Spec D6 / T32. Whether a check-in landing at [now] earns the early-arrival bonus:
 /// the bonus must be switched on, a scheduled start must exist, and [now]
-/// must be at least [cutoffMins] before it.
+/// must be before it (optionally offset by [cutoffMins]).
 bool isEarlyArrivalEligible({
   required bool bonusEnabled,
   required DateTime? scheduledStart,
   required DateTime now,
-  required int cutoffMins,
+  int cutoffMins = 0,
 }) {
   if (!bonusEnabled || scheduledStart == null) return false;
   return now.isBefore(scheduledStart.subtract(Duration(minutes: cutoffMins)));

@@ -46,7 +46,7 @@ class ScreenShell extends StatelessWidget {
   ///
   /// C4p (`/t/:id/me`) rides along: a link guest opens their own check-in
   /// (GuestFlowScreen) in this minimal shell, never the member invitation.
-  static const _guestAllowed = {
+  static const guestAllowed = {
     RoutePaths.playerLive,
     RoutePaths.resultPodium,
     RoutePaths.invitation,
@@ -125,7 +125,7 @@ class ScreenShell extends StatelessWidget {
         body: ThemedAppBackground(child: SafeArea(child: child)),
       );
     }
-    final guestOk = isGuest && _guestAllowed.contains(requiredPath);
+    final guestOk = isGuest && guestAllowed.contains(requiredPath);
 
     // Route guard: block access when the user cannot enter this path.
     if (!isRegisteredUser && !guestOk) {

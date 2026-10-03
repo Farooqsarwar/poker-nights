@@ -78,21 +78,36 @@ Map<String, String> validateEventSettings(GameSettings s, {DateTime? now}) {
 
   if (s.buyIn <= 0) {
     errors['buyIn'] = 'Must be positive';
+  } else if (s.buyIn < 5 || s.buyIn > 200 || s.buyIn % 5 != 0) {
+    errors['buyIn'] = 'Must be between 5 and 200 and a multiple of 5';
   }
 
-  if (s.rebuys && s.rebuyLimit != null && s.rebuyLimit! < 0) {
-    errors['rebuyLimit'] = 'Must be >= 0';
+  if (s.rebuys && s.rebuyLimit != null) {
+    if (s.rebuyLimit! < 0) {
+      errors['rebuyLimit'] = 'Must be >= 0';
+    } else if (s.rebuyLimit! < 1 || s.rebuyLimit! > 10) {
+      errors['rebuyLimit'] = 'Must be between 1 and 10';
+    }
   }
-  if (s.maxReEntries != null && s.maxReEntries! < 0) {
-    errors['maxReEntries'] = 'Must be >= 0';
+  if (s.maxReEntries != null) {
+    if (s.maxReEntries! < 0) {
+      errors['maxReEntries'] = 'Must be >= 0';
+    } else if (s.maxReEntries! < 1 || s.maxReEntries! > 10) {
+      errors['maxReEntries'] = 'Must be between 1 and 10';
+    }
   }
 
-  if (s.koEnabled && s.koAmount < 0) {
-    errors['koAmount'] = 'Must be >= 0';
+  if (s.koEnabled) {
+    if (s.koAmount < 0) {
+      errors['koAmount'] = 'Must be >= 0';
+    } else if (s.koAmount < 5 || s.koAmount > 50 || s.koAmount % 5 != 0) {
+      errors['koAmount'] = 'Must be between 5 and 50 and a multiple of 5';
+    }
   }
 
-  // Spec §7 / §18: "0-20%". The forms cap entry at 20; this is the backstop
-  // the model's [GameSettings.effectiveOrganizerPct] backs with a clamp.
+  // Spec G1 / C-cfg step 10: "percent 0–30 %, step 1" (the earlier §7/§18
+  // "0-20%" was superseded). This is the backstop the model's
+  // [GameSettings.effectiveOrganizerPct] backs with a clamp.
   if (s.organizerPct < 0 || s.organizerPct > GameSettings.maxOrganizerPct) {
     errors['orgPct'] = 'Must be 0-${GameSettings.maxOrganizerPct}';
   }

@@ -3,6 +3,12 @@
 /// Seeded Friday-night session: 9 players, live + finished games, chat, poll,
 /// notifications, 5-player cash session. Imported by tool/capture_boards_test.dart
 /// and tool/content_probe_test.dart (both run via `flutter test <path>`).
+library;
+
+// The @visibleForTesting provider setters are the supported seam this fixture
+// exists to use; tool/ is not a test/ directory, so the analyzer cannot see
+// that.
+// ignore_for_file: invalid_use_of_visible_for_testing_member
 import 'dart:io';
 
 import 'package:flutter/material.dart';

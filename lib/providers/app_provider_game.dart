@@ -291,6 +291,7 @@ extension AppProviderGame on AppProvider {
   }
 
   void updateGameStatus(LiveGameStatus status) {
+    if (_currentGame == null || (!isAdmin && !canOperateTheClock)) return;
     _forceClaimEditor();
     final wasPublished = _currentGame?.status == LiveGameStatus.published;
     _currentGame = _currentGame!.copyWith(status: status);
@@ -494,7 +495,7 @@ extension AppProviderGame on AppProvider {
   /// would affect it (checklist §10.4). RSVP validity is surfaced in the audit.
   void updateEventSettings(GameSettings next, {bool clearRsvps = false}) {
     final game = _currentGame;
-    if (game == null || _user == null) return;
+    if (game == null || _user == null || !isAdmin) return;
     final prev = game.settings;
     if (prev == next) return;
     _pushUndo();
@@ -688,6 +689,13 @@ extension AppProviderGame on AppProvider {
     final checkedInCount =
         game.players.where((p) => p.checkedIn && p.confirmed).length;
     updateEventSettings(game.settings.copyWith(players: checkedInCount));
+    // Organizers/co-hosts cannot run updateEventSettings (host-only per E6),
+    // so freeze the headcount locally for them — startTimer regenerates anyway.
+    if (_currentGame != null &&
+        _currentGame!.settings.players != checkedInCount) {
+      _currentGame = _currentGame!
+          .copyWith(settings: _currentGame!.settings.copyWith(players: checkedInCount));
+    }
     startTimer();
   }
 

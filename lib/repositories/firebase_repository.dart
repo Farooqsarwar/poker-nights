@@ -808,13 +808,43 @@ class FirebaseRepository {
     'gamesPlayed': gamesPlayed,
   });
 
+  static final List<DateTime> _codeLookupHistory = [];
+  static const int _maxCodeLookupsPerMinute = 20;
+
+  static bool _isValidJoinCode(String code) =>
+      code.isNotEmpty &&
+      code.length >= 4 &&
+      code.length <= 12 &&
+      RegExp(r'^[A-Z0-9]+$').hasMatch(code);
+
+  static bool _checkCodeLookupRateLimit() {
+    final now = DateTime.now();
+    _codeLookupHistory.removeWhere(
+      (t) => now.difference(t) > const Duration(minutes: 1),
+    );
+    if (_codeLookupHistory.length >= _maxCodeLookupsPerMinute) {
+      return false;
+    }
+    _codeLookupHistory.add(now);
+    return true;
+  }
+
   /// Reads the raw `joinCodes/{code}` document without joining anything.
   /// Returns `{kind, gid, gameId?, name?, icon?}` or `null` when unknown.
   /// Used by the unified join screen to classify a code (group vs game/tv)
   /// before deciding which flow to run.
+  /// E7 migration seam: when Cloud Functions exist, set
+  /// [useFunctionsForCodes] to route this through the `resolveJoinCode`
+  /// callable (App Check + rate_limits) instead of the direct get below.
+  static bool useFunctionsForCodes = false;
+
   Future<Map<String, dynamic>?> peekJoinCode(String code) async {
     final key = code.trim().toUpperCase();
-    if (key.isEmpty) return null;
+    if (!_isValidJoinCode(key)) return null;
+    if (!_checkCodeLookupRateLimit()) {
+      debugPrint('peekJoinCode: rate limit exceeded for $key');
+      return null;
+    }
     final snap = await _db.collection('joinCodes').doc(key).get();
     if (!snap.exists) return null;
     return Map<String, dynamic>.from(snap.data()!);
@@ -825,6 +855,11 @@ class FirebaseRepository {
   /// the code does not exist.
   Future<String?> joinByCode(String code, AppUser user) async {
     final key = code.trim().toUpperCase();
+    if (!_isValidJoinCode(key)) return null;
+    if (!_checkCodeLookupRateLimit()) {
+      debugPrint('joinByCode: rate limit exceeded for $key');
+      return null;
+    }
     final codeSnap = await _db.collection('joinCodes').doc(key).get();
     if (!codeSnap.exists) return null;
     final data = Map<String, dynamic>.from(codeSnap.data()!);
@@ -833,7 +868,7 @@ class FirebaseRepository {
     // Read name/icon from the joinCodes doc (world-readable for signed-in users)
     // so we never have to touch groups/{gid} — non-members cannot read that doc.
     final name = (data['name'] as String?) ?? '';
-    final icon = (data['icon'] as String?) ?? '♠';
+    final icon = (data['icon'] as String?) ?? 'Spade';
     // The code travels onto the membership row so the RULES can verify it
     // against `groups/{gid}.joinCode`. Checking it only here (client-side) let
     // any signed-in user — including an anonymous guest — join any group by id
@@ -2161,9 +2196,8 @@ class FirebaseRepository {
   /// it; this build runs without functions.)
   Stream<DocumentSnapshot<Map<String, dynamic>>> gameDocSnapshots(
     String gid,
-    String gameId, {
-    bool isAdmin = false,
-  }) => _db
+    String gameId,
+  ) => _db
       .collection('groups')
       .doc(gid)
       .collection('games')
@@ -2184,14 +2218,21 @@ class FirebaseRepository {
   }
 
   /// Registers the game's public/tv codes for lookup flows.
+  /// Spark-plan client-side only: spec E7 wants callable-only `codes/` with
+  /// App Check + rate_limits. Until Functions exist this stays client-readable
+  /// (get-public/list-denied in rules, unguessable codes, H6-guarded creation).
+  /// Move to Functions when server exists; do not loosen rules in the meantime.
   Future<void> upsertGameCodes(LiveGame game) async {
+    final pubKey = game.publicCode.trim().toUpperCase();
+    final tvKey = game.tvCode.trim().toUpperCase();
+    if (!_isValidJoinCode(pubKey) || !_isValidJoinCode(tvKey)) return;
     final batch = _db.batch();
-    batch.set(_db.collection('joinCodes').doc(game.publicCode.toUpperCase()), {
+    batch.set(_db.collection('joinCodes').doc(pubKey), {
       'gid': game.groupId,
       'gameId': game.id,
       'kind': 'game',
     });
-    batch.set(_db.collection('joinCodes').doc(game.tvCode.toUpperCase()), {
+    batch.set(_db.collection('joinCodes').doc(tvKey), {
       'gid': game.groupId,
       'gameId': game.id,
       'kind': 'tv',
@@ -2232,6 +2273,11 @@ class FirebaseRepository {
     String code,
   ) async {
     final key = code.trim().toUpperCase();
+    if (!_isValidJoinCode(key)) return null;
+    if (!_checkCodeLookupRateLimit()) {
+      debugPrint('findGameByCode: rate limit exceeded for $key');
+      return null;
+    }
     final snap = await _db.collection('joinCodes').doc(key).get();
     if (!snap.exists) return null;
     final data = Map<String, dynamic>.from(snap.data()!);

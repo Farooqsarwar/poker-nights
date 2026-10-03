@@ -170,6 +170,14 @@ extension AppProviderAuth on AppProvider {
       if (themePref is String) _themePreference = themePref;
       final defaultChipSet = prefs['defaultChipSetId'];
       if (defaultChipSet is String) _defaultChipSetId = defaultChipSet;
+      final sounds = prefs['soundsEnabled'];
+      if (sounds is bool) _soundsEnabled = sounds;
+      final compact = prefs['compactSummary'];
+      if (compact is bool) _compactSummary = compact;
+      final sms = prefs['smsEnabled'];
+      if (sms is bool) _smsEnabled = sms;
+      final avatar = prefs['avatarColorIndex'];
+      if (avatar is num) _avatarColorIndex = avatar.toInt();
       // Restore per-group notification-mirror cursors so history isn't
       // re-mirrored on every sign-in.
       for (final entry in prefs.entries) {

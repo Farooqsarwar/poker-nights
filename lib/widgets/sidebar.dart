@@ -296,8 +296,8 @@ class Sidebar extends StatelessWidget {
                               hoverColor: AppColors.surfaceHover,
                               padding: const EdgeInsets.all(4),
                               constraints: const BoxConstraints(
-                                minWidth: 28,
-                                minHeight: 28,
+                                minWidth: 44,
+                                minHeight: 44,
                               ),
                               onPressed: app.logout,
                             ),

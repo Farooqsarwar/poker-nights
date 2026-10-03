@@ -11,10 +11,8 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 
-/// Splash screen reproducing the Poker Night Tools product mockup:
-/// a rounded matte-black card with a metal rim that spins on its Y axis,
-/// showing the red bracket + spade face on one side and the
-/// POKER / NIGHT / TOOLS lockup on the other.
+/// Splash screen: PNT symbol + "Poker Night" (Spec A5#3).
+/// Back face shows the POKER / NIGHT lockup only — no TOOLS.
 ///
 /// All face geometry below is measured from the reference render, expressed as
 /// fractions of the card size so it scales to any screen.
@@ -123,14 +121,18 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _goNext() {
     if (_navigated || !mounted) return;
-    _navigated = true;
     final app = context.read<AppProvider>();
+    if (!app.authReady) return;
+    _navigated = true;
     // If previous game was running and we can resume, do so
     if (app.canResumePreviousGame) {
-      context.go(RoutePaths.invitation); // TODO: replace with actual resume route
+      if (app.currentGame != null) {
+        context.go(app.isAdmin ? RoutePaths.hostDashboard : RoutePaths.playerLive);
+      } else {
+        context.go(RoutePaths.home);
+      }
       return;
     }
-    if (!app.authReady) return;
     context.go(app.isAuthenticated ? RoutePaths.home : RoutePaths.landing);
   }
 
@@ -490,7 +492,7 @@ class _FrontFacePainter extends CustomPainter {
 }
 
 // =============================================================================
-// BACK FACE — POKER / NIGHT / TOOLS lockup
+// BACK FACE — POKER / NIGHT lockup (A5#3, no TOOLS)
 // =============================================================================
 
 class _BackFace extends StatelessWidget {
@@ -523,7 +525,6 @@ class _BackFace extends StatelessWidget {
       children: <Widget>[
         _word('POKER', AppColors.foreground, 0, w, h, blockW, wordSize),
         _word('NIGHT', AppColors.primary, 1, w, h, blockW, wordSize),
-        _word('TOOLS', AppColors.foreground, 2, w, h, blockW, wordSize),
 
         // Red rule under the lockup.
         Positioned(
@@ -548,20 +549,11 @@ class _BackFace extends StatelessWidget {
                 TextSpan(
                   children: <TextSpan>[
                     TextSpan(
-                      text: 'SCAN. TRADE. TRACK. ',
+                      text: 'POKER NIGHT',
                       style: _lockupStyle(
                         color: AppColors.foreground,
                         fontSize: tagSize,
                         weight: FontWeight.w600,
-                        letterSpacing: tagSize * 0.10,
-                      ),
-                    ),
-                    TextSpan(
-                      text: 'WIN.',
-                      style: _lockupStyle(
-                        color: AppColors.primary,
-                        fontSize: tagSize,
-                        weight: FontWeight.w700,
                         letterSpacing: tagSize * 0.10,
                       ),
                     ),
@@ -595,7 +587,7 @@ class _BackFace extends StatelessWidget {
   /// One justified word row.
   ///
   /// Each letter is laid out with `spaceBetween` across a fixed width, which is
-  /// exactly how the reference is set: POKER / NIGHT / TOOLS all span the same
+  /// exactly how the reference is set: POKER / NIGHT both span the same
   /// measure regardless of their differing letter widths.
   Widget _word(
     String text,

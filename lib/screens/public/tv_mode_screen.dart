@@ -12,6 +12,7 @@ import '../../models/live_game.dart';
 import '../../providers/app_provider.dart';
 import '../../services/payment_service.dart';
 import '../../services/tv_display_settings.dart';
+import '../../widgets/app_slider.dart';
 import '../../widgets/premium_gate.dart';
 import '../../widgets/app_modal.dart';
 import '../../services/entitlements.dart';
@@ -23,6 +24,7 @@ import '../../widgets/brand_lockup.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/tournament_display_block.dart';
 import '../../utils/formatters.dart';
+import '../../utils/voice_service.dart';
 
 /// Full-screen TV display mirroring the web `TVModePage`.
 ///
@@ -519,11 +521,18 @@ class _TVLayoutState extends State<_TVLayout> {
 /// Slim identity bar above the scoreboard clock — the event name and the
 /// TV code that was used to connect this screen. Purely informational: the
 /// host glances up to confirm this display is showing the right game.
-class _TVHeader extends StatelessWidget {
+class _TVHeader extends StatefulWidget {
   const _TVHeader({required this.name, required this.tvCode});
 
   final String name;
   final String tvCode;
+
+  @override
+  State<_TVHeader> createState() => _TVHeaderState();
+}
+
+class _TVHeaderState extends State<_TVHeader> {
+  bool _audioUnlocked = false;
 
   @override
   Widget build(BuildContext context) {
@@ -538,7 +547,7 @@ class _TVHeader extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              name,
+              widget.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.bodySm.copyWith(
@@ -548,6 +557,35 @@ class _TVHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
+          if (!_audioUnlocked) ...[
+            InkWell(
+              onTap: () async {
+                await VoiceService.instance.speak('Audio enabled.');
+                if (mounted) setState(() => _audioUnlocked = true);
+              },
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(color: AppColors.primary),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.volume_up, size: 12, color: AppColors.primaryText),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Enable Audio',
+                      style: AppTypography.bodyXs.copyWith(color: AppColors.primaryText, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.sm,
@@ -559,7 +597,7 @@ class _TVHeader extends StatelessWidget {
               border: Border.all(color: AppColors.border),
             ),
             child: Text(
-              tvCode,
+              widget.tvCode,
               style: AppTypography.monoXs.copyWith(
                 color: AppColors.mutedForeground,
                 letterSpacing: 1.5,
@@ -899,74 +937,80 @@ class _PayoutsPanel extends StatelessWidget {
     // Projections carry an empty `prizes` list plus a count, so read the
     // count rather than the list length (see TournamentStructure.paidPlaces).
     final paidPlaces = game.structure.paidPlacesForDisplay.clamp(0, 6);
+    final prizes = game.structure.prizes;
+
+    final activeLeaders = game.activePlayers.toList()
+      ..sort((a, b) => (b.stack ?? 0).compareTo(a.stack ?? 0));
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: AppSpacing.xs),
-          // 14-043 / 15-034: the pool total is a LIVE figure. Once the
-          // tournament is finished, public and player results show the paid
-          // positions only — no money. The podium and history screens already
-          // gate on this; TV did not.
-          if (game.status != LiveGameStatus.completed) ...[
-            Text(
-              Formatters.prize(game.structure.prizePool),
-              textAlign: TextAlign.center,
-              style: AppTypography.mono(
-                size: 42 * scale,
-                weight: FontWeight.w300,
-                color: AppColors.foreground,
-              ),
+          Text(
+            Formatters.prize(game.structure.prizePool),
+            textAlign: TextAlign.center,
+            style: AppTypography.mono(
+              size: 42 * scale,
+              weight: FontWeight.w300,
+              color: AppColors.foreground,
             ),
-            Text(
-              game.prizePoolLabel.toUpperCase(),
-              textAlign: TextAlign.center,
-              style: AppTypography.mono(
-                size: 12 * scale,
-                letterSpacing: 2,
-                color: AppColors.mutedForeground,
-              ),
+          ),
+          Text(
+            game.status == LiveGameStatus.completed
+                ? 'FINAL PRIZE POOL'
+                : game.prizePoolLabel.toUpperCase(),
+            textAlign: TextAlign.center,
+            style: AppTypography.mono(
+              size: 12 * scale,
+              letterSpacing: 2,
+              color: AppColors.mutedForeground,
             ),
-          ] else
-            Text(
-              'FINAL POSITIONS',
-              textAlign: TextAlign.center,
-              style: AppTypography.mono(
-                size: 12 * scale,
-                letterSpacing: 2,
-                color: AppColors.mutedForeground,
-              ),
-            ),
-          if (game.status == LiveGameStatus.completed) ...[
-            const SizedBox(height: AppSpacing.lg),
-            Divider(height: 1, color: AppColors.border),
-            const SizedBox(height: AppSpacing.sm),
-            for (var i = 0; i < paidPlaces; i++)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Text(
-                      _ords[i],
-                      style: AppTypography.mono(
-                        size: 12 * scale,
-                        weight: FontWeight.w700,
-                        color: AppColors.primary,
-                      ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Divider(height: 1, color: AppColors.border),
+          const SizedBox(height: AppSpacing.sm),
+          for (var i = 0; i < paidPlaces; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Text(
+                    _ords[i],
+                    style: AppTypography.mono(
+                      size: 12 * scale,
+                      weight: FontWeight.w700,
+                      color: AppColors.primary,
                     ),
-                    const Spacer(),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    i < prizes.length ? Formatters.prize(prizes[i].amount) : '—',
+                    style: AppTypography.mono(
+                      size: 12 * scale,
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (game.status == LiveGameStatus.completed)
                     Text(
                       _podiumName(i + 1),
                       style: AppTypography.mono(
                         size: 13 * scale,
                         color: AppColors.foreground,
                       ),
+                    )
+                  else if (i < activeLeaders.length)
+                    Text(
+                      '${activeLeaders[i].name} (${Formatters.chips(activeLeaders[i].stack ?? 0)})',
+                      style: AppTypography.mono(
+                        size: 12 * scale,
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
-                  ],
-                ),
+                ],
               ),
-          ],
+            ),
         ],
       ),
     );
@@ -1162,12 +1206,14 @@ class _TvSettingsSheetState extends State<_TvSettingsSheet> {
           Row(
             children: [
               Expanded(
-                child: Slider(
+                child: AppSlider(
                   value: _d.textScale,
                   min: TvDisplaySettings.minTextScale,
                   max: TvDisplaySettings.maxTextScale,
                   divisions: 13,
                   label: '${(_d.textScale * 100).round()}%',
+                  title: 'Text size',
+                  valueLabel: '${(_d.textScale * 100).round()}%',
                   onChanged: (v) => _set(_d.copyWith(textScale: v)),
                 ),
               ),

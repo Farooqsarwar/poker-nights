@@ -13,7 +13,8 @@ class AppSpacing {
   static const double xxl = 32; // Increased from 24 to 32
   static const double xxxl = 40; // Increased from 32 to 40
   static const double huge = 48; // Increased from 40 to 48
-  static const double page = 32; // Increased from 24
+  static const double gutter = 18; // Spec B3 mobile horizontal gutter
+  static const double page = 18; // Spec B3
   static const double section = 40; // Increased from 32
 
   static const EdgeInsets pagePadding = EdgeInsets.symmetric(
@@ -21,17 +22,14 @@ class AppSpacing {
     vertical: xxl,
   );
 
-  /// Compact-layout page padding.
+  /// Compact-layout page padding (Spec B3: 18px horizontal gutters).
   ///
   /// Deliberately carries NO extra bottom clearance for the floating bottom
   /// nav. The nav belongs to `ScreenShell`, so the shell pads for it exactly
-  /// once, using the nav's own height. This used to add a hardcoded `bottom:
-  /// 96` on top of the shell's own `64 + inset`, so compact screens paid for
-  /// the nav twice (~160px of dead space) while tablet-width screens — which
-  /// took the desktop padding — did not pay for it at all.
+  /// once, using the nav's own height.
   static const EdgeInsets mobileContentPadding = EdgeInsets.only(
-    left: xl,
-    right: xl,
+    left: gutter,
+    right: gutter,
     top: xl,
     bottom: xl,
   );
@@ -123,11 +121,6 @@ class AppFontSizes {
   static const double displayLg = 48;
   static const double displayXl = 60;
   static const double displayHero = 72;
-}
-
-/// Centralized asset paths.
-class AppAssets {
-  AppAssets._();
 }
 
 /// Centralized feature flags.

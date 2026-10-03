@@ -217,7 +217,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                               size: AppButtonSize.md,
                               variant: AppButtonVariant.secondary,
                               onPressed: () {
-                                context.push('/checkout?plan=$_selectedPlanId');
+                                context.push('${RoutePaths.checkout}?plan=$_selectedPlanId');
                               },
                               child: const Text('Simulate Checkout'),
                             ),
@@ -257,7 +257,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                               size: AppButtonSize.md,
                               variant: AppButtonVariant.secondary,
                               onPressed: () {
-                                context.push('/checkout?plan=$_selectedPlanId');
+                                context.push('${RoutePaths.checkout}?plan=$_selectedPlanId');
                               },
                               child: const Text('Simulate Checkout'),
                             ),
@@ -354,7 +354,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
       (
         icon: Icons.leaderboard_outlined,
         title: 'Seasons & points',
-        desc: 'Club championship leaderboards calculated after every game using Linear, Quadratic, or WSOP formulas.',
+        desc: 'Club championship leaderboards calculated after every game using field-size weighted, 10-7-5-3-1 ladder, or custom formulas.',
         actionLabel: 'View Seasons',
         onTap: () => context.push(RoutePaths.standings),
       ),
@@ -368,7 +368,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
       (
         icon: Icons.military_tech_outlined,
         title: 'Progressive & Mystery bounties',
-        desc: 'Bounties that increase with knockouts (PKO) or hidden golden envelope draws.',
+        desc: 'Bounties that increase with each knockout (PKO) or custom mystery bounty prize pools.',
         actionLabel: 'Configure Bounties',
         onTap: () => context.push(RoutePaths.createTournament),
       ),

@@ -11,10 +11,10 @@ import '../theme/theme_palette.dart';
 class AppColors {
   AppColors._();
 
-  /// Replaces the active palette.  Called by [PokerNightApp] before building
-  /// the [MaterialApp] so the new values are in place before any descendant
-  /// reads them.
+  /// The active palette. Replaced by [setPalette] before building
+  /// the [MaterialApp] so new values are in place before descendants read them.
   static ThemePalette currentPalette = ThemePalettes.red;
+  static void setPalette(ThemePalette palette) => currentPalette = palette;
 
   // ── Base tokens ────────────────────────────────────────────────────────────
   static Color get background => currentPalette.background;

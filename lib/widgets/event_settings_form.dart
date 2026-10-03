@@ -12,12 +12,11 @@ import '../models/live_game.dart';
 import '../models/table_settings.dart';
 import '../models/tournament.dart';
 import '../utils/event_settings_validation.dart';
-import 'app_button.dart';
-import 'app_modal.dart';
 import 'app_text_field.dart';
 import 'app_toggle.dart';
 import 'chip_set_editor.dart';
 import 'count_stepper.dart';
+import 'legal_gate_dialog.dart';
 
 /// A section of the event settings form. Sections render in the order given
 /// in [EventSettingsForm.sections].
@@ -1216,40 +1215,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
 
   Future<void> _handleOrgPctChanged(int v) async {
     if (v > 0 && !_legalAccepted && _orgPct == 0) {
-      var confirmed = false;
-      await showAppModal(
-        context: context,
-        title: 'Organiser fee compliance',
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'In some countries (including Portugal), retaining any money from a game can be treated as operating unlicensed gaming. By enabling this, you confirm that you comply with your local gaming laws and that this contribution is used solely to cover actual costs (equipment, drinks, snacks).',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.mutedForeground,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            AppButton(
-              fullWidth: true,
-              onPressed: () {
-                confirmed = true;
-                Navigator.of(context).pop();
-              },
-              child: const Text('I confirm and accept'),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            AppButton(
-              fullWidth: true,
-              variant: AppButtonVariant.ghost,
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-          ],
-        ),
-      );
+      final confirmed = await showOrganizerLegalGateDialog(context);
       if (!confirmed) return;
       _legalAccepted = true;
     }

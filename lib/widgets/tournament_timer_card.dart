@@ -7,6 +7,7 @@ import '../models/live_game.dart';
 import '../utils/automations_service.dart';
 import '../utils/formatters.dart';
 import 'app_timer.dart';
+import 'brand_lockup.dart';
 
 /// Pixel-perfect tournament live scoreboard timer card matching screens C5 & C10.
 ///
@@ -65,17 +66,10 @@ class TournamentTimerCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header: Red Spade + Status
+          // Header: Logo + Status
           Row(
             children: [
-              Text(
-                '♠',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 16,
-                  height: 1,
-                ),
-              ),
+              const PokerNightLogo(size: 16),
               const SizedBox(width: 8),
               Text(
                 isBreak
@@ -261,26 +255,29 @@ class TournamentTimerCard extends StatelessWidget {
                     Expanded(
                       child: _SubStatItem(
                         label: 'PLAYERS',
-                        customValue: RichText(
-                          textAlign: TextAlign.center,
-                          text: TextSpan(
-                            style: TextStyle(
-                              fontFamily: AppTypography.monoFamily,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.foreground,
+                        customValue: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: RichText(
+                            textAlign: TextAlign.center,
+                            text: TextSpan(
+                              style: TextStyle(
+                                fontFamily: AppTypography.monoFamily,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.foreground,
+                              ),
+                              children: [
+                                TextSpan(text: '$activeCount'),
+                                TextSpan(
+                                  text: '/',
+                                  style: TextStyle(color: AppColors.primary),
+                                ),
+                                TextSpan(
+                                  text: '$totalCount',
+                                  style: TextStyle(color: AppColors.primary),
+                                ),
+                              ],
                             ),
-                            children: [
-                              TextSpan(text: '$activeCount'),
-                              TextSpan(
-                                text: '/',
-                                style: TextStyle(color: AppColors.primary),
-                              ),
-                              TextSpan(
-                                text: '$totalCount',
-                                style: TextStyle(color: AppColors.primary),
-                              ),
-                            ],
                           ),
                         ),
                       ),

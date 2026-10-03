@@ -301,7 +301,7 @@ abstract final class SpecRoutes {
     tournamentMe: RoutePaths.invitation,
 
     // ── D · cash game and TV ────────────────────────────────────────────────
-    tvCode: RoutePaths.join,
+    tvCode: RoutePaths.tvMode,
     newCashGame: RoutePaths.cashGame,
     cashGame: RoutePaths.cashGameLive,
 

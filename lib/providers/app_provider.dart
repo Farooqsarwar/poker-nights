@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../app/route_paths.dart';
+import '../constants/app_constants.dart';
 import '../utils/cash_settlement.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'
     show DocumentSnapshot, FieldValue, FirebaseException;
@@ -42,14 +43,15 @@ import '../utils/mock_data.dart';
 import '../utils/model_codec.dart';
 import '../utils/automations_service.dart';
 import '../utils/sanitization.dart';
-import '../utils/tournament_engine.dart';
 import '../utils/voice_service.dart';
+import '../utils/tournament_engine.dart';
 import '../services/browser_notifications.dart';
 import '../services/onesignal_sender.dart';
 import '../services/projections.dart' as projections;
 import '../services/push_service.dart';
 import '../services/recovery_service.dart';
 import '../services/tab_leader.dart';
+import '../services/telemetry.dart';
 
 part 'app_provider_auth.dart';
 part 'app_provider_cloud_sync.dart';
@@ -326,6 +328,14 @@ class AppProvider extends ChangeNotifier {
   /// goes wrong, not that it cannot be defeated.
   PremiumTier premiumTier = PremiumTier.free;
 
+  /// Whether the user has active Premium access.
+  bool get isPremium => premiumTier == PremiumTier.premium;
+
+  /// Plays a test speech announcement for the Sound & Voice settings.
+  Future<void> testVoice() async {
+    await VoiceService.instance.speak('Level 1. Blinds 25 and 50.');
+  }
+
   /// Resolves the effective Premium tier.
   ///
   /// Two sources, deliberately:
@@ -585,7 +595,7 @@ class AppProvider extends ChangeNotifier {
   final Map<String, bool> _adminVerdictByGroup = {};
 
   DateTime? _lastEditorHeartbeatAt;
-  static const Duration _editorHeartbeatInterval = Duration(seconds: 25);
+  static const Duration _editorHeartbeatInterval = Duration(seconds: 30);
 
   /// Resolves `(gid, gameId)` for cloud operations on the active game, or
   /// null when there is nothing to target yet.
@@ -669,36 +679,70 @@ class AppProvider extends ChangeNotifier {
   /// tournament wizard works out of the box.
   static final List<TournamentPreset> seedPresets = [
     TournamentPreset(
-      id: 'pr-friday',
-      name: 'Friday Night Regular',
-      buyIn: 15,
+      id: 'starter-freezeout',
+      name: 'Classic Freezeout',
+      buyIn: 20,
+      koEnabled: false,
+      koAmount: 5,
+      rebuys: false,
+      rebuysCloseLevel: 0,
+      reEntry: false,
+      addOn: false,
+      durationHours: 3.0,
+      anteEnabled: true,
+      anteAfterLevel: 5,
+      organizerPct: 0,
+      chipSetName: 'Standard 500',
+      chipSet: List.of(TournamentEngine.getPreset('Standard 500')),
+    ),
+    TournamentPreset(
+      id: 'starter-sprint',
+      name: 'Sprint Turbo',
+      buyIn: 10,
       koEnabled: false,
       koAmount: 5,
       rebuys: true,
-      rebuysCloseLevel: 6,
+      rebuysCloseLevel: 4,
       reEntry: true,
-      addOn: true,
-      durationHours: 3.5,
+      addOn: false,
+      durationHours: 2.0,
       anteEnabled: true,
-      anteAfterLevel: 6,
-      organizerPct: 10,
+      anteAfterLevel: 3,
+      organizerPct: 0,
       chipSetName: 'Home Set (4 colour)',
       chipSet: List.of(MockData.defaultChipSet),
     ),
     TournamentPreset(
-      id: 'pr-deep',
-      name: 'Deep Stack Turbo',
+      id: 'starter-deep',
+      name: 'Deep Stack',
       buyIn: 25,
-      koEnabled: true,
-      koAmount: 10,
+      koEnabled: false,
+      koAmount: 5,
       rebuys: false,
-      rebuysCloseLevel: 5,
+      rebuysCloseLevel: 0,
       reEntry: false,
       addOn: false,
-      durationHours: 5,
+      durationHours: 4.5,
+      anteEnabled: true,
+      anteAfterLevel: 6,
+      organizerPct: 0,
+      chipSetName: 'Standard 500',
+      chipSet: List.of(TournamentEngine.getPreset('Standard 500')),
+    ),
+    TournamentPreset(
+      id: 'starter-ko',
+      name: 'KO Bounty',
+      buyIn: 20,
+      koEnabled: true,
+      koAmount: 10,
+      rebuys: true,
+      rebuysCloseLevel: 5,
+      reEntry: true,
+      addOn: true,
+      durationHours: 3.5,
       anteEnabled: true,
       anteAfterLevel: 5,
-      organizerPct: 0,
+      organizerPct: 10,
       chipSetName: 'Standard 500',
       chipSet: List.of(TournamentEngine.getPreset('Standard 500')),
     ),
@@ -1017,6 +1061,13 @@ class AppProvider extends ChangeNotifier {
   /// §28's one conditional cell: an organizer, but only for their own game.
   bool get canSeePrivateFinancials =>
       Permissions.can(Capability.viewPrivateFinancials, currentActor);
+
+  /// True when the signed-in user is an assigned organizer for the active game.
+  bool get isCurrentGameOrganizer =>
+      _currentGame != null && _user != null && _currentGame!.isOrganizer(_user!.id);
+
+  /// Structure edits require host authority (§3, §12).
+  bool get canEditStructure => isAdmin;
 
   /// Assigns or removes a tournament organizer (§3).
   ///

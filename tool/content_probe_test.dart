@@ -1,6 +1,8 @@
 /// Content probe (tool): dumps every rendered Text per seeded screen so empty
 /// screens can be identified precisely. Report: spec_boards/content_audit.txt
 /// Run: flutter test tool/content_probe_test.dart
+library;
+
 // ignore_for_file: avoid_print
 import 'dart:io';
 

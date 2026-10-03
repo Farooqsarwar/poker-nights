@@ -21,9 +21,8 @@ class CashPlayer {
   bool get isCashedOut => hasCashedOut;
 
   /// Where this person stands: what they took out, plus what is still in front
-  /// of them, minus what they put in -- across every stint of the session
-  /// (a rejoin does not wipe an earlier cash-out).
-  double get net => cashedOut + (hasCashedOut ? 0 : stack) - totalBuyIns;
+  /// of them, minus what they put in -- across every stint of the session.
+  double get net => hasCashedOut ? cashedOut - totalBuyIns : stack - totalBuyIns;
 
   CashPlayer copyWith({
     String? id,
@@ -108,7 +107,8 @@ class CashSession {
   final List<CashPlayer> players;
   final String? unresolvedNote;
 
-  double get totalInPlay => players.fold(0, (sum, p) => sum + p.stack);
+  double get totalInPlay =>
+      players.where((p) => !p.hasCashedOut).fold(0, (sum, p) => sum + p.stack);
 
   double get totalBuyIns => players.fold(0, (sum, p) => sum + p.totalBuyIns);
 

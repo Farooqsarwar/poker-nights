@@ -157,7 +157,7 @@ class _StructureEditorState extends State<StructureEditor> {
               Expanded(
                 child: AppButton(
                   size: AppButtonSize.sm,
-                  variant: AppButtonVariant.danger,
+                  variant: AppButtonVariant.destructive,
                   onPressed: widget.onSpeedUp,
                   child: const Text('Speed up (-5m)'),
                 ),

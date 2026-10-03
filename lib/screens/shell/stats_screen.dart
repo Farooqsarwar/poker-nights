@@ -12,7 +12,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_tag.dart';
-import '../../widgets/back_nav_button.dart';
+import '../../widgets/app_back_button.dart';
 
 /// Statistics screen matching F3_Stats mobile-first design.
 class StatsScreen extends StatelessWidget {
@@ -50,7 +50,7 @@ class StatsScreen extends StatelessWidget {
           // App bar with squircle back button <
           Row(
             children: [
-              BackNavButton(
+              AppBackButton(
                 onPressed: () {
                   if (context.canPop()) {
                     context.pop();

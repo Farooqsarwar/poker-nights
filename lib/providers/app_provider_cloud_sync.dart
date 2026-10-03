@@ -12,7 +12,7 @@ extension AppProviderCloudSync on AppProvider {
 
   void _forceClaimEditor() {
     final game = _currentGame;
-    if (game == null || _user == null || !isAdmin) return;
+    if (game == null || _user == null || !canRunCurrentGame) return;
     // A follower tab (see TabLeader) never claims, even optimistically —
     // otherwise its local copy would show this device as editor while the
     // leader tab is the only one actually allowed to act on it.
@@ -349,8 +349,8 @@ extension AppProviderCloudSync on AppProvider {
   /// are restricted to admin-only until the multi-admin feature is implemented.
   bool get canManageMembers => isAdmin;
 
-  /// MVP spec §3.3: only admin can grant rebuys/add-ons.
-  bool get canGrantRebuys => isAdmin;
+  /// Allow co-hosts / tournament organizers to grant rebuys, add-ons, and seating (§3, §4, §E9).
+  bool get canGrantRebuys => isAdmin || canOperateTheClock || isCurrentGameOrganizer;
 
   /// This member's role in the current group, for role-picker UIs.
   GroupRole roleOf(AppUser member) => member.isAdmin
@@ -404,15 +404,15 @@ extension AppProviderCloudSync on AppProvider {
     // believe it ran the clock, the other devices would keep running the
     // previous phone's, and the co-host's first whole-document save would be
     // refused by the very transaction that makes one writer the winner.
-    if (!isAdmin && !(forceEditorClaim && canOperateTheClock)) return;
+    final editor = game.editorDeviceId;
+    final sameDevice = editor == _repo.deviceId;
+    if (!isAdmin && !(canOperateTheClock && (forceEditorClaim || sameDevice))) return;
     // A follower tab never claims or heartbeats automatically — only the
     // browser-elected leader does. An explicit forceEditorClaim (the user's
     // own "take control" action) is still honoured from any tab.
     if (!(_tabLeader?.isLeader ?? true) && !forceEditorClaim) return;
-    final editor = game.editorDeviceId;
     final now = DateTime.now();
     final claimedAt = game.editorClaimedAt;
-    final sameDevice = editor == _repo.deviceId;
     final stale =
         editor.isNotEmpty &&
         claimedAt != null &&
@@ -543,13 +543,17 @@ extension AppProviderCloudSync on AppProvider {
         default:
           error = 'unknown kind';
       }
-      if (error != null) hadError = true;
+      if (error != null) {
+        hadError = true;
+        debugPrint('Processing request ${req.id} failed: $error; preserving request.');
+        continue;
+      }
       try {
         await _repo.consumeRequest(gameId, req.id);
+        changed = true;
       } catch (e) {
         debugPrint('consumeRequest failed: $e');
       }
-      changed = true;
     }
     if (changed && !hadError) if (!_disposed) notifyListeners();
   }
@@ -646,7 +650,7 @@ extension AppProviderCloudSync on AppProvider {
       if (_syncedGameKey != key) return;
       _gameDocSub?.cancel();
       _gameDocSub = _repo
-          .gameDocSnapshots(gid, gameId, isAdmin: asAdmin)
+          .gameDocSnapshots(gid, gameId)
           .listen(
             _adoptRemoteGame,
             onError: (Object e) {

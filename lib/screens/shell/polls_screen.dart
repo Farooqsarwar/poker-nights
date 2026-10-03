@@ -46,16 +46,35 @@ class _PollsScreenState extends State<PollsScreen> {
   }
 
   void _createPoll(AppProvider app) {
+    final question = _pollQuestion.text.trim();
+    if (question.isEmpty) {
+      setState(() => _pollError = 'Please enter a poll question.');
+      return;
+    }
+    if (question.length > 120) {
+      setState(() => _pollError = 'Question must be 120 characters or less.');
+      return;
+    }
     final opts = _pollOptions
         .map((c) => c.text.trim())
         .where((o) => o.isNotEmpty)
         .toList();
-    if (_pollQuestion.text.trim().isEmpty || opts.length < 2) {
-      setState(() => _pollError = 'Enter a question and at least two options.');
+    if (opts.length < 2) {
+      setState(() => _pollError = 'Enter at least two options.');
       return;
     }
+    if (opts.length > 6) {
+      setState(() => _pollError = 'Maximum of 6 options allowed.');
+      return;
+    }
+    for (final opt in opts) {
+      if (opt.length > 60) {
+        setState(() => _pollError = 'Options must be 60 characters or less.');
+        return;
+      }
+    }
     final error = app.createPoll(
-      _pollQuestion.text.trim(),
+      question,
       opts,
       multi: _pollMulti,
     );
@@ -103,7 +122,7 @@ class _PollsScreenState extends State<PollsScreen> {
           ],
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Options (min. 2)',
+            'Options (2–6)',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.mutedForeground,
             ),
@@ -138,7 +157,7 @@ class _PollsScreenState extends State<PollsScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
-          if (_pollOptions.length < 10)
+          if (_pollOptions.length < 6)
             InkWell(
               onTap: () =>
                   setState(() => _pollOptions.add(TextEditingController())),

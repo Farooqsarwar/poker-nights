@@ -290,7 +290,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                       color: AppColors.successText,
                     ),
                     title: Text(
-                      'Buy-in / Rebuy',
+                      'Top-up chips (rebuy)',
                       style: TextStyle(color: AppColors.foreground),
                     ),
                     shape: RoundedRectangleBorder(
@@ -321,6 +321,27 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
                       _openAction(
                         _CashAction(_CashActionType.cashOut, player.id),
                         preset: player.stack,
+                      );
+                    },
+                  ),
+                ] else ...[
+                  ListTile(
+                    leading: Icon(
+                      Icons.login_outlined,
+                      color: AppColors.primary,
+                    ),
+                    title: Text(
+                      'Rejoin table',
+                      style: TextStyle(color: AppColors.foreground),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      _openAction(
+                        _CashAction(_CashActionType.buyIn, player.id),
+                        preset: app.cashSession?.settings.minBuyIn,
                       );
                     },
                   ),
@@ -597,7 +618,20 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
 
           // Bottom Action Button: Cash out & settle
           InkWell(
-            onTap: () => setState(() => _showReconcile = true),
+            onTap: () {
+              if (players.length > 16) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text(
+                      'Cash settlement supports up to 16 players (Spec F2.10). Cash out in batches to proceed.',
+                    ),
+                    backgroundColor: AppColors.destructive,
+                  ),
+                );
+                return;
+              }
+              setState(() => _showReconcile = true);
+            },
             borderRadius: BorderRadius.circular(16),
             child: Container(
               height: 56,
@@ -910,11 +944,10 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
             const SizedBox(height: AppSpacing.md),
             CashSettlementPanel(
               players: session.players,
-              tier: app.premiumTier,
             ),
             const SizedBox(height: AppSpacing.lg),
             AppButton(
-              variant: AppButtonVariant.danger,
+              variant: AppButtonVariant.destructive,
               fullWidth: true,
               onPressed: () {
                 setState(() {
@@ -989,7 +1022,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
             ],
             const SizedBox(height: AppSpacing.lg),
             AppButton(
-              variant: AppButtonVariant.danger,
+              variant: AppButtonVariant.destructive,
               fullWidth: true,
               onPressed: diff.abs() <= 0.01 || _forceEnd
                   ? () => _endGame(app)

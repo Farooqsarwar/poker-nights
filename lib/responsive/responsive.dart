@@ -22,6 +22,8 @@ extension AppDeviceX on AppDevice {
 }
 
 /// Breakpoint-aware helpers.
+/// Note: `tablet` here is the compact-layout threshold (480, Tailwind `sm`),
+/// not Tailwind `md` (768). Sidebar switches at [desktop]=768 per Spec C1.
 class AppBreakpoints {
   AppBreakpoints._();
 
@@ -32,9 +34,9 @@ class AppBreakpoints {
 
   static AppDevice deviceOf(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    if (width > largeDesktop) return AppDevice.largeDesktop;
-    if (width > desktop) return AppDevice.desktop;
-    if (width > tablet) return AppDevice.tablet;
+    if (width >= largeDesktop) return AppDevice.largeDesktop;
+    if (width >= desktop) return AppDevice.desktop;
+    if (width >= tablet) return AppDevice.tablet;
     return AppDevice.mobile;
   }
 
@@ -42,7 +44,7 @@ class AppBreakpoints {
       MediaQuery.sizeOf(context).width >= desktop;
 
   static bool isLarge(BuildContext context) =>
-      MediaQuery.sizeOf(context).width > largeDesktop;
+      MediaQuery.sizeOf(context).width >= largeDesktop;
 }
 
 /// LayoutBuilder-driven responsive builder.
@@ -56,11 +58,11 @@ class ResponsiveBuilder extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final device = width > AppBreakpoints.largeDesktop
+        final device = width >= AppBreakpoints.largeDesktop
             ? AppDevice.largeDesktop
-            : width > AppBreakpoints.desktop
+            : width >= AppBreakpoints.desktop
             ? AppDevice.desktop
-            : width > AppBreakpoints.tablet
+            : width >= AppBreakpoints.tablet
             ? AppDevice.tablet
             : AppDevice.mobile;
         return builder(context, device);
@@ -171,15 +173,17 @@ class AppScale {
   }
 
   /// Fluid font size, held between [minTextScale] and [maxScale] times the
-  /// design value.
+  /// design value. Allows large display headings (>= 32) to scale down to 0.75
+  /// on narrow (320px) screens to avoid overflow (Spec B3).
   static double sp(num value, {double maxScale = maxTextScale}) {
     if (_isDesktop) return value.toDouble();
+    final minScale = value >= 32 ? 0.75 : minTextScale;
     return _rawOr(
       () => _clamped(
         value,
         ScreenUtil().setSp(value),
         maxScale,
-        minScale: minTextScale,
+        minScale: minScale,
       ),
       value,
     );

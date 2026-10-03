@@ -11,12 +11,20 @@ class AppTheme {
   AppTheme._();
 
   /// Builds the [ThemeData] for the given [palette].
-  ///
-  /// Currently only dark variants are used (the light variant is kept for
-  /// future use but shares the same palette).
-  static ThemeData forPalette(ThemePalette palette, {Brightness brightness = Brightness.dark}) {
+  static ThemeData forPalette(
+    ThemePalette palette, {
+    Brightness brightness = Brightness.dark,
+  }) {
+    // Spec B1: One-look black application aesthetic. Dark-only palette.
+    final bg = palette.background;
+    final cardBg = palette.card;
+    final fg = palette.foreground;
+    final mutedFg = palette.mutedForeground;
+    final borderColor = palette.border;
+    final selectedNavColor = palette.redText;
+
     final colorScheme = ColorScheme(
-      brightness: brightness,
+      brightness: Brightness.dark,
       primary: palette.primary,
       onPrimary: palette.onPrimary,
       primaryContainer: palette.accent,
@@ -37,13 +45,13 @@ class AppTheme {
       onErrorContainer: palette.destructive,
     );
 
-    final base = ThemeData(useMaterial3: false, colorScheme: colorScheme);
+    final base = ThemeData(useMaterial3: true, colorScheme: colorScheme);
 
     return base.copyWith(
-      scaffoldBackgroundColor: palette.background,
+      scaffoldBackgroundColor: bg,
       textTheme: AppTypography.textTheme(),
-      canvasColor: palette.background,
-      dividerColor: palette.border,
+      canvasColor: bg,
+      dividerColor: borderColor,
       splashColor: palette.primarySoft,
       highlightColor: palette.primarySoft,
       focusColor: palette.primarySoft,
@@ -53,13 +61,13 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        foregroundColor: palette.foreground,
+        foregroundColor: fg,
         centerTitle: false,
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: palette.card,
-        selectedItemColor: palette.primary,
-        unselectedItemColor: palette.mutedForeground,
+        backgroundColor: cardBg,
+        selectedItemColor: selectedNavColor,
+        unselectedItemColor: mutedFg,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
       ),
@@ -80,11 +88,11 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: palette.card,
-        hintStyle: AppTypography.body(color: palette.onSurfaceHint),
-        labelStyle: AppTypography.body(color: palette.mutedForeground),
+        fillColor: cardBg,
+        hintStyle: AppTypography.body(color: mutedFg),
+        labelStyle: AppTypography.body(color: mutedFg),
         errorStyle: AppTypography.body(
-          color: palette.destructive,
+          color: AppColors.redText,
           size: AppFontSizes.xs,
         ),
         contentPadding: const EdgeInsets.symmetric(
@@ -93,11 +101,11 @@ class AppTheme {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: BorderSide(color: palette.border),
+          borderSide: BorderSide(color: borderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: BorderSide(color: palette.border),
+          borderSide: BorderSide(color: borderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -116,35 +124,35 @@ class AppTheme {
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: palette.card,
+        backgroundColor: cardBg,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          side: BorderSide(color: palette.border),
+          side: BorderSide(color: borderColor),
         ),
       ),
       dividerTheme: DividerThemeData(
-        color: palette.border,
+        color: borderColor,
         thickness: 1,
         space: 1,
       ),
       cardTheme: CardThemeData(
-        color: palette.card,
+        color: cardBg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          side: BorderSide(color: palette.border),
+          side: BorderSide(color: borderColor),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: palette.secondary,
-        contentTextStyle: AppTypography.body(),
+        contentTextStyle: AppTypography.body(color: Colors.white),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          side: BorderSide(color: palette.border),
+          side: BorderSide(color: borderColor),
         ),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
@@ -158,119 +166,15 @@ class AppTheme {
         ),
         textStyle: AppTypography.body(
           size: AppFontSizes.xs,
-          color: palette.foreground,
+          color: Colors.white,
         ),
       ),
       scrollbarTheme: ScrollbarThemeData(
         thumbColor: WidgetStateProperty.resolveWith(
-          (states) => palette.border,
+          (states) => borderColor,
         ),
         radius: const Radius.circular(2),
         thickness: WidgetStateProperty.all(4),
-      ),
-    );
-  }
-
-  /// Convenience: builds the dark [ThemeData] from the current [AppColors]
-  /// palette.  Used by [PokerNightApp].
-  static ThemeData dark() {
-    return forPalette(AppColors.currentPalette);
-  }
-
-  /// Light variant – reuses the same palette with a paper-toned surface.
-  /// Kept for the ThemeMode.light / system toggle.
-  static ThemeData light() {
-    const paper = Color(0xFFF6F4EF);
-    const paperCard = Colors.white;
-    const ink = Color(0xFF1C1B18);
-    const inkMuted = Color(0xFF6B675F);
-    const line = Color(0xFFE4E1DA);
-
-    final p = AppColors.currentPalette;
-
-    final colorScheme = ColorScheme.light(
-      primary: p.primary,
-      onPrimary: p.onPrimary,
-      secondary: p.secondary,
-      surface: paperCard,
-      onSurface: ink,
-      error: p.destructive,
-      onError: Colors.white,
-    );
-
-    final base = ThemeData(useMaterial3: false, colorScheme: colorScheme);
-
-    return base.copyWith(
-      scaffoldBackgroundColor: paper,
-      textTheme: AppTypography.textTheme(),
-      canvasColor: paper,
-      dividerColor: line,
-      splashColor: p.primarySoft,
-      highlightColor: p.primarySoft,
-      focusColor: p.primarySoft,
-      hoverColor: p.primarySoft,
-      appBarTheme: AppBarTheme(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        foregroundColor: Colors.black,
-        centerTitle: false,
-      ),
-      bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: paperCard,
-        selectedItemColor: p.primary,
-        unselectedItemColor: inkMuted,
-        type: BottomNavigationBarType.fixed,
-        elevation: 0,
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: paperCard,
-        hintStyle: AppTypography.body(color: inkMuted),
-        labelStyle: AppTypography.body(color: inkMuted),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 12,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: line),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: const BorderSide(color: line),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          borderSide: BorderSide(color: p.primary, width: 1.2),
-        ),
-      ),
-      dialogTheme: DialogThemeData(
-        backgroundColor: paperCard,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          side: const BorderSide(color: line),
-        ),
-      ),
-      cardTheme: CardThemeData(
-        color: paperCard,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          side: const BorderSide(color: line),
-        ),
-      ),
-      dividerTheme: const DividerThemeData(color: line, thickness: 1, space: 1),
-      snackBarTheme: SnackBarThemeData(
-        backgroundColor: ink,
-        contentTextStyle: AppTypography.body(color: Colors.white),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
       ),
     );
   }

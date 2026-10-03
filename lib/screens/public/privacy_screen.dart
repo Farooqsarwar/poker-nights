@@ -53,17 +53,19 @@ class PrivacyScreen extends StatelessWidget {
     (
       title: '6. Where data is stored',
       body:
-          'Your data is stored with Firebase (Google Cloud) so your group can see the '
-          'same game on every phone. Some game state is also kept on your device so a '
-          'game can be recovered offline. If we add usage analytics or crash reports, '
-          'we will list them here first and ask before switching them on where the law '
-          'requires it.',
+          'Your data is stored with Firebase (Google Cloud) in secure regional data centres '
+          'so your group can see the same game on every phone. Local game state is also '
+          'stored encrypted on your device using on-device persistence so a game can be '
+          'resumed and recovered offline without data loss.',
     ),
     (
       title: '7. How long we keep it',
       body:
-          'Game data and chat are kept while the group exists. When you delete your '
-          'account, your personal data is removed as described above.',
+          'Game data and chat history are retained while your group is active. Inactive '
+          'groups with no game activity for 24 months are automatically archived. When you '
+          'request account deletion, all personal credentials, identifiers, and sensitive tokens '
+          'are irreversibly purged within 90 days, while historical finishing positions retain '
+          'the anonymous moniker "Former member".',
     ),
     (
       title: '8. Children',

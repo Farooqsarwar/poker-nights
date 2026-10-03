@@ -184,7 +184,7 @@ class ThemePalette {
     secondary,
     primary.withValues(alpha: 0.7),
     const Color(0xFF424242),
-    const Color(0xFF455A64),
+    muted,
   ];
 
   /// Hues for the redesign's tinted avatars (T140). Drawn from the semantic
@@ -206,8 +206,13 @@ class ThemePalette {
   }
 
   Color avatarColorFor(String name) {
-    if (name.isEmpty) return avatarPalette.first;
-    return avatarPalette[name.codeUnitAt(0) % avatarPalette.length];
+    final key = name.trim();
+    if (key.isEmpty) return avatarPalette.first;
+    var h = 0;
+    for (final c in key.codeUnits) {
+      h = (h * 31 + c) & 0x7fffffff;
+    }
+    return avatarPalette[h % avatarPalette.length];
   }
 
   // ── Gradient helpers ────────────────────────────────────────────────────

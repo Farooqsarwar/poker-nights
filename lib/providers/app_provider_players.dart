@@ -660,6 +660,14 @@ extension AppProviderPlayers on AppProvider {
       addAnnouncement('Late registration has closed.', false);
       return;
     }
+    if (_currentGame!.checkInClosed) {
+      addAnnouncement('Check-in is closed.', false);
+      return;
+    }
+    if (!_currentGame!.isCheckInOpenAt(DateTime.now())) {
+      addAnnouncement('Check-in has not opened yet.', false);
+      return;
+    }
     // A member with no roster row yet (joined the group after this game was
     // seeded, or never answered the invite) gets one created here, implicitly
     // "Going" + checked in. This MUST persist as a single whole-row write
@@ -1501,8 +1509,10 @@ extension AppProviderPlayers on AppProvider {
   /// count exceeds that, multiple balanced tables are created automatically.
   /// Every player gets exactly one unique (table, seat) — no duplicates.
   void generateSeating(TableSeatingMode mode) {
+    if (!canGrantRebuys) return;
     _forceClaimEditor();
     if (!_isGameAuthority) return;
+    Telemetry.seatingDrawn(mode.name);
     final game = _currentGame;
     if (game == null) return;
 
@@ -1620,6 +1630,7 @@ extension AppProviderPlayers on AppProvider {
   void confirmSeating() {
     final game = _currentGame;
     if (game == null) return;
+    if (!canGrantRebuys) return;
     _forceClaimEditor();
     if (!_isGameAuthority) {
       if (isAdmin) {
@@ -1656,6 +1667,7 @@ extension AppProviderPlayers on AppProvider {
   String? assignSeat(String playerId, int table, int seat) {
     final game = _currentGame;
     if (game == null) return null;
+    if (!canGrantRebuys) return 'Not permitted to assign seats.';
     if (table < 1 || seat < 1) return 'Choose a valid table and seat.';
     final occupied = game.players.any(
       (p) =>

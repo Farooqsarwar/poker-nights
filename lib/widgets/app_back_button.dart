@@ -10,9 +10,14 @@ import '../constants/app_constants.dart';
 class AppBackButton extends StatefulWidget {
   const AppBackButton({
     super.key,
-    required this.onTap,
-    this.tooltip = 'Go back',
-  });
+    VoidCallback? onTap,
+    VoidCallback? onPressed,
+    String? tooltip,
+    String? label,
+  })  : onTap = onTap ?? onPressed ?? _noop,
+        tooltip = tooltip ?? label ?? 'Go back';
+
+  static void _noop() {}
 
   final VoidCallback onTap;
   final String tooltip;

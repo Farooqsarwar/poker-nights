@@ -250,28 +250,32 @@ class _JourneyStepItem extends StatelessWidget {
         label:
             '${step.label}: ${done ? 'done' : current ? 'current step' : 'upcoming'}',
         button: onTap != null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            vertical: _kStepVerticalPadding,
-            horizontal: AppSpacing.xxs,
-          ),
-          child: Column(
-            children: [
-              _dot(context),
-              const SizedBox(height: AppSpacing.xxs),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  step.label,
-                  maxLines: 1,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: labelColor,
-                    fontWeight: weight,
-                    height: 1.2,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: _kStepVerticalPadding,
+              horizontal: AppSpacing.xxs,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _dot(context),
+                const SizedBox(height: AppSpacing.xxs),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    step.label,
+                    maxLines: 1,
+                    style: AppTypography.bodyXs.copyWith(
+                      color: labelColor,
+                      fontWeight: weight,
+                      height: 1.2,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

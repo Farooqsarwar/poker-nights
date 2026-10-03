@@ -1,5 +1,5 @@
+// ignore_for_file: avoid_print
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -10,9 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'package:poker_night/app/colors.dart';
-import 'package:poker_night/app/route_paths.dart';
 import 'package:poker_night/models/cash_game.dart';
-import 'package:poker_night/models/chip_color.dart';
 import 'package:poker_night/models/game.dart';
 import 'package:poker_night/models/group.dart';
 import 'package:poker_night/models/live_game.dart';
@@ -29,10 +27,7 @@ import 'package:poker_night/screens/cash/cash_game_live_screen.dart';
 import 'package:poker_night/screens/cash/cash_game_screen.dart';
 import 'package:poker_night/screens/premium/checkout_screen.dart';
 import 'package:poker_night/screens/premium/upgrade_screen.dart';
-import 'package:poker_night/screens/public/auth_screen.dart';
-import 'package:poker_night/screens/public/guest_flow_screen.dart';
 import 'package:poker_night/screens/public/join_screen.dart';
-import 'package:poker_night/screens/public/landing_screen.dart';
 import 'package:poker_night/screens/public/privacy_screen.dart';
 import 'package:poker_night/screens/public/support_screen.dart';
 import 'package:poker_night/screens/public/terms_screen.dart';
@@ -56,7 +51,6 @@ import 'package:poker_night/screens/tournament/admin_dashboard_screen.dart';
 import 'package:poker_night/screens/tournament/check_in_screen.dart';
 import 'package:poker_night/screens/tournament/complete_tournament_screen.dart';
 import 'package:poker_night/screens/tournament/create_tournament_screen.dart';
-import 'package:poker_night/screens/tournament/deal_screen.dart';
 import 'package:poker_night/screens/tournament/final_table_screen.dart';
 import 'package:poker_night/screens/tournament/invitation_screen.dart';
 import 'package:poker_night/screens/tournament/player_live_screen.dart';

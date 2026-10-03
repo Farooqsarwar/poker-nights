@@ -5,7 +5,6 @@ import '../app/colors.dart';
 import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/cash_game.dart';
-import '../services/payment_service.dart';
 import '../utils/cash_settlement.dart';
 import '../utils/formatters.dart';
 import 'app_card.dart';
@@ -22,11 +21,9 @@ class CashSettlementPanel extends StatelessWidget {
   const CashSettlementPanel({
     super.key,
     required this.players,
-    required this.tier,
   });
 
   final List<CashPlayer> players;
-  final PremiumTier tier;
 
   @override
   Widget build(BuildContext context) {

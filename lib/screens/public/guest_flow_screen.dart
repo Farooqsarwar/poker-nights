@@ -24,6 +24,7 @@ import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_tag.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_timer.dart';
+import '../../widgets/app_segmented_control.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/code_input.dart';
 import '../../widgets/form_screen_header.dart';
@@ -70,6 +71,7 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
   final TextEditingController _nameController = TextEditingController();
   String? _codeError;
   String? _nameError;
+  String _guestRsvp = 'Going';
 
   /// Why tonight is over for this guest — closed registration, or the event
   /// being called off. Drives [_buildTooLate].
@@ -663,12 +665,14 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
               ],
               const SizedBox(height: AppSpacing.lg),
               Center(
-                child: AppButton(
-                  variant: AppButtonVariant.primary,
-                  size: AppButtonSize.md,
+                child: SizedBox(
                   width: 128,
-                  onPressed: _submitCode,
-                  child: const Text('Join'),
+                  child: AppButton(
+                    variant: AppButtonVariant.primary,
+                    size: AppButtonSize.md,
+                    onPressed: _submitCode,
+                    child: const Text('Join'),
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -781,25 +785,47 @@ class _GuestFlowScreenState extends State<GuestFlowScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xl),
-          AppButton(
-            fullWidth: true,
-            size: AppButtonSize.lg,
-            // Spec C4/C4p. The event details are worth reading hours early; the
-            // claim is not, because claiming IS the check-in. Tapping through
-            // to the locked card beats a button that greets a guest by taking
-            // them to a form they cannot yet submit.
-            onPressed: () => setState(
-              () => _step = game.isCheckInOpenAt(DateTime.now())
-                  ? _GuestStep.chooseInviter
-                  : _GuestStep.checkInLocked,
-            ),
-            child: AppIconLabel(
-              label: 'Claim My Guest Place',
-              trailing: Icons.arrow_forward,
-              color: AppColors.primaryForeground,
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'RSVP for this game',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Center(
+            child: AppSegmentedControl<String>(
+              selected: _guestRsvp,
+              values: const ['Going', 'Maybe', "Can't go"],
+              onSelected: (v) => setState(() => _guestRsvp = v),
             ),
           ),
+          const SizedBox(height: AppSpacing.lg),
+          if (_guestRsvp != "Can't go") ...[
+            AppButton(
+              fullWidth: true,
+              size: AppButtonSize.lg,
+              // Spec C4/C4p. The event details are worth reading hours early; the
+              // claim is not, because claiming IS the check-in. Tapping through
+              // to the locked card beats a button that greets a guest by taking
+              // them to a form they cannot yet submit.
+              onPressed: () => setState(
+                () => _step = game.isCheckInOpenAt(DateTime.now())
+                    ? _GuestStep.chooseInviter
+                    : _GuestStep.checkInLocked,
+              ),
+              child: AppIconLabel(
+                label: 'Claim My Guest Place',
+                trailing: Icons.arrow_forward,
+                color: AppColors.primaryForeground,
+              ),
+            ),
+          ] else ...[
+            Text(
+              'Thanks for letting the host know!',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+            ),
+          ],
         ],
       ),
     );

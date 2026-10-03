@@ -51,17 +51,17 @@ class AppBadge extends StatelessWidget {
       ),
       AppBadgeVariant.highlight => (
         AppColors.primary.withValues(alpha: Glass.badgeOpacity),
-        AppColors.primary,
+        AppColors.primaryText,
         AppColors.primary,
       ),
       AppBadgeVariant.green => (
         AppColors.success.withValues(alpha: Glass.badgeOpacity),
-        AppColors.success,
+        AppColors.successText,
         AppColors.success,
       ),
       AppBadgeVariant.red => (
         AppColors.destructive.withValues(alpha: Glass.badgeOpacity),
-        AppColors.destructive,
+        AppColors.destructiveText,
         AppColors.destructive,
       ),
       AppBadgeVariant.muted => (

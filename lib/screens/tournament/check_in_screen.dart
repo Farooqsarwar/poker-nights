@@ -181,7 +181,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
               // this banner makes the timing visible to the admin.
               Builder(builder: (ctx) {
                 final app = ctx.read<AppProvider>();
-                if (!app.lateRegistrationOpen) {
+                final g = app.currentGame;
+                if (g != null && g.registrationClosed) {
                   return const AppAlertBanner(
                     type: AppAlertType.error,
                     message:
@@ -194,7 +195,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                       'Host override: this skips the normal guest slot flow.',
                 );
               }),
-              const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.lg),
               AppTextField(
                 controller: controller,
                 label: 'Name',
@@ -213,15 +214,21 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
-                    child: AppButton(
-                      onPressed: name.isEmpty || !app.lateRegistrationOpen
-                          ? null
-                          : () {
-                              app.addWalkInPlayer(name);
-                              Navigator.of(context).pop();
-                            },
-                      child: const Text('Check in'),
-                    ),
+                    child: Builder(builder: (btnCtx) {
+                      final a = btnCtx.read<AppProvider>();
+                      final g = a.currentGame;
+                      final closed =
+                          g == null || g.registrationClosed;
+                      return AppButton(
+                        onPressed: name.isEmpty || closed
+                            ? null
+                            : () {
+                                app.addWalkInPlayer(name);
+                                Navigator.of(context).pop();
+                              },
+                        child: const Text('Check in'),
+                      );
+                    }),
                   ),
                 ],
               ),
@@ -236,11 +243,11 @@ class _CheckInScreenState extends State<CheckInScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final game = app.currentGame;
-    final isAdmin = app.canRunCurrentGame;
+    final canRunClock = app.canRunCurrentGame;
 
-    // Seating setup is admin-only. Players see their seat from the invitation
+    // Seating setup is host/co-host-only. Players see their seat from the invitation
     // screen, never this setup UI (client feedback 07-018).
-    if (!isAdmin) {
+    if (!canRunClock) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) context.go(RoutePaths.invitation);
       });
@@ -340,6 +347,21 @@ class _CheckInScreenState extends State<CheckInScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          if (game.settings.earlyArrivalBonusEnabled) ...[
+            AppCard(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
+              child: Text(
+                'Early arrival bonus: checked in and approved before the scheduled start earns +${(((game.settings.earlyArrivalBonusPctOverride ?? 0.125) * 100).toStringAsFixed(1))}% chips.',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // Spec C4/C4p. The host is not the one opening the door — the window
           // opens by itself 10 minutes before the start — so this says which
           // side of it the room is on, and counts down, instead of leaving a
@@ -760,7 +782,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
                   children: [
                     // D4: seating and TDA balancing are part of the free
                     // tournament engine — never Premium-gated.
-                    for (final mode in SeatingMode.values)
+                    // Spec O6: Manual seating is not shown until O6 is approved.
+                    for (final mode in SeatingMode.values.where((m) => m != SeatingMode.manual))
                       _SeatingOption(
                         label: mode.label,
                         active: _seatingMode == mode,
@@ -931,7 +954,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     Expanded(
                       child: AppButton(
                         variant: AppButtonVariant.secondary,
-                        onPressed: game.rebuysClosed
+                        onPressed: game.registrationClosed
                             ? null
                             : () => _showWalkInModal(context, app),
                         child: const Text('Walk-in'),
@@ -939,7 +962,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     ),
                   ],
                 ),
-                if (game.rebuysClosed) ...[
+                if (game.registrationClosed) ...[
                   const SizedBox(height: AppSpacing.sm),
                   AppAlertBanner(
                     type: AppAlertType.warning,

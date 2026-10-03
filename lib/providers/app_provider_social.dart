@@ -22,6 +22,27 @@ extension AppProviderSocial on AppProvider {
     _chatSendTimes.putIfAbsent(userId, () => <DateTime>[]).add(DateTime.now());
   }
 
+  /// Structured @mention check: true when [body] @-names a group member or
+  /// current-game player (case-insensitive, punctuation-trimmed).
+  bool _mentionsMember(String body) {
+    final names = <String>{
+      for (final m in _currentGroup.members) m.name.toLowerCase(),
+      for (final p in _currentGame?.players ?? const []) p.name.toLowerCase(),
+    }..removeWhere((n) => n.isEmpty);
+    if (names.isEmpty) return false;
+    final tokens = body.split(RegExp(r'\s+'));
+    for (final t in tokens) {
+      if (!t.startsWith('@') || t.length < 2) continue;
+      final ref =
+          t.substring(1).replaceAll(RegExp(r'[^a-z0-9_.]+'), '').toLowerCase();
+      if (ref.isEmpty) continue;
+      for (final n in names) {
+        if (n == ref || n.startsWith(ref) || ref.startsWith(n)) return true;
+      }
+    }
+    return false;
+  }
+
   /// Marks an entire chat scope as read up to now so its unread counter
   /// resets. Callers (chat sheet / group hub screens) invoke this when the
   /// conversation becomes visible.
@@ -65,7 +86,7 @@ extension AppProviderSocial on AppProvider {
   /// Sends a chat message. Returns a validation message when the message
   /// cannot be sent (empty, too long or rate limited), or null on success.
   String? sendChatMessage(String? gameId, String body) {
-    if (_user == null) return null;
+    if (_user == null) return 'You must be signed in to send a message.';
     // Spec §22: sanitize input before processing.
     final sanitized = Sanitization.sanitizeChat(body);
     if (sanitized.isEmpty) return 'Message cannot be empty.';
@@ -109,21 +130,24 @@ extension AppProviderSocial on AppProvider {
       _postGroupChat(msg);
     }
 
-    // Fan out a push notification for this chat message (UAT 12-108/13-059).
-    // The sender is excluded inside _fanOutPush so they don't banner themselves.
-    pushNotification(
-      AppNotification(
-        id: 'chat-${msg.id}',
-        title: isGameChat
-            ? 'Game Chat: ${_currentGame?.settings.name ?? 'Live Game'}'
-            : 'Group Chat: ${_currentGroup.name}',
-        body: '${_user!.name}: $sanitized',
-        timestamp: DateTime.now(),
-        type: NotificationType.chat,
-        link: isGameChat ? '/game/$gameId' : '/chat',
-        read: false,
-      ),
-    );
+    // Push only for structured mentions per Spec E10 (not every line).
+    // Plain chat stays in-app to avoid push spam and rules throttle.
+    final mentionsMe = _mentionsMember(sanitized);
+    if (mentionsMe) {
+      pushNotification(
+        AppNotification(
+          id: 'chat-${msg.id}',
+          title: isGameChat
+              ? 'Game Chat: ${_currentGame?.settings.name ?? 'Live Game'}'
+              : 'Group Chat: ${_currentGroup.name}',
+          body: '${_user!.name}: $sanitized',
+          timestamp: DateTime.now(),
+          type: NotificationType.chat,
+          link: isGameChat ? '/game/$gameId' : '/chat',
+          read: false,
+        ),
+      );
+    }
 
     if (!_disposed) notifyListeners();
     return null;
@@ -316,7 +340,7 @@ extension AppProviderSocial on AppProvider {
   Future<int> importNights(List<ImportedNight> nights) async {
     final gid = _currentGroup.id;
     if (!isAdmin || gid.isEmpty || nights.isEmpty) return 0;
-    final have = {for (final n in _importedNights) n.date};
+    final have = seasonDates.toSet();
     final fresh = [
       for (final n in nights)
         if (have.add(n.date)) n,
@@ -1181,10 +1205,14 @@ extension AppProviderSocial on AppProvider {
         .where((p) => !p.isGuest && p.rsvp == null)
         .toList();
     if (pending.isEmpty) return;
-    for (final _ in pending) {
+    for (final p in pending) {
+      // Addressed to THIS member only: an untargeted broadcast repeated N
+      // times delivered every member of the group N "you haven't responded"
+      // rows, including the people who had already answered.
       pushNotification(
         AppNotification(
-          id: 'n-${DateTime.now().millisecondsSinceEpoch}',
+          id: 'rsvp-reminder-${game.id}-${p.id}-'
+              '${DateTime.now().millisecondsSinceEpoch}',
           title: 'RSVP reminder',
           body:
               'You haven\'t responded to ${target.settings.name} '
@@ -1194,6 +1222,7 @@ extension AppProviderSocial on AppProvider {
           link: '/invitation',
           read: false,
           timestamp: DateTime.now(),
+          audience: [p.id],
         ),
       );
     }

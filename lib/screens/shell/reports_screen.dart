@@ -152,6 +152,15 @@ class _ReportCard extends StatelessWidget {
               ),
               AppButton(
                 size: AppButtonSize.sm,
+                variant: AppButtonVariant.destructive,
+                onPressed: () {
+                  app.resolveReport(report, removeMessage: true);
+                  app.removeMember(report.authorId);
+                },
+                child: const Text('Remove from group'),
+              ),
+              AppButton(
+                size: AppButtonSize.sm,
                 variant: AppButtonVariant.secondary,
                 onPressed: () => app.resolveReport(report),
                 child: const Text('Dismiss'),

@@ -385,8 +385,12 @@ abstract final class PayoutsEngine {
         ev: List<double>.filled(stacks.length, 0),
       );
     }
+    final maxX = prizes.length >= 2
+        ? math.max(0, prizes[0] - prizes[1])
+        : math.max(0, prizes[0]);
+    final clampedX = x.clamp(0, maxX);
     final lockedPrizes = List<int>.from(prizes);
-    lockedPrizes[0] = (lockedPrizes[0] - x).round();
+    lockedPrizes[0] = (lockedPrizes[0] - clampedX).round();
 
     final List<double> locked;
     switch (method) {
@@ -403,7 +407,7 @@ abstract final class PayoutsEngine {
     final ev = List<double>.filled(stacks.length, 0);
     for (var i = 0; i < stacks.length; i++) {
       final chipShare = totalChips > 0 ? stacks[i] / totalChips : 0.0;
-      ev[i] = locked[i] + x * chipShare;
+      ev[i] = locked[i] + clampedX * chipShare;
     }
     return LeaveForWinnerResult(locked: locked, ev: ev);
   }

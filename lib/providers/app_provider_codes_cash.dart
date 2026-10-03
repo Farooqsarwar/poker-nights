@@ -86,7 +86,7 @@ extension AppProviderCodesCash on AppProvider {
       if (hit.kind == 'game' && _isGameAuthority) {
         // Admins can follow the raw document.
         _lookupSub =
-            _repo.gameDocSnapshots(hit.gid, hit.gameId, isAdmin: true).listen((snap) {
+            _repo.gameDocSnapshots(hit.gid, hit.gameId).listen((snap) {
           final data = snap.data();
           if (!snap.exists || data == null) return;
           try {

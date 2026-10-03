@@ -45,7 +45,12 @@ class PageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasActions = actions != null && actions!.isNotEmpty;
     final actionRow = hasActions
-        ? Row(mainAxisSize: MainAxisSize.min, children: actions!)
+        ? Wrap(
+            alignment: WrapAlignment.end,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: actions!,
+          )
         : null;
 
     final titleLine = Row(
@@ -114,7 +119,13 @@ class PageHeader extends StatelessWidget {
               child: AppBackButton(onTap: onBack!, tooltip: backTooltip),
             ),
             const Spacer(),
-            ?actionRow,
+            if (actionRow != null)
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: actionRow,
+                ),
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),

@@ -16,10 +16,9 @@ import 'interactive_scale.dart';
 enum AppButtonVariant {
   primary,
   secondary,
-  danger,
+  destructive,
   ghost,
   light,
-  destructive,
 }
 
 enum AppButtonSize { sm, md, lg, xl }
@@ -50,7 +49,6 @@ class AppButton extends StatefulWidget {
     required this.child,
     this.variant = AppButtonVariant.primary,
     this.size = AppButtonSize.md,
-    this.width,
     this.disabled = false,
     this.loading = false,
     this.fullWidth = false,
@@ -60,7 +58,6 @@ class AppButton extends StatefulWidget {
   final Widget child;
   final AppButtonVariant variant;
   final AppButtonSize size;
-  final double? width;
   final bool disabled;
   final bool loading;
   final bool fullWidth;
@@ -109,7 +106,7 @@ class _AppButtonState extends State<AppButton> {
               duration: AppDurations.fast,
               opacity: widget.disabled ? 0.4 : 1,
               child: SizedBox(
-                width: widget.width ?? (widget.fullWidth ? double.infinity : null),
+                width: widget.fullWidth ? double.infinity : null,
                 height: _heightFor(context, sizes),
                 child: AnimatedContainer(
                   duration: AppDurations.fast,
@@ -285,22 +282,6 @@ class _AppButtonState extends State<AppButton> {
                 : AppColors.borderSubtle,
           ),
         );
-      case AppButtonVariant.danger:
-        return BoxDecoration(
-          color: AppColors.destructive.withValues(alpha: _hovering ? 0.20 : 0.12),
-          borderRadius: borderRadius,
-          border: Border.all(
-            color: AppColors.destructive.withValues(
-              alpha: _hovering ? 0.40 : 0.25,
-            ),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.destructive.withValues(alpha: 0.10),
-              blurRadius: 12,
-            ),
-          ],
-        );
       case AppButtonVariant.destructive:
         return BoxDecoration(
           borderRadius: borderRadius,
@@ -387,14 +368,6 @@ class _AppButtonState extends State<AppButton> {
           foreground: AppColors.foreground,
           border: Border.all(color: AppColors.border),
         );
-      case AppButtonVariant.danger:
-        return _BtnColors(
-          background: Colors.transparent,
-          foreground: AppColors.destructive,
-          border: Border.all(
-            color: AppColors.destructive.withValues(alpha: 0.3),
-          ),
-        );
       case AppButtonVariant.destructive:
         return _BtnColors(
           background: AppColors.destructive,
@@ -419,7 +392,7 @@ class _AppButtonState extends State<AppButton> {
         return const _BtnSizes(
           fontSize: AppFontSizes.xs,
           padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          height: 34,
+          height: 44,
         );
       case AppButtonSize.md:
         return const _BtnSizes(

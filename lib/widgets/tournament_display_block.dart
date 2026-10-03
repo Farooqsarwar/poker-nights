@@ -942,6 +942,7 @@ class _CompactLayout extends StatelessWidget {
               ),
               LayoutBuilder(
                 builder: (context, constraints) {
+                  final narrow = constraints.maxWidth < 340;
                   return Wrap(
                     children: [
                       for (
@@ -950,16 +951,21 @@ class _CompactLayout extends StatelessWidget {
                       i++
                       )
                         SizedBox(
-                          width: constraints.maxWidth / 2,
-                          height: 70,
-                          child: _PayoutValue(
-                            label: const ['1ST', '2ND', '3RD', '4TH'][i],
-                            value: showPayoutAmounts
-                                ? Formatters.chips(
-                              game.structure.prizes[i].amount,
-                            )
-                                : '—',
-                            scale: .55,
+                          width: narrow
+                              ? constraints.maxWidth
+                              : constraints.maxWidth / 2,
+                          child: ConstrainedBox(
+                            constraints:
+                                const BoxConstraints(minHeight: 70),
+                            child: _PayoutValue(
+                              label: const ['1ST', '2ND', '3RD', '4TH'][i],
+                              value: showPayoutAmounts
+                                  ? Formatters.chips(
+                                game.structure.prizes[i].amount,
+                              )
+                                  : '—',
+                              scale: .55,
+                            ),
                           ),
                         ),
                     ],
@@ -1017,6 +1023,7 @@ class _CompactStat extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           FittedBox(
+            fit: BoxFit.scaleDown,
             child: Text(
               label,
               style: AppTypography.mono(
@@ -1028,6 +1035,7 @@ class _CompactStat extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           FittedBox(
+            fit: BoxFit.scaleDown,
             child: redSlash && slash >= 0
                 ? Text.rich(
               TextSpan(

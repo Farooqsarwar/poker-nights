@@ -55,7 +55,7 @@ Future<void> main() async {
   // Production error handling — show a friendly error overlay instead of a red screen.
   ErrorWidget.builder = (FlutterErrorDetails details) {
     return Material(
-      color: const Color(0xFF131315),
+      color: const Color(0xFF0A0A0A),
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -98,9 +98,15 @@ Future<void> main() async {
   // performance tuning knob.
   await _boot(
     'Firebase',
-    () => Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    ),
+    () async {
+      try {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      } catch (e) {
+        debugPrint('Firebase init degraded: $e');
+      }
+    },
     const Duration(seconds: 15),
   );
 
@@ -232,7 +238,7 @@ class _BootFailureApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        backgroundColor: const Color(0xFF0D0D0D),
+        backgroundColor: const Color(0xFF0A0A0A),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.xl),
@@ -382,18 +388,14 @@ class PokerNightApp extends StatelessWidget {
     // Resolve the active palette from the stored color-theme id and push it
     // into AppColors so every static accessor returns the correct value.
     final palette = ThemePalettes.forId(colorTheme);
-    AppColors.currentPalette = palette;
+    AppColors.setPalette(palette);
 
     return MaterialApp.router(
       title: 'Poker Night',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.forPalette(palette, brightness: Brightness.light),
+      theme: AppTheme.forPalette(palette, brightness: Brightness.dark),
       darkTheme: AppTheme.forPalette(palette, brightness: Brightness.dark),
-      themeMode: switch (themePreference) {
-        'light' => ThemeMode.light,
-        'system' => ThemeMode.system,
-        _ => ThemeMode.dark,
-      },
+      themeMode: ThemeMode.dark,
       routerConfig: router,
       builder: (context, child) => ResponsiveBreakpoints.builder(
         child: Builder(
@@ -401,7 +403,7 @@ class PokerNightApp extends StatelessWidget {
             width: ResponsiveValue<double?>(
               innerContext,
               conditionalValues: [
-                const Condition.equals(name: MOBILE, value: 450),
+                const Condition.equals(name: MOBILE, value: AppBreakpoints.tablet),
               ],
             ).value,
             child: BouncingScrollWrapper.builder(

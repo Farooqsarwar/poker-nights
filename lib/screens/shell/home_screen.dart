@@ -1319,6 +1319,39 @@ class _NextActionCard extends StatelessWidget {
             subtitle,
             style: TextStyle(color: AppColors.mutedForeground, fontSize: 13),
           ),
+          if (going > group.tableSettings.maxPerTable) ...[
+            const SizedBox(height: 10),
+            Text(
+              "That's a second table — Premium covers 2+ tables. Sort it now, days before the game, never at the door.",
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.primary,
+                  onPressed: () => context.push(RoutePaths.upgrade),
+                  child: const Text('See Premium'),
+                ),
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () {
+                    app.updateGroupTableSettings(
+                      group.tableSettings.copyWith(maxPerTable: 10),
+                    );
+                  },
+                  child:
+                      const Text('Seat 10 at one table instead (free)'),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 16),
           InkWell(
             onTap: () => onOpen(game),

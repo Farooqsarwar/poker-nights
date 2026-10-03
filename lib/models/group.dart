@@ -16,10 +16,11 @@ class Group {
     required this.chat,
     required this.polls,
     required this.notifications,
-    this.icon = '♠',
+    this.icon = 'Spade',
     this.pinned = false,
     this.tableSettings = TableSettings.fallback,
     this.defaultChipSetId,
+    this.learningOptOut = false,
   });
 
   final String id;
@@ -32,7 +33,7 @@ class Group {
   final List<Poll> polls;
   final List<AppNotification> notifications;
 
-  /// Short emoji used as the group's icon in the sidebar and header.
+  /// Icon name used as the group's icon in the sidebar and header.
   final String icon;
 
   /// When true the group floats to the top of the sidebar's group list.
@@ -45,15 +46,22 @@ class Group {
   /// Default chip set ID for games created in this group.
   final String? defaultChipSetId;
 
+  /// Spec B9/H5: whether this group opts out of pace adaptation learning.
+  final bool learningOptOut;
+
   List<LiveGame> get upcomingGames =>
       games.where((g) => g.status.isUpcoming).toList();
 
-  List<LiveGame> get pastGames =>
-      games.where((g) => g.status == LiveGameStatus.completed).toList();
+  List<LiveGame> get pastGames => games
+      .where((g) =>
+          g.status == LiveGameStatus.completed ||
+          g.status == LiveGameStatus.cancelled)
+      .toList();
 
   Group copyWith({
     String? name,
     String? joinCode,
+    String? ownerId,
     List<AppUser>? members,
     List<LiveGame>? games,
     List<ChatMessage>? chat,
@@ -64,12 +72,13 @@ class Group {
     TableSettings? tableSettings,
     String? defaultChipSetId,
     bool clearDefaultChipSetId = false,
+    bool? learningOptOut,
   }) {
     return Group(
       id: id,
       name: name ?? this.name,
       joinCode: joinCode ?? this.joinCode,
-      ownerId: ownerId,
+      ownerId: ownerId ?? this.ownerId,
       members: members ?? this.members,
       games: games ?? this.games,
       chat: chat ?? this.chat,
@@ -84,6 +93,7 @@ class Group {
       defaultChipSetId: clearDefaultChipSetId
           ? null
           : defaultChipSetId ?? this.defaultChipSetId,
+      learningOptOut: learningOptOut ?? this.learningOptOut,
     );
   }
 }

@@ -16,7 +16,7 @@ import 'package:poker_night/screens/shell/stats_screen.dart';
 import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/theme/theme_palette.dart';
 import 'package:poker_night/widgets/app_toggle.dart';
-import 'package:poker_night/widgets/back_nav_button.dart';
+import 'package:poker_night/widgets/app_back_button.dart';
 import 'package:poker_night/widgets/squircle_icon_button.dart';
 import 'package:provider/provider.dart';
 
@@ -102,20 +102,20 @@ void main() {
     expect(pressed, isTrue);
   });
 
-  testWidgets('BackNavButton renders squircle with chevron_left', (
+  testWidgets('AppBackButton renders squircle with chevron_left', (
     tester,
   ) async {
     var backPressed = false;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: BackNavButton(onPressed: () => backPressed = true),
+          body: AppBackButton(onPressed: () => backPressed = true),
         ),
       ),
     );
 
     expect(find.byIcon(Icons.chevron_left), findsOneWidget);
-    await tester.tap(find.byType(BackNavButton));
+    await tester.tap(find.byType(AppBackButton));
     expect(backPressed, isTrue);
   });
 
@@ -209,7 +209,7 @@ void main() {
 
       expect(find.text('Statistics'), findsOneWidget);
       expect(find.text('Alex Morgan · all-time results'), findsOneWidget);
-      expect(find.byType(BackNavButton), findsOneWidget);
+      expect(find.byType(AppBackButton), findsOneWidget);
       expect(find.text('Wins'), findsOneWidget);
       expect(find.text('Avg finish'), findsOneWidget);
       expect(find.text('#3.2'), findsOneWidget);

@@ -279,36 +279,49 @@ class TournamentEngine {
 
   /// Build Spec v3.1 §F1.5 — score one composition, lower is better.
   static double scoreComposition(List<int> counts, List<int> values, int totalChips) {
-    if (counts.isEmpty || values.isEmpty || totalChips <= 0) return double.infinity;
-    final used = <int, int>{};
-    for (var i = 0; i < counts.length; i++) {
-      if (counts[i] > 0) used[values[i]] = counts[i];
+    if (counts.isEmpty || values.isEmpty) return double.infinity;
+    final present = <({int value, int count})>[];
+    for (var i = 0; i < counts.length && i < values.length; i++) {
+      if (counts[i] > 0) {
+        present.add((value: values[i], count: counts[i]));
+      }
     }
-    if (used.isEmpty) return double.infinity;
+    if (present.isEmpty) return double.infinity;
+    present.sort((a, b) => a.value.compareTo(b.value));
 
-    var smallestPair = 0.0;
-    final present = used.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
-    if (present.length >= 2) {
-      final low = present.first.key;
-      final next = present[1].key;
-      smallestPair = math.pow(((low - next) / 2), 2).toDouble() + 25;
+    var pen = 0.0;
+
+    // 1. Smallest chip: target count t = 12 if v1/v0 = 4 else 10
+    //    pen += ((c0 − t)/2)² + (c0 < 8 || c0 > 16 ? 25 : 0)
+    final c0 = present.first.count;
+    final v0 = present.first.value;
+    final target = (present.length >= 2 && present[1].value == 4 * v0) ? 12 : 10;
+    final diff = (c0 - target) / 2.0;
+    pen += diff * diff + (c0 < 8 || c0 > 16 ? 25.0 : 0.0);
+
+    // 2. Change coverage: Walking denominations low to high, if sum of lower denoms < 2 × current chip value, add +15
+    var lowerSum = present.first.value * present.first.count;
+    for (var i = 1; i < present.length; i++) {
+      final vi = present[i].value;
+      if (lowerSum < 2 * vi) {
+        pen += 15.0;
+      }
+      lowerSum += vi * present[i].count;
     }
 
-    var changeCoverage = 0.0;
-    final denomValues = present.map((e) => e.key).toList();
-    for (final value in denomValues) {
-      if (value < 10) changeCoverage += 15;
-      if (value == 25) changeCoverage += 15;
+    // 3. Total chip count sanity:
+    //    3 points per chip under 20, 3 points per chip over 40, plus flat +2 if total not in 25–35 sweet spot
+    final n = totalChips > 0 ? totalChips : present.fold<int>(0, (s, e) => s + e.count);
+    pen += 3.0 * math.max(0, 20 - n) + 3.0 * math.max(0, n - 40) + ((n >= 25 && n <= 35) ? 0.0 : 2.0);
+
+    // 4. Round counts: Denomination count divisible by 5 or 2 gets -0.5 discount
+    for (final e in present) {
+      if (e.count % 5 == 0 || e.count % 2 == 0) {
+        pen -= 0.5;
+      }
     }
 
-    var chipCountPenalty = 0.0;
-    final totalUsed = present.fold<int>(0, (sum, e) => sum + e.value);
-    chipCountPenalty = 3 * (totalChips - totalUsed).abs() + 2;
-
-    var parityBonus = 0.0;
-    if (present.length % 2 == 0) parityBonus = -1.0;
-
-    return smallestPair + changeCoverage + chipCountPenalty + parityBonus;
+    return pen;
   }
 
   /// Recommends unique values for unnumbered chips ordered from most-available
@@ -357,7 +370,6 @@ class TournamentEngine {
     [10, 20],
     [15, 30],
     [20, 40],
-    [20, 50],
     [25, 50],
     [40, 80],
     [50, 100],
@@ -1042,38 +1054,12 @@ class TournamentEngine {
   /// principle and slower in practice, and the slowness compounds with the
   /// number of players at the table.
   ///
-  /// So: big-blind ante for anything but the smallest fields, individual for
-  /// short-handed games where the per-hand cost of collecting is small and the
-  /// fairness is more noticeable. Very short events skip antes entirely --
-  /// there is not enough runway for them to matter before the blinds do the
-  /// work anyway.
+  /// Spec §F1.8: Auto Big Blind ante standard (one big-blind ante once rebuys close).
   static AnteRecommendation recommendAnte({
     required int players,
     required double durationHours,
-  }) {
-    if (durationHours < 3.5 && players <= 6) {
-      return const AnteRecommendation(
-        enabled: false,
-        style: AnteStyle.bigBlind,
-        reason: 'A short game with a small field does not need antes — the '
-            'blinds create the pressure on their own.',
-      );
-    }
-    if (players <= 6) {
-      return const AnteRecommendation(
-        enabled: true,
-        style: AnteStyle.individual,
-        reason: 'Short-handed, so an individual ante is quick to collect and '
-            'spreads the cost evenly.',
-      );
-    }
-    return const AnteRecommendation(
-      enabled: true,
-      style: AnteStyle.bigBlind,
-      reason: 'One payment per hand from the big blind — faster at a full '
-          'table than collecting from everybody.',
-    );
-  }
+  }) =>
+      recommendAnteStyle(players: players, durationHours: durationHours);
 
   /// Step 5 of the addendum's generation sequence: where the rebuy window
   /// should actually close.
@@ -1152,22 +1138,19 @@ class TournamentEngine {
     }
 
     // ── Players ──────────────────────────────────────────────────────────
-    // A bigger field takes longer to reduce, so a slightly later cutoff is
-    // tolerable before the late game loses its pressure.
-    var ceilingFraction = 0.55;
-    if (players >= 18) ceilingFraction = 0.60;
-    if (players >= 40) ceilingFraction = 0.65;
+    // Spec §F1.10 / G1: Rebuy window ceiling is 40% flat of the tournament duration,
+    // matching suggestRebuyClose.
+    const ceilingFraction = 0.40;
 
     // ── Level length + duration ──────────────────────────────────────────
     // Section 6 forbids a fixed clock rule ("rebuys always end after two
     // hours"), but level LENGTH still matters: eight 10-minute levels and
     // eight 20-minute levels are not the same tournament. The ceiling stays
     // expressed in levels, then is sanity-checked against the SHARE of the
-    // night it covers -- a proportion of whatever was asked for, never a
-    // fixed number of minutes.
+    // night it covers -- at most 40% of planned duration (Spec §F1.10).
     var ceiling = math.max(2, (plannedLevels * ceilingFraction).floor());
     if (levelDurationMins > 0 && durationHours > 0) {
-      final maxWindowMins = durationHours * 60 * ceilingFraction;
+      final maxWindowMins = durationHours * 60 * 0.40;
       final levelsThatFit = (maxWindowMins / levelDurationMins).floor();
       if (levelsThatFit >= 2) ceiling = math.min(ceiling, levelsThatFit);
     }
@@ -1181,6 +1164,21 @@ class TournamentEngine {
     }
 
     var result = viable.clamp(2, ceiling);
+    // Spec-port cross-check (F1.10/G1): the standalone `suggestRebuyClose`
+    // enforces the same 40% flat ceiling. Keep both paths in agreement —
+    // any future rewire must preserve this invariant.
+    assert(result <= ceiling, 'rebuy close exceeds 40% ceiling');
+
+    // ── Field shape ─────────────────────────────────────────────────────
+    // Stack-versus-blinds is field-independent, but the FIELD SHAPE is not:
+    // a single table is down to the endgame by the midpoint of the schedule
+    // — a rebuy there buys a chair at a four-handed table — while a
+    // multi-table field is still mid-pack at the same level, so a rebuy is
+    // still worth buying. A single-table field therefore closes one level
+    // earlier than the ceiling allows; anything bigger keeps the window.
+    // (The ceiling itself stays the G1 40% flat maximum either way.)
+    final singleTableField = players > 0 && players <= 9;
+    if (singleTableField && result > 2) result -= 1;
 
     // ── Add-on ───────────────────────────────────────────────────────────
     // If a later top-up exists, the rebuy window does not have to carry the
@@ -2570,6 +2568,10 @@ class TournamentEngine {
 
   // ───────────────────────────────────────────────────────────────────────
   // Build Spec v3.1 §F1 port — standalone, spec-faithful functions.
+  // Accepted client-side deviation (A3): [generate] keeps its cursor-walk
+  // ladder (deterministic, covered by engine_properties_test); the spec-named
+  // helpers below are standalone + trace-verified. Full rewire is tracked
+  // tech debt — do not partially wire DP snap into the walk.
   //
   // The functions above patch concrete bugs in THIS app's own (differently
   // architected) blind-curve engine. The functions below are new: the spec
@@ -2926,11 +2928,21 @@ class TournamentEngine {
     required int levelDurationMins,
     required int totalNightMinutes,
     required double mFloor,
+    AnteStyle? anteStyle,
   }) {
+    int computeAnteTotal(BlindLevel l) {
+      final ante = l.ante ?? 0;
+      if (ante <= 0) return 0;
+      if (anteStyle == AnteStyle.bigBlind || (anteStyle == null && ante == l.bb)) {
+        return l.bb;
+      }
+      return ante * 8;
+    }
+
     final qualifying = <int>[]; // 0-indexed into levels
     for (var i = 0; i < levels.length; i++) {
       final l = levels[i];
-      final orbitCost = l.sb + l.bb + (l.ante ?? 0);
+      final orbitCost = l.sb + l.bb + computeAnteTotal(l);
       if (orbitCost <= 0) continue;
       final freshM = startingStack / orbitCost;
       final elapsedMins = (i + 1) * levelDurationMins;
@@ -2944,7 +2956,7 @@ class TournamentEngine {
     for (final idx in {chosen - 1, chosen, chosen + 1}) {
       if (idx < 0 || idx >= levels.length) continue;
       final l = levels[idx];
-      final orbitCost = l.sb + l.bb + (l.ante ?? 0);
+      final orbitCost = l.sb + l.bb + computeAnteTotal(l);
       final freshM = orbitCost > 0 ? startingStack / orbitCost : 0.0;
       final freshDepthBB = l.bb > 0 ? startingStack / l.bb : 0.0;
       final elapsedMins = (idx + 1) * levelDurationMins;

@@ -132,8 +132,13 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
-    if (!_isForgot && _passwordController.text.length < 8) {
+    if (_isRegister && _passwordController.text.length < 8) {
       _fieldError(_Field.password, 'Password must be at least 8 characters.');
+      return;
+    }
+
+    if (!_isRegister && !_isForgot && _passwordController.text.isEmpty) {
+      _fieldError(_Field.password, 'Password is required.');
       return;
     }
 
@@ -158,7 +163,8 @@ class _AuthScreenState extends State<AuthScreen> {
     final String? error;
     switch (widget.mode) {
       case AuthMode.login:
-        error = await app.login(email, _passwordController.text);
+        final rawErr = await app.login(email, _passwordController.text);
+        error = rawErr != null ? 'Invalid email or password. Check your details and try again.' : null;
       case AuthMode.register:
         error = await app.register(
           _nameController.text.trim(),

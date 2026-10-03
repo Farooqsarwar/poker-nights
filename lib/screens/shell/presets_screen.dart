@@ -19,6 +19,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
+import '../../widgets/app_slider.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/chip_token.dart';
@@ -40,10 +41,12 @@ class _PresetsScreenState extends State<PresetsScreen> {
   void _editPreset(AppProvider app, TournamentPreset? preset) {
     // D4: 3 saved templates free, unlimited on Premium. Editing/using an
     // existing preset is never capped — only creating a new one past the
-    // free limit is.
+    // free limit is. The count covers the host's OWN saved presets; the four
+    // app-shipped starters (§B6) are content, not slots, so a fresh free
+    // account does not open on the upgrade prompt.
     if (preset == null &&
         app.premiumTier != PremiumTier.premium &&
-        app.presets.length >= PremiumBoundary.freeMaxSavedPresets) {
+        app.userSavedPresetCount >= PremiumBoundary.freeMaxSavedPresets) {
       _showPresetLimitPrompt(app);
       return;
     }
@@ -734,13 +737,14 @@ class _PresetFormState extends State<_PresetForm> {
             Row(
               children: [
                 Expanded(
-                  child: Slider(
+                  child: AppSlider(
                     value: _orgPct,
                     min: 0,
-                    max: 20,
-                    divisions: 20,
-                    activeColor: AppColors.primary,
-                    inactiveColor: AppColors.border,
+                    max: 30,
+                    divisions: 30,
+                    label: '${_orgPct.round()}%',
+                    title: 'Organizational costs',
+                    valueLabel: '${_orgPct.round()}%',
                     onChanged: (v) => setState(() => _orgPct = v),
                   ),
                 ),

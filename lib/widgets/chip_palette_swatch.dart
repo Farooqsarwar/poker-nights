@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/colors.dart';
 import '../app/typography.dart';
 import '../models/chip_palette.dart';
+import 'min_tap_target.dart';
 
 /// One swatch in the F5 fixed chip palette (Addendum 1 §2 row 2).
 ///
@@ -31,11 +32,12 @@ class ChipPaletteSwatch extends StatelessWidget {
       label: entry.name,
       selected: selected,
       button: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(size),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      child: MinTapTarget(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(size),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: size,
@@ -65,6 +67,7 @@ class ChipPaletteSwatch extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }

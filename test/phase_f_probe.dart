@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -14,6 +15,7 @@ import 'package:poker_night/screens/shell/presets_screen.dart';
 import 'package:poker_night/screens/shell/profile_screen.dart';
 import 'package:poker_night/screens/shell/settings_screen.dart';
 import 'package:poker_night/screens/shell/stats_screen.dart';
+import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/theme/theme_palette.dart';
 import 'package:poker_night/widgets/screen_shell.dart';
 import 'package:provider/provider.dart';
@@ -31,9 +33,21 @@ void main() {
   setUp(() {
     AppColors.currentPalette = ThemePalettes.forId('red');
     GoogleFonts.config.allowRuntimeFetching = false;
+    // See phase_b_probe: real AppProvider under the screens — disable the
+    // recovery store (Windows localstore delete race) and answer the
+    // connectivity plugin's channel (MissingPluginException).
+    RecoveryService.enabled = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('dev.fluttercommunity.plus/connectivity_status'),
+      (call) async => null,
+    );
     FlutterError.onError = (_) {};
   });
-  tearDown(() => FlutterError.onError = FlutterError.presentError);
+  tearDown(() {
+    RecoveryService.enabled = true;
+    FlutterError.onError = FlutterError.presentError;
+  });
 
   const me = AppUser(
     id: 'u1',

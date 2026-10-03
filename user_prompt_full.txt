@@ -1,0 +1,119 @@
+<USER_REQUEST>
+All wrong + not implemented — spec ref + file:
+Core lib/app/ models/
+ 1. Light theme vs one-look black — Spec B1 — lib/app/theme.dart:14-31,55-63
+ 2. Fill-red as nav text — Spec B1 red vs redText — lib/app/theme.dart:31
+ 3. useMaterial3:false half-migrated — Spec B3 — lib/app/theme.dart:65
+ 4. Mobile 450 vs tablet 480 mismatch — Spec C1 — lib/main.dart:398-411
+ 5. Global currentPalette mutable — Spec E2 — lib/main.dart:384, lib/app/colors.dart:17
+ 6. Desktop Firebase throw, single project vs 3 envs — Spec A3 — lib/firebase_options.dart:28-41, lib/main.dart:101
+ 7. Spade=Card same icon — Spec B2 — lib/app/icons.dart:6,10
+ 8. Admin live-guard only review, not create/checkin — Spec C3 — lib/app/router.dart:375-381
+ 9. Guest sets dual-source drift risk — Spec C4 — lib/app/router.dart:129-133
+10. setCurrentGroup/Game in builder side-effect — Spec E9 — lib/app/router.dart:220-275
+11. Network font, offline fallback — Spec E9 — lib/app/typography.dart:45,72,96
+12. Shimmer fixed 240x48 rect — Spec B1 — lib/app/typography.dart:167-169
+13. enableShotClock=false never read, clock wired — Spec A2/O13 — lib/constants/app_constants.dart:133
+14. Gutter 24/32 vs 18px — Spec B3 — lib/constants/app_constants.dart:16,32-37
+15. 768 > vs >= split, 480 named tablet — Spec C1 — lib/responsive/responsive.dart:29-42
+16. 320px hero overflow, minScale 1.0 — Spec B3 — lib/responsive/responsive.dart:114
+17. Avatar blue-grey T141 risk — Spec T141 — lib/theme/theme_palette.dart:181-188
+18. Avatar hash first-char cluster — Spec B5 — lib/theme/theme_palette.dart:208-211
+19. Cash totalInPlay incl cashed-out stale stack — Spec D1/D2 — lib/models/cash_game.dart:111
+20. Rejoin double-counts cashedOut+stack — Spec D2 — lib/models/cash_game.dart:26
+21. out leaves active=true — Spec E3 — lib/models/game.dart:180-187
+22. Cancelled in neither upcoming nor past — Spec B8 — lib/models/group.dart:52-56
+23. ownerId no copyWith transfer — Spec E6 — lib/models/group.dart:77
+24. Empty {} decodes phantom row — Spec B12 — lib/models/imported_night.dart:10-13,58-69
+25. evaluateNoShowGate/isLateArrivalAllowed 0 callers + mutates model — Spec E8 — lib/models/live_game.dart:1092-1148
+26. stacksLocked omits onBreak — Spec E8 — lib/models/live_game.dart:1272-1276
+27. canReEnter ignores rebuyLimit interplay — Spec §9 — lib/models/live_game.dart:1232-1238
+28. maxOrganizerPct=20 vs 0-30% — Spec G1 — lib/models/live_game.dart:284
+29. Preset missing ~20 GameSettings fields, resets on apply — Spec §9.1/A1 — lib/models/tournament_preset.dart:1-107
+30. Global isAdmin vs per-group role — Spec D15 — lib/models/user.dart:64,67
+31. Aliveness max(taken,stillIn) overstates — Spec F1 — lib/models/calibration_record.dart:161-163
+32. Missing duration records perfect 0 delta — Spec §14 — lib/models/calibration_record.dart:185
+33. createdAt not in toMap, writer dependent — Spec E10 — lib/models/chat_report.dart:63-73
+34. kExpectedAddOnRate deprecated alias — cleanup — lib/models/tournament.dart:109-110
+35. Equal times → 24h solve — Spec F1 — lib/models/tournament.dart:225-231
+Utils lib/utils/
+36. Table-walk not spec port, helpers unwired — Spec A3/F1.3 — lib/utils/tournament_engine.dart:1426,2562-2581
+37. [20,50] violates SB=BB/2 — Spec A6/F1.14 — lib/utils/tournament_engine.dart:373
+38. optimiseRebuyClose 30/38/40 vs 40% flat + 20BB vs freshM≥Mmin — Spec F1.10/G1 — lib/utils/tournament_engine.dart:1085,1146
+39. No hard-finish in bridge — Spec F4 — lib/utils/payout_bridge.dart:16-32
+40. rebuyPause timed vs hold — Spec F4 — lib/utils/clock_sequence.dart:23
+41. Drift formula, no projected/drift/±20 panel — Spec F4 — lib/utils/clock_sequence.dart:139
+42. refitRemaining silent shorten 0 callers — Spec F4 — lib/utils/clock_sequence.dart:173
+43. Missing rollover/end/Add/Repeat/late-keep-endBy/pause-ms — Spec F4 — lib/utils/clock_sequence.dart
+44. isEarlyArrivalEligible 0 calls — dead — lib/utils/live_play_rules.dart:28
+45. Fee >maxOrganizerPct(20) root — Spec G1 — lib/utils/event_settings_validation.dart:110
+46. money_utils.dart 0 callers, 3rd formatter — dead — lib/utils/money_utils.dart
+47. formatMoney 3rd formatter — dedup — lib/utils/automations_service.dart:61
+48. playChime no-op — Spec E11 — lib/utils/voice_service.dart:66
+49. Numerals not words, no master election — Spec E11 — lib/utils/voice_service.dart:112,42
+50. _checkInOpen true on live/onBreak — Spec E8 — lib/utils/main_button.dart:67
+Providers/repo/services
+51. slotSig map-toString fragile — Spec E2 — lib/providers/app_provider.dart:131-181
+52. canResume setter 0 callers, resume dead — Spec C — lib/providers/app_provider.dart:248-264,370-375
+53. notifyListeners does I/O — Spec E9 — lib/providers/app_provider.dart:240-264
+54. Retry swallows non-retriable — Spec E5 — lib/providers/app_provider_auth.dart:48-61
+55. Auto-persist browserNotify — Spec E10 — lib/providers/app_provider_auth.dart:157-166
+56. Requests sub never cancelled on authority loss — Spec E9 — lib/providers/app_provider_cloud_sync.dart:506-515
+57. Empty-viewer player payload dead weight — Spec E6 — lib/providers/app_provider_cloud_sync.dart:493
+58. Conflict editorDeviceId != uid always true — Spec E9 — lib/providers/app_provider_user_data.dart:632-651
+59. Stats N-writes per result — Spec E14 — lib/providers/app_provider_user_data.dart:157-170
+60. Export omits own chats — Spec E15 — lib/providers/app_provider_notifications_settings.dart:760-802
+61. Delete/leave leak members/outbox subs — Spec E4 — lib/providers/app_provider_groups.dart:423-472
+62. Undo revision+1 too strict — Spec E9 — lib/providers/app_provider_game.dart:9-15
+63. Full LiveGame stack + sidecar every mutation — Spec E9 — lib/providers/app_provider_game.dart:26-55
+64. Preview uses raw fee vs gated fee — Spec E15 — lib/providers/app_provider_game.dart:746-780
+65. 1-min warning widened 60s — Spec E11 — lib/providers/app_provider_timer.dart:34-36
+66. next/prev/restartLevel ! crash — Spec E9 — lib/providers/app_provider_timer.dart:537,742,773
+67. requestRebuy/checkIn/eliminate ! crash — Spec E9 — lib/providers/app_provider_players.dart:28,274,308,644,772
+68. Duplicate seat finders — cleanup — lib/providers/app_provider_players.dart:_findAvailableSeat/_findFreeSeat
+69. Drops roundingRemainder on recalc — Spec F1 — lib/providers/app_provider_tournament.dart:944-964
+70. Every chat line pushes, should be mentions only — Spec E10 — lib/providers/app_provider_social.dart:67-130
+71. Waitlist caps one table, no premium multi — Spec D5 — lib/providers/app_provider_social.dart:658-665
+72. guest branch dead, repo only game/tv — cleanup — lib/providers/app_provider_codes_cash.dart:106
+73. Float cents drift, must be int — Spec E16 — lib/providers/app_provider_codes_cash.dart:174-369
+74. undoCash/cashOutAll 0 callers — dead — lib/providers/app_provider_codes_cash.dart:253,263
+75. Code/TV release never deleted — Spec E7 — lib/providers/app_provider_codes_cash.dart, lib/repositories/firebase_repository.dart
+76. joinCodes client-readable vs callable-only — Spec E7 — lib/repositories/firebase_repository.dart:2216-2283
+77. _mirrorPlayerIndex O(N) every save — Spec E4 — lib/repositories/firebase_repository.dart:1938-1989
+78. Inbox Timestamp/string mix breaks order — Spec E10 — lib/repositories/firebase_repository.dart:2589-2616
+79. Organizer sees fee/gross, must be host-only — Spec E6 — lib/services/permissions.dart:110-112, lib/services/projections.dart:25
+80. appId '' vs sender GUID defaults disagree — Spec E10 — lib/services/push_service.dart
+81. GuestSession slot int vs double — Spec E4 — lib/services/recovery_service.dart:30-43
+82. lastSavedAt injected into codec map — Spec E2 — lib/services/recovery_service.dart:60-65
+83. 6 telemetry helpers never called — dead — lib/services/telemetry.dart
+Screens
+84. D2 hide pool/prizes, only fee hidden — Spec D2 — lib/screens/tournament/player_live_screen.dart:1250-1308,1328-1330
+85. D2 same — Spec D2 — lib/screens/tournament/payouts_screen.dart:24-26,77,228
+86. D2 copy inverts, host-only banner — Spec D2 — lib/screens/tournament/admin_dashboard_screen.dart:4677,4773
+87. D2 showAmounts=isAdmin + share inherits — Spec D2 — lib/screens/tournament/result_podium_screen.dart:82-84,151,223
+88. D3 anytime stack edit, must be deal/final — Spec D3 — lib/screens/tournament/admin_dashboard_screen.dart:2182,2808-2810,2871-2903
+89. Ante false/none vs Auto BB — Spec F1.8/D7 — lib/screens/tournament/quick_start_screen.dart:139-140,200-203, lib/screens/tournament/create_tournament_screen.dart:462
+90. Bonus thin, missing 2.5-25% step2.5 def12.5% + opens-10m copy — Spec D6 — lib/screens/tournament/create_tournament_screen.dart:1841
+91. Prize host-only copy → organiser only — Spec D2 — lib/screens/tournament/structure_review_screen.dart:1184,1260
+92. Missing D6 line + bonus toast — Spec C4/D6 — lib/screens/tournament/check_in_screen.dart
+93. Missing D5 Home card — Spec D5/T81 — lib/screens/shell/home_screen.dart
+94. Extra LEADERBOARD pill — Spec B7 — lib/screens/shell/history_screen.dart:131-134
+95. TOOLS lockup vs PNT symbol — Spec A5#3 — lib/screens/public/splash_screen.dart:14-18
+96. Yellow 0xFFD97706 — Spec T141/B1 — lib/screens/public/tools_screen.dart:64,70
+97. Linear/Quadratic/WSOP vs Field/10-7-5-3-1/Custom — Spec D14 — lib/screens/premium/upgrade_screen.dart:357
+98. Hard-finish runtime banner/Split-now/Play+30 missing — Spec F4 — lib/screens/tournament/admin_dashboard_screen.dart, player_live_screen.dart, tv_mode_screen.dart
+Widgets
+ 99. 0 uses, thumb 18 vs 28, white vs crimson, no -/+/Semantics — Spec B3 — lib/widgets/app_slider.dart:9-107, unused by tv_mode_screen.dart:1208, presets_screen.dart:737
+100. 0 callers, inline dup must be deleted, row no 44px — Spec H4 — lib/widgets/legal_gate_dialog.dart:11-136 vs lib/widgets/event_settings_form.dart:1220-1252
+101. Default 3s vs ≥4s/5s-Undo, amber icon grep trip — Spec B3 — lib/widgets/app_toast.dart:17,32
+102. Highlight/red 12.5px fail AA, need text-safe reds — Spec T102 — lib/widgets/app_badge.dart:52-66
+103. No long-press repeat — Spec B3 — lib/widgets/count_stepper.dart:19-132
+104. GroupContextHeader 0 mounts — dead — lib/widgets/group_switcher.dart:130-131
+105. Dual onTap/onPressed + tooltip/label aliases — cleanup — lib/widgets/app_back_button.dart:14-18
+106. hint/placeholder inverted naming — docs — lib/widgets/app_text_field.dart:16-17,39-40
+107. centered needs T70 board exception doc — Spec T70 — lib/widgets/form_screen_header.dart:33
+108. isAdmin→isHost, admin comments → host — hygiene — lib/widgets/poll_card.dart:18,25, chat_sheet.dart:168, structure_audit_banner.dart:35, app_tabs.dart:37, event_day_checklist.dart:12,27
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-10-03T12:31:41+05:00.
+</ADDITIONAL_METADATA>

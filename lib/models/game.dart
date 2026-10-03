@@ -15,7 +15,7 @@ enum Rsvp {
       case Rsvp.maybe:
         return 'Maybe';
       case Rsvp.cant:
-        return "Can't Come";
+        return "Can't come";
       case Rsvp.goingPlus1:
         return 'Going +1';
       case Rsvp.goingPlus2:
@@ -27,7 +27,12 @@ enum Rsvp {
     }
   }
 
-  bool get isGoing => this == Rsvp.going || label.startsWith('Going +');
+  bool get isGoing =>
+      this == Rsvp.going ||
+      this == Rsvp.goingPlus1 ||
+      this == Rsvp.goingPlus2 ||
+      this == Rsvp.goingPlus3 ||
+      this == Rsvp.goingPlus4;
 
   int get guestCount {
     switch (this) {
@@ -43,6 +48,15 @@ enum Rsvp {
         return 0;
     }
   }
+}
+
+/// Player lifecycle status (Spec §E3 / §E4).
+enum PlayerStatus {
+  active,
+  paused,
+  out,
+  removed,
+  noShow,
 }
 
 /// A player (member or guest) registered against a game.
@@ -129,12 +143,21 @@ class Player {
   final int seat;
   final bool active;
 
+  /// Player lifecycle status (Spec §E3 / §E4).
+  PlayerStatus get status {
+    if (noShow) return PlayerStatus.noShow;
+    if (eliminated) return PlayerStatus.out;
+    if (!active) return PlayerStatus.paused;
+    return PlayerStatus.active;
+  }
+
   Player copyWith({
     String? name,
     String? inviterId,
     Rsvp? rsvp,
     bool? checkedIn,
     bool? noShow,
+    PlayerStatus? status,
     bool? confirmed,
     bool? eliminated,
     int? eliminationPos,
@@ -154,6 +177,16 @@ class Player {
     int? seat,
     bool? active,
   }) {
+    final effectiveNoShow =
+        status == PlayerStatus.noShow ? true : (noShow ?? this.noShow);
+    final effectiveEliminated =
+        status == PlayerStatus.out ? true : (eliminated ?? this.eliminated);
+    final effectiveActive = status == PlayerStatus.noShow ||
+            status == PlayerStatus.paused ||
+            status == PlayerStatus.out ||
+            effectiveEliminated
+        ? false
+        : (status == PlayerStatus.active ? true : (active ?? this.active));
     return Player(
       id: id,
       name: name ?? this.name,
@@ -162,9 +195,9 @@ class Player {
       guestSlot: guestSlot,
       rsvp: rsvp ?? this.rsvp,
       checkedIn: checkedIn ?? this.checkedIn,
-      noShow: noShow ?? this.noShow,
+      noShow: effectiveNoShow,
       confirmed: confirmed ?? this.confirmed,
-      eliminated: eliminated ?? this.eliminated,
+      eliminated: effectiveEliminated,
       eliminationPos:
           clearEliminationPos ? null : eliminationPos ?? this.eliminationPos,
       eliminatedAtLevel:
@@ -181,7 +214,7 @@ class Player {
       knockouts: knockouts ?? this.knockouts,
       table: table ?? this.table,
       seat: seat ?? this.seat,
-      active: active ?? this.active,
+      active: effectiveActive,
     );
   }
 
@@ -359,7 +392,9 @@ class Poll {
     final counts = <String, int>{for (final o in options) o: 0};
     for (final chosen in votes.values) {
       for (final c in chosen) {
-        counts[c] = (counts[c] ?? 0) + 1;
+        if (counts.containsKey(c)) {
+          counts[c] = counts[c]! + 1;
+        }
       }
     }
     return counts;

@@ -251,7 +251,7 @@ class _StandingsScreenState extends State<StandingsScreen> {
             const SizedBox(height: AppSpacing.sm),
             AppButton(
               variant: AppButtonVariant.secondary,
-              onPressed: () => context.push('/import-results'),
+              onPressed: () => context.push(RoutePaths.importResults),
               child: const Text('Import past results'),
             ),
           ],

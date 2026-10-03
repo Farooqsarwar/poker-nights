@@ -354,7 +354,7 @@ extension AppProviderNotificationsSettings on AppProvider {
 
   void setAnnounceEliminations(bool value) {
     final game = _currentGame;
-    if (game == null || game.settings.announceEliminations == value) return;
+    if (game == null || !isAdmin || game.settings.announceEliminations == value) return;
     _currentGame = game.copyWith(
       settings: game.settings.copyWith(announceEliminations: value),
     );
@@ -367,6 +367,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setSoundsEnabled(bool value) {
     if (_soundsEnabled == value) return;
     _soundsEnabled = value;
+    _persistPref('soundsEnabled', value);
     if (!_disposed) notifyListeners();
   }
 
@@ -375,6 +376,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setCompactSummary(bool value) {
     if (_compactSummary == value) return;
     _compactSummary = value;
+    _persistPref('compactSummary', value);
     if (!_disposed) notifyListeners();
   }
 
@@ -383,6 +385,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setSmsEnabled(bool value) {
     if (_smsEnabled == value) return;
     _smsEnabled = value;
+    _persistPref('smsEnabled', value);
     if (!_disposed) notifyListeners();
   }
 
@@ -425,6 +428,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   void setAvatarColor(int index) {
     if (_avatarColorIndex == index) return;
     _avatarColorIndex = index;
+    _persistPref('avatarColorIndex', index);
     if (!_disposed) notifyListeners();
   }
 

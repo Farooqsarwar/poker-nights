@@ -16,7 +16,7 @@ import 'package:localstore/localstore.dart';
 class TvDisplaySettings {
   const TvDisplaySettings({
     this.textScale = 1.0,
-    this.showLeaderboard = true,
+    this.showLeaderboard = false,
     this.showPayouts = true,
     this.showUpcoming = true,
     this.rotateSeconds = 8,
@@ -37,6 +37,8 @@ class TvDisplaySettings {
 
   static const double minTextScale = 0.7;
   static const double maxTextScale = 2.0;
+  static const int minRotateSeconds = 5;
+  static const int maxRotateSeconds = 30;
   static const List<int> rotatePresets = [5, 8, 12, 20, 30];
 
   /// A screen with every panel switched off would rotate through nothing, so
@@ -57,7 +59,8 @@ class TvDisplaySettings {
         showLeaderboard: showLeaderboard ?? this.showLeaderboard,
         showPayouts: showPayouts ?? this.showPayouts,
         showUpcoming: showUpcoming ?? this.showUpcoming,
-        rotateSeconds: rotateSeconds ?? this.rotateSeconds,
+        rotateSeconds: (rotateSeconds ?? this.rotateSeconds)
+            .clamp(minRotateSeconds, maxRotateSeconds),
       );
 
   Map<String, dynamic> toMap() => {

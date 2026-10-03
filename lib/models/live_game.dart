@@ -7,6 +7,7 @@ import 'game.dart';
 import 'table_settings.dart';
 import 'tournament.dart';
 import 'tournament_format.dart';
+import '../utils/live_play_rules.dart';
 
 /// The document version this build writes (`_v`, §E2 rule 1). Bump it whenever
 /// the stored shape changes in a way an older build could not round-trip.
@@ -90,6 +91,9 @@ class GameSettings {
     this.earlyArrivalCutoffMins,
     this.earlyArrivalBonusPctOverride,
     this.rsvpDeadlineHours,
+    this.hardFinishEnabled = false,
+    this.hardFinishMinsAfterFinish = 60,
+    this.hardFinishSplit = 'icm',
   });
 
   final String name;
@@ -256,6 +260,11 @@ class GameSettings {
   /// the 12.5% default — see [effectiveEarlyArrivalPct].
   final double? earlyArrivalBonusPctOverride;
 
+  /// §F4 / C-cfg §7. Optional hard finish ceiling.
+  final bool hardFinishEnabled;
+  final int hardFinishMinsAfterFinish;
+  final String hardFinishSplit;
+
   /// §11.4 Stage A. Mirrors [TournamentParams.effectiveShootoutTables] so live
   /// seating (§26.1) can split a shootout field into the SAME table count the
   /// structure was generated for, instead of re-deriving it from
@@ -271,9 +280,9 @@ class GameSettings {
   /// generation-override group above — a Reset there must not quietly undo a
   /// payout decision that has nothing to do with the blind curve.
 
-  /// Ceiling on the organizer allocation (specification §7 and §18:
-  /// "0-20%").
-  static const int maxOrganizerPct = 20;
+  /// Ceiling on the organizer allocation (specification §7, §18, Spec G1:
+  /// "0-30%").
+  static const int maxOrganizerPct = 30;
 
   /// The percentage calculations should actually use.
   ///
@@ -395,6 +404,9 @@ class GameSettings {
     int? earlyArrivalCutoffMins,
     double? earlyArrivalBonusPctOverride,
     int? rsvpDeadlineHours,
+    bool? hardFinishEnabled,
+    int? hardFinishMinsAfterFinish,
+    String? hardFinishSplit,
 
     /// Per-field clears. A null above means "unchanged", which is right for a
     /// partial update but leaves no way to hand one decision back to the
@@ -500,6 +512,10 @@ class GameSettings {
               ? null
               : earlyArrivalBonusPctOverride ??
                   this.earlyArrivalBonusPctOverride,
+      hardFinishEnabled: hardFinishEnabled ?? this.hardFinishEnabled,
+      hardFinishMinsAfterFinish:
+          hardFinishMinsAfterFinish ?? this.hardFinishMinsAfterFinish,
+      hardFinishSplit: hardFinishSplit ?? this.hardFinishSplit,
     );
   }
 
@@ -565,10 +581,12 @@ bool isEarlyArrivalApproved({
   required bool bonusEnabled,
   required DateTime? scheduledStart,
   required DateTime now,
-}) {
-  if (!bonusEnabled || scheduledStart == null) return false;
-  return now.isBefore(scheduledStart);
-}
+}) =>
+    isEarlyArrivalEligible(
+      bonusEnabled: bonusEnabled,
+      scheduledStart: scheduledStart,
+      now: now,
+    );
 
 /// Where the check-in window stands at a given instant.
 ///
@@ -1073,52 +1091,60 @@ class LiveGame {
   /// §E17 row 13 — No-show gate: evaluated once at the start if ≥1 "Going"
   /// player hasn't checked in. Two host choices: "Wait n more min" or
   /// "Start without her" (marks player noShow, no buy-in taken, seat held).
-  /// Returns whether the gate was triggered.
-  bool evaluateNoShowGate(DateTime now, {required LiveGame game}) {
-    // Only evaluate at or after the scheduled start, in checkin/running status
-    if (game.status.index < LiveGameStatus.checkin.index) return false;
-    if (game.status.index > LiveGameStatus.running.index) return false;
+  /// Pure method: returns whether the gate is triggered without mutating in-place.
+  bool evaluateNoShowGate(DateTime now) {
+    if (status.index < LiveGameStatus.checkin.index) return false;
+    if (status.index > LiveGameStatus.running.index) return false;
 
-    // Check if any "Going" player hasn't checked in (confirmed)
-    final goingPlayers = game.players.where((p) => p.rsvp?.isGoing ?? false).toList();
+    final goingPlayers = players.where((p) => p.rsvp?.isGoing ?? false).toList();
     final unconfirmedGoing = goingPlayers.where((p) => !p.confirmed).toList();
+    return unconfirmedGoing.isNotEmpty;
+  }
 
-    if (unconfirmedGoing.isEmpty) return false;
-
-    // Trigger the no-show gate - mark players as noShow, no buy-in taken
-    // Seat stays reserved so a late arrival is a normal add later
-    for (final _ in unconfirmedGoing) {
-      // Mark as noShow in the player status
-      // The actual status mutation happens in the UI/provider layer
-      // based on this gate being triggered
+  /// Pure helper to apply no-show gate transitions on players.
+  LiveGame applyNoShowGate({required DateTime now}) {
+    if (status.index < LiveGameStatus.checkin.index || status.index > LiveGameStatus.running.index) {
+      return this;
     }
-
-    return true;
+    final goingPlayers = players.where((p) => p.rsvp?.isGoing ?? false).toList();
+    final unconfirmedGoing = goingPlayers.where((p) => !p.confirmed).toSet();
+    if (unconfirmedGoing.isEmpty) return this;
+    return copyWith(
+      players: players.map((p) {
+        if (unconfirmedGoing.contains(p)) {
+          return p.copyWith(
+            status: PlayerStatus.noShow,
+            noShow: true,
+            active: false,
+          );
+        }
+        return p;
+      }).toList(),
+    );
   }
 
   /// §E17 row 17 — Late-arrival registration: allowed while rebuys are open
   /// (rebuy formats) or until the first break (freeze-out). After the cutoff
   /// → blocked with message. Same seat+handout+ledger path as check-in.
-  bool isLateArrivalAllowed({
-    required LiveGame game,
-    required DateTime now,
-}) {
-    // Check if past the no-show gate / start
-    if (game.status.index < LiveGameStatus.checkin.index) return false;
+  bool isLateArrivalAllowed(
+    DateTime now,
+  ) {
+    if (status.index < LiveGameStatus.checkin.index) return false;
 
-    // In freeze-out: blocked after first break
-    if (!game.settings.rebuys && game.currentLevel >= 1) {
-      final firstBreakLevel = game.settings.breaks.isNotEmpty ? game.settings.breaks.first.afterLevel : 1;
-      if (game.currentLevel >= firstBreakLevel) return false;
+    // In freeze-out: blocked after first break (allows Level 1 if no breaks)
+    if (!settings.rebuys) {
+      if (settings.breaks.isNotEmpty) {
+        final firstBreakLevel = settings.breaks.first.afterLevel;
+        if (currentLevel > firstBreakLevel) return false;
+      } else {
+        if (currentLevel > 1) return false;
+      }
+    } else {
+      // In rebuy format: allowed while rebuys are open
+      if (currentLevel >= settings.rebuysCloseLevel) return false;
     }
 
-    // In rebuy format: allowed while rebuys are open
-    // (rebuy close level not yet reached)
-    if (game.settings.rebuys) {
-      return game.currentLevel < game.settings.rebuysCloseLevel;
-    }
-
-return true;
+    return true;
   }
 
   /// Spec C4/C4p. The window resolved against [now] — what the guest's locked
@@ -1198,16 +1224,24 @@ return true;
     if (!settings.rebuys) return true;
     if (settlementConfirmed) return true;
     if (status == LiveGameStatus.rebuypause) return false;
-    if (status.index > LiveGameStatus.rebuypause.index) return true;
+    if (status == LiveGameStatus.finaltable ||
+        status == LiveGameStatus.completed ||
+        status == LiveGameStatus.cancelled) {
+      return true;
+    }
+    // Scheduled breaks do not close the window by themselves.
     return currentLevel > settings.rebuysCloseLevel;
   }
 
-  /// Whether [player] may still re-enter. §9's cap, plus the existing window.
+  /// Whether [player] may still re-enter. §9's cap, rebuyLimit interplay, plus the existing window.
   bool canReEnter(Player player) {
     if (!settings.reEntry) return false;
     if (rebuysClosed) return false;
-    final cap = settings.maxReEntries;
+    final cap = settings.maxReEntries ?? settings.rebuyLimit;
     if (cap != null && player.reEntries >= cap) return false;
+    if (settings.rebuyLimit != null && (player.rebuys + player.reEntries) >= settings.rebuyLimit!) {
+      return false;
+    }
     return true;
   }
 
@@ -1228,7 +1262,10 @@ return true;
   /// join. Sharing one flag meant reopening the rebuy window would also have
   /// reopened the door.
   bool get registrationClosed =>
-      status.index >= LiveGameStatus.rebuypause.index ||
+      status == LiveGameStatus.rebuypause ||
+      status == LiveGameStatus.finaltable ||
+      status == LiveGameStatus.completed ||
+      status == LiveGameStatus.cancelled ||
       // The closing LEVEL applies whether or not rebuys are enabled.
       //
       // Gating this on `settings.rebuys` left a no-rebuy tournament with no
@@ -1237,6 +1274,7 @@ return true;
       // rebuys, so the status never reaches it and walk-ins, guest claims and
       // check-ins stayed open at level 12 of a live game. Technical section
       // 10.3 closes late registration when the rebuy level ends regardless.
+      // Scheduled breaks (`onBreak`) never close it by themselves.
       (settings.rebuysCloseLevel > 0 &&
           currentLevel > settings.rebuysCloseLevel);
 
@@ -1247,6 +1285,7 @@ return true;
       status == LiveGameStatus.running ||
       status == LiveGameStatus.paused ||
       status == LiveGameStatus.rebuypause ||
+      status == LiveGameStatus.onBreak ||
       status == LiveGameStatus.finaltable;
 
   LiveGame copyWith({

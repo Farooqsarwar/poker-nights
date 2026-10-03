@@ -6,7 +6,7 @@ import '../models/payment_record.dart';
 /// backend (§22); this function is the single projection rule the future
 /// server will run, and the mock applies it at the data-access boundary so the
 /// interface never holds private fields for the wrong role (§2.3).
-enum GameProjectionRole { admin, player, guest, tv }
+enum GameProjectionRole { admin, coHost, player, guest, tv }
 
 const _noOrganizerAmount = 0;
 
@@ -46,17 +46,13 @@ LiveGame projectionFor(
     addOnOvertime: false,
   );
 
-  // 14-045 / 05-033 / 19-021: players do not see their own investment either —
-  // not their rebuys, re-entries or add-ons. The viewer used to be exempted
-  // here, which left exactly the figures the checklist names as hidden sitting
-  // in the member's own row.
+  // Spec E6: Preserve rebuys and knockouts for player rankings and podium counts.
+  // Players do not see other players' re-entries or add-ons.
   final publicPlayers = game.players
       .map(
         (p) => p.copyWith(
-          rebuys: 0,
           reEntries: 0,
           hasAddOn: false,
-          knockouts: 0,
         ),
       )
       .toList();
@@ -79,7 +75,7 @@ LiveGame projectionFor(
   final publicPendingGuests = role == GameProjectionRole.guest
       ? [
           for (final p in game.pendingGuests)
-            p.copyWith(rebuys: 0, reEntries: 0, hasAddOn: false, knockouts: 0),
+            p.copyWith(reEntries: 0, hasAddOn: false),
         ]
       : const <Player>[];
 
@@ -97,16 +93,10 @@ LiveGame projectionFor(
       paidPlaces: game.structure.prizes.length,
     ),
     players: publicPlayers,
-    // Section 23: members and guests must not receive "rebuy/add-on totals"
-    // or "gross collected". The player rows above are scrubbed of rebuys,
-    // re-entries and add-ons for exactly that reason — and the payment ledger
-    // hands all three straight back, plus the gross, to anyone who sums it.
-    //
-    // So it does not travel at all. Not even the viewer's own rows: the same
-    // decision was already taken for their own investment a few lines up, and
-    // a single record still reveals the buy-in amount alongside a player id.
-    // The host sees the ledger; nobody else does.
-    payments: const <PaymentRecord>[],
+    // Spec E6: Preserve the viewer's own payment rows rather than emptying the ledger completely.
+    payments: viewerId != null
+        ? game.payments.where((p) => p.playerId == viewerId).toList()
+        : const <PaymentRecord>[],
     // An agreed deal (C-deal) is what each NAMED person actually received,
     // which is the host-only decision the results screen already makes for
     // individual payouts ("showAmounts = app.isAdmin") — not the public

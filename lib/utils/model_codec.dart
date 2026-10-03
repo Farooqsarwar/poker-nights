@@ -359,6 +359,9 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'earlyArrivalCutoffMins': s.earlyArrivalCutoffMins,
       'rsvpDeadlineHours': s.rsvpDeadlineHours,
       'earlyArrivalBonusPctOverride': s.earlyArrivalBonusPctOverride,
+      'hardFinishEnabled': s.hardFinishEnabled,
+      'hardFinishMinsAfterFinish': s.hardFinishMinsAfterFinish,
+      'hardFinishSplit': s.hardFinishSplit,
     };
 
 GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
@@ -437,6 +440,10 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
       rsvpDeadlineHours: (m['rsvpDeadlineHours'] as num?)?.toInt(),
       earlyArrivalBonusPctOverride:
           (m['earlyArrivalBonusPctOverride'] as num?)?.toDouble(),
+      hardFinishEnabled: (m['hardFinishEnabled'] as bool?) ?? false,
+      hardFinishMinsAfterFinish:
+          (m['hardFinishMinsAfterFinish'] as num?)?.toInt() ?? 60,
+      hardFinishSplit: (m['hardFinishSplit'] as String?) ?? 'icm',
     );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -922,21 +929,65 @@ Map<String, dynamic> tournamentPresetToMap(TournamentPreset p) => {
       'buyIn': p.buyIn,
       'koEnabled': p.koEnabled,
       'koAmount': p.koAmount,
+      'koKind': p.koKind.name,
       'rebuys': p.rebuys,
       'rebuysCloseLevel': p.rebuysCloseLevel,
+      'rebuyCloseChosenByOrganizer': p.rebuyCloseChosenByOrganizer,
       'rebuyLimit': p.rebuyLimit,
       'reEntry': p.reEntry,
       'addOn': p.addOn,
+      'addOnOvertime': p.addOnOvertime,
       'addOnCloseLevel': p.addOnCloseLevel,
       'breaks': p.breaks.map(scheduledBreakToMap).toList(),
       'durationHours': p.durationHours,
       'anteEnabled': p.anteEnabled,
       'anteAfterLevel': p.anteAfterLevel,
+      'anteStyle': p.anteStyle.name,
+      'antePreference': p.antePreference.name,
       'organizerPct': p.organizerPct,
       'chipSetName': p.chipSetName,
       'chipSet': p.chipSet.map(chipColorToMap).toList(),
       'rebuyCost': p.rebuyCost,
       'addOnCost': p.addOnCost,
+      if (p.format != null) 'format': p.format!.name,
+      if (p.maxReEntries != null) 'maxReEntries': p.maxReEntries,
+      'earlyArrivalBonusEnabled': p.earlyArrivalBonusEnabled,
+      if (p.earlyArrivalCutoffMins != null)
+        'earlyArrivalCutoffMins': p.earlyArrivalCutoffMins,
+      if (p.earlyArrivalBonusPctOverride != null)
+        'earlyArrivalBonusPctOverride': p.earlyArrivalBonusPctOverride,
+      if (p.rsvpDeadlineHours != null)
+        'rsvpDeadlineHours': p.rsvpDeadlineHours,
+      'hardFinishEnabled': p.hardFinishEnabled,
+      'hardFinishMinsAfterFinish': p.hardFinishMinsAfterFinish,
+      'hardFinishSplit': p.hardFinishSplit,
+      if (p.levelDurationMins != null)
+        'levelDurationMins': p.levelDurationMins,
+      if (p.pace != null) 'pace': p.pace!.name,
+      if (p.shootoutTables != null) 'shootoutTables': p.shootoutTables,
+      if (p.shootoutTableTargetMins != null)
+        'shootoutTableTargetMins': p.shootoutTableTargetMins,
+      if (p.expectedPlayersOverride != null)
+        'expectedPlayersOverride': p.expectedPlayersOverride,
+      'announceEliminations': p.announceEliminations,
+      'locationPrivate': p.locationPrivate,
+      if (p.forcePaidPlaces != null) 'forcePaidPlaces': p.forcePaidPlaces,
+      if (p.rebuyChips != null) 'rebuyChips': p.rebuyChips,
+      if (p.reEntryChips != null) 'reEntryChips': p.reEntryChips,
+      if (p.addOnChips != null) 'addOnChips': p.addOnChips,
+      if (p.tableSettingsOverride != null)
+        'tableSettingsOverride':
+            tableSettingsToMap(p.tableSettingsOverride!),
+      if (p.lockedExpectedPlayers != null)
+        'lockedExpectedPlayers': p.lockedExpectedPlayers,
+      if (p.expectedRebuys != null) 'expectedRebuys': p.expectedRebuys,
+      if (p.expectedReEntries != null)
+        'expectedReEntries': p.expectedReEntries,
+      if (p.expectedAddOns != null) 'expectedAddOns': p.expectedAddOns,
+      if (p.forecastRebuyRate != null)
+        'forecastRebuyRate': p.forecastRebuyRate,
+      if (p.forecastAddOnTakeUp != null)
+        'forecastAddOnTakeUp': p.forecastAddOnTakeUp,
     };
 
 TournamentPreset tournamentPresetFromMap(Map<String, dynamic> m) =>
@@ -946,11 +997,15 @@ TournamentPreset tournamentPresetFromMap(Map<String, dynamic> m) =>
       buyIn: (m['buyIn'] as num?)?.toInt() ?? 0,
       koEnabled: (m['koEnabled'] as bool?) ?? false,
       koAmount: (m['koAmount'] as num?)?.toInt() ?? 0,
+      koKind: _enumByName(BountyKind.values, m['koKind'], BountyKind.fixed),
       rebuys: (m['rebuys'] as bool?) ?? false,
       rebuysCloseLevel: (m['rebuysCloseLevel'] as num?)?.toInt() ?? 0,
+      rebuyCloseChosenByOrganizer:
+          (m['rebuyCloseChosenByOrganizer'] as bool?) ?? false,
       rebuyLimit: (m['rebuyLimit'] as num?)?.toInt(),
       reEntry: (m['reEntry'] as bool?) ?? false,
       addOn: (m['addOn'] as bool?) ?? false,
+      addOnOvertime: (m['addOnOvertime'] as bool?) ?? false,
       addOnCloseLevel: (m['addOnCloseLevel'] as num?)?.toInt() ?? 6,
       breaks: _mapList(m['breaks'] as List? ?? const [])
           .map(scheduledBreakFromMap)
@@ -958,6 +1013,8 @@ TournamentPreset tournamentPresetFromMap(Map<String, dynamic> m) =>
       durationHours: (m['durationHours'] as num?)?.toDouble() ?? 3,
       anteEnabled: (m['anteEnabled'] as bool?) ?? false,
       anteAfterLevel: (m['anteAfterLevel'] as num?)?.toInt() ?? 0,
+      anteStyle: _enumByName(AnteStyle.values, m['anteStyle'], AnteStyle.bigBlind),
+      antePreference: _enumByName(AntePreference.values, m['antePreference'], AntePreference.recommend),
       organizerPct: (m['organizerPct'] as num?)?.toInt() ?? 0,
       chipSetName: (m['chipSetName'] as String?) ?? '',
       chipSet: _mapList(m['chipSet'] as List? ?? const [])
@@ -965,6 +1022,51 @@ TournamentPreset tournamentPresetFromMap(Map<String, dynamic> m) =>
           .toList(),
       rebuyCost: (m['rebuyCost'] as num?)?.toInt(),
       addOnCost: (m['addOnCost'] as num?)?.toInt(),
+      format: m['format'] != null
+          ? _enumByName(TournamentFormat.values, m['format'], TournamentFormat.freezeOut)
+          : null,
+      maxReEntries: (m['maxReEntries'] as num?)?.toInt(),
+      earlyArrivalBonusEnabled:
+          (m['earlyArrivalBonusEnabled'] as bool?) ?? false,
+      earlyArrivalCutoffMins:
+          (m['earlyArrivalCutoffMins'] as num?)?.toInt(),
+      earlyArrivalBonusPctOverride:
+          (m['earlyArrivalBonusPctOverride'] as num?)?.toDouble(),
+      rsvpDeadlineHours: (m['rsvpDeadlineHours'] as num?)?.toInt(),
+      hardFinishEnabled: (m['hardFinishEnabled'] as bool?) ?? false,
+      hardFinishMinsAfterFinish:
+          (m['hardFinishMinsAfterFinish'] as num?)?.toInt() ?? 60,
+      hardFinishSplit: (m['hardFinishSplit'] as String?) ?? 'icm',
+      levelDurationMins: (m['levelDurationMins'] as num?)?.toInt(),
+      pace: m['pace'] != null
+          ? _enumByName(PaceMode.values, m['pace'], PaceMode.regular)
+          : null,
+      shootoutTables: (m['shootoutTables'] as num?)?.toInt(),
+      shootoutTableTargetMins:
+          (m['shootoutTableTargetMins'] as num?)?.toInt(),
+      expectedPlayersOverride:
+          (m['expectedPlayersOverride'] as num?)?.toInt(),
+      announceEliminations:
+          (m['announceEliminations'] as bool?) ?? false,
+      locationPrivate: (m['locationPrivate'] as bool?) ?? false,
+      forcePaidPlaces: (m['forcePaidPlaces'] as num?)?.toInt(),
+      rebuyChips: (m['rebuyChips'] as num?)?.toInt(),
+      reEntryChips: (m['reEntryChips'] as num?)?.toInt(),
+      addOnChips: (m['addOnChips'] as num?)?.toInt(),
+      tableSettingsOverride: m['tableSettingsOverride'] == null
+          ? null
+          : tableSettingsFromMap(
+              Map<String, dynamic>.from(
+                  m['tableSettingsOverride'] as Map)),
+      lockedExpectedPlayers:
+          (m['lockedExpectedPlayers'] as num?)?.toInt(),
+      expectedRebuys: (m['expectedRebuys'] as num?)?.toInt(),
+      expectedReEntries: (m['expectedReEntries'] as num?)?.toInt(),
+      expectedAddOns: (m['expectedAddOns'] as num?)?.toInt(),
+      forecastRebuyRate:
+          (m['forecastRebuyRate'] as num?)?.toDouble(),
+      forecastAddOnTakeUp:
+          (m['forecastAddOnTakeUp'] as num?)?.toDouble(),
     );
 
 /// Public [NotificationType] parser for callers outside this file (the
@@ -1009,6 +1111,7 @@ Map<String, dynamic> groupToMap(Group g) => {
       'icon': g.icon,
       'pinned': g.pinned,
       'tableSettings': tableSettingsToMap(g.tableSettings),
+      'learningOptOut': g.learningOptOut,
       if (g.defaultChipSetId != null) 'defaultChipSetId': g.defaultChipSetId,
     };
 
@@ -1030,8 +1133,9 @@ Group groupFromMap(Map<String, dynamic> m) => Group(
       notifications: _mapList(m['notifications'] as List? ?? const [])
           .map(appNotificationFromMap)
           .toList(),
-      icon: (m['icon'] as String?) ?? '♠',
+      icon: (m['icon'] as String?) ?? 'Spade',
       pinned: (m['pinned'] as bool?) ?? false,
+      learningOptOut: (m['learningOptOut'] as bool?) ?? false,
       tableSettings: m['tableSettings'] == null
           ? TableSettings.fallback
           : tableSettingsFromMap(

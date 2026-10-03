@@ -135,7 +135,7 @@ extension AppProviderGroups on AppProvider {
 
   /// Creates a new group with this account as owner. Returns null when the
   /// caller is unauthenticated or the write failed.
-  Future<Group?> createGroup(String name, {String icon = '♠'}) async {
+  Future<Group?> createGroup(String name, {String icon = 'Spade'}) async {
     final user = _user;
     if (!_backendUp || user == null) return null;
     final group = Group(
@@ -274,6 +274,13 @@ extension AppProviderGroups on AppProvider {
           .catchError((Object e) =>
               debugPrint('updateGroupTableSettings failed: $e')));
     }
+  }
+
+  /// Spec B9/H5: Owner-only group pace learning opt-out.
+  void setGroupLearningOptOut(bool optOut) {
+    if (_user?.id != _currentGroup.ownerId) return;
+    _setGroup(_currentGroup.copyWith(learningOptOut: optOut));
+    if (!_disposed) notifyListeners();
   }
 
   /// Owner-only: points the group at one of the owner's saved chip sets, or
@@ -417,6 +424,8 @@ extension AppProviderGroups on AppProvider {
     _bundleSub = null;
     _cashSub?.cancel();
     _cashSub = null;
+    _requestsSub?.cancel();
+    _requestsSub = null;
     _currentGroupId = null;
     _bundleLoaded = false;
     _bundleReady = null;
@@ -447,6 +456,8 @@ extension AppProviderGroups on AppProvider {
     _bundleSub = null;
     _cashSub?.cancel();
     _cashSub = null;
+    _requestsSub?.cancel();
+    _requestsSub = null;
     _currentGroupId = null;
     _bundleLoaded = false;
     _bundleReady = null;

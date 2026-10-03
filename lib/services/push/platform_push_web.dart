@@ -85,7 +85,7 @@ class WebPlatformPush implements PlatformPush {
         }
         debugPrint('[Push] web init skipped: $e');
       }
-      
+
       if (!_ready) return; // Stop executing further if SDK is entirely blocked (e.g. localhost)
 
       _granted = _readPermission(one);

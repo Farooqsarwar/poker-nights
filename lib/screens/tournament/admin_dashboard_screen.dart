@@ -251,8 +251,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                   ),
                 const SizedBox(height: AppSpacing.xl),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.sm,
                   children: [
                     // §8.1's `waitMinutes` "needs no new state, since
                     // scheduled already permits check-in to continue" — so
@@ -263,7 +265,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       onPressed: () => Navigator.pop(ctx),
                       child: const Text('Keep Waiting'),
                     ),
-                    const SizedBox(width: AppSpacing.md),
                     AppButton(
                       onPressed: () {
                         Navigator.pop(ctx);
@@ -396,6 +397,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       );
     }
 
+    // Non-runners (members, link guests) watch from player live, not the
+    // host dashboard. Anonymous quick-start hosts (isGuest) keep dashboard.
+    if (game.status.isActiveLive &&
+        !app.canRunCurrentGame &&
+        !app.isGuest) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go(RoutePaths.playerLive);
+      });
+      return const SizedBox.shrink();
+    }
+
     final structure = game.structure;
     final settings = game.settings;
     final status = game.status;
@@ -446,7 +458,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           ],
           // Top bar
-          if (device.isMobile) ...[
+          if (device.isCompact) ...[
             Row(
               children: [
                 Container(
@@ -497,25 +509,62 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (app.isGuest) ...[
-                  TextButton(
-                    onPressed: () => context.go(RoutePaths.register),
-                    child: Text(
-                      'Save game',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-                SquircleIconButton(
-                  icon: Icons.more_vert,
-                  size: 40,
-                  iconSize: 20,
-                  borderRadius: 12,
-                  onPressed: () => _showMoreActionsMenu(context, app, game),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final narrow =
+                        MediaQuery.sizeOf(context).width < 360;
+                    // 320px: title + text button + overflow do not fit —
+                    // keep the overflow menu, drop the text button.
+                    if (app.isGuest && narrow) {
+                      return SquircleIconButton(
+                        icon: Icons.more_vert,
+                        size: 40,
+                        iconSize: 20,
+                        borderRadius: 12,
+                        onPressed: () =>
+                            _showMoreActionsMenu(context, app, game),
+                      );
+                    }
+                    if (!app.isGuest) {
+                      return SquircleIconButton(
+                        icon: Icons.more_vert,
+                        size: 40,
+                        iconSize: 20,
+                        borderRadius: 12,
+                        onPressed: () =>
+                            _showMoreActionsMenu(context, app, game),
+                      );
+                    }
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton(
+                          onPressed: () => context.go(RoutePaths.register),
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(44, 44),
+                            tapTargetSize:
+                                MaterialTapTargetSize.padded,
+                          ),
+                          child: Text(
+                            'Save game',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        SquircleIconButton(
+                          icon: Icons.more_vert,
+                          size: 40,
+                          iconSize: 20,
+                          borderRadius: 12,
+                          onPressed: () =>
+                              _showMoreActionsMenu(context, app, game),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -709,7 +758,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           // The bubble is the loudest moment of the night and the one a host
           // most often misses while running the clock. Announcing it is the
           // whole feature — there is nothing to action, so no button.
-          if (PayoutBridge.dealTriggerFor(game) == DealTriggerType.targetTime)
+          if (game.settings.hardFinishEnabled &&
+              PayoutBridge.isAtHardCeiling(game))
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+              child: AppAlertBanner(
+                type: AppAlertType.error,
+                message:
+                    'Hard finish reached — split the remaining prizes now (ICM/chips) or play on.',
+                actionLabel: 'Open deal',
+                onAction: () => context.push(RoutePaths.deal),
+              ),
+            )
+          else if (PayoutBridge.dealTriggerFor(game) ==
+              DealTriggerType.targetTime)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: AppAlertBanner(
@@ -809,7 +871,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
           ],
-          if (!device.isMobile) ...[
+          if (!device.isCompact) ...[
             // ── DESKTOP BEAUTIFUL LAYOUT ──
             // Row 1: Timer full width, top center
             ClipRRect(
@@ -837,17 +899,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       child: Builder(
                         builder: (_) {
                           if (status == LiveGameStatus.checkin ||
-                              status == LiveGameStatus.published ||
                               status == LiveGameStatus.ready) {
+                            final blocked = app.startBlockedReason;
                             return AppButton(
                               size: AppButtonSize.lg,
-                              onPressed: () => _confirmStartTimer(context, app),
-                              child: const AppIconLabel(
-                                label: 'Start Timer',
+                              onPressed: blocked == null
+                                  ? () => _confirmStartTimer(context, app)
+                                  : null,
+                              child: AppIconLabel(
+                                label: blocked ?? 'Start Timer',
                                 icon: Icons.play_arrow,
                               ),
                             );
-                          } else if (status == LiveGameStatus.running) {
+                          } else if (status == LiveGameStatus.published) {
                             return AppButton(
                               size: AppButtonSize.lg,
                               variant: AppButtonVariant.primary,
@@ -1314,8 +1378,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     child: Builder(
                       builder: (_) {
                         if (status == LiveGameStatus.checkin ||
-                            status == LiveGameStatus.published ||
                             status == LiveGameStatus.ready) {
+                          final blocked = app.startBlockedReason;
                           return Container(
                             height: 48,
                             decoration: BoxDecoration(
@@ -1334,7 +1398,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             child: Material(
                               color: Colors.transparent,
                               child: InkWell(
-                                onTap: () => _confirmStartTimer(context, app),
+                                onTap: blocked == null
+                                    ? () => _confirmStartTimer(context, app)
+                                    : null,
                                 borderRadius: BorderRadius.circular(12),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1346,7 +1412,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     ),
                                     SizedBox(width: 6),
                                     Text(
-                                      'Start',
+                                      blocked ?? 'Start',
                                       style: TextStyle(
                                         color: AppColors.foreground,
                                         fontSize: 16,
@@ -1358,6 +1424,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               ),
                             ),
                           );
+                        } else if (status == LiveGameStatus.published) {
+                          return const SizedBox.shrink();
                         } else if (status == LiveGameStatus.running) {
                           return Container(
                             height: 48,
@@ -1788,11 +1856,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             AppCard(
               borderColor: AppColors.destructive.withValues(alpha: 0.3),
               padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth < 400) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
                           'Cancel tournament',
@@ -1808,16 +1876,49 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             color: AppColors.mutedForeground,
                           ),
                         ),
+                        const SizedBox(height: AppSpacing.sm),
+                        AppButton(
+                          fullWidth: true,
+                          variant: AppButtonVariant.destructive,
+                          onPressed: () =>
+                              _showCancelPreview(app, settings),
+                          child: const Text('Cancel tournament'),
+                        ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  AppButton(
-                    variant: AppButtonVariant.danger,
-                    onPressed: () => _showCancelPreview(app, settings),
-                    child: const Text('Cancel tournament'),
-                  ),
-                ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Cancel tournament',
+                              style: AppTypography.bodySm.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.destructive,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xxs),
+                            Text(
+                              'Requires confirmation and a reason, which is recorded in the audit log and shared with members.',
+                              style: AppTypography.bodyXs.copyWith(
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      AppButton(
+                        variant: AppButtonVariant.destructive,
+                        onPressed: () => _showCancelPreview(app, settings),
+                        child: const Text('Cancel tournament'),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
@@ -1863,11 +1964,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   /// scrolls horizontally instead.
   Widget _buildPillTab(String id, String label) {
     final active = _tab == id;
-    return GestureDetector(
-      onTap: () => setState(() => _tab = id),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 40),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    return Semantics(
+      button: true,
+      selected: active,
+      child: InkWell(
+        onTap: () => setState(() => _tab = id),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          constraints:
+              const BoxConstraints(minHeight: 48, minWidth: 48),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: active ? AppColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
@@ -1880,6 +1987,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             fontWeight: active ? FontWeight.w700 : FontWeight.w500,
             fontSize: 13,
           ),
+        ),
         ),
       ),
     );
@@ -2015,6 +2123,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 const SizedBox(height: 6),
                 Text(
                   label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: AppColors.mutedForeground,
                     fontSize: 12,
@@ -2032,6 +2142,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   List<Widget> _mobilePlayersList(AppProvider app, LiveGame game) {
     final isAdmin = app.canRunCurrentGame;
     final settings = game.settings;
+    // Spec D3: stacks visible/editable only at deal or final table.
+    final stacksVisible = game.dealAmounts != null ||
+        game.status == LiveGameStatus.finaltable;
     if (game.activePlayers.isEmpty) {
       return [
         Padding(
@@ -2068,7 +2181,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () => _editPlayerStack(context, app, p),
+              onTap: stacksVisible ? () => _editPlayerStack(context, app, p) : null,
               borderRadius: BorderRadius.circular(14),
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -2113,27 +2226,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     child: InkWell(
                                       onTap: () => _showRenamePlayerDialog(context, app, p),
                                       borderRadius: BorderRadius.circular(4),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Flexible(
-                                            child: Text(
-                                              p.name,
-                                              style: TextStyle(
-                                                color: AppColors.foreground,
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 15,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 12,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                p.name,
+                                                style: TextStyle(
+                                                  color: AppColors.foreground,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 15,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Icon(
-                                            Icons.edit_outlined,
-                                            size: 13,
-                                            color: AppColors.mutedForeground,
-                                          ),
-                                        ],
+                                            const SizedBox(width: 4),
+                                            Icon(
+                                              Icons.edit_outlined,
+                                              size: 18,
+                                              color: AppColors.mutedForeground,
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -2176,7 +2295,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              if (p.stack != null) ...[
+                              if (p.stack != null && stacksVisible) ...[
                                 const SizedBox(height: 3),
                                 Text(
                                   'Stack: ${Formatters.chips(p.stack!)}',
@@ -2221,7 +2340,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             Expanded(
                               child: AppButton(
                                 size: AppButtonSize.sm,
-                                variant: AppButtonVariant.danger,
+                                variant: AppButtonVariant.destructive,
                                 onPressed: () =>
                                     _showEliminateModal(context, app, p),
                                 child: const Text('Out'),
@@ -2796,7 +2915,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           color: AppColors.mutedForeground,
                         ),
                       ),
-                      if (app.isAdmin)
+                      if (app.isAdmin &&
+                          (game.dealAmounts != null ||
+                              game.status == LiveGameStatus.finaltable))
                         GestureDetector(
                           onTap: () => _editPlayerStack(context, app, p),
                           child: Padding(
@@ -2826,7 +2947,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     if (app.isAdmin)
                       AppButton(
                         size: AppButtonSize.sm,
-                        variant: AppButtonVariant.danger,
+                        variant: AppButtonVariant.destructive,
                         onPressed: () => _showEliminateModal(context, app, p),
                         child: const Text('Out'),
                       ),
@@ -2870,7 +2991,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   /// §3's [Player.stack]: a manual host spot-check, not a live count. Feeds
   /// §25.5's `lowestStackBB` sample the next time anyone busts.
+  /// Spec D3: only editable at deal or final table.
   void _editPlayerStack(BuildContext context, AppProvider app, Player p) {
+    final game = app.currentGame;
+    final stacksEditable = game != null &&
+        (game.dealAmounts != null ||
+            game.status == LiveGameStatus.finaltable);
+    if (!stacksEditable) return;
     final ctrl = TextEditingController(text: p.stack?.toString() ?? '');
     showAppModal(
       context: context,
@@ -2933,7 +3060,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               const SizedBox(width: AppSpacing.sm),
               AppButton(
-                variant: AppButtonVariant.danger,
+                variant: AppButtonVariant.destructive,
                 onPressed: () {
                   app.removePlayer(p.id);
                   Navigator.pop(context);
@@ -3123,7 +3250,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: AppButton(
-                  variant: AppButtonVariant.danger,
+                  variant: AppButtonVariant.destructive,
                   onPressed: () {
                     app.undoLast();
                     Navigator.pop(context);
@@ -4052,7 +4179,7 @@ void _confirmUndoPlayerAction(BuildContext context, AppProvider app, Player p) {
             ),
             const SizedBox(width: AppSpacing.sm),
             AppButton(
-              variant: AppButtonVariant.danger,
+              variant: AppButtonVariant.destructive,
               onPressed: () {
                 app.undoLastPlayerAction(p.id);
                 Navigator.pop(context);
@@ -4224,7 +4351,7 @@ class _EliminatedTab extends StatelessWidget {
                                     ),
                                     const SizedBox(width: AppSpacing.sm),
                                     AppButton(
-                                      variant: AppButtonVariant.danger,
+                                      variant: AppButtonVariant.destructive,
                                       onPressed: () {
                                         context
                                             .read<AppProvider>()
@@ -5169,7 +5296,7 @@ class _EliminateContentState extends State<_EliminateContent> {
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: AppButton(
-                variant: AppButtonVariant.danger,
+                variant: AppButtonVariant.destructive,
                 onPressed: _sameHand.isEmpty
                     ? () => widget.onConfirm(_koRecipient)
                     : () => widget.onConfirmTied?.call(_sameHand.toList()),
@@ -5305,7 +5432,7 @@ class _CancelTournamentFormState extends State<_CancelTournamentForm> {
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: AppButton(
-                variant: AppButtonVariant.danger,
+                variant: AppButtonVariant.destructive,
                 onPressed: reason.isEmpty
                     ? null
                     : () => widget.onCancel(reason),

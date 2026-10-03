@@ -34,7 +34,7 @@ class AppTabs extends StatelessWidget {
           height: shouldStack ? 56 : 46,
           decoration: Glass.glassTabBar(),
           // On wide layouts tabs are left-aligned at intrinsic width, so a
-          // long set (admin: Players/Eliminated/Seating/Levels/Prizes/Audit)
+          // long set (host: Players/Eliminated/Seating/Levels/Prizes/Audit)
           // scrolled instead of overflowing. Mobile stays evenly expanded.
           child: isMobile
               ? Row(

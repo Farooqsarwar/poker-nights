@@ -61,13 +61,13 @@ const kToolChipSets = <String, List<ChipColor>>{
     ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 25, quantity: 100),
     ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 100, quantity: 50),
     ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 500, quantity: 30),
-    ChipColor(color: 'Yellow', hex: 0xFFF1C40F, value: 1000, quantity: 20),
+    ChipColor(color: 'Grey', hex: 0xFF95A5A6, value: 1000, quantity: 20),
   ],
   'Four colours (25/100/500/1000)': [
     ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 25, quantity: 100),
     ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 100, quantity: 100),
     ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 500, quantity: 50),
-    ChipColor(color: 'Yellow', hex: 0xFFF1C40F, value: 1000, quantity: 30),
+    ChipColor(color: 'Grey', hex: 0xFF95A5A6, value: 1000, quantity: 30),
   ],
 };
 

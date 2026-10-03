@@ -101,13 +101,6 @@ const double kExpectedRebuyRate = 0.35;
 /// re-entries off changed the forecast.
 const double kExpectedReEntryRate = 0.2;
 
-/// Deprecated alias for [kAddOnTakeUpRate].
-///
-/// This was 0.65 while §F1.1 states 70 %, so the engine and the figure shown
-/// to the host disagreed by five points on the same quantity. Pointed at the
-/// one constant rather than left as a second copy — that is how the two drift.
-@Deprecated('Use kAddOnTakeUpRate — §F1.1 states 70 %.')
-const double kExpectedAddOnRate = kAddOnTakeUpRate;
 
 /// Build Spec v3.1 §F1.1 defaults for the add-on, expressed the way the spec
 /// expresses them: a multiple of the starting stack, and the share of the
@@ -225,7 +218,7 @@ class StructureExplanation {
 int? clockDiffMinutes(String start, String end) {
   final s = _minutesOfDay(start);
   final e = _minutesOfDay(end);
-  if (s == null || e == null) return null;
+  if (s == null || e == null || s == e) return null;
   final diff = e - s;
   return diff > 0 ? diff : diff + 24 * 60;
 }
@@ -487,7 +480,7 @@ class TournamentParams {
       : 0;
 
   int get effectiveExpectedReEntries => reEntry
-      ? math.max(0, expectedReEntries ?? (players * effectiveExpectedRebuyRate).round())
+      ? math.max(0, expectedReEntries ?? (players * kExpectedReEntryRate).round())
       : 0;
 
   int get effectiveExpectedAddOns => addOn

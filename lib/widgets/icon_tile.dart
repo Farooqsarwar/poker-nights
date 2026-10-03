@@ -7,8 +7,8 @@ import '../app/typography.dart';
 /// rule). Premium uses [IconTileTone.primary] (crimson) instead.
 enum IconTileTone { primary, soft, success, danger, warning, neutral }
 
-/// Rounded square carrying a glyph, an icon, initials or a small widget —
-/// the redesign's crimson ♠ tile (A6/A7), the group-initials tile (A8), and
+/// Rounded square carrying an icon, initials or a small widget —
+/// the redesign's crimson brand tile (A6/A7), the group-initials tile (A8), and
 /// the tinted icon tiles on notifications, tools and state cards.
 ///
 /// Exactly one of [icon], [label] or [child] should be given.
@@ -26,7 +26,7 @@ class IconTile extends StatelessWidget {
 
   final IconData? icon;
 
-  /// Text content — a glyph such as '♠' or initials such as 'FP'.
+  /// Text content — initials such as 'FP'.
   final String? label;
   final Widget? child;
   final double size;

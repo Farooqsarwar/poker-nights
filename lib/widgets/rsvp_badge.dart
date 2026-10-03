@@ -5,12 +5,19 @@ import 'app_badge.dart';
 
 /// RSVP badge mirroring the web `RSVPBadge` component.
 class RSVPBadge extends StatelessWidget {
-  const RSVPBadge({super.key, required this.rsvp});
+  const RSVPBadge({super.key, required this.rsvp, this.waitlistNumber});
 
   final Rsvp? rsvp;
+  final int? waitlistNumber;
 
   @override
   Widget build(BuildContext context) {
+    if (waitlistNumber != null && waitlistNumber! > 0) {
+      return AppBadge(
+        label: 'Waitlist #$waitlistNumber',
+        variant: AppBadgeVariant.highlight,
+      );
+    }
     if (rsvp == null) {
       return const AppBadge(
         label: 'No response',
@@ -30,7 +37,7 @@ class RSVPBadge extends StatelessWidget {
         return const AppBadge(label: 'Maybe', variant: AppBadgeVariant.accent);
       case Rsvp.cant:
         return const AppBadge(
-          label: "Can't Come",
+          label: "Can't come",
           variant: AppBadgeVariant.red,
         );
       case Rsvp.goingPlus1:

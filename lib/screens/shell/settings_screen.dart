@@ -14,7 +14,8 @@ import '../../widgets/app_tag.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
-import '../../widgets/back_nav_button.dart';
+import '../../widgets/app_back_button.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/delete_account_flow.dart';
 
 class _CurrencyChoice extends StatelessWidget {
@@ -154,7 +155,7 @@ class SettingsScreen extends StatelessWidget {
           // App bar with Squircle back button <
           Row(
             children: [
-              BackNavButton(
+              AppBackButton(
                 onPressed: () {
                   if (context.canPop()) {
                     context.pop();
@@ -186,9 +187,9 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // GAMEPLAY Section
+          // SOUND & VOICE Section (Spec E11 / T33)
           Text(
-            'GAMEPLAY',
+            'SOUND & VOICE',
             style: AppTypography.bodyXs.copyWith(
               letterSpacing: 1.2,
               fontWeight: FontWeight.w600,
@@ -213,6 +214,59 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   showDivider: true,
                 ),
+                _buildSettingRow(
+                  title: 'Sound effects & chimes',
+                  subtitle: 'Audio cues and 1-minute warning chimes',
+                  trailing: AppToggle(
+                    value: app.soundsEnabled,
+                    onChanged: (v) => app.setSoundsEnabled(v),
+                  ),
+                  showDivider: true,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Test voice playback',
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      AppButton(
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.secondary,
+                        onPressed: () => app.testVoice(),
+                        child: const Text('Play sample'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // GAMEPLAY Section
+          Text(
+            'GAMEPLAY',
+            style: AppTypography.bodyXs.copyWith(
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceHint,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: Column(
+              children: [
                 _buildSettingRow(
                   title: 'Haptics',
                   subtitle: 'Short vibration on level change',
@@ -251,6 +305,62 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
+
+          // HOSTING DEFAULTS (Spec B9 / H5)
+          if (app.isAdmin) ...[
+            Text(
+              'HOSTING DEFAULTS',
+              style: AppTypography.bodyXs.copyWith(
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w600,
+                color: AppColors.onSurfaceHint,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.borderSubtle),
+              ),
+              child: Column(
+                children: [
+                  _buildSettingRow(
+                    title: 'Default table capacity',
+                    subtitle: 'Maximum players per table (4–10)',
+                    trailing: Text(
+                      '${app.currentGroup.tableSettings.maxPerTable} seats',
+                      style: AppTypography.monoSm.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    showDivider: true,
+                  ),
+                  _buildSettingRow(
+                    title: 'RSVP deadline',
+                    subtitle: 'Hours before scheduled start to lock RSVPs',
+                    trailing: Text(
+                      '24 hours',
+                      style: AppTypography.monoSm.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    showDivider: true,
+                  ),
+                  _buildSettingRow(
+                    title: 'Pace adaptation (Spec H5)',
+                    subtitle: 'Learn from past games to adjust level duration',
+                    trailing: AppToggle(
+                      value: true,
+                      onChanged: (v) {},
+                    ),
+                    showDivider: false,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
 
           // ON THIS PHONE Section (F2): choices that change how this phone
           // shows things and are never shared with the group.

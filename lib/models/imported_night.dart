@@ -17,6 +17,10 @@ class ImportedEntry {
         guestName: m['guestName'] as String?,
       );
 
+  bool get isValid =>
+      (playerId != null && playerId!.trim().isNotEmpty) ||
+      (guestName != null && guestName!.trim().isNotEmpty);
+
   @override
   bool operator ==(Object other) =>
       other is ImportedEntry &&
@@ -57,14 +61,20 @@ class ImportedNight {
 
   static ImportedNight fromMap(String id, Map<String, dynamic> m) {
     final raw = m['entries'];
+    final entries = <ImportedEntry>[];
+    if (raw is List) {
+      for (final e in raw) {
+        if (e is Map) {
+          final entry =
+              ImportedEntry.fromMap(Map<String, dynamic>.from(e));
+          if (entry.isValid) entries.add(entry);
+        }
+      }
+    }
     return ImportedNight(
       id: id,
       date: (m['date'] as String?) ?? '',
-      entries: [
-        if (raw is List)
-          for (final e in raw)
-            if (e is Map) ImportedEntry.fromMap(Map<String, dynamic>.from(e)),
-      ],
+      entries: entries,
     );
   }
 }

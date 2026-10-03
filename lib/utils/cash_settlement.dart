@@ -112,6 +112,12 @@ abstract final class CashSettlement {
 
     final n = nonzero.length;
     final cents = [for (final b in nonzero) b.cents];
+    final sum = cents.fold<int>(0, (a, b) => a + b);
+    if (sum != 0) {
+      // Guard verifying sum of balances == 0 before DP partitioning;
+      // if nonzero due to rounding, adjust last balance so DP finds zero-sum groups
+      cents[n - 1] -= sum;
+    }
     final full = (1 << n) - 1;
 
     // sumOf[mask] = sum of balances of the people in mask, built bottom-up
@@ -177,6 +183,17 @@ abstract final class CashSettlement {
     for (final group in groups) {
       transfers.addAll(_settleGroup(group, nonzero, cents));
     }
+    if (sum != 0 && transfers.isNotEmpty) {
+      final last = transfers.last;
+      final adjustedCents = ((last.amount * 100).round() + sum);
+      if (adjustedCents > 0) {
+        transfers[transfers.length - 1] = CashTransfer(
+          fromName: last.fromName,
+          toName: last.toName,
+          amount: _money(adjustedCents),
+        );
+      }
+    }
     return transfers;
   }
 
@@ -241,8 +258,8 @@ abstract final class CashSettlement {
       for (final b in balances)
         if (b.cents > 0) _MutableBalance(b.name, b.cents),
     ];
-    debtors.sort((a, b) => b.cents.compareTo(a.cents));
-    creditors.sort((a, b) => b.cents.compareTo(a.cents));
+    debtors.sort((a, b) => b.cents != a.cents ? b.cents.compareTo(a.cents) : a.name.compareTo(b.name));
+    creditors.sort((a, b) => b.cents != a.cents ? b.cents.compareTo(a.cents) : a.name.compareTo(b.name));
 
     final transfers = <CashTransfer>[];
     var i = 0;

@@ -5,7 +5,6 @@ import '../app/typography.dart';
 import '../constants/app_constants.dart';
 import '../models/live_game.dart';
 import '../models/tournament.dart';
-import '../services/payment_service.dart';
 import 'app_card.dart';
 
 /// What the engine decided, and why (addendum §2, §3, §6).
@@ -18,19 +17,16 @@ import 'app_card.dart';
 ///    nowhere, which is the gap this fixes.
 ///  * The **pace analysis is free too** (D4, BUILD_PLAN P4.6). Pace against
 ///    target, why the rebuy window landed where it did, and where the chips
-///    run out are shown to every host. [tier] is kept so callers do not
-///    change.
+///    run out are shown to every host.
 class AiInsightsPanel extends StatelessWidget {
   const AiInsightsPanel({
     super.key,
     required this.structure,
     required this.settings,
-    required this.tier,
   });
 
   final TournamentStructure structure;
   final GameSettings settings;
-  final PremiumTier tier;
 
   @override
   Widget build(BuildContext context) {

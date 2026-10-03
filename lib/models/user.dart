@@ -17,8 +17,6 @@ class UserStats {
   final int knockouts;
 }
 
-enum UserRole { host, player, guest }
-
 /// A member's role within a specific group. The owner always has full Host
 /// authority regardless of this value (tracked separately via
 /// `Group.ownerId`). Mirrors the `role` string stored in Firestore
@@ -68,14 +66,24 @@ class AppUser {
     this.fcmTokens = const [],
     this.isCoAdmin = false,
     this.blockedUserIds = const [],
+    this.organizerContributionAccepted = false,
+    this.country = 'US',
+    this.is18Plus = true,
   });
 
   final String id;
   final String name;
   final String email;
+  /// Legacy storage flag: true = host role in the legacy global sense.
+  /// Authority is per-group (ownerId/GroupRole); do not use alone for
+  /// per-tournament gates — resolve via roleIn()/permissions instead.
+  @Deprecated('Use roleIn()/permissions per-group instead')
   final bool isAdmin;
   final UserStats stats;
   final List<String> fcmTokens;
+  final bool organizerContributionAccepted;
+  final String country;
+  final bool is18Plus;
 
   /// Members this member has blocked — spec §E10 (3) "Moderation": "**Block**
   /// — on a member's row or message: **Block {name}** hides their messages and
@@ -96,6 +104,30 @@ class AppUser {
   /// with [isAdmin] in practice — a member's group role is one of
   /// member/co-host/host, never more than one at a time.
   final bool isCoAdmin;
+
+  /// Spec D15: Role resolution per group context.
+  GroupRole get defaultRole =>
+      isAdmin ? GroupRole.host : (isCoAdmin ? GroupRole.coHost : GroupRole.member);
+
+  /// Resolves the user's role inside [group], honouring group ownership and membership.
+  GroupRole roleIn(dynamic group) {
+    if (group != null) {
+      try {
+        if (group.ownerId == id) return GroupRole.host;
+        final members = group.members as Iterable?;
+        if (members != null) {
+          for (final m in members) {
+            if (m.id == id) {
+              return m.isAdmin == true
+                  ? GroupRole.host
+                  : (m.isCoAdmin == true ? GroupRole.coHost : GroupRole.member);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    return defaultRole;
+  }
 
   String get initials {
     if (name.isEmpty) return '?';
@@ -164,6 +196,9 @@ class AppUser {
     List<String>? fcmTokens,
     bool? isCoAdmin,
     List<String>? blockedUserIds,
+    bool? organizerContributionAccepted,
+    String? country,
+    bool? is18Plus,
   }) {
     return AppUser(
       id: id ?? this.id,
@@ -174,6 +209,10 @@ class AppUser {
       fcmTokens: fcmTokens ?? this.fcmTokens,
       isCoAdmin: isCoAdmin ?? this.isCoAdmin,
       blockedUserIds: blockedUserIds ?? this.blockedUserIds,
+      organizerContributionAccepted:
+          organizerContributionAccepted ?? this.organizerContributionAccepted,
+      country: country ?? this.country,
+      is18Plus: is18Plus ?? this.is18Plus,
     );
   }
 }

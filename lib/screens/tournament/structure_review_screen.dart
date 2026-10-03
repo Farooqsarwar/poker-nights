@@ -27,7 +27,7 @@ import '../../widgets/app_page.dart';
 import '../../widgets/app_select.dart';
 import '../../widgets/app_tabs.dart';
 import '../../widgets/app_text_field.dart';
-import '../../widgets/back_nav_button.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/journey_progress.dart';
 import '../../widgets/medal_icon.dart';
 import '../../widgets/structure_editor.dart';
@@ -196,7 +196,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
             const SizedBox(height: AppSpacing.lg),
             Row(
               children: [
-                BackNavButton(onPressed: () => context.go(backTo)),
+                AppBackButton(onPressed: () => context.go(backTo)),
                 const SizedBox(width: AppSpacing.md),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -384,7 +384,61 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            if (settings.earlyArrivalBonusEnabled || settings.hardFinishEnabled) ...[
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.borderSubtle),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (settings.earlyArrivalBonusEnabled) ...[
+                      Row(
+                        children: [
+                          Icon(Icons.stars_outlined, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Early arrival bonus: +${((settings.earlyArrivalBonusPctOverride ?? 0.125) * 100).toStringAsFixed(1)}% chips',
+                              style: AppTypography.bodySm.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (settings.hardFinishEnabled)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Divider(height: 1),
+                        ),
+                    ],
+                    if (settings.hardFinishEnabled) ...[
+                      Row(
+                        children: [
+                          Icon(Icons.timer_outlined, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Hard finish: +${settings.hardFinishMinsAfterFinish}m · split by ${settings.hardFinishSplit.toUpperCase()}',
+                              style: AppTypography.bodySm.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            const SizedBox(height: 8),
 
             // Bottom Bar: Edit (dark squircle) & Publish event (crimson glowing)
             Row(
@@ -478,7 +532,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
-              BackNavButton(onPressed: () => context.go(backTo)),
+              AppBackButton(onPressed: () => context.go(backTo)),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -550,7 +604,6 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
           AiInsightsPanel(
             structure: structure,
             settings: settings,
-            tier: app.premiumTier,
           ),
           const SizedBox(height: AppSpacing.lg),
           // Structure warnings and chip shortages (§4.5) share one expandable

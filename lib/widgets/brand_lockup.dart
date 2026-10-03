@@ -34,7 +34,7 @@ class PokerNightLogo extends StatelessWidget {
   }
 }
 
-/// The "pokernighttools" brand lockup featuring the real asset logo according to theme.
+/// The "Poker Night" brand lockup featuring the real asset logo according to theme.
 class PokerNightBrand extends StatelessWidget {
   const PokerNightBrand({
     super.key,
@@ -60,7 +60,7 @@ class PokerNightBrand extends StatelessWidget {
             TextSpan(
               children: [
                 TextSpan(
-                  text: 'pokernight',
+                  text: 'Poker ',
                   style: GoogleFonts.spaceGrotesk(
                     fontSize: fontSize,
                     fontWeight: FontWeight.w700,
@@ -69,7 +69,7 @@ class PokerNightBrand extends StatelessWidget {
                   ),
                 ),
                 TextSpan(
-                  text: 'tools',
+                  text: 'Night',
                   style: GoogleFonts.spaceGrotesk(
                     fontSize: fontSize,
                     fontWeight: FontWeight.w700,

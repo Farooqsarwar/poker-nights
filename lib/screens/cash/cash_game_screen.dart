@@ -12,7 +12,7 @@ import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
-import '../../widgets/back_nav_button.dart';
+import '../../widgets/app_back_button.dart';
 
 /// Cash game setup screen strictly matching D1_CashSetup mobile-first design.
 ///
@@ -239,15 +239,15 @@ class _CashGameScreenState extends State<CashGameScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              BackNavButton(
-                onPressed: () {
+              AppBackButton(
+                onTap: () {
                   if (context.canPop()) {
                     context.pop();
                   } else {
                     context.go(RoutePaths.home);
                   }
                 },
-                label: 'Back to home',
+                tooltip: 'Back to home',
               ),
               Container(
                 padding: const EdgeInsets.symmetric(

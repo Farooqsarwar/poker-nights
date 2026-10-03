@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -108,7 +109,12 @@ class _DealScreenState extends State<DealScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
 
-          _StacksCard(players: players, leader: leader),
+          _StacksCard(
+            players: players,
+            leader: leader,
+            game: game,
+            app: app,
+          ),
           const SizedBox(height: AppSpacing.md),
 
           if (prizes.isNotEmpty)
@@ -365,15 +371,167 @@ class _NoGame extends StatelessWidget {  const _NoGame({required this.message, t
   }
 }
 
-/// C-deal item 1 — the stacks still on the table, with the leader named.
+/// C-deal item 1 — the stacks still on the table, with steppers, Count by colour, and Add player.
 class _StacksCard extends StatelessWidget {
-  const _StacksCard({required this.players, required this.leader});
+  const _StacksCard({
+    required this.players,
+    required this.leader,
+    required this.game,
+    required this.app,
+  });
 
   final List<Player> players;
   final Player? leader;
+  final LiveGame game;
+  final AppProvider app;
+
+  void _showCountByColourDialog(BuildContext context, Player player) {
+    final chipSet = game.settings.chipSet;
+    final counts = <int, int>{};
+    for (final c in chipSet) {
+      counts[c.value] = 0;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          int total = 0;
+          for (final entry in counts.entries) {
+            total += entry.key * entry.value;
+          }
+
+          return AlertDialog(
+            backgroundColor: AppColors.card,
+            title: Text('Count chips: ${player.name}', style: AppTypography.bodyBold),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final chip in chipSet)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: Color(chip.hex),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white24),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${chip.color} (${Formatters.chips(chip.value)})',
+                              style: AppTypography.bodySm,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, size: 20),
+                            onPressed: (counts[chip.value] ?? 0) > 0
+                                ? () => setModalState(() {
+                                      counts[chip.value] = (counts[chip.value] ?? 0) - 1;
+                                    })
+                                : null,
+                          ),
+                          Text('${counts[chip.value] ?? 0}', style: AppTypography.monoSm),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline, size: 20),
+                            onPressed: () => setModalState(() {
+                              counts[chip.value] = (counts[chip.value] ?? 0) + 1;
+                            }),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const Divider(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Total counted:', style: AppTypography.bodyBold),
+                      Text(Formatters.chips(total), style: AppTypography.mono(weight: FontWeight.w700)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text('Cancel', style: TextStyle(color: AppColors.mutedForeground)),
+              ),
+              AppButton(
+                size: AppButtonSize.sm,
+                onPressed: () {
+                  app.updatePlayerStack(player.id, total);
+                  Navigator.of(ctx).pop();
+                },
+                child: const Text('Apply total'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showAddPlayerDialog(BuildContext context) {
+    final nameCtrl = TextEditingController();
+    final stackCtrl = TextEditingController(text: '${game.structure.startingStack}');
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text('Add player to deal', style: AppTypography.bodyBold),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: 'Player name'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: stackCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Starting chips'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Cancel', style: TextStyle(color: AppColors.mutedForeground)),
+          ),
+          AppButton(
+            size: AppButtonSize.sm,
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              if (name.isNotEmpty) {
+                final stack = int.tryParse(stackCtrl.text.trim()) ?? game.structure.startingStack;
+                app.checkInPlayer(name);
+                final p = app.currentGame?.players.where((x) => x.name.toLowerCase() == name.toLowerCase()).firstOrNull;
+                if (p != null) {
+                  app.updatePlayerStack(p.id, stack);
+                }
+              }
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final step = game.settings.chipSet.isNotEmpty ? game.settings.chipSet.first.value : 100;
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -383,11 +541,26 @@ class _StacksCard extends StatelessWidget {
               Expanded(
                 child: Text('Stacks on the table', style: AppTypography.display(size: AppFontSizes.lg, weight: FontWeight.w600)),
               ),
-              if (leader != null)
+              if (leader != null) ...[
                 AppBadge(
                   label: '1st on chips',
                   variant: AppBadgeVariant.green,
                 ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+              AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => _showAddPlayerDialog(context),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.person_add_outlined, size: 14),
+                    SizedBox(width: 4),
+                    Text('Add player'),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -415,11 +588,43 @@ class _StacksCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Text(
-                    Formatters.chips(players[i].stack ?? 0),
-                    style: AppTypography.bodySm.copyWith(
-                      fontWeight: i == 0 ? FontWeight.w600 : null,
+                  Tooltip(
+                    message: 'Count by colour',
+                    child: IconButton(
+                      icon: const Icon(Icons.colorize_outlined, size: 16),
+                      color: AppColors.mutedForeground,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      onPressed: () => _showCountByColourDialog(context, players[i]),
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.remove, size: 16),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    onPressed: () {
+                      final cur = players[i].stack ?? 0;
+                      app.updatePlayerStack(players[i].id, max(0, cur - step));
+                    },
+                  ),
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 64),
+                    alignment: Alignment.center,
+                    child: Text(
+                      Formatters.chips(players[i].stack ?? 0),
+                      style: AppTypography.monoSm.copyWith(
+                        fontWeight: i == 0 ? FontWeight.w600 : null,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add, size: 16),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    onPressed: () {
+                      final cur = players[i].stack ?? 0;
+                      app.updatePlayerStack(players[i].id, cur + step);
+                    },
                   ),
                 ],
               ),

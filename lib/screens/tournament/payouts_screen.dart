@@ -74,7 +74,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     final addOns = game.players.where((p) => p.hasAddOn).length;
     final knockouts =
         game.players.fold<int>(0, (sum, p) => sum + p.knockouts);
-    final showMoney = isAdmin && prizes.isNotEmpty;
+    final showMoney = prizes.isNotEmpty;
     return AppPage(
       maxWidth: 560,
       child: Column(

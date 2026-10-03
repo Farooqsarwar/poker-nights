@@ -132,10 +132,11 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       buyIn: _buyIn,
       chipSet: _chips(app),
       rebuys: _rebuy,
-      rebuysCloseLevel: _rebuy ? 6 : 0,
+      rebuysCloseLevel: 0,
+      rebuyCloseChosenByOrganizer: false,
       reEntry: false,
       addOn: _rebuy,
-      anteEnabled: false,
+      anteEnabled: true,
       anteAfterLevel: 6,
       koEnabled: false,
       koAmount: 5,
@@ -178,6 +179,8 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
     final now = DateTime.now();
     String two(int v) => v.toString().padLeft(2, '0');
     final name = '${_weekdays[now.weekday - 1]} Poker';
+    final structure = TournamentEngine.generate(_params(app, pace: pace));
+    final rebuyClose = _rebuy ? structure.rebuysCloseLevel : 0;
     return GameSettings(
       name: name,
       date: '${now.year}-${two(now.month)}-${two(now.day)}',
@@ -190,14 +193,14 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       koEnabled: false,
       koAmount: 5,
       rebuys: _rebuy,
-      rebuysCloseLevel: _rebuy ? 6 : 0,
+      rebuysCloseLevel: rebuyClose,
       reEntry: false,
       addOn: _rebuy,
-      addOnCloseLevel: _rebuy ? 6 : 0,
-      anteEnabled: false,
-      anteAfterLevel: 6,
-      anteStyle: AnteStyle.individual,
-      antePreference: AntePreference.none,
+      addOnCloseLevel: rebuyClose,
+      anteEnabled: true,
+      anteAfterLevel: rebuyClose > 0 ? rebuyClose + 1 : 6,
+      anteStyle: AnteStyle.bigBlind,
+      antePreference: AntePreference.recommend,
       organizerPct: 0,
       chipSet: _chips(app),
       chipSetName: _chipsName(app),
@@ -227,7 +230,7 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
           const SizedBox(height: AppSpacing.xl),
           AppButton(
             fullWidth: true,
-            variant: AppButtonVariant.danger,
+            variant: AppButtonVariant.destructive,
             onPressed: () {
               proceed = true;
               Navigator.of(context).pop();
@@ -605,6 +608,16 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
               ),
             ),
           const SizedBox(height: AppSpacing.md),
+          if (chips.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: Text(
+                'No chip set found — add one in Chip sets first.',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.destructiveText,
+                ),
+              ),
+            ),
           _QuickCard(
             eyebrow: "What you'll get",
             child: Text(

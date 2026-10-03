@@ -613,16 +613,16 @@ extension AppProviderTournament on AppProvider {
       effectiveAddOnCost: s.effectiveAddOnCost,
     );
 
-    // Delegate the organizer-cut and prize-split maths to the shared helper in
-    // TournamentEngine so the rules stay consistent everywhere.
-    final recalculated = PayoutBridge.recalculate(
-      grossEligible: grossEligible,
-      players: confirmedCount,
-      organizerPct: s.effectiveOrganizerPct,
-      buyIn: s.buyIn,
-      forcePaidPlaces: s.forcePaidPlaces,
-      extraEntries: totalRebuys + totalReEntries,
-    );
+  // Delegate the organizer-cut and prize-split maths to the shared helper in
+  // TournamentEngine so the rules stay consistent everywhere.
+  final recalculated = PayoutBridge.recalculate(
+    grossEligible: grossEligible,
+    players: confirmedCount,
+    organizerPct: _effectiveLegalFeePct(s.effectiveOrganizerPct),
+    buyIn: s.buyIn,
+    forcePaidPlaces: s.forcePaidPlaces,
+    extraEntries: totalRebuys + totalReEntries,
+  );
 
     // Patch only the financial fields; levels and all other structure data
     // remain exactly as they were (including any StructureEditor overrides).
@@ -634,6 +634,14 @@ extension AppProviderTournament on AppProvider {
         prizes: recalculated.prizes,
       ),
     );
+  }
+
+  int _effectiveLegalFeePct(num requestedPct) {
+    if (requestedPct <= 0) return 0;
+    // Spec H4 / D13: Organiser fee requires 18+ and legal gate acceptance
+    if (user != null && !user!.organizerContributionAccepted) return 0;
+    if (user != null && !user!.is18Plus) return 0;
+    return requestedPct.round();
   }
 
   /// Manually overrides the number of paid places and recalculates prizes.
@@ -1057,7 +1065,7 @@ extension AppProviderTournament on AppProvider {
         anteStyle: s.anteStyle,
         koEnabled: s.koEnabled,
         koAmount: s.koAmount,
-        organizerPct: s.effectiveOrganizerPct,
+        organizerPct: _effectiveLegalFeePct(s.effectiveOrganizerPct),
         rebuyCost: s.rebuyCost,
         addOnCost: s.addOnCost,
         breaks: s.breaks,
@@ -1304,7 +1312,7 @@ extension AppProviderTournament on AppProvider {
         anteStyle: s.anteStyle,
         koEnabled: s.koEnabled,
         koAmount: s.koAmount,
-        organizerPct: s.effectiveOrganizerPct,
+        organizerPct: _effectiveLegalFeePct(s.effectiveOrganizerPct),
         rebuyCost: s.rebuyCost,
         addOnCost: s.addOnCost,
         breaks: s.breaks,
@@ -1430,7 +1438,7 @@ extension AppProviderTournament on AppProvider {
 
   void updateStructurePlayerCount(int players) {
     final game = _currentGame;
-    if (game == null) return;
+    if (game == null || !canEditStructure) return;
     _pushUndo();
     _recalculateWithPlayers(players);
   }
@@ -1527,7 +1535,7 @@ extension AppProviderTournament on AppProvider {
         anteStyle: newSettings.anteStyle,
         koEnabled: newSettings.koEnabled,
         koAmount: newSettings.koAmount,
-        organizerPct: newSettings.effectiveOrganizerPct,
+        organizerPct: _effectiveLegalFeePct(newSettings.effectiveOrganizerPct),
         rebuyCost: newSettings.rebuyCost,
         addOnCost: newSettings.addOnCost,
         breaks: newSettings.breaks,
@@ -1609,7 +1617,7 @@ extension AppProviderTournament on AppProvider {
 
   void applyLevelEdits(List<LevelEdit> edits) {
     final game = _currentGame;
-    if (game == null || edits.isEmpty) return;
+    if (game == null || !canEditStructure || edits.isEmpty) return;
     for (final e in edits) {
       if (_validateLevelDuration(e.durationMins) != null ||
           e.sb <= 0 ||
@@ -1642,7 +1650,7 @@ extension AppProviderTournament on AppProvider {
   /// not patched by level number (checklist §12.4).
   void applyFutureLevels(List<BlindLevel> futureLevels) {
     final game = _currentGame;
-    if (game == null || futureLevels.isEmpty) return;
+    if (game == null || !canEditStructure || futureLevels.isEmpty) return;
     for (final l in futureLevels) {
       if (_validateLevelDuration(l.durationMins) != null ||
           l.sb <= 0 ||
@@ -1705,6 +1713,7 @@ extension AppProviderTournament on AppProvider {
   ) {
     final game = _currentGame;
     if (game == null) return 'No active game.';
+    if (!canEditStructure) return 'Host authority required to edit structure.';
     if (afterLevel < game.currentLevel) {
       return 'Completed and active levels cannot be changed.';
     }

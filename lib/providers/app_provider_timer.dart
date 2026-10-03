@@ -316,6 +316,8 @@ extension AppProviderTimer on AppProvider {
   }
 
   void startTimer({List<String> noShowIds = const []}) {
+    if (_currentGame == null || (!isAdmin && !canOperateTheClock)) return;
+    _startTick();
     _forceClaimEditor();
 
     if (noShowIds.isNotEmpty) {
@@ -417,6 +419,7 @@ extension AppProviderTimer on AppProvider {
   }
 
   void pauseTimer() {
+    if (_currentGame == null || (!isAdmin && !canOperateTheClock)) return;
     _forceClaimEditor();
     _currentGame = _currentGame!.copyWith(
       timerRunning: false,
@@ -430,6 +433,7 @@ extension AppProviderTimer on AppProvider {
   }
 
   void resumeTimer() {
+    if (_currentGame == null || (!isAdmin && !canOperateTheClock)) return;
     _forceClaimEditor();
     if (_currentGame?.status == LiveGameStatus.completed || 
         _currentGame?.status == LiveGameStatus.cancelled) {
@@ -469,6 +473,7 @@ extension AppProviderTimer on AppProvider {
   /// and never touches it -- §12 requires it to be "independent of level
   /// timer", and a level must not end early because somebody tanked.
   void startShotClock(String playerId, {int? seconds}) {
+    if (!AppFeatureFlags.enableShotClock) return;
     final game = _currentGame;
     if (game == null) return;
     final duration = seconds ?? ShotClock.defaultSeconds;

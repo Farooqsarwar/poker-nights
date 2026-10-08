@@ -391,4 +391,19 @@ Future<void> registerBoardFonts() async {
     final loader = FontLoader(e.key)..addFont(bytes(e.value));
     await loader.load();
   }
+  // Material icons, from the Flutter SDK's own cache — without this every
+  // Icon renders as an empty box in captures (same fix as design_probe).
+  try {
+    final flutterRoot = File(Platform.resolvedExecutable)
+        .parent.parent.parent.parent.parent.parent.path;
+    final icons = File(
+      '$flutterRoot/bin/cache/artifacts/material_fonts/materialicons-regular.otf',
+    );
+    if (icons.existsSync()) {
+      final raw = await icons.readAsBytes();
+      final loader = FontLoader('MaterialIcons')
+        ..addFont(Future.value(ByteData.view(raw.buffer)));
+      await loader.load();
+    }
+  } catch (_) {}
 }

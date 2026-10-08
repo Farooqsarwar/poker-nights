@@ -8,8 +8,10 @@ import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/glass_styles.dart';
 import '../../models/cash_game.dart';
+import '../../models/chip_color.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
+import '../../utils/mock_data.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/app_back_button.dart';
@@ -28,6 +30,7 @@ class CashGameScreen extends StatefulWidget {
 
 class _CashGameScreenState extends State<CashGameScreen> {
   static const _stakes = <(String, double, double)>[
+    ('0.05 / 0.10', 0.05, 0.10),
     ('0.5 / 1', 0.5, 1),
     ('1 / 2', 1, 2),
     ('2 / 5', 2, 5),
@@ -40,8 +43,8 @@ class _CashGameScreenState extends State<CashGameScreen> {
   bool _trackSettlement = true;
   String? _selectedChipSetId;
 
-  // Selected preset stake index: 0 = 0.5/1, 1 = 1/2, 2 = 2/5, -1 = custom.
-  int _selectedStakeIndex = 1;
+  // Selected preset stake index: 0 = 0.05/0.10, 1 = 0.5/1, 2 = 1/2, 3 = 2/5, -1 = custom.
+  int _selectedStakeIndex = 2;
   double _sb = 1;
   double _bb = 2;
 
@@ -54,6 +57,13 @@ class _CashGameScreenState extends State<CashGameScreen> {
     super.initState();
     _minBuyIn.addListener(_markEdited);
     _maxBuyIn.addListener(_markEdited);
+    // Breakdown card reads these controllers — rebuild as the host types.
+    _minBuyIn.addListener(_refreshBreakdown);
+    _chipValue.addListener(_refreshBreakdown);
+  }
+
+  void _refreshBreakdown() {
+    if (mounted) setState(() {});
   }
 
   bool _settingBuyIns = false;
@@ -70,7 +80,6 @@ class _CashGameScreenState extends State<CashGameScreen> {
     _chipValue.dispose();
     super.dispose();
   }
-
   static String _num(double v) =>
       v == v.roundToDouble() ? v.round().toString() : v.toString();
 
@@ -88,12 +97,12 @@ class _CashGameScreenState extends State<CashGameScreen> {
     });
   }
 
-  /// Custom stakes: SB < BB always, in half-unit steps.
+  /// Custom stakes: SB < BB always, in 0.05 steps down to micro 0.05/0.10.
   void _nudgeCustom({double sb = 0, double bb = 0}) {
     var nextSb = _sb + sb;
     var nextBb = _bb + bb;
-    if (nextSb < 0.5) nextSb = 0.5;
-    if (nextBb <= nextSb) nextBb = nextSb + 0.5;
+    if (nextSb < 0.05) nextSb = 0.05;
+    if (nextBb <= nextSb) nextBb = nextSb + 0.05;
     _applyStakes(-1, nextSb, nextBb);
   }
 
@@ -146,6 +155,71 @@ class _CashGameScreenState extends State<CashGameScreen> {
       const [],
     );
     context.go(RoutePaths.cashGameLive);
+  }
+
+  /// Chips of the selected set (standard fallback), sorted big first.
+  List<ChipColor> _breakdownChips(AppProvider app) {
+    final id = _selectedChipSetId ?? app.defaultChipSetId;
+    final set = id == null
+        ? null
+        : app.savedChipSets.where((c) => c.id == id).firstOrNull;
+    final chips = List<ChipColor>.of(
+      set?.chips ?? MockData.defaultChipSet,
+    )..sort((a, b) => b.value.compareTo(a.value));
+    return chips.where((c) => c.value > 0).toList();
+  }
+
+  /// Fewest-chip breakdown of one min buy-in, so the host knows what to hand
+  /// each player. Rebuilds live as buy-in, chip value or set changes.
+  Widget _buildBreakdownCard(AppProvider app) {
+    final buyIn =
+        num.tryParse(_minBuyIn.text.trim())?.toDouble() ?? 0;
+    final unit = num.tryParse(_chipValue.text.trim())?.toDouble() ?? 0;
+    final chips = _breakdownChips(app);
+    String body;
+    if (buyIn <= 0 || unit < 0.01 || chips.isEmpty) {
+      body = 'Enter a min buy-in and chip value to see the breakdown.';
+    } else {
+      var rest = (buyIn / unit).round();
+      final parts = <String>[];
+      for (final c in chips) {
+        final n = rest ~/ c.value;
+        if (n > 0) {
+          parts.add('$n × ${c.value}');
+          rest -= n * c.value;
+        }
+      }
+      body = parts.isEmpty
+          ? 'Buy-in is smaller than the smallest chip — lower the chip value.'
+          : 'Per min buy-in: ${parts.join(' + ')}'
+              '${rest > 0 ? ' (+$rest unit${rest == 1 ? '' : 's'} short — add a smaller chip)' : ''}';
+    }
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Chip breakdown',
+            style: AppTypography.bodySm.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _chipSetLabel(AppProvider app) {
@@ -331,8 +405,8 @@ class _CashGameScreenState extends State<CashGameScreen> {
                   child: _StakeStepper(
                     label: 'Small blind',
                     value: _num(_sb),
-                    onMinus: () => _nudgeCustom(sb: -0.5),
-                    onPlus: () => _nudgeCustom(sb: 0.5),
+                    onMinus: () => _nudgeCustom(sb: -0.05),
+                    onPlus: () => _nudgeCustom(sb: 0.05),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -340,8 +414,8 @@ class _CashGameScreenState extends State<CashGameScreen> {
                   child: _StakeStepper(
                     label: 'Big blind',
                     value: _num(_bb),
-                    onMinus: () => _nudgeCustom(bb: -0.5),
-                    onPlus: () => _nudgeCustom(bb: 0.5),
+                    onMinus: () => _nudgeCustom(bb: -0.05),
+                    onPlus: () => _nudgeCustom(bb: 0.05),
                   ),
                 ),
               ],
@@ -451,6 +525,8 @@ class _CashGameScreenState extends State<CashGameScreen> {
               color: AppColors.mutedForeground,
             ),
           ),
+          const SizedBox(height: 12),
+          _buildBreakdownCard(app),
           const SizedBox(height: 20),
 
           // Track settlement Card

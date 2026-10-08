@@ -129,6 +129,21 @@ const _coHostPaths = {
 /// screen itself stays member-oriented.
 const _guestAllowed = ScreenShell.guestAllowed;
 
+/// Tournament-scoped routes that should be inaccessible when a game is cancelled.
+const _tournamentPaths = {
+  RoutePaths.invitation,
+  RoutePaths.checkIn,
+  RoutePaths.hostDashboard,
+  RoutePaths.playerLive,
+  RoutePaths.rebuySettlement,
+  RoutePaths.finalTable,
+  RoutePaths.completeTournament,
+  RoutePaths.deal,
+  RoutePaths.structureReview,
+  RoutePaths.createTournament,
+  RoutePaths.quick,
+};
+
 /// Builds the app router wired to [app] so the auth guard re-evaluates on
 /// every provider change (sign-in/out and the initial `authReady` flip).
 /// Adapts [AppProvider] into a [Listenable] that fires only when a field the
@@ -375,6 +390,16 @@ GoRouter buildAppRouter(AppProvider app) {
     // notifyListeners() call, so this fires automatically when the admin
     // starts the tournament (P1 fix).
     final game = app.currentGame;
+    // Cancelled tournament: bounce everyone away from tournament screens.
+    if (game != null &&
+        game.status == LiveGameStatus.cancelled &&
+        _tournamentPaths.contains(flat)) {
+      return authed ? RoutePaths.group : RoutePaths.landing;
+    }
+    // Auto-redirect members AND link guests from invitation to live game
+    // when game goes live. GoRouter re-evaluates redirect on every
+    // notifyListeners() call, so this fires automatically when the admin
+    // starts the tournament (P1 fix).
     if (flat == RoutePaths.invitation &&
         game != null &&
         game.status.isActiveLive &&

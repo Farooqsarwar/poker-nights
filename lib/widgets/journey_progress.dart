@@ -36,6 +36,15 @@ enum JourneyStep {
         JourneyStep.seating => 'Seating',
         JourneyStep.start => 'Start',
       };
+
+  /// Returns the route with `?from=` parameter set for the structure review
+  /// screen so its back button returns to the correct screen.
+  String routeFrom(String currentRoute) {
+    if (this == JourneyStep.structure) {
+      return RoutePaths.structureReviewWith(currentRoute);
+    }
+    return route;
+  }
 }
 
 /// Persistent journey header shown at the top of the three pre-live screens
@@ -83,9 +92,10 @@ class JourneyProgress extends StatelessWidget {
   /// reason [JourneyStep.route] is data rather than a navigation call.
   final String? currentRoute;
 
-  /// Fired with the tapped step so the mounting screen can dispatch the
-  /// navigation. When null the steps render but ignore taps.
-  final ValueChanged<JourneyStep>? onStepTap;
+  /// Fired with the tapped step's resolved route (including `?from=` for
+  /// structure review) so the mounting screen can dispatch the navigation.
+  /// When null the steps render but ignore taps.
+  final ValueChanged<String>? onStepTap;
 
   /// Horizontal outer padding; defaulted to match a typical content column.
   /// Override so the strip lines up with the mounting screen's own insets.
@@ -144,7 +154,9 @@ class JourneyProgress extends StatelessWidget {
                 // the strip is unreliable and stops them using it at all.
                 onTap: onStepTap == null || JourneyStep.values[i].route == here
                     ? null
-                    : () => onStepTap!(JourneyStep.values[i]),
+                    : () => onStepTap!(
+                        JourneyStep.values[i].routeFrom(here ?? ''),
+                      ),
               ),
             ),
           ],
@@ -301,7 +313,7 @@ class JourneyProgressPreview extends StatelessWidget {
   final LiveGame game;
 
   /// Forwarded straight to [JourneyProgress.onStepTap].
-  final ValueChanged<JourneyStep>? onStepTap;
+  final ValueChanged<String>? onStepTap;
 
   @override
   Widget build(BuildContext context) {
@@ -313,6 +325,7 @@ class JourneyProgressPreview extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.md),
           child: JourneyProgress(
             game: game,
+            currentRoute: RoutePaths.invitation,
             onStepTap: onStepTap,
           ),
         ),

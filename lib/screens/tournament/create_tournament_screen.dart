@@ -908,9 +908,20 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 borderRadius: 12,
                 backgroundColor: AppColors.card,
                 borderColor: AppColors.borderSubtle,
-                onPressed: () => _step == 1
-                    ? context.go(RoutePaths.group)
-                    : setState(() => _step--),
+                onPressed: () {
+                  if (_step == 1) {
+                    // Detect if we're editing an existing tournament (via /t/:id/configure)
+                    // vs creating new (via /create-tournament or /t/new).
+                    // The matched route path tells us which flow we're in.
+                    final matchedPath =
+                        GoRouterState.of(context).matchedLocation;
+                    final isEditing = matchedPath.contains('/configure');
+                    context.go(
+                        isEditing ? RoutePaths.hostDashboard : RoutePaths.group);
+                  } else {
+                    setState(() => _step--);
+                  }
+                },
               ),
               const Spacer(),
               Text(

@@ -319,7 +319,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
           JourneyProgress(
             game: game,
             currentRoute: RoutePaths.checkIn,
-            onStepTap: (step) => context.go(step.route),
+            onStepTap: (route) => context.go(route),
           ),
           const SizedBox(height: AppSpacing.lg),
           Row(

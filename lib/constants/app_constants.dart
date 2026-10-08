@@ -110,17 +110,17 @@ class AppDurations {
 class AppFontSizes {
   AppFontSizes._();
 
-  static const double xs = 12;
-  static const double sm = 14;
-  static const double md = 16;
-  static const double lg = 18;
-  static const double xl = 20;
-  static const double xxl = 24;
-  static const double xxxl = 30;
-  static const double display = 36;
-  static const double displayLg = 48;
-  static const double displayXl = 60;
-  static const double displayHero = 72;
+  static const double xs = 13;
+  static const double sm = 15;
+  static const double md = 17;
+  static const double lg = 19;
+  static const double xl = 21;
+  static const double xxl = 25;
+  static const double xxxl = 31;
+  static const double display = 38;
+  static const double displayLg = 50;
+  static const double displayXl = 62;
+  static const double displayHero = 74;
 }
 
 /// Centralized feature flags.

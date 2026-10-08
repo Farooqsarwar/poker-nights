@@ -111,7 +111,7 @@ class AppTypography {
   /// using the text-safe [AppColors.primaryText]; pass a muted colour for a
   /// quieter field label.
   static TextStyle eyebrow({
-    double size = 11,
+    double size = 12,
     Color? color,
     FontWeight weight = FontWeight.w600,
   }) {

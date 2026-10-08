@@ -135,10 +135,10 @@ class _InvitationScreenState extends State<InvitationScreen> {
           // Pre-live journey — persistent header shown across the invitation,
           // structure and check-in screens (Task C). Tapping a step navigates
           // to the screen that owns it.
-          JourneyProgress(
+JourneyProgress(
             game: game,
             currentRoute: RoutePaths.invitation,
-            onStepTap: (step) => context.go(step.route),
+            onStepTap: (route) => context.go(route),
           ),
           _PremiumEventHeader(
             game: game,
@@ -1109,7 +1109,7 @@ class _StructureStatusCard extends StatelessWidget {
             variant: hasStructure
                 ? AppButtonVariant.secondary
                 : AppButtonVariant.primary,
-            onPressed: () => context.go(RoutePaths.structureReview),
+            onPressed: () => context.go(RoutePaths.structureReviewWith(RoutePaths.invitation)),
             child: Text(hasStructure ? 'Review' : 'Generate'),
           ),
         ],

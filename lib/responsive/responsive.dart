@@ -113,7 +113,10 @@ class AppScale {
   ///
   /// Landscape was the worst case and the easiest to hit: rotating the phone
   /// during a live tournament halved the size of every number on the screen.
-  static const double minTextScale = 1.0;
+  ///
+  /// Raised to 1.15 so even the smallest phones render text 15% above the
+  /// design baseline, improving readability without breaking layout.
+  static const double minTextScale = 1.15;
 
   static bool get _isDesktop {
     try {
@@ -173,11 +176,11 @@ class AppScale {
   }
 
   /// Fluid font size, held between [minTextScale] and [maxScale] times the
-  /// design value. Allows large display headings (>= 32) to scale down to 0.75
-  /// on narrow (320px) screens to avoid overflow (Spec B3).
+  /// design value. Allows large display headings (>= 32) to scale down to 0.85
+  /// on narrow (320px) screens to avoid overflow while staying readable.
   static double sp(num value, {double maxScale = maxTextScale}) {
     if (_isDesktop) return value.toDouble();
-    final minScale = value >= 32 ? 0.75 : minTextScale;
+    final minScale = value >= 32 ? 0.85 : minTextScale;
     return _rawOr(
       () => _clamped(
         value,

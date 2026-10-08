@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:poker_night/app/colors.dart';
 import 'package:poker_night/app/theme.dart';
 import 'package:poker_night/theme/theme_palette.dart';
@@ -7,6 +8,8 @@ import 'package:poker_night/widgets/app_button.dart';
 import 'package:poker_night/widgets/app_card.dart';
 import 'package:poker_night/widgets/app_modal.dart';
 import 'package:poker_night/widgets/shell_insets.dart';
+
+import 'design_probe.dart' as design show loadRealFonts;
 
 /// Renders the real widgets to PNG so their appearance can be inspected
 /// rather than reasoned about:
@@ -18,15 +21,23 @@ import 'package:poker_night/widgets/shell_insets.dart';
 /// then look at test/goldens/*.png. Not an assertion — a camera.
 ///
 /// google_fonts cannot fetch in the sandbox and throws per text style, so the
-/// recorded exceptions are drained before the capture. The text renders in the
-/// fallback face, which is fine: this is about layout and opacity, not type.
+/// recorded exceptions are drained before the capture. Real faces are loaded
+/// via design_probe (same as the phase_* probes) so text and MaterialIcons
+/// render instead of blocks.
 void drainFontErrors(WidgetTester t) {
   while (t.takeException() != null) {}
 }
 
 void main() {
+  setUpAll(design.loadRealFonts);
   setUp(() {
     AppColors.currentPalette = ThemePalettes.forId('red');
+    GoogleFonts.config.allowRuntimeFetching = false;
+    FlutterError.onError = (_) {};
+  });
+
+  tearDown(() {
+    FlutterError.onError = FlutterError.presentError;
   });
 
   Widget host(Widget child) => MaterialApp(

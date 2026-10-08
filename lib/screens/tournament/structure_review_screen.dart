@@ -191,7 +191,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
             JourneyProgress(
               game: game,
               currentRoute: RoutePaths.structureReview,
-              onStepTap: (step) => context.go(step.route),
+              onStepTap: (route) => context.go(route),
             ),
             const SizedBox(height: AppSpacing.lg),
             Row(
@@ -527,7 +527,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
           JourneyProgress(
             game: game,
             currentRoute: RoutePaths.structureReview,
-            onStepTap: (step) => context.go(step.route),
+            onStepTap: (route) => context.go(route),
           ),
           const SizedBox(height: AppSpacing.lg),
           Row(

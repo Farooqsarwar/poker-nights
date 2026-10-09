@@ -173,6 +173,10 @@ class VoiceService {
     }
   }
 
+  Future<void> setVolume(double volume) async {
+    await _tts?.setVolume(volume);
+  }
+
   Future<void> stop() async {
     try {
       await _tts?.stop();

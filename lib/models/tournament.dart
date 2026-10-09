@@ -32,6 +32,9 @@ class BlindLevel {
   /// loads as "all engine-generated", which is what it was.
   final bool manuallyEdited;
 
+  int get safeSb => (bb > 0 && sb > bb) ? bb : sb;
+  int get safeBb => (bb > 0 && sb > bb) ? sb : bb;
+
   bool get hasAnte => ante != null;
 
   BlindLevel copyWith({

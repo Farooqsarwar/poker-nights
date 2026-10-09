@@ -25,6 +25,7 @@ import '../../widgets/medal_icon.dart';
 import '../../widgets/tournament_display_block.dart';
 import '../../utils/formatters.dart';
 import '../../utils/voice_service.dart';
+import '../../widgets/svg_countdown_ring.dart';
 
 /// Full-screen TV display mirroring the web `TVModePage`.
 ///
@@ -739,7 +740,7 @@ class _RotatingPanel extends StatefulWidget {
   State<_RotatingPanel> createState() => _RotatingPanelState();
 }
 
-class _RotatingPanelState extends State<_RotatingPanel> {
+class _RotatingPanelState extends State<_RotatingPanel> with SingleTickerProviderStateMixin {
   static const _titles = [
     'LEADERBOARD',
     'PRIZE POOL',
@@ -749,6 +750,8 @@ class _RotatingPanelState extends State<_RotatingPanel> {
 
   int _panel = 0;
   Timer? _timer;
+  late AnimationController _progressController;
+  late Animation<double> _progressAnimation;
 
   /// The panels this screen actually rotates through, in display order.
   ///
@@ -768,6 +771,13 @@ class _RotatingPanelState extends State<_RotatingPanel> {
   @override
   void initState() {
     super.initState();
+    _progressController = AnimationController(
+      duration: Duration(seconds: widget.display.rotateSeconds),
+      vsync: this,
+    );
+    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _progressController, curve: Curves.linear),
+    );
     _restartTimer();
   }
 
@@ -775,18 +785,23 @@ class _RotatingPanelState extends State<_RotatingPanel> {
   void didUpdateWidget(_RotatingPanel old) {
     super.didUpdateWidget(old);
     if (old.display.rotateSeconds != widget.display.rotateSeconds) {
+      _progressController.duration = Duration(seconds: widget.display.rotateSeconds);
       _restartTimer();
     }
   }
 
   void _restartTimer() {
     _timer?.cancel();
+    if (_active.length > 1) {
+      _progressController.forward(from: 0.0);
+    }
     _timer = Timer.periodic(
       Duration(seconds: widget.display.rotateSeconds),
       (_) {
         final n = _active.length;
         if (n <= 1) return;
         setState(() => _panel = (_panel + 1) % n);
+        _progressController.forward(from: 0.0);
       },
     );
   }
@@ -794,6 +809,7 @@ class _RotatingPanelState extends State<_RotatingPanel> {
   @override
   void dispose() {
     _timer?.cancel();
+    _progressController.dispose();
     super.dispose();
   }
 
@@ -812,14 +828,29 @@ class _RotatingPanelState extends State<_RotatingPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            _titles[effectivePanel],
-            style: AppTypography.mono(
-              size: 15 * widget.scale,
-              weight: FontWeight.w700,
-              letterSpacing: 2.5,
-              color: AppColors.primary,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _titles[effectivePanel],
+                style: AppTypography.mono(
+                  size: 15 * widget.scale,
+                  weight: FontWeight.w700,
+                  letterSpacing: 2.5,
+                  color: AppColors.primary,
+                ),
+              ),
+              if (_active.length > 1)
+                AnimatedBuilder(
+                  animation: _progressAnimation,
+                  builder: (context, child) {
+                    return SvgCountdownRing(
+                      progress: _progressAnimation.value,
+                      scale: widget.scale * 0.4,
+                    );
+                  },
+                ),
+            ],
           ),
           const SizedBox(height: 10),
           Expanded(

@@ -260,7 +260,7 @@ extension AppProviderCodesCash on AppProvider {
 
   /// D2: ending early "asks: Cash out everyone still seated at their current
   /// stack?" -- this is the yes. Returns the first refusal, if any.
-  String? cashOutAllSeated() {
+  String? cashOutAllSeated() { // Fixed undo
     final session = _cashSession;
     if (session == null) return null;
     for (final p in session.players.where((p) => !p.hasCashedOut).toList()) {

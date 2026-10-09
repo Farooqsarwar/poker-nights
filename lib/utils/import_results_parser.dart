@@ -152,6 +152,26 @@ abstract final class ImportResultsParser {
   static String? matchMember(String name, Map<String, String> memberIndex) =>
       memberIndex[normalise(name)];
 
+  /// Finds a member with a similar name (for auto-relink suggestions).
+  /// Returns the member id if a close match is found, null otherwise.
+  static String? findSimilarMember(String name, Map<String, String> memberIndex) {
+    final normalized = normalise(name);
+    for (final entry in memberIndex.entries) {
+      // Check if names are similar (substring or Levenshtein-like)
+      if (entry.key.contains(normalized) || normalized.contains(entry.key)) {
+        return entry.value;
+      }
+      // Simple similarity: if they share a significant prefix/suffix
+      if (entry.key.length >= 3 && normalized.length >= 3) {
+        if (entry.key.startsWith(normalized.substring(0, 3)) ||
+            normalized.startsWith(entry.key.substring(0, 3))) {
+          return entry.value;
+        }
+      }
+    }
+    return null;
+  }
+
   /// Turns a valid [line] into a stored night: names that match a member
   /// become `playerId`, the rest keep `guestName` exactly as typed.
   static ImportedNight toNight(

@@ -14,6 +14,7 @@ import '../../widgets/app_tag.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_toggle.dart';
+import '../../widgets/app_slider.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/delete_account_flow.dart';
@@ -212,8 +213,28 @@ class SettingsScreen extends StatelessWidget {
                     value: app.voiceEnabled,
                     onChanged: (v) => app.setVoiceEnabled(v),
                   ),
-                  showDivider: true,
+                  showDivider: !app.voiceEnabled,
                 ),
+                  if (app.voiceEnabled)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.volume_down, size: 20, color: AppColors.mutedForeground),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: AppSlider(
+                              value: app.voiceVolume,
+                              onChanged: (v) => app.setVoiceVolume(v),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Icon(Icons.volume_up, size: 20, color: AppColors.mutedForeground),
+                        ],
+                      ),
+                    ),
+                  if (app.voiceEnabled)
+                    const Divider(height: 1),
                 _buildSettingRow(
                   title: 'Sound effects & chimes',
                   subtitle: 'Audio cues and 1-minute warning chimes',

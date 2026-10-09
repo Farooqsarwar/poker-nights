@@ -1,0 +1,2202 @@
+[
+  {
+    "num": 1,
+    "text": "18. Controls — Use at least 44 × 44 px touch targets, 52 px primary buttons and 52–56 px text fields; add hit-slop to smaller toggles, chips and checkboxes.",
+    "example": "A small visibility-eye icon remains easy to tap on a phone."
+  },
+  {
+    "num": 2,
+    "text": "19. Controls — Steppers support long-press repeat; sliders show the current value and exact −/+ controls and expose value, minimum, maximum and step to accessibility services.",
+    "example": "A host changes the buy-in by exact increments rather than relying only on dragging a slider."
+  },
+  {
+    "num": 3,
+    "text": "20. Forms — Show focus and inline validation states; auth primary actions use white-filled buttons; password fields include visibility toggles.",
+    "example": "Mismatched confirmation text appears immediately below the password field."
+  },
+  {
+    "num": 4,
+    "text": "21. Accessibility — Meet WCAG AA against actual backgrounds: 4.5:1 for normal text and 3:1 for qualifying large text; use #F2555A for small crimson text and #B23430 only as a destructive fill.",
+    "example": "The Delete account row uses redText, while its confirmation button uses redDanger with white text."
+  },
+  {
+    "num": 5,
+    "text": "22. Accessibility — Show a 2 px crimson keyboard/switch focus ring with a 2 px offset; label every icon-only control.",
+    "example": "Keyboard users can identify the focused “More options” button."
+  },
+  {
+    "num": 6,
+    "text": "23. Accessibility — Support OS text scaling to 200% without clipped cards, rows or fields; preserve independent timer and large-stat sizing.",
+    "example": "A user enlarges system text and member names wrap instead of disappearing."
+  },
+  {
+    "num": 7,
+    "text": "24. Accessibility — Announce level changes, rebuy closing, holds and busts through screen readers using the same wording as voice announcements, regardless of audio settings; never announce every second.",
+    "example": "A muted device still announces “Level four. Blinds five and ten, ante ten.” through its screen reader."
+  },
+  {
+    "num": 8,
+    "text": "25. Accessibility — Every sound or vibration needs a visual equivalent: pulse seconds at 5 and 1 minute, show the final 5–4–3–2–1 countdown, and pulse the new level and blinds twice for 300 ms each.",
+    "example": "A player who cannot hear the warning sees the countdown on the TV."
+  },
+  {
+    "num": 9,
+    "text": "26. Accessibility — Under reduced motion, replace level-change pulses with a 3-second redText outline and suppress transitions; normal transitions use approximately 150–220 ms easing.",
+    "example": "A level change is highlighted without flashing or moving when reduced motion is on."
+  },
+  {
+    "num": 10,
+    "text": "27. Accessibility — Never convey meaning by color alone; pair states with words, signs or icons and display chip color names beside swatches.",
+    "example": "An OUT label and minus sign remain understandable without distinguishing red from green."
+  },
+  {
+    "num": 11,
+    "text": "28. Icons — Use one consistent custom SVG icon set; do not use emoji in application copy, generated messages or notifications.",
+    "example": "A trophy icon, rather than a trophy emoji, identifies a winner."
+  },
+  {
+    "num": 12,
+    "text": "29. Explanations — Keep the first explanatory sentence visible and place long explanations, roughly over 170 characters, behind a “Why?”/“Less” control; never hide required inputs behind that control.",
+    "example": "The host expands “Why?” to understand a suggested rebuy cutoff without losing access to its stepper."
+  },
+  {
+    "num": 13,
+    "text": "30. Choices — Stack exclusive option cards vertically except genuinely two-dimensional layouts and the specified compact pace cards; clearly show the selected option and its consequence.",
+    "example": "Each pace option states its level length and predicted finish time."
+  },
+  {
+    "num": 14,
+    "text": "31. Feedback — Toasts must wrap rather than truncate, remain for at least 4 seconds, and remain at least 5 seconds when offering Undo; increase reading time for longer text.",
+    "example": "After a rebuy, a toast shows the chip handout and an Undo action."
+  },
+  {
+    "num": 15,
+    "text": "32. Confirmation — Consequential actions require a sheet stating the consequence, an explicit Cancel button and a named confirmation; embedded controls retain their own labels.",
+    "example": "“Remove Alex from Friday Club?” offers Cancel and Remove Alex rather than two ambiguous buttons."
+  },
+  {
+    "num": 16,
+    "text": "33. Empty and disabled states — Give empty screens one explanatory sentence and one primary action; show a readable reason beside disabled controls instead of relying on opacity.",
+    "example": "An empty history screen offers “Start a game now.”"
+  },
+  {
+    "num": 17,
+    "text": "34. Mock safety — Use realistic completed sample inputs for visual verification without submitting them to live backends.",
+    "example": "A sign-in screenshot shows alex@pokernight.app and a masked sample password without logging in."
+  },
+  {
+    "num": 18,
+    "text": "35. Visual verification — Produce production-rendered mobile 390×844 at 2× and desktop 1440×900 at 1× captures; include the Reformed master board and flow boards for its 46 listed screens, plus required Original-only flows.",
+    "example": "Reviewers can inspect onboarding and live-clock screens in both viewports."
+  },
+  {
+    "num": 19,
+    "text": "36. Visual verification — Keep screen captures inside authentic phone bezels or browser chrome; place checklist annotations below screenshots, never pins or numbers over UI pixels.",
+    "example": "A verification note sits beneath the screenshot rather than covering a button."
+  },
+  {
+    "num": 20,
+    "text": "37. Navigation — Provide Home, Games, Chat, Members and More in a floating glass bar for group members; use clear back arrows in wizards and avoid nested or buried navigation.",
+    "example": "A member reaches the group chat directly from the Chat tab."
+  },
+  {
+    "num": 21,
+    "text": "38. Navigation — Original additionally requires a global drawer and a More/Explore sheet with synchronized destinations; reconcile these with Reformed’s single-layer/no-buried-drawer rule.",
+    "example": "Polls, History, Cash Game, Tools, Standings and Settings are reachable without navigating through multiple submenus."
+  },
+  {
+    "num": 22,
+    "text": "39. Navigation — On screens at least 768 px wide, Original replaces mobile bars with a 264 px sidebar and centers content within 720 px; smaller screens retain the mobile shell.",
+    "example": "A laptop displays the group switcher and navigation beside the content."
+  },
+  {
+    "num": 23,
+    "text": "40. Navigation — Show the correct active tab for each route, chat unread and member-count badges; keep game sub-tabs pinned during scrolling.",
+    "example": "Opening tournament payouts keeps Games active rather than losing the current game context."
+  },
+  {
+    "num": 24,
+    "text": "41. Navigation — Games opens a running host/co-host dashboard or a player live view automatically; otherwise open the group’s games list or its start-game empty state.",
+    "example": "A player taps Games during an event and immediately sees the live clock."
+  },
+  {
+    "num": 25,
+    "text": "42. Navigation — Picking a drawer or Explore destination closes that overlay; Back from an Explore destination restores the prior tab and reopened Explore sheet.",
+    "example": "A user opens Settings from More, then returns to the same place with Back."
+  },
+  {
+    "num": 26,
+    "text": "43. Routing — Support deep links for joining groups, games, guests, TV, tools and legal pages; rewrite legacy /game/{CODE}, /j/{CODE} and old tab query links into current routes.",
+    "example": "An older shared /j/ link still opens the correct joining flow."
+  },
+  {
+    "num": 27,
+    "text": "44. Routing — Preserve a pending deep link once while authentication resolves; consume it after login when necessary and retain the intended destination.",
+    "example": "A signed-out invite recipient signs up and returns to the same group invitation."
+  },
+  {
+    "num": 28,
+    "text": "45. Routing — Enforce role-based route access; members follow running games into the live view, hosts cannot back-navigate into pre-game review, and co-host level editors are read-only.",
+    "example": "A player cannot open Configure by typing its URL."
+  },
+  {
+    "num": 29,
+    "text": "46. Routing — Re-run route guards only when the seven auth/game/group guard values change, not on every timer tick or unrelated state update.",
+    "example": "A running countdown does not trigger navigation reevaluation every second."
+  },
+  {
+    "num": 30,
+    "text": "47. Splash — Resolve cached authentication and local game state; after 5 seconds without auth resolution, continue to the landing and retry in the background; surface recoverable running games.",
+    "example": "A slow auth service does not leave the user stuck on the splash screen."
+  },
+  {
+    "num": 31,
+    "text": "48. Routing — Initial no-group routing conflicts: Original sends authenticated users to Home’s no-group state; Reformed sends authenticated users without groups to /landing.",
+    "example": "A newly registered user with no club sees the destination approved for this flow."
+  },
+  {
+    "num": 32,
+    "text": "49. Routes — Preserve all destinations from both route catalogs, including Original’s operational subflows; exact URL naming differs and must be mapped consistently rather than dropping screens.",
+    "example": "History remains reachable whether an approved link uses /history or /group/history."
+  },
+  {
+    "num": 33,
+    "text": "50. Landing — Explain home-game management and provide Sign in, Create account, direct six-character code entry/QR, Start a game now and free-tool access; indicate browser availability and the free single-table offer.",
+    "example": "A first-time visitor starts a tournament without creating an account."
+  },
+  {
+    "num": 34,
+    "text": "51. Sign-in — Support Firebase email/password and Google OAuth with persistent sessions; trim/lowercase email, validate its basic format and require a password.",
+    "example": "Alex signs in with Google and returns to the remembered game invitation."
+  },
+  {
+    "num": 35,
+    "text": "52. Sign-in — Use a generic credential error, show throttling feedback, disable online sign-in while offline, and create a first-time Google profile from the supplied name.",
+    "example": "A failed sign-in does not disclose whether the email address exists."
+  },
+  {
+    "num": 36,
+    "text": "53. Registration — Collect sanitized full name of 1–40 characters, email, password of at least 8 characters and matching confirmation, with inline validation.",
+    "example": "A seven-character password prevents account creation and shows the reason."
+  },
+  {
+    "num": 37,
+    "text": "54. Registration — Require an explicit 18-or-older and Terms checkbox; keep history-learning consent separate, optional and unchecked by default.",
+    "example": "A user creates an account while declining use of their games for learning."
+  },
+  {
+    "num": 38,
+    "text": "55. Password recovery — Accept an email, throttle abusive reset requests and always return a non-enumerating confirmation.",
+    "example": "The response says a reset link is on its way if the email has an account."
+  },
+  {
+    "num": 39,
+    "text": "56. Anonymous hosting — “Start a game now” creates Firebase anonymous authentication and allows a complete quick tournament, including players, payouts and player/TV codes, without signup.",
+    "example": "Friends already seated can begin playing immediately."
+  },
+  {
+    "num": 40,
+    "text": "57. Anonymous hosting — Block group creation, scheduled RSVP posting and Premium purchasing until the anonymous host registers; avoid presenting empty group/chat/history features as active features.",
+    "example": "Choosing Create a group prompts registration while keeping tonight’s quick game intact."
+  },
+  {
+    "num": 41,
+    "text": "58. Account linking — Link anonymous credentials to registration without changing the UID or losing the game, results or corrected chip counts; offer to save corrected chips as “My chips.”",
+    "example": "After the game, Alex registers and keeps the same results and chip configuration."
+  },
+  {
+    "num": 42,
+    "text": "59. Account linking — Handle credential-already-in-use without blocking registration; offer sign-in to the existing account and preserve tonight’s shareable guest link.",
+    "example": "A host with an existing Google account can still share the just-finished game."
+  },
+  {
+    "num": 43,
+    "text": "60. Guest entry — Ask for a display name before RSVP, allow an optional inviter name, and require no email or password; support Going, Maybe and Can’t.",
+    "example": "Sam enters a name and marks Going from a shared game link."
+  },
+  {
+    "num": 44,
+    "text": "61. Guest shell — Hide club, billing and host/co-host administration; provide an explicit exit, game-specific live views and a prompt to register/join the group when appropriate.",
+    "example": "A guest watches the blinds and prizes without seeing Configure or group creation."
+  },
+  {
+    "num": 45,
+    "text": "62. Guest persistence — Store game ID, name, inviter and slot locally so refresh retains the approved seat; provide “Not {name}?” to restart entry on a shared phone.",
+    "example": "Two people using the same phone can explicitly switch guest identity."
+  },
+  {
+    "num": 46,
+    "text": "63. Guest removal — If the host removes a guest, explain the removal, clear the saved session and return to guest entry.",
+    "example": "A removed player does not regain their old seat by refreshing."
+  },
+  {
+    "num": 47,
+    "text": "64. Join codes — Accept typed six-character codes, pasted invite URLs and QR payloads; normalize case and separators, taking ?code= or the final path segment.",
+    "example": "Pasting a full invitation link works in the same field as typing its code."
+  },
+  {
+    "num": 48,
+    "text": "65. Join codes — Alphabet requirements conflict: Original uses ABCDEFGHJKMNPQRSTUVWXYZ23456789, including U; Reformed calls for excluding U as well as I, L, O, 0 and 1.",
+    "example": "Generation and validation must use one approved alphabet so a displayed code is always accepted."
+  },
+  {
+    "num": 49,
+    "text": "66. Join resolution — Classify a code without joining or subscribing: group to invite preview, game to member invitation or guest entry, TV to the read-only display; give a useful unknown-code message.",
+    "example": "Scanning a TV-only code never checks the viewer into a game."
+  },
+  {
+    "num": 50,
+    "text": "67. Join performance — Provide a mobile camera QR scanner; Reformed requires table-code resolution in under one second.",
+    "example": "Scanning a valid table QR opens its joining destination without manual typing."
+  },
+  {
+    "num": 51,
+    "text": "68. Join protection — Limit lookups to 10 per minute per device using a sliding window on both client and server; the eleventh attempt is refused with a wait message.",
+    "example": "Repeated guesses cannot bypass the limit through direct callable requests."
+  },
+  {
+    "num": 52,
+    "text": "69. Group preview — Show group name, inviter/owner identity, avatars and member/game counts; Reformed also requests an active-game preview.",
+    "example": "An invite recipient can inspect the club before choosing Join group."
+  },
+  {
+    "num": 53,
+    "text": "70. Group join — Use an idempotent one-tap join for authenticated users; otherwise register/sign in and continue automatically; existing members see Open group.",
+    "example": "Opening the same invite twice does not create duplicate membership."
+  },
+  {
+    "num": 54,
+    "text": "71. Group creation — Require only a group name, create its host membership, and show its code, QR, link, Share and Done actions immediately.",
+    "example": "A new host creates Friday Club and sends its invite link to friends."
+  },
+  {
+    "num": 55,
+    "text": "72. Groups — Allow membership in multiple groups, prioritize pinned groups and synchronize the selected group across every tab.",
+    "example": "Switching to Office League changes Games, Chat and Members together."
+  },
+  {
+    "num": 56,
+    "text": "73. Home — Prioritize a hosted live game, then a played live game, then the next scheduled game, then a no-game action; show notifications, upcoming games, open polls and group totals for games, members, cash nights and prizes paid.",
+    "example": "A co-host returning mid-game sees Open dashboard before future invitations."
+  },
+  {
+    "num": 57,
+    "text": "74. Home — Provide New game for hosts, Suggest a date for ordinary members, Cash game and a separate quick-start action; give no-group users Create group and Join group choices.",
+    "example": "A member who cannot schedule directly can propose a date through a poll."
+  },
+  {
+    "num": 58,
+    "text": "75. Repeat game — When appropriate, offer “Same as last time?” to repost the last completed setup one week later or open it prefilled for edits.",
+    "example": "The host schedules next Friday’s usual format with one action."
+  },
+  {
+    "num": 59,
+    "text": "76. Games hub — List live, scheduled, RSVP-open/closed and finished games with date, time, venue, buy-in, bounty and the viewer’s RSVP; include hosting, cash-game and invite actions.",
+    "example": "A game card shows “15 + 5 KO” and the viewer’s waitlist position."
+  },
+  {
+    "num": 60,
+    "text": "77. Member directory — Show initials avatars, names, games/wins, role badges and self markers; never expose other members’ email addresses, and show join dates only to the host.",
+    "example": "A member can see Sam’s win count but not Sam’s email."
+  },
+  {
+    "num": 61,
+    "text": "78. Roles — Role naming conflicts: Original requires Host, Co-host and Member and explicitly forbids “Admin”; Reformed lists Host, Admin and Member.",
+    "example": "A delegated operator’s badge and permissions must use the approved role model consistently."
+  },
+  {
+    "num": 62,
+    "text": "79. Co-host permissions — Allow clock operation, busts, rebuys, pause, check-in approvals and seating; prohibit changes to structure, payouts, organiser contribution, deal confirmation or final-result confirmation.",
+    "example": "A co-host approves an arrival but cannot change the buy-in or confirm a deal."
+  },
+  {
+    "num": 63,
+    "text": "80. Member administration — Allow the group host to add/remove co-hosts and remove members with confirmation; retain removed members’ historical results.",
+    "example": "Removing Sam from the club does not erase last season’s finishes."
+  },
+  {
+    "num": 64,
+    "text": "81. Group invitations — Provide Share, Copy, QR and a searchable list of previous opponents with last-played dates; clearly mark existing members and use the selected group’s own counts and code.",
+    "example": "The host searches for a former opponent and sends a one-tap group invite."
+  },
+  {
+    "num": 65,
+    "text": "82. Group settings — Include default chips, table settings, standings/seasons, history, members, import, learning consent, leave/delete controls and code re-roll; members may view while hosts edit restricted settings.",
+    "example": "The host raises the group’s default table capacity while members can inspect it."
+  },
+  {
+    "num": 66,
+    "text": "83. Group defaults — Store table capacity of 4–10, default 9, and seating mode on the group; personal hosting defaults seed only new groups.",
+    "example": "Changing a personal default does not silently alter an existing club’s table size."
+  },
+  {
+    "num": 67,
+    "text": "84. Chat — Provide separate real-time group and game chats with avatars, timestamps, member/online counts, day separators, a pinned event card and separate unread counts.",
+    "example": "A player opens game chat without marking unrelated group chat messages as read."
+  },
+  {
+    "num": 68,
+    "text": "85. Chat — Keep unread counts to undeleted messages from others newer than the viewer’s last-read timestamp; opening that chat advances lastRead.",
+    "example": "A user’s own messages never increase their unread badge."
+  },
+  {
+    "num": 69,
+    "text": "86. Chat — Limit client sends to eight per 30 seconds and at least 4 seconds apart; use the specified approximately 3.75-second server spacing and retain blocked text in the composer.",
+    "example": "A rapid second send shows “Sending too fast” without deleting the draft."
+  },
+  {
+    "num": 70,
+    "text": "87. Chat — Guests cannot post until joining the group; provide the specified game-chat read view with a Join the group to chat action.",
+    "example": "A link guest reads a host announcement but must join before replying."
+  },
+  {
+    "num": 71,
+    "text": "88. Chat moderation — Filter offensive content server-side before fan-out using English and Portuguese word lists; explain held messages and allow editing and retry.",
+    "example": "A filtered message remains unsent and the author can revise it."
+  },
+  {
+    "num": 72,
+    "text": "89. Chat moderation — Support Copy, Report and Block from message actions; allow the group host to delete messages, leaving a “Message deleted” placeholder.",
+    "example": "A member reports a message as spam while the host can remove it."
+  },
+  {
+    "num": 73,
+    "text": "90. Chat moderation — Blocked users’ messages and polls are hidden everywhere for that viewer; store the block on the user and provide Settings → Blocked to undo it.",
+    "example": "Unblocking a member restores visibility of their permitted content."
+  },
+  {
+    "num": 74,
+    "text": "91. Reports — Show a host report inbox with reasons, reporter, time and count badge; provide Delete message, Remove member and Dismiss, then notify the reporter that it was handled.",
+    "example": "The host opens two pending reports from Group settings and dismisses a mistaken report."
+  },
+  {
+    "num": 75,
+    "text": "92. Reports — Every new report sends the group host a non-disableable push; escalate unhandled reports to support after 24 hours and delete handled reports after 90 days.",
+    "example": "An unattended report reaches support the following day."
+  },
+  {
+    "num": 76,
+    "text": "93. Chat automation — Reformed requires a system bot to announce blind increases, break countdowns, rebuy closure and eliminations in the chat stream.",
+    "example": "The game chat automatically posts that Level 5 has started."
+  },
+  {
+    "num": 77,
+    "text": "94. Polls — Allow questions of 1–120 characters and two to six options of 1–60 characters, single/multiple choice, manual or scheduled closure and reusable scheduling/buy-in/rebuy templates.",
+    "example": "Members vote on Friday or Saturday as the next game night."
+  },
+  {
+    "num": 78,
+    "text": "95. Polls — Let users change votes or remove their current vote; store selections per user and delete empty entries; percentages use people who voted as the denominator.",
+    "example": "Tapping the selected single-choice option again removes that user’s vote."
+  },
+  {
+    "num": 79,
+    "text": "96. Polls — Show open polls first, closed polls with winners, percentage bars and open-poll counts on Home/navigation; make inline Home voting functional.",
+    "example": "A member answers a scheduling poll without leaving Home."
+  },
+  {
+    "num": 80,
+    "text": "97. Poll scheduling — Reformed requires closing the winning date option to draft a scheduled tournament automatically; keep it a draft rather than publishing without the host.",
+    "example": "Closing a Friday-date poll prepares a Friday tournament for review."
+  },
+  {
+    "num": 81,
+    "text": "98. Notifications — Provide an inbox with unread count, New/Earlier groups, relative timestamps, mark-all-read and deep links to the relevant action.",
+    "example": "Tapping a promoted-from-waitlist alert opens the game invitation."
+  },
+  {
+    "num": 82,
+    "text": "99. Notifications — Support game posted, RSVP deadline in 24 hours, waitlist promotion, check-in open, starts in 30 minutes, seat confirmed, time changed, rebuys closing, final table, results, new poll, chat mention and member joined.",
+    "example": "A player receives a seat-confirmation notification after the host approves check-in."
+  },
+  {
+    "num": 83,
+    "text": "100. Notifications — Reformed additionally specifies a one-hour game-start countdown alert; expose event-category switches while keeping mandatory moderation alerts always on.",
+    "example": "A user can disable ordinary countdown notifications but not suppress a host’s required report alerts."
+  },
+  {
+    "num": 84,
+    "text": "101. Notifications — Write one event outbox item, fan it out to inboxes and push, deduplicate events and prevent the originating device from re-bannering its own action.",
+    "example": "Posting a game produces one notification per recipient, not duplicates from every connected phone."
+  },
+  {
+    "num": 85,
+    "text": "102. Notifications — Schedule and reschedule reminders using the game’s stored IANA time zone and wall-clock time so lead times survive daylight-saving changes.",
+    "example": "Moving a game from 20:00 to 21:00 also moves its 30-minute reminder."
+  },
+  {
+    "num": 86,
+    "text": "103. Notifications — Push-provider requirements conflict: Original specifies Firebase Cloud Messaging and Functions; Reformed specifies OneSignal synchronization, including read/unread state.",
+    "example": "Choose one approved integration so inbox state and native push remain consistent."
+  },
+  {
+    "num": 87,
+    "text": "104. Quick start — Reach a running tournament in two taps from the landing/start entry and complete setup in approximately 60 seconds without an account wall.",
+    "example": "The host taps Start a game now, accepts defaults and starts the clock."
+  },
+  {
+    "num": 88,
+    "text": "105. Quick start — Input requirements differ: Reformed specifies only players, target hours, buy-in and chip set; Original additionally specifies pace, Freeze Out/Rebuy format and optional group-history counting.",
+    "example": "The final quick-start form must retain the inputs approved for its intended short flow."
+  },
+  {
+    "num": 89,
+    "text": "106. Quick start — Default attendance to the group’s last headcount or 8; allow 2–30 on Premium and 2 up to one table’s configured capacity on Free.",
+    "example": "A free group configured for 9 seats cannot increase a quick game to 10 through the player stepper."
+  },
+  {
+    "num": 90,
+    "text": "107. Quick start — At the free attendance cap, disable + with a planning explanation; never present a second-table upgrade prompt during quick start.",
+    "example": "The host is told to plan a multi-table night instead of facing a paywall at the table."
+  },
+  {
+    "num": 91,
+    "text": "108. Quick start — Offer 2, 3, 4 or 5 hours, default 4; compute finish from the start rounded up to the next five minutes, and show each pace’s predicted finish.",
+    "example": "Starting near 19:58 with four hours selected targets approximately midnight."
+  },
+  {
+    "num": 92,
+    "text": "109. Quick start — Default buy-in to 15, range 5–100 in steps of 5; Rebuy enables a 35% forecast and a 125% add-on; expose the current/default chip set.",
+    "example": "Selecting Rebuy immediately updates the generated stack and finish explanation."
+  },
+  {
+    "num": 93,
+    "text": "110. Quick start — Show a live plain-language summary of players, duration, stack depth, opening blinds, pace, rebuy cutoff, handout and buy-in before starting.",
+    "example": "The host sees the exact chips each player should receive before tapping Generate & start."
+  },
+  {
+    "num": 94,
+    "text": "111. Quick start — Generate the structure, start Level 1 and open the dashboard with the game code, QR and player/TV joining explanation prominently displayed.",
+    "example": "Players scan the code immediately after the host starts the clock."
+  },
+  {
+    "num": 95,
+    "text": "112. Quick start — Support count-only games without names and an optional “Count it for this group” toggle; hide that toggle when no group is selected.",
+    "example": "Eight friends run a timer before anyone joins by name."
+  },
+  {
+    "num": 96,
+    "text": "113. Quick start — Starting a new game while another runs requires confirmation; preserve the previous game as unfinished history and exclude it from standings.",
+    "example": "The host chooses Keep Friday running rather than accidentally replacing it."
+  },
+  {
+    "num": 97,
+    "text": "114. Anonymous chips — Default unsaved setups to White 1×150, Red 5×150, Green 25×100 and Black 100×100; clearly identify the assumed 500-piece box.",
+    "example": "A host can verify the displayed inventory against the physical case."
+  },
+  {
+    "num": 98,
+    "text": "115. Anonymous chips — “Fix the count” opens a lightweight per-color count-stepper sheet for tonight only, before the first handout; it must not open the saved-chip-set editor or mutate other games.",
+    "example": "Changing Black from 100 to 80 updates only the quick game’s bank check."
+  },
+  {
+    "num": 99,
+    "text": "116. Planned tournament — Provide a five-step wizard with progress, back navigation, tappable completed steps, retained input values, auto-saved drafts and Custom/Templates entry.",
+    "example": "The host leaves halfway through setup and later reopens “Draft — not posted.”"
+  },
+  {
+    "num": 100,
+    "text": "117. Wizard structure — Step assignments conflict: Original uses Event details → Chip set → Rebuys/add-ons → Format → Review/create; Reformed uses Basics/venue → Chips → Economics → Pacing → Invitations.",
+    "example": "The approved five-step arrangement must still expose all required fields and a structure review before publishing."
+  },
+  {
+    "num": 101,
+    "text": "118. Event details — Collect a sanitized 1–40-character name, date, start, finish and optional venue/maps location; seed customary group values, otherwise use a weekday Poker name and 20:00 start.",
+    "example": "Friday Club opens with its usual 20:00 start and last-used location."
+  },
+  {
+    "num": 102,
+    "text": "119. Scheduling — Use a Monday-start month calendar, highlight today/selection, disable past dates and allow month navigation; default to the group’s usual next game day.",
+    "example": "The host selects next Friday without accidentally choosing a past date."
+  },
+  {
+    "num": 103,
+    "text": "120. Scheduling — Start and finish move in 15-minute increments; default finish to start plus 4 hours 30 minutes and permit a window of 1–12 hours, including across midnight.",
+    "example": "A game can start at 20:00 and finish at 00:30 the next day."
+  },
+  {
+    "num": 104,
+    "text": "121. Scheduling — Offer quick start times 19:00, 19:15, 19:30, 19:45, 20:00, 20:15, 20:30 and 21:00 alongside exact time controls.",
+    "example": "The host selects 19:30 with one tap and then adjusts by 15 minutes."
+  },
+  {
+    "num": 105,
+    "text": "122. Tournament types — Support Freeze Out, Rebuy, Re-entry and Premium Shootout, defaulting the wizard to last-used or Rebuy; hide freezeout rebuy controls and give each re-entry its own registration and finish.",
+    "example": "A busted re-entry player registers again instead of silently restoring the old entry."
+  },
+  {
+    "num": 106,
+    "text": "123. Shootout — Configure 2–6 starting tables and 1–3 advancing players per table, defaulting to one advancing player; qualifying players reach the final stage.",
+    "example": "A two-table shootout sends each table’s winner to the final."
+  },
+  {
+    "num": 107,
+    "text": "124. Buy-in — Use an exact stepper/slider, normally 5–100 in steps of 5; carry forward the group’s last value and keep the posting group visible.",
+    "example": "Raising a buy-in from 15 to 20 does not change the chip denominations by itself."
+  },
+  {
+    "num": 108,
+    "text": "125. Payout mode — Offer only None or Standard; None runs the game without a normal prize pool while still allowing a separate KO bounty.",
+    "example": "A social game disables standard prizes but retains a fixed knockout reward."
+  },
+  {
+    "num": 109,
+    "text": "126. Bounty setup — Make KO an optional amount on top of buy-in, default 5, range 5–50 in steps of 5; offer Fixed, Progressive and Mystery with the latter two identified as Premium.",
+    "example": "The invitation displays 15 + 5 KO rather than treating 20 as the tournament buy-in."
+  },
+  {
+    "num": 110,
+    "text": "127. Rebuy policy — Support Unlimited or Limited rebuys, with 1–10 per player and default 2 when limited; retain separate live per-player caps.",
+    "example": "The game permits two rebuys generally, while the host caps one player at one."
+  },
+  {
+    "num": 111,
+    "text": "128. Rebuy forecast — Default expected rebuys to 35%, adjustable 0–100% in steps of 5, and expose eligible historical suggestions without losing manual overrides.",
+    "example": "The host increases the forecast to 50% for a rebuy-heavy group."
+  },
+  {
+    "num": 112,
+    "text": "129. Rebuy terms — Show rebuy cost as buy-in plus any bounty and normally a fresh starting stack; Configure supports a rebuy-stack control of 100–20,000 in steps of 100 before chip locks apply.",
+    "example": "The host sees the money due and exact new stack before recording a rebuy."
+  },
+  {
+    "num": 113,
+    "text": "130. Rebuy timing — Suggest a closing level with neighboring choices and explanations; allow a manual cutoff no earlier than the running level until settlement step 1 is submitted.",
+    "example": "A host chooses Level 5 instead of the suggested Level 4."
+  },
+  {
+    "num": 114,
+    "text": "131. Re-entry policy — Set the re-entry closing level and a maximum of 1–5 re-entries per player, default 1, or Unlimited.",
+    "example": "A player can re-enter once before the published cutoff."
+  },
+  {
+    "num": 115,
+    "text": "132. Add-on setup — Allow Yes/No, a 110–150% starting-stack multiplier in steps of 5 with default 125%, and price 1–100 in steps of 1, normally equal to buy-in.",
+    "example": "A 200-chip starting stack produces a 250-chip add-on at the default multiplier."
+  },
+  {
+    "num": 116,
+    "text": "133. Add-on forecast — Configure expected uptake from 0–100% in steps of 10, default 70%; it affects predicted chips/finish but not the bank reserve for every player.",
+    "example": "Reducing expected uptake to 60% changes the finish estimate without under-reserving physical chips."
+  },
+  {
+    "num": 117,
+    "text": "134. Add-on breakdown — Allow predefining physical add-on chips or deciding at the end of rebuys; lock this timing choice when settlement step 1 is submitted.",
+    "example": "The host chooses the fewest available chips at the add-on break."
+  },
+  {
+    "num": 118,
+    "text": "135. Early bonus — Default off; when enabled use 2.5–25% in steps of 2.5 with default 12.5%, show the extra chips and award only to players approved before scheduled start.",
+    "example": "An approved 19:59 check-in for a 20:00 game receives 25 extra chips on a 200-chip stack."
+  },
+  {
+    "num": 119,
+    "text": "136. Wizard attendance — Before RSVPs, use the last group headcount or 8 and expose a 2–60 override in review; after RSVPs, Configure defaults to Going count.",
+    "example": "A draft starts at 8 players and later regenerates for 11 confirmed attendees."
+  },
+  {
+    "num": 120,
+    "text": "137. Configure — Allow expected-player overrides, attendance inclusion/exclusion without changing RSVP, guest/write-in additions, player-view preview, table settings, stack options, format, pace, chips, paid places and template saving.",
+    "example": "The host excludes a doubtful attendee from tonight’s chip forecast without deleting their Going response."
+  },
+  {
+    "num": 121,
+    "text": "138. Configure — Keep frequent controls visible and place advanced tracking, rebuy/add-on quantities, per-game chips and paid-position controls under a clearly labeled More options area.",
+    "example": "A new host sees the main configuration before opening advanced controls."
+  },
+  {
+    "num": 122,
+    "text": "139. Review — Show level count, estimated duration, pace, a complete blinds/ante/break table, rebuy-close markers and expandable engine explanations; allow editing before publishing.",
+    "example": "The host checks the proposed add-on break in the ladder before sending invitations."
+  },
+  {
+    "num": 123,
+    "text": "140. Publish — Publish the reviewed event for RSVP, notify group members and open the invitation; do not silently apply generated structural changes without the required confirmation.",
+    "example": "Generating a proposal alone does not replace a previously approved setup."
+  },
+  {
+    "num": 124,
+    "text": "141. Price locks — Freeze buy-in, rebuy price, add-on price and KO bounty when the game is posted; enforce the lock in both UI and data writes.",
+    "example": "A host cannot raise the buy-in after players have accepted the invitation."
+  },
+  {
+    "num": 125,
+    "text": "142. Chip locks — Freeze starting stack, rebuy stack, add-on multiplier and early-bonus percentage at the first approved check-in/handout, not merely at posting.",
+    "example": "A host may adjust stacks before anyone receives chips, but not afterward."
+  },
+  {
+    "num": 126,
+    "text": "143. Live configuration locks — Lock tournament format and maximum re-entries while running; permit only allowed future-level, ante, rebuy-cutoff, per-player-cap and forward-looking chip changes.",
+    "example": "Switching a running freezeout into a rebuy tournament is refused."
+  },
+  {
+    "num": 127,
+    "text": "144. Hard finish — Offer an optional latest finish, off by default, normally finish plus 1 hour, up to plus 3 hours in 15-minute steps, with an agreed ICM or chip-chop split.",
+    "example": "The invitation can state “Hard finish 01:30 — split by ICM.”"
+  },
+  {
+    "num": 128,
+    "text": "145. Hard-finish lock — Fix the hard-finish time and split at posting and show them on the invitation; only the explicitly confirmed live extension may move the deadline.",
+    "example": "The host cannot silently change an RSVP’d ICM finish into a different settlement rule."
+  },
+  {
+    "num": 129,
+    "text": "146. Chip ownership — Provide free, unlimited user-owned chip sets; groups reference a default set by ID, while each posted game retains its own frozen configuration.",
+    "example": "Two groups use the same physical case without duplicating its saved inventory."
+  },
+  {
+    "num": 130,
+    "text": "147. Chip list — Display set name, denomination and piece counts, named swatches, default status, create/edit actions and a preview of the starting stack it supports.",
+    "example": "The host picks Home set instead of the always-available standard 500-piece box."
+  },
+  {
+    "num": 131,
+    "text": "148. Chip editor — Support Numbered/No numbers, editable set and color names, per-color values and quantities, add/remove denomination, Save and total pieces/value.",
+    "example": "A host records 80 green chips with value 25."
+  },
+  {
+    "num": 132,
+    "text": "149. Chip values — Use the editor ladder 1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1,000, 2,000, 2,500, 5,000, 10,000 and 25,000; quantities step by 10.",
+    "example": "The denomination stepper moves from 200 to 250 rather than an arbitrary value."
+  },
+  {
+    "num": 133,
+    "text": "150. Chip validation — Require at least two distinct values; block duplicate values and removal below two denominations; always present the textual chip color name.",
+    "example": "Saving two different colors both worth 25 shows a clear validation error."
+  },
+  {
+    "num": 134,
+    "text": "151. Chip colors — Use the corrected ten-name palette: White, Red, Green, Black, Blue, Yellow, Pink, Purple, Orange and Grey; real chip swatches are Original’s exception to its no-yellow interface rule.",
+    "example": "A real yellow chip can be represented without making the app’s buttons yellow."
+  },
+  {
+    "num": 135,
+    "text": "152. Unnumbered chips — Offer automatic or manual values; editor suggestions assign the largest pile the smallest value along 1/5/25/100/500/1,000/5,000/25,000 and disable manual values while suggestions are active.",
+    "example": "A 150-chip pile receives a lower suggested value than a 40-chip pile."
+  },
+  {
+    "num": 136,
+    "text": "153. Chip-set changes — Editing a saved set updates group default pointers for future games but never changes chips already dealt in a running game; a per-game switch leaves the group default untouched.",
+    "example": "Correcting next week’s inventory does not alter tonight’s blind payability."
+  },
+  {
+    "num": 137,
+    "text": "154. Presets — Ship Freezeout/Regular, Sprint/Turbo, Deep/Deep and KO Bounty/Regular with a fixed bounty of 5; buy-in comes from hosting defaults and stacks from the engine.",
+    "example": "Choosing Sprint selects fast pacing without hard-coding a stack incompatible with the host’s chips."
+  },
+  {
+    "num": 138,
+    "text": "155. Templates — Save full configuration copies with names, rename/delete actions and usage metadata; allow three saved templates free and unlimited with Premium.",
+    "example": "A host saves the usual rebuy night and later renames it “Friday regular.”"
+  },
+  {
+    "num": 139,
+    "text": "156. Templates — Using a preset/template prefills the wizard and jumps to review, but always regenerates for current attendance, timing and chips rather than replaying an old ladder.",
+    "example": "A template originally used for 8 players recalculates when 12 are expected."
+  },
+  {
+    "num": 140,
+    "text": "157. Structure model — Separate structural chip/time inputs from buy-in money; express depth in big blinds and account explicitly for entrants, rebuys, re-entries, add-ons, bonuses, breaks and time.",
+    "example": "Changing a buy-in from 15 to 150 alone does not make an identical chip structure deeper."
+  },
+  {
+    "num": 141,
+    "text": "158. Chip supply — Compute total chips as starting chips plus all chip injections; chips remain in circulation after their owners bust, and average depth uses total chips divided by live players and current BB.",
+    "example": "A player’s elimination increases survivors’ average stack instead of deleting their chips from the model."
+  },
+  {
+    "num": 142,
+    "text": "159. Time model — Subtract scheduled breaks and the modeled rebuy allowance from the available window; show estimated finish ranges rather than guaranteeing an exact finishing minute.",
+    "example": "A projected 00:20 finish can show a 00:00–01:00 range."
+  },
+  {
+    "num": 143,
+    "text": "160. Structure output — Return starting stack, per-player composition, denomination bank checks, all handouts, levels, breaks, color-ups, rebuy options, projected-end range, explanations and verification metadata.",
+    "example": "One generated structure feeds the wizard review, live clock, player ladder and TV."
+  },
+  {
+    "num": 144,
+    "text": "161. Pace — Use uniform level lengths all night: Turbo 15 minutes, Regular 20 and Deep 30; show opening depth, target level, finish, fit and bank status for each option.",
+    "example": "Every Regular level begins with 20 minutes unless the host explicitly edits it."
+  },
+  {
+    "num": 145,
+    "text": "162. Pace recommendation — Recommend the slowest of Deep then Regular that fits and has enough chips; never silently recommend or switch to Turbo.",
+    "example": "A four-hour night recommends Regular when Deep overruns."
+  },
+  {
+    "num": 146,
+    "text": "163. Pace warning — When Regular does not fit, present later finish, skip the add-on when applicable, and Turbo as explicit choices with predicted finish times.",
+    "example": "The host chooses to omit the add-on rather than unexpectedly speeding up every level."
+  },
+  {
+    "num": 147,
+    "text": "164. Late start — Keep the agreed finish time, re-fit to the shorter window before starting and ask the host to resolve any new warning; never silently regenerate a running structure.",
+    "example": "A 20:20 start still targets 00:30 instead of automatically extending the night."
+  },
+  {
+    "num": 148,
+    "text": "165. Opening depth — Target Turbo 60 BB, Regular 100 BB and Deep 160 BB, with qualifying bands 50–70, 85–130 and at least 150 BB respectively; surface any depth shortfall.",
+    "example": "A Regular 200-chip stack opens at 1/2 for 100 BB of depth."
+  },
+  {
+    "num": 149,
+    "text": "166. Playable floor — If no bank-feasible stack reaches 20 BB, flag the structure infeasible, block creation, state maximum supported players and offer more chips, fewer injections or freezeout.",
+    "example": "A tiny chip case cannot be presented as a valid 22-player rebuy tournament."
+  },
+  {
+    "num": 150,
+    "text": "167. Bank forecast — Reserve the Poisson 90th-percentile rebuy count, capped by limited-rebuy rules, plus an add-on and early bonus for every entrant; use expected uptake only for pacing.",
+    "example": "The case is checked against a busy night rather than only the average number of rebuys."
+  },
+  {
+    "num": 151,
+    "text": "168. Stack search — Evaluate nice feasible stack candidates deepest first, up to 20 feasible plans; normally use 3–5 denominations, search at most 24 chips per denomination and enforce all inventory limits.",
+    "example": "The engine refuses a composition that needs 144 red chips when only 100 are owned."
+  },
+  {
+    "num": 152,
+    "text": "169. Composition rules — Exclude chips above half the stack except the specified smallest-chip handling; treat chips above a quarter-stack as a soft penalty, not a hard rejection.",
+    "example": "A necessary 100 chip in a 200 stack is penalized but can still be selected."
+  },
+  {
+    "num": 153,
+    "text": "170. Composition scoring — Preserve reference penalties for smallest-chip counts, change-making coverage, too few/many chips, 25–35-chip preference, round counts and oversized chips; a rival must improve score by more than 3 to beat the deeper near-tie.",
+    "example": "Two similar feasible compositions retain the deeper starting stack unless the other is materially better."
+  },
+  {
+    "num": 154,
+    "text": "171. Structure normalization — Preserve printed values; for unnumbered chips rank piles and select among the five reference denomination families by ratios closest to four, marking values as assumed.",
+    "example": "A generated explanation warns that unprinted chip values were inferred."
+  },
+  {
+    "num": 155,
+    "text": "172. Structure pacing — Use C including expected rebuys, add-ons and all early bonuses, finishing BB = C/K with K=20 without antes or 27 with antes, growth minimum 1.2 and pace caps 1.6/1.5/1.45.",
+    "example": "A rebuy-heavy night targets a higher finishing blind than a freezeout with the same initial stacks."
+  },
+  {
+    "num": 156,
+    "text": "173. Structure fit — Use available play minutes and logarithmic blind growth, publish four spare levels and allow a 5-minute fit tolerance; replan breaks if the chosen pace runs longer.",
+    "example": "A structure needing a fraction beyond 12 levels is not falsely reported a full 20-minute level late."
+  },
+  {
+    "num": 157,
+    "text": "174. Structure formula conflict — Original requires the verified uniform-level solver; Reformed’s summary lists total levels as L=S/(N×B0). Reconcile this with the engine-authority requirement rather than implementing an unverified substitute.",
+    "example": "The reference demo remains a 12-target-level, 16-published-level structure."
+  },
+  {
+    "num": 158,
+    "text": "175. Blind ladder — Snap to strictly increasing, playable nice big blinds using only denominations actually dealt, not colors still in the case; avoid unnecessary doubling cliffs and meaningless tiny steps.",
+    "example": "A level cannot require 1-value chips if every issued chip is worth at least 5."
+  },
+  {
+    "num": 159,
+    "text": "176. Blind snapping — Preserve DP candidates within raw/1.6 to raw×1.6, NICE_M={1,1.2,1.5,2,2.5,3,4,5,6,8}×10^k, fixed opening BB and the reference growth penalties/fallback chain.",
+    "example": "When a color-up removes finer values, the ladder still advances to the next legal blind."
+  },
+  {
+    "num": 160,
+    "text": "177. Small blinds — Normally use half the BB rounded to a live chip, at least one live chip and below BB; preserve the reference payable color-up-boundary hold exception on fresh generation.",
+    "example": "The engine may hold a legal small blind at a color-up boundary to avoid a jarring jump."
+  },
+  {
+    "num": 161,
+    "text": "178. Color-ups — Retire only actually dealt denominations, only at breaks, never the largest dealt chip; require raw BB at least four times the next denomination and keep all later blinds payable.",
+    "example": "On a suitable break, 1-value chips are exchanged and later levels use 5 as the minimum."
+  },
+  {
+    "num": 162,
+    "text": "179. Color-up timing — Preserve the reference index rule: choose the first permitted break with afterLevel at least triggerLevel−1 and not before the preceding color-up; without another qualifying break, keep the chips in play.",
+    "example": "A break immediately before the trigger level may retire the denomination in time for that level."
+  },
+  {
+    "num": 163,
+    "text": "180. Color-up operation — Announce the exchange and use value-preserving exchanges with leftover rounding up, not a chip race; display chip names and exchange instructions.",
+    "example": "Players replace small chips without losing value from fractional exchanges."
+  },
+  {
+    "num": 164,
+    "text": "181. Ante — Offer Off, Big Blind and Individual; BBA equals one BB per hand, while Individual is 10% of BB rounded to a live denomination and at least one chip.",
+    "example": "At BB 100 with 5-value chips available, an individual ante is 10."
+  },
+  {
+    "num": 165,
+    "text": "182. Ante recommendation — Auto recommends no ante for at most 6 players and under 210 minutes, otherwise BBA; hosting defaults can bias on/off, and Individual is never auto-selected.",
+    "example": "Six players over three hours begin with no ante suggestion."
+  },
+  {
+    "num": 166,
+    "text": "183. Ante start — Default to the level after rebuy/re-entry closure, otherwise the first level where a fresh stack is at most 40 BB; let the host override future start levels and make Off remove all antes.",
+    "example": "Moving the ante start to Level 6 updates all later schedule rows."
+  },
+  {
+    "num": 167,
+    "text": "184. Break planning — Default to 10-minute breaks approximately every 90 minutes of play, with count floor((T−30)/90); permit host editing and discard trailing breaks after the final playing segment.",
+    "example": "A 270-minute target produces two planned breaks."
+  },
+  {
+    "num": 168,
+    "text": "185. Add-on break planning — Place the add-on break immediately after rebuy closure by moving the first break and re-solving once; retain the move only if the suggested close stays consistent.",
+    "example": "An existing first break moves to after Level 4 without adding extra break minutes."
+  },
+  {
+    "num": 169,
+    "text": "186. Rebuy-close calculation — Suggest the last level meeting fresh-M floors 10/15/20 for Turbo/Regular/Deep and no later than 40% of the night; show adjacent choices with depth, M and elapsed share.",
+    "example": "The host compares Level 3, 4 and 5 before accepting the recommended close."
+  },
+  {
+    "num": 170,
+    "text": "187. Rebuy-close calculation — Preserve the placeholder-ante bootstrap and second pass, using BB/2 and an eight-player ante total for the recommendation’s fresh-M calculation.",
+    "example": "The engine avoids circular disagreement between the suggested ante start and rebuy close."
+  },
+  {
+    "num": 171,
+    "text": "188. Finish estimate — Calculate target-level duration plus prior breaks; show low = estimate−max(level minutes,15) and high = estimate+2×max(level minutes,15), with clock times and plain-language explanations.",
+    "example": "A 260-minute Regular estimate becomes a 240–300-minute range."
+  },
+  {
+    "num": 172,
+    "text": "189. Handouts — Compute exact starting, rebuy, add-on, bonus, late-arrival and cash-top-up chip breakdowns; fewestChips must honor remaining inventory and favor larger chips on ties.",
+    "example": "A 250-chip add-on can use two 100s and two 25s."
+  },
+  {
+    "num": 173,
+    "text": "190. Stack options — Offer Engine pick and Small chips out; the latter distributes small chips once and uses the largest chip for rebuys/add-ons, showing shortages honestly.",
+    "example": "A host chooses larger-chip rebuys to avoid running out of small change."
+  },
+  {
+    "num": 174,
+    "text": "191. Stack options — Search Small chips out between half and three times reference stack R, require whole-largest-chip rebuy/add-on values and depth/bank feasibility, maximize small chips and regenerate using forceStack.",
+    "example": "Selecting a feasible 400-chip alternative rescales blinds as well as handouts."
+  },
+  {
+    "num": 175,
+    "text": "192. Legacy structures — Preserve the no-pace phased solver for old saved games and verification, but pass an explicit pace from every new host-facing flow and do not expose legacy mode.",
+    "example": "An old tournament still reopens correctly while new games use 15/20/30-minute pacing."
+  },
+  {
+    "num": 176,
+    "text": "193. Level editor — Use the same full, free editor in review and live contexts, with SB, BB, ante, minutes, breaks, purposes and rebuy markers.",
+    "example": "Editing an unplayed level updates the host and player structure views consistently."
+  },
+  {
+    "num": 177,
+    "text": "194. Level editor — Allow edit, insert level/break below, append level/break, delete and recalculate unplayed levels; keep at least two playing levels at all times.",
+    "example": "Deleting down to one level is blocked with a clear explanation."
+  },
+  {
+    "num": 178,
+    "text": "195. Level locks — Played levels are read-only except for explicit record correction and can never be deleted; correcting one never replays it. The running level can be edited but not deleted.",
+    "example": "Correcting a recorded Level 2 duration does not send the timer back to Level 2."
+  },
+  {
+    "num": 179,
+    "text": "196. Level pins — Editing blinds creates a manual anchor; preserve played, running, final and pinned anchors while recalculating only unpinned intervals, with strict increasing-BB validation.",
+    "example": "Recalculation keeps the host’s Level 6 setting at 10/20."
+  },
+  {
+    "num": 180,
+    "text": "197. Level recalculation — Interpolate geometrically between pins, DP-snap with fixed endpoints and retarget the remaining tail; restore exact pin values and return a named error when infeasible.",
+    "example": "A pin that leaves no legal increasing ladder is reported rather than silently moved."
+  },
+  {
+    "num": 181,
+    "text": "198. Level recalculation — Preserve the reference distinction that re-solved segment/tail small blinds use payable BB/2 and do not apply fresh-generation color-up holds.",
+    "example": "An edited segment remains reproducible across devices even at a color-up boundary."
+  },
+  {
+    "num": 182,
+    "text": "199. Level insertion — Use a payable nice blind near the geometric midpoint, or approximately previous BB×1.4 at the end; re-space unpinned neighbors if needed and refuse when pins leave no room.",
+    "example": "Inserting between two tightly pinned levels explains that a pin must be released first."
+  },
+  {
+    "num": 183,
+    "text": "200. Level deletion — Confirm consequences, renumber following levels, move a deleted rebuy-close marker backward, and move a deleted break’s color-up to the next break or drop it if none remains.",
+    "example": "Deleting a 10-minute break warns that later levels start 10 minutes earlier."
+  },
+  {
+    "num": 184,
+    "text": "201. Level warnings — Identify adjacent repeating/dipping blinds and offer one-tap recalculation without blocking the whole editor; ante starts cannot move onto played/running levels.",
+    "example": "A host sees exactly which two manually edited levels need repair."
+  },
+  {
+    "num": 185,
+    "text": "202. Editor preview — Provide a sandboxed Before start/Running preview and restore the actual game completely when leaving the preview; co-hosts see the editor without edit controls.",
+    "example": "Previewing “running at Level 4” does not alter the real clock."
+  },
+  {
+    "num": 186,
+    "text": "203. Invitation — Show game name, date/start, buy-in and bounty, venue, Going avatars/counts, Maybe/Can’t/No reply, available seats, waitlist and the viewer’s current RSVP.",
+    "example": "A player checks whether a 9-seat game still has room before answering."
+  },
+  {
+    "num": 187,
+    "text": "204. Invitation — Provide maps directions, optional distance after location permission and an ICS calendar download with correct time, place and a return link.",
+    "example": "A player adds Friday’s game to their phone calendar."
+  },
+  {
+    "num": 188,
+    "text": "205. RSVP — Support Going, Maybe, Can’t and Bring a guest; after answering, show the status with a change action.",
+    "example": "A member changes from Maybe to Going without submitting a second identity."
+  },
+  {
+    "num": 189,
+    "text": "206. RSVP capacity — Free capacity is one configured table; Premium capacity is table count×maximum seats; queue excess Going responses by RSVP time.",
+    "example": "The tenth response at a 9-seat table becomes Waitlist #1."
+  },
+  {
+    "num": 190,
+    "text": "207. Plus-ones — Queue guests from the moment added, not the inviter’s original RSVP time; remove unclaimed slots first when allowances/membership change and never silently drop an approved guest.",
+    "example": "A newly added plus-one stays behind people already waiting."
+  },
+  {
+    "num": 191,
+    "text": "208. Waitlist — Promote the earliest eligible waiter when a seat opens and notify them; allow the host to remove a Going entry.",
+    "example": "When Alex withdraws, the next queued player receives a promotion alert."
+  },
+  {
+    "num": 192,
+    "text": "209. RSVP deadline — Configure 1–72 whole hours before start, default 24; display the exact deadline, block new Going/+1 after it, and continue waitlist promotion until start.",
+    "example": "A seat released after the RSVP deadline still moves to the first existing waiter."
+  },
+  {
+    "num": 193,
+    "text": "210. RSVP changes — Changing the deadline re-announces it to members who have not answered; changing start/finish updates invitations and reminders.",
+    "example": "Members who have not responded see a revised RSVP closing time."
+  },
+  {
+    "num": 194,
+    "text": "211. Second table — When planned attendance exceeds one table, notify the host before game night with Premium and a free alternative to seat 10 at one table; the alternative changes the group default.",
+    "example": "The tenth Going response triggers a planning card instead of a game-night paywall."
+  },
+  {
+    "num": 195,
+    "text": "212. Check-in timing — Open exactly 10 minutes before scheduled start; before then show a locked state and opening time, then request, pending and confirmed states.",
+    "example": "For a 20:00 game, a player can request check-in at 19:50."
+  },
+  {
+    "num": 196,
+    "text": "213. Check-in request — A player or guest taps “I’m here — check me in”; this creates a request, not automatic admission or a paid record.",
+    "example": "The player waits for host approval before receiving an assigned seat."
+  },
+  {
+    "num": 197,
+    "text": "214. Host check-in — Show checked-in, pending and not-arrived totals, individual Confirm actions, Confirm all for at least two pending requests, Take buy-in and Nudge.",
+    "example": "The co-host approves three arrivals together while another player is still missing."
+  },
+  {
+    "num": 198,
+    "text": "215. Check-in approval — Assign a seat immediately using the selected seating mode, show the exact chip handout, create an owed buy-in/bounty ledger entry and apply any eligible early bonus.",
+    "example": "Confirmation shows “Table 1, Seat 4” and the chips to hand to Sam."
+  },
+  {
+    "num": 199,
+    "text": "216. Player confirmation — Show the assigned table/seat, table diagram with dealer and self marker, confirmed status and a link to the live clock/prizes; no seating controls.",
+    "example": "A player finds their seat without asking the host to repeat it."
+  },
+  {
+    "num": 200,
+    "text": "217. No-show gate — At scheduled start, identify every Going player not checked in; provide Seat them, Start without them with reserved seat, and a shared Wait 10 more minutes action.",
+    "example": "The host starts without Marta while preserving her seat for a permitted late arrival."
+  },
+  {
+    "num": 201,
+    "text": "218. No-show accounting — Starting without a player must not create a paid entry, issue chips or consume buy-in; resolving one missing player must not dismiss unresolved no-shows.",
+    "example": "Two missing players remain separate decisions rather than disappearing after the first is resolved."
+  },
+  {
+    "num": 202,
+    "text": "219. Late registration — Admit late arrivals/walk-ins only while rebuys are open, or before the first freezeout break; use the normal seat, full handout and owed-entry path.",
+    "example": "A late freezeout player joins before the first break and pays a full entry."
+  },
+  {
+    "num": 203,
+    "text": "220. Late registration — Hide walk-in controls after final settlement pool publication and refuse late entries after the applicable cutoff with an explanation.",
+    "example": "A player cannot add a new entry after rebuys and the final prize pool are settled."
+  },
+  {
+    "num": 204,
+    "text": "221. Players — Provide Active, Roster and Seating tabs; show pending arrivals, no-shows, exact handout reference, owed totals, player statuses and RSVP/attendance metadata.",
+    "example": "The host distinguishes a busted participant from someone who never arrived."
+  },
+  {
+    "num": 205,
+    "text": "222. Player states — Maintain active, paused, out, removed and no-show separately; removal corrects an entry that never played and is not a finish position.",
+    "example": "A mistakenly added name is removed rather than recorded as last place."
+  },
+  {
+    "num": 206,
+    "text": "223. Rebuy action — A single + records a rebuy, increments the visible count including zero, issues a fresh stack and shows Undo; block it after closure or when caps are reached.",
+    "example": "A second allowed rebuy immediately updates the pot and the player’s counter."
+  },
+  {
+    "num": 207,
+    "text": "224. Pause action — While rebuys remain open, Pause means out of chips and deciding; retain the seat and no finish position, with Rebuy and Out choices.",
+    "example": "A player considering a rebuy is not prematurely assigned ninth place."
+  },
+  {
+    "num": 208,
+    "text": "225. Bust action — Confirm final elimination, record place, bust time and level, free the seat and ask “Knocked out by”; show attribution and Undo afterward.",
+    "example": "The roster shows “Out, 10th, by Hugo” after confirmation."
+  },
+  {
+    "num": 209,
+    "text": "226. Knockout attribution — Require an eliminator when KO bounty is enabled and allow it optionally otherwise; support two eliminators for an evenly split bounty, with full Undo of credits.",
+    "example": "Two players sharing the knockout each receive half the fixed bounty record."
+  },
+  {
+    "num": 210,
+    "text": "227. Same-hand busts — At one table, order simultaneous eliminations by chips at the start of that hand, with the larger starting stack finishing higher; do not tie them.",
+    "example": "Two players bust together, but the player who started with more chips takes fifth rather than sixth."
+  },
+  {
+    "num": 211,
+    "text": "228. Stack visibility — Source expectations differ: Original prohibits routine tournament stack entry and shows stacks only when typed for a deal/final table; Reformed describes continuously current personal stacks.",
+    "example": "Under Original behavior, the ordinary live card shows seat, status, rebuys and knockouts until a stack is actually entered."
+  },
+  {
+    "num": 212,
+    "text": "229. Player correction — Allow per-player rebuy caps and confirmed Remove player; removing an erroneous entry frees the seat and removes its buy-in rather than creating a bust result.",
+    "example": "The host removes a duplicate registration without affecting finish order."
+  },
+  {
+    "num": 213,
+    "text": "230. Undo — Keep a 30-action stack, global Undo and player-specific Undo of that player’s latest eligible rebuy, add-on, pause or bust regardless of later actions by others.",
+    "example": "Sam’s rebuy can be undone even after Alex has subsequently busted."
+  },
+  {
+    "num": 214,
+    "text": "231. Owed ledger — Record each buy-in, rebuy, re-entry and add-on as owed until explicitly marked paid; show total owed and per-player tags with reversible payment recording.",
+    "example": "A host collects 30 from one player and marks their outstanding entries paid."
+  },
+  {
+    "num": 215,
+    "text": "232. Dashboard — Show game name/status, join/sound controls, level, large countdown, SB/ante/BB, elapsed progress, total time, average stack, players, starting stack, M-ratio, rebuy close and next level.",
+    "example": "The host can read current blinds and the next level without opening another screen."
+  },
+  {
+    "num": 216,
+    "text": "233. Dashboard — Provide large Pause/Resume and Next controls plus Speed, Edit, Seats and TV shortcuts; conditionally show join, offline, takeover and hand-for-hand banners.",
+    "example": "The host pauses play and opens seating from the same dashboard."
+  },
+  {
+    "num": 217,
+    "text": "234. Dashboard — Provide Players, Eliminated and Prizes views, showing the first six active rows with See all, Out actions, eliminated-player Undo and engine-generated prize amounts.",
+    "example": "The host records a bust from the dashboard and then checks the resulting payouts."
+  },
+  {
+    "num": 218,
+    "text": "235. Clock states — Implement normal level, paused, break, rebuy-closing hold and planned-levels-ended states, each with explicit state text and valid actions.",
+    "example": "During a rebuy hold, the display explains why the next level has not begun."
+  },
+  {
+    "num": 219,
+    "text": "236. Clock controls — Support −1 minute, +1 minute, Restart level and Previous level with undoable state changes; keep player-count ±1 clearly labeled as a correction, not a recorded bust.",
+    "example": "The host adds a minute after an interruption without inventing an elimination event."
+  },
+  {
+    "num": 220,
+    "text": "237. Clock accounting — Total elapsed time starts at zero, includes breaks and excludes paused time; derive the visible timer from absolute authoritative timestamps rather than accumulated interval ticks.",
+    "example": "Closing the app for a minute does not cause the countdown to lose that minute."
+  },
+  {
+    "num": 221,
+    "text": "238. Clock rollover — Only the authority advances segments and revisions; transition into a scheduled break, rebuy hold, next level or end state and generate the proper announcement/undo entry.",
+    "example": "At zero, all screens display the next level while only one device writes it."
+  },
+  {
+    "num": 222,
+    "text": "239. Pause/resume — Save remaining milliseconds on pause and set a new authoritative end timestamp on resume.",
+    "example": "A paused level resumes with exactly the stored time remaining."
+  },
+  {
+    "num": 223,
+    "text": "240. Drift guidance — Calculate projected finish from the current remainder, future target levels, remaining breaks and any pending rebuy allowance; warn beyond ±20 minutes without automatically changing the ladder.",
+    "example": "The Speed panel explains that the game is 25 minutes behind and lets the host decide what to change."
+  },
+  {
+    "num": 224,
+    "text": "241. End of ladder — Offer Add a level using approximately 1.4× the last BB on playable chips and the same duration, or Repeat the last level; do not silently end an unfinished tournament.",
+    "example": "Three remaining players continue after the last published level with a host-selected extension."
+  },
+  {
+    "num": 225,
+    "text": "242. Announcements — Let the host send a short announcement from the dashboard; push it to players and display the latest message in the live structure view and on TV.",
+    "example": "“Break after Level 5” appears on players’ screens and the room display."
+  },
+  {
+    "num": 226,
+    "text": "243. Rebuy closure — Source rules conflict: Original holds at the closing level for Close rebuys or Keep open one more level; Reformed requires automatic locking when the designated level concludes.",
+    "example": "The approved rule must determine whether a host decision or automatic closure follows Level 6."
+  },
+  {
+    "num": 227,
+    "text": "244. Rebuy hold — Under Original behavior, block Next until the host resolves closure; closing blocks + and Pause, turns paused players Out and starts the add-on break/settlement.",
+    "example": "A player still deciding is marked Out when the host finally closes rebuys."
+  },
+  {
+    "num": 228,
+    "text": "245. Reopening — Allow Reopen rebuys only until the add-on break ends, applying normal caps and state rules.",
+    "example": "The host corrects an accidental early close before the permitted reopening window expires."
+  },
+  {
+    "num": 229,
+    "text": "246. Early closure — Offer “End rebuys now — after Level n” from the level view with confirmation, applying closure at the end of the current level and entering the same settlement flow.",
+    "example": "The host schedules an early cutoff without changing mid-hand eligibility."
+  },
+  {
+    "num": 230,
+    "text": "247. Rebuy settlement — Provide two entry paths into one screen, show current entries/pool and sequentially gated attendance/rebuy confirmation, add-on decisions and final prize-pool publication.",
+    "example": "The final pool cannot be confirmed before all eligible add-on choices are known."
+  },
+  {
+    "num": 231,
+    "text": "248. Settlement step 1 — Confirm who remains and final rebuy counts with In/Busted and count controls; save confirmed player/rebuy counts for later learning.",
+    "example": "The host corrects a missed rebuy before submitting attendance."
+  },
+  {
+    "num": 232,
+    "text": "249. Settlement step 2 — Let each eligible survivor take or decline one add-on, with price and an inventory-feasible fewest-chip breakdown; prohibit duplicates.",
+    "example": "Sam takes the add-on once and Alex explicitly declines it."
+  },
+  {
+    "num": 233,
+    "text": "250. Settlement step 3 — Recompute final entries, rebuys, add-ons, net prize pool and paid places, then publish the final prizes to all game viewers.",
+    "example": "Players and TV see the same finalized payout table."
+  },
+  {
+    "num": 234,
+    "text": "251. Settlement timing — Allow Confirm & resume to end the break early; if the timer expires before add-on decisions finish, resume play on time but show “Add-on window (overtime)” until everyone from step 1 is resolved.",
+    "example": "The clock reaches the next level while one final add-on decision is still pending."
+  },
+  {
+    "num": 235,
+    "text": "252. Add-on window — Respect Addendum 2: Next closes the window; otherwise an incomplete settlement keeps it open after the break until every eligible player takes or declines; do not lock the final pool prematurely.",
+    "example": "An unresolved player can still take their one add-on during the displayed overtime window."
+  },
+  {
+    "num": 236,
+    "text": "253. Table count — Default to ceil(players/maxPerTable), with max 4–10 and default 9; split evenly, require at least two per table and warn on explicit over-capacity overrides.",
+    "example": "Eleven players at a nine-seat maximum split into tables of six and five."
+  },
+  {
+    "num": 237,
+    "text": "254. Seating — Use randomized seats and dealers, with all-table and per-table reshuffle/dealer actions and confirmations naming who moves.",
+    "example": "Shuffling Table 1 changes only the ordering of players already at that table."
+  },
+  {
+    "num": 238,
+    "text": "255. Check-in seating — Fully random assigns a random free seat at the shortest table, breaking table-size ties toward the lower table number.",
+    "example": "A new arrival fills the smaller of two tables."
+  },
+  {
+    "num": 239,
+    "text": "256. Guest seating — Support Guests with inviter, keeping a guest with the inviter only when capacity/balance permits, and Guests separate, using another shortest table when available.",
+    "example": "A guest may join the inviter’s table unless it would become too full."
+  },
+  {
+    "num": 240,
+    "text": "257. Guest seating — Seat guests sequentially against current occupancy; use random seating if the inviter has not arrived, and apply the documented inviter ordering during full redraws.",
+    "example": "Two guests confirmed back-to-back may correctly land at different tables."
+  },
+  {
+    "num": 241,
+    "text": "258. Balancing — Requirements conflict: Original proposes host-confirmed TDA 11-A pairwise moves when tables differ by at least two; Reformed describes automatic balancing with no difference above one at any time.",
+    "example": "Under Original behavior, a 7/5 split produces a suggested move rather than moving someone silently."
+  },
+  {
+    "num": 242,
+    "text": "259. TDA move — Recommend the player due the BB next at the larger table to the next-BB seat at the smaller table; identify player/table/seat and wait until the current hand is finished.",
+    "example": "The host confirms a move that preserves the player’s big-blind obligation."
+  },
+  {
+    "num": 243,
+    "text": "260. Table breaking — When remaining players fit one fewer table, propose a confirmed full redraw with fresh dealers; use an inline prompt except when moving to the final table.",
+    "example": "A three-table event shrinking to two redraws without opening the one-table final screen."
+  },
+  {
+    "num": 244,
+    "text": "261. Final table — Trigger the final-table seating flow only when all remaining players fit one table; show numbered seats and dealer, Shuffle again and Assign seats & continue.",
+    "example": "Nine remaining players at a nine-seat limit can be redrawn for the final table."
+  },
+  {
+    "num": 245,
+    "text": "262. Final-table display — Reformed additionally requires a high-visibility circular SVG countdown ring and a finalist chip leaderboard with big-blind depths based on entered stacks.",
+    "example": "Finalists’ recorded stacks appear beside the remaining level time."
+  },
+  {
+    "num": 246,
+    "text": "263. Winner safety — Reformed requires Declare Winner to remain disabled while more than two players remain; keep this distinct from Original’s separately confirmed End tournament/deal workflows.",
+    "example": "With three finalists, the host cannot accidentally use Declare Winner to end the event."
+  },
+  {
+    "num": 247,
+    "text": "264. Payout visibility — Everyone in the game, including guests, co-hosts and TV, sees net prize pool, paid places and prize amounts; only the host sees the organiser deduction and gross financials.",
+    "example": "A player verifies first prize without seeing the host-only fee breakdown."
+  },
+  {
+    "num": 248,
+    "text": "265. Pool accounting — Include owed and paid buy-ins, rebuys, re-entries and add-ons in the normal pool; exclude bounty entries and calculate distributions after organiser deductions.",
+    "example": "An unpaid but recorded rebuy still increases the displayed pool and owed ledger."
+  },
+  {
+    "num": 249,
+    "text": "266. Payout updates — Recalculate immediately after a rebuy, add-on or new entry; notify the host when paid-place count changes, and propagate the same figures to every projection.",
+    "example": "A late entry expands the pool and updates the TV prize strip."
+  },
+  {
+    "num": 250,
+    "text": "267. Paid-place calculation — Use the reference ps15 curve, count rebuys as entries, cap at six and the available shape, and apply the max(1,floor(players/2)−1) field cap.",
+    "example": "A rebuy increases effective entries without counting as a new person for the field cap."
+  },
+  {
+    "num": 251,
+    "text": "268. Paid-place calculation — Apply the pre-rounding last-place checks of at least 1.5×buy-in and one cash unit, reducing places until valid; keep manual place-count override and Use the suggestion.",
+    "example": "With net pool 149 and buy-in 15, the 22.35 third-place share forces a two-place suggestion."
+  },
+  {
+    "num": 252,
+    "text": "269. Payout shapes — Use owner shares: one place 100%; two 65/35; three 52.5/32.5/15; four 42.5/30/17.5/10; five 38/24/17/12/9; six 35/22/16/12/9/6.",
+    "example": "A 2,400 pool split across three places pays 1,260, 780 and 360."
+  },
+  {
+    "num": 253,
+    "text": "270. Payout source conflict — Original specifies ps15 and the owner’s shapes; Reformed describes tiered WSOP curves. Preserve the verified engine contract unless a changed payout policy is explicitly approved.",
+    "example": "A generic 50/30/20 split must not silently replace the required three-place owner split."
+  },
+  {
+    "num": 254,
+    "text": "271. Money arithmetic — Use integer minor units internally, then cash units of 1 below buy-in 5, 5 below 100, 10 below 500 and 50 thereafter.",
+    "example": "A buy-in of 15 produces ordinary payouts rounded around five-unit cash steps."
+  },
+  {
+    "num": 255,
+    "text": "272. Payout rounding — Round places below first to the nearest cash unit with exact halves down; give first the exact remainder, including cents, and repair order inversions.",
+    "example": "A 149 net pool with two places pays 99 and 50 without losing a unit."
+  },
+  {
+    "num": 256,
+    "text": "273. Organiser contribution — Default off; when legally enabled, offer None, Percent 0–30 in steps of 1 with a 10% proposed value, or Fixed in steps of 5 below the expected pool less one cash unit.",
+    "example": "The host previews a 10% deduction before deciding whether to enable it."
+  },
+  {
+    "num": 257,
+    "text": "274. Organiser calculation — Round the deduction down to whole units, require fee below gross pool, display pool-deduction/hidden-from-players warnings and keep per-entry mode engine-only in v1.",
+    "example": "Ten percent of 165 produces a fee of 16, not 17."
+  },
+  {
+    "num": 258,
+    "text": "275. Organiser locks — Require consequence confirmation after prizes have been shown, lock the fee completely when rebuys close and never recalculate it as part of a deal.",
+    "example": "Changing an agreed deal does not apply a second organiser deduction."
+  },
+  {
+    "num": 259,
+    "text": "276. Organiser safety — If a fixed fee would reach the actual pool at closure, reduce it to pool minus one cash unit before calling the engine and explain the adjustment to the host.",
+    "example": "Lower attendance cannot leave a zero or negative distributable prize pool."
+  },
+  {
+    "num": 260,
+    "text": "277. Bounty accounting — Maintain a separate fixed-bounty pot funded by each entry/rebuy’s surcharge; record knockout credits outside normal prizes and exclude them from deals.",
+    "example": "A player’s knockout reward is not redistributed during an ICM chop."
+  },
+  {
+    "num": 261,
+    "text": "278. Bubble — Detect remaining players equal to paid places plus one; show the dashboard card and player/TV banner with deal access and the next-elimination consequence.",
+    "example": "Four players remaining with three prizes displays On the bubble."
+  },
+  {
+    "num": 262,
+    "text": "279. Hand-for-hand — For a multi-table bubble, let the host start/stop hand-for-hand, pause the clock, track each table’s hand-done state and advance only when every table finishes; stop automatically once all survivors are paid.",
+    "example": "Table 1 waits for Table 2 before the next hand is dealt."
+  },
+  {
+    "num": 263,
+    "text": "280. Cross-table ties — During hand-for-hand, link same-hand eliminations at different tables as tied at the highest covered place; pool the covered prizes and split with cash-unit rounding, favoring the larger starting stack for a leftover unit.",
+    "example": "Two simultaneous cross-table busts share the combined prizes for their covered positions."
+  },
+  {
+    "num": 264,
+    "text": "281. Bubble save — Offer the bubble their buy-in back only after whole-table agreement; fund it proportionally from every paid place in whole units, with first absorbing rounding, and preview before recording.",
+    "example": "Prizes 99/60/30 become 91/55/28/15 after an agreed 15-unit bubble save."
+  },
+  {
+    "num": 265,
+    "text": "282. Bubble-save validation — Refuse an amount above the smallest prize or a reordered payout ladder; provide Record, Not now and Undo and update all viewers only after confirmation.",
+    "example": "Dismissing the preview leaves the original prizes unchanged."
+  },
+  {
+    "num": 266,
+    "text": "283. Deal suggestions — Evaluate target-time, bubble, in-the-money and heads-up triggers in priority order, show each once per game, remember dismissals and never apply a deal automatically.",
+    "example": "At target time the host can choose Keep playing instead of opening negotiations."
+  },
+  {
+    "num": 267,
+    "text": "284. Deal threshold — Make the generic ICM suggestion threshold configurable from two to five players, default five; offer the in-game deal screen for two to five participants.",
+    "example": "The host asks for deal prompts only once three players remain."
+  },
+  {
+    "num": 268,
+    "text": "285. Deal input — Collect each remaining stack and prizes still unpaid, with denomination-aware steppers/sliders and Count by color; a prize-pool total alone is insufficient.",
+    "example": "The host counts each finalist’s 25 and 100 chips to obtain an exact stack."
+  },
+  {
+    "num": 269,
+    "text": "286. ICM — Implement Malmuth–Harville exact DP up to 2,000,000 states; above that use 200,000 stack-weighted samples with a seeded Park–Miller RNG and expose the computation method.",
+    "example": "Every device computes the same result for the same seed and inputs."
+  },
+  {
+    "num": 270,
+    "text": "287. ICM edge cases — Assign zero-stack players bottom places with equal splitting, treat missing prize places as zero and ignore excess prizes beyond the relevant field.",
+    "example": "A just-busted zero stack does not receive first-place probability."
+  },
+  {
+    "num": 271,
+    "text": "288. Deal comparison — Show ICM, min-cash-first capped chip chop and equal chop together; chip chop cannot give anyone more than first prize, redistributing excess among uncapped players.",
+    "example": "The host compares a large stack’s ICM equity with its chip-chop amount."
+  },
+  {
+    "num": 272,
+    "text": "289. Deal rounding — Floor to the cash unit, distribute by largest remainder with stable tie-breaking and respect caps; reject impossible caps and preserve the exact unpaid total.",
+    "example": "A rounded deal still distributes the entire 500-unit remaining pool."
+  },
+  {
+    "num": 273,
+    "text": "290. Agreed deal — Prefill editable agreed amounts from rounded ICM and block confirmation unless their sum equals the unpaid pool; list amounts in a named confirmation sheet.",
+    "example": "Amounts totaling 185 cannot finalize a deal when 189 remains."
+  },
+  {
+    "num": 274,
+    "text": "291. Deal completion — Confirming a full deal ends the game, writes results and ranks remaining players by chip count; use “Deal at n players”/“leads on chips” rather than claiming an outright win.",
+    "example": "Three finalists agree a split and the shared result image is labeled Deal at 3 players."
+  },
+  {
+    "num": 275,
+    "text": "292. Partial-deal engine — Preserve leaveForWinner and compareDeals for engine parity, including bounds on the reserved winner amount, but do not expose a partial-deal UI in v1.",
+    "example": "Tests can verify a reserved winner prize without adding an unsupported screen."
+  },
+  {
+    "num": 276,
+    "text": "293. Hard-finish operation — Warn host and TV 15 minutes before the agreed hard finish; when reached with multiple players, finish the current hand, hold and open the chosen deal method for stack entry and confirmation.",
+    "example": "At 01:30 the host taps Hand finished before completing the agreed ICM split."
+  },
+  {
+    "num": 277,
+    "text": "294. Hard-finish extension — Allow host-only Play on +30 minutes only after confirming table agreement, logging every extension; never turn the schedule into silent Turbo.",
+    "example": "An agreed extra half-hour is visible in the audit history."
+  },
+  {
+    "num": 278,
+    "text": "295. Tournament completion — When a bust leaves one active player and no paused player, stop the clock and open Finish order; keep status uncompleted until the host confirms.",
+    "example": "The last elimination does not publish results before the host checks them."
+  },
+  {
+    "num": 279,
+    "text": "296. Manual ending — Provide a separately confirmed End tournament action; rank survivors by entered stacks or ask the host to order them if stacks are absent.",
+    "example": "A night ending early still receives an explicit, reviewable finish order."
+  },
+  {
+    "num": 280,
+    "text": "297. Finish corrections — Derive initial places from recorded busts, limit drag correction to permitted positions, explain that prizes move with places and require confirmation rather than treating the whole field as an unrecorded draft.",
+    "example": "Correcting second and third place updates their prizes only after approval."
+  },
+  {
+    "num": 281,
+    "text": "298. Completion writes — On confirmation, store each finish, prize, knockouts, rebuys, bust details and actual duration; update history, personal result copies and eligible season calculations, then mark completed.",
+    "example": "The finished game appears in the player’s own record and the club’s standings."
+  },
+  {
+    "num": 282,
+    "text": "299. Solo completion — Save groupless quick games under the host’s soloGames collection, label them Solo in history and skip group/season writes.",
+    "example": "A private quick night remains available without creating a club."
+  },
+  {
+    "num": 283,
+    "text": "300. Result correction — Let the game host reopen completed results through History → Correct results, retain an audit trail and recompute dependent standings/season points.",
+    "example": "Fixing an incorrectly recorded winner updates the season table automatically."
+  },
+  {
+    "num": 284,
+    "text": "301. Results — Show a top-three podium, remaining finishes, prize amounts, bounty/knockout achievements and applicable season points, with accurate deal-versus-win wording.",
+    "example": "A player sees their final position and knockout record after confirmation."
+  },
+  {
+    "num": 285,
+    "text": "302. Results story — Compute comeback only from entered stacks among the top three, omit it when none exist, derive fastest bust from the lowest non-winner bust level, and calculate most knockouts from recorded events.",
+    "example": "A count-only night does not invent a biggest-comeback story."
+  },
+  {
+    "num": 286,
+    "text": "303. Results sharing — Generate a real 1080×1350 image with group/date, winner or deal label, players, pool, podium, prizes, applicable points, knockouts and PNT branding; share through the OS.",
+    "example": "The host sends a readable results card to the group chat."
+  },
+  {
+    "num": 287,
+    "text": "304. History — Provide chronological tournament/cash records, All/Tournaments/Cash filters, winners, turnout, prizes, duration and drill-down to results/elimination sequences; include the viewer’s Solo games.",
+    "example": "A signed-in user finds both Friday Club events and an independent quick night."
+  },
+  {
+    "num": 288,
+    "text": "305. History privacy — Show only the viewer’s own P&L column; keep basic history available free and present Premium graphs/export as a quiet enhancement, not a history-access wall.",
+    "example": "Sam cannot inspect Alex’s lifetime profit through a shared group history screen."
+  },
+  {
+    "num": 289,
+    "text": "306. Personal statistics — Show games, wins, podiums, average finish, knockouts, whole-percent win rate, ITM percentage and relevant elimination trends, scoped to all groups or a selected group.",
+    "example": "A user compares their own average finish in two clubs."
+  },
+  {
+    "num": 290,
+    "text": "307. Personal financials — Compute lifetime P&L from prizes minus buy-ins paid and restrict it, ITM and personal money history to the owner; retain personal result copies independently of group existence.",
+    "example": "Deleting a group does not erase a member’s own permitted historical record."
+  },
+  {
+    "num": 291,
+    "text": "308. Standings — Free group standings show games, wins, podiums, average finish and knockouts, sorted by podiums then average finish; do not create a global cross-group public leaderboard.",
+    "example": "A club ranks members without publishing their financial performance."
+  },
+  {
+    "num": 292,
+    "text": "309. Standings conflict — Original forbids money/ROI in group standings and derives season points from finishes; Reformed says to commit final points and ROI to the club season leaderboard.",
+    "example": "Private player ROI must not be exposed as a public club statistic without resolving this requirement conflict."
+  },
+  {
+    "num": 293,
+    "text": "310. Season scoring — Premium seasons have date ranges and selectable field-size, 10-7-5-3-1 or custom formulas; default custom table is 25-18-15-12-10-8-6-4-2-1.",
+    "example": "The host changes a season from weighted scoring to the simple five-place ladder."
+  },
+  {
+    "num": 294,
+    "text": "311. Season calculation — Default points are 10×sqrt(players/finish), one decimal, using people who played rather than rebuys; rank by total points, wins then name.",
+    "example": "A win against 12 players earns 34.6 points, while last place earns 10."
+  },
+  {
+    "num": 295,
+    "text": "312. Statistics integrity — Exclude cancelled/unfinished results with nonpositive place; recompute standings and points from finishes rather than storing stale derived totals.",
+    "example": "Correcting a finish immediately changes the season ranking."
+  },
+  {
+    "num": 296,
+    "text": "313. Import — Allow host text import of one night per line as YYYY-MM-DD; names in finishing order, with Check preview and explicit Import confirmation.",
+    "example": "The host imports “2026-06-27; Sam, Alex, Nina” as an earlier event."
+  },
+  {
+    "num": 297,
+    "text": "314. Import validation — Name errors by line; require one semicolon, valid date, at least two players, no duplicate player and no duplicate season date; import valid lines even if others fail.",
+    "example": "Three good lines import while a malformed fourth line remains flagged for correction."
+  },
+  {
+    "num": 298,
+    "text": "315. Import matching — Match member names by trimmed lowercase equality with accents preserved; store unmatched names as guest results and never automatically relink old guest rows after later registration.",
+    "example": "“Tomas” does not silently match “Tomás.”"
+  },
+  {
+    "num": 299,
+    "text": "316. Learning consent — Use historical calibration only with signup consent and group opt-in; retain bust times/levels, chip supply, final BB, actual duration and confirmed rebuy/add-on observations for eligible nights.",
+    "example": "A group that opts out is excluded from rebuy-rate recommendations."
+  },
+  {
+    "num": 300,
+    "text": "317. Pace learning — From the last five completed games, propose an adjustment when average deviation reaches 15 minutes, clamped to ±20%; show evidence and require explicit acceptance.",
+    "example": "A host accepts a suggested 14% pacing adjustment after repeated late finishes."
+  },
+  {
+    "num": 301,
+    "text": "318. Rebuy learning — From at least eight completed rebuy/re-entry games, suggest mean confirmed rebuys/confirmed players clamped to 0–100%; otherwise retain the 35% default.",
+    "example": "The host sees “Suggested from your last 8 games” above the rebuy-rate slider."
+  },
+  {
+    "num": 302,
+    "text": "319. Add-on learning — From at least eight eligible games, suggest mean add-ons taken/players alive at the add-on break, clamped to 0–100%; otherwise retain 70%.",
+    "example": "A club with low add-on uptake gets a better finish estimate without reducing bank reserves."
+  },
+  {
+    "num": 303,
+    "text": "320. Calibration — Ship the reference constants initially, review real-game evidence after approximately 20 nights and retune explicitly rather than silently altering an active event.",
+    "example": "The team evaluates whether K_ANTE=27 predicts this group’s finish times accurately."
+  },
+  {
+    "num": 304,
+    "text": "321. Cash access — Permit a simple local cash session without a group or RSVP process; preserve recovery and host-only access to the session ledger.",
+    "example": "Friends start a cash night without setting up tournament invitations."
+  },
+  {
+    "num": 305,
+    "text": "322. Cash setup — Offer 0.5/1, 1/2 and 2/5 stakes plus Custom with SB below BB; default to 1/2, min buy-in 50 BB and max 250 BB, with min below max.",
+    "example": "At 1/2, default buy-in limits are 100 and 500."
+  },
+  {
+    "num": 306,
+    "text": "323. Cash chip value — Select an available chip set and define money value per chip unit for this session only, default 1 and minimum 0.01; use it for stack-to-money reconciliation and cash-out.",
+    "example": "A chip marked 25 is worth 0.25 when the session chip-unit value is 0.01."
+  },
+  {
+    "num": 307,
+    "text": "324. Cash settlement option — Default Track settlement on and explain that it calculates who owes whom without processing payments.",
+    "example": "The host enables settlement guidance before starting the session."
+  },
+  {
+    "num": 308,
+    "text": "325. Cash dashboard — Show fixed stakes, player count, chip value still in play, elapsed time, issued/returned totals and player rows with contributions, status, counted stack and approximate BB depth.",
+    "example": "The host sees how much chip value remains on the table after two cash-outs."
+  },
+  {
+    "num": 309,
+    "text": "326. Cash add/top-up — Add a named player within buy-in limits, propose an editable chip breakdown from inventory and record top-ups with matching ledger/stack changes and Undo.",
+    "example": "A 20-unit top-up immediately increases both issued chip value and that player’s contribution."
+  },
+  {
+    "num": 310,
+    "text": "327. Cash tracking — Treat current stacks as host-counted values, not automatic observation of the physical table; use them for depth/recount while seated and convert them into money only on cash-out.",
+    "example": "The host recounts a player’s stack before recording the final cash-out."
+  },
+  {
+    "num": 311,
+    "text": "328. Cash cash-out/rejoin — Cash out at counted stack×chip value and allow Rejoin with a new buy-in; calculate whole-session net across every stint, top-up and cash-out.",
+    "example": "A player leaves, returns later and still receives one correct net settlement balance."
+  },
+  {
+    "num": 312,
+    "text": "329. Cash reconciliation — Require counted seated stacks converted to money to equal issued minus returned value before settlement; block mismatches with a Recount explanation.",
+    "example": "Settlement is blocked when stacks total 1,760 but the ledger says 1,800 remains."
+  },
+  {
+    "num": 313,
+    "text": "330. Cash preview — Provide Preview settle-up at any time without writing, cashing out players or ending the session.",
+    "example": "The host checks likely transfers midway through the night without changing records."
+  },
+  {
+    "num": 314,
+    "text": "331. Cash finish — End session & settle completes only after everyone is cashed out, or explicitly confirms cashing out all remaining players at their entered stacks first.",
+    "example": "The host confirms all current counts before closing the night."
+  },
+  {
+    "num": 315,
+    "text": "332. Cash settlement algorithm — Requirements conflict: Original mandates exact minimum transfers via zero-sum-group bitmask DP; Reformed specifies whole-table greedy O(N log N), which does not always give the minimum.",
+    "example": "For balances +4,+3,+3,−6,−4, the Original requires three transfers rather than greedy’s four."
+  },
+  {
+    "num": 316,
+    "text": "333. Cash settlement validation — Require zero-sum balances and at most 16 people with nonzero balances; block an action creating a seventeenth open balance until someone is settled.",
+    "example": "A seventeenth unsettled participant receives an explicit limit message."
+  },
+  {
+    "num": 317,
+    "text": "334. Cash output — Return deterministic payer/payee/amount instructions with Copy as text; for the exact engine, pair within optimal zero-sum groups with stable name tie-breaking.",
+    "example": "The host copies “D pays B 3; D pays C 3; E pays A 4.”"
+  },
+  {
+    "num": 318,
+    "text": "335. TV access — Provide a read-only, browser-based paired display with a separate TV code, fullscreen control and return-to-origin exit; build browser pairing first, with casting deferred pending approval.",
+    "example": "A laptop becomes the room scoreboard by opening /tv/{code}."
+  },
+  {
+    "num": 319,
+    "text": "336. TV layout — Optimize for 16:9 landscape with very large, high-contrast clock/blinds, status, game/code, progress, elapsed time, average stack, next level and players; use a stacked portrait fallback.",
+    "example": "The whole room can read the blinds from a television."
+  },
+  {
+    "num": 320,
+    "text": "337. TV sizing — Support automatic width-based scaling plus per-device text scale 0.7–2.0; use up to 180 px clock numerals and at least 120 px clock height on 1080p.",
+    "example": "A large television enlarges the timer without changing the host phone layout."
+  },
+  {
+    "num": 321,
+    "text": "338. TV panels — Default payouts and upcoming levels on and leaderboard off; rotate optional panels every 5, 8, 12, 20 or 30 seconds, default 8.",
+    "example": "The TV alternates upcoming blinds and prizes every eight seconds."
+  },
+  {
+    "num": 322,
+    "text": "339. TV live messages — Automatically show bubble state and the latest host announcement, with announcements visible for 60 seconds, independently of optional panel toggles.",
+    "example": "A break announcement remains visible while the payout strip rotates."
+  },
+  {
+    "num": 323,
+    "text": "340. TV privacy — Never send organiser fee, gross financials, private ledger or other players’ personal money to TV; show only the allowed game projection and optional public leaderboard fields.",
+    "example": "The room sees prizes but not who still owes the host a buy-in."
+  },
+  {
+    "num": 324,
+    "text": "341. TV entitlements — Include one default display free; custom layouts/branding and additional displays are Premium, with pairing-related upgrade guidance on the host device rather than blocking the TV’s game view.",
+    "example": "A host configures a second room display without asking players to buy Premium."
+  },
+  {
+    "num": 325,
+    "text": "342. TV pairing lifecycle — Notify the host on the first TV connection and allow TV-code re-roll that immediately invalidates the previous code.",
+    "example": "The host revokes an old TV link after using it in another room."
+  },
+  {
+    "num": 326,
+    "text": "343. Audio controls — Default level chime, five-minute warning, one-minute warning, voice, haptics and master sound on; provide device-local switches and a scoreboard master mute.",
+    "example": "Muting the dashboard stops room audio while visual countdowns continue."
+  },
+  {
+    "num": 327,
+    "text": "344. Voice — Speak level numbers, blinds, antes, break information, rebuy warnings and end-of-ladder messages as words without currency; retain the last spoken announcement visibly.",
+    "example": "The app says “Blinds five and ten” rather than reading a slash or currency symbol."
+  },
+  {
+    "num": 328,
+    "text": "345. Audio master — Only the selected audio-master device speaks; default to the authority phone, allow This phone/The TV selection and never force voice on if that device has disabled it.",
+    "example": "Five player phones do not all announce the next level aloud."
+  },
+  {
+    "num": 329,
+    "text": "346. Browser audio — Require a user gesture to unlock sound on each browser/TV; show a clear tap prompt and keep the phone as audio master until the TV is unlocked.",
+    "example": "The host phone continues announcements while the TV waits for its first tap."
+  },
+  {
+    "num": 330,
+    "text": "347. Sound testing — Provide Test sound using the next level’s announcement and the device’s current volume.",
+    "example": "The host checks pronunciation and audibility before players arrive."
+  },
+  {
+    "num": 331,
+    "text": "348. Volume conflict — Original explicitly forbids an in-app volume slider and uses device volume; Reformed requires speech-synthesizer volume controls.",
+    "example": "The settings design must choose either device-only volume or an approved additional speech control."
+  },
+  {
+    "num": 332,
+    "text": "349. Haptics/awake — Provide optional level-change haptics, on by default, and keep the authority device and TV awake during an active clock when the setting is enabled.",
+    "example": "The host phone does not sleep halfway through a live level."
+  },
+  {
+    "num": 333,
+    "text": "350. Public tools — Offer a no-login hub with five free, unlimited, individually shareable calculators using the same engines; do not read or mutate group/game data implicitly.",
+    "example": "A visitor calculates prizes without creating a club."
+  },
+  {
+    "num": 334,
+    "text": "351. Blind generator — Accept players, target duration in 30-minute steps, pace and starting stack; defaults are 10 players, 4 hours and stack 400, with stack 100–20,000 in steps of 100.",
+    "example": "A visitor generates a Regular structure for 10 players over four hours."
+  },
+  {
+    "num": 335,
+    "text": "352. Blind generator — Show the complete ladder, antes, breaks, level/duration summary, Add level and a share link that restores inputs; Reformed also requires standard 300- and 500-chip-box support.",
+    "example": "Sharing the tool preserves the chosen chip-box scenario and target length."
+  },
+  {
+    "num": 336,
+    "text": "353. No-chip tools — When no inventory is supplied, use the reference nonbinding synthetic case/practical blind table; Quick blind targets opening BB near stack/100 on playable units.",
+    "example": "A 400-chip quick-blind input can suggest 2/4 without needing a saved chip set."
+  },
+  {
+    "num": 337,
+    "text": "354. Standalone clock — Provide a fullscreen countdown with blinds, ante, progress, next level/break, previous, play/pause, next, restart, editable levels and audio alerts.",
+    "example": "A visitor runs their own entered blind schedule without club features."
+  },
+  {
+    "num": 338,
+    "text": "355. Public ICM — Accept 2–9 players, their individual stacks and remaining prizes; reject a tenth player and show ICM amount/percentage, chip chop and total distributed.",
+    "example": "Stacks 8,000/5,000/2,000 and prizes 250/150/100 produce ICM about 197.44/171.61/130.95."
+  },
+  {
+    "num": 339,
+    "text": "356. Payout calculator — Accept at least two entries, buy-in 5–200 in steps of 5 and place choices with the engine recommendation; support fields of 100+ while retaining verified payout rules.",
+    "example": "A 24-entry event at buy-in 100 can show the owner’s three-place payout of 1,260/780/360."
+  },
+  {
+    "num": 340,
+    "text": "357. Payout reuse — Provide a signed-in, explicit Use this structure action that copies the calculated split into a new game’s payout override rather than silently changing an existing game.",
+    "example": "A host chooses a calculated payout when preparing a new event."
+  },
+  {
+    "num": 341,
+    "text": "358. Quick blind calculator — Provide the Reformed 30-second recommendation flow from players, stack 100–20,000 in steps of 100 and 2/3/4-hour targets; show starting blinds, level length and level count, with live updates and transfer to the full generator.",
+    "example": "A visitor starts with a fast recommendation and then opens its complete schedule."
+  },
+  {
+    "num": 342,
+    "text": "359. Profile — Show avatar, display name, membership date, own P&L, career statistics and achievements with icons; support editing the display name and changing/removing a photo.",
+    "example": "A user changes the name shown on seats and in future standings."
+  },
+  {
+    "num": 343,
+    "text": "360. Settings — Provide gameplay, sound/voice, local preferences, hosting defaults, game assets, blocked users, data and plan sections, plus Sign out and Delete account.",
+    "example": "A host changes default buy-in without editing a posted tournament."
+  },
+  {
+    "num": 344,
+    "text": "361. Hosting defaults — Store preferred ante bias, buy-in, stack option, format, payout mode, 4–10 table capacity, optional contribution proposal and deal threshold; seed new games/groups only.",
+    "example": "A new game starts with the host’s preferred freezeout format."
+  },
+  {
+    "num": 345,
+    "text": "362. Local preferences — Keep currency, audio, compact results, keep-awake and TV display settings per device; do not include the removed Hosting tour/app-tour setting in v1.",
+    "example": "The television uses larger text while the host phone retains its own sound preference."
+  },
+  {
+    "num": 346,
+    "text": "363. Currency — Default to no symbol; allow None, €, $ or £ as a display-only preference everywhere, with no exchange conversion and never a currency symbol on chip quantities.",
+    "example": "Selecting € changes 1,250 to €1,250 without changing its numerical value."
+  },
+  {
+    "num": 347,
+    "text": "364. Formatting — Use locale thousands separators and clock/date formats, preserve cents when present, never abbreviate money and limit chip abbreviations to permitted compact chip displays.",
+    "example": "A prize is shown as 1,250 rather than 1.3K."
+  },
+  {
+    "num": 348,
+    "text": "365. Localization — Ship English initially but put all strings in ARB resources from the start; format game times with locale and stored time-zone awareness.",
+    "example": "Another language can be added without rewriting hard-coded interface strings."
+  },
+  {
+    "num": 349,
+    "text": "366. Premium — Preserve Original’s free baseline: all public tools, unlimited tournaments/sync, one table, full level editing, all full deals, one default TV, fixed bounty, three templates, unlimited chip sets, cash and basic standings.",
+    "example": "A free host can negotiate an ICM deal without an upgrade."
+  },
+  {
+    "num": 350,
+    "text": "367. Premium — Original’s paid features are multiple tables, seasons/points, custom TV layouts and extra displays, Progressive/Mystery bounty controls, unlimited templates and graphs/history exports.",
+    "example": "The fourth saved template is identified as a Premium feature."
+  },
+  {
+    "num": 351,
+    "text": "368. Premium conflict — Reformed additionally places unlimited clubs, multi-season archives, custom TV branding and SMS alerts in Pro; Original’s exclusive entitlement list does not make clubs or SMS a paid requirement.",
+    "example": "The final feature matrix must resolve whether an SMS reminder and club creation need Pro."
+  },
+  {
+    "num": 352,
+    "text": "369. Premium prompts — Show upgrade entry from planned second-table demand, an explicitly chosen Premium control or Settings; never block an already-running game or prompt from capped quick start.",
+    "example": "A host evaluates the second-table upgrade days before the event."
+  },
+  {
+    "num": 353,
+    "text": "370. Progressive/Mystery scope — Show these Premium choices as Coming soon until their mechanics are approved; fixed KO payouts must work fully in v1.",
+    "example": "The app does not imply a functioning mystery-draw payout when only pricing/pot tracking exists."
+  },
+  {
+    "num": 354,
+    "text": "371. Plans — Provide Monthly, Yearly and one-time Host licence; read prices from store products, compute actual annual savings and exclude the one-time licence from subscription/trial comparisons.",
+    "example": "The yearly savings badge changes when store prices change."
+  },
+  {
+    "num": 355,
+    "text": "372. Trial conflict — Original’s unresolved-decision default is no trial with Continue; Reformed explicitly requires seven-day trial terms. Do not present an unapproved trial as settled policy.",
+    "example": "Checkout must display the trial wording corresponding to the approved product configuration."
+  },
+  {
+    "num": 356,
+    "text": "373. Checkout — Use native Apple/Google purchase sheets and an approved hosted web checkout; never build a card-entry form or store card details in the app.",
+    "example": "A mobile purchase opens the platform billing sheet."
+  },
+  {
+    "num": 357,
+    "text": "374. Entitlements — Validate purchases server-side, store the entitlement server-side, return to the originating feature after success and offer Restore purchases in Upgrade and Settings.",
+    "example": "Reinstalling the app can restore a valid Host licence."
+  },
+  {
+    "num": 358,
+    "text": "375. Entitlement scope — Premium belongs to the purchasing host account and applies to that host’s games; players need no purchase, and shared group-wide host entitlement remains unapproved.",
+    "example": "A Premium host’s guests can play at multiple tables without individual subscriptions."
+  },
+  {
+    "num": 359,
+    "text": "376. Privacy policy — Provide a public, dated policy listing collected account/game/chat/poll data, purposes, sharing limits, processors, storage region, retention, analytics/crashes, export/deletion rights, adults-only use and support contact.",
+    "example": "A user can inspect the policy before registering."
+  },
+  {
+    "num": 360,
+    "text": "377. Privacy — Do not sell personal data, use advertising trackers or create advertising profiles; implement GDPR/CCPA-oriented consent and data-control requirements.",
+    "example": "Game results are not sent into an advertising audience database."
+  },
+  {
+    "num": 361,
+    "text": "378. Consent records — Store versioned, timestamped history-learning consent with a per-group opt-out; do not use opted-out nights beyond their own necessary result records for calibration.",
+    "example": "Turning off group learning stops that club’s future data from tuning structures."
+  },
+  {
+    "num": 362,
+    "text": "379. Analytics — Collect only allowed product-usage events, never names, chat or ledger amounts; in the EU initialize Analytics only after Allow, with Not now and a later settings choice.",
+    "example": "A user declines analytics and can still run a tournament."
+  },
+  {
+    "num": 363,
+    "text": "380. Crash reporting — Disclose Crashlytics and diagnostic data in the policy and store privacy labels; retain crash reports for the specified 90-day period.",
+    "example": "A crash report identifies the error and device environment, not chat contents."
+  },
+  {
+    "num": 364,
+    "text": "381. Data export — Provide free personal JSON export of profile, memberships, results, chip sets, templates and own chat messages, distinct from Premium history/graph exports.",
+    "example": "A free user downloads their own personal data under Settings → Data."
+  },
+  {
+    "num": 365,
+    "text": "382. Account deletion — Delete user/auth documents, anonymize group finishes as Former member and chat authors as Deleted user, and clear group chip-set pointers to deleted personal sets.",
+    "example": "The club’s historical standings remain without exposing the deleted account’s identity."
+  },
+  {
+    "num": 366,
+    "text": "383. Deletion safety — Block deletion while the user hosts scheduled or running games, require ending or handing them over, and cancel solely owned drafts during deletion.",
+    "example": "A host transfers Friday’s event before deleting their account."
+  },
+  {
+    "num": 367,
+    "text": "384. Retention — Retain permitted group game/chat/audit data while the group exists; after 24 months of inactivity, warn the host 30 days ahead, archive the group and delete its chat.",
+    "example": "A host can prevent inactivity archival by resuming group activity."
+  },
+  {
+    "num": 368,
+    "text": "385. Terms — Publish adult-use, account-security, service limitations, user data ownership, acceptable/lawful use and Premium cancellation terms; describe a home-game clock/manager, not an online gambling/payment platform.",
+    "example": "The Terms explain that players settle real money outside the app."
+  },
+  {
+    "num": 369,
+    "text": "386. Organiser legal gate — Keep the contribution off by default and country-controlled; show the versioned H4 warning on first enabling, country changes or fee-bearing template imports, requiring I understand before Enable.",
+    "example": "Importing a template cannot silently bypass the organiser-fee warning."
+  },
+  {
+    "num": 370,
+    "text": "387. Legal acceptance — Record contribution-warning acceptance against the user with time, app version and copy version, not on a publicly shared game.",
+    "example": "A later copy revision can be distinguished from the warning the host originally accepted."
+  },
+  {
+    "num": 371,
+    "text": "388. Launch gate — Obtain gaming-lawyer approval per launch market, including specific Portuguese approval before a Portuguese release; do not treat document examples as legal clearance.",
+    "example": "A country’s organiser feature remains remotely disabled until approved."
+  },
+  {
+    "num": 372,
+    "text": "389. Support — Publish a contact address, one-business-day response commitment, expandable FAQs and Email us with visible version/platform/game-ID diagnostics and no undisclosed personal attachment.",
+    "example": "A user reports a recovery issue with the affected game ID prefilled."
+  },
+  {
+    "num": 373,
+    "text": "390. Support content — Explain quick/planned starts, recovery, cash settlement, prize visibility, no-money-movement limits and abuse reporting, matching the actual implemented behavior.",
+    "example": "The recovery FAQ tells the host how to resume the locally saved game."
+  },
+  {
+    "num": 374,
+    "text": "391. Lifecycle — Model draft, scheduled, running, paused, on-break, rebuy-hold, final-table, completed and cancelled states; keep drafts private and create quick games directly as running.",
+    "example": "An unpublished wizard draft is not visible to ordinary group members."
+  },
+  {
+    "num": 375,
+    "text": "392. Lifecycle — Tie check-in, RSVP cutoff, no-show handling, rebuy settlement and completion writes to explicit state transitions, not merely which screen is open.",
+    "example": "Closing the check-in page does not change whether an arrival is approved."
+  },
+  {
+    "num": 376,
+    "text": "393. House rules — Publish rebuy opening/closing, eligibility, limits, chip amount and add-on eligibility/timing explicitly; distinguish a rebuy, a new re-entry and a one-time add-on.",
+    "example": "Players know whether buying more chips while still holding a stack is permitted by that night’s rules."
+  },
+  {
+    "num": 377,
+    "text": "394. Architecture — Separate Flutter screens, domain app state, pure engines/permissions/projections, I/O services and model codecs; screens hold presentation state only.",
+    "example": "A widget calls a rebuy intent instead of directly mutating the cash ledger."
+  },
+  {
+    "num": 378,
+    "text": "395. Architecture — Keep all mutable domain state in one domain-split app-state layer, using the team’s selected Provider/Riverpod approach rather than independent conflicting screen stores.",
+    "example": "Undo and the live dashboard read the same authoritative player state."
+  },
+  {
+    "num": 379,
+    "text": "396. Engine port — Port the reference research structure and payouts engines function-for-function into pure Dart libraries with preserved names; never port the mock’s outdated embedded engine copies.",
+    "example": "generateStructure and payoutPlan retain matching behavior across JavaScript and Dart."
+  },
+  {
+    "num": 380,
+    "text": "397. Engine determinism — Engines, permissions and projections must take explicit values and return values without I/O or ambient clocks; inject required random inputs and use seeded Monte Carlo for repeatability.",
+    "example": "Recomputing a published structure from identical settings produces the same result."
+  },
+  {
+    "num": 381,
+    "text": "398. Engine compatibility — Preserve public engine helpers, constants, rounding rules, legacy behavior and engine-only APIs even when the v1 UI does not expose them; test the icmTrigger method separately from JSON serialization.",
+    "example": "Serializing structure data does not accidentally remove deal-trigger behavior from the Dart model."
+  },
+  {
+    "num": 382,
+    "text": "399. Backend — Use Firebase Authentication, Firestore, Functions, Hosting/universal links, Remote Config, Crashlytics, permitted Analytics and the approved push integration; enable App Check on Firestore and callable Functions.",
+    "example": "A callable code lookup without valid App Check is refused."
+  },
+  {
+    "num": 383,
+    "text": "400. Regional storage — Select the cloud region and disclose processors per approved launch market; use an EU Firebase region for EU launches.",
+    "example": "An EU launch uses the approved EU storage region rather than an unspecified default."
+  },
+  {
+    "num": 384,
+    "text": "401. Functions — Implement server responsibilities for transactional code reservation/joining, push fan-out, time-relative reminder scheduling, receipt validation, deletion, moderation, retention and required derived-result updates.",
+    "example": "A purchase receipt is verified on the backend rather than trusted from a phone flag."
+  },
+  {
+    "num": 385,
+    "text": "402. Models — Represent users, memberships, groups, tournaments, settings/overrides, players, RSVPs/waitlists, ledger, seating, clock, results, authority, deal-trigger history, templates, chip sets, cash sessions and seasons explicitly.",
+    "example": "A player’s paused state is distinct from their RSVP and ledger payment status."
+  },
+  {
+    "num": 386,
+    "text": "403. Overrides — Store null for engine-selected settings and explicit values for host overrides; every new input must pass through GameSettings, serialization and verification recomputation.",
+    "example": "A custom ante start remains an intentional override rather than being mistaken for tampering."
+  },
+  {
+    "num": 387,
+    "text": "404. Codec — Use one versioned codec for both cloud documents and recovery snapshots; read older versions losslessly, and prevent clients from becoming authority when a game uses a newer unsupported write version.",
+    "example": "An older app displays the game but asks for an update before taking over its clock."
+  },
+  {
+    "num": 388,
+    "text": "405. Storage — Keep user-owned results, chip sets, templates, inbox and server-written entitlements separate from groups, membership, group games/chats/polls/seasons, solo games, cash sessions, reports, code registry and public projections.",
+    "example": "A Solo game is stored under its host without inventing a group container."
+  },
+  {
+    "num": 389,
+    "text": "406. Private storage — Keep organiser contribution, gross financials and full audit in host-only private storage; expose only the minimum profile/membership fields required to other users.",
+    "example": "A co-host cannot read the private organiser record through a direct document request."
+  },
+  {
+    "num": 390,
+    "text": "407. Game roles — Resolve permissions per game from hostUid and coHostUids, copy group co-hosts when posting and let only the host manage game hosting assignments.",
+    "example": "The same person can host Tuesday’s game and be an ordinary player on Friday."
+  },
+  {
+    "num": 391,
+    "text": "408. Game creation — Assign a new planned game’s creator as that game’s host, including when they are otherwise an ordinary group member; keep game and group roles distinct.",
+    "example": "A member organizing Tuesday’s event gets host controls for that event, not ownership of the entire club."
+  },
+  {
+    "num": 392,
+    "text": "409. Permissions — Enforce capability checks in the UI and backend; hiding a button alone must never authorize or protect an operation.",
+    "example": "A crafted request from a player cannot alter blinds even if it bypasses the interface."
+  },
+  {
+    "num": 393,
+    "text": "410. Co-host write rules — Apply Addendum 1: on the game document, co-hosts may change only clock, control and ledger; players, requests and RSVPs use their own subcollection rules, while settings, hostUid and coHostUids remain host-only.",
+    "example": "A co-host’s direct settings write fails even though a permitted player update succeeds."
+  },
+  {
+    "num": 394,
+    "text": "411. Player requests — Members/guests may create or change only their own authorized RSVP/check-in/rebuy request fields; host/co-host approval is separate from a player writing authoritative game state.",
+    "example": "A player can request another entry without directly issuing themselves chips."
+  },
+  {
+    "num": 395,
+    "text": "412. Membership security — Create memberships only through server-side joinGroup(code), with validated codes and idempotence; allow host role updates/removal and a member’s own leave operation.",
+    "example": "A client cannot grant itself host membership by writing a member document."
+  },
+  {
+    "num": 396,
+    "text": "413. Premium security — Validate Premium-only writes against the host’s server-maintained entitlement, including multiple tables, seasons, Premium bounty settings and extra templates.",
+    "example": "Editing a local tier flag does not unlock a second table in backend rules."
+  },
+  {
+    "num": 397,
+    "text": "414. Projection security — Publish pre-stripped player/guest/TV data with an explicit key allowlist and authorized writer checks; never rely on client-side filtering of a readable full game.",
+    "example": "Adding an unexpected fee or ledger field to a public projection is rejected."
+  },
+  {
+    "num": 398,
+    "text": "415. Financial projections — Host/co-host may access permitted ledger detail, players/guests only their own owed rows, and TV none; do not place own-only rows in an unrestricted shared public ledger.",
+    "example": "Sam sees Sam’s outstanding buy-in but not Alex’s debt."
+  },
+  {
+    "num": 399,
+    "text": "416. Code generation — Generate six-character codes with cryptographic randomness, reserve them transactionally in one unique group/game/TV namespace, retry collisions and do not let hosts choose codes manually.",
+    "example": "A generated game code cannot collide with an existing group invite."
+  },
+  {
+    "num": 400,
+    "text": "417. Code security — Prohibit direct client reads/writes of the code registry and rate-limit counters; resolve via App-Check-protected callable logic returning only the necessary kind and target IDs.",
+    "example": "A visitor cannot enumerate every active game from Firestore."
+  },
+  {
+    "num": 401,
+    "text": "418. Code separation — Keep game and TV codes distinct so TV links cannot RSVP/check in; group-code re-roll must invalidate the old invite immediately.",
+    "example": "An old club invitation stops granting access as soon as the host re-rolls it."
+  },
+  {
+    "num": 402,
+    "text": "419. Code expiry — Expire/release game and TV codes and delete public live projections on completion or cancellation while retaining authorized results/history.",
+    "example": "A former live link reports that the game has ended rather than exposing stale live data."
+  },
+  {
+    "num": 403,
+    "text": "420. Single writer — Permit exactly one host/co-host device to write authoritative game/clock state; on web, elect only one leader tab per browser.",
+    "example": "Two tabs on the host’s laptop do not both advance the level."
+  },
+  {
+    "num": 404,
+    "text": "421. Authority heartbeat — Send a heartbeat every 30 seconds; allow eligible automatic claims when no editor exists or the editor has been stale over 90 seconds, otherwise remain a follower.",
+    "example": "A co-host can recover an abandoned clock after the stale threshold."
+  },
+  {
+    "num": 405,
+    "text": "422. Manual takeover — Always offer Take over or Watch only to another host/co-host device; claim authority transactionally, bump revision and make the old writer fall back to read-only when its next write fails.",
+    "example": "The host intentionally moves control from a phone to a tablet without waiting 90 seconds."
+  },
+  {
+    "num": 406,
+    "text": "423. Host handover — Let the host transfer game ownership to a co-host with confirmation, retaining the former host as co-host so the new host can confirm deals and results.",
+    "example": "The original host leaves early without leaving the tournament impossible to finish."
+  },
+  {
+    "num": 407,
+    "text": "424. Emergency takeover — When no co-host device is online and the authority has been silent 30 minutes, offer checked-in signed-in players a transactionally logged promotion to co-host and authority; exclude anonymous link guests.",
+    "example": "A checked-in member resumes control after the host phone dies."
+  },
+  {
+    "num": 408,
+    "text": "425. Clock synchronization — Estimate server offset as server−(t0+t1)/2 and show levelEndsAt−(now+offset); remeasure every 10 minutes and on resume, with followers advancing display only.",
+    "example": "A phone with an inaccurate local clock still shows the shared countdown."
+  },
+  {
+    "num": 409,
+    "text": "426. Write integrity — Every authoritative transaction checks editorDeviceId and expected revision, increments revision and uses an idempotency key; retries are no-ops rather than duplicate game actions.",
+    "example": "A network retry cannot add the same rebuy twice."
+  },
+  {
+    "num": 410,
+    "text": "427. Ledger idempotence — Use game/player/kind uniqueness for a buy-in or add-on, fresh keys for each legitimate rebuy/re-entry and game/player/bust/entry uniqueness for elimination.",
+    "example": "Double-tapping Add-on cannot create a second purchase or chip injection."
+  },
+  {
+    "num": 411,
+    "text": "428. Concurrent updates — Patch only owned fields for multi-writer RSVP, request and chat operations instead of replacing complete documents.",
+    "example": "One member’s RSVP change does not erase another person’s response."
+  },
+  {
+    "num": 412,
+    "text": "429. Offline — Enable Firestore persistence and a local RecoveryService snapshot store, using the Reformed SQLite/SecureStorage approach as appropriate; snapshot after every authoritative write.",
+    "example": "An offline rebuy is saved locally before the host continues play."
+  },
+  {
+    "num": 413,
+    "text": "430. Offline operation — Let a previously loaded authority device run the night and queue busts, rebuys, add-ons and check-ins in order; show a persistent offline banner and synchronize when connectivity returns.",
+    "example": "The host continues a full tournament after the venue loses internet."
+  },
+  {
+    "num": 414,
+    "text": "431. Offline limits — First-time device/code loading requires connectivity; followers continue counting from the last end timestamp and show Reconnecting rather than claiming fresh synchronized state.",
+    "example": "A new TV cannot join a completely offline venue until it briefly gets a connection."
+  },
+  {
+    "num": 415,
+    "text": "432. Reconnect conflicts — Reject queued actions targeting a superseded authority/revision rather than merging them; list unapplied actions so the host can review and redo valid ones.",
+    "example": "An offline phone does not overwrite a co-host’s later takeover and eliminations."
+  },
+  {
+    "num": 416,
+    "text": "433. Recovery — Restore game and cash-session snapshots after crash/restart, compare local and cloud freshness and recover the correct elapsed clock without data loss; Original offers Resume, while Reformed describes immediate resumption.",
+    "example": "Reopening the app recovers the running level rather than starting it again at full duration."
+  },
+  {
+    "num": 417,
+    "text": "434. Guest local storage — Retain guest identity/approved slot independently of Firebase anonymous-host authentication; clear only when explicitly switching guest identity or being removed.",
+    "example": "Refreshing a guest page does not create another player entry."
+  },
+  {
+    "num": 418,
+    "text": "435. Integrity verification — Recompute published structure from all settings and declared edits, including levels, breaks, cutoff and starting stack; verify against net prizes without exposing the private fee.",
+    "example": "An undeclared structural mismatch produces a host-only republish warning."
+  },
+  {
+    "num": 419,
+    "text": "436. Audit — Record action, actor, time, amount, structural changes, author and monotonic revision; retain edited-level markers and result-correction/hosting-transfer/extension history without exposing private audit data publicly.",
+    "example": "The host can inspect who corrected a payout and when."
+  },
+  {
+    "num": 420,
+    "text": "437. Integrity wording — Treat deterministic recomputation as a consistency check, not a cryptographic anti-cheating guarantee; avoid alarming player banners for host-side mismatch handling.",
+    "example": "Players see edited-level marks while the host receives the detailed mismatch prompt."
+  },
+  {
+    "num": 421,
+    "text": "438. Input safety — Normalize before storage by decoding entities, removing dangerous tags/HTML, collapsing whitespace, trimming and enforcing lengths; separately escape every rendered/share-image output.",
+    "example": "A name containing quotes displays safely in a generated action button."
+  },
+  {
+    "num": 422,
+    "text": "439. Input limits — Enforce 1–40-character names, 1–120-character poll questions, 1–60-character poll options and 1–1,000-character chat; preserve legitimate accents and apostrophes.",
+    "example": "“O’Brien” remains readable while markup embedded in a name is removed."
+  },
+  {
+    "num": 423,
+    "text": "440. Identity formatting — Disambiguate matching first names with a last-name initial and keep initials avatars separate from textual names.",
+    "example": "Two members called Alex appear as Alex M. and Alex R."
+  },
+  {
+    "num": 424,
+    "text": "441. Acceptance — Pass all 759 structure-engine and 55 payout-engine reference assertions before screens rely on the ports; compare actual computed results, not just matching API names.",
+    "example": "The demo structure and ICM examples match the supplied reference vectors."
+  },
+  {
+    "num": 425,
+    "text": "442. Acceptance — Reimplement applicable behaviors from all 145 mock tests as Flutter widget/integration tests; recognize T60, T101 and T145 as mock-specific rather than copying DOM/script checks into the app.",
+    "example": "The real app tests the guest exit flow instead of the mock’s HTML container structure."
+  },
+  {
+    "num": 426,
+    "text": "443. Acceptance — Add coverage for all 54 specified untested behaviors plus addendum/Reformed additions, including permissions, timing boundaries, settlement overtime, deletion, DST reminders and TV audio unlocking.",
+    "example": "Tests verify that unresolved add-on decisions remain available after the break ends."
+  },
+  {
+    "num": 427,
+    "text": "444. Acceptance — Preserve the 400-seeded-operation ladder-edit fuzz test and chip-payability regression scenarios; verify color-ups, pin refusal, duplicate actions and exact settlement minima.",
+    "example": "Random inserts/deletes never create an unpayable blind or a descending ladder."
+  },
+  {
+    "num": 428,
+    "text": "445. Acceptance — Test all applicable screen states and roles, real-background contrast, 44 px targets, keyboard/screen-reader behavior, 200% text scaling, visual sound equivalents and reduced motion.",
+    "example": "An automated check catches a small crimson label that fails contrast on its card background."
+  },
+  {
+    "num": 429,
+    "text": "446. Security testing — Maintain CI Firestore/Functions rule tests for every collection, public-projection keys/writers, code limits/App Check, co-host field restrictions, membership creation and server-side Premium enforcement.",
+    "example": "A rules test confirms a free host cannot submit an unauthorized second-table setting."
+  },
+  {
+    "num": 430,
+    "text": "447. Environments — Use separate owner-controlled Firebase dev, staging and production projects, each with the required services; test country legal flags in staging before enabling them in production.",
+    "example": "A staging organiser-fee test cannot change the production country configuration."
+  },
+  {
+    "num": 431,
+    "text": "448. CI/deployment — Run engine, widget/integration and rules suites on every pull request; deploy dev on merge, staging on release branches and production from tagged releases.",
+    "example": "A failing payout regression prevents the change from reaching a production release."
+  },
+  {
+    "num": 432,
+    "text": "449. Delivery milestones — Deliver the eight specified stages: engines; design/shell; runnable quick night; groups/RSVP/wizard; seating/deals/results; sync/co-host/offline/TV; cash/tools/account/sound; Premium/legal/onboarding/store readiness.",
+    "example": "The third milestone already lets the owner run a complete basic night."
+  },
+  {
+    "num": 433,
+    "text": "450. Milestone acceptance — Require passing relevant tests and engine vectors, no open staging crashes for those flows, design review and an owner walkthrough; payment is per accepted milestone.",
+    "example": "A milestone is accepted after the owner successfully walks its flows on staging."
+  },
+  {
+    "num": 434,
+    "text": "451. Design delivery — Build missing-board screens from the prose and shared components without blocking unrelated milestones, then reskin when approved tiles arrive.",
+    "example": "Group import can be implemented before a dedicated design tile is commissioned."
+  },
+  {
+    "num": 435,
+    "text": "452. Ownership — Keep code in the owner’s Git repository from the first commit; Firebase projects, developer accounts and domain belong to the owner with team access delegated.",
+    "example": "The owner retains direct access to the source and production project throughout development."
+  },
+  {
+    "num": 436,
+    "text": "453. Commercial handoff — Supply a price and duration per milestone, team, assumptions and one written questions list; use documented “build meanwhile” defaults for unresolved choices unless the owner decides otherwise.",
+    "example": "A quote separates the sync milestone from the cash/tools milestone."
+  },
+  {
+    "num": 437,
+    "text": "454. Change control — Version the specification/mock/engine baseline with SHA-256 references and dated changes; scope additions require written description, quotation and agreement before work starts.",
+    "example": "A new manual-seat-dragging request is approved explicitly rather than silently added to v1."
+  },
+  {
+    "num": 438,
+    "text": "455. Store submission — Initially ship with organiser contribution remotely off; use the prescribed timer/calculator positioning, no “rake,” “cut,” “bet” or “gamble” marketing keywords, and truthful review notes about recorded rather than collected buy-ins.",
+    "example": "App-review notes explain that no wagering or user-to-user payments occur in the product."
+  },
+  {
+    "num": 439,
+    "text": "456. Store readiness — Answer age/content questionnaires truthfully, target the specified 17+/Mature store positioning alongside the 18+ service gate, provide accurate privacy labels, moderation/contact features and validated store billing.",
+    "example": "A submission includes Report/Block support and declares Analytics and diagnostics accurately."
+  },
+  {
+    "num": 440,
+    "text": "457. Release — Obtain legal and owner sign-off, maintain consistent submission records, and release the web build first if store approval delays the common-codebase launch.",
+    "example": "The browser game manager can launch without pretending that unapproved mobile apps are already available."
+  }
+]

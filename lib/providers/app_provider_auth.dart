@@ -143,6 +143,11 @@ extension AppProviderAuth on AppProvider {
       final prefs = await _repo.loadUserPrefs(uid);
       final voice = prefs['voiceEnabled'];
       if (voice is bool) _voiceEnabled = voice;
+      final vol = prefs['voiceVolume'];
+      if (vol is num) {
+        _voiceVolume = vol.toDouble();
+        VoiceService.instance.setVolume(_voiceVolume);
+      }
       final haptics = prefs['hapticsEnabled'];
       if (haptics is bool) _hapticsEnabled = haptics;
       // D9 consent. Absent means never answered, which is a "no" — the
@@ -399,6 +404,15 @@ extension AppProviderAuth on AppProvider {
   bool get deleteNeedsPassword => _repo.deleteNeedsPassword;
 
   Future<String?> deleteAccount({String? password}) async {
+    final live = _currentGame;
+    if (live != null &&
+        isAdmin &&
+        (live.status == LiveGameStatus.running ||
+         live.status == LiveGameStatus.paused ||
+         live.status == LiveGameStatus.onBreak ||
+         live.status == LiveGameStatus.finaltable)) {
+      return 'End or hand over your live games first.';
+    }
     try {
       await _repo.deleteAccount(password: password);
     } on fa.FirebaseAuthException catch (e) {
@@ -429,6 +443,8 @@ extension AppProviderAuth on AppProvider {
     _currentGame = null;
     _cashSession = null;
     _guestSession = null;
+    _currentGroup = AppProvider._kEmptyGroup;
+    _notifications = const [];
     _restoredFromRecovery = false;
     _recoveryTime = null;
     RecoveryService.clearGame();

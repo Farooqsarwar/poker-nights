@@ -65,7 +65,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
     (free: 'One TV display', premium: 'Custom TV layouts & more displays'),
     (free: 'Basic standings', premium: 'Graphs & exportable history'),
     (free: '3 saved templates', premium: 'Unlimited saved templates'),
-    (free: 'Fixed bounties', premium: 'Progressive & Mystery bounties'),
+    (free: 'Fixed bounties', premium: 'Golden envelopes & Mystery bounties'),
     (free: 'Public tools, no account', premium: 'Seasons & points leaderboards'),
   ];
 
@@ -367,7 +367,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
       ),
       (
         icon: Icons.military_tech_outlined,
-        title: 'Progressive & Mystery bounties',
+        title: 'Golden envelopes & Mystery bounties',
         desc: 'Bounties that increase with each knockout (PKO) or custom mystery bounty prize pools.',
         actionLabel: 'Configure Bounties',
         onTap: () => context.push(RoutePaths.createTournament),

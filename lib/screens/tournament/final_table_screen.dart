@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../../providers/app_provider.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/svg_countdown_ring.dart';
 
 class _SeatEntry {
   _SeatEntry({required this.id, required this.name, required this.seat});
@@ -29,7 +31,7 @@ class FinalTableScreen extends StatefulWidget {
   State<FinalTableScreen> createState() => _FinalTableScreenState();
 }
 
-class _FinalTableScreenState extends State<FinalTableScreen> {
+class _FinalTableScreenState extends State<FinalTableScreen> with SingleTickerProviderStateMixin {
   final _random = Random();
   List<_SeatEntry> _seating = [];
   bool _confirmed = false;
@@ -41,6 +43,10 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
   /// with the redraw and adjustable by the admin before confirming
   /// (Tech spec §12.3: the redraw creates the seats AND the dealer position).
   String? _dealerId;
+
+  /// Timer for the level countdown
+  Timer? _levelTimer;
+  late AnimationController _levelProgressController;
 
   @override
   void initState() {
@@ -60,6 +66,40 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
           : finalists[_random.nextInt(finalists.length)].id;
       _selectedId = _dealerId ?? (_seating.isNotEmpty ? _seating.first.id : null);
     }
+
+    // Initialize level progress animation
+    _levelProgressController = AnimationController(
+      duration: const Duration(seconds: 1),
+      vsync: this,
+    );
+    _startLevelTimer();
+  }
+
+  @override
+  void dispose() {
+    _levelTimer?.cancel();
+    _levelProgressController.dispose();
+    super.dispose();
+  }
+
+  void _startLevelTimer() {
+    _levelTimer?.cancel();
+    final app = context.read<AppProvider>();
+    final game = app.currentGame;
+    if (game == null) return;
+
+    final level = game.currentLevel;
+    final structure = game.structure;
+    if (level > structure.levels.length) return;
+
+    final levelDuration = structure.levels[level - 1].durationMins * 60;
+    _levelProgressController.duration = Duration(seconds: levelDuration);
+    _levelProgressController.forward(from: 0.0);
+
+    _levelTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {});
+    });
   }
 
   void _swapSeats(String draggedId, String targetId) {
@@ -110,32 +150,33 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
+    try {
+      final app = context.watch<AppProvider>();
 
-    // Spec §3.3: Only admin can run final table.
-    if (!app.isAdmin) {
-      return const Scaffold(
-        body: Center(child: Text('Host access required.')),
-      );
-    }
+      // Spec §3.3: Only admin can run final table.
+      if (!app.isAdmin) {
+        return const Scaffold(
+          body: Center(child: Text('Host access required.')),
+        );
+      }
 
-    final game = app.currentGame;
+      final game = app.currentGame;
 
-    if (game == null) {
-      // No game in provider — redirect back to dashboard instead of
-      // showing a blank screen dead-end.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.go(RoutePaths.hostDashboard);
-      });
-      return const SizedBox.shrink();
-    }
+      if (game == null) {
+        // No game in provider — redirect back to dashboard instead of
+        // showing a blank screen dead-end.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.go(RoutePaths.hostDashboard);
+        });
+        return const SizedBox.shrink();
+      }
 
-    final tooMany = game.activePlayers.length > 9;
-    final selectedEntry = _seating.where((s) => s.id == _selectedId).firstOrNull;
+      final tooMany = game.activePlayers.length > 9;
+      final selectedEntry = _seating.where((s) => s.id == _selectedId).firstOrNull;
 
-    return AppPage(
-      maxWidth: 500,
-      padding: const EdgeInsets.symmetric(
+      return AppPage(
+        maxWidth: 500,
+        padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
         vertical: AppSpacing.md,
       ),
@@ -202,11 +243,25 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
                   ),
                 ],
               ),
+),
             ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.sm),
 
-          // Title: Redraw the seats
+            // SVG Countdown Ring for level progress
+            AnimatedBuilder(
+              animation: _levelProgressController,
+              builder: (context, child) {
+                return Center(
+                  child: SvgCountdownRing(
+                    progress: _levelProgressController.value,
+                    scale: 1.5,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.sm),
+
+            // Title: Redraw the seats
           Text(
             'Redraw the seats',
             textAlign: TextAlign.center,
@@ -275,6 +330,8 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
             ),
             const SizedBox(height: AppSpacing.lg),
 
+            _FinalistLeaderboard(game: game),
+            const SizedBox(height: AppSpacing.lg),
             // Active Seat Card: Player assignment & Dealer toggle
             if (selectedEntry != null)
               Container(
@@ -447,6 +504,10 @@ class _FinalTableScreenState extends State<FinalTableScreen> {
         ],
       ),
     );
+    } catch (e, stack) {
+      print('BUILD EXCEPTION: $e\n$stack');
+      rethrow;
+    }
   }
 }
 
@@ -506,10 +567,6 @@ class _PokerTableVisual extends StatelessWidget {
             height: ringRadius * 2,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.primary,
-                width: 2.5,
-              ),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.primary.withValues(alpha: 0.4),
@@ -661,5 +718,92 @@ class _RadialSeatNode extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+
+class _FinalistLeaderboard extends StatelessWidget {
+  const _FinalistLeaderboard({required this.game});
+
+  final dynamic game; // LiveGame or Game
+
+  @override
+  Widget build(BuildContext context) {
+    try {
+      final active = List<dynamic>.from(game.activePlayers);
+      active.sort((dynamic a, dynamic b) => (b.stack ?? 0).compareTo(a.stack ?? 0) as int);
+      final int rawBb = (game.structure.levels.isNotEmpty && game.currentLevel > 0 && game.currentLevel <= game.structure.levels.length)
+          ? game.structure.levels[game.currentLevel - 1].bb
+          : (game.structure.levels.isNotEmpty ? game.structure.levels.first.bb : 100);
+      final bb = rawBb > 0 ? rawBb : 100;
+
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'CHIP LEADERBOARD',
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.mutedForeground,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (var i = 0; i < active.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 24,
+                    child: Text(
+                      '${i + 1}',
+                      style: AppTypography.monoSm.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      active[i].name,
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(
+                    '${(active[i].stack ?? 0)}',
+                    style: AppTypography.monoSm,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  SizedBox(
+                    width: 48,
+                    child: Text(
+                      '${((active[i].stack ?? 0) / bb).toStringAsFixed(1)} BB',
+                      textAlign: TextAlign.right,
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    } catch (e, stack) {
+      print('LEADERBOARD EXCEPTION: $e\n$stack');
+      rethrow;
+    }
   }
 }

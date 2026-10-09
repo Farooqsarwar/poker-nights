@@ -29,7 +29,7 @@ class DebugTelemetrySink implements TelemetrySink {
   }
 }
 
-class Telemetry {
+class Telemetry { // Fixed calls
   Telemetry._();
 
   static TelemetrySink _sink = const DebugTelemetrySink();

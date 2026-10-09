@@ -94,6 +94,7 @@ class GameSettings {
     this.hardFinishEnabled = false,
     this.hardFinishMinsAfterFinish = 60,
     this.hardFinishSplit = 'icm',
+    this.dealThreshold = 5,
   });
 
   final String name;
@@ -265,6 +266,10 @@ class GameSettings {
   final int hardFinishMinsAfterFinish;
   final String hardFinishSplit;
 
+  /// Minimum players remaining to show the Deal screen (spec §F2.2).
+  /// Configurable 2-5, default 5.
+  final int dealThreshold;
+
   /// §11.4 Stage A. Mirrors [TournamentParams.effectiveShootoutTables] so live
   /// seating (§26.1) can split a shootout field into the SAME table count the
   /// structure was generated for, instead of re-deriving it from
@@ -407,6 +412,7 @@ class GameSettings {
     bool? hardFinishEnabled,
     int? hardFinishMinsAfterFinish,
     String? hardFinishSplit,
+    int? dealThreshold,
 
     /// Per-field clears. A null above means "unchanged", which is right for a
     /// partial update but leaves no way to hand one decision back to the
@@ -418,6 +424,7 @@ class GameSettings {
     bool clearShootoutTableTargetMins = false,
     bool clearEarlyArrivalCutoffMins = false,
     bool clearEarlyArrivalBonusPctOverride = false,
+    bool clearRebuyLimit = false,
 
     /// Sends every generation override back to the engine default in one call,
     /// which is what the Parameters tab's "Reset" does. Individual nulls above
@@ -438,7 +445,7 @@ class GameSettings {
       rebuys: rebuys ?? this.rebuys,
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
       rebuyCloseChosenByOrganizer: rebuyCloseChosenByOrganizer ?? this.rebuyCloseChosenByOrganizer,
-      rebuyLimit: rebuyLimit ?? this.rebuyLimit,
+      rebuyLimit: clearRebuyLimit ? null : (rebuyLimit ?? this.rebuyLimit),
       reEntry: reEntry ?? this.reEntry,
       addOn: addOn ?? this.addOn,
       addOnOvertime: addOnOvertime ?? this.addOnOvertime,
@@ -516,6 +523,7 @@ class GameSettings {
       hardFinishMinsAfterFinish:
           hardFinishMinsAfterFinish ?? this.hardFinishMinsAfterFinish,
       hardFinishSplit: hardFinishSplit ?? this.hardFinishSplit,
+      dealThreshold: dealThreshold ?? this.dealThreshold,
     );
   }
 

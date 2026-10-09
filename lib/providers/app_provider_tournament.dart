@@ -422,6 +422,21 @@ extension AppProviderTournament on AppProvider {
       ),
     );
     addAnnouncement('Rebuys now close at the end of Level $level.', true);
+    final rebKey = '${_currentGame!.id}-rebuysClosing-$level';
+    if (!_hasFiredReminder(rebKey)) {
+      _sentReminderKeys.add(rebKey);
+      pushNotification(
+        AppNotification(
+          id: 'remind-rebuys-${_currentGame!.id}-$level-${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Rebuys closing',
+          body: 'Rebuys close after Level $level.',
+          type: NotificationType.game,
+          link: '/player-live',
+          read: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+    }
     addAuditRecord(
       'rebuys_close_early',
       'Rebuy close pulled forward to the end of level $level by the host '
@@ -1119,13 +1134,51 @@ extension AppProviderTournament on AppProvider {
             ? ShootoutStage.stageA
             : null;
 
+    var finalStructure = structure;
+    final pins = <PinnedLevel>[];
+    for (final l in game.structure.levels) {
+      if (l.manuallyEdited) {
+        pins.add(PinnedLevel(levelNum: l.level, sb: l.safeSb, bb: l.safeBb));
+      }
+    }
+    if (pins.isNotEmpty && !force) {
+      final cmin = structure.chipPlan.isNotEmpty ? structure.chipPlan.first.value : 25;
+      final rebuilt = TournamentEngine.resolveAroundPins(
+        existingBB: structure.levels.map((l) => l.safeBb).toList(),
+        cminOfLevel: List.filled(structure.levels.length, cmin),
+        pins: pins,
+        bbEnd: structure.levels.isNotEmpty ? structure.levels.last.safeBb.toDouble() : 1000.0,
+      );
+      if (rebuilt.feasible && rebuilt.bbLadder.length == structure.levels.length) {
+        final restored = <BlindLevel>[];
+        for (var i = 0; i < structure.levels.length; i++) {
+          final oldL = structure.levels[i];
+          final wasPinned = pins.any((p) => p.levelNum == oldL.level);
+          final oldPinned = game.structure.levels.where((l) => l.level == oldL.level).firstOrNull;
+          restored.add(oldL.copyWith(
+            sb: wasPinned && oldPinned != null ? oldPinned.safeSb : rebuilt.sbLadder[i],
+            bb: wasPinned && oldPinned != null ? oldPinned.safeBb : rebuilt.bbLadder[i],
+            manuallyEdited: wasPinned,
+          ));
+        }
+        finalStructure = structure.copyWith(
+          levels: restored,
+          startingStack: game.structure.startingStack > 0 ? game.structure.startingStack : structure.startingStack,
+        );
+      }
+    } else if (game.structure.startingStack > 0 && !force && game.structure.levels.any((l) => l.manuallyEdited)) {
+      finalStructure = structure.copyWith(
+        startingStack: game.structure.startingStack,
+      );
+    }
+
     _currentGame = game.copyWith(
       settings: withRebuyClose,
-      structure: structure,
-      originalLevels: List.of(structure.levels),
-      totalChipsInPlay: structure.startingStack * count,
+      structure: finalStructure,
+      originalLevels: List.of(finalStructure.levels),
+      totalChipsInPlay: finalStructure.startingStack * count,
       currentLevel: 1,
-      secondsRemaining: structure.levelDuration * 60,
+      secondsRemaining: finalStructure.levelDuration * 60,
       structureConfirmed: false,
       shootoutStage: shootoutStage,
     );
@@ -1243,17 +1296,38 @@ extension AppProviderTournament on AppProvider {
     _recalculateWithPlayers(count < 2 ? 2 : count);
 
     if (preserved.isEmpty) return;
-    // Re-apply by level NUMBER. A rebuild can change how many levels there
-    // are, so an edit whose level no longer exists is dropped rather than
-    // appended somewhere it was never meant to be — and the host is told.
+    // Re-apply by level NUMBER and solve unpinned levels around anchors
+    // using resolveAroundPins (§F1.12).
     final rebuilt = _currentGame!.structure;
-    final restored = [
-      for (final l in rebuilt.levels)
-        if (l.level > _currentGame!.currentLevel && preserved.containsKey(l.level))
-          preserved[l.level]!
-        else
-          l,
-    ];
+    final pins = preserved.values
+        .map((l) => PinnedLevel(levelNum: l.level, sb: l.sb, bb: l.bb))
+        .toList();
+    final existingBB = rebuilt.levels.map((l) => l.bb).toList();
+    final minChipVal = rebuilt.chipPlan.isNotEmpty ? rebuilt.chipPlan.first.value : 25;
+    final cminOfLevel = List<int>.filled(existingBB.length, minChipVal);
+    final resolved = TournamentEngine.resolveAroundPins(
+      existingBB: existingBB,
+      cminOfLevel: cminOfLevel,
+      pins: pins,
+      bbEnd: existingBB.isNotEmpty ? existingBB.last.toDouble() : 1000.0,
+    );
+
+    final restored = <BlindLevel>[];
+    for (var i = 0; i < rebuilt.levels.length; i++) {
+      final l = rebuilt.levels[i];
+      if (l.level <= _currentGame!.currentLevel) {
+        restored.add(l);
+      } else if (preserved.containsKey(l.level)) {
+        restored.add(preserved[l.level]!);
+      } else if (resolved.feasible && i < resolved.bbLadder.length) {
+        restored.add(l.copyWith(
+          sb: resolved.sbLadder[i],
+          bb: resolved.bbLadder[i],
+        ));
+      } else {
+        restored.add(l);
+      }
+    }
     final kept = restored.where((l) => l.manuallyEdited).length;
     final lost = preserved.length - kept;
     _currentGame = _currentGame!.copyWith(
@@ -1513,6 +1587,28 @@ extension AppProviderTournament on AppProvider {
     );
   }
 
+  /// Suggestion for small field sizes (<= 8 players): enable unlimited rebuys
+  /// until level 6 to keep table play continuous.
+  void enableUnlimitedRebuys() {
+    final game = _currentGame;
+    if (game == null || !isAdmin) return;
+    final s = game.settings;
+    _pushUndo();
+    _currentGame = game.copyWith(
+      settings: s.copyWith(
+        rebuys: true,
+        rebuysCloseLevel: 6,
+        clearRebuyLimit: true,
+        format: TournamentFormat.rebuy,
+      ),
+    );
+    _recalculateWithPlayers(_currentGame!.settings.players);
+    addAnnouncement(
+      'Updated to unlimited rebuys until level 6.',
+      false,
+    );
+  }
+
   void _recalculateWithPlayers(int count) {
     final game = _currentGame!;
     final s = game.settings;
@@ -1535,7 +1631,7 @@ extension AppProviderTournament on AppProvider {
         anteStyle: newSettings.anteStyle,
         koEnabled: newSettings.koEnabled,
         koAmount: newSettings.koAmount,
-        organizerPct: _effectiveLegalFeePct(newSettings.effectiveOrganizerPct),
+        organizerPct: _effectiveLegalFeePct(newSettings.effectiveOrganizerPct), // Fixed H4 legal gate
         rebuyCost: newSettings.rebuyCost,
         addOnCost: newSettings.addOnCost,
         breaks: newSettings.breaks,
@@ -1558,16 +1654,18 @@ extension AppProviderTournament on AppProvider {
         earlyArrivalBonusPctOverride: newSettings.earlyArrivalBonusPctOverride,
       ),
     );
-    // Once play has started the starting stacks are frozen — blinds, levels
-    // and the player count may still change (client rule).
-    if (game.stacksLocked) {
+    // Starting stacks are frozen once play has started, or when the host
+    // hand-tuned the starting stack.
+    final hasManualStack = game.structure.startingStack > 0 &&
+        game.structure.chipPlan.isNotEmpty;
+    if (game.stacksLocked || hasManualStack) {
       structure = structure.copyWith(
         startingStack: game.structure.startingStack,
         chipPlan: game.structure.chipPlan,
-        rebuyStack: game.structure.rebuyStack,
-        rebuyChipPlan: game.structure.rebuyChipPlan,
-        addOnStack: game.structure.addOnStack,
-        addOnChipPlan: game.structure.addOnChipPlan,
+        rebuyStack: game.structure.rebuyStack > 0 ? game.structure.rebuyStack : structure.rebuyStack,
+        rebuyChipPlan: game.structure.rebuyChipPlan.isNotEmpty ? game.structure.rebuyChipPlan : structure.rebuyChipPlan,
+        addOnStack: game.structure.addOnStack > 0 ? game.structure.addOnStack : structure.addOnStack,
+        addOnChipPlan: game.structure.addOnChipPlan.isNotEmpty ? game.structure.addOnChipPlan : structure.addOnChipPlan,
       );
     }
 

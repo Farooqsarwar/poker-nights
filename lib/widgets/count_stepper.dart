@@ -24,6 +24,7 @@ class CountStepper extends StatelessWidget {
     this.min = 0,
     this.max = 999,
     this.step = 1,
+    this.quickSteps = const [],
     this.suffix,
     this.semanticLabel,
   });
@@ -33,6 +34,7 @@ class CountStepper extends StatelessWidget {
   final int min;
   final int max;
   final int step;
+  final List<int> quickSteps;
 
   /// Rendered after the number, e.g. "players".
   final String? suffix;
@@ -49,45 +51,79 @@ class CountStepper extends StatelessWidget {
     return Semantics(
       label: semanticLabel,
       value: '$value',
-      child: Container(
-        decoration: BoxDecoration(
-          color: Glass.solidTint(AppColors.secondary),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _StepperButton(
-              icon: Icons.remove,
-              enabled: value > min,
-              onTap: () => _nudge(-step),
-              tooltip: 'Decrease',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Glass.solidTint(AppColors.secondary),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.border),
             ),
-            ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 56),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _StepperButton(
+                  icon: Icons.remove,
+                  enabled: value > min,
+                  onTap: () => _nudge(-step),
+                  tooltip: 'Decrease',
                 ),
-                child: Text(
-                  suffix == null ? '$value' : '$value $suffix',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodyStyle.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.foreground,
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 56),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                    ),
+                    child: Text(
+                      suffix == null ? '$value' : '$value $suffix',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodyStyle.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.foreground,
+                      ),
+                    ),
+                  ),
+                ),
+                _StepperButton(
+                  icon: Icons.add,
+                  enabled: value < max,
+                  onTap: () => _nudge(step),
+                  tooltip: 'Increase',
+                ),
+              ],
+            ),
+          ),
+          if (quickSteps.isNotEmpty) ...[
+            const SizedBox(width: AppSpacing.xs),
+            for (final qs in quickSteps)
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: InkWell(
+                  onTap: () => _nudge(qs),
+                  borderRadius: BorderRadius.circular(AppRadius.xs),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
+                      border: Border.all(color: AppColors.borderSubtle),
+                    ),
+                    child: Text(
+                      '+$qs',
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-            _StepperButton(
-              icon: Icons.add,
-              enabled: value < max,
-              onTap: () => _nudge(step),
-              tooltip: 'Increase',
-            ),
           ],
-        ),
+        ],
       ),
     );
   }

@@ -64,6 +64,10 @@ extension AppProviderTimer on AppProvider {
   void _startTick() {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      _remindersTickCount++;
+      if (_remindersTickCount % 15 == 0) {
+        _checkScheduledReminders();
+      }
       if (_currentGame == null || !_currentGame!.timerRunning) return;
       int remaining;
       if (_currentGame!.levelEndTime != null) {
@@ -316,7 +320,7 @@ extension AppProviderTimer on AppProvider {
   }
 
   void startTimer({List<String> noShowIds = const []}) {
-    if (_currentGame == null || (!isAdmin && !canOperateTheClock)) return;
+    if (_currentGame == null || (!isAdmin && !isCoAdmin && !canOperateTheClock)) return;
     _startTick();
     _forceClaimEditor();
 
@@ -596,6 +600,23 @@ extension AppProviderTimer on AppProvider {
         _currentGame!.settings.rebuys &&
         wasBelowRebuyClose &&
         nowAtOrAboveRebuyClose;
+    if (_currentGame!.settings.rebuys && next == _currentGame!.settings.rebuysCloseLevel) {
+      final rebKey = '${_currentGame!.id}-rebuysClosing-$next';
+      if (!_hasFiredReminder(rebKey)) {
+        _sentReminderKeys.add(rebKey);
+        pushNotification(
+          AppNotification(
+            id: 'remind-rebuys-${_currentGame!.id}-$next-${DateTime.now().millisecondsSinceEpoch}',
+            title: 'Rebuys closing',
+            body: 'Rebuys close after Level $next.',
+            type: NotificationType.game,
+            link: '/player-live',
+            read: false,
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
+    }
     if (shouldPauseRebuy) {
       final level = (next <= _currentGame!.structure.levels.length)
           ? _currentGame!.structure.levels[next - 1]
@@ -804,5 +825,92 @@ extension AppProviderTimer on AppProvider {
     );
     addAnnouncement('Level ${game.currentLevel} restarted.', true);
     if (!_disposed) notifyListeners();
+  }
+
+  /// Evaluates and fires scheduled reminders that would otherwise require
+  /// Cloud Tasks (free-plan client-side automation):
+  /// 1. "Starts in 30 min" (30 minutes before scheduledStart)
+  /// 2. "RSVP deadline" (at rsvpDeadline)
+  /// 3. "rebuys closing" (when rebuysClosingArmed is active)
+  void _checkScheduledReminders() {
+    final candidateGames = <LiveGame>[
+      ?_currentGame,
+      ..._currentGroup.games,
+    ];
+    final seenGameIds = <String>{};
+
+    for (final game in candidateGames) {
+      if (!seenGameIds.add(game.id)) continue;
+
+      // 1. "Starts in 30 min"
+      if (!game.status.isActiveLive &&
+          game.status != LiveGameStatus.completed &&
+          game.status != LiveGameStatus.cancelled) {
+        final start = game.settings.scheduledStart;
+        if (start != null) {
+          final diff = start.difference(_serverNow);
+          if (diff.inSeconds > 0 && diff.inMinutes <= 30) {
+            final key = '${game.id}-starts30';
+            if (!_hasFiredReminder(key)) {
+              _sentReminderKeys.add(key);
+              pushNotification(
+                AppNotification(
+                  id: 'remind-30-${game.id}-${DateTime.now().millisecondsSinceEpoch}',
+                  title: 'Starts in 30 min',
+                  body: '${game.settings.name} starts in 30 min — check in to keep your seat.',
+                  type: NotificationType.game,
+                  link: '/check-in',
+                  read: false,
+                  timestamp: DateTime.now(),
+                ),
+              );
+            }
+          }
+        }
+
+        // 2. "RSVP deadline"
+        final deadline = game.settings.rsvpDeadline;
+        if (deadline != null) {
+          final diff = deadline.difference(_serverNow);
+          if (diff.inSeconds <= 0 &&
+              _serverNow.isBefore(game.settings.scheduledStart ?? _serverNow.add(const Duration(days: 1)))) {
+            final key = '${game.id}-rsvp';
+            if (!_hasFiredReminder(key)) {
+              _sentReminderKeys.add(key);
+              pushNotification(
+                AppNotification(
+                  id: 'remind-rsvp-${game.id}-${DateTime.now().millisecondsSinceEpoch}',
+                  title: 'RSVP deadline',
+                  body: 'RSVP deadline has arrived for ${game.settings.name}.',
+                  type: NotificationType.rsvp,
+                  link: '/invitation',
+                  read: false,
+                  timestamp: DateTime.now(),
+                ),
+              );
+            }
+          }
+        }
+      }
+
+      // 3. "rebuys closing"
+      if (game.settings.rebuys && game.rebuysClosingArmed) {
+        final key = '${game.id}-rebuysClosing-${game.currentLevel}';
+        if (!_hasFiredReminder(key)) {
+          _sentReminderKeys.add(key);
+          pushNotification(
+            AppNotification(
+              id: 'remind-rebuys-${game.id}-${game.currentLevel}-${DateTime.now().millisecondsSinceEpoch}',
+              title: 'Rebuys closing',
+              body: 'Rebuys close after Level ${game.settings.rebuysCloseLevel}.',
+              type: NotificationType.game,
+              link: '/player-live',
+              read: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        }
+      }
+    }
   }
 }

@@ -404,8 +404,9 @@ class _ChipRow extends StatelessWidget {
                   CountStepper(
                     value: chip.quantity,
                     min: 1,
-                    max: 500,
+                    max: 1000,
                     step: 5,
+                    quickSteps: const [25, 50, 100],
                     semanticLabel: '${chip.color} chips owned',
                     onChanged: onQuantity,
                   ),

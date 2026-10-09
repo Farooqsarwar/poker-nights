@@ -616,6 +616,13 @@ service cloud.firestore {
             && request.auth.uid == uid
             && sessionId == request.resource.data.get('id', '');
       }
+
+      match /soloTournaments/{tournamentId} {
+        allow read, delete: if signedIn() && request.auth.uid == uid;
+        allow create, update: if signedIn()
+            && request.auth.uid == uid
+            && tournamentId == request.resource.data.get('id', '');
+      }
     }
 
     // ---------- groups ----------
@@ -979,7 +986,7 @@ service cloud.firestore {
       // the admin "add member by email" flow would still find the dead uid.
       // The row stores `uid`, so ownership is checkable exactly as `update`
       // already does.
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && (resource == null || resource.data.uid == request.auth.uid);
     }
 
     // ---------- pending member invites (free-plan replacement) ----------

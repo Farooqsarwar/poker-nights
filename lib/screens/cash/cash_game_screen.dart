@@ -30,21 +30,26 @@ class CashGameScreen extends StatefulWidget {
 
 class _CashGameScreenState extends State<CashGameScreen> {
   static const _stakes = <(String, double, double)>[
-    ('0.05 / 0.10', 0.05, 0.10),
     ('0.5 / 1', 0.5, 1),
     ('1 / 2', 1, 2),
     ('2 / 5', 2, 5),
+    ('10 / 20', 10, 20),
+    ('15 / 30', 15, 30),
+    ('20 / 40', 20, 40),
+    ('25 / 50', 25, 50),
   ];
 
   final _name = TextEditingController(text: 'Cash game');
   final _minBuyIn = TextEditingController(text: '100');
   final _maxBuyIn = TextEditingController(text: '500');
   final _chipValue = TextEditingController(text: '1');
+  final _customSb = TextEditingController(text: '1');
+  final _customBb = TextEditingController(text: '2');
   bool _trackSettlement = true;
   String? _selectedChipSetId;
 
-  // Selected preset stake index: 0 = 0.05/0.10, 1 = 0.5/1, 2 = 1/2, 3 = 2/5, -1 = custom.
-  int _selectedStakeIndex = 2;
+  // Selected preset stake index: 0 = 1/2, 1 = 2/5, 2 = 10/20, 3 = 15/30, 4 = 20/40, 5 = 25/50, -1 = custom.
+  int _selectedStakeIndex = 0;
   double _sb = 1;
   double _bb = 2;
 
@@ -78,16 +83,22 @@ class _CashGameScreenState extends State<CashGameScreen> {
     _minBuyIn.dispose();
     _maxBuyIn.dispose();
     _chipValue.dispose();
+    _customSb.dispose();
+    _customBb.dispose();
     super.dispose();
   }
   static String _num(double v) =>
       v == v.roundToDouble() ? v.round().toString() : v.toString();
 
-  void _applyStakes(int index, double sb, double bb) {
+  void _applyStakes(int index, double sb, double bb, {bool syncControllers = true}) {
     setState(() {
       _selectedStakeIndex = index;
       _sb = sb;
       _bb = bb;
+      if (syncControllers) {
+        _customSb.text = _num(sb);
+        _customBb.text = _num(bb);
+      }
       if (!_buyInsEdited) {
         _settingBuyIns = true;
         _minBuyIn.text = _num(bb * 50);
@@ -97,12 +108,12 @@ class _CashGameScreenState extends State<CashGameScreen> {
     });
   }
 
-  /// Custom stakes: SB < BB always, in 0.05 steps down to micro 0.05/0.10.
+  /// Custom stakes: SB < BB always, in 1-unit steps for integer stakes or 0.05 for micro.
   void _nudgeCustom({double sb = 0, double bb = 0}) {
     var nextSb = _sb + sb;
     var nextBb = _bb + bb;
     if (nextSb < 0.05) nextSb = 0.05;
-    if (nextBb <= nextSb) nextBb = nextSb + 0.05;
+    if (nextBb <= nextSb) nextBb = nextSb + (nextSb >= 1 ? 1 : 0.05);
     _applyStakes(-1, nextSb, nextBb);
   }
 
@@ -369,33 +380,23 @@ class _CashGameScreenState extends State<CashGameScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.borderSubtle),
-            ),
-            child: Row(
-              children: [
-                for (var i = 0; i < _stakes.length; i++)
-                  Expanded(
-                    child: _buildStakeSegment(
-                      label: _stakes[i].$1,
-                      selected: _selectedStakeIndex == i,
-                      onTap: () =>
-                          _applyStakes(i, _stakes[i].$2, _stakes[i].$3),
-                    ),
-                  ),
-                Expanded(
-                  child: _buildStakeSegment(
-                    label: 'Custom',
-                    selected: custom,
-                    onTap: () => _applyStakes(-1, _sb, _bb),
-                  ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < _stakes.length; i++)
+                _buildStakeChip(
+                  label: _stakes[i].$1,
+                  selected: _selectedStakeIndex == i,
+                  onTap: () =>
+                      _applyStakes(i, _stakes[i].$2, _stakes[i].$3),
                 ),
-              ],
-            ),
+              _buildStakeChip(
+                label: 'Custom',
+                selected: custom,
+                onTap: () => _applyStakes(-1, _sb, _bb),
+              ),
+            ],
           ),
           if (custom) ...[
             const SizedBox(height: 12),
@@ -404,18 +405,30 @@ class _CashGameScreenState extends State<CashGameScreen> {
                 Expanded(
                   child: _StakeStepper(
                     label: 'Small blind',
-                    value: _num(_sb),
-                    onMinus: () => _nudgeCustom(sb: -0.05),
-                    onPlus: () => _nudgeCustom(sb: 0.05),
+                    controller: _customSb,
+                    onMinus: () => _nudgeCustom(sb: -1),
+                    onPlus: () => _nudgeCustom(sb: 1),
+                    onChanged: (val) {
+                      final parsed = double.tryParse(val.trim());
+                      if (parsed != null && parsed > 0) {
+                        _applyStakes(-1, parsed, _bb, syncControllers: false);
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _StakeStepper(
                     label: 'Big blind',
-                    value: _num(_bb),
-                    onMinus: () => _nudgeCustom(bb: -0.05),
-                    onPlus: () => _nudgeCustom(bb: 0.05),
+                    controller: _customBb,
+                    onMinus: () => _nudgeCustom(bb: -1),
+                    onPlus: () => _nudgeCustom(bb: 1),
+                    onChanged: (val) {
+                      final parsed = double.tryParse(val.trim());
+                      if (parsed != null && parsed > 0) {
+                        _applyStakes(-1, _sb, parsed, syncControllers: false);
+                      }
+                    },
                   ),
                 ),
               ],
@@ -606,7 +619,7 @@ class _CashGameScreenState extends State<CashGameScreen> {
     );
   }
 
-  static Widget _buildStakeSegment({
+  static Widget _buildStakeChip({
     required String label,
     required bool selected,
     required VoidCallback onTap,
@@ -616,32 +629,29 @@ class _CashGameScreenState extends State<CashGameScreen> {
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : Colors.transparent,
+          color: selected ? AppColors.primary : AppColors.card,
           borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.borderSubtle,
+          ),
           boxShadow: selected
               ? [
                   BoxShadow(
                     color: AppColors.primarySoftBorder,
                     blurRadius: 8,
-                    offset: Offset(0, 2),
+                    offset: const Offset(0, 2),
                   ),
                 ]
               : null,
         ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected
-                  ? AppColors.foreground
-                  : AppColors.mutedForeground,
-              fontSize: 15,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? AppColors.primaryForeground : AppColors.foreground,
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
       ),
@@ -705,15 +715,17 @@ class _CashGameScreenState extends State<CashGameScreen> {
 class _StakeStepper extends StatelessWidget {
   const _StakeStepper({
     required this.label,
-    required this.value,
+    required this.controller,
     required this.onMinus,
     required this.onPlus,
+    required this.onChanged,
   });
 
   final String label;
-  final String value;
+  final TextEditingController controller;
   final VoidCallback onMinus;
   final VoidCallback onPlus;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -735,12 +747,20 @@ class _StakeStepper extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  value,
+                TextField(
+                  controller: controller,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.center,
+                  onChanged: onChanged,
                   style: TextStyle(
                     color: AppColors.foreground,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
                   ),
                 ),
                 Text(

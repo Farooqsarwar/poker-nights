@@ -597,6 +597,40 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                 : 'AI estimate based on ${settings.players} expected players (from RSVPs) — review, edit or regenerate before the game.',
           ),
           const SizedBox(height: AppSpacing.lg),
+          if (settings.players <= 8 && (!settings.rebuys || settings.rebuyLimit != null) && isAdmin) ...[
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Row(
+                children: [
+                  Icon(Icons.lightbulb_outline, color: AppColors.primary, size: 22),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Field size suggestion (${settings.players} players)',
+                          style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'For 8 or fewer players, unlimited rebuys until Level 6 keeps play continuous and prevents early eliminations from emptying the table.',
+                          style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  AppButton(
+                    size: AppButtonSize.sm,
+                    onPressed: () => app.enableUnlimitedRebuys(),
+                    child: const Text('Apply'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // Section 2 requires the depth explanation in plain language; it was
           // being computed and shown nowhere. Free, because the spec requires
           // it. The deeper analysis below it is section 3's "Advanced AI
@@ -679,154 +713,14 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
             defaultLevelDuration: structure.levelDuration,
           ),
           const SizedBox(height: AppSpacing.lg),
-          // Starting chip plan
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Starting stack — '
-                        '${Formatters.chips(structure.startingStack)}',
-                        style: AppTypography.bodySm.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    // Technical section 17 lists Regenerate, EDIT and Confirm
-                    // as the three actions on the estimate. The blind schedule
-                    // below already has its own editor; the stack had none, so
-                    // the only way to change it was Recalculate — which throws
-                    // away every manual edit. This adjusts it in place.
-                    if (isAdmin && settings.chipSet.isNotEmpty)
-                      AppButton(
-                        size: AppButtonSize.sm,
-                        variant: AppButtonVariant.ghost,
-                        onPressed: () => showAppModal(
-                          context: context,
-                          title: 'Fix the count',
-                          maxWidth: 420,
-                          child: FixChipCountSheet(
-                            chips: settings.chipSet,
-                            onApply: (counts) {
-                              app.fixChipCount(counts);
-                              Navigator.of(context).pop();
-                              // A2-4's second half: on later registration, offer
-                              // to keep the corrected inventory. Tonight's game
-                              // already has it; this is the only route by which
-                              // a real-world box discrepancy reaches the saved
-                              // set, and it is an offer, never a silent write.
-                              _offerSaveChipSet(context, app, counts);
-                            },
-                          ),
-                        ),
-                        child: const Text('Fix count'),
-                      ),
-                    AppButton(
-                      size: AppButtonSize.sm,
-                      variant: AppButtonVariant.ghost,
-                      onPressed: () => _showAdjustModal(context, app, structure),
-                      child: const Text('Adjust'),
-                    ),
-                  ],
-                ),
-                for (final step in const ['stack', 'chipBank'])
-                  if (WhyDisclosure.forStep(structure, step) case final why?)
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.xs),
-                      child: why,
-                    ),
-                const SizedBox(height: AppSpacing.md),
-                for (final c in structure.chipPlan)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        _ChipDot(hex: c.hex, value: c.value),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Text(c.color, style: AppTypography.bodySm),
-                        ),
-                        Text(
-                          '×${c.count}',
-                          style: AppTypography.monoSm.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.lg),
-                        SizedBox(
-                          width: 72,
-                          child: Text(
-                            Formatters.chips(c.total),
-                            textAlign: TextAlign.right,
-                            style: AppTypography.monoSm.copyWith(
-                              color: AppColors.primaryText,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (settings.rebuys) ...[
-                  Container(
-                    padding: const EdgeInsets.only(top: AppSpacing.md),
-                    decoration: BoxDecoration(
-                      border: Border(top: BorderSide(color: AppColors.border)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Rebuy stack — ${Formatters.chips(structure.rebuyStack)}',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        for (final c in structure.rebuyChipPlan)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              children: [
-                                _ChipDot(hex: c.hex, value: c.value),
-                                const SizedBox(width: AppSpacing.md),
-                                Expanded(
-                                  child: Text(
-                                    c.color,
-                                    style: AppTypography.bodyXs,
-                                  ),
-                                ),
-                                Text(
-                                  '×${c.count}',
-                                  style: AppTypography.monoXs,
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-                if (settings.addOn)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.sm),
-                    child: Text(
-                      'Add-on stack: ${Formatters.chips(structure.addOnStack)} — same as starting stack',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          _buildStartingChipPlanCard(context, app, structure, settings, isAdmin),
           const SizedBox(height: AppSpacing.lg),
           ],
           // ── Blind Structure tab ── everything the generator produced.
           if (_tab == _tabStructure) ...[
+          // Starting stack size and chip distribution come first (Points 3 & 5)
+          _buildStartingChipPlanCard(context, app, structure, settings, isAdmin),
+          const SizedBox(height: AppSpacing.lg),
           // Blind schedule
           AppCard(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -1110,7 +1004,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                               Expanded(
                                 flex: 3,
                                 child: Text(
-                                  Formatters.chips(l.sb),
+                                  Formatters.chips(l.safeSb),
                                   textAlign: TextAlign.right,
                                   style: AppTypography.monoXs,
                                 ),
@@ -1118,7 +1012,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                               Expanded(
                                 flex: 3,
                                 child: Text(
-                                  Formatters.chips(l.bb),
+                                  Formatters.chips(l.safeBb),
                                   textAlign: TextAlign.right,
                                   style: AppTypography.monoXs.copyWith(
                                     color: AppColors.foreground,
@@ -1638,6 +1532,163 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
       ),
     );
   }
+
+  Widget _buildStartingChipPlanCard(
+    BuildContext context,
+    AppProvider app,
+    TournamentStructure structure,
+    GameSettings settings,
+    bool isAdmin,
+  ) {
+    final openingBb = structure.levels.isNotEmpty ? structure.levels.first.safeBb : 20;
+    final openingSb = structure.levels.isNotEmpty ? structure.levels.first.safeSb : 10;
+    final bbDepth = openingBb > 0 ? (structure.startingStack / openingBb).round() : 100;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Starting stack — ${Formatters.chips(structure.startingStack)}',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$bbDepth BB deep (opening blinds $openingSb/$openingBb)',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.primaryText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isAdmin && settings.chipSet.isNotEmpty)
+                AppButton(
+                  size: AppButtonSize.sm,
+                  variant: AppButtonVariant.ghost,
+                  onPressed: () => showAppModal(
+                    context: context,
+                    title: 'Fix the count',
+                    maxWidth: 420,
+                    child: FixChipCountSheet(
+                      chips: settings.chipSet,
+                      onApply: (counts) {
+                        app.fixChipCount(counts);
+                        Navigator.of(context).pop();
+                        _offerSaveChipSet(context, app, counts);
+                      },
+                    ),
+                  ),
+                  child: const Text('Fix count'),
+                ),
+              AppButton(
+                size: AppButtonSize.sm,
+                variant: AppButtonVariant.ghost,
+                onPressed: () => _showAdjustModal(context, app, structure),
+                child: const Text('Adjust'),
+              ),
+            ],
+          ),
+          for (final step in const ['stack', 'chipBank'])
+            if (WhyDisclosure.forStep(structure, step) case final why?)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                child: why,
+              ),
+          const SizedBox(height: AppSpacing.md),
+          for (final c in structure.chipPlan)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  _ChipDot(hex: c.hex, value: c.value),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(c.color, style: AppTypography.bodySm),
+                  ),
+                  Text(
+                    '×${c.count}',
+                    style: AppTypography.monoSm.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.lg),
+                  SizedBox(
+                    width: 72,
+                    child: Text(
+                      Formatters.chips(c.total),
+                      textAlign: TextAlign.right,
+                      style: AppTypography.monoSm.copyWith(
+                        color: AppColors.primaryText,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (settings.rebuys) ...[
+            Container(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: AppColors.border)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Rebuy stack — ${Formatters.chips(structure.rebuyStack)}',
+                    style: AppTypography.bodyXs.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (final c in structure.rebuyChipPlan)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          _ChipDot(hex: c.hex, value: c.value),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Text(
+                              c.color,
+                              style: AppTypography.bodyXs,
+                            ),
+                          ),
+                          Text(
+                            '×${c.count}',
+                            style: AppTypography.monoXs,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          if (settings.addOn)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Text(
+                'Add-on stack: ${Formatters.chips(structure.addOnStack)} — same as starting stack',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 
@@ -1710,6 +1761,7 @@ void _showAdjustModal(
 ) {
   final locked = app.currentGame?.stacksLocked ?? false;
   var stack = structure.startingStack;
+  final controller = TextEditingController(text: '$stack');
 
   // Step by something countable: 5% of the stack rounded to a round number,
   // never finer than the smallest chip in play.
@@ -1723,108 +1775,162 @@ void _showAdjustModal(
   final step = rawStep <= minChip
       ? minChip
       : (rawStep ~/ minChip) * minChip;
+  final openingBb = structure.levels.isNotEmpty ? structure.levels.first.safeBb : 20;
 
   showAppModal(
     context: context,
-    title: 'Adjust structure',
+    title: 'Adjust starting stack',
     maxWidth: 440,
     child: StatefulBuilder(
-      builder: (modalContext, setModalState) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Changes apply straight to this structure. Blinds, prizes and '
-            'paid places stay exactly as they are, and nobody loses their '
-            'RSVP or check-in.',
-            style: AppTypography.bodySm.copyWith(
-              color: AppColors.mutedForeground,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Starting stack',
-                      style: AppTypography.bodySm.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      locked
-                          ? 'Frozen — play has started'
-                          : 'In steps of $step',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
+      builder: (modalContext, setModalState) {
+        final currentBbDepth = openingBb > 0 ? (stack / openingBb).round() : 0;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Changes apply straight to this structure. Blinds, prizes and '
+              'paid places stay exactly as they are, and nobody loses their '
+              'RSVP or check-in.',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
               ),
-              const SizedBox(width: AppSpacing.md),
-              Opacity(
-                opacity: locked ? 0.4 : 1,
-                child: IgnorePointer(
-                  ignoring: locked,
-                  child: CountStepper(
-                    value: stack,
-                    min: step,
-                    max: 1000000,
-                    step: step,
-                    semanticLabel: 'Starting stack',
-                    onChanged: (v) => setModalState(() => stack = v),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            // Quick preset pills
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: [1500, 2000, 2500, 3000, 5000, 10000].map((presetVal) {
+                final isSelected = stack == presetVal;
+                final bbLabel = openingBb > 0 ? '${presetVal ~/ openingBb}BB' : '';
+                return ChoiceChip(
+                  label: Text(
+                    '${Formatters.chips(presetVal)}${bbLabel.isNotEmpty ? ' ($bbLabel)' : ''}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected ? AppColors.primaryText : AppColors.foreground,
+                    ),
+                  ),
+                  selected: isSelected,
+                  selectedColor: AppColors.primarySoft,
+                  backgroundColor: AppColors.card,
+                  onSelected: locked
+                      ? null
+                      : (_) {
+                          setModalState(() {
+                            stack = presetVal;
+                            controller.text = '$stack';
+                          });
+                        },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Starting stack ($currentBbDepth BB)',
+                        style: AppTypography.bodySm.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        locked
+                            ? 'Frozen — play has started'
+                            : 'Type directly or step by $step',
+                        style: AppTypography.bodyXs.copyWith(
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Level lengths and individual blinds are edited from the blind '
-            'schedule below.',
-            style: AppTypography.bodyXs.copyWith(
-              color: AppColors.mutedForeground,
+                const SizedBox(width: AppSpacing.md),
+                SizedBox(
+                  width: 130,
+                  child: AppTextField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    readOnly: locked,
+                    onChanged: (val) {
+                      final parsed = int.tryParse(val.replaceAll(',', '').trim());
+                      if (parsed != null && parsed > 0) {
+                        setModalState(() => stack = parsed);
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Row(
-            children: [
-              Expanded(
-                child: AppButton(
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => Navigator.of(modalContext).pop(),
-                  child: const Text('Cancel'),
+            const SizedBox(height: AppSpacing.sm),
+            Opacity(
+              opacity: locked ? 0.4 : 1,
+              child: IgnorePointer(
+                ignoring: locked,
+                child: CountStepper(
+                  value: stack,
+                  min: step,
+                  max: 1000000,
+                  step: step,
+                  quickSteps: [minChip, step, step * 2],
+                  semanticLabel: 'Starting stack',
+                  onChanged: (v) => setModalState(() {
+                    stack = v;
+                    controller.text = '$v';
+                  }),
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: AppButton(
-                  onPressed: () {
-                    final summary = app.adjustStructure(
-                      startingStack: stack,
-                    );
-                    Navigator.of(modalContext).pop();
-                    if (summary != null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(summary)),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Level lengths and individual blinds are edited from the blind '
+              'schedule below.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => Navigator.of(modalContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: AppButton(
+                    onPressed: () {
+                      final summary = app.adjustStructure(
+                        startingStack: stack,
                       );
-                    }
-                  },
-                  child: const Text('Apply'),
+                      Navigator.of(modalContext).pop();
+                      if (summary != null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(summary)),
+                        );
+                      }
+                    },
+                    child: const Text('Apply'),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
+              ],
+            ),
+          ],
+        );
+      },
     ),
   );
-  }
+}
 
   Widget _buildC2SummaryCard(String value, String caption) {
     return Container(

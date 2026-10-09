@@ -113,11 +113,7 @@ abstract final class CashSettlement {
     final n = nonzero.length;
     final cents = [for (final b in nonzero) b.cents];
     final sum = cents.fold<int>(0, (a, b) => a + b);
-    if (sum != 0) {
-      // Guard verifying sum of balances == 0 before DP partitioning;
-      // if nonzero due to rounding, adjust last balance so DP finds zero-sum groups
-      cents[n - 1] -= sum;
-    }
+    if (sum != 0) throw Exception("Balances must sum to zero");
     final full = (1 << n) - 1;
 
     // sumOf[mask] = sum of balances of the people in mask, built bottom-up

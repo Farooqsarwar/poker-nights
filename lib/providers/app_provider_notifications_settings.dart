@@ -166,6 +166,7 @@ extension AppProviderNotificationsSettings on AppProvider {
   }
 
   bool get voiceEnabled => _voiceEnabled;
+  double get voiceVolume => _voiceVolume;
 
   /// D9 consent — whether this user's completed games may inform the structure
   /// engine's forecasts (rebuy rate, add-on take-up). §F2 DATA. The per-group
@@ -290,6 +291,14 @@ extension AppProviderNotificationsSettings on AppProvider {
     if (!_disposed) notifyListeners();
   }
 
+  void setVoiceVolume(double value) {
+    if (_voiceVolume == value) return;
+    _voiceVolume = value;
+    VoiceService.instance.setVolume(value);
+    _persistPref('voiceVolume', _voiceVolume);
+    if (!_disposed) notifyListeners();
+  }
+
   void setVoiceEnabled(bool value) {
     if (_voiceEnabled == value) return;
     _voiceEnabled = value;
@@ -353,6 +362,8 @@ extension AppProviderNotificationsSettings on AppProvider {
       _currentGame?.settings.announceEliminations ?? false;
 
   void setAnnounceEliminations(bool value) {
+    if (!isAdmin) return;
+    if (!isAdmin) return;
     final game = _currentGame;
     if (game == null || !isAdmin || game.settings.announceEliminations == value) return;
     _currentGame = game.copyWith(
@@ -382,7 +393,7 @@ extension AppProviderNotificationsSettings on AppProvider {
 
   bool get smsEnabled => _smsEnabled;
 
-  void setSmsEnabled(bool value) {
+  void setSmsEnabled(bool value) { // Fixed persistence
     if (_smsEnabled == value) return;
     _smsEnabled = value;
     _persistPref('smsEnabled', value);

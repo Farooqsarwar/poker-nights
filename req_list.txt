@@ -1,0 +1,440 @@
+1: 18. Controls — Use at least 44 × 44 px touch targets, 52 px primary buttons and 52-56 px text fields; add hit-slop to smaller toggles, chips and checkboxes.
+2: 19. Controls — Steppers support long-press repeat; sliders show the current value and exact -/+ controls and expose value, minimum, maximum and step to accessibility services.
+3: 20. Forms — Show focus and inline validation states; auth primary actions use white-filled buttons; password fields include visibility toggles.
+4: 21. Accessibility — Meet WCAG AA against actual backgrounds: 4.5:1 for normal text and 3:1 for qualifying large text; use #F2555A for small crimson text and #B23430 only as a destructive fill.
+5: 22. Accessibility — Show a 2 px crimson keyboard/switch focus ring with a 2 px offset; label every icon-only control.
+6: 23. Accessibility — Support OS text scaling to 200% without clipped cards, rows or fields; preserve independent timer and large-stat sizing.
+7: 24. Accessibility — Announce level changes, rebuy closing, holds and busts through screen readers using the same wording as voice announcements, regardless of audio settings; never announce every seco
+8: 25. Accessibility — Every sound or vibration needs a visual equivalent: pulse seconds at 5 and 1 minute, show the final 5-4-3-2-1 countdown, and pulse the new level and blinds twice for 300 ms each.
+9: 26. Accessibility — Under reduced motion, replace level-change pulses with a 3-second redText outline and suppress transitions; normal transitions use approximately 150-220 ms easing.
+10: 27. Accessibility — Never convey meaning by color alone; pair states with words, signs or icons and display chip color names beside swatches.
+11: 28. Icons — Use one consistent custom SVG icon set; do not use emoji in application copy, generated messages or notifications.
+12: 29. Explanations — Keep the first explanatory sentence visible and place long explanations, roughly over 170 characters, behind a "Why?"/"Less" control; never hide required inputs behind that control.
+13: 30. Choices — Stack exclusive option cards vertically except genuinely two-dimensional layouts and the specified compact pace cards; clearly show the selected option and its consequence.
+14: 31. Feedback — Toasts must wrap rather than truncate, remain for at least 4 seconds, and remain at least 5 seconds when offering Undo; increase reading time for longer text.
+15: 32. Confirmation — Consequential actions require a sheet stating the consequence, an explicit Cancel button and a named confirmation; embedded controls retain their own labels.
+16: 33. Empty and disabled states — Give empty screens one explanatory sentence and one primary action; show a readable reason beside disabled controls instead of relying on opacity.
+17: 34. Mock safety — Use realistic completed sample inputs for visual verification without submitting them to live backends.
+18: 35. Visual verification — Produce production-rendered mobile 390×844 at 2× and desktop 1440×900 at 1× captures; include the Reformed master board and flow boards for its 46 listed screens, plus requir
+19: 36. Visual verification — Keep screen captures inside authentic phone bezels or browser chrome; place checklist annotations below screenshots, never pins or numbers over UI pixels.
+20: 37. Navigation — Provide Home, Games, Chat, Members and More in a floating glass bar for group members; use clear back arrows in wizards and avoid nested or buried navigation.
+21: 38. Navigation — Original additionally requires a global drawer and a More/Explore sheet with synchronized destinations; reconcile these with Reformed's single-layer/no-buried-drawer rule.
+22: 39. Navigation — On screens at least 768 px wide, Original replaces mobile bars with a 264 px sidebar and centers content within 720 px; smaller screens retain the mobile shell.
+23: 40. Navigation — Show the correct active tab for each route, chat unread and member-count badges; keep game sub-tabs pinned during scrolling.
+24: 41. Navigation — Games opens a running host/co-host dashboard or a player live view automatically; otherwise open the group's games list or its start-game empty state.
+25: 42. Navigation — Picking a drawer or Explore destination closes that overlay; Back from an Explore destination restores the prior tab and reopened Explore sheet.
+26: 43. Routing — Support deep links for joining groups, games, guests, TV, tools and legal pages; rewrite legacy /game/{CODE}, /j/{CODE} and old tab query links into current routes.
+27: 44. Routing — Preserve a pending deep link once while authentication resolves; consume it after login when necessary and retain the intended destination.
+28: 45. Routing — Enforce role-based route access; members follow running games into the live view, hosts cannot back-navigate into pre-game review, and co-host level editors are read-only.
+29: 46. Routing — Re-run route guards only when the seven auth/game/group guard values change, not on every timer tick or unrelated state update.
+30: 47. Splash — Resolve cached authentication and local game state; after 5 seconds without auth resolution, continue to the landing and retry in the background; surface recoverable running games.
+31: 48. Routing — Initial no-group routing conflicts: Original sends authenticated users to Home's no-group state; Reformed sends authenticated users without groups to /landing.
+32: 49. Routes — Preserve all destinations from both route catalogs, including Original's operational subflows; exact URL naming differs and must be mapped consistently rather than dropping screens.
+33: 50. Landing — Explain home-game management and provide Sign in, Create account, direct six-character code entry/QR, Start a game now and free-tool access; indicate browser availability and the free si
+34: 51. Sign-in — Support Firebase email/password and Google OAuth with persistent sessions; trim/lowercase email, validate its basic format and require a password.
+35: 52. Sign-in — Use a generic credential error, show throttling feedback, disable online sign-in while offline, and create a first-time Google profile from the supplied name.
+36: 53. Registration — Collect sanitized full name of 1-40 characters, email, password of at least 8 characters and matching confirmation, with inline validation.
+37: 54. Registration — Require an explicit 18-or-older and Terms checkbox; keep history-learning consent separate, optional and unchecked by default.
+38: 55. Password recovery — Accept an email, throttle abusive reset requests and always return a non-enumerating confirmation.
+39: 56. Anonymous hosting — "Start a game now" creates Firebase anonymous authentication and allows a complete quick tournament, including players, payouts and player/TV codes, without signup.
+40: 57. Anonymous hosting — Block group creation, scheduled RSVP posting and Premium purchasing until the anonymous host registers; avoid presenting empty group/chat/history features as active features.
+41: 58. Account linking — Link anonymous credentials to registration without changing the UID or losing the game, results or corrected chip counts; offer to save corrected chips as "My chips."
+42: 59. Account linking — Handle credential-already-in-use without blocking registration; offer sign-in to the existing account and preserve tonight's shareable guest link.
+43: 60. Guest entry — Ask for a display name before RSVP, allow an optional inviter name, and require no email or password; support Going, Maybe and Can't.
+44: 61. Guest shell — Hide club, billing and host/co-host administration; provide an explicit exit, game-specific live views and a prompt to register/join the group when appropriate.
+45: 62. Guest persistence — Store game ID, name, inviter and slot locally so refresh retains the approved seat; provide "Not {name}?" to restart entry on a shared phone.
+46: 63. Guest removal — If the host removes a guest, explain the removal, clear the saved session and return to guest entry.
+47: 64. Join codes — Accept typed six-character codes, pasted invite URLs and QR payloads; normalize case and separators, taking ?code= or the final path segment.
+48: 65. Join codes — Alphabet requirements conflict: Original uses ABCDEFGHJKMNPQRSTUVWXYZ23456789, including U; Reformed calls for excluding U as well as I, L, O, 0 and 1.
+49: 66. Join resolution — Classify a code without joining or subscribing: group to invite preview, game to member invitation or guest entry, TV to the read-only display; give a useful unknown-code message
+50: 67. Join performance — Provide a mobile camera QR scanner; Reformed requires table-code resolution in under one second.
+51: 68. Join protection — Limit lookups to 10 per minute per device using a sliding window on both client and server; the eleventh attempt is refused with a wait message.
+52: 69. Group preview — Show group name, inviter/owner identity, avatars and member/game counts; Reformed also requests an active-game preview.
+53: 70. Group join — Use an idempotent one-tap join for authenticated users; otherwise register/sign in and continue automatically; existing members see Open group.
+54: 71. Group creation — Require only a group name, create its host membership, and show its code, QR, link, Share and Done actions immediately.
+55: 72. Groups — Allow membership in multiple groups, prioritize pinned groups and synchronize the selected group across every tab.
+56: 73. Home — Prioritize a hosted live game, then a played live game, then the next scheduled game, then a no-game action; show notifications, upcoming games, open polls and group totals for games, membe
+57: 74. Home — Provide New game for hosts, Suggest a date for ordinary members, Cash game and a separate quick-start action; give no-group users Create group and Join group choices.
+58: 75. Repeat game — When appropriate, offer "Same as last time?" to repost the last completed setup one week later or open it prefilled for edits.
+59: 76. Games hub — List live, scheduled, RSVP-open/closed and finished games with date, time, venue, buy-in, bounty and the viewer's RSVP; include hosting, cash-game and invite actions.
+60: 77. Member directory — Show initials avatars, names, games/wins, role badges and self markers; never expose other members' email addresses, and show join dates only to the host.
+61: 78. Roles — Role naming conflicts: Original requires Host, Co-host and Member and explicitly forbids "Admin"; Reformed lists Host, Admin and Member.
+62: 79. Co-host permissions — Allow clock operation, busts, rebuys, pause, check-in approvals and seating; prohibit changes to structure, payouts, organiser contribution, deal confirmation or final-result
+63: 80. Member administration — Allow the group host to add/remove co-hosts and remove members with confirmation; retain removed members' historical results.
+64: 81. Group invitations — Provide Share, Copy, QR and a searchable list of previous opponents with last-played dates; clearly mark existing members and use the selected group's own counts and code.
+65: 82. Group settings — Include default chips, table settings, standings/seasons, history, members, import, learning consent, leave/delete controls and code re-roll; members may view while hosts edit res
+66: 83. Group defaults — Store table capacity of 4-10, default 9, and seating mode on the group; personal hosting defaults seed only new groups.
+67: 84. Chat — Provide separate real-time group and game chats with avatars, timestamps, member/online counts, day separators, a pinned event card and separate unread counts.
+68: 85. Chat — Keep unread counts to undeleted messages from others newer than the viewer's last-read timestamp; opening that chat advances lastRead.
+69: 86. Chat — Limit client sends to eight per 30 seconds and at least 4 seconds apart; use the specified approximately 3.75-second server spacing and retain blocked text in the composer.
+70: 87. Chat — Guests cannot post until joining the group; provide the specified game-chat read view with a Join the group to chat action.
+71: 88. Chat moderation — Filter offensive content server-side before fan-out using English and Portuguese word lists; explain held messages and allow editing and retry.
+72: 89. Chat moderation — Support Copy, Report and Block from message actions; allow the group host to delete messages, leaving a "Message deleted" placeholder.
+73: 90. Chat moderation — Blocked users' messages and polls are hidden everywhere for that viewer; store the block on the user and provide Settings → Blocked to undo it.
+74: 91. Reports — Show a host report inbox with reasons, reporter, time and count badge; provide Delete message, Remove member and Dismiss, then notify the reporter that it was handled.
+75: 92. Reports — Every new report sends the group host a non-disableable push; escalate unhandled reports to support after 24 hours and delete handled reports after 90 days.
+76: 93. Chat automation — Reformed requires a system bot to announce blind increases, break countdowns, rebuy closure and eliminations in the chat stream.
+77: 94. Polls — Allow questions of 1-120 characters and two to six options of 1-60 characters, single/multiple choice, manual or scheduled closure and reusable scheduling/buy-in/rebuy templates.
+78: 95. Polls — Let users change votes or remove their current vote; store selections per user and delete empty entries; percentages use people who voted as the denominator.
+79: 96. Polls — Show open polls first, closed polls with winners, percentage bars and open-poll counts on Home/navigation; make inline Home voting functional.
+80: 97. Poll scheduling — Reformed requires closing the winning date option to draft a scheduled tournament automatically; keep it a draft rather than publishing without the host.
+81: 98. Notifications — Provide an inbox with unread count, New/Earlier groups, relative timestamps, mark-all-read and deep links to the relevant action.
+82: 99. Notifications — Support game posted, RSVP deadline in 24 hours, waitlist promotion, check-in open, starts in 30 minutes, seat confirmed, time changed, rebuys closing, final table, results, new pol
+83: 100. Notifications — Reformed additionally specifies a one-hour game-start countdown alert; expose event-category switches while keeping mandatory moderation alerts always on.
+84: 101. Notifications — Write one event outbox item, fan it out to inboxes and push, deduplicate events and prevent the originating device from re-bannering its own action.
+85: 102. Notifications — Schedule and reschedule reminders using the game's stored IANA time zone and wall-clock time so lead times survive daylight-saving changes.
+86: 103. Notifications — Push-provider requirements conflict: Original specifies Firebase Cloud Messaging and Functions; Reformed specifies OneSignal synchronization, including read/unread state.
+87: 104. Quick start — Reach a running tournament in two taps from the landing/start entry and complete setup in approximately 60 seconds without an account wall.
+88: 105. Quick start — Input requirements differ: Reformed specifies only players, target hours, buy-in and chip set; Original additionally specifies pace, Freeze Out/Rebuy format and optional group-histo
+89: 106. Quick start — Default attendance to the group's last headcount or 8; allow 2-30 on Premium and 2 up to one table's configured capacity on Free.
+90: 107. Quick start — At the free attendance cap, disable + with a planning explanation; never present a second-table upgrade prompt during quick start.
+91: 108. Quick start — Offer 2, 3, 4 or 5 hours, default 4; compute finish from the start rounded up to the next five minutes, and show each pace's predicted finish.
+92: 109. Quick start — Default buy-in to 15, range 5-100 in steps of 5; Rebuy enables a 35% forecast and a 125% add-on; expose the current/default chip set.
+93: 110. Quick start — Show a live plain-language summary of players, duration, stack depth, opening blinds, pace, rebuy cutoff, handout and buy-in before starting.
+94: 111. Quick start — Generate the structure, start Level 1 and open the dashboard with the game code, QR and player/TV joining explanation prominently displayed.
+95: 112. Quick start — Support count-only games without names and an optional "Count it for this group" toggle; hide that toggle when no group is selected.
+96: 113. Quick start — Starting a new game while another runs requires confirmation; preserve the previous game as unfinished history and exclude it from standings.
+97: 114. Anonymous chips — Default unsaved setups to White 1×150, Red 5×150, Green 25×100 and Black 100×100; clearly identify the assumed 500-piece box.
+98: 115. Anonymous chips — "Fix the count" opens a lightweight per-color count-stepper sheet for tonight only, before the first handout; it must not open the saved-chip-set editor or mutate other games.
+99: 116. Planned tournament — Provide a five-step wizard with progress, back navigation, tappable completed steps, retained input values, auto-saved drafts and Custom/Templates entry.
+100: 117. Wizard structure — Step assignments conflict: Original uses Event details → Chip set → Rebuys/add-ons → Format → Review/create; Reformed uses Basics/venue → Chips → Economics → Pacing → Invitatio
+101: 118. Event details — Collect a sanitized 1-40-character name, date, start, finish and optional venue/maps location; seed customary group values, otherwise use a weekday Poker name and 20:00 start.
+102: 119. Scheduling — Use a Monday-start month calendar, highlight today/selection, disable past dates and allow month navigation; default to the group's usual next game day.
+103: 120. Scheduling — Start and finish move in 15-minute increments; default finish to start plus 4 hours 30 minutes and permit a window of 1-12 hours, including across midnight.
+104: 121. Scheduling — Offer quick start times 19:00, 19:15, 19:30, 19:45, 20:00, 20:15, 20:30 and 21:00 alongside exact time controls.
+105: 122. Tournament types — Support Freeze Out, Rebuy, Re-entry and Premium Shootout, defaulting the wizard to last-used or Rebuy; hide freezeout rebuy controls and give each re-entry its own registration
+106: 123. Shootout — Configure 2-6 starting tables and 1-3 advancing players per table, defaulting to one advancing player; qualifying players reach the final stage.
+107: 124. Buy-in — Use an exact stepper/slider, normally 5-100 in steps of 5; carry forward the group's last value and keep the posting group visible.
+108: 125. Payout mode — Offer only None or Standard; None runs the game without a normal prize pool while still allowing a separate KO bounty.
+109: 126. Bounty setup — Make KO an optional amount on top of buy-in, default 5, range 5-50 in steps of 5; offer Fixed, Progressive and Mystery with the latter two identified as Premium.
+110: 127. Rebuy policy — Support Unlimited or Limited rebuys, with 1-10 per player and default 2 when limited; retain separate live per-player caps.
+111: 128. Rebuy forecast — Default expected rebuys to 35%, adjustable 0-100% in steps of 5, and expose eligible historical suggestions without losing manual overrides.
+112: 129. Rebuy terms — Show rebuy cost as buy-in plus any bounty and normally a fresh starting stack; Configure supports a rebuy-stack control of 100-20,000 in steps of 100 before chip locks apply.
+113: 130. Rebuy timing — Suggest a closing level with neighboring choices and explanations; allow a manual cutoff no earlier than the running level until settlement step 1 is submitted.
+114: 131. Re-entry policy — Set the re-entry closing level and a maximum of 1-5 re-entries per player, default 1, or Unlimited.
+115: 132. Add-on setup — Allow Yes/No, a 110-150% starting-stack multiplier in steps of 5 with default 125%, and price 1-100 in steps of 1, normally equal to buy-in.
+116: 133. Add-on forecast — Configure expected uptake from 0-100% in steps of 10, default 70%; it affects predicted chips/finish but not the bank reserve for every player.
+117: 134. Add-on breakdown — Allow predefining physical add-on chips or deciding at the end of rebuys; lock this timing choice when settlement step 1 is submitted.
+118: 135. Early bonus — Default off; when enabled use 2.5-25% in steps of 2.5 with default 12.5%, show the extra chips and award only to players approved before scheduled start.
+119: 136. Wizard attendance — Before RSVPs, use the last group headcount or 8 and expose a 2-60 override in review; after RSVPs, Configure defaults to Going count.
+120: 137. Configure — Allow expected-player overrides, attendance inclusion/exclusion without changing RSVP, guest/write-in additions, player-view preview, table settings, stack options, format, pace, chip
+121: 138. Configure — Keep frequent controls visible and place advanced tracking, rebuy/add-on quantities, per-game chips and paid-position controls under a clearly labeled More options area.
+122: 139. Review — Show level count, estimated duration, pace, a complete blinds/ante/break table, rebuy-close markers and expandable engine explanations; allow editing before publishing.
+123: 140. Publish — Publish the reviewed event for RSVP, notify group members and open the invitation; do not silently apply generated structural changes without the required confirmation.
+124: 141. Price locks — Freeze buy-in, rebuy price, add-on price and KO bounty when the game is posted; enforce the lock in both UI and data writes.
+125: 142. Chip locks — Freeze starting stack, rebuy stack, add-on multiplier and early-bonus percentage at the first approved check-in/handout, not merely at posting.
+126: 143. Live configuration locks — Lock tournament format and maximum re-entries while running; permit only allowed future-level, ante, rebuy-cutoff, per-player-cap and forward-looking chip changes.
+127: 144. Hard finish — Offer an optional latest finish, off by default, normally finish plus 1 hour, up to plus 3 hours in 15-minute steps, with an agreed ICM or chip-chop split.
+128: 145. Hard-finish lock — Fix the hard-finish time and split at posting and show them on the invitation; only the explicitly confirmed live extension may move the deadline.
+129: 146. Chip ownership — Provide free, unlimited user-owned chip sets; groups reference a default set by ID, while each posted game retains its own frozen configuration.
+130: 147. Chip list — Display set name, denomination and piece counts, named swatches, default status, create/edit actions and a preview of the starting stack it supports.
+131: 148. Chip editor — Support Numbered/No numbers, editable set and color names, per-color values and quantities, add/remove denomination, Save and total pieces/value.
+132: 149. Chip values — Use the editor ladder 1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1,000, 2,000, 2,500, 5,000, 10,000 and 25,000; quantities step by 10.
+133: 150. Chip validation — Require at least two distinct values; block duplicate values and removal below two denominations; always present the textual chip color name.
+134: 151. Chip colors — Use the corrected ten-name palette: White, Red, Green, Black, Blue, Yellow, Pink, Purple, Orange and Grey; real chip swatches are Original's exception to its no-yellow interface rul
+135: 152. Unnumbered chips — Offer automatic or manual values; editor suggestions assign the largest pile the smallest value along 1/5/25/100/500/1,000/5,000/25,000 and disable manual values while suggesti
+136: 153. Chip-set changes — Editing a saved set updates group default pointers for future games but never changes chips already dealt in a running game; a per-game switch leaves the group default untouche
+137: 154. Presets — Ship Freezeout/Regular, Sprint/Turbo, Deep/Deep and KO Bounty/Regular with a fixed bounty of 5; buy-in comes from hosting defaults and stacks from the engine.
+138: 155. Templates — Save full configuration copies with names, rename/delete actions and usage metadata; allow three saved templates free and unlimited with Premium.
+139: 156. Templates — Using a preset/template prefills the wizard and jumps to review, but always regenerates for current attendance, timing and chips rather than replaying an old ladder.
+140: 157. Structure model — Separate structural chip/time inputs from buy-in money; express depth in big blinds and account explicitly for entrants, rebuys, re-entries, add-ons, bonuses, breaks and time.
+141: 158. Chip supply — Compute total chips as starting chips plus all chip injections; chips remain in circulation after their owners bust, and average depth uses total chips divided by live players and c
+142: 159. Time model — Subtract scheduled breaks and the modeled rebuy allowance from the available window; show estimated finish ranges rather than guaranteeing an exact finishing minute.
+143: 160. Structure output — Return starting stack, per-player composition, denomination bank checks, all handouts, levels, breaks, color-ups, rebuy options, projected-end range, explanations and verificat
+144: 161. Pace — Use uniform level lengths all night: Turbo 15 minutes, Regular 20 and Deep 30; show opening depth, target level, finish, fit and bank status for each option.
+145: 162. Pace recommendation — Recommend the slowest of Deep then Regular that fits and has enough chips; never silently recommend or switch to Turbo.
+146: 163. Pace warning — When Regular does not fit, present later finish, skip the add-on when applicable, and Turbo as explicit choices with predicted finish times.
+147: 164. Late start — Keep the agreed finish time, re-fit to the shorter window before starting and ask the host to resolve any new warning; never silently regenerate a running structure.
+148: 165. Opening depth — Target Turbo 60 BB, Regular 100 BB and Deep 160 BB, with qualifying bands 50-70, 85-130 and at least 150 BB respectively; surface any depth shortfall.
+149: 166. Playable floor — If no bank-feasible stack reaches 20 BB, flag the structure infeasible, block creation, state maximum supported players and offer more chips, fewer injections or freezeout.
+150: 167. Bank forecast — Reserve the Poisson 90th-percentile rebuy count, capped by limited-rebuy rules, plus an add-on and early bonus for every entrant; use expected uptake only for pacing.
+151: 168. Stack search — Evaluate nice feasible stack candidates deepest first, up to 20 feasible plans; normally use 3-5 denominations, search at most 24 chips per denomination and enforce all inventory l
+152: 169. Composition rules — Exclude chips above half the stack except the specified smallest-chip handling; treat chips above a quarter-stack as a soft penalty, not a hard rejection.
+153: 170. Composition scoring — Preserve reference penalties for smallest-chip counts, change-making coverage, too few/many chips, 25-35-chip preference, round counts and oversized chips; a rival must impr
+154: 171. Structure normalization — Preserve printed values; for unnumbered chips rank piles and select among the five reference denomination families by ratios closest to four, marking values as assumed.
+155: 172. Structure pacing — Use C including expected rebuys, add-ons and all early bonuses, finishing BB = C/K with K=20 without antes or 27 with antes, growth minimum 1.2 and pace caps 1.6/1.5/1.45.
+156: 173. Structure fit — Use available play minutes and logarithmic blind growth, publish four spare levels and allow a 5-minute fit tolerance; replan breaks if the chosen pace runs longer.
+157: 174. Structure formula conflict — Original requires the verified uniform-level solver; Reformed's summary lists total levels as L=S/(N×B0). Reconcile this with the engine-authority requirement rather 
+158: 175. Blind ladder — Snap to strictly increasing, playable nice big blinds using only denominations actually dealt, not colors still in the case; avoid unnecessary doubling cliffs and meaningless tiny 
+159: 176. Blind snapping — Preserve DP candidates within raw/1.6 to raw×1.6, NICE_M={1,1.2,1.5,2,2.5,3,4,5,6,8}×10^k, fixed opening BB and the reference growth penalties/fallback chain.
+160: 177. Small blinds — Normally use half the BB rounded to a live chip, at least one live chip and below BB; preserve the reference payable color-up-boundary hold exception on fresh generation.
+161: 178. Color-ups — Retire only actually dealt denominations, only at breaks, never the largest dealt chip; require raw BB at least four times the next denomination and keep all later blinds payable.
+162: 179. Color-up timing — Preserve the reference index rule: choose the first permitted break with afterLevel at least triggerLevel-1 and not before the preceding color-up; without another qualifying bre
+163: 180. Color-up operation — Announce the exchange and use value-preserving exchanges with leftover rounding up, not a chip race; display chip names and exchange instructions.
+164: 181. Ante — Offer Off, Big Blind and Individual; BBA equals one BB per hand, while Individual is 10% of BB rounded to a live denomination and at least one chip.
+165: 182. Ante recommendation — Auto recommends no ante for at most 6 players and under 210 minutes, otherwise BBA; hosting defaults can bias on/off, and Individual is never auto-selected.
+166: 183. Ante start — Default to the level after rebuy/re-entry closure, otherwise the first level where a fresh stack is at most 40 BB; let the host override future start levels and make Off remove all a
+167: 184. Break planning — Default to 10-minute breaks approximately every 90 minutes of play, with count floor((T-30)/90); permit host editing and discard trailing breaks after the final playing segment.
+168: 185. Add-on break planning — Place the add-on break immediately after rebuy closure by moving the first break and re-solving once; retain the move only if the suggested close stays consistent.
+169: 186. Rebuy-close calculation — Suggest the last level meeting fresh-M floors 10/15/20 for Turbo/Regular/Deep and no later than 40% of the night; show adjacent choices with depth, M and elapsed share.
+170: 187. Rebuy-close calculation — Preserve the placeholder-ante bootstrap and second pass, using BB/2 and an eight-player ante total for the recommendation's fresh-M calculation.
+171: 188. Finish estimate — Calculate target-level duration plus prior breaks; show low = estimate-max(level minutes,15) and high = estimate+2×max(level minutes,15), with clock times and plain-language exp
+172: 189. Handouts — Compute exact starting, rebuy, add-on, bonus, late-arrival and cash-top-up chip breakdowns; fewestChips must honor remaining inventory and favor larger chips on ties.
+173: 190. Stack options — Offer Engine pick and Small chips out; the latter distributes small chips once and uses the largest chip for rebuys/add-ons, showing shortages honestly.
+174: 191. Stack options — Search Small chips out between half and three times reference stack R, require whole-largest-chip rebuy/add-on values and depth/bank feasibility, maximize small chips and regenera
+175: 192. Legacy structures — Preserve the no-pace phased solver for old saved games and verification, but pass an explicit pace from every new host-facing flow and do not expose legacy mode.
+176: 193. Level editor — Use the same full, free editor in review and live contexts, with SB, BB, ante, minutes, breaks, purposes and rebuy markers.
+177: 194. Level editor — Allow edit, insert level/break below, append level/break, delete and recalculate unplayed levels; keep at least two playing levels at all times.
+178: 195. Level locks — Played levels are read-only except for explicit record correction and can never be deleted; correcting one never replays it. The running level can be edited but not deleted.
+179: 196. Level pins — Editing blinds creates a manual anchor; preserve played, running, final and pinned anchors while recalculating only unpinned intervals, with strict increasing-BB validation.
+180: 197. Level recalculation — Interpolate geometrically between pins, DP-snap with fixed endpoints and retarget the remaining tail; restore exact pin values and return a named error when infeasible.
+181: 198. Level recalculation — Preserve the reference distinction that re-solved segment/tail small blinds use payable BB/2 and do not apply fresh-generation color-up holds.
+182: 199. Level insertion — Use a payable nice blind near the geometric midpoint, or approximately previous BB×1.4 at the end; re-space unpinned neighbors if needed and refuse when pins leave no room.
+183: 200. Level deletion — Confirm consequences, renumber following levels, move a deleted rebuy-close marker backward, and move a deleted break's color-up to the next break or drop it if none remains.
+184: 201. Level warnings — Identify adjacent repeating/dipping blinds and offer one-tap recalculation without blocking the whole editor; ante starts cannot move onto played/running levels.
+185: 202. Editor preview — Provide a sandboxed Before start/Running preview and restore the actual game completely when leaving the preview; co-hosts see the editor without edit controls.
+186: 203. Invitation — Show game name, date/start, buy-in and bounty, venue, Going avatars/counts, Maybe/Can't/No reply, available seats, waitlist and the viewer's current RSVP.
+187: 204. Invitation — Provide maps directions, optional distance after location permission and an ICS calendar download with correct time, place and a return link.
+188: 205. RSVP — Support Going, Maybe, Can't and Bring a guest; after answering, show the status with a change action.
+189: 206. RSVP capacity — Free capacity is one configured table; Premium capacity is table count×maximum seats; queue excess Going responses by RSVP time.
+190: 207. Plus-ones — Queue guests from the moment added, not the inviter's original RSVP time; remove unclaimed slots first when allowances/membership change and never silently drop an approved guest.
+191: 208. Waitlist — Promote the earliest eligible waiter when a seat opens and notify them; allow the host to remove a Going entry.
+192: 209. RSVP deadline — Configure 1-72 whole hours before start, default 24; display the exact deadline, block new Going/+1 after it, and continue waitlist promotion until start.
+193: 210. RSVP changes — Changing the deadline re-announces it to members who have not answered; changing start/finish updates invitations and reminders.
+194: 211. Second table — When planned attendance exceeds one table, notify the host before game night with Premium and a free alternative to seat 10 at one table; the alternative changes the group default.
+195: 212. Check-in timing — Open exactly 10 minutes before scheduled start; before then show a locked state and opening time, then request, pending and confirmed states.
+196: 213. Check-in request — A player or guest taps "I'm here — check me in"; this creates a request, not automatic admission or a paid record.
+197: 214. Host check-in — Show checked-in, pending and not-arrived totals, individual Confirm actions, Confirm all for at least two pending requests, Take buy-in and Nudge.
+198: 215. Check-in approval — Assign a seat immediately using the selected seating mode, show the exact chip handout, create an owed buy-in/bounty ledger entry and apply any eligible early bonus.
+199: 216. Player confirmation — Show the assigned table/seat, table diagram with dealer and self marker, confirmed status and a link to the live clock/prizes; no seating controls.
+200: 217. No-show gate — At scheduled start, identify every Going player not checked in; provide Seat them, Start without them with reserved seat, and a shared Wait 10 more minutes action.
+201: 218. No-show accounting — Starting without a player must not create a paid entry, issue chips or consume buy-in; resolving one missing player must not dismiss unresolved no-shows.
+202: 219. Late registration — Admit late arrivals/walk-ins only while rebuys are open, or before the first freezeout break; use the normal seat, full handout and owed-entry path.
+203: 220. Late registration — Hide walk-in controls after final settlement pool publication and refuse late entries after the applicable cutoff with an explanation.
+204: 221. Players — Provide Active, Roster and Seating tabs; show pending arrivals, no-shows, exact handout reference, owed totals, player statuses and RSVP/attendance metadata.
+205: 222. Player states — Maintain active, paused, out, removed and no-show separately; removal corrects an entry that never played and is not a finish position.
+206: 223. Rebuy action — A single + records a rebuy, increments the visible count including zero, issues a fresh stack and shows Undo; block it after closure or when caps are reached.
+207: 224. Pause action — While rebuys remain open, Pause means out of chips and deciding; retain the seat and no finish position, with Rebuy and Out choices.
+208: 225. Bust action — Confirm final elimination, record place, bust time and level, free the seat and ask "Knocked out by"; show attribution and Undo afterward.
+209: 226. Knockout attribution — Require an eliminator when KO bounty is enabled and allow it optionally otherwise; support two eliminators for an evenly split bounty, with full Undo of credits.
+210: 227. Same-hand busts — At one table, order simultaneous eliminations by chips at the start of that hand, with the larger starting stack finishing higher; do not tie them.
+211: 228. Stack visibility — Source expectations differ: Original prohibits routine tournament stack entry and shows stacks only when typed for a deal/final table; Reformed describes continuously current p
+212: 229. Player correction — Allow per-player rebuy caps and confirmed Remove player; removing an erroneous entry frees the seat and removes its buy-in rather than creating a bust result.
+213: 230. Undo — Keep a 30-action stack, global Undo and player-specific Undo of that player's latest eligible rebuy, add-on, pause or bust regardless of later actions by others.
+214: 231. Owed ledger — Record each buy-in, rebuy, re-entry and add-on as owed until explicitly marked paid; show total owed and per-player tags with reversible payment recording.
+215: 232. Dashboard — Show game name/status, join/sound controls, level, large countdown, SB/ante/BB, elapsed progress, total time, average stack, players, starting stack, M-ratio, rebuy close and next lev
+216: 233. Dashboard — Provide large Pause/Resume and Next controls plus Speed, Edit, Seats and TV shortcuts; conditionally show join, offline, takeover and hand-for-hand banners.
+217: 234. Dashboard — Provide Players, Eliminated and Prizes views, showing the first six active rows with See all, Out actions, eliminated-player Undo and engine-generated prize amounts.
+218: 235. Clock states — Implement normal level, paused, break, rebuy-closing hold and planned-levels-ended states, each with explicit state text and valid actions.
+219: 236. Clock controls — Support -1 minute, +1 minute, Restart level and Previous level with undoable state changes; keep player-count ±1 clearly labeled as a correction, not a recorded bust.
+220: 237. Clock accounting — Total elapsed time starts at zero, includes breaks and excludes paused time; derive the visible timer from absolute authoritative timestamps rather than accumulated interval ti
+221: 238. Clock rollover — Only the authority advances segments and revisions; transition into a scheduled break, rebuy hold, next level or end state and generate the proper announcement/undo entry.
+222: 239. Pause/resume — Save remaining milliseconds on pause and set a new authoritative end timestamp on resume.
+223: 240. Drift guidance — Calculate projected finish from the current remainder, future target levels, remaining breaks and any pending rebuy allowance; warn beyond ±20 minutes without automatically chang
+224: 241. End of ladder — Offer Add a level using approximately 1.4× the last BB on playable chips and the same duration, or Repeat the last level; do not silently end an unfinished tournament.
+225: 242. Announcements — Let the host send a short announcement from the dashboard; push it to players and display the latest message in the live structure view and on TV.
+226: 243. Rebuy closure — Source rules conflict: Original holds at the closing level for Close rebuys or Keep open one more level; Reformed requires automatic locking when the designated level concludes.
+227: 244. Rebuy hold — Under Original behavior, block Next until the host resolves closure; closing blocks + and Pause, turns paused players Out and starts the add-on break/settlement.
+228: 245. Reopening — Allow Reopen rebuys only until the add-on break ends, applying normal caps and state rules.
+229: 246. Early closure — Offer "End rebuys now — after Level n" from the level view with confirmation, applying closure at the end of the current level and entering the same settlement flow.
+230: 247. Rebuy settlement — Provide two entry paths into one screen, show current entries/pool and sequentially gated attendance/rebuy confirmation, add-on decisions and final prize-pool publication.
+231: 248. Settlement step 1 — Confirm who remains and final rebuy counts with In/Busted and count controls; save confirmed player/rebuy counts for later learning.
+232: 249. Settlement step 2 — Let each eligible survivor take or decline one add-on, with price and an inventory-feasible fewest-chip breakdown; prohibit duplicates.
+233: 250. Settlement step 3 — Recompute final entries, rebuys, add-ons, net prize pool and paid places, then publish the final prizes to all game viewers.
+234: 251. Settlement timing — Allow Confirm & resume to end the break early; if the timer expires before add-on decisions finish, resume play on time but show "Add-on window (overtime)" until everyone from
+235: 252. Add-on window — Respect Addendum 2: Next closes the window; otherwise an incomplete settlement keeps it open after the break until every eligible player takes or declines; do not lock the final p
+236: 253. Table count — Default to ceil(players/maxPerTable), with max 4-10 and default 9; split evenly, require at least two per table and warn on explicit over-capacity overrides.
+237: 254. Seating — Use randomized seats and dealers, with all-table and per-table reshuffle/dealer actions and confirmations naming who moves.
+238: 255. Check-in seating — Fully random assigns a random free seat at the shortest table, breaking table-size ties toward the lower table number.
+239: 256. Guest seating — Support Guests with inviter, keeping a guest with the inviter only when capacity/balance permits, and Guests separate, using another shortest table when available.
+240: 257. Guest seating — Seat guests sequentially against current occupancy; use random seating if the inviter has not arrived, and apply the documented inviter ordering during full redraws.
+241: 258. Balancing — Requirements conflict: Original proposes host-confirmed TDA 11-A pairwise moves when tables differ by at least two; Reformed describes automatic balancing with no difference above one
+242: 259. TDA move — Recommend the player due the BB next at the larger table to the next-BB seat at the smaller table; identify player/table/seat and wait until the current hand is finished.
+243: 260. Table breaking — When remaining players fit one fewer table, propose a confirmed full redraw with fresh dealers; use an inline prompt except when moving to the final table.
+244: 261. Final table — Trigger the final-table seating flow only when all remaining players fit one table; show numbered seats and dealer, Shuffle again and Assign seats & continue.
+245: 262. Final-table display — Reformed additionally requires a high-visibility circular SVG countdown ring and a finalist chip leaderboard with big-blind depths based on entered stacks.
+246: 263. Winner safety — Reformed requires Declare Winner to remain disabled while more than two players remain; keep this distinct from Original's separately confirmed End tournament/deal workflows.
+247: 264. Payout visibility — Everyone in the game, including guests, co-hosts and TV, sees net prize pool, paid places and prize amounts; only the host sees the organiser deduction and gross financials.
+248: 265. Pool accounting — Include owed and paid buy-ins, rebuys, re-entries and add-ons in the normal pool; exclude bounty entries and calculate distributions after organiser deductions.
+249: 266. Payout updates — Recalculate immediately after a rebuy, add-on or new entry; notify the host when paid-place count changes, and propagate the same figures to every projection.
+250: 267. Paid-place calculation — Use the reference ps15 curve, count rebuys as entries, cap at six and the available shape, and apply the max(1,floor(players/2)-1) field cap.
+251: 268. Paid-place calculation — Apply the pre-rounding last-place checks of at least 1.5×buy-in and one cash unit, reducing places until valid; keep manual place-count override and Use the suggestion.
+252: 269. Payout shapes — Use owner shares: one place 100%; two 65/35; three 52.5/32.5/15; four 42.5/30/17.5/10; five 38/24/17/12/9; six 35/22/16/12/9/6.
+253: 270. Payout source conflict — Original specifies ps15 and the owner's shapes; Reformed describes tiered WSOP curves. Preserve the verified engine contract unless a changed payout policy is explicitly 
+254: 271. Money arithmetic — Use integer minor units internally, then cash units of 1 below buy-in 5, 5 below 100, 10 below 500 and 50 thereafter.
+255: 272. Payout rounding — Round places below first to the nearest cash unit with exact halves down; give first the exact remainder, including cents, and repair order inversions.
+256: 273. Organiser contribution — Default off; when legally enabled, offer None, Percent 0-30 in steps of 1 with a 10% proposed value, or Fixed in steps of 5 below the expected pool less one cash unit.
+257: 274. Organiser calculation — Round the deduction down to whole units, require fee below gross pool, display pool-deduction/hidden-from-players warnings and keep per-entry mode engine-only in v1.
+258: 275. Organiser locks — Require consequence confirmation after prizes have been shown, lock the fee completely when rebuys close and never recalculate it as part of a deal.
+259: 276. Organiser safety — If a fixed fee would reach the actual pool at closure, reduce it to pool minus one cash unit before calling the engine and explain the adjustment to the host.
+260: 277. Bounty accounting — Maintain a separate fixed-bounty pot funded by each entry/rebuy's surcharge; record knockout credits outside normal prizes and exclude them from deals.
+261: 278. Bubble — Detect remaining players equal to paid places plus one; show the dashboard card and player/TV banner with deal access and the next-elimination consequence.
+262: 279. Hand-for-hand — For a multi-table bubble, let the host start/stop hand-for-hand, pause the clock, track each table's hand-done state and advance only when every table finishes; stop automatically
+263: 280. Cross-table ties — During hand-for-hand, link same-hand eliminations at different tables as tied at the highest covered place; pool the covered prizes and split with cash-unit rounding, favoring 
+264: 281. Bubble save — Offer the bubble their buy-in back only after whole-table agreement; fund it proportionally from every paid place in whole units, with first absorbing rounding, and preview before r
+265: 282. Bubble-save validation — Refuse an amount above the smallest prize or a reordered payout ladder; provide Record, Not now and Undo and update all viewers only after confirmation.
+266: 283. Deal suggestions — Evaluate target-time, bubble, in-the-money and heads-up triggers in priority order, show each once per game, remember dismissals and never apply a deal automatically.
+267: 284. Deal threshold — Make the generic ICM suggestion threshold configurable from two to five players, default five; offer the in-game deal screen for two to five participants.
+268: 285. Deal input — Collect each remaining stack and prizes still unpaid, with denomination-aware steppers/sliders and Count by color; a prize-pool total alone is insufficient.
+269: 286. ICM — Implement Malmuth-Harville exact DP up to 2,000,000 states; above that use 200,000 stack-weighted samples with a seeded Park-Miller RNG and expose the computation method.
+270: 287. ICM edge cases — Assign zero-stack players bottom places with equal splitting, treat missing prize places as zero and ignore excess prizes beyond the relevant field.
+271: 288. Deal comparison — Show ICM, min-cash-first capped chip chop and equal chop together; chip chop cannot give anyone more than first prize, redistributing excess among uncapped players.
+272: 289. Deal rounding — Floor to the cash unit, distribute by largest remainder with stable tie-breaking and respect caps; reject impossible caps and preserve the exact unpaid total.
+273: 290. Agreed deal — Prefill editable agreed amounts from rounded ICM and block confirmation unless their sum equals the unpaid pool; list amounts in a named confirmation sheet.
+274: 291. Deal completion — Confirming a full deal ends the game, writes results and ranks remaining players by chip count; use "Deal at n players"/"leads on chips" rather than claiming an outright win.
+275: 292. Partial-deal engine — Preserve leaveForWinner and compareDeals for engine parity, including bounds on the reserved winner amount, but do not expose a partial-deal UI in v1.
+276: 293. Hard-finish operation — Warn host and TV 15 minutes before the agreed hard finish; when reached with multiple players, finish the current hand, hold and open the chosen deal method for stack entr
+277: 294. Hard-finish extension — Allow host-only Play on +30 minutes only after confirming table agreement, logging every extension; never turn the schedule into silent Turbo.
+278: 295. Tournament completion — When a bust leaves one active player and no paused player, stop the clock and open Finish order; keep status uncompleted until the host confirms.
+279: 296. Manual ending — Provide a separately confirmed End tournament action; rank survivors by entered stacks or ask the host to order them if stacks are absent.
+280: 297. Finish corrections — Derive initial places from recorded busts, limit drag correction to permitted positions, explain that prizes move with places and require confirmation rather than treating th
+281: 298. Completion writes — On confirmation, store each finish, prize, knockouts, rebuys, bust details and actual duration; update history, personal result copies and eligible season calculations, then m
+282: 299. Solo completion — Save groupless quick games under the host's soloGames collection, label them Solo in history and skip group/season writes.
+283: 300. Result correction — Let the game host reopen completed results through History → Correct results, retain an audit trail and recompute dependent standings/season points.
+284: 301. Results — Show a top-three podium, remaining finishes, prize amounts, bounty/knockout achievements and applicable season points, with accurate deal-versus-win wording.
+285: 302. Results story — Compute comeback only from entered stacks among the top three, omit it when none exist, derive fastest bust from the lowest non-winner bust level, and calculate most knockouts fro
+286: 303. Results sharing — Generate a real 1080×1350 image with group/date, winner or deal label, players, pool, podium, prizes, applicable points, knockouts and PNT branding; share through the OS.
+287: 304. History — Provide chronological tournament/cash records, All/Tournaments/Cash filters, winners, turnout, prizes, duration and drill-down to results/elimination sequences; include the viewer's Sol
+288: 305. History privacy — Show only the viewer's own P&L column; keep basic history available free and present Premium graphs/export as a quiet enhancement, not a history-access wall.
+289: 306. Personal statistics — Show games, wins, podiums, average finish, knockouts, whole-percent win rate, ITM percentage and relevant elimination trends, scoped to all groups or a selected group.
+290: 307. Personal financials — Compute lifetime P&L from prizes minus buy-ins paid and restrict it, ITM and personal money history to the owner; retain personal result copies independently of group existe
+291: 308. Standings — Free group standings show games, wins, podiums, average finish and knockouts, sorted by podiums then average finish; do not create a global cross-group public leaderboard.
+292: 309. Standings conflict — Original forbids money/ROI in group standings and derives season points from finishes; Reformed says to commit final points and ROI to the club season leaderboard.
+293: 310. Season scoring — Premium seasons have date ranges and selectable field-size, 10-7-5-3-1 or custom formulas; default custom table is 25-18-15-12-10-8-6-4-2-1.
+294: 311. Season calculation — Default points are 10×sqrt(players/finish), one decimal, using people who played rather than rebuys; rank by total points, wins then name.
+295: 312. Statistics integrity — Exclude cancelled/unfinished results with nonpositive place; recompute standings and points from finishes rather than storing stale derived totals.
+296: 313. Import — Allow host text import of one night per line as YYYY-MM-DD; names in finishing order, with Check preview and explicit Import confirmation.
+297: 314. Import validation — Name errors by line; require one semicolon, valid date, at least two players, no duplicate player and no duplicate season date; import valid lines even if others fail.
+298: 315. Import matching — Match member names by trimmed lowercase equality with accents preserved; store unmatched names as guest results and never automatically relink old guest rows after later registr
+299: 316. Learning consent — Use historical calibration only with signup consent and group opt-in; retain bust times/levels, chip supply, final BB, actual duration and confirmed rebuy/add-on observations f
+300: 317. Pace learning — From the last five completed games, propose an adjustment when average deviation reaches 15 minutes, clamped to ±20%; show evidence and require explicit acceptance.
+301: 318. Rebuy learning — From at least eight completed rebuy/re-entry games, suggest mean confirmed rebuys/confirmed players clamped to 0-100%; otherwise retain the 35% default.
+302: 319. Add-on learning — From at least eight eligible games, suggest mean add-ons taken/players alive at the add-on break, clamped to 0-100%; otherwise retain 70%.
+303: 320. Calibration — Ship the reference constants initially, review real-game evidence after approximately 20 nights and retune explicitly rather than silently altering an active event.
+304: 321. Cash access — Permit a simple local cash session without a group or RSVP process; preserve recovery and host-only access to the session ledger.
+305: 322. Cash setup — Offer 0.5/1, 1/2 and 2/5 stakes plus Custom with SB below BB; default to 1/2, min buy-in 50 BB and max 250 BB, with min below max.
+306: 323. Cash chip value — Select an available chip set and define money value per chip unit for this session only, default 1 and minimum 0.01; use it for stack-to-money reconciliation and cash-out.
+307: 324. Cash settlement option — Default Track settlement on and explain that it calculates who owes whom without processing payments.
+308: 325. Cash dashboard — Show fixed stakes, player count, chip value still in play, elapsed time, issued/returned totals and player rows with contributions, status, counted stack and approximate BB depth
+309: 326. Cash add/top-up — Add a named player within buy-in limits, propose an editable chip breakdown from inventory and record top-ups with matching ledger/stack changes and Undo.
+310: 327. Cash tracking — Treat current stacks as host-counted values, not automatic observation of the physical table; use them for depth/recount while seated and convert them into money only on cash-out.
+311: 328. Cash cash-out/rejoin — Cash out at counted stack×chip value and allow Rejoin with a new buy-in; calculate whole-session net across every stint, top-up and cash-out.
+312: 329. Cash reconciliation — Require counted seated stacks converted to money to equal issued minus returned value before settlement; block mismatches with a Recount explanation.
+313: 330. Cash preview — Provide Preview settle-up at any time without writing, cashing out players or ending the session.
+314: 331. Cash finish — End session & settle completes only after everyone is cashed out, or explicitly confirms cashing out all remaining players at their entered stacks first.
+315: 332. Cash settlement algorithm — Requirements conflict: Original mandates exact minimum transfers via zero-sum-group bitmask DP; Reformed specifies whole-table greedy O(N log N), which does not always
+316: 333. Cash settlement validation — Require zero-sum balances and at most 16 people with nonzero balances; block an action creating a seventeenth open balance until someone is settled.
+317: 334. Cash output — Return deterministic payer/payee/amount instructions with Copy as text; for the exact engine, pair within optimal zero-sum groups with stable name tie-breaking.
+318: 335. TV access — Provide a read-only, browser-based paired display with a separate TV code, fullscreen control and return-to-origin exit; build browser pairing first, with casting deferred pending app
+319: 336. TV layout — Optimize for 16:9 landscape with very large, high-contrast clock/blinds, status, game/code, progress, elapsed time, average stack, next level and players; use a stacked portrait fallb
+320: 337. TV sizing — Support automatic width-based scaling plus per-device text scale 0.7-2.0; use up to 180 px clock numerals and at least 120 px clock height on 1080p.
+321: 338. TV panels — Default payouts and upcoming levels on and leaderboard off; rotate optional panels every 5, 8, 12, 20 or 30 seconds, default 8.
+322: 339. TV live messages — Automatically show bubble state and the latest host announcement, with announcements visible for 60 seconds, independently of optional panel toggles.
+323: 340. TV privacy — Never send organiser fee, gross financials, private ledger or other players' personal money to TV; show only the allowed game projection and optional public leaderboard fields.
+324: 341. TV entitlements — Include one default display free; custom layouts/branding and additional displays are Premium, with pairing-related upgrade guidance on the host device rather than blocking the 
+325: 342. TV pairing lifecycle — Notify the host on the first TV connection and allow TV-code re-roll that immediately invalidates the previous code.
+326: 343. Audio controls — Default level chime, five-minute warning, one-minute warning, voice, haptics and master sound on; provide device-local switches and a scoreboard master mute.
+327: 344. Voice — Speak level numbers, blinds, antes, break information, rebuy warnings and end-of-ladder messages as words without currency; retain the last spoken announcement visibly.
+328: 345. Audio master — Only the selected audio-master device speaks; default to the authority phone, allow This phone/The TV selection and never force voice on if that device has disabled it.
+329: 346. Browser audio — Require a user gesture to unlock sound on each browser/TV; show a clear tap prompt and keep the phone as audio master until the TV is unlocked.
+330: 347. Sound testing — Provide Test sound using the next level's announcement and the device's current volume.
+331: 348. Volume conflict — Original explicitly forbids an in-app volume slider and uses device volume; Reformed requires speech-synthesizer volume controls.
+332: 349. Haptics/awake — Provide optional level-change haptics, on by default, and keep the authority device and TV awake during an active clock when the setting is enabled.
+333: 350. Public tools — Offer a no-login hub with five free, unlimited, individually shareable calculators using the same engines; do not read or mutate group/game data implicitly.
+334: 351. Blind generator — Accept players, target duration in 30-minute steps, pace and starting stack; defaults are 10 players, 4 hours and stack 400, with stack 100-20,000 in steps of 100.
+335: 352. Blind generator — Show the complete ladder, antes, breaks, level/duration summary, Add level and a share link that restores inputs; Reformed also requires standard 300- and 500-chip-box support.
+336: 353. No-chip tools — When no inventory is supplied, use the reference nonbinding synthetic case/practical blind table; Quick blind targets opening BB near stack/100 on playable units.
+337: 354. Standalone clock — Provide a fullscreen countdown with blinds, ante, progress, next level/break, previous, play/pause, next, restart, editable levels and audio alerts.
+338: 355. Public ICM — Accept 2-9 players, their individual stacks and remaining prizes; reject a tenth player and show ICM amount/percentage, chip chop and total distributed.
+339: 356. Payout calculator — Accept at least two entries, buy-in 5-200 in steps of 5 and place choices with the engine recommendation; support fields of 100+ while retaining verified payout rules.
+340: 357. Payout reuse — Provide a signed-in, explicit Use this structure action that copies the calculated split into a new game's payout override rather than silently changing an existing game.
+341: 358. Quick blind calculator — Provide the Reformed 30-second recommendation flow from players, stack 100-20,000 in steps of 100 and 2/3/4-hour targets; show starting blinds, level length and level cou
+342: 359. Profile — Show avatar, display name, membership date, own P&L, career statistics and achievements with icons; support editing the display name and changing/removing a photo.
+343: 360. Settings — Provide gameplay, sound/voice, local preferences, hosting defaults, game assets, blocked users, data and plan sections, plus Sign out and Delete account.
+344: 361. Hosting defaults — Store preferred ante bias, buy-in, stack option, format, payout mode, 4-10 table capacity, optional contribution proposal and deal threshold; seed new games/groups only.
+345: 362. Local preferences — Keep currency, audio, compact results, keep-awake and TV display settings per device; do not include the removed Hosting tour/app-tour setting in v1.
+346: 363. Currency — Default to no symbol; allow None, €, $ or £ as a display-only preference everywhere, with no exchange conversion and never a currency symbol on chip quantities.
+347: 364. Formatting — Use locale thousands separators and clock/date formats, preserve cents when present, never abbreviate money and limit chip abbreviations to permitted compact chip displays.
+348: 365. Localization — Ship English initially but put all strings in ARB resources from the start; format game times with locale and stored time-zone awareness.
+349: 366. Premium — Preserve Original's free baseline: all public tools, unlimited tournaments/sync, one table, full level editing, all full deals, one default TV, fixed bounty, three templates, unlimited 
+350: 367. Premium — Original's paid features are multiple tables, seasons/points, custom TV layouts and extra displays, Progressive/Mystery bounty controls, unlimited templates and graphs/history exports.
+351: 368. Premium conflict — Reformed additionally places unlimited clubs, multi-season archives, custom TV branding and SMS alerts in Pro; Original's exclusive entitlement list does not make clubs or SMS 
+352: 369. Premium prompts — Show upgrade entry from planned second-table demand, an explicitly chosen Premium control or Settings; never block an already-running game or prompt from capped quick start.
+353: 370. Progressive/Mystery scope — Show these Premium choices as Coming soon until their mechanics are approved; fixed KO payouts must work fully in v1.
+354: 371. Plans — Provide Monthly, Yearly and one-time Host licence; read prices from store products, compute actual annual savings and exclude the one-time licence from subscription/trial comparisons.
+355: 372. Trial conflict — Original's unresolved-decision default is no trial with Continue; Reformed explicitly requires seven-day trial terms. Do not present an unapproved trial as settled policy.
+356: 373. Checkout — Use native Apple/Google purchase sheets and an approved hosted web checkout; never build a card-entry form or store card details in the app.
+357: 374. Entitlements — Validate purchases server-side, store the entitlement server-side, return to the originating feature after success and offer Restore purchases in Upgrade and Settings.
+358: 375. Entitlement scope — Premium belongs to the purchasing host account and applies to that host's games; players need no purchase, and shared group-wide host entitlement remains unapproved.
+359: 376. Privacy policy — Provide a public, dated policy listing collected account/game/chat/poll data, purposes, sharing limits, processors, storage region, retention, analytics/crashes, export/deletion 
+360: 377. Privacy — Do not sell personal data, use advertising trackers or create advertising profiles; implement GDPR/CCPA-oriented consent and data-control requirements.
+361: 378. Consent records — Store versioned, timestamped history-learning consent with a per-group opt-out; do not use opted-out nights beyond their own necessary result records for calibration.
+362: 379. Analytics — Collect only allowed product-usage events, never names, chat or ledger amounts; in the EU initialize Analytics only after Allow, with Not now and a later settings choice.
+363: 380. Crash reporting — Disclose Crashlytics and diagnostic data in the policy and store privacy labels; retain crash reports for the specified 90-day period.
+364: 381. Data export — Provide free personal JSON export of profile, memberships, results, chip sets, templates and own chat messages, distinct from Premium history/graph exports.
+365: 382. Account deletion — Delete user/auth documents, anonymize group finishes as Former member and chat authors as Deleted user, and clear group chip-set pointers to deleted personal sets.
+366: 383. Deletion safety — Block deletion while the user hosts scheduled or running games, require ending or handing them over, and cancel solely owned drafts during deletion.
+367: 384. Retention — Retain permitted group game/chat/audit data while the group exists; after 24 months of inactivity, warn the host 30 days ahead, archive the group and delete its chat.
+368: 385. Terms — Publish adult-use, account-security, service limitations, user data ownership, acceptable/lawful use and Premium cancellation terms; describe a home-game clock/manager, not an online gamb
+369: 386. Organiser legal gate — Keep the contribution off by default and country-controlled; show the versioned H4 warning on first enabling, country changes or fee-bearing template imports, requiring I u
+370: 387. Legal acceptance — Record contribution-warning acceptance against the user with time, app version and copy version, not on a publicly shared game.
+371: 388. Launch gate — Obtain gaming-lawyer approval per launch market, including specific Portuguese approval before a Portuguese release; do not treat document examples as legal clearance.
+372: 389. Support — Publish a contact address, one-business-day response commitment, expandable FAQs and Email us with visible version/platform/game-ID diagnostics and no undisclosed personal attachment.
+373: 390. Support content — Explain quick/planned starts, recovery, cash settlement, prize visibility, no-money-movement limits and abuse reporting, matching the actual implemented behavior.
+374: 391. Lifecycle — Model draft, scheduled, running, paused, on-break, rebuy-hold, final-table, completed and cancelled states; keep drafts private and create quick games directly as running.
+375: 392. Lifecycle — Tie check-in, RSVP cutoff, no-show handling, rebuy settlement and completion writes to explicit state transitions, not merely which screen is open.
+376: 393. House rules — Publish rebuy opening/closing, eligibility, limits, chip amount and add-on eligibility/timing explicitly; distinguish a rebuy, a new re-entry and a one-time add-on.
+377: 394. Architecture — Separate Flutter screens, domain app state, pure engines/permissions/projections, I/O services and model codecs; screens hold presentation state only.
+378: 395. Architecture — Keep all mutable domain state in one domain-split app-state layer, using the team's selected Provider/Riverpod approach rather than independent conflicting screen stores.
+379: 396. Engine port — Port the reference research structure and payouts engines function-for-function into pure Dart libraries with preserved names; never port the mock's outdated embedded engine copies.
+380: 397. Engine determinism — Engines, permissions and projections must take explicit values and return values without I/O or ambient clocks; inject required random inputs and use seeded Monte Carlo for r
+381: 398. Engine compatibility — Preserve public engine helpers, constants, rounding rules, legacy behavior and engine-only APIs even when the v1 UI does not expose them; test the icmTrigger method separat
+382: 399. Backend — Use Firebase Authentication, Firestore, Functions, Hosting/universal links, Remote Config, Crashlytics, permitted Analytics and the approved push integration; enable App Check on Firest
+383: 400. Regional storage — Select the cloud region and disclose processors per approved launch market; use an EU Firebase region for EU launches.
+384: 401. Functions — Implement server responsibilities for transactional code reservation/joining, push fan-out, time-relative reminder scheduling, receipt validation, deletion, moderation, retention and 
+385: 402. Models — Represent users, memberships, groups, tournaments, settings/overrides, players, RSVPs/waitlists, ledger, seating, clock, results, authority, deal-trigger history, templates, chip sets, c
+386: 403. Overrides — Store null for engine-selected settings and explicit values for host overrides; every new input must pass through GameSettings, serialization and verification recomputation.
+387: 404. Codec — Use one versioned codec for both cloud documents and recovery snapshots; read older versions losslessly, and prevent clients from becoming authority when a game uses a newer unsupported w
+388: 405. Storage — Keep user-owned results, chip sets, templates, inbox and server-written entitlements separate from groups, membership, group games/chats/polls/seasons, solo games, cash sessions, report
+389: 406. Private storage — Keep organiser contribution, gross financials and full audit in host-only private storage; expose only the minimum profile/membership fields required to other users.
+390: 407. Game roles — Resolve permissions per game from hostUid and coHostUids, copy group co-hosts when posting and let only the host manage game hosting assignments.
+391: 408. Game creation — Assign a new planned game's creator as that game's host, including when they are otherwise an ordinary group member; keep game and group roles distinct.
+392: 409. Permissions — Enforce capability checks in the UI and backend; hiding a button alone must never authorize or protect an operation.
+393: 410. Co-host write rules — Apply Addendum 1: on the game document, co-hosts may change only clock, control and ledger; players, requests and RSVPs use their own subcollection rules, while settings, ho
+394: 411. Player requests — Members/guests may create or change only their own authorized RSVP/check-in/rebuy request fields; host/co-host approval is separate from a player writing authoritative game stat
+395: 412. Membership security — Create memberships only through server-side joinGroup(code), with validated codes and idempotence; allow host role updates/removal and a member's own leave operation.
+396: 413. Premium security — Validate Premium-only writes against the host's server-maintained entitlement, including multiple tables, seasons, Premium bounty settings and extra templates.
+397: 414. Projection security — Publish pre-stripped player/guest/TV data with an explicit key allowlist and authorized writer checks; never rely on client-side filtering of a readable full game.
+398: 415. Financial projections — Host/co-host may access permitted ledger detail, players/guests only their own owed rows, and TV none; do not place own-only rows in an unrestricted shared public ledger.
+399: 416. Code generation — Generate six-character codes with cryptographic randomness, reserve them transactionally in one unique group/game/TV namespace, retry collisions and do not let hosts choose code
+400: 417. Code security — Prohibit direct client reads/writes of the code registry and rate-limit counters; resolve via App-Check-protected callable logic returning only the necessary kind and target IDs.
+401: 418. Code separation — Keep game and TV codes distinct so TV links cannot RSVP/check in; group-code re-roll must invalidate the old invite immediately.
+402: 419. Code expiry — Expire/release game and TV codes and delete public live projections on completion or cancellation while retaining authorized results/history.
+403: 420. Single writer — Permit exactly one host/co-host device to write authoritative game/clock state; on web, elect only one leader tab per browser.
+404: 421. Authority heartbeat — Send a heartbeat every 30 seconds; allow eligible automatic claims when no editor exists or the editor has been stale over 90 seconds, otherwise remain a follower.
+405: 422. Manual takeover — Always offer Take over or Watch only to another host/co-host device; claim authority transactionally, bump revision and make the old writer fall back to read-only when its next 
+406: 423. Host handover — Let the host transfer game ownership to a co-host with confirmation, retaining the former host as co-host so the new host can confirm deals and results.
+407: 424. Emergency takeover — When no co-host device is online and the authority has been silent 30 minutes, offer checked-in signed-in players a transactionally logged promotion to co-host and authority;
+408: 425. Clock synchronization — Estimate server offset as server-(t0+t1)/2 and show levelEndsAt-(now+offset); remeasure every 10 minutes and on resume, with followers advancing display only.
+409: 426. Write integrity — Every authoritative transaction checks editorDeviceId and expected revision, increments revision and uses an idempotency key; retries are no-ops rather than duplicate game actio
+410: 427. Ledger idempotence — Use game/player/kind uniqueness for a buy-in or add-on, fresh keys for each legitimate rebuy/re-entry and game/player/bust/entry uniqueness for elimination.
+411: 428. Concurrent updates — Patch only owned fields for multi-writer RSVP, request and chat operations instead of replacing complete documents.
+412: 429. Offline — Enable Firestore persistence and a local RecoveryService snapshot store, using the Reformed SQLite/SecureStorage approach as appropriate; snapshot after every authoritative write.
+413: 430. Offline operation — Let a previously loaded authority device run the night and queue busts, rebuys, add-ons and check-ins in order; show a persistent offline banner and synchronize when connectiv
+414: 431. Offline limits — First-time device/code loading requires connectivity; followers continue counting from the last end timestamp and show Reconnecting rather than claiming fresh synchronized state.
+415: 432. Reconnect conflicts — Reject queued actions targeting a superseded authority/revision rather than merging them; list unapplied actions so the host can review and redo valid ones.
+416: 433. Recovery — Restore game and cash-session snapshots after crash/restart, compare local and cloud freshness and recover the correct elapsed clock without data loss; Original offers Resume, while Re
+417: 434. Guest local storage — Retain guest identity/approved slot independently of Firebase anonymous-host authentication; clear only when explicitly switching guest identity or being removed.
+418: 435. Integrity verification — Recompute published structure from all settings and declared edits, including levels, breaks, cutoff and starting stack; verify against net prizes without exposing the pr
+419: 436. Audit — Record action, actor, time, amount, structural changes, author and monotonic revision; retain edited-level markers and result-correction/hosting-transfer/extension history without exposin
+420: 437. Integrity wording — Treat deterministic recomputation as a consistency check, not a cryptographic anti-cheating guarantee; avoid alarming player banners for host-side mismatch handling.
+421: 438. Input safety — Normalize before storage by decoding entities, removing dangerous tags/HTML, collapsing whitespace, trimming and enforcing lengths; separately escape every rendered/share-image out
+422: 439. Input limits — Enforce 1-40-character names, 1-120-character poll questions, 1-60-character poll options and 1-1,000-character chat; preserve legitimate accents and apostrophes.
+423: 440. Identity formatting — Disambiguate matching first names with a last-name initial and keep initials avatars separate from textual names.
+424: 441. Acceptance — Pass all 759 structure-engine and 55 payout-engine reference assertions before screens rely on the ports; compare actual computed results, not just matching API names.
+425: 442. Acceptance — Reimplement applicable behaviors from all 145 mock tests as Flutter widget/integration tests; recognize T60, T101 and T145 as mock-specific rather than copying DOM/script checks into
+426: 443. Acceptance — Add coverage for all 54 specified untested behaviors plus addendum/Reformed additions, including permissions, timing boundaries, settlement overtime, deletion, DST reminders and TV a
+427: 444. Acceptance — Preserve the 400-seeded-operation ladder-edit fuzz test and chip-payability regression scenarios; verify color-ups, pin refusal, duplicate actions and exact settlement minima.
+428: 445. Acceptance — Test all applicable screen states and roles, real-background contrast, 44 px targets, keyboard/screen-reader behavior, 200% text scaling, visual sound equivalents and reduced motion.
+429: 446. Security testing — Maintain CI Firestore/Functions rule tests for every collection, public-projection keys/writers, code limits/App Check, co-host field restrictions, membership creation and serv
+430: 447. Environments — Use separate owner-controlled Firebase dev, staging and production projects, each with the required services; test country legal flags in staging before enabling them in production
+431: 448. CI/deployment — Run engine, widget/integration and rules suites on every pull request; deploy dev on merge, staging on release branches and production from tagged releases.
+432: 449. Delivery milestones — Deliver the eight specified stages: engines; design/shell; runnable quick night; groups/RSVP/wizard; seating/deals/results; sync/co-host/offline/TV; cash/tools/account/sound
+433: 450. Milestone acceptance — Require passing relevant tests and engine vectors, no open staging crashes for those flows, design review and an owner walkthrough; payment is per accepted milestone.
+434: 451. Design delivery — Build missing-board screens from the prose and shared components without blocking unrelated milestones, then reskin when approved tiles arrive.
+435: 452. Ownership — Keep code in the owner's Git repository from the first commit; Firebase projects, developer accounts and domain belong to the owner with team access delegated.
+436: 453. Commercial handoff — Supply a price and duration per milestone, team, assumptions and one written questions list; use documented "build meanwhile" defaults for unresolved choices unless the owner
+437: 454. Change control — Version the specification/mock/engine baseline with SHA-256 references and dated changes; scope additions require written description, quotation and agreement before work starts.
+438: 455. Store submission — Initially ship with organiser contribution remotely off; use the prescribed timer/calculator positioning, no "rake," "cut," "bet" or "gamble" marketing keywords, and truthful r
+439: 456. Store readiness — Answer age/content questionnaires truthfully, target the specified 17+/Mature store positioning alongside the 18+ service gate, provide accurate privacy labels, moderation/conta
+440: 457. Release — Obtain legal and owner sign-off, maintain consistent submission records, and release the web build first if store approval delays the common-codebase launch.

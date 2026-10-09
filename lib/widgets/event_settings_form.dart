@@ -11,7 +11,13 @@ import '../models/tournament_format.dart';
 import '../models/live_game.dart';
 import '../models/table_settings.dart';
 import '../models/tournament.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/app_provider.dart';
 import '../utils/event_settings_validation.dart';
+import '../utils/formatters.dart';
+import 'app_button.dart';
+import 'app_modal.dart';
 import 'app_text_field.dart';
 import 'app_toggle.dart';
 import 'chip_set_editor.dart';
@@ -44,12 +50,15 @@ class EventSettingsForm extends StatefulWidget {
     required this.onChanged,
     this.showOrganizerPct = false,
     this.orgPctCeiling = GameSettings.maxOrganizerPct,
+    this.hideSavePresetButton = false,
   });
 
   /// The settings this form starts from. Seeded once; later edits are never
   /// re-synced from a new [GameSettings], so callers must not rebuild this
   /// widget with a draft as its own [initial] (the parent owns the draft).
   final GameSettings initial;
+  
+  final bool hideSavePresetButton;
 
   /// Which sections to render, in order of iteration.
   final Set<EventFormSection> sections;
@@ -154,7 +163,10 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
     _orgPct = s.organizerPct;
     // Only shown when rebuys are Limited; defaults to 1 per player.
     _rebuyLimit = TextEditingController(text: s.rebuyLimit?.toString() ?? '1');
-    _rebuyCost = TextEditingController(text: s.rebuyCost?.toString() ?? '');
+    final initialRebuy = s.rebuyCost != null
+        ? s.rebuyCost.toString()
+        : (s.buyIn > 0 ? s.buyIn.toString() : '');
+    _rebuyCost = TextEditingController(text: initialRebuy);
     _addOnCost = TextEditingController(text: s.addOnCost?.toString() ?? '');
     _format = s.effectiveFormat;
     _maxReEntries = TextEditingController(text: s.maxReEntries?.toString() ?? '');
@@ -277,7 +289,9 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
       anteAfterLevel: _anteAfterLevel,
       organizerPct: _orgPct,
       breaks: List.of(_breaks),
-      rebuyCost: _rebuys ? rebuyCost?.toInt() : null,
+      rebuyCost: _rebuys
+          ? (rebuyCost?.toInt() ?? buyIn?.toInt() ?? s.buyIn)
+          : null,
       addOnCost: _addOn ? addOnCost?.toInt() : null,
       tableSettingsOverride: _overrideTableSettings
           ? TableSettings(
@@ -555,7 +569,99 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
           _emit();
         },
       ),
+      if (!widget.hideSavePresetButton) ...[
+        const SizedBox(height: AppSpacing.md),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AppButton(
+            variant: AppButtonVariant.secondary,
+            size: AppButtonSize.sm,
+            onPressed: _chipSet.isEmpty ? null : () => _showSavePresetModal(context),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.bookmark_add_outlined, size: 16),
+                SizedBox(width: AppSpacing.xs),
+                Text('Save chip set as preset'),
+              ],
+            ),
+          ),
+        ),
+      ],
     ];
+  }
+
+  Future<void> _showSavePresetModal(BuildContext context) async {
+    final controller = TextEditingController(
+      text: _chipSetName.isNotEmpty && _chipSetName != 'Custom'
+          ? _chipSetName
+          : 'My Chip Set',
+    );
+    final app = context.read<AppProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    await showAppModal(
+      context: context,
+      title: 'Save chip set preset',
+      maxWidth: 400,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Save these ${_chipSet.length} chip denominations as a preset you can reuse for any tournament.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            controller: controller,
+            label: 'Preset name',
+            placeholder: 'e.g. Home Set 500',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: AppButton(
+                  onPressed: () {
+                    final trimmed = controller.text.trim();
+                    if (trimmed.isEmpty) return;
+                    final id = 'cs-${DateTime.now().millisecondsSinceEpoch}';
+                    try {
+                      app.saveChipSet(id, trimmed, _chipSet);
+                      setState(() {
+                        _chipSetName = trimmed;
+                      });
+                      _emit();
+                      Navigator.of(context).pop();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text('Saved "$trimmed" to your chip set presets.'),
+                        ),
+                      );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Could not save preset: $e')),
+                      );
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   // ---- Rules ----
@@ -752,6 +858,20 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
               ],
             ),
           ),
+        if (!widget.sections.contains(EventFormSection.money))
+          _EditRow(
+            title: 'Rebuy price',
+            subtitle: 'Defaults to the buy-in when blank',
+            trailing: SizedBox(
+              width: 130,
+              child: AppTextField(
+                controller: _rebuyCost,
+                keyboardType: TextInputType.number,
+                placeholder: _buyIn.text.isNotEmpty ? _buyIn.text : '100',
+                onChanged: (_) => _emit(),
+              ),
+            ),
+          ),
       ],
       if (_reEntry)
         Padding(
@@ -806,36 +926,42 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
   /// the two controls would disagree.
   List<Widget> _formatFields() {
     return [
-      _EditRow(
+      _ToggleRow(
         title: 'Ante',
-        subtitle: 'How the ante is posted',
-        trailing: _OptionPicker(
-          options: const [
-            'Recommended',
-            'No ante',
-            'Big blind',
-            'Individual',
-          ],
-          selected: switch (_antePreference) {
-            AntePreference.recommend => 'Recommended',
-            AntePreference.none => 'No ante',
-            AntePreference.bigBlind => 'Big blind',
-            AntePreference.individual => 'Individual',
-          },
-          onChanged: (v) {
-            setState(
-              () => _antePreference = switch (v) {
-                'No ante' => AntePreference.none,
-                'Big blind' => AntePreference.bigBlind,
-                'Individual' => AntePreference.individual,
-                _ => AntePreference.recommend,
-              },
-            );
-            _emit();
-          },
-        ),
+        subtitle: 'Ante posted every hand later in the tournament',
+        value: _antePreference != AntePreference.none,
+        onChanged: (v) {
+          setState(() {
+            _antePreference = v ? AntePreference.bigBlind : AntePreference.none;
+          });
+          _emit();
+        },
       ),
-      if (_antePreference != AntePreference.none)
+      if (_antePreference != AntePreference.none) ...[
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: _EditRow(
+            title: 'Ante type',
+            subtitle: 'Big Blind Ante is recommended for faster home play',
+            trailing: _OptionPicker(
+              options: const [
+                'Big blind (Recommended)',
+                'Individual',
+              ],
+              selected: _antePreference == AntePreference.individual
+                  ? 'Individual'
+                  : 'Big blind (Recommended)',
+              onChanged: (v) {
+                setState(
+                  () => _antePreference = v.contains('Individual')
+                      ? AntePreference.individual
+                      : AntePreference.bigBlind,
+                );
+                _emit();
+              },
+            ),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
           child: _OptionPicker(
@@ -857,6 +983,7 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
             },
           ),
         ),
+      ],
       Divider(color: AppColors.border),
       // §25.1a: players checked in before the cutoff start above the printed
       // stack. Off by default — it is a house rule, not a tournament rule —
@@ -924,6 +1051,27 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
                   ),
                   onChanged: (_) => _emit(),
                 ),
+              ),
+              Builder(
+                builder: (context) {
+                  final pct = double.tryParse(_earlyArrivalPct.text.trim()) ?? 12.5;
+                  final refStack = _chipSet.isNotEmpty
+                      ? (_chipSet.fold<int>(0, (s, c) => s + c.value * c.quantity) ~/
+                              (widget.initial.players > 0 ? widget.initial.players : 8))
+                          .clamp(500, 20000)
+                      : 2000;
+                  final bonusChips = (refStack * (pct / 100)).round();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Text(
+                      'Adds ~${Formatters.chips(bonusChips)} extra chips (${pct.toStringAsFixed(1)}% of ~${Formatters.chips(refStack)} stack)',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),

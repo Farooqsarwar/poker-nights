@@ -65,7 +65,7 @@ extension AppProviderSocial on AppProvider {
     final lastRead = _chatLastRead[scopeKey];
     var count = 0;
     for (final m in messages) {
-      if (m.deleted || m.authorId == uid) continue;
+      if (m.deleted) continue;
       if (blocked.contains(m.authorId)) continue;
       if (lastRead != null && !m.timestamp.isAfter(lastRead)) continue;
       count++;

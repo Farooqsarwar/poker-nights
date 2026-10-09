@@ -350,7 +350,7 @@ extension AppProviderCloudSync on AppProvider {
   bool get canManageMembers => isAdmin;
 
   /// Allow co-hosts / tournament organizers to grant rebuys, add-ons, and seating (§3, §4, §E9).
-  bool get canGrantRebuys => isAdmin || canOperateTheClock || isCurrentGameOrganizer;
+  bool get canGrantRebuys => isAdmin || isCoAdmin || canOperateTheClock || isCurrentGameOrganizer;
 
   /// This member's role in the current group, for role-picker UIs.
   GroupRole roleOf(AppUser member) => member.isAdmin
@@ -544,15 +544,14 @@ extension AppProviderCloudSync on AppProvider {
           error = 'unknown kind';
       }
       if (error != null) {
-        hadError = true;
-        debugPrint('Processing request ${req.id} failed: $error; preserving request.');
-        continue;
+        debugPrint('Processing request ${req.id} failed: $error; dropping request.');
       }
       try {
         await _repo.consumeRequest(gameId, req.id);
-        changed = true;
+        if (error == null) changed = true;
       } catch (e) {
         debugPrint('consumeRequest failed: $e');
+        hadError = true;
       }
     }
     if (changed && !hadError) if (!_disposed) notifyListeners();

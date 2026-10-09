@@ -291,7 +291,7 @@ extension AppProviderGame on AppProvider {
   }
 
   void updateGameStatus(LiveGameStatus status) {
-    if (_currentGame == null || (!isAdmin && !canOperateTheClock)) return;
+    if (_currentGame == null || (!isAdmin && !isCoAdmin && !canOperateTheClock)) return;
     _forceClaimEditor();
     final wasPublished = _currentGame?.status == LiveGameStatus.published;
     _currentGame = _currentGame!.copyWith(status: status);

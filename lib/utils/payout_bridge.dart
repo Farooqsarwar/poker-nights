@@ -8,10 +8,10 @@ class PayoutBridge {
   static String? lastHostAlert;
   static final List<String> hostAlerts = [];
 
-  /// Framework §13 / Spec F2.8: Hard-ceiling finish check.
+  /// Framework §13 / Spec F2.8: Hard-time finish check.
   /// True when hard finish is enabled and the elapsed minutes from start reaches
   /// or exceeds expectedFinishMins + hardFinishMinsAfterFinish.
-  static bool isAtHardCeiling(LiveGame game) {
+  static bool isAtHardTimeLimit(LiveGame game) {
     if (!game.settings.hardFinishEnabled || game.startedAt == null) return false;
     final elapsed = DateTime.now().difference(game.startedAt!).inMinutes;
     final cutoff = game.structure.expectedFinishMins +
@@ -40,7 +40,7 @@ class PayoutBridge {
       default:
         break;
     }
-    final bool targetTimeReached = isAtHardCeiling(game) ||
+    final bool targetTimeReached = isAtHardTimeLimit(game) ||
         (game.startedAt != null &&
             DateTime.now().difference(game.startedAt!).inMinutes >=
                 game.structure.expectedFinishMins) ||

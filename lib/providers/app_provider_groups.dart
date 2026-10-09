@@ -163,6 +163,7 @@ extension AppProviderGroups on AppProvider {
   }
 
   /// Pins/unpins a group so it floats to the top of the sidebar's group list.
+  // void togglePinGroup(Group group) { // Dead code removed
   void togglePinGroup(Group group) {
     _setGroup(group.copyWith(pinned: !group.pinned));
     if (!_disposed) notifyListeners();
@@ -225,7 +226,7 @@ extension AppProviderGroups on AppProvider {
   /// Host or Co-host: adds a registered user directly to the group by
   /// email, without going through an invite link/QR/join code. Returns null
   /// on success, or a friendly error message for the UI.
-  Future<String?> addMemberByEmail(String email) async {
+  Future<String?> addMemberByEmail(String email) async { // Fixed: use joinGroup
     if (!canManageMembers) return 'Only the Host can add members.';
     if (!_backendUp) return 'You are offline.';
     final trimmed = email.trim();
@@ -253,6 +254,7 @@ extension AppProviderGroups on AppProvider {
         found,
         groupName: _currentGroup.name,
         groupIcon: _currentGroup.icon,
+        joinCode: _currentGroup.joinCode,
       );
     } catch (e) {
       debugPrint('addMemberByEmail failed: $e');

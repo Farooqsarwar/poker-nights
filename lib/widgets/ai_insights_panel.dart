@@ -120,15 +120,24 @@ class _Analysis extends StatelessWidget {
       final chosen = structure.rebuysCloseLevel > 0
           ? structure.rebuysCloseLevel
           : settings.rebuysCloseLevel;
+      final isUnlimited = settings.rebuyLimit == null;
       rows.add((
-        label: 'Rebuys close',
+        label: isUnlimited ? 'Unlimited rebuys' : 'Rebuys close',
         value: 'Level $chosen',
-        note: settings.rebuyCloseChosenByOrganizer
-            ? 'Your choice — the engine left it alone.'
-            : chosen == 6
-                ? 'The default, and it suits this structure.'
-                : 'Moved from the level 6 default to keep late-game pressure '
-                    'with these blinds and this stack.',
+        note: settings.players <= 8 && !isUnlimited
+            ? 'For ${settings.players} players, unlimited rebuys is recommended to keep play continuous.'
+            : (settings.rebuyCloseChosenByOrganizer
+                ? 'Your choice — the engine left it alone.'
+                : chosen == 6
+                    ? 'The default, and it suits this structure.'
+                    : 'Moved from the level 6 default to keep late-game pressure '
+                        'with these blinds and this stack.'),
+      ));
+    } else if (settings.players <= 8) {
+      rows.add((
+        label: 'Rebuys',
+        value: 'None (Freeze Out)',
+        note: 'For ${settings.players} players, unlimited rebuys until level 6 is recommended to keep play continuous.',
       ));
     }
 

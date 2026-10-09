@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/tournament.dart';
@@ -224,9 +225,11 @@ class _StructureEditorState extends State<StructureEditor> {
                   onChanged: (v) {
                     if (v == null) return;
                     final parts = v.split('-');
+                    final p0 = int.parse(parts[0]);
+                    final p1 = int.parse(parts[1]);
                     setState(() {
-                      l.sbValue = int.parse(parts[0]);
-                      l.bbValue = int.parse(parts[1]);
+                      l.sbValue = math.min(p0, p1);
+                      l.bbValue = math.max(p0, p1);
                     });
                   },
                   items: [

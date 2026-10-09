@@ -63,8 +63,8 @@ class _PollsScreenState extends State<PollsScreen> {
       setState(() => _pollError = 'Enter at least two options.');
       return;
     }
-    if (opts.length > 6) {
-      setState(() => _pollError = 'Maximum of 6 options allowed.');
+    if (opts.length > 10) {
+      setState(() => _pollError = 'Maximum of 10 options allowed.');
       return;
     }
     for (final opt in opts) {
@@ -110,6 +110,7 @@ class _PollsScreenState extends State<PollsScreen> {
             controller: _pollQuestion,
             label: 'Question',
             placeholder: 'e.g. What buy-in for next game?',
+            maxLength: 120,
           ),
           if (_pollError != null) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -157,7 +158,7 @@ class _PollsScreenState extends State<PollsScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
-          if (_pollOptions.length < 6)
+          if (_pollOptions.length < 10)
             InkWell(
               onTap: () =>
                   setState(() => _pollOptions.add(TextEditingController())),
@@ -266,11 +267,10 @@ class _PollsScreenState extends State<PollsScreen> {
             onBack: () => context.go(RoutePaths.group),
             title: 'Polls',
             actions: [
-              if (isAdmin)
-                PromptLink(
-                  action: '+ Create poll',
-                  onTap: () => setState(() => _showPollModal = true),
-                ),
+              PromptLink(
+                action: '+ Create poll',
+                onTap: () => setState(() => _showPollModal = true),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),

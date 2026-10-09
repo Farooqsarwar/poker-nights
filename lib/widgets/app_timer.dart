@@ -48,24 +48,25 @@ class AppTimer extends StatelessWidget {
     // width column on a 320px phone. Scaling down instead keeps the class's
     // documented promise that it fits whatever width it is given.
     return FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              for (var i = 0; i < timeStr.length; i++)
-                _TimerDigit(
-                  char: timeStr[i],
-                  size: size,
-                  color: (lastColonIdx != -1 && i >= lastColonIdx)
-                      ? secsColor
-                      : minsColor,
-                  danger: danger,
-                ),
-            ],
-          ),
-        )
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          for (var i = 0; i < timeStr.length; i++)
+            _TimerDigit(
+              char: timeStr[i],
+              size: size,
+              color: (lastColonIdx != -1 && i >= lastColonIdx)
+                  ? secsColor
+                  : minsColor,
+              danger: danger,
+              isColon: timeStr[i] == ':',
+            ),
+        ],
+      ),
+    )
         .animate(
           key: ValueKey(danger ? 'danger' : 'normal'),
           onPlay: (controller) =>
@@ -79,36 +80,63 @@ class AppTimer extends StatelessWidget {
   }
 }
 
-class _TimerDigit extends StatelessWidget {
+class _TimerDigit extends StatefulWidget {
   const _TimerDigit({
     required this.char,
     required this.size,
     required this.color,
     required this.danger,
+    required this.isColon,
   });
 
   final String char;
   final double size;
   final Color color;
   final bool danger;
+  final bool isColon;
+
+  @override
+  State<_TimerDigit> createState() => _TimerDigitState();
+}
+
+class _TimerDigitState extends State<_TimerDigit> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_TimerDigit oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.char != oldWidget.char) {
+      _controller.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isColon = char == ':';
-
-    // We want all digits to be roughly the same width for stability
-    final digitWidth = size * 0.6;
-
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: isColon ? size * 0.05 : 0),
-      width: isColon ? null : digitWidth,
+      margin: EdgeInsets.symmetric(horizontal: widget.isColon ? widget.size * 0.05 : 0),
+      width: widget.isColon ? null : widget.size * 0.6,
       alignment: Alignment.center,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
         switchInCurve: Curves.easeOutBack,
         switchOutCurve: Curves.easeIn,
         transitionBuilder: (Widget child, Animation<double> animation) {
-          final isNew = child.key == ValueKey(char);
+          final isNew = child.key == ValueKey(widget.char);
           return ClipRect(
             child: SlideTransition(
               position: Tween<Offset>(
@@ -120,20 +148,20 @@ class _TimerDigit extends StatelessWidget {
           );
         },
         child: Text(
-          char,
-          key: ValueKey<String>(char),
+          widget.char,
+          key: ValueKey<String>(widget.char),
           style:
               AppTypography.mono(
-                size: size,
+                size: widget.size,
                 weight: FontWeight.w400,
-                color: color,
+                color: widget.color,
                 height: 1.0,
               ).copyWith(
-                letterSpacing: size * -0.05,
-                shadows: danger
+                letterSpacing: widget.size * -0.05,
+                shadows: widget.danger
                     ? [
                         Shadow(
-                          color: color.withValues(alpha: 0.5),
+                          color: widget.color.withValues(alpha: 0.5),
                           blurRadius: 8,
                         ),
                       ]
@@ -212,4 +240,3 @@ class _LiveTimerBuilderState extends State<LiveTimerBuilder>
     return widget.builder(context, widget.game.currentSecondsRemaining(offset));
   }
 }
-

@@ -23,6 +23,7 @@ import '../../widgets/app_icon_label.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_tag.dart';
+import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toggle.dart';
 import '../../widgets/chip_pill.dart';
 import '../../widgets/count_stepper.dart';
@@ -232,6 +233,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   /// §6.2 guard flag: once the review step is reached the suggestions never
   /// come back, even if the admin navigates back to edit details.
   bool _reachedReview = false;
+bool _unlimitedRebuysDismissed = false;
 
   /// Loading state while publishing the tournament
   bool _isPublishing = false;
@@ -252,6 +254,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   late TextEditingController _locationController;
   late TextEditingController _buyInController;
   late TextEditingController _playersController;
+  late TextEditingController _rebuyCostController;
 
   String _formatDisplayDate(String iso) {
     final dt = DateTime.tryParse(iso);
@@ -297,6 +300,12 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     if (_playersController.text != playersStr) {
       _playersController.text = playersStr;
     }
+    final rebuyCostStr = _draft.rebuyCost != null
+        ? '${_draft.rebuyCost}'
+        : (_draft.buyIn > 0 ? '${_draft.buyIn}' : '');
+    if (_rebuyCostController.text != rebuyCostStr) {
+      _rebuyCostController.text = rebuyCostStr;
+    }
   }
 
   @override
@@ -305,6 +314,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     _locationController.dispose();
     _buyInController.dispose();
     _playersController.dispose();
+    _rebuyCostController.dispose();
     super.dispose();
   }
 
@@ -324,6 +334,11 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       text: _draft.buyIn > 0 ? '${_draft.buyIn}' : '',
     );
     _playersController = TextEditingController(text: '$_expectedPlayers');
+    _rebuyCostController = TextEditingController(
+      text: _draft.rebuyCost != null
+          ? '${_draft.rebuyCost}'
+          : (_draft.buyIn > 0 ? '${_draft.buyIn}' : ''),
+    );
 
     final defaultChipSetId = group.defaultChipSetId ?? app.defaultChipSetId;
     if (defaultChipSetId != null) {
@@ -452,7 +467,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
           '${next.hour.toString().padLeft(2, '0')}:${next.minute.toString().padLeft(2, '0')}';
     }
     return GameSettings(
-      name: '',
+      name: 'Poker Night',
       date: _todayIso,
       time: time,
       location: '',
@@ -1223,7 +1238,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         const SizedBox(height: 8),
         _buildTextField(
           controller: _nameController,
-          placeholder: 'Friday Night Freezeout',
+          placeholder: "e.g. Friday Poker",
           onChanged: (val) {
             _onDraftChanged(_draft.copyWith(name: val));
           },
@@ -1359,147 +1374,59 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         _fieldError('location'),
         const SizedBox(height: 16),
 
-        // Buy-in & Expected players side-by-side row
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('Buy-in'),
-                  const SizedBox(height: 8),
-                  Container(
-                    height: 52,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.borderSubtle),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          r'$',
-                          style: TextStyle(
-                            color: AppColors.foreground,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: TextField(
-                            controller: _buyInController,
-                            keyboardType: TextInputType.number,
-                            style: TextStyle(
-                              color: AppColors.foreground,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              // The container draws the field; without these the theme's
-                              // outline and fill paint a second box inside it.
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              filled: false,
-                              hintText: '100',
-                              hintStyle: TextStyle(color: AppColors.onSurfaceHint),
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            onChanged: (val) {
-                              final parsed = int.tryParse(val) ?? 0;
-                              _onDraftChanged(_draft.copyWith(buyIn: parsed));
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _fieldError('buyIn'),
-                ],
+        // Buy-in
+        _buildFormFieldLabel('Buy-in'),
+        const SizedBox(height: 8),
+        Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.borderSubtle),
+          ),
+          child: Row(
+            children: [
+              Text(
+                r'$',
+                style: TextStyle(
+                  color: AppColors.foreground,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('Expected players'),
-                  const SizedBox(height: 8),
-                  Container(
-                    height: 52,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.borderSubtle),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _playersController,
-                            keyboardType: TextInputType.number,
-                            style: TextStyle(
-                              color: AppColors.foreground,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              // The container draws the field; without these the theme's
-                              // outline and fill paint a second box inside it.
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              filled: false,
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            onChanged: (val) {
-                              final parsed =
-                                  int.tryParse(val) ?? _derivedExpectedPlayers;
-                              _onDraftChanged(
-                                _draft.copyWith(
-                                  players: parsed,
-                                  expectedPlayersOverride: parsed,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        Text(
-                          'from group',
-                          style: TextStyle(
-                            color: AppColors.mutedForeground,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: TextField(
+                  controller: _buyInController,
+                  keyboardType: TextInputType.number,
+                  style: TextStyle(
+                    color: AppColors.foreground,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _expectedPlayers <= 9
-                        ? '1 table (1–9 players · standard hosting)'
-                        : '${(_expectedPlayers / 9).ceil()} tables needed (multi-table)',
-                    style: TextStyle(
-                      color: _expectedPlayers > 9 &&
-                              app.premiumTier != PremiumTier.premium
-                          ? AppColors.primaryText
-                          : AppColors.mutedForeground,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: false,
+                    hintText: '100',
+                    hintStyle: TextStyle(color: AppColors.onSurfaceHint),
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
                   ),
-                ],
+                  onChanged: (val) {
+                    final parsed = int.tryParse(val) ?? 0;
+                    _onDraftChanged(_draft.copyWith(buyIn: parsed));
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 6),
+        _fieldError('buyIn'),
+        const SizedBox(height: 16),
+
         Text(
           'Group members: unlimited on all plans. Tournament capacity: 1 table (up to 9 players) is Free; 2+ tables is Premium.',
           style: AppTypography.bodyXs.copyWith(
@@ -1618,13 +1545,365 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
             ),
         ],
 
+        // Tournament type (Pace: Turbo / Normal / Deep) (Points 4 & 14)
+        _buildTournamentTypeSection(),
+        const SizedBox(height: 16),
+
+        // Rebuys & Rebuy price (Points 4, 11 & 12)
+        _buildRebuysSection(),
+        const SizedBox(height: 16),
+
         // KO bounty — the spec's Step-1 field (§C1 step 1, T37/T38/T64).
         _buildKoBountySection(app),
+        const SizedBox(height: 16),
+
+        // On-time arrival bonus % (Points 4 & 16)
+        _buildEarlyArrivalBonusSection(),
         const SizedBox(height: 24),
 
         // Step chips row
         _buildStepChipsRow(),
       ],
+    );
+  }
+
+  Widget _buildTournamentTypeSection() {
+    final currentPace = _draft.pace ?? PaceMode.regular;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildFormFieldLabel('Tournament type'),
+        const SizedBox(height: 2),
+        Text(
+          'Starting stack depth and blind speed',
+          style: TextStyle(
+            color: AppColors.mutedForeground,
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildTypePill(
+                title: 'Turbo',
+                subtitle: '50–75 BB',
+                isSelected: currentPace == PaceMode.turbo,
+                onTap: () => _onDraftChanged(_draft.copyWith(pace: PaceMode.turbo)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildTypePill(
+                title: 'Normal',
+                subtitle: '100 BB',
+                isSelected: currentPace == PaceMode.regular,
+                onTap: () => _onDraftChanged(_draft.copyWith(pace: PaceMode.regular)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildTypePill(
+                title: 'Deep',
+                subtitle: '150+ BB',
+                isSelected: currentPace == PaceMode.deep,
+                onTap: () => _onDraftChanged(_draft.copyWith(pace: PaceMode.deep)),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRebuysSection() {
+    final s = _draft;
+    final isFreeze = !s.rebuys;
+    final isLimited = s.rebuys && s.rebuyLimit != null;
+    final isUnlimited = s.rebuys && s.rebuyLimit == null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildFormFieldLabel('Rebuys'),
+        const SizedBox(height: 2),
+        Text(
+          'Allow players to buy back in after elimination',
+          style: TextStyle(
+            color: AppColors.mutedForeground,
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildTypePill(
+                title: 'Freeze Out',
+                subtitle: 'No rebuys',
+                isSelected: isFreeze,
+                onTap: () => _onDraftChanged(
+                  _draft.copyWith(
+                    rebuys: false,
+                    format: TournamentFormat.freezeOut,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildTypePill(
+                title: 'Limited',
+                subtitle: '1 per player',
+                isSelected: isLimited,
+                onTap: () => _onDraftChanged(
+                  _draft.copyWith(
+                    rebuys: true,
+                    rebuyLimit: 1,
+                    rebuyCost: _draft.rebuyCost ?? _draft.buyIn,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildTypePill(
+                title: 'Unlimited',
+                subtitle: 'Until close',
+                isSelected: isUnlimited,
+                onTap: () => _onDraftChanged(
+                  _draft.copyWith(
+                    rebuys: true,
+                    clearRebuyLimit: true,
+                    rebuyCost: _draft.rebuyCost ?? _draft.buyIn,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (s.rebuys) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Rebuy price',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Defaults to the buy-in (\$${s.buyIn})',
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: 120,
+                child: Container(
+                  height: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.borderSubtle),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(r'$', style: TextStyle(color: AppColors.foreground, fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: TextField(
+                          controller: _rebuyCostController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            filled: false,
+                            isDense: true,
+                            hintText: '${s.buyIn}',
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          onChanged: (val) {
+                            final parsed = int.tryParse(val) ?? s.buyIn;
+                            _onDraftChanged(_draft.copyWith(rebuyCost: parsed));
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildEarlyArrivalBonusSection() {
+    final s = _draft;
+    final pctInt = ((s.earlyArrivalBonusPctOverride ?? 0.10) * 100).round();
+    final approxStack = (s.durationHours * 500).round();
+    final bonusChips = (approxStack * (pctInt / 100)).round();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('On-time bonus'),
+                  const SizedBox(height: 2),
+                  Text(
+                    s.earlyArrivalBonusEnabled
+                        ? 'Adds ~$bonusChips extra chips ($pctInt% stack bonus)'
+                        : 'Reward players who arrive on time with extra chips',
+                    style: TextStyle(
+                      color: AppColors.mutedForeground,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildSmallPill(
+                  label: 'No',
+                  isSelected: !s.earlyArrivalBonusEnabled,
+                  onTap: () => _onDraftChanged(
+                    _draft.copyWith(earlyArrivalBonusEnabled: false),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                _buildSmallPill(
+                  label: 'Yes',
+                  isSelected: s.earlyArrivalBonusEnabled,
+                  onTap: () => _onDraftChanged(
+                    _draft.copyWith(earlyArrivalBonusEnabled: true),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        if (s.earlyArrivalBonusEnabled) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Bonus percentage',
+                  style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+                ),
+              ),
+              CountStepper(
+                value: pctInt,
+                min: 5,
+                max: 50,
+                step: 5,
+                suffix: '%',
+                semanticLabel: 'On-time bonus percent',
+                onChanged: (v) => _onDraftChanged(
+                  _draft.copyWith(earlyArrivalBonusPctOverride: v / 100.0),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTypePill({
+    required String title,
+    required String subtitle,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primarySoft : AppColors.card,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.borderSubtle,
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isSelected ? AppColors.primaryText : AppColors.foreground,
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isSelected
+                    ? AppColors.primaryText.withValues(alpha: 0.8)
+                    : AppColors.mutedForeground,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmallPill({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primarySoft : AppColors.card,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.borderSubtle,
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? AppColors.primaryText : AppColors.mutedForeground,
+          ),
+        ),
+      ),
     );
   }
 
@@ -1830,28 +2109,188 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   Widget _buildStep2(AppProvider app) {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
-      child: EventSettingsForm(
-        key: _formKey,
-        initial: _draft,
-        sections: const {EventFormSection.chips},
-        onChanged: _onDraftChanged,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          EventSettingsForm(
+            key: _formKey,
+            initial: _draft,
+            sections: const {EventFormSection.chips},
+            onChanged: _onDraftChanged,
+            hideSavePresetButton: true,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton(
+              variant: AppButtonVariant.secondary,
+              size: AppButtonSize.sm,
+              onPressed: _draft.chipSet.isEmpty ? null : () => _showSavePresetModal(context),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.bookmark_add_outlined, size: 16),
+                  SizedBox(width: AppSpacing.xs),
+                  Text('Save chip set as preset'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showSavePresetModal(BuildContext context) async {
+    final controller = TextEditingController(
+      text: _draft.chipSetName.isNotEmpty && _draft.chipSetName != 'Custom'
+          ? _draft.chipSetName
+          : 'My Chip Set',
+    );
+    final app = context.read<AppProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    await showAppModal(
+      context: context,
+      title: 'Save chip set preset',
+      maxWidth: 400,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Save these ${_draft.chipSet.length} chip denominations as a preset you can reuse for any tournament.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            controller: controller,
+            label: 'Preset name',
+            placeholder: 'e.g. Home Set 500',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: AppButton(
+                  onPressed: () {
+                    final trimmed = controller.text.trim();
+                    if (trimmed.isEmpty) return;
+                    final id = 'cs-${DateTime.now().millisecondsSinceEpoch}';
+                    try {
+                      app.saveChipSet(id, trimmed, _draft.chipSet);
+                      setState(() {
+                        _draft = _draft.copyWith(chipSetName: trimmed);
+                        _seedTick++;
+                      });
+                      Navigator.of(context).pop();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text('Saved "$trimmed" to your chip set presets.'),
+                        ),
+                      );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Could not save preset: $e')),
+                      );
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildStep3(AppProvider app) {
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: EventSettingsForm(
-        key: _formKey,
-        initial: _draft,
-        // Rebuys & add-ons only (D1): the fine-grained rebuys section owns
-        // the rebuys/re-entry/limit/close and add-on decisions; the money
-        // section carries their prices. The KO bounty is a step-1 control and
-        // ante/breaks are format decisions, so nothing here is shown twice.
-        sections: const {EventFormSection.rebuys, EventFormSection.money},
-        onChanged: _onDraftChanged,
-      ),
+    final showSuggestion = _expectedPlayers <= 8 && 
+                           !_draft.rebuys && 
+                           !_unlimitedRebuysDismissed;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showSuggestion) ...[
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            margin: const EdgeInsets.only(bottom: AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.primarySoftBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline, size: 18, color: AppColors.primary),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      'Suggestion for small fields',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryText,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'With $_expectedPlayers players, consider unlimited rebuys to build the pot and keep the game going if someone busts early.',
+                  style: AppTypography.bodyXs.copyWith(color: AppColors.mutedForeground),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  children: [
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      onPressed: () {
+                        _onDraftChanged(_draft.copyWith(
+                          rebuys: true,
+                          rebuyLimit: null, // Unlimited
+                        ));
+                      },
+                      child: const Text('Enable unlimited rebuys'),
+                    ),
+                    AppButton(
+                      size: AppButtonSize.sm,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () {
+                        setState(() {
+                          _unlimitedRebuysDismissed = true;
+                        });
+                      },
+                      child: const Text('Dismiss'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: EventSettingsForm(
+            key: _formKey,
+            initial: _draft,
+            sections: const {EventFormSection.rebuys, EventFormSection.money},
+            onChanged: _onDraftChanged,
+          ),
+        ),
+      ],
     );
   }
 
@@ -2803,3 +3242,4 @@ class _BountyKindOption extends StatelessWidget {
     );
   }
 }
+

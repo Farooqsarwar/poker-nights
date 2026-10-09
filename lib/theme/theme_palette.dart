@@ -160,7 +160,7 @@ class ThemePalette {
   Color get destructiveSoft => redDim;
   Color get warningSoft => redDim;
   Color get warningSoftBorder => primary.withValues(alpha: 0.30);
-  Color get successSoft => success.withValues(alpha: 0.15);
+  Color get successSoft => Color.alphaBlend(success.withValues(alpha: 0.15), muted);
   Color get successSoftBorder => success.withValues(alpha: 0.30);
   Color get feltGlow => primary.withValues(alpha: 0.04);
   Color get glassOverlay => const Color(0x99000000);

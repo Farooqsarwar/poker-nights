@@ -11,8 +11,10 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 
-/// Splash screen: PNT symbol + "Poker Night" (Spec A5#3).
-/// Back face shows the POKER / NIGHT lockup only — no TOOLS.
+/// Splash screen reproducing the Poker Night Tools product mockup:
+/// a rounded matte-black card that spins on its Y axis, showing the red
+/// bracket + spade face on one side and the POKER / NIGHT / TOOLS lockup on
+/// the other with the "SCAN. TRADE. TRACK. WIN." tagline.
 ///
 /// All face geometry below is measured from the reference render, expressed as
 /// fractions of the card size so it scales to any screen.
@@ -492,7 +494,7 @@ class _FrontFacePainter extends CustomPainter {
 }
 
 // =============================================================================
-// BACK FACE — POKER / NIGHT lockup (A5#3, no TOOLS)
+// BACK FACE — POKER / NIGHT / TOOLS lockup
 // =============================================================================
 
 class _BackFace extends StatelessWidget {
@@ -525,6 +527,7 @@ class _BackFace extends StatelessWidget {
       children: <Widget>[
         _word('POKER', AppColors.foreground, 0, w, h, blockW, wordSize),
         _word('NIGHT', AppColors.primary, 1, w, h, blockW, wordSize),
+        _word('TOOLS', AppColors.foreground, 2, w, h, blockW, wordSize),
 
         // Red rule under the lockup.
         Positioned(
@@ -549,11 +552,20 @@ class _BackFace extends StatelessWidget {
                 TextSpan(
                   children: <TextSpan>[
                     TextSpan(
-                      text: 'POKER NIGHT',
+                      text: 'SCAN. TRADE. TRACK. ',
                       style: _lockupStyle(
                         color: AppColors.foreground,
                         fontSize: tagSize,
                         weight: FontWeight.w600,
+                        letterSpacing: tagSize * 0.10,
+                      ),
+                    ),
+                    TextSpan(
+                      text: 'WIN.',
+                      style: _lockupStyle(
+                        color: AppColors.primary,
+                        fontSize: tagSize,
+                        weight: FontWeight.w700,
                         letterSpacing: tagSize * 0.10,
                       ),
                     ),
@@ -587,7 +599,7 @@ class _BackFace extends StatelessWidget {
   /// One justified word row.
   ///
   /// Each letter is laid out with `spaceBetween` across a fixed width, which is
-  /// exactly how the reference is set: POKER / NIGHT both span the same
+  /// exactly how the reference is set: POKER / NIGHT / TOOLS all span the same
   /// measure regardless of their differing letter widths.
   Widget _word(
     String text,

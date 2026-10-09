@@ -759,7 +759,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           // most often misses while running the clock. Announcing it is the
           // whole feature — there is nothing to action, so no button.
           if (game.settings.hardFinishEnabled &&
-              PayoutBridge.isAtHardCeiling(game))
+              PayoutBridge.isAtHardTimeLimit(game))
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: AppAlertBanner(
@@ -1057,15 +1057,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       // early on agreed figures, which is a different job from
                       // transcribing who went out in which order — so it gets
                       // its own screen rather than a mode of this one.
-                      AppButton(
-                        size: AppButtonSize.lg,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => context.go(RoutePaths.deal),
-                        child: const AppIconLabel(
-                          label: 'Agree a deal instead',
-                          trailing: Icons.calculate_outlined,
+                      if (game.activePlayers.length >=
+                          game.settings.dealThreshold.clamp(2, 5))
+                        AppButton(
+                          size: AppButtonSize.lg,
+                          variant: AppButtonVariant.secondary,
+                          onPressed: () => context.go(RoutePaths.deal),
+                          child: const AppIconLabel(
+                            label: 'Agree a deal instead',
+                            trailing: Icons.calculate_outlined,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),

@@ -149,7 +149,11 @@ class _ImportResultsScreenState extends State<ImportResultsScreen> {
           ],
 
           if (checked != null) ...[
-            _Preview(valid: valid, failed: failed),
+            _Preview(
+              valid: valid,
+              failed: failed,
+              memberIndex: app.importMemberIndex,
+            ),
             const SizedBox(height: AppSpacing.lg),
             if (valid.isNotEmpty)
               AppButton(
@@ -218,10 +222,15 @@ TextStyle get _cardTitle =>
 
 /// The preview: every line the host typed, with what happens to it.
 class _Preview extends StatelessWidget {
-  const _Preview({required this.valid, required this.failed});
+  const _Preview({
+    required this.valid,
+    required this.failed,
+    required this.memberIndex,
+  });
 
   final List<ImportLine> valid;
   final List<ImportLine> failed;
+  final Map<String, String> memberIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -255,7 +264,7 @@ class _Preview extends StatelessWidget {
           for (final line in [...valid, ...failed])
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: _LineTile(line: line),
+              child: _LineTile(line: line, memberIndex: memberIndex),
             ),
         ],
       ),
@@ -264,9 +273,10 @@ class _Preview extends StatelessWidget {
 }
 
 class _LineTile extends StatelessWidget {
-  const _LineTile({required this.line});
+  const _LineTile({required this.line, required this.memberIndex});
 
   final ImportLine line;
+  final Map<String, String> memberIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -314,6 +324,36 @@ class _LineTile extends StatelessWidget {
                         : AppColors.destructive,
                   ),
                 ),
+                if (ok) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  ...line.names.map((name) {
+                    final normalized = name.trim().toLowerCase();
+                    final matched = memberIndex.containsKey(normalized);
+                    if (matched) return const SizedBox.shrink();
+                    final suggestion = ImportResultsParser.findSimilarMember(name, memberIndex);
+                    if (suggestion != null) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Row(
+                          children: [
+                            Icon(Icons.lightbulb_outline, size: 12, color: AppColors.primary),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                '"$name" → suggest: [member match]',
+                                style: AppTypography.bodyXs.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
+                ],
               ],
             ),
           ),

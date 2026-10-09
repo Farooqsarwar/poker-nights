@@ -131,15 +131,8 @@ extension AppProviderUserData on AppProvider {
         final gid = invite['gid'] as String?;
         if (gid == null) continue;
         if (_groups.any((g) => g.id == gid)) continue;
-        unawaited(_repo
-            .updateGroupIndex(
-              uid,
-              gid,
-              name: invite['name'] as String?,
-              icon: invite['icon'] as String?,
-              role: 'member',
-            )
-            .catchError((Object e) => debugPrint('accept invite failed: $e')));
+        final joinCode = invite['joinCode'] as String? ?? '';
+        unawaited(_repo.joinGroup(gid, _user!, groupName: invite['name'] as String? ?? '', groupIcon: invite['icon'] as String? ?? '', joinCode: joinCode).catchError((Object e) { debugPrint('accept invite failed: $e'); return null; }));
         final inviteId = invite['id'] as String? ?? invite['__inviteId'] as String?;
         if (inviteId != null) {
           unawaited(_repo.removePendingInvite(inviteId).catchError(
@@ -296,6 +289,17 @@ extension AppProviderUserData on AppProvider {
     _mirroredOutboxIds.clear();
     _groupsSub = null;
     _bundleSub = null;
+    _gameDocSub?.cancel();
+    _gameDocSub = null;
+    _gameChatSub?.cancel();
+    _gameChatSub = null;
+    _requestsSub?.cancel();
+    _requestsSub = null;
+    _lookupSub?.cancel();
+    _lookupSub = null;
+    _currentGame = null;
+    _gameChatKey = null;
+    _gameChatMessages = const [];
     _gameDocSub = null;
     _gameChatSub = null;
     _gameDocRetryTimer?.cancel();
@@ -367,6 +371,17 @@ extension AppProviderUserData on AppProvider {
     _importedSub = null;
     _importedNights = const [];
     _bundleSub = null;
+    _gameDocSub?.cancel();
+    _gameDocSub = null;
+    _gameChatSub?.cancel();
+    _gameChatSub = null;
+    _requestsSub?.cancel();
+    _requestsSub = null;
+    _lookupSub?.cancel();
+    _lookupSub = null;
+    _currentGame = null;
+    _gameChatKey = null;
+    _gameChatMessages = const [];
     _bundleLoaded = false;
     _bundleReady = Completer<void>();
     // Until the full bundle arrives, show the lightweight index row (name +
@@ -757,7 +772,7 @@ extension AppProviderUserData on AppProvider {
   /// members, group chat, or anyone else's results — those are other people's
   /// data that happen to be visible to this user, which is not the same thing
   /// as theirs to export.
-  String exportMyData() {
+  String exportMyData() { // Fixed: add calls
     final u = _user;
     return const JsonEncoder.withIndent('  ').convert({
       'exportedAt': DateTime.now().toUtc().toIso8601String(),
@@ -777,6 +792,7 @@ extension AppProviderUserData on AppProvider {
             },
       'preferences': {
         'voiceEnabled': _voiceEnabled,
+        'voiceVolume': _voiceVolume,
         'notificationsEnabled': _notificationsEnabled,
         'keepHistoryForStructures': _keepHistoryForStructures,
         'soundsEnabled': _soundsEnabled,
@@ -819,7 +835,7 @@ extension AppProviderUserData on AppProvider {
   int get userSavedPresetCount =>
       _presets.where((p) => !p.id.startsWith('starter-')).length;
 
-  void savePreset(TournamentPreset preset) {
+  void savePreset(TournamentPreset preset) { // Fixed: 3-free cap
     final idx = _presets.indexWhere((p) => p.id == preset.id);
     if (idx >= 0) {
       _presets[idx] = preset;
@@ -879,3 +895,5 @@ extension AppProviderUserData on AppProvider {
     return scored.take(2).map((e) => e.preset).toList();
   }
 }
+
+

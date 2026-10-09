@@ -473,6 +473,19 @@ class AppProvider extends ChangeNotifier {
   final Set<String> _seenNotificationIds = <String>{};
   bool _notificationsPrimed = false;
 
+  /// Tracks scheduled reminders ("Starts in 30 min", RSVP deadline, rebuys closing)
+  /// so each fires at most once per game (free-plan client replacement for Cloud Tasks).
+  final Set<String> _sentReminderKeys = <String>{};
+
+  bool _hasFiredReminder(String key) {
+    if (_sentReminderKeys.contains(key)) return true;
+    if (_notifications.any((n) => n.id.contains(key))) {
+      _sentReminderKeys.add(key);
+      return true;
+    }
+    return false;
+  }
+
   /// Debounces whole-document game saves so rapid admin edits coalesce.
   Timer? _gameSaveDebounce;
   Timer? _projectionDebounce;
@@ -868,6 +881,7 @@ class AppProvider extends ChangeNotifier {
   // ── Timer ──────────────────────────────────────────────────────────────────
   Timer? _ticker;
   Timer? _serverTimeRecalibration;
+  int _remindersTickCount = 0;
 
   /// Marks already announced per level (checklist 15-047/15-048) so the
   /// five-minute and one-minute warnings fire only once per level.
@@ -945,6 +959,7 @@ class AppProvider extends ChangeNotifier {
 
   // ── Voice & misc ───────────────────────────────────────────────────────────
   bool _voiceEnabled = true;
+  double _voiceVolume = 1.0;
 
   /// Rule 12 haptics: short vibration on level change on host phone.
   /// Setting, default on (T107). Pure client-side, persisted per user.

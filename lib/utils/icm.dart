@@ -99,7 +99,7 @@ abstract final class Icm {
       final totalLive = liveStacks.fold<double>(0, (a, b) => a + b);
 
       final states = _frontierStates(m, rounds);
-      final method = (states <= maxStates)
+      final method = (states <= maxStates && m <= 30)
           ? _exactDp(
               liveStacks: liveStacks,
               liveOriginalIndex: live,

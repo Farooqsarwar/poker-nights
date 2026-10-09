@@ -16,6 +16,7 @@ import '../../utils/payouts_engine.dart';
 import '../../widgets/app_alert_banner.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/count_stepper.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/app_text_field.dart';
@@ -71,6 +72,16 @@ class _DealScreenState extends State<DealScreen> {
       return _NoGame(
         message: 'Only the host of this game can agree a deal.',
         icon: Icons.lock_outline,
+      );
+    }
+    // Deal threshold check: only allow deal when players remaining >= threshold
+    final threshold = game.settings.dealThreshold.clamp(2, 5);
+    if (game.activePlayers.length < threshold) {
+      return _NoGame(
+        message:
+            'A deal can only be made with $threshold or more players remaining. '
+            'Current: ${game.activePlayers.length}.',
+        icon: Icons.calculate_outlined,
       );
     }
     if (game.activePlayers.isEmpty) {
@@ -429,20 +440,17 @@ class _StacksCard extends StatelessWidget {
                               style: AppTypography.bodySm,
                             ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.remove_circle_outline, size: 20),
-                            onPressed: (counts[chip.value] ?? 0) > 0
-                                ? () => setModalState(() {
-                                      counts[chip.value] = (counts[chip.value] ?? 0) - 1;
-                                    })
-                                : null,
-                          ),
-                          Text('${counts[chip.value] ?? 0}', style: AppTypography.monoSm),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle_outline, size: 20),
-                            onPressed: () => setModalState(() {
-                              counts[chip.value] = (counts[chip.value] ?? 0) + 1;
-                            }),
+                          SizedBox(
+                            width: 150,
+                            child: CountStepper(
+                              value: counts[chip.value] ?? 0,
+                              min: 0,
+                              step: 1,
+                              quickSteps: const [25, 50, 100],
+                              onChanged: (v) => setModalState(() {
+                                counts[chip.value] = v;
+                              }),
+                            ),
                           ),
                         ],
                       ),

@@ -266,7 +266,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
       _seatingModeInitialized = true;
       _seatingMode = app.effectiveTableSettings.randomizeByDefault
           ? SeatingMode.random
-          : SeatingMode.manual;
+          : (app.isPremium ? SeatingMode.manual : SeatingMode.random);
     }
 
     final players = game.players;
@@ -783,7 +783,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                     // D4: seating and TDA balancing are part of the free
                     // tournament engine — never Premium-gated.
                     // Spec O6: Manual seating is not shown until O6 is approved.
-                    for (final mode in SeatingMode.values.where((m) => m != SeatingMode.manual))
+                    for (final mode in SeatingMode.values.where((m) => m != SeatingMode.manual || app.isPremium))
                       _SeatingOption(
                         label: mode.label,
                         active: _seatingMode == mode,

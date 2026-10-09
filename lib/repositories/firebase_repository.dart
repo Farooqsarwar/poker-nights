@@ -1393,18 +1393,10 @@ class FirebaseRepository {
     String gid,
     AppUser user, {
     String groupName = '',
-    String groupIcon = '♠',
+    String groupIcon = '?',
+    String joinCode = '',
   }) async {
     final batch = _db.batch();
-    batch.set(
-      _db.collection('groups').doc(gid).collection('members').doc(user.id),
-      {
-        'name': user.name,
-        'role': 'member',
-        'joinedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
     batch.set(_db.collection('pendingInvites').doc('$gid:${user.id}'), {
       'uid': user.id,
       'gid': gid,
@@ -1412,6 +1404,7 @@ class FirebaseRepository {
       'icon': groupIcon,
       'role': 'member',
       'createdAt': FieldValue.serverTimestamp(),
+      'joinCode': joinCode,
     });
     await batch.commit();
   }
@@ -2649,3 +2642,4 @@ class FirebaseRepository {
 /// Debug logger used by repository callers to trace sync behaviour.
 @visibleForTesting
 void logRepo(Object message) => debugPrint('[FirebaseRepository] $message');
+

@@ -421,6 +421,28 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
           _QuickCard(
+            eyebrow: 'Pace',
+            child: PaceCards(
+              options: opts,
+              selected: selected,
+              onSelected: (p) => setState(() => _pace = p),
+              onChooseLater: () => setState(() {
+                _hours = _hoursOptions.firstWhere(
+                  (h) => h > _hours,
+                  orElse: () => _hoursOptions.last,
+                );
+                _pace = null;
+              }),
+              onDropAddOn: _rebuy
+                  ? () => setState(() {
+                      _rebuy = false;
+                      _pace = null;
+                    })
+                  : null,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _QuickCard(
             eyebrow: 'Players',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -533,28 +555,6 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
                 _hours = int.parse(id);
                 _pace = null;
               }),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _QuickCard(
-            eyebrow: 'Pace',
-            child: PaceCards(
-              options: opts,
-              selected: selected,
-              onSelected: (p) => setState(() => _pace = p),
-              onChooseLater: () => setState(() {
-                _hours = _hoursOptions.firstWhere(
-                  (h) => h > _hours,
-                  orElse: () => _hoursOptions.last,
-                );
-                _pace = null;
-              }),
-              onDropAddOn: _rebuy
-                  ? () => setState(() {
-                      _rebuy = false;
-                      _pace = null;
-                    })
-                  : null,
             ),
           ),
           const SizedBox(height: AppSpacing.md),

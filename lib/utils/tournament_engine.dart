@@ -371,12 +371,17 @@ class TournamentEngine {
     [15, 30],
     [20, 40],
     [25, 50],
+    [50, 75],
     [40, 80],
     [50, 100],
     [60, 120],
+    [75, 125],
     [75, 150],
+    [100, 175],
     [100, 200],
+    [125, 250],
     [150, 300],
+    [175, 350],
     [200, 400],
     [250, 500],
     [300, 600],
@@ -1785,6 +1790,12 @@ class TournamentEngine {
         final bb = validBlindLevels[i][1];
         if (minChip <= 0 || sb % minChip != 0 || bb % minChip != 0) continue;
         var candidate = (targetBBDepth * bb / sb).round() * sb;
+        if (depthBand.max.isFinite) {
+          final maxBandStack = (depthBand.max * bb / sb).floor() * sb;
+          if (candidate > maxBandStack) {
+            candidate = maxBandStack;
+          }
+        }
         // Floor the search. Walking all the way down to one small blind meant
         // a tight inventory could "succeed" at a 1 big-blind stack, which is
         // not a tournament. Below 20 BB the opening is unplayable, so try the
@@ -1844,14 +1855,22 @@ class TournamentEngine {
           depth: depth,
           divisor: params.players,
         );
-        if (anyCover == null || depth > anyCover.depth) anyCover = entry;
+        final delta = (depth - targetBBDepth).abs();
+        final bestWithChangeDelta = withChange == null
+            ? double.infinity
+            : (withChange.depth - targetBBDepth).abs();
+        final bestAnyCoverDelta = anyCover == null
+            ? double.infinity
+            : (anyCover.depth - targetBBDepth).abs();
+
+        if (anyCover == null || delta < bestAnyCoverDelta) anyCover = entry;
         if (hasChange(plan, sb) &&
-            (withChange == null || depth > withChange.depth)) {
+            (withChange == null || delta < bestWithChangeDelta)) {
           withChange = entry;
         }
       }
-      // Prefer the deepest PLAYABLE candidate; only if none has change at all
-      // does the deepest coverable one stand.
+      // Prefer the candidate closest to targetBBDepth that has change; only if
+      // none has change at all does the closest coverable one stand.
       best = withChange ?? anyCover;
     }
 

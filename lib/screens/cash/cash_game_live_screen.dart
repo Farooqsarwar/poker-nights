@@ -930,7 +930,7 @@ class _CashGameLiveScreenState extends State<CashGameLiveScreen> {
   ) {
     return AppModal(
       open: true,
-      title: 'Settle-up preview',
+      title: 'Preview settle-up(writes nothing)',
       onClose: () => setState(() => _showReconcile = false),
       child: SingleChildScrollView(
         child: Column(

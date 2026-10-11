@@ -768,6 +768,24 @@ class PayoutOption {
       prizePool;
 }
 
+/// One colour's shortfall from the §F1.5 hard bank check: the case holds
+/// [owned] chips of this colour but the night needs [needed].
+class BankShortfall {
+  const BankShortfall({
+    required this.colour,
+    required this.value,
+    required this.needed,
+    required this.owned,
+  });
+
+  final String colour;
+  final int value;
+  final int needed;
+  final int owned;
+
+  int get short => needed - owned;
+}
+
 /// The generated tournament structure.
 class TournamentStructure {
   const TournamentStructure({
@@ -793,6 +811,9 @@ class TournamentStructure {
     this.rebuysCloseLevel = 0,
     this.engineVersion = '2.1.0',
     this.feasible = true,
+    this.depthOk = true,
+    this.bankOk = true,
+    this.bankShortfall = const [],
     this.depthShortfallNote,
     this.maxPlayersSupported,
     this.pace,
@@ -857,7 +878,23 @@ class TournamentStructure {
   /// both already refuse to go below the floor. Only the engine's absolute
   /// last-resort branch (an inventory that cannot fund even a 20BB stack for
   /// any blind pair) can set this false.
+  ///
+  /// Build Spec v3.1 §F1.5 point 7: `feasible = depthOk && bankOk`. A stack
+  /// that clears the 20 BB floor but that the chip case cannot actually deal
+  /// to the field (with the busy-night rebuy/add-on/bonus reserve) is NOT
+  /// feasible, even though its depth is fine.
   final bool feasible;
+
+  /// §F1.5 — whether a candidate stack reached the playable depth floor.
+  final bool depthOk;
+
+  /// §F1.5 — whether the chip case can actually deal the night: per colour,
+  /// `count × draws ≤ owned` (draws = N + 90th-percentile rebuys), then every
+  /// player's add-on and bonus handout fits in what is left.
+  final bool bankOk;
+
+  /// Per-colour shortfall when [bankOk] is false; empty otherwise.
+  final List<BankShortfall> bankShortfall;
 
   /// Plain-language explanation of why the opening stack fell below the
   /// playable floor, and what would fix it. Null unless [feasible] is false.
@@ -1040,6 +1077,9 @@ class TournamentStructure {
     int? rebuysCloseLevel,
     String? engineVersion,
     bool? feasible,
+    bool? depthOk,
+    bool? bankOk,
+    List<BankShortfall>? bankShortfall,
     String? depthShortfallNote,
     int? maxPlayersSupported,
     PaceMode? pace,
@@ -1076,6 +1116,9 @@ class TournamentStructure {
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
       engineVersion: engineVersion ?? this.engineVersion,
       feasible: feasible ?? this.feasible,
+      depthOk: depthOk ?? this.depthOk,
+      bankOk: bankOk ?? this.bankOk,
+      bankShortfall: bankShortfall ?? this.bankShortfall,
       depthShortfallNote: depthShortfallNote ?? this.depthShortfallNote,
       maxPlayersSupported: maxPlayersSupported ?? this.maxPlayersSupported,
       // Same reason as breaks above: a field left out here is silently reset

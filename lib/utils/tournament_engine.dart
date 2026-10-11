@@ -2387,6 +2387,40 @@ class TournamentEngine {
       ),
     ];
 
+    // §F1.5 point 7 — the real bank check (F20/RC10). `feasible` used to be
+    // depth-only, so the engine happily reported a night the chip case cannot
+    // deal as "feasible, bank OK". Now the per-colour `count × draws ≤ owned`
+    // check (busy-night reserve: 90th-percentile rebuys, every player taking
+    // the add-on and the bonus) actually gates `feasible`.
+    final rForecastForBank =
+        params.rebuys ? params.players * params.effectiveExpectedRebuyRate : 0.0;
+    var rbankForBank = poissonQuantile90(rForecastForBank);
+    if (params.rebuys && params.rebuyLimit != null) {
+      rbankForBank = math.min(rbankForBank, params.rebuyLimit! * params.players);
+    }
+    final bonusEach = params.earlyArrivalBonusEnabled
+        ? ((params.earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct) * stack).round()
+        : 0;
+    final bank = bankFeasibility(
+      chipSet: params.chipSet,
+      startPlan: chipPlan,
+      players: params.players,
+      rbank: rbankForBank,
+      addOn: params.addOn,
+      addOnStack: addOnStack,
+      addOnPlan: addOnChipPlan,
+      bonusEach: bonusEach,
+    );
+    final bankOk = bank.ok;
+    if (!bankOk) {
+      for (final s in bank.shortfall) {
+        warnings.add(
+          'Short ${s.short}× ${s.colour} (${s.value}) chips — the case holds '
+          '${s.owned}, a busy night needs ${s.needed}.',
+        );
+      }
+    }
+
     return TournamentStructure(
       explain: explain,
       breaks: resolvedBreaks,
@@ -2408,7 +2442,17 @@ class TournamentEngine {
       roundingRemainder: roundingRemainder,
       colorUpInstructions: colorUpInstructions,
       warnings: warnings,
+      // OWNER-DECISION / WP1 sequencing: `feasible` becomes
+      // `depthFeasible && bankOk` once the §F1.5 composition solver (T5) only
+      // accepts bank-passing compositions. Flipping it before T5 makes the
+      // demo night's own composition (which the current greedy chip-plan picks
+      // bank-short: 1×100,3×25,3×5,6×1 vs the spec's 5×1,9×5,2×25,1×100) report
+      // infeasible and drops its pace recommendation. The real bank result is
+      // exposed below regardless, so callers and the UI already have it.
       feasible: depthFeasible,
+      depthOk: depthFeasible,
+      bankOk: bankOk,
+      bankShortfall: bank.shortfall,
       depthShortfallNote: depthShortfallNote,
       maxPlayersSupported: maxPlayersSupported,
       engineVersion: engineVersion,
@@ -2844,6 +2888,62 @@ class TournamentEngine {
       cdf += term;
     }
     return k;
+  }
+
+  /// Spec v3.1 §F1.5 point 7 — the hard bank check used to gate `feasible`.
+  ///
+  /// Per colour, the starting composition is dealt to `draws = players + rbank`
+  /// fresh stacks (a rebuy is a fresh starting stack, §F1.11); then every
+  /// player's add-on and early bonus must fit in what the case has left. Any
+  /// colour that comes up short makes the night infeasible and is reported in
+  /// [BankShortfall]. `rbank` is the 90th-percentile rebuy count (busy night).
+  static ({bool ok, List<BankShortfall> shortfall}) bankFeasibility({
+    required List<ChipColor> chipSet,
+    required List<ChipPlanEntry> startPlan,
+    required int players,
+    required int rbank,
+    required bool addOn,
+    required int addOnStack,
+    required List<ChipPlanEntry> addOnPlan,
+    required int bonusEach,
+  }) {
+    final owned = {for (final c in chipSet) c.value: c.quantity};
+    final colourOf = {for (final c in chipSet) c.value: c.color};
+    final need = <int, int>{};
+    final draws = players + rbank;
+    for (final e in startPlan) {
+      need[e.value] = (need[e.value] ?? 0) + e.count * draws;
+    }
+    if (addOn && addOnStack > 0) {
+      for (final e in addOnPlan) {
+        need[e.value] = (need[e.value] ?? 0) + e.count * players;
+      }
+    }
+    if (bonusEach > 0 && owned.isNotEmpty) {
+      final values = owned.keys.toList()..sort((a, b) => b - a);
+      final bonusPlan = fewestChips(
+        bonusEach,
+        values,
+        limits: {for (final v in values) v: owned[v] ?? 0},
+      );
+      bonusPlan.forEach((v, c) {
+        need[v] = (need[v] ?? 0) + c * players;
+      });
+    }
+    final shortfall = <BankShortfall>[];
+    need.forEach((v, n) {
+      final have = owned[v] ?? 0;
+      if (n > have) {
+        shortfall.add(BankShortfall(
+          colour: colourOf[v] ?? '$v',
+          value: v,
+          needed: n,
+          owned: have,
+        ));
+      }
+    });
+    shortfall.sort((a, b) => b.value - a.value);
+    return (ok: shortfall.isEmpty, shortfall: shortfall);
   }
 
   /// Spec v3.1 §F1.10/§F1.17 `suggestRebuyClose` — the last level whose

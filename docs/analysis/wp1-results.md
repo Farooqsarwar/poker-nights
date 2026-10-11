@@ -131,6 +131,9 @@ scenario after-matrix agrees: `SB>=BB=0, step>2=0, stackNotRound=712, feasibleBu
 - Demo night (§F1.15) exact across every commit. ✅
 - Invariant suite green (asserts the T2/T6/T8-fixed invariants; reports the T4/T5-pending ones). ✅
 - Engine test subset (232 tests) green after each commit. ✅
+- Structure/provider consumers (131 tests: deal screen, projections, final table,
+  group chips, clock sequence, structure integrity, offline conflict, co-host rules)
+  green after the `safeBb`→`bb` renames and model changes. ✅
 - Full `flutter test` green: **the engine suite is green; a full-suite run including widget/golden
   tests was not completed in-session** (see chat summary). The WP1 changes are engine + model +
   two provider/screen call-site renames (`safeBb`→`bb`), all analyze-clean.

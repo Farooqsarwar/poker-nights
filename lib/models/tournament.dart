@@ -75,6 +75,16 @@ class ChipPlanEntry {
 /// individual ante). The big blind ante is the recommended default.
 enum AnteStyle { bigBlind, individual }
 
+/// Which family of blind values the ladder may use (T3, client pt 13).
+///
+/// `niceSpec` is the §F1.6 default — nice values `m × 10ᵏ` that are multiples
+/// of `2 × cmin`, so a chip set with a small chip opens with fine blinds.
+/// `home25` restricts big blinds to a 25-based home ladder (50/100/150/200/…)
+/// by treating the smallest chip as at least 25, which is what a host who
+/// thinks in 25s wants even when their chips could post finer blinds.
+// OWNER-DECISION: depth/blind values (conflict register, pt 13).
+enum BlindFamily { niceSpec, home25 }
+
 /// The admin's ante choice at creation (checklist 09-010). "recommend" keeps
 /// the system recommendation (big blind ante from a fixed level onward),
 /// while the other values override it explicitly.
@@ -298,6 +308,7 @@ class TournamentParams {
     this.addOnTakeUpRate,
     this.forceStack,
     this.targetDepthBB,
+    this.blindFamily = BlindFamily.niceSpec,
   });
 
   final int players;
@@ -415,6 +426,9 @@ class TournamentParams {
   // OWNER-DECISION: depth values (conflict register, pt 13) — turbo 75 / deep
   // 150 are not in the spec's DEPTH_BAND (turbo [50,70], deep aim 160).
   final int? targetDepthBB;
+
+  /// §F1.6 blind-value family (T3). Default [BlindFamily.niceSpec].
+  final BlindFamily blindFamily;
 
   double get effectiveExpectedRebuyRate =>
       math.max(0, expectedRebuyRate ?? kExpectedRebuyRate);
@@ -576,6 +590,7 @@ class TournamentParams {
     double? addOnTakeUpRate,
     int? forceStack,
     int? targetDepthBB,
+    BlindFamily? blindFamily,
   }) =>
       TournamentParams(
         players: players ?? this.players,
@@ -626,6 +641,7 @@ class TournamentParams {
         addOnTakeUpRate: addOnTakeUpRate ?? this.addOnTakeUpRate,
         forceStack: forceStack ?? this.forceStack,
         targetDepthBB: targetDepthBB ?? this.targetDepthBB,
+        blindFamily: blindFamily ?? this.blindFamily,
       );
 }
 

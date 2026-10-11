@@ -152,6 +152,7 @@ void main() {
     var runs = 0;
     const minStep = 1.15; // OWNER-DECISION: tune MIN_STEP after review.
 
+    for (final fam in BlindFamily.values) // T3: run under both families
     for (final players in [6, 9, 12, 20]) {
       for (final hours in [3.0, 4.0, 5.0]) {
         for (final paceE in _paces.entries) {
@@ -164,6 +165,7 @@ void main() {
                     durationHours: hours,
                     buyIn: 20,
                     chipSet: caseE.value,
+                    blindFamily: fam,
                     rebuys: rebuy,
                     rebuysCloseLevel: close,
                     rebuyCloseChosenByOrganizer: close > 0,
@@ -187,7 +189,7 @@ void main() {
                   }
                   runs++;
                   final tag =
-                      '${caseE.key}/$players/${hours}h/${paceE.key}/${rebuy ? 'rebuy' : 'freeze'}/${ante ? 'bb' : 'none'}/c$close';
+                      '${fam.name}/${caseE.key}/$players/${hours}h/${paceE.key}/${rebuy ? 'rebuy' : 'freeze'}/${ante ? 'bb' : 'none'}/c$close';
                   final lv = s.levels;
 
                   for (var i = 0; i < lv.length; i++) {

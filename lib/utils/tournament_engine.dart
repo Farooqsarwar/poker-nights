@@ -1809,7 +1809,12 @@ class TournamentEngine {
           openingSB: sbOfBB(bbProv),
         );
         if (sol == null) continue;
-        final cmin0 = sol.used.first.value; // smallest chip actually dealt
+        // T3 home25: force a 25-based blind family by treating the dealt
+        // smallest as at least 25 (so every BB is a multiple of 50). niceSpec
+        // keeps the composition's true smallest.
+        final cmin0 = params.blindFamily == BlindFamily.home25
+            ? math.max(sol.used.first.value, 25)
+            : sol.used.first.value;
         final bb = niceBB(s / styleD, cmin0);
         if (bb <= 0) continue;
         final depth = s / bb;
@@ -2154,10 +2159,14 @@ class TournamentEngine {
     // the shortage warning above (which still guarantees >= 20BB) and gets
     // its own explicit, structured signal rather than silently shipping a
     // depth:10 structure with no indication anything was wrong.
-    final depthFeasible = f15Pick != null || f15Closest != null || best != null;
+    // §F1.5 point 7: the night is feasible only when the §F1.5 search found a
+    // round, bank-fundable stack (in-band or the closest playable one). The
+    // greedy last-resort `best` is a display placeholder for a case that is
+    // genuinely too small — it does NOT make the night feasible.
+    final depthFeasible = f15Pick != null || f15Closest != null;
     String? depthShortfallNote;
     int? maxPlayersSupported;
-    if (f15Pick == null && f15Closest == null && best == null) {
+    if (f15Pick == null && f15Closest == null) {
       maxPlayersSupported =
           _largestPlayableFieldSize(params: params, minChip: minChip);
       depthShortfallNote = maxPlayersSupported != null && maxPlayersSupported > 0

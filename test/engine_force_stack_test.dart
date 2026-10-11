@@ -77,6 +77,21 @@ void main() {
     expect(dd, greaterThan(ds));
   });
 
+  test('blindFamily.home25 forces a 25-based ladder on a fine chip set (T3)', () {
+    // box500 has a 1-chip, so niceSpec opens with fine blinds; home25 forces
+    // every BB to a multiple of 50 (SB a multiple of 25).
+    final spec = TournamentEngine.generate(base(box500));
+    final home = TournamentEngine.generate(
+        base(box500).copyWith(blindFamily: BlindFamily.home25));
+    expect(spec.levels.first.bb % 50 == 0, isFalse,
+        reason: 'niceSpec may open finer than 25-based');
+    for (final l in home.levels) {
+      expect(l.bb % 50, 0, reason: 'home25 BB ${l.bb} not a multiple of 50');
+      expect(l.sb % 25, 0, reason: 'home25 SB ${l.sb} not a multiple of 25');
+      expect(l.sb, lessThan(l.bb));
+    }
+  });
+
   test('a forced stack plus one pin survives recalc (stack + pin unchanged, tail rises)',
       () {
     final p = base(box500, forceStack: 3000);

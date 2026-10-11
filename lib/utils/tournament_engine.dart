@@ -2269,25 +2269,63 @@ class TournamentEngine {
     // position to us".
     // Step 5 of the addendum's generation sequence. Done before breaks,
     // because the default break position hangs off where rebuys close.
-    final optimisedRebuyClose = (params.rebuys || params.reEntry)
-        ? optimiseRebuyCloseLevel(
-            requested: params.rebuysCloseLevel,
-            organizerChose: params.rebuyCloseChosenByOrganizer,
-            levelBlinds: [
-              for (final l in levels) [l.sb, l.bb],
-            ],
-            startingStack: stack,
-            plannedLevels: plannedLevels,
-            players: params.players,
-            durationHours: params.durationHours,
-            levelDurationMins: levelDuration,
-            anteEnabled: params.anteEnabled,
-            anteAfterLevel: params.anteAfterLevel,
-            breaks: params.breaks,
-            addOnAvailable: params.addOn,
-            minChipValue: minChip,
-          )
-        : params.rebuysCloseLevel;
+    //
+    // §F1.10 (F33/RC5): the auto-suggestion is the LAST level whose fresh-stack
+    // M still clears the style floor (turbo 10 / standard 15 / deep 20) and
+    // that starts within 40 % of the night — via [suggestRebuyClose]. The
+    // legacy `optimiseRebuyCloseLevel` collapsed to L2 on almost every night,
+    // because its `minChipValue × 4 > bb` guard fires on the small EARLY blinds
+    // (L1's bb < 4×cmin) and drove `viable` to 1. `optimiseRebuyCloseLevel` is
+    // kept (its unit tests still cover it) but is no longer on the generate
+    // path. A host's explicit choice still wins untouched.
+    final mFloor = switch (paceStyle) {
+      PaceStyle.turbo => 10.0,
+      PaceStyle.standard => 15.0,
+      PaceStyle.deep => 20.0,
+    };
+    final int optimisedRebuyClose;
+    if (params.rebuys || params.reEntry) {
+      if (params.rebuyCloseChosenByOrganizer) {
+        optimisedRebuyClose = params.rebuysCloseLevel;
+      } else {
+        final sugg = suggestRebuyClose(
+          startingStack: stack,
+          levels: levels,
+          levelDurationMins: levelDuration,
+          totalNightMinutes: paceTargetMinutes,
+          mFloor: mFloor,
+          anteStyle: params.anteStyle,
+        );
+        optimisedRebuyClose =
+            sugg.suggested > 0 ? sugg.suggested : params.rebuysCloseLevel;
+      }
+    } else {
+      optimisedRebuyClose = params.rebuysCloseLevel;
+    }
+
+    // §F1.8 two-pass ante bootstrap: the ladder's antes were placed with the
+    // host's placeholder `anteAfterLevel`; now that the close is known, a
+    // rebuy/re-entry night starts its ante at the level AFTER the close
+    // (level `close + 1`, i.e. 0-indexed `close`), and the levels are
+    // relabelled. This is what makes a host-chosen close actually move the
+    // ante start (F33), and it keeps the demo night's ante at L5 (close 4).
+    if ((params.rebuys || params.reEntry) &&
+        params.anteEnabled &&
+        optimisedRebuyClose > 0) {
+      for (var i = 0; i < levels.length; i++) {
+        final live = i >= optimisedRebuyClose;
+        final l = levels[i];
+        final want = live
+            ? (params.anteStyle == AnteStyle.individual
+                ? individualAnteValue(
+                    l.bb, sortedChips.map((c) => c.value).toList())
+                : l.bb)
+            : null;
+        if ((l.ante ?? 0) != (want ?? 0)) {
+          levels[i] = l.copyWith(ante: want, clearAnte: want == null);
+        }
+      }
+    }
 
     final resolvedBreaks = _placeBreaks(
       requested: params.breaks,

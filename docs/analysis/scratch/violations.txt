@@ -1,0 +1,1171 @@
+runs=1440  violations=1168
+by type: {stack%25!=0: 712, FEASIBLE_BUT_BROKE: 456}
+---
+stack%25!=0 (357)  demo/6/3.0h/turbo/rebuy/bb/c0
+stack%25!=0 (357)  demo/6/3.0h/turbo/rebuy/bb/c4
+stack%25!=0 (357)  demo/6/3.0h/turbo/rebuy/bb/c5
+stack%25!=0 (357)  demo/6/3.0h/turbo/rebuy/bb/c6
+stack%25!=0 (357)  demo/6/3.0h/turbo/rebuy/none/c0
+stack%25!=0 (357)  demo/6/3.0h/turbo/rebuy/none/c4
+stack%25!=0 (357)  demo/6/3.0h/turbo/rebuy/none/c5
+stack%25!=0 (357)  demo/6/3.0h/turbo/rebuy/none/c6
+stack%25!=0 (796)  box500/6/3.0h/regular/rebuy/bb/c0
+stack%25!=0 (197)  demo/6/3.0h/regular/rebuy/bb/c0
+stack%25!=0 (796)  box500/6/3.0h/regular/rebuy/bb/c4
+stack%25!=0 (197)  demo/6/3.0h/regular/rebuy/bb/c4
+stack%25!=0 (796)  box500/6/3.0h/regular/rebuy/bb/c5
+stack%25!=0 (197)  demo/6/3.0h/regular/rebuy/bb/c5
+stack%25!=0 (796)  box500/6/3.0h/regular/rebuy/bb/c6
+stack%25!=0 (197)  demo/6/3.0h/regular/rebuy/bb/c6
+stack%25!=0 (796)  box500/6/3.0h/regular/rebuy/none/c0
+stack%25!=0 (197)  demo/6/3.0h/regular/rebuy/none/c0
+stack%25!=0 (796)  box500/6/3.0h/regular/rebuy/none/c4
+stack%25!=0 (197)  demo/6/3.0h/regular/rebuy/none/c4
+stack%25!=0 (796)  box500/6/3.0h/regular/rebuy/none/c5
+stack%25!=0 (197)  demo/6/3.0h/regular/rebuy/none/c5
+stack%25!=0 (796)  box500/6/3.0h/regular/rebuy/none/c6
+stack%25!=0 (197)  demo/6/3.0h/regular/rebuy/none/c6
+stack%25!=0 (1920)  box500/6/3.0h/deep/freeze/bb/c0
+stack%25!=0 (960)  demo/6/3.0h/deep/freeze/bb/c0
+stack%25!=0 (1920)  box500/6/3.0h/deep/freeze/none/c0
+stack%25!=0 (960)  demo/6/3.0h/deep/freeze/none/c0
+stack%25!=0 (638)  box500/6/3.0h/deep/rebuy/bb/c0
+stack%25!=0 (317)  demo/6/3.0h/deep/rebuy/bb/c0
+stack%25!=0 (638)  box500/6/3.0h/deep/rebuy/bb/c4
+stack%25!=0 (317)  demo/6/3.0h/deep/rebuy/bb/c4
+stack%25!=0 (638)  box500/6/3.0h/deep/rebuy/bb/c5
+stack%25!=0 (317)  demo/6/3.0h/deep/rebuy/bb/c5
+stack%25!=0 (638)  box500/6/3.0h/deep/rebuy/bb/c6
+stack%25!=0 (317)  demo/6/3.0h/deep/rebuy/bb/c6
+stack%25!=0 (638)  box500/6/3.0h/deep/rebuy/none/c0
+stack%25!=0 (317)  demo/6/3.0h/deep/rebuy/none/c0
+stack%25!=0 (638)  box500/6/3.0h/deep/rebuy/none/c4
+stack%25!=0 (317)  demo/6/3.0h/deep/rebuy/none/c4
+stack%25!=0 (638)  box500/6/3.0h/deep/rebuy/none/c5
+stack%25!=0 (317)  demo/6/3.0h/deep/rebuy/none/c5
+stack%25!=0 (638)  box500/6/3.0h/deep/rebuy/none/c6
+stack%25!=0 (317)  demo/6/3.0h/deep/rebuy/none/c6
+stack%25!=0 (666)  box500/6/3.0h/none/rebuy/bb/c0
+stack%25!=0 (222)  demo/6/3.0h/none/rebuy/bb/c0
+stack%25!=0 (666)  box500/6/3.0h/none/rebuy/bb/c4
+stack%25!=0 (222)  demo/6/3.0h/none/rebuy/bb/c4
+stack%25!=0 (666)  box500/6/3.0h/none/rebuy/bb/c5
+stack%25!=0 (222)  demo/6/3.0h/none/rebuy/bb/c5
+stack%25!=0 (666)  box500/6/3.0h/none/rebuy/bb/c6
+stack%25!=0 (222)  demo/6/3.0h/none/rebuy/bb/c6
+stack%25!=0 (666)  box500/6/3.0h/none/rebuy/none/c0
+stack%25!=0 (222)  demo/6/3.0h/none/rebuy/none/c0
+stack%25!=0 (666)  box500/6/3.0h/none/rebuy/none/c4
+stack%25!=0 (222)  demo/6/3.0h/none/rebuy/none/c4
+stack%25!=0 (666)  box500/6/3.0h/none/rebuy/none/c5
+stack%25!=0 (222)  demo/6/3.0h/none/rebuy/none/c5
+stack%25!=0 (666)  box500/6/3.0h/none/rebuy/none/c6
+stack%25!=0 (222)  demo/6/3.0h/none/rebuy/none/c6
+stack%25!=0 (357)  demo/6/4.0h/turbo/rebuy/bb/c0
+stack%25!=0 (357)  demo/6/4.0h/turbo/rebuy/bb/c4
+stack%25!=0 (357)  demo/6/4.0h/turbo/rebuy/bb/c5
+stack%25!=0 (357)  demo/6/4.0h/turbo/rebuy/bb/c6
+stack%25!=0 (357)  demo/6/4.0h/turbo/rebuy/none/c0
+stack%25!=0 (357)  demo/6/4.0h/turbo/rebuy/none/c4
+stack%25!=0 (357)  demo/6/4.0h/turbo/rebuy/none/c5
+stack%25!=0 (357)  demo/6/4.0h/turbo/rebuy/none/c6
+stack%25!=0 (796)  box500/6/4.0h/regular/rebuy/bb/c0
+stack%25!=0 (197)  demo/6/4.0h/regular/rebuy/bb/c0
+stack%25!=0 (796)  box500/6/4.0h/regular/rebuy/bb/c4
+stack%25!=0 (197)  demo/6/4.0h/regular/rebuy/bb/c4
+stack%25!=0 (796)  box500/6/4.0h/regular/rebuy/bb/c5
+stack%25!=0 (197)  demo/6/4.0h/regular/rebuy/bb/c5
+stack%25!=0 (796)  box500/6/4.0h/regular/rebuy/bb/c6
+stack%25!=0 (197)  demo/6/4.0h/regular/rebuy/bb/c6
+stack%25!=0 (796)  box500/6/4.0h/regular/rebuy/none/c0
+stack%25!=0 (197)  demo/6/4.0h/regular/rebuy/none/c0
+stack%25!=0 (796)  box500/6/4.0h/regular/rebuy/none/c4
+stack%25!=0 (197)  demo/6/4.0h/regular/rebuy/none/c4
+stack%25!=0 (796)  box500/6/4.0h/regular/rebuy/none/c5
+stack%25!=0 (197)  demo/6/4.0h/regular/rebuy/none/c5
+stack%25!=0 (796)  box500/6/4.0h/regular/rebuy/none/c6
+stack%25!=0 (197)  demo/6/4.0h/regular/rebuy/none/c6
+stack%25!=0 (1920)  box500/6/4.0h/deep/freeze/bb/c0
+stack%25!=0 (960)  demo/6/4.0h/deep/freeze/bb/c0
+stack%25!=0 (1920)  box500/6/4.0h/deep/freeze/none/c0
+stack%25!=0 (960)  demo/6/4.0h/deep/freeze/none/c0
+stack%25!=0 (638)  box500/6/4.0h/deep/rebuy/bb/c0
+stack%25!=0 (317)  demo/6/4.0h/deep/rebuy/bb/c0
+stack%25!=0 (638)  box500/6/4.0h/deep/rebuy/bb/c4
+stack%25!=0 (317)  demo/6/4.0h/deep/rebuy/bb/c4
+stack%25!=0 (638)  box500/6/4.0h/deep/rebuy/bb/c5
+stack%25!=0 (317)  demo/6/4.0h/deep/rebuy/bb/c5
+stack%25!=0 (638)  box500/6/4.0h/deep/rebuy/bb/c6
+stack%25!=0 (317)  demo/6/4.0h/deep/rebuy/bb/c6
+stack%25!=0 (638)  box500/6/4.0h/deep/rebuy/none/c0
+stack%25!=0 (317)  demo/6/4.0h/deep/rebuy/none/c0
+stack%25!=0 (638)  box500/6/4.0h/deep/rebuy/none/c4
+stack%25!=0 (317)  demo/6/4.0h/deep/rebuy/none/c4
+stack%25!=0 (638)  box500/6/4.0h/deep/rebuy/none/c5
+stack%25!=0 (317)  demo/6/4.0h/deep/rebuy/none/c5
+stack%25!=0 (638)  box500/6/4.0h/deep/rebuy/none/c6
+stack%25!=0 (317)  demo/6/4.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/6/4.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=7200 owned=6870  demo/6/4.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/6/4.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=7200 owned=6870  demo/6/4.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/6/4.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=7200 owned=6870  demo/6/4.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/6/4.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=7200 owned=6870  demo/6/4.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/6/4.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=7200 owned=6870  demo/6/4.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/6/4.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=7200 owned=6870  demo/6/4.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/6/4.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=7200 owned=6870  demo/6/4.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/6/4.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=7200 owned=6870  demo/6/4.0h/none/rebuy/none/c6
+stack%25!=0 (357)  demo/6/5.0h/turbo/rebuy/bb/c0
+stack%25!=0 (357)  demo/6/5.0h/turbo/rebuy/bb/c4
+stack%25!=0 (357)  demo/6/5.0h/turbo/rebuy/bb/c5
+stack%25!=0 (357)  demo/6/5.0h/turbo/rebuy/bb/c6
+stack%25!=0 (357)  demo/6/5.0h/turbo/rebuy/none/c0
+stack%25!=0 (357)  demo/6/5.0h/turbo/rebuy/none/c4
+stack%25!=0 (357)  demo/6/5.0h/turbo/rebuy/none/c5
+stack%25!=0 (357)  demo/6/5.0h/turbo/rebuy/none/c6
+stack%25!=0 (796)  box500/6/5.0h/regular/rebuy/bb/c0
+stack%25!=0 (197)  demo/6/5.0h/regular/rebuy/bb/c0
+stack%25!=0 (796)  box500/6/5.0h/regular/rebuy/bb/c4
+stack%25!=0 (197)  demo/6/5.0h/regular/rebuy/bb/c4
+stack%25!=0 (796)  box500/6/5.0h/regular/rebuy/bb/c5
+stack%25!=0 (197)  demo/6/5.0h/regular/rebuy/bb/c5
+stack%25!=0 (796)  box500/6/5.0h/regular/rebuy/bb/c6
+stack%25!=0 (197)  demo/6/5.0h/regular/rebuy/bb/c6
+stack%25!=0 (796)  box500/6/5.0h/regular/rebuy/none/c0
+stack%25!=0 (197)  demo/6/5.0h/regular/rebuy/none/c0
+stack%25!=0 (796)  box500/6/5.0h/regular/rebuy/none/c4
+stack%25!=0 (197)  demo/6/5.0h/regular/rebuy/none/c4
+stack%25!=0 (796)  box500/6/5.0h/regular/rebuy/none/c5
+stack%25!=0 (197)  demo/6/5.0h/regular/rebuy/none/c5
+stack%25!=0 (796)  box500/6/5.0h/regular/rebuy/none/c6
+stack%25!=0 (197)  demo/6/5.0h/regular/rebuy/none/c6
+stack%25!=0 (1920)  box500/6/5.0h/deep/freeze/bb/c0
+stack%25!=0 (960)  demo/6/5.0h/deep/freeze/bb/c0
+stack%25!=0 (1920)  box500/6/5.0h/deep/freeze/none/c0
+stack%25!=0 (960)  demo/6/5.0h/deep/freeze/none/c0
+stack%25!=0 (638)  box500/6/5.0h/deep/rebuy/bb/c0
+stack%25!=0 (317)  demo/6/5.0h/deep/rebuy/bb/c0
+stack%25!=0 (638)  box500/6/5.0h/deep/rebuy/bb/c4
+stack%25!=0 (317)  demo/6/5.0h/deep/rebuy/bb/c4
+stack%25!=0 (638)  box500/6/5.0h/deep/rebuy/bb/c5
+stack%25!=0 (317)  demo/6/5.0h/deep/rebuy/bb/c5
+stack%25!=0 (638)  box500/6/5.0h/deep/rebuy/bb/c6
+stack%25!=0 (317)  demo/6/5.0h/deep/rebuy/bb/c6
+stack%25!=0 (638)  box500/6/5.0h/deep/rebuy/none/c0
+stack%25!=0 (317)  demo/6/5.0h/deep/rebuy/none/c0
+stack%25!=0 (638)  box500/6/5.0h/deep/rebuy/none/c4
+stack%25!=0 (317)  demo/6/5.0h/deep/rebuy/none/c4
+stack%25!=0 (638)  box500/6/5.0h/deep/rebuy/none/c5
+stack%25!=0 (317)  demo/6/5.0h/deep/rebuy/none/c5
+stack%25!=0 (638)  box500/6/5.0h/deep/rebuy/none/c6
+stack%25!=0 (317)  demo/6/5.0h/deep/rebuy/none/c6
+stack%25!=0 (1920)  box500/6/5.0h/none/freeze/bb/c0
+stack%25!=0 (960)  demo/6/5.0h/none/freeze/bb/c0
+stack%25!=0 (1920)  box500/6/5.0h/none/freeze/none/c0
+stack%25!=0 (960)  demo/6/5.0h/none/freeze/none/c0
+stack%25!=0 (668)  box500/6/5.0h/none/rebuy/bb/c0
+stack%25!=0 (332)  demo/6/5.0h/none/rebuy/bb/c0
+stack%25!=0 (668)  box500/6/5.0h/none/rebuy/bb/c4
+stack%25!=0 (332)  demo/6/5.0h/none/rebuy/bb/c4
+stack%25!=0 (668)  box500/6/5.0h/none/rebuy/bb/c5
+stack%25!=0 (332)  demo/6/5.0h/none/rebuy/bb/c5
+stack%25!=0 (668)  box500/6/5.0h/none/rebuy/bb/c6
+stack%25!=0 (332)  demo/6/5.0h/none/rebuy/bb/c6
+stack%25!=0 (668)  box500/6/5.0h/none/rebuy/none/c0
+stack%25!=0 (332)  demo/6/5.0h/none/rebuy/none/c0
+stack%25!=0 (668)  box500/6/5.0h/none/rebuy/none/c4
+stack%25!=0 (332)  demo/6/5.0h/none/rebuy/none/c4
+stack%25!=0 (668)  box500/6/5.0h/none/rebuy/none/c5
+stack%25!=0 (332)  demo/6/5.0h/none/rebuy/none/c5
+stack%25!=0 (668)  box500/6/5.0h/none/rebuy/none/c6
+stack%25!=0 (332)  demo/6/5.0h/none/rebuy/none/c6
+stack%25!=0 (476)  box500/9/3.0h/turbo/rebuy/bb/c0
+stack%25!=0 (357)  demo/9/3.0h/turbo/rebuy/bb/c0
+stack%25!=0 (476)  box500/9/3.0h/turbo/rebuy/bb/c4
+stack%25!=0 (357)  demo/9/3.0h/turbo/rebuy/bb/c4
+stack%25!=0 (476)  box500/9/3.0h/turbo/rebuy/bb/c5
+stack%25!=0 (357)  demo/9/3.0h/turbo/rebuy/bb/c5
+stack%25!=0 (476)  box500/9/3.0h/turbo/rebuy/bb/c6
+stack%25!=0 (357)  demo/9/3.0h/turbo/rebuy/bb/c6
+stack%25!=0 (476)  box500/9/3.0h/turbo/rebuy/none/c0
+stack%25!=0 (357)  demo/9/3.0h/turbo/rebuy/none/c0
+stack%25!=0 (476)  box500/9/3.0h/turbo/rebuy/none/c4
+stack%25!=0 (357)  demo/9/3.0h/turbo/rebuy/none/c4
+stack%25!=0 (476)  box500/9/3.0h/turbo/rebuy/none/c5
+stack%25!=0 (357)  demo/9/3.0h/turbo/rebuy/none/c5
+stack%25!=0 (476)  box500/9/3.0h/turbo/rebuy/none/c6
+stack%25!=0 (357)  demo/9/3.0h/turbo/rebuy/none/c6
+stack%25!=0 (396)  box500/9/3.0h/regular/rebuy/bb/c0
+stack%25!=0 (198)  demo/9/3.0h/regular/rebuy/bb/c0
+stack%25!=0 (396)  box500/9/3.0h/regular/rebuy/bb/c4
+stack%25!=0 (198)  demo/9/3.0h/regular/rebuy/bb/c4
+stack%25!=0 (396)  box500/9/3.0h/regular/rebuy/bb/c5
+stack%25!=0 (198)  demo/9/3.0h/regular/rebuy/bb/c5
+stack%25!=0 (396)  box500/9/3.0h/regular/rebuy/bb/c6
+stack%25!=0 (198)  demo/9/3.0h/regular/rebuy/bb/c6
+stack%25!=0 (396)  box500/9/3.0h/regular/rebuy/none/c0
+stack%25!=0 (198)  demo/9/3.0h/regular/rebuy/none/c0
+stack%25!=0 (396)  box500/9/3.0h/regular/rebuy/none/c4
+stack%25!=0 (198)  demo/9/3.0h/regular/rebuy/none/c4
+stack%25!=0 (396)  box500/9/3.0h/regular/rebuy/none/c5
+stack%25!=0 (198)  demo/9/3.0h/regular/rebuy/none/c5
+stack%25!=0 (396)  box500/9/3.0h/regular/rebuy/none/c6
+stack%25!=0 (198)  demo/9/3.0h/regular/rebuy/none/c6
+stack%25!=0 (960)  box500/9/3.0h/deep/freeze/bb/c0
+stack%25!=0 (960)  box500/9/3.0h/deep/freeze/none/c0
+stack%25!=0 (316)  box500/9/3.0h/deep/rebuy/bb/c0
+stack%25!=0 (318)  demo/9/3.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/3.0h/deep/rebuy/bb/c0
+stack%25!=0 (316)  box500/9/3.0h/deep/rebuy/bb/c4
+stack%25!=0 (318)  demo/9/3.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/3.0h/deep/rebuy/bb/c4
+stack%25!=0 (316)  box500/9/3.0h/deep/rebuy/bb/c5
+stack%25!=0 (318)  demo/9/3.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/3.0h/deep/rebuy/bb/c5
+stack%25!=0 (316)  box500/9/3.0h/deep/rebuy/bb/c6
+stack%25!=0 (318)  demo/9/3.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/3.0h/deep/rebuy/bb/c6
+stack%25!=0 (316)  box500/9/3.0h/deep/rebuy/none/c0
+stack%25!=0 (318)  demo/9/3.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/3.0h/deep/rebuy/none/c0
+stack%25!=0 (316)  box500/9/3.0h/deep/rebuy/none/c4
+stack%25!=0 (318)  demo/9/3.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/3.0h/deep/rebuy/none/c4
+stack%25!=0 (316)  box500/9/3.0h/deep/rebuy/none/c5
+stack%25!=0 (318)  demo/9/3.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/3.0h/deep/rebuy/none/c5
+stack%25!=0 (316)  box500/9/3.0h/deep/rebuy/none/c6
+stack%25!=0 (318)  demo/9/3.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/3.0h/deep/rebuy/none/c6
+stack%25!=0 (216)  box500/9/3.0h/none/rebuy/bb/c0
+stack%25!=0 (217)  demo/9/3.0h/none/rebuy/bb/c0
+stack%25!=0 (216)  box500/9/3.0h/none/rebuy/bb/c4
+stack%25!=0 (217)  demo/9/3.0h/none/rebuy/bb/c4
+stack%25!=0 (216)  box500/9/3.0h/none/rebuy/bb/c5
+stack%25!=0 (217)  demo/9/3.0h/none/rebuy/bb/c5
+stack%25!=0 (216)  box500/9/3.0h/none/rebuy/bb/c6
+stack%25!=0 (217)  demo/9/3.0h/none/rebuy/bb/c6
+stack%25!=0 (216)  box500/9/3.0h/none/rebuy/none/c0
+stack%25!=0 (217)  demo/9/3.0h/none/rebuy/none/c0
+stack%25!=0 (216)  box500/9/3.0h/none/rebuy/none/c4
+stack%25!=0 (217)  demo/9/3.0h/none/rebuy/none/c4
+stack%25!=0 (216)  box500/9/3.0h/none/rebuy/none/c5
+stack%25!=0 (217)  demo/9/3.0h/none/rebuy/none/c5
+stack%25!=0 (216)  box500/9/3.0h/none/rebuy/none/c6
+stack%25!=0 (217)  demo/9/3.0h/none/rebuy/none/c6
+stack%25!=0 (476)  box500/9/4.0h/turbo/rebuy/bb/c0
+stack%25!=0 (357)  demo/9/4.0h/turbo/rebuy/bb/c0
+stack%25!=0 (476)  box500/9/4.0h/turbo/rebuy/bb/c4
+stack%25!=0 (357)  demo/9/4.0h/turbo/rebuy/bb/c4
+stack%25!=0 (476)  box500/9/4.0h/turbo/rebuy/bb/c5
+stack%25!=0 (357)  demo/9/4.0h/turbo/rebuy/bb/c5
+stack%25!=0 (476)  box500/9/4.0h/turbo/rebuy/bb/c6
+stack%25!=0 (357)  demo/9/4.0h/turbo/rebuy/bb/c6
+stack%25!=0 (476)  box500/9/4.0h/turbo/rebuy/none/c0
+stack%25!=0 (357)  demo/9/4.0h/turbo/rebuy/none/c0
+stack%25!=0 (476)  box500/9/4.0h/turbo/rebuy/none/c4
+stack%25!=0 (357)  demo/9/4.0h/turbo/rebuy/none/c4
+stack%25!=0 (476)  box500/9/4.0h/turbo/rebuy/none/c5
+stack%25!=0 (357)  demo/9/4.0h/turbo/rebuy/none/c5
+stack%25!=0 (476)  box500/9/4.0h/turbo/rebuy/none/c6
+stack%25!=0 (357)  demo/9/4.0h/turbo/rebuy/none/c6
+stack%25!=0 (396)  box500/9/4.0h/regular/rebuy/bb/c0
+stack%25!=0 (198)  demo/9/4.0h/regular/rebuy/bb/c0
+stack%25!=0 (396)  box500/9/4.0h/regular/rebuy/bb/c4
+stack%25!=0 (198)  demo/9/4.0h/regular/rebuy/bb/c4
+stack%25!=0 (396)  box500/9/4.0h/regular/rebuy/bb/c5
+stack%25!=0 (198)  demo/9/4.0h/regular/rebuy/bb/c5
+stack%25!=0 (396)  box500/9/4.0h/regular/rebuy/bb/c6
+stack%25!=0 (198)  demo/9/4.0h/regular/rebuy/bb/c6
+stack%25!=0 (396)  box500/9/4.0h/regular/rebuy/none/c0
+stack%25!=0 (198)  demo/9/4.0h/regular/rebuy/none/c0
+stack%25!=0 (396)  box500/9/4.0h/regular/rebuy/none/c4
+stack%25!=0 (198)  demo/9/4.0h/regular/rebuy/none/c4
+stack%25!=0 (396)  box500/9/4.0h/regular/rebuy/none/c5
+stack%25!=0 (198)  demo/9/4.0h/regular/rebuy/none/c5
+stack%25!=0 (396)  box500/9/4.0h/regular/rebuy/none/c6
+stack%25!=0 (198)  demo/9/4.0h/regular/rebuy/none/c6
+stack%25!=0 (960)  box500/9/4.0h/deep/freeze/bb/c0
+stack%25!=0 (960)  box500/9/4.0h/deep/freeze/none/c0
+stack%25!=0 (316)  box500/9/4.0h/deep/rebuy/bb/c0
+stack%25!=0 (318)  demo/9/4.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/4.0h/deep/rebuy/bb/c0
+stack%25!=0 (316)  box500/9/4.0h/deep/rebuy/bb/c4
+stack%25!=0 (318)  demo/9/4.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/4.0h/deep/rebuy/bb/c4
+stack%25!=0 (316)  box500/9/4.0h/deep/rebuy/bb/c5
+stack%25!=0 (318)  demo/9/4.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/4.0h/deep/rebuy/bb/c5
+stack%25!=0 (316)  box500/9/4.0h/deep/rebuy/bb/c6
+stack%25!=0 (318)  demo/9/4.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/4.0h/deep/rebuy/bb/c6
+stack%25!=0 (316)  box500/9/4.0h/deep/rebuy/none/c0
+stack%25!=0 (318)  demo/9/4.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/4.0h/deep/rebuy/none/c0
+stack%25!=0 (316)  box500/9/4.0h/deep/rebuy/none/c4
+stack%25!=0 (318)  demo/9/4.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/4.0h/deep/rebuy/none/c4
+stack%25!=0 (316)  box500/9/4.0h/deep/rebuy/none/c5
+stack%25!=0 (318)  demo/9/4.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/4.0h/deep/rebuy/none/c5
+stack%25!=0 (316)  box500/9/4.0h/deep/rebuy/none/c6
+stack%25!=0 (318)  demo/9/4.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/4.0h/deep/rebuy/none/c6
+stack%25!=0 (476)  box500/9/5.0h/turbo/rebuy/bb/c0
+stack%25!=0 (357)  demo/9/5.0h/turbo/rebuy/bb/c0
+stack%25!=0 (476)  box500/9/5.0h/turbo/rebuy/bb/c4
+stack%25!=0 (357)  demo/9/5.0h/turbo/rebuy/bb/c4
+stack%25!=0 (476)  box500/9/5.0h/turbo/rebuy/bb/c5
+stack%25!=0 (357)  demo/9/5.0h/turbo/rebuy/bb/c5
+stack%25!=0 (476)  box500/9/5.0h/turbo/rebuy/bb/c6
+stack%25!=0 (357)  demo/9/5.0h/turbo/rebuy/bb/c6
+stack%25!=0 (476)  box500/9/5.0h/turbo/rebuy/none/c0
+stack%25!=0 (357)  demo/9/5.0h/turbo/rebuy/none/c0
+stack%25!=0 (476)  box500/9/5.0h/turbo/rebuy/none/c4
+stack%25!=0 (357)  demo/9/5.0h/turbo/rebuy/none/c4
+stack%25!=0 (476)  box500/9/5.0h/turbo/rebuy/none/c5
+stack%25!=0 (357)  demo/9/5.0h/turbo/rebuy/none/c5
+stack%25!=0 (476)  box500/9/5.0h/turbo/rebuy/none/c6
+stack%25!=0 (357)  demo/9/5.0h/turbo/rebuy/none/c6
+stack%25!=0 (396)  box500/9/5.0h/regular/rebuy/bb/c0
+stack%25!=0 (198)  demo/9/5.0h/regular/rebuy/bb/c0
+stack%25!=0 (396)  box500/9/5.0h/regular/rebuy/bb/c4
+stack%25!=0 (198)  demo/9/5.0h/regular/rebuy/bb/c4
+stack%25!=0 (396)  box500/9/5.0h/regular/rebuy/bb/c5
+stack%25!=0 (198)  demo/9/5.0h/regular/rebuy/bb/c5
+stack%25!=0 (396)  box500/9/5.0h/regular/rebuy/bb/c6
+stack%25!=0 (198)  demo/9/5.0h/regular/rebuy/bb/c6
+stack%25!=0 (396)  box500/9/5.0h/regular/rebuy/none/c0
+stack%25!=0 (198)  demo/9/5.0h/regular/rebuy/none/c0
+stack%25!=0 (396)  box500/9/5.0h/regular/rebuy/none/c4
+stack%25!=0 (198)  demo/9/5.0h/regular/rebuy/none/c4
+stack%25!=0 (396)  box500/9/5.0h/regular/rebuy/none/c5
+stack%25!=0 (198)  demo/9/5.0h/regular/rebuy/none/c5
+stack%25!=0 (396)  box500/9/5.0h/regular/rebuy/none/c6
+stack%25!=0 (198)  demo/9/5.0h/regular/rebuy/none/c6
+stack%25!=0 (960)  box500/9/5.0h/deep/freeze/bb/c0
+stack%25!=0 (960)  box500/9/5.0h/deep/freeze/none/c0
+stack%25!=0 (316)  box500/9/5.0h/deep/rebuy/bb/c0
+stack%25!=0 (318)  demo/9/5.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/5.0h/deep/rebuy/bb/c0
+stack%25!=0 (316)  box500/9/5.0h/deep/rebuy/bb/c4
+stack%25!=0 (318)  demo/9/5.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/5.0h/deep/rebuy/bb/c4
+stack%25!=0 (316)  box500/9/5.0h/deep/rebuy/bb/c5
+stack%25!=0 (318)  demo/9/5.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/5.0h/deep/rebuy/bb/c5
+stack%25!=0 (316)  box500/9/5.0h/deep/rebuy/bb/c6
+stack%25!=0 (318)  demo/9/5.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/5.0h/deep/rebuy/bb/c6
+stack%25!=0 (316)  box500/9/5.0h/deep/rebuy/none/c0
+stack%25!=0 (318)  demo/9/5.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/5.0h/deep/rebuy/none/c0
+stack%25!=0 (316)  box500/9/5.0h/deep/rebuy/none/c4
+stack%25!=0 (318)  demo/9/5.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/5.0h/deep/rebuy/none/c4
+stack%25!=0 (316)  box500/9/5.0h/deep/rebuy/none/c5
+stack%25!=0 (318)  demo/9/5.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/5.0h/deep/rebuy/none/c5
+stack%25!=0 (316)  box500/9/5.0h/deep/rebuy/none/c6
+stack%25!=0 (318)  demo/9/5.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=287100 owned=252500  base25/9/5.0h/deep/rebuy/none/c6
+stack%25!=0 (960)  box500/9/5.0h/none/freeze/bb/c0
+stack%25!=0 (960)  box500/9/5.0h/none/freeze/none/c0
+stack%25!=0 (326)  box500/9/5.0h/none/rebuy/bb/c0
+stack%25!=0 (328)  demo/9/5.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=292500 owned=252500  base25/9/5.0h/none/rebuy/bb/c0
+stack%25!=0 (326)  box500/9/5.0h/none/rebuy/bb/c4
+stack%25!=0 (328)  demo/9/5.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=292500 owned=252500  base25/9/5.0h/none/rebuy/bb/c4
+stack%25!=0 (326)  box500/9/5.0h/none/rebuy/bb/c5
+stack%25!=0 (328)  demo/9/5.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=292500 owned=252500  base25/9/5.0h/none/rebuy/bb/c5
+stack%25!=0 (326)  box500/9/5.0h/none/rebuy/bb/c6
+stack%25!=0 (328)  demo/9/5.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=292500 owned=252500  base25/9/5.0h/none/rebuy/bb/c6
+stack%25!=0 (326)  box500/9/5.0h/none/rebuy/none/c0
+stack%25!=0 (328)  demo/9/5.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=292500 owned=252500  base25/9/5.0h/none/rebuy/none/c0
+stack%25!=0 (326)  box500/9/5.0h/none/rebuy/none/c4
+stack%25!=0 (328)  demo/9/5.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=292500 owned=252500  base25/9/5.0h/none/rebuy/none/c4
+stack%25!=0 (326)  box500/9/5.0h/none/rebuy/none/c5
+stack%25!=0 (328)  demo/9/5.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=292500 owned=252500  base25/9/5.0h/none/rebuy/none/c5
+stack%25!=0 (326)  box500/9/5.0h/none/rebuy/none/c6
+stack%25!=0 (328)  demo/9/5.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=292500 owned=252500  base25/9/5.0h/none/rebuy/none/c6
+stack%25!=0 (120)  demo/12/3.0h/turbo/freeze/bb/c0
+stack%25!=0 (120)  demo/12/3.0h/turbo/freeze/none/c0
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/3.0h/turbo/rebuy/bb/c0
+stack%25!=0 (236)  demo/12/3.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/3.0h/turbo/rebuy/bb/c4
+stack%25!=0 (236)  demo/12/3.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/3.0h/turbo/rebuy/bb/c5
+stack%25!=0 (236)  demo/12/3.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/3.0h/turbo/rebuy/bb/c6
+stack%25!=0 (236)  demo/12/3.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/3.0h/turbo/rebuy/none/c0
+stack%25!=0 (236)  demo/12/3.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/3.0h/turbo/rebuy/none/c4
+stack%25!=0 (236)  demo/12/3.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/3.0h/turbo/rebuy/none/c5
+stack%25!=0 (236)  demo/12/3.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/3.0h/turbo/rebuy/none/c6
+stack%25!=0 (236)  demo/12/3.0h/turbo/rebuy/none/c6
+stack%25!=0 (597)  box500/12/3.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/3.0h/regular/rebuy/bb/c0
+stack%25!=0 (196)  demo/12/3.0h/regular/rebuy/bb/c0
+stack%25!=0 (597)  box500/12/3.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/3.0h/regular/rebuy/bb/c4
+stack%25!=0 (196)  demo/12/3.0h/regular/rebuy/bb/c4
+stack%25!=0 (597)  box500/12/3.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/3.0h/regular/rebuy/bb/c5
+stack%25!=0 (196)  demo/12/3.0h/regular/rebuy/bb/c5
+stack%25!=0 (597)  box500/12/3.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/3.0h/regular/rebuy/bb/c6
+stack%25!=0 (196)  demo/12/3.0h/regular/rebuy/bb/c6
+stack%25!=0 (597)  box500/12/3.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/3.0h/regular/rebuy/none/c0
+stack%25!=0 (196)  demo/12/3.0h/regular/rebuy/none/c0
+stack%25!=0 (597)  box500/12/3.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/3.0h/regular/rebuy/none/c4
+stack%25!=0 (196)  demo/12/3.0h/regular/rebuy/none/c4
+stack%25!=0 (597)  box500/12/3.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/3.0h/regular/rebuy/none/c5
+stack%25!=0 (196)  demo/12/3.0h/regular/rebuy/none/c5
+stack%25!=0 (597)  box500/12/3.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/3.0h/regular/rebuy/none/c6
+stack%25!=0 (196)  demo/12/3.0h/regular/rebuy/none/c6
+stack%25!=0 (960)  box500/12/3.0h/deep/freeze/bb/c0
+stack%25!=0 (960)  box500/12/3.0h/deep/freeze/none/c0
+stack%25!=0 (636)  box500/12/3.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/3.0h/deep/rebuy/bb/c0
+stack%25!=0 (316)  demo/12/3.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/3.0h/deep/rebuy/bb/c0
+stack%25!=0 (636)  box500/12/3.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/3.0h/deep/rebuy/bb/c4
+stack%25!=0 (316)  demo/12/3.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/3.0h/deep/rebuy/bb/c4
+stack%25!=0 (636)  box500/12/3.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/3.0h/deep/rebuy/bb/c5
+stack%25!=0 (316)  demo/12/3.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/3.0h/deep/rebuy/bb/c5
+stack%25!=0 (636)  box500/12/3.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/3.0h/deep/rebuy/bb/c6
+stack%25!=0 (316)  demo/12/3.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/3.0h/deep/rebuy/bb/c6
+stack%25!=0 (636)  box500/12/3.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/3.0h/deep/rebuy/none/c0
+stack%25!=0 (316)  demo/12/3.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/3.0h/deep/rebuy/none/c0
+stack%25!=0 (636)  box500/12/3.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/3.0h/deep/rebuy/none/c4
+stack%25!=0 (316)  demo/12/3.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/3.0h/deep/rebuy/none/c4
+stack%25!=0 (636)  box500/12/3.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/3.0h/deep/rebuy/none/c5
+stack%25!=0 (316)  demo/12/3.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/3.0h/deep/rebuy/none/c5
+stack%25!=0 (636)  box500/12/3.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/3.0h/deep/rebuy/none/c6
+stack%25!=0 (316)  demo/12/3.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/3.0h/deep/rebuy/none/c6
+stack%25!=0 (606)  box500/12/3.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=14544 owned=13400  box500/12/3.0h/none/rebuy/bb/c0
+stack%25!=0 (201)  demo/12/3.0h/none/rebuy/bb/c0
+stack%25!=0 (606)  box500/12/3.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=14544 owned=13400  box500/12/3.0h/none/rebuy/bb/c4
+stack%25!=0 (201)  demo/12/3.0h/none/rebuy/bb/c4
+stack%25!=0 (606)  box500/12/3.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=14544 owned=13400  box500/12/3.0h/none/rebuy/bb/c5
+stack%25!=0 (201)  demo/12/3.0h/none/rebuy/bb/c5
+stack%25!=0 (606)  box500/12/3.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=14544 owned=13400  box500/12/3.0h/none/rebuy/bb/c6
+stack%25!=0 (201)  demo/12/3.0h/none/rebuy/bb/c6
+stack%25!=0 (606)  box500/12/3.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=14544 owned=13400  box500/12/3.0h/none/rebuy/none/c0
+stack%25!=0 (201)  demo/12/3.0h/none/rebuy/none/c0
+stack%25!=0 (606)  box500/12/3.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=14544 owned=13400  box500/12/3.0h/none/rebuy/none/c4
+stack%25!=0 (201)  demo/12/3.0h/none/rebuy/none/c4
+stack%25!=0 (606)  box500/12/3.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=14544 owned=13400  box500/12/3.0h/none/rebuy/none/c5
+stack%25!=0 (201)  demo/12/3.0h/none/rebuy/none/c5
+stack%25!=0 (606)  box500/12/3.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=14544 owned=13400  box500/12/3.0h/none/rebuy/none/c6
+stack%25!=0 (201)  demo/12/3.0h/none/rebuy/none/c6
+stack%25!=0 (120)  demo/12/4.0h/turbo/freeze/bb/c0
+stack%25!=0 (120)  demo/12/4.0h/turbo/freeze/none/c0
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/4.0h/turbo/rebuy/bb/c0
+stack%25!=0 (236)  demo/12/4.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/4.0h/turbo/rebuy/bb/c4
+stack%25!=0 (236)  demo/12/4.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/4.0h/turbo/rebuy/bb/c5
+stack%25!=0 (236)  demo/12/4.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/4.0h/turbo/rebuy/bb/c6
+stack%25!=0 (236)  demo/12/4.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/4.0h/turbo/rebuy/none/c0
+stack%25!=0 (236)  demo/12/4.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/4.0h/turbo/rebuy/none/c4
+stack%25!=0 (236)  demo/12/4.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/4.0h/turbo/rebuy/none/c5
+stack%25!=0 (236)  demo/12/4.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/4.0h/turbo/rebuy/none/c6
+stack%25!=0 (236)  demo/12/4.0h/turbo/rebuy/none/c6
+stack%25!=0 (597)  box500/12/4.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/4.0h/regular/rebuy/bb/c0
+stack%25!=0 (196)  demo/12/4.0h/regular/rebuy/bb/c0
+stack%25!=0 (597)  box500/12/4.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/4.0h/regular/rebuy/bb/c4
+stack%25!=0 (196)  demo/12/4.0h/regular/rebuy/bb/c4
+stack%25!=0 (597)  box500/12/4.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/4.0h/regular/rebuy/bb/c5
+stack%25!=0 (196)  demo/12/4.0h/regular/rebuy/bb/c5
+stack%25!=0 (597)  box500/12/4.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/4.0h/regular/rebuy/bb/c6
+stack%25!=0 (196)  demo/12/4.0h/regular/rebuy/bb/c6
+stack%25!=0 (597)  box500/12/4.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/4.0h/regular/rebuy/none/c0
+stack%25!=0 (196)  demo/12/4.0h/regular/rebuy/none/c0
+stack%25!=0 (597)  box500/12/4.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/4.0h/regular/rebuy/none/c4
+stack%25!=0 (196)  demo/12/4.0h/regular/rebuy/none/c4
+stack%25!=0 (597)  box500/12/4.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/4.0h/regular/rebuy/none/c5
+stack%25!=0 (196)  demo/12/4.0h/regular/rebuy/none/c5
+stack%25!=0 (597)  box500/12/4.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/4.0h/regular/rebuy/none/c6
+stack%25!=0 (196)  demo/12/4.0h/regular/rebuy/none/c6
+stack%25!=0 (960)  box500/12/4.0h/deep/freeze/bb/c0
+stack%25!=0 (960)  box500/12/4.0h/deep/freeze/none/c0
+stack%25!=0 (636)  box500/12/4.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/4.0h/deep/rebuy/bb/c0
+stack%25!=0 (316)  demo/12/4.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/4.0h/deep/rebuy/bb/c0
+stack%25!=0 (636)  box500/12/4.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/4.0h/deep/rebuy/bb/c4
+stack%25!=0 (316)  demo/12/4.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/4.0h/deep/rebuy/bb/c4
+stack%25!=0 (636)  box500/12/4.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/4.0h/deep/rebuy/bb/c5
+stack%25!=0 (316)  demo/12/4.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/4.0h/deep/rebuy/bb/c5
+stack%25!=0 (636)  box500/12/4.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/4.0h/deep/rebuy/bb/c6
+stack%25!=0 (316)  demo/12/4.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/4.0h/deep/rebuy/bb/c6
+stack%25!=0 (636)  box500/12/4.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/4.0h/deep/rebuy/none/c0
+stack%25!=0 (316)  demo/12/4.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/4.0h/deep/rebuy/none/c0
+stack%25!=0 (636)  box500/12/4.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/4.0h/deep/rebuy/none/c4
+stack%25!=0 (316)  demo/12/4.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/4.0h/deep/rebuy/none/c4
+stack%25!=0 (636)  box500/12/4.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/4.0h/deep/rebuy/none/c5
+stack%25!=0 (316)  demo/12/4.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/4.0h/deep/rebuy/none/c5
+stack%25!=0 (636)  box500/12/4.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/4.0h/deep/rebuy/none/c6
+stack%25!=0 (316)  demo/12/4.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/4.0h/deep/rebuy/none/c6
+stack%25!=0 (516)  box500/12/4.0h/none/rebuy/bb/c0
+stack%25!=0 (256)  demo/12/4.0h/none/rebuy/bb/c0
+stack%25!=0 (516)  box500/12/4.0h/none/rebuy/bb/c4
+stack%25!=0 (256)  demo/12/4.0h/none/rebuy/bb/c4
+stack%25!=0 (516)  box500/12/4.0h/none/rebuy/bb/c5
+stack%25!=0 (256)  demo/12/4.0h/none/rebuy/bb/c5
+stack%25!=0 (516)  box500/12/4.0h/none/rebuy/bb/c6
+stack%25!=0 (256)  demo/12/4.0h/none/rebuy/bb/c6
+stack%25!=0 (516)  box500/12/4.0h/none/rebuy/none/c0
+stack%25!=0 (256)  demo/12/4.0h/none/rebuy/none/c0
+stack%25!=0 (516)  box500/12/4.0h/none/rebuy/none/c4
+stack%25!=0 (256)  demo/12/4.0h/none/rebuy/none/c4
+stack%25!=0 (516)  box500/12/4.0h/none/rebuy/none/c5
+stack%25!=0 (256)  demo/12/4.0h/none/rebuy/none/c5
+stack%25!=0 (516)  box500/12/4.0h/none/rebuy/none/c6
+stack%25!=0 (256)  demo/12/4.0h/none/rebuy/none/c6
+stack%25!=0 (120)  demo/12/5.0h/turbo/freeze/bb/c0
+stack%25!=0 (120)  demo/12/5.0h/turbo/freeze/none/c0
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/5.0h/turbo/rebuy/bb/c0
+stack%25!=0 (236)  demo/12/5.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/5.0h/turbo/rebuy/bb/c4
+stack%25!=0 (236)  demo/12/5.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/5.0h/turbo/rebuy/bb/c5
+stack%25!=0 (236)  demo/12/5.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/5.0h/turbo/rebuy/bb/c6
+stack%25!=0 (236)  demo/12/5.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/5.0h/turbo/rebuy/none/c0
+stack%25!=0 (236)  demo/12/5.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/5.0h/turbo/rebuy/none/c4
+stack%25!=0 (236)  demo/12/5.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/5.0h/turbo/rebuy/none/c5
+stack%25!=0 (236)  demo/12/5.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=14400 owned=13400  box500/12/5.0h/turbo/rebuy/none/c6
+stack%25!=0 (236)  demo/12/5.0h/turbo/rebuy/none/c6
+stack%25!=0 (597)  box500/12/5.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/5.0h/regular/rebuy/bb/c0
+stack%25!=0 (196)  demo/12/5.0h/regular/rebuy/bb/c0
+stack%25!=0 (597)  box500/12/5.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/5.0h/regular/rebuy/bb/c4
+stack%25!=0 (196)  demo/12/5.0h/regular/rebuy/bb/c4
+stack%25!=0 (597)  box500/12/5.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/5.0h/regular/rebuy/bb/c5
+stack%25!=0 (196)  demo/12/5.0h/regular/rebuy/bb/c5
+stack%25!=0 (597)  box500/12/5.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/5.0h/regular/rebuy/bb/c6
+stack%25!=0 (196)  demo/12/5.0h/regular/rebuy/bb/c6
+stack%25!=0 (597)  box500/12/5.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/5.0h/regular/rebuy/none/c0
+stack%25!=0 (196)  demo/12/5.0h/regular/rebuy/none/c0
+stack%25!=0 (597)  box500/12/5.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/5.0h/regular/rebuy/none/c4
+stack%25!=0 (196)  demo/12/5.0h/regular/rebuy/none/c4
+stack%25!=0 (597)  box500/12/5.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/5.0h/regular/rebuy/none/c5
+stack%25!=0 (196)  demo/12/5.0h/regular/rebuy/none/c5
+stack%25!=0 (597)  box500/12/5.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=14328 owned=13400  box500/12/5.0h/regular/rebuy/none/c6
+stack%25!=0 (196)  demo/12/5.0h/regular/rebuy/none/c6
+stack%25!=0 (960)  box500/12/5.0h/deep/freeze/bb/c0
+stack%25!=0 (960)  box500/12/5.0h/deep/freeze/none/c0
+stack%25!=0 (636)  box500/12/5.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/5.0h/deep/rebuy/bb/c0
+stack%25!=0 (316)  demo/12/5.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/5.0h/deep/rebuy/bb/c0
+stack%25!=0 (636)  box500/12/5.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/5.0h/deep/rebuy/bb/c4
+stack%25!=0 (316)  demo/12/5.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/5.0h/deep/rebuy/bb/c4
+stack%25!=0 (636)  box500/12/5.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/5.0h/deep/rebuy/bb/c5
+stack%25!=0 (316)  demo/12/5.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/5.0h/deep/rebuy/bb/c5
+stack%25!=0 (636)  box500/12/5.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/5.0h/deep/rebuy/bb/c6
+stack%25!=0 (316)  demo/12/5.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/5.0h/deep/rebuy/bb/c6
+stack%25!=0 (636)  box500/12/5.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/5.0h/deep/rebuy/none/c0
+stack%25!=0 (316)  demo/12/5.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/5.0h/deep/rebuy/none/c0
+stack%25!=0 (636)  box500/12/5.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/5.0h/deep/rebuy/none/c4
+stack%25!=0 (316)  demo/12/5.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/5.0h/deep/rebuy/none/c4
+stack%25!=0 (636)  box500/12/5.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/5.0h/deep/rebuy/none/c5
+stack%25!=0 (316)  demo/12/5.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/5.0h/deep/rebuy/none/c5
+stack%25!=0 (636)  box500/12/5.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=15264 owned=13400  box500/12/5.0h/deep/rebuy/none/c6
+stack%25!=0 (316)  demo/12/5.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=7584 owned=6870  demo/12/5.0h/deep/rebuy/none/c6
+stack%25!=0 (626)  box500/12/5.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=15024 owned=13400  box500/12/5.0h/none/rebuy/bb/c0
+stack%25!=0 (311)  demo/12/5.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=7464 owned=6870  demo/12/5.0h/none/rebuy/bb/c0
+stack%25!=0 (626)  box500/12/5.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=15024 owned=13400  box500/12/5.0h/none/rebuy/bb/c4
+stack%25!=0 (311)  demo/12/5.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=7464 owned=6870  demo/12/5.0h/none/rebuy/bb/c4
+stack%25!=0 (626)  box500/12/5.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=15024 owned=13400  box500/12/5.0h/none/rebuy/bb/c5
+stack%25!=0 (311)  demo/12/5.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=7464 owned=6870  demo/12/5.0h/none/rebuy/bb/c5
+stack%25!=0 (626)  box500/12/5.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=15024 owned=13400  box500/12/5.0h/none/rebuy/bb/c6
+stack%25!=0 (311)  demo/12/5.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=7464 owned=6870  demo/12/5.0h/none/rebuy/bb/c6
+stack%25!=0 (626)  box500/12/5.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=15024 owned=13400  box500/12/5.0h/none/rebuy/none/c0
+stack%25!=0 (311)  demo/12/5.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=7464 owned=6870  demo/12/5.0h/none/rebuy/none/c0
+stack%25!=0 (626)  box500/12/5.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=15024 owned=13400  box500/12/5.0h/none/rebuy/none/c4
+stack%25!=0 (311)  demo/12/5.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=7464 owned=6870  demo/12/5.0h/none/rebuy/none/c4
+stack%25!=0 (626)  box500/12/5.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=15024 owned=13400  box500/12/5.0h/none/rebuy/none/c5
+stack%25!=0 (311)  demo/12/5.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=7464 owned=6870  demo/12/5.0h/none/rebuy/none/c5
+stack%25!=0 (626)  box500/12/5.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=15024 owned=13400  box500/12/5.0h/none/rebuy/none/c6
+stack%25!=0 (311)  demo/12/5.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=7464 owned=6870  demo/12/5.0h/none/rebuy/none/c6
+stack%25!=0 (236)  demo/20/3.0h/turbo/freeze/bb/c0
+stack%25!=0 (236)  demo/20/3.0h/turbo/freeze/none/c0
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/turbo/rebuy/bb/c0
+stack%25!=0 (236)  demo/20/3.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/3.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/3.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/turbo/rebuy/bb/c4
+stack%25!=0 (236)  demo/20/3.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/3.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/3.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/turbo/rebuy/bb/c5
+stack%25!=0 (236)  demo/20/3.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/3.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/3.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/turbo/rebuy/bb/c6
+stack%25!=0 (236)  demo/20/3.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/3.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/3.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/turbo/rebuy/none/c0
+stack%25!=0 (236)  demo/20/3.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/3.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/3.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/turbo/rebuy/none/c4
+stack%25!=0 (236)  demo/20/3.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/3.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/3.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/turbo/rebuy/none/c5
+stack%25!=0 (236)  demo/20/3.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/3.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/3.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/turbo/rebuy/none/c6
+stack%25!=0 (236)  demo/20/3.0h/turbo/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/3.0h/turbo/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/3.0h/turbo/rebuy/none/c6
+stack%25!=0 (597)  box500/20/3.0h/regular/freeze/bb/c0
+stack%25!=0 (196)  demo/20/3.0h/regular/freeze/bb/c0
+stack%25!=0 (597)  box500/20/3.0h/regular/freeze/none/c0
+stack%25!=0 (196)  demo/20/3.0h/regular/freeze/none/c0
+stack%25!=0 (597)  box500/20/3.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/3.0h/regular/rebuy/bb/c0
+stack%25!=0 (196)  demo/20/3.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/3.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/regular/rebuy/bb/c0
+stack%25!=0 (597)  box500/20/3.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/3.0h/regular/rebuy/bb/c4
+stack%25!=0 (196)  demo/20/3.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/3.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/regular/rebuy/bb/c4
+stack%25!=0 (597)  box500/20/3.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/3.0h/regular/rebuy/bb/c5
+stack%25!=0 (196)  demo/20/3.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/3.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/regular/rebuy/bb/c5
+stack%25!=0 (597)  box500/20/3.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/3.0h/regular/rebuy/bb/c6
+stack%25!=0 (196)  demo/20/3.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/3.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/regular/rebuy/bb/c6
+stack%25!=0 (597)  box500/20/3.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/3.0h/regular/rebuy/none/c0
+stack%25!=0 (196)  demo/20/3.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/3.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/regular/rebuy/none/c0
+stack%25!=0 (597)  box500/20/3.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/3.0h/regular/rebuy/none/c4
+stack%25!=0 (196)  demo/20/3.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/3.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/regular/rebuy/none/c4
+stack%25!=0 (597)  box500/20/3.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/3.0h/regular/rebuy/none/c5
+stack%25!=0 (196)  demo/20/3.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/3.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/regular/rebuy/none/c5
+stack%25!=0 (597)  box500/20/3.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/3.0h/regular/rebuy/none/c6
+stack%25!=0 (196)  demo/20/3.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/3.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/regular/rebuy/none/c6
+stack%25!=0 (636)  box500/20/3.0h/deep/freeze/bb/c0
+stack%25!=0 (316)  demo/20/3.0h/deep/freeze/bb/c0
+stack%25!=0 (636)  box500/20/3.0h/deep/freeze/none/c0
+stack%25!=0 (316)  demo/20/3.0h/deep/freeze/none/c0
+stack%25!=0 (636)  box500/20/3.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/3.0h/deep/rebuy/bb/c0
+stack%25!=0 (316)  demo/20/3.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/3.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/deep/rebuy/bb/c0
+stack%25!=0 (636)  box500/20/3.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/3.0h/deep/rebuy/bb/c4
+stack%25!=0 (316)  demo/20/3.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/3.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/deep/rebuy/bb/c4
+stack%25!=0 (636)  box500/20/3.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/3.0h/deep/rebuy/bb/c5
+stack%25!=0 (316)  demo/20/3.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/3.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/deep/rebuy/bb/c5
+stack%25!=0 (636)  box500/20/3.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/3.0h/deep/rebuy/bb/c6
+stack%25!=0 (316)  demo/20/3.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/3.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/deep/rebuy/bb/c6
+stack%25!=0 (636)  box500/20/3.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/3.0h/deep/rebuy/none/c0
+stack%25!=0 (316)  demo/20/3.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/3.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/deep/rebuy/none/c0
+stack%25!=0 (636)  box500/20/3.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/3.0h/deep/rebuy/none/c4
+stack%25!=0 (316)  demo/20/3.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/3.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/deep/rebuy/none/c4
+stack%25!=0 (636)  box500/20/3.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/3.0h/deep/rebuy/none/c5
+stack%25!=0 (316)  demo/20/3.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/3.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/deep/rebuy/none/c5
+stack%25!=0 (636)  box500/20/3.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/3.0h/deep/rebuy/none/c6
+stack%25!=0 (316)  demo/20/3.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/3.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/3.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/3.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/3.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/3.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/3.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/3.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/3.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/3.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/3.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/3.0h/none/rebuy/none/c6
+stack%25!=0 (236)  demo/20/4.0h/turbo/freeze/bb/c0
+stack%25!=0 (236)  demo/20/4.0h/turbo/freeze/none/c0
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/4.0h/turbo/rebuy/bb/c0
+stack%25!=0 (236)  demo/20/4.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/4.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/4.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/4.0h/turbo/rebuy/bb/c4
+stack%25!=0 (236)  demo/20/4.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/4.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/4.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/4.0h/turbo/rebuy/bb/c5
+stack%25!=0 (236)  demo/20/4.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/4.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/4.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/4.0h/turbo/rebuy/bb/c6
+stack%25!=0 (236)  demo/20/4.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/4.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/4.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/4.0h/turbo/rebuy/none/c0
+stack%25!=0 (236)  demo/20/4.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/4.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/4.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/4.0h/turbo/rebuy/none/c4
+stack%25!=0 (236)  demo/20/4.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/4.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/4.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/4.0h/turbo/rebuy/none/c5
+stack%25!=0 (236)  demo/20/4.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/4.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/4.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/4.0h/turbo/rebuy/none/c6
+stack%25!=0 (236)  demo/20/4.0h/turbo/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/4.0h/turbo/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/4.0h/turbo/rebuy/none/c6
+stack%25!=0 (597)  box500/20/4.0h/regular/freeze/bb/c0
+stack%25!=0 (196)  demo/20/4.0h/regular/freeze/bb/c0
+stack%25!=0 (597)  box500/20/4.0h/regular/freeze/none/c0
+stack%25!=0 (196)  demo/20/4.0h/regular/freeze/none/c0
+stack%25!=0 (597)  box500/20/4.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/4.0h/regular/rebuy/bb/c0
+stack%25!=0 (196)  demo/20/4.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/4.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/regular/rebuy/bb/c0
+stack%25!=0 (597)  box500/20/4.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/4.0h/regular/rebuy/bb/c4
+stack%25!=0 (196)  demo/20/4.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/4.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/regular/rebuy/bb/c4
+stack%25!=0 (597)  box500/20/4.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/4.0h/regular/rebuy/bb/c5
+stack%25!=0 (196)  demo/20/4.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/4.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/regular/rebuy/bb/c5
+stack%25!=0 (597)  box500/20/4.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/4.0h/regular/rebuy/bb/c6
+stack%25!=0 (196)  demo/20/4.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/4.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/regular/rebuy/bb/c6
+stack%25!=0 (597)  box500/20/4.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/4.0h/regular/rebuy/none/c0
+stack%25!=0 (196)  demo/20/4.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/4.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/regular/rebuy/none/c0
+stack%25!=0 (597)  box500/20/4.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/4.0h/regular/rebuy/none/c4
+stack%25!=0 (196)  demo/20/4.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/4.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/regular/rebuy/none/c4
+stack%25!=0 (597)  box500/20/4.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/4.0h/regular/rebuy/none/c5
+stack%25!=0 (196)  demo/20/4.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/4.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/regular/rebuy/none/c5
+stack%25!=0 (597)  box500/20/4.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/4.0h/regular/rebuy/none/c6
+stack%25!=0 (196)  demo/20/4.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/4.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/regular/rebuy/none/c6
+stack%25!=0 (636)  box500/20/4.0h/deep/freeze/bb/c0
+stack%25!=0 (316)  demo/20/4.0h/deep/freeze/bb/c0
+stack%25!=0 (636)  box500/20/4.0h/deep/freeze/none/c0
+stack%25!=0 (316)  demo/20/4.0h/deep/freeze/none/c0
+stack%25!=0 (636)  box500/20/4.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/4.0h/deep/rebuy/bb/c0
+stack%25!=0 (316)  demo/20/4.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/4.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/deep/rebuy/bb/c0
+stack%25!=0 (636)  box500/20/4.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/4.0h/deep/rebuy/bb/c4
+stack%25!=0 (316)  demo/20/4.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/4.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/deep/rebuy/bb/c4
+stack%25!=0 (636)  box500/20/4.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/4.0h/deep/rebuy/bb/c5
+stack%25!=0 (316)  demo/20/4.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/4.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/deep/rebuy/bb/c5
+stack%25!=0 (636)  box500/20/4.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/4.0h/deep/rebuy/bb/c6
+stack%25!=0 (316)  demo/20/4.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/4.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/deep/rebuy/bb/c6
+stack%25!=0 (636)  box500/20/4.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/4.0h/deep/rebuy/none/c0
+stack%25!=0 (316)  demo/20/4.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/4.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/deep/rebuy/none/c0
+stack%25!=0 (636)  box500/20/4.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/4.0h/deep/rebuy/none/c4
+stack%25!=0 (316)  demo/20/4.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/4.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/deep/rebuy/none/c4
+stack%25!=0 (636)  box500/20/4.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/4.0h/deep/rebuy/none/c5
+stack%25!=0 (316)  demo/20/4.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/4.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/deep/rebuy/none/c5
+stack%25!=0 (636)  box500/20/4.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/4.0h/deep/rebuy/none/c6
+stack%25!=0 (316)  demo/20/4.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/4.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/deep/rebuy/none/c6
+stack%25!=0 (436)  box500/20/4.0h/none/freeze/bb/c0
+stack%25!=0 (216)  demo/20/4.0h/none/freeze/bb/c0
+stack%25!=0 (436)  box500/20/4.0h/none/freeze/none/c0
+stack%25!=0 (216)  demo/20/4.0h/none/freeze/none/c0
+stack%25!=0 (436)  box500/20/4.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=17876 owned=13400  box500/20/4.0h/none/rebuy/bb/c0
+stack%25!=0 (216)  demo/20/4.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=8856 owned=6870  demo/20/4.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/none/rebuy/bb/c0
+stack%25!=0 (436)  box500/20/4.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=17876 owned=13400  box500/20/4.0h/none/rebuy/bb/c4
+stack%25!=0 (216)  demo/20/4.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=8856 owned=6870  demo/20/4.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/none/rebuy/bb/c4
+stack%25!=0 (436)  box500/20/4.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=17876 owned=13400  box500/20/4.0h/none/rebuy/bb/c5
+stack%25!=0 (216)  demo/20/4.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=8856 owned=6870  demo/20/4.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/none/rebuy/bb/c5
+stack%25!=0 (436)  box500/20/4.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=17876 owned=13400  box500/20/4.0h/none/rebuy/bb/c6
+stack%25!=0 (216)  demo/20/4.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=8856 owned=6870  demo/20/4.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/none/rebuy/bb/c6
+stack%25!=0 (436)  box500/20/4.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=17876 owned=13400  box500/20/4.0h/none/rebuy/none/c0
+stack%25!=0 (216)  demo/20/4.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=8856 owned=6870  demo/20/4.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/none/rebuy/none/c0
+stack%25!=0 (436)  box500/20/4.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=17876 owned=13400  box500/20/4.0h/none/rebuy/none/c4
+stack%25!=0 (216)  demo/20/4.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=8856 owned=6870  demo/20/4.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/none/rebuy/none/c4
+stack%25!=0 (436)  box500/20/4.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=17876 owned=13400  box500/20/4.0h/none/rebuy/none/c5
+stack%25!=0 (216)  demo/20/4.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=8856 owned=6870  demo/20/4.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/none/rebuy/none/c5
+stack%25!=0 (436)  box500/20/4.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=17876 owned=13400  box500/20/4.0h/none/rebuy/none/c6
+stack%25!=0 (216)  demo/20/4.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=8856 owned=6870  demo/20/4.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/4.0h/none/rebuy/none/c6
+stack%25!=0 (236)  demo/20/5.0h/turbo/freeze/bb/c0
+stack%25!=0 (236)  demo/20/5.0h/turbo/freeze/none/c0
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/5.0h/turbo/rebuy/bb/c0
+stack%25!=0 (236)  demo/20/5.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/5.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/5.0h/turbo/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/5.0h/turbo/rebuy/bb/c4
+stack%25!=0 (236)  demo/20/5.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/5.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/5.0h/turbo/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/5.0h/turbo/rebuy/bb/c5
+stack%25!=0 (236)  demo/20/5.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/5.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/5.0h/turbo/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/5.0h/turbo/rebuy/bb/c6
+stack%25!=0 (236)  demo/20/5.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/5.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/5.0h/turbo/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/5.0h/turbo/rebuy/none/c0
+stack%25!=0 (236)  demo/20/5.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/5.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/5.0h/turbo/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/5.0h/turbo/rebuy/none/c4
+stack%25!=0 (236)  demo/20/5.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/5.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/5.0h/turbo/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/5.0h/turbo/rebuy/none/c5
+stack%25!=0 (236)  demo/20/5.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/5.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/5.0h/turbo/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=24600 owned=13400  box500/20/5.0h/turbo/rebuy/none/c6
+stack%25!=0 (236)  demo/20/5.0h/turbo/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=9676 owned=6870  demo/20/5.0h/turbo/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=394625 owned=252500  base25/20/5.0h/turbo/rebuy/none/c6
+stack%25!=0 (597)  box500/20/5.0h/regular/freeze/bb/c0
+stack%25!=0 (196)  demo/20/5.0h/regular/freeze/bb/c0
+stack%25!=0 (597)  box500/20/5.0h/regular/freeze/none/c0
+stack%25!=0 (196)  demo/20/5.0h/regular/freeze/none/c0
+stack%25!=0 (597)  box500/20/5.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/5.0h/regular/rebuy/bb/c0
+stack%25!=0 (196)  demo/20/5.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/5.0h/regular/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/regular/rebuy/bb/c0
+stack%25!=0 (597)  box500/20/5.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/5.0h/regular/rebuy/bb/c4
+stack%25!=0 (196)  demo/20/5.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/5.0h/regular/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/regular/rebuy/bb/c4
+stack%25!=0 (597)  box500/20/5.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/5.0h/regular/rebuy/bb/c5
+stack%25!=0 (196)  demo/20/5.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/5.0h/regular/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/regular/rebuy/bb/c5
+stack%25!=0 (597)  box500/20/5.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/5.0h/regular/rebuy/bb/c6
+stack%25!=0 (196)  demo/20/5.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/5.0h/regular/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/regular/rebuy/bb/c6
+stack%25!=0 (597)  box500/20/5.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/5.0h/regular/rebuy/none/c0
+stack%25!=0 (196)  demo/20/5.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/5.0h/regular/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/regular/rebuy/none/c0
+stack%25!=0 (597)  box500/20/5.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/5.0h/regular/rebuy/none/c4
+stack%25!=0 (196)  demo/20/5.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/5.0h/regular/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/regular/rebuy/none/c4
+stack%25!=0 (597)  box500/20/5.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/5.0h/regular/rebuy/none/c5
+stack%25!=0 (196)  demo/20/5.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/5.0h/regular/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/regular/rebuy/none/c5
+stack%25!=0 (597)  box500/20/5.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=24477 owned=13400  box500/20/5.0h/regular/rebuy/none/c6
+stack%25!=0 (196)  demo/20/5.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=8036 owned=6870  demo/20/5.0h/regular/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/regular/rebuy/none/c6
+stack%25!=0 (636)  box500/20/5.0h/deep/freeze/bb/c0
+stack%25!=0 (316)  demo/20/5.0h/deep/freeze/bb/c0
+stack%25!=0 (636)  box500/20/5.0h/deep/freeze/none/c0
+stack%25!=0 (316)  demo/20/5.0h/deep/freeze/none/c0
+stack%25!=0 (636)  box500/20/5.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/5.0h/deep/rebuy/bb/c0
+stack%25!=0 (316)  demo/20/5.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/5.0h/deep/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/deep/rebuy/bb/c0
+stack%25!=0 (636)  box500/20/5.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/5.0h/deep/rebuy/bb/c4
+stack%25!=0 (316)  demo/20/5.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/5.0h/deep/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/deep/rebuy/bb/c4
+stack%25!=0 (636)  box500/20/5.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/5.0h/deep/rebuy/bb/c5
+stack%25!=0 (316)  demo/20/5.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/5.0h/deep/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/deep/rebuy/bb/c5
+stack%25!=0 (636)  box500/20/5.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/5.0h/deep/rebuy/bb/c6
+stack%25!=0 (316)  demo/20/5.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/5.0h/deep/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/deep/rebuy/bb/c6
+stack%25!=0 (636)  box500/20/5.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/5.0h/deep/rebuy/none/c0
+stack%25!=0 (316)  demo/20/5.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/5.0h/deep/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/deep/rebuy/none/c0
+stack%25!=0 (636)  box500/20/5.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/5.0h/deep/rebuy/none/c4
+stack%25!=0 (316)  demo/20/5.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/5.0h/deep/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/deep/rebuy/none/c4
+stack%25!=0 (636)  box500/20/5.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/5.0h/deep/rebuy/none/c5
+stack%25!=0 (316)  demo/20/5.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/5.0h/deep/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/deep/rebuy/none/c5
+stack%25!=0 (636)  box500/20/5.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=26076 owned=13400  box500/20/5.0h/deep/rebuy/none/c6
+stack%25!=0 (316)  demo/20/5.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=12956 owned=6870  demo/20/5.0h/deep/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/deep/rebuy/none/c6
+stack%25!=0 (666)  box500/20/5.0h/none/freeze/bb/c0
+stack%25!=0 (666)  box500/20/5.0h/none/freeze/none/c0
+stack%25!=0 (666)  box500/20/5.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=27306 owned=13400  box500/20/5.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/5.0h/none/rebuy/bb/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/none/rebuy/bb/c0
+stack%25!=0 (666)  box500/20/5.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=27306 owned=13400  box500/20/5.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/5.0h/none/rebuy/bb/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/none/rebuy/bb/c4
+stack%25!=0 (666)  box500/20/5.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=27306 owned=13400  box500/20/5.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/5.0h/none/rebuy/bb/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/none/rebuy/bb/c5
+stack%25!=0 (666)  box500/20/5.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=27306 owned=13400  box500/20/5.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/5.0h/none/rebuy/bb/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/none/rebuy/bb/c6
+stack%25!=0 (666)  box500/20/5.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=27306 owned=13400  box500/20/5.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/5.0h/none/rebuy/none/c0
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/none/rebuy/none/c0
+stack%25!=0 (666)  box500/20/5.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=27306 owned=13400  box500/20/5.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/5.0h/none/rebuy/none/c4
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/none/rebuy/none/c4
+stack%25!=0 (666)  box500/20/5.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=27306 owned=13400  box500/20/5.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/5.0h/none/rebuy/none/c5
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/none/rebuy/none/c5
+stack%25!=0 (666)  box500/20/5.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=27306 owned=13400  box500/20/5.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=12300 owned=6870  demo/20/5.0h/none/rebuy/none/c6
+FEASIBLE_BUT_BROKE need=328000 owned=252500  base25/20/5.0h/none/rebuy/none/c6

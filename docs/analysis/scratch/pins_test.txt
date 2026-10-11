@@ -1,0 +1,3 @@
+resolveAroundPins feasible=true error=null
+pinned L9 -> asked bb=225 got bb=225 sb=115
+pinKept=true  bbRises=true  sb<bb=true

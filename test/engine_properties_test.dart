@@ -138,8 +138,13 @@ void main() {
     });
   });
 
-  group('23-005 — level duration is always 10, 15 or 20', () {
-    test('no generated level uses any other length', () {
+  group('23-005 — level duration is a valid pace length (10, 15, 20 or 30)', () {
+    // X4 (WP1): the old title said "always 10, 15 or 20", but the Deep pace
+    // uses 30-minute levels (§A4 / §F1.3 PACE table), and `validLevelDurations`
+    // already includes 30. Asserting against `validLevelDurations` keeps the
+    // Deep pace valid rather than failing it; the stale "10/15/20" wording is
+    // corrected here.
+    test('no generated level uses a non-pace length', () {
       for (final c in _sweep()) {
         expect(TournamentEngine.validLevelDurations, contains(c.s.levelDuration));
         for (final l in c.s.levels) {

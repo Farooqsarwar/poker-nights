@@ -1138,16 +1138,16 @@ extension AppProviderTournament on AppProvider {
     final pins = <PinnedLevel>[];
     for (final l in game.structure.levels) {
       if (l.manuallyEdited) {
-        pins.add(PinnedLevel(levelNum: l.level, sb: l.safeSb, bb: l.safeBb));
+        pins.add(PinnedLevel(levelNum: l.level, sb: l.sb, bb: l.bb));
       }
     }
     if (pins.isNotEmpty && !force) {
       final cmin = structure.chipPlan.isNotEmpty ? structure.chipPlan.first.value : 25;
       final rebuilt = TournamentEngine.resolveAroundPins(
-        existingBB: structure.levels.map((l) => l.safeBb).toList(),
+        existingBB: structure.levels.map((l) => l.bb).toList(),
         cminOfLevel: List.filled(structure.levels.length, cmin),
         pins: pins,
-        bbEnd: structure.levels.isNotEmpty ? structure.levels.last.safeBb.toDouble() : 1000.0,
+        bbEnd: structure.levels.isNotEmpty ? structure.levels.last.bb.toDouble() : 1000.0,
       );
       if (rebuilt.feasible && rebuilt.bbLadder.length == structure.levels.length) {
         final restored = <BlindLevel>[];
@@ -1156,8 +1156,8 @@ extension AppProviderTournament on AppProvider {
           final wasPinned = pins.any((p) => p.levelNum == oldL.level);
           final oldPinned = game.structure.levels.where((l) => l.level == oldL.level).firstOrNull;
           restored.add(oldL.copyWith(
-            sb: wasPinned && oldPinned != null ? oldPinned.safeSb : rebuilt.sbLadder[i],
-            bb: wasPinned && oldPinned != null ? oldPinned.safeBb : rebuilt.bbLadder[i],
+            sb: wasPinned && oldPinned != null ? oldPinned.sb : rebuilt.sbLadder[i],
+            bb: wasPinned && oldPinned != null ? oldPinned.bb : rebuilt.bbLadder[i],
             manuallyEdited: wasPinned,
           ));
         }

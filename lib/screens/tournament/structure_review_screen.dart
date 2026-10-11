@@ -1004,7 +1004,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                               Expanded(
                                 flex: 3,
                                 child: Text(
-                                  Formatters.chips(l.safeSb),
+                                  Formatters.chips(l.sb),
                                   textAlign: TextAlign.right,
                                   style: AppTypography.monoXs,
                                 ),
@@ -1012,7 +1012,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                               Expanded(
                                 flex: 3,
                                 child: Text(
-                                  Formatters.chips(l.safeBb),
+                                  Formatters.chips(l.bb),
                                   textAlign: TextAlign.right,
                                   style: AppTypography.monoXs.copyWith(
                                     color: AppColors.foreground,
@@ -1540,8 +1540,8 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
     GameSettings settings,
     bool isAdmin,
   ) {
-    final openingBb = structure.levels.isNotEmpty ? structure.levels.first.safeBb : 20;
-    final openingSb = structure.levels.isNotEmpty ? structure.levels.first.safeSb : 10;
+    final openingBb = structure.levels.isNotEmpty ? structure.levels.first.bb : 20;
+    final openingSb = structure.levels.isNotEmpty ? structure.levels.first.sb : 10;
     final bbDepth = openingBb > 0 ? (structure.startingStack / openingBb).round() : 100;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -1775,7 +1775,7 @@ void _showAdjustModal(
   final step = rawStep <= minChip
       ? minChip
       : (rawStep ~/ minChip) * minChip;
-  final openingBb = structure.levels.isNotEmpty ? structure.levels.first.safeBb : 20;
+  final openingBb = structure.levels.isNotEmpty ? structure.levels.first.bb : 20;
 
   showAppModal(
     context: context,

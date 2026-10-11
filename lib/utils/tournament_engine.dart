@@ -2107,125 +2107,46 @@ class TournamentEngine {
             )
             .toDouble();
 
-    // Only the rungs this chip set can actually post.
+    // §F1.6 blind ladder — ONE spec-faithful build (F6, F7, RC1, X2).
     //
-    // The opening rung was already filtered this way, but the CLIMB was not —
-    // it walked the whole table. Adding the low rungs (1/2 … 6/12) exposed
-    // that: a Home Set whose smallest chip is 5 opened legally at 5/10 and
-    // then climbed to 6/12, which no combination of its chips can post
-    // (23-001). §F1.6 avoids this by generating each level as a multiple of
-    // `2 × cmin` rather than from a fixed table; filtering the table by the
-    // starting chip is the same guarantee within the table.
-    final ladder = [
-      for (final pair in validBlindLevels)
-        if (minChip > 0 && pair[0] % minChip == 0 && pair[1] % minChip == 0)
-          pair,
-    ];
-    if (ladder.isEmpty) ladder.addAll(validBlindLevels);
+    // The opening big blind is the solved [openingBB]; the raw geometric curve
+    // `BB1 × gⁱ` (with the §11.3 rebuy premium folded into g via [rebuyPremium]
+    // / [gBase]) is DP-snapped to a strictly-increasing sequence of nice
+    // multiples of `2 × cmin` by [dpSnapLadder], and each level's small blind
+    // comes from [chooseSBLadder] (`round(BB/2/cmin) × cmin`, ≥ cmin, below BB).
+    //
+    // This replaces the legacy cursor-walk over [validBlindLevels], which
+    // filtered the rung table to the chips in play but then indexed it with the
+    // UNFILTERED [startIndex] at two sites (the opening SB and the walk cursor).
+    // When the smallest chip was ≥ 25 the two lists diverged, printing SB > BB
+    // and a ×6–×8 L1→L2 jump (F6). The DP build is payable by construction, so
+    // `cmin0` (the smallest dealt chip) is the single `2 × cmin` unit — one
+    // consistent list, used everywhere.
+    final cmin0 = minChip > 0 ? minChip : 1;
+    final rawCurve = <double>[openingBB.toDouble()];
+    for (var i = 1; i < numLevels; i++) {
+      // `i` is 0-based; spec levels are 1-based, so level i+1's premium.
+      rawCurve.add(rawCurve[i - 1] * gBase * (1 + rebuyPremium(i + 1)));
+    }
+    final cminByLevel = List<int>.filled(numLevels, cmin0);
+    final bbLadder = dpSnapLadder(
+      raw: rawCurve,
+      cminOfLevel: cminByLevel,
+      pinnedFirst: openingBB,
+    );
+    final sbLadder = chooseSBLadder(
+      bbLadder: bbLadder,
+      cminOfLevel: cminByLevel,
+      g: gFreezeOut,
+    );
     final levels = <BlindLevel>[];
-    // Two walks over the same ladder. `cursor` is the Freeze Out reference —
-    // it is exactly the walk this engine has always done, and it alone decides
-    // the printed blinds when there is no premium. `premCursor` is what is
-    // actually printed: the reference rung, pushed forward by the premium.
-    var cursor = startIndex;
-    var premCursor = startIndex;
-    var prevRefBB = openingBB;
-    var prevBB = openingBB;
-    var rawCurve = openingBB.toDouble();
-    var refCurve = openingBB.toDouble();
-
     for (var i = 0; i < numLevels; i++) {
-      final int sb;
-      final int bb;
-      if (i == 0) {
-        sb = ladder[startIndex][0];
-        bb = openingBB;
-      } else {
-        // `i` is 0-based; spec levels are 1-based. Level index i IS spec level
-        // i+1, so the first multiplication (i == 1) must use rebuyPremium(2).
-        rawCurve *= gBase * (1 + rebuyPremium(i + 1));
-        refCurve *= gFreezeOut;
-        final raw = refCurve;
-
-        // The premium as a MULTIPLE of the Freeze Out curve, not as an absolute
-        // big blind.
-        //
-        // This is the whole fix. The walk below advances at least one rung per
-        // level, and the practical ladder has roughly one rung per level, so
-        // the walk — not `rawCurve` — is what sets the printed blinds: the two
-        // `while` loops below never once fired on the raw value at 6, 9, 12 or
-        // 18 players, and Freeze Out and Rebuy came out byte-identical even at
-        // maximum premium. Chasing the raw value directly would fix that and
-        // simultaneously move every Freeze Out ladder, which boundary 7
-        // forbids. Expressing the premium as a ratio instead leaves the
-        // reference walk untouched (ratio is exactly 1.0 when every
-        // `rebuyPremium` is 0) and still moves the rungs when there is a
-        // premium to apply. The ratio peaks inside the rebuy window and decays
-        // back to 1 by the planned finish — which is `gBase` being solved down,
-        // seen from the other side: the steeper window is handed back so the
-        // ladder still ends where a Freeze Out would.
-        final premiumRatio = refCurve > 0 ? rawCurve / refCurve : 1.0;
-
-        // Extend the ladder for huge fields once the printed end is reached.
-        if (cursor >= ladder.length - 1 && raw > prevRefBB) {
-          final lastSb = ladder.last[0];
-          ladder.add([lastSb + 200, (lastSb + 200) * 2]);
-        }
-
-        // First ladder entry strictly above the previous big blind keeps the
-        // curve monotonically increasing even when growth is nearly flat.
-        while (cursor < ladder.length - 1 && ladder[cursor][1] <= prevRefBB) {
-          cursor++;
-        }
-        // Then track the raw curve: advance whenever the next entry sits
-        // closer to the raw target than the current one.
-        while (cursor < ladder.length - 1 &&
-            ladder[cursor + 1][1] > prevRefBB &&
-            (ladder[cursor + 1][1] - raw).abs() <
-                (raw - ladder[cursor][1]).abs()) {
-          cursor++;
-        }
-        prevRefBB = ladder[cursor][1];
-
-        // Apply the premium on top of the reference rung. The printed cursor
-        // never sits behind the reference one, so the Freeze Out walk remains
-        // the floor and a decaying ratio can never pull the ladder backwards.
-        var idx = math.max(premCursor, cursor);
-        final premiumTarget = ladder[cursor][1] * premiumRatio;
-        // A premium can run past the printed end sooner than the reference
-        // walk does. Bounded: each pass appends a strictly larger rung.
-        var extended = 0;
-        while (idx >= ladder.length - 1 &&
-            premiumTarget > ladder.last[1] &&
-            extended < 64) {
-          final lastSb = ladder.last[0];
-          ladder.add([lastSb + 200, (lastSb + 200) * 2]);
-          extended++;
-        }
-        while (idx < ladder.length - 1 &&
-            (ladder[idx + 1][1] - premiumTarget).abs() <
-                (premiumTarget - ladder[idx][1]).abs()) {
-          idx++;
-        }
-        // 11-009 and the monotonicity invariant: the ladder holds duplicate
-        // big blinds (20/50 and 25/50), so "one rung on" is not automatically
-        // "one big blind up".
-        while (idx < ladder.length - 1 && ladder[idx][1] <= prevBB) {
-          idx++;
-        }
-        premCursor = idx;
-        sb = ladder[idx][0];
-        bb = ladder[idx][1];
-      }
-      prevBB = bb;
-
+      final sb = sbLadder[i];
+      final bb = bbLadder[i];
       final useAnte = params.anteEnabled && i >= params.anteAfterLevel;
       // Big blind ante = one ante per table equal to the big blind (the
       // recommended default). Individual ante = Build Spec v3.1 §F1.8 D7:
-      // 10% of the big blind, rounded to the nearest chip actually in play
-      // (see [individualAnteValue]) — not the big blind divided by an
-      // assumed table size, which drifted with table size instead of blind
-      // size and could snap to a value nobody was holding.
+      // 10% of the big blind, rounded to the nearest chip actually in play.
       final ante = useAnte
           ? (params.anteStyle == AnteStyle.individual
                 ? individualAnteValue(
@@ -2245,7 +2166,9 @@ class TournamentEngine {
       );
     }
 
-    final openingSb = validBlindLevels[startIndex][0];
+    final openingSb = sbLadder.isNotEmpty
+        ? sbLadder.first
+        : validBlindLevels[startIndex][0];
     final rebuyChipPlan = _buildChipPlan(
       rebuyStack,
       params.chipSet,

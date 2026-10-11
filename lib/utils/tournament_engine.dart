@@ -113,11 +113,18 @@ typedef PaceOptions = ({
   /// Null when nothing qualifies — turbo is never recommended.
   PaceMode? recommended,
 
-  /// Set only when no pace fits. The host picks; nothing is applied silently.
+  /// Set only when no pace fits **on time**. The host picks; nothing is applied
+  /// silently. (F15/T7: a chip-bank shortfall is NOT a time warning — see
+  /// [bankBlocked].)
   String? warning,
 
   /// §F1.3's named choices: `later`, `noAddOn`, `turbo`.
   List<String> choices,
+
+  /// Set only when the blocker is the chip case, not the clock (F15/T7): some
+  /// pace fits on time but no pace's bank is OK. Carries the §F1.5 sentence so
+  /// the UI shows "your chip case cannot fund this" rather than "no pace fits".
+  String? bankBlocked,
 });
 
 /// A host-fixed level for [TournamentEngine.resolveAroundPins] (Build Spec
@@ -322,6 +329,139 @@ class TournamentEngine {
     }
 
     return pen;
+  }
+
+  /// Candidate starting stacks for [sMaxValue] — the "nice" values ≤ S_max,
+  /// deepest first (§F1.5 point 3 / §F1.16 step 3). Not snapped: the §F1.16
+  /// trace evaluates 120/80/60/… and the winner's roundness is enforced by the
+  /// composition/selection, not by pruning the candidate list.
+  static List<int> candidateStacks(double sMaxValue) =>
+      niceValuesInRange(1, 1, sMaxValue).reversed.toList();
+
+  /// Spec v3.1 §F1.5 point 4 / §F1.16 `solveChipPlanBounded` — the best chip
+  /// composition for one [stack], or null if none is feasible.
+  ///
+  /// Eligible chips are those worth ≤ stack/2 (the smallest is always eligible),
+  /// and the smallest must be ≤ [openingSB] so it can post the blind. The
+  /// larger eligible denominations (up to three — in every realistic home case
+  /// there are at most three after the ≤ S/2 filter) are searched 0–24; the
+  /// smallest takes the remainder. A plan uses 3–5 denominations, passes the
+  /// hard per-colour bank check (start × [draws] + every player's add-on and
+  /// bonus handout ≤ owned), and is scored by [scoreComposition] plus the
+  /// caller's soft 25 % rule (+12 per chip worth more than stack/4).
+  static ({List<({int value, int count})> used, double score})? solveChipPlanBounded({
+    required int stack,
+    required List<ChipColor> chipSet,
+    required int draws,
+    required int players,
+    required int addOnStack,
+    required int bonusEach,
+    required int openingSB,
+  }) {
+    if (stack <= 0) return null;
+    final owned = <int, int>{};
+    for (final c in chipSet) {
+      if (c.value > 0) owned[c.value] = (owned[c.value] ?? 0) + c.quantity;
+    }
+    final all = owned.keys.toList()..sort();
+    if (all.isEmpty) return null;
+    final smallest = all.first;
+    if (smallest > openingSB) return null; // cannot post the small blind
+
+    final eligible =
+        all.where((v) => v <= stack / 2 || v == smallest).toList()..sort();
+    final e0 = eligible.first; // the remainder filler
+    var free = eligible.sublist(1); // larger denominations, searched 0–24
+    if (free.length > 3) free = free.sublist(free.length - 3); // keep the 3 largest
+
+    final valuesDesc = all.reversed.toList();
+
+    ({List<({int value, int count})> used, double score})? best;
+    final counts = List<int>.filled(free.length, 0);
+
+    bool bankOkFor(List<({int value, int count})> used) {
+      final remaining = {...owned};
+      for (final u in used) {
+        final need = u.count * draws;
+        if (need > (remaining[u.value] ?? 0)) return false;
+        remaining[u.value] = (remaining[u.value] ?? 0) - need;
+      }
+      if (addOnStack > 0) {
+        final plan = fewestChips(addOnStack, valuesDesc,
+            limits: {for (final v in valuesDesc) v: remaining[v] ?? 0});
+        var made = 0;
+        plan.forEach((v, c) => made += v * c);
+        if (made != addOnStack) return false; // {} ⇒ cannot make it
+        for (var i = 0; i < players; i++) {
+          plan.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c);
+        }
+        if (remaining.values.any((q) => q < 0)) return false;
+      }
+      if (bonusEach > 0) {
+        final plan = fewestChips(bonusEach, valuesDesc,
+            limits: {for (final v in valuesDesc) v: remaining[v] ?? 0});
+        var made = 0;
+        plan.forEach((v, c) => made += v * c);
+        if (made != bonusEach) return false;
+        for (var i = 0; i < players; i++) {
+          plan.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c);
+        }
+        if (remaining.values.any((q) => q < 0)) return false;
+      }
+      return true;
+    }
+
+    void evaluate() {
+      var spent = 0;
+      for (var i = 0; i < free.length; i++) {
+        spent += free[i] * counts[i];
+      }
+      final rem = stack - spent;
+      if (rem < 0) return;
+      if (rem % e0 != 0) return;
+      final c0 = rem ~/ e0;
+      if (c0 < 0 || c0 > 24) return;
+      final used = <({int value, int count})>[];
+      if (c0 > 0) used.add((value: e0, count: c0));
+      for (var i = 0; i < free.length; i++) {
+        if (counts[i] > 0) used.add((value: free[i], count: counts[i]));
+      }
+      used.sort((a, b) => a.value - b.value);
+      if (used.length < 3 || used.length > 5) return;
+      // Postability + change: a player must hold at least two of the smallest
+      // dealt chip (which is ≤ the opening SB), so they can post the blind and
+      // make change, not only pay it exactly (PN-040/PN-045, §F1.6).
+      if (used.first.count < 2) return;
+      if (!bankOkFor(used)) return;
+      final total = used.fold<int>(0, (a, b) => a + b.count);
+      var score = scoreComposition(
+        used.map((u) => u.count).toList(),
+        used.map((u) => u.value).toList(),
+        total,
+      );
+      for (final u in used) {
+        if (u.value > stack / 4) score += 12.0 * u.count; // soft 25 % rule
+      }
+      if (best == null || score < best!.score) {
+        best = (used: List.of(used), score: score);
+      }
+    }
+
+    void dfs(int idx) {
+      if (idx == free.length) {
+        evaluate();
+        return;
+      }
+      for (var c = 0; c <= 24; c++) {
+        counts[idx] = c;
+        if (free[idx] * c > stack) break;
+        dfs(idx + 1);
+      }
+      counts[idx] = 0;
+    }
+
+    dfs(0);
+    return best;
   }
 
   /// Recommends unique values for unnumbered chips ordered from most-available
@@ -1584,6 +1724,132 @@ class TournamentEngine {
     // inventory can actually supply, and the pair landing closest to the
     // target depth inside the 80-240 band wins.
 
+    // ── §F1.5 starting stack + composition (bank-aware) — T4/T5 ─────────────
+    //
+    // Candidate "nice" stacks ≤ S_max, deepest first; each scored by
+    // [solveChipPlanBounded] (0–24 DFS + [scoreComposition] + soft-25 % + the
+    // hard per-colour bank check); depth is a HARD band filter; the winner is
+    // the best-scoring in-band stack, deeper on a ≤3-point near tie, and a
+    // round-unit stack preferred on a tie (F32). The opening BB is
+    // `niceBB(S / D, cmin)` so the magnitude follows the LOWEST payable rung at
+    // the target depth (F4) and SB < BB holds by construction (T3). This is the
+    // §F1.5 solver that replaces the legacy greedy search below on the normal
+    // path; the greedy block now only serves as the shortage fallback
+    // (§F1.5 points 5–7) when nothing lands in the band.
+    final bankValueOwned =
+        params.chipSet.fold<int>(0, (a, c) => a + c.value * c.quantity);
+    final rbankForStack = params.rebuys
+        ? poissonQuantile90(params.players * params.effectiveExpectedRebuyRate)
+        : 0;
+    final drawsForStack = params.players + rbankForStack;
+    final bonusPctForStack = params.earlyArrivalBonusEnabled
+        ? (params.earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct)
+        : 0.0;
+    final sMaxForStack = sMax(
+      bankValue: bankValueOwned,
+      draws: drawsForStack,
+      players: params.players,
+      addOnMult: params.addOn ? params.effectiveAddOnMultiplier : 0.0,
+      bonusPct: bonusPctForStack,
+    );
+    final styleD = hostDepth?.toDouble() ??
+        switch (paceStyle) {
+          PaceStyle.turbo => _turboAim,
+          PaceStyle.standard => _standardAim,
+          PaceStyle.deep => _deepAim,
+        };
+    final roundUnit = math.max(25, minChip);
+    final chipByValue = {for (final c in params.chipSet) c.value: c};
+    int sbOfBB(int bb) {
+      var sb = (bb / 2 / minChip).round() * minChip;
+      if (sb < minChip) sb = minChip;
+      if (sb >= bb) sb = math.max(minChip, bb - minChip);
+      return sb;
+    }
+
+    List<ChipPlanEntry> planFromUsed(List<({int value, int count})> used) => [
+          for (final u in used)
+            ChipPlanEntry(
+              color: chipByValue[u.value]?.color ?? '${u.value}',
+              hex: chipByValue[u.value]?.hex ?? 0xFF888888,
+              value: u.value,
+              count: u.count,
+            ),
+        ];
+
+    ({int stack, int bb, int cmin, List<ChipPlanEntry> plan, double score, double depth})?
+        f15Pick;
+    ({int stack, int bb, int cmin, List<ChipPlanEntry> plan, double score, double depth})?
+        f15Closest;
+    double bandDist(double depth) => depth < depthBand.min
+        ? depthBand.min - depth
+        : (depth > depthBand.max ? depth - depthBand.max : 0.0);
+    final f15InBand = <({int stack, int bb, int cmin, List<ChipPlanEntry> plan, double score, double depth})>[];
+    if (minChip > 0 && bankValueOwned > 0) {
+      // Candidates are nice values that are ALSO a multiple of roundUnit, so
+      // every chosen stack is a round home value (F32/RC9). The §F1.16 trace's
+      // non-round candidates (120/80/…) are exercised by the direct
+      // solveChipPlanBounded unit test, not by generate().
+      for (final s in candidateStacks(sMaxForStack)
+          .where((s) => s % roundUnit == 0)) {
+        // Provisional opening (owned-smallest) only decides the eligibility
+        // SB passed to the search; the REAL opening BB/cmin come from the
+        // chosen composition's smallest DEALT chip (§F1.16 step 4).
+        final bbProv = niceBB(s / styleD, minChip);
+        if (bbProv <= 0) continue;
+        final addOnForThis = params.addOn ? (params.addOnChips ?? s) : 0;
+        final bonusForThis = (bonusPctForStack * s).round();
+        final sol = solveChipPlanBounded(
+          stack: s,
+          chipSet: params.chipSet,
+          draws: drawsForStack,
+          players: params.players,
+          addOnStack: addOnForThis,
+          bonusEach: bonusForThis,
+          openingSB: sbOfBB(bbProv),
+        );
+        if (sol == null) continue;
+        final cmin0 = sol.used.first.value; // smallest chip actually dealt
+        final bb = niceBB(s / styleD, cmin0);
+        if (bb <= 0) continue;
+        final depth = s / bb;
+        if (depth < kMinPlayableDepthBB) continue;
+        final entry = (
+          stack: s,
+          bb: bb,
+          cmin: cmin0,
+          plan: planFromUsed(sol.used),
+          score: sol.score,
+          depth: depth,
+        );
+        if (depth >= depthBand.min && depth <= depthBand.max) {
+          f15InBand.add(entry);
+        }
+        if (f15Closest == null || bandDist(depth) < bandDist(f15Closest.depth)) {
+          f15Closest = entry;
+        }
+      }
+      if (f15InBand.isNotEmpty) {
+        final minScore =
+            f15InBand.map((e) => e.score).reduce(math.min);
+        final contenders =
+            f15InBand.where((e) => e.score <= minScore + 3).toList()
+              ..sort((a, b) {
+                final ar = a.stack % roundUnit == 0;
+                final br = b.stack % roundUnit == 0;
+                if (ar != br) return ar ? -1 : 1; // round first (F32)
+                // Then closest to the style's aim depth D — "normal = 100 BB",
+                // so a near-score-tie resolves toward the aim rather than
+                // drifting to the top of the band (client pt 2 / T4 acceptance).
+                final da = (a.depth - styleD).abs();
+                final db = (b.depth - styleD).abs();
+                if ((da - db).abs() > 0.5) return da < db ? -1 : 1;
+                return b.stack - a.stack; // then deeper (§F1.5 point 6)
+              });
+        f15Pick = contenders.first;
+      }
+    }
+
     // Real expected entries rather than a flat `players x 1.2 x 2` buffer —
     // the same figures Technical section 6.3 step 4 uses for the blind curve.
     final expectedRebuysForChips = params.effectiveExpectedRebuys;
@@ -1888,10 +2154,10 @@ class TournamentEngine {
     // the shortage warning above (which still guarantees >= 20BB) and gets
     // its own explicit, structured signal rather than silently shipping a
     // depth:10 structure with no indication anything was wrong.
-    final depthFeasible = best != null;
+    final depthFeasible = f15Pick != null || f15Closest != null || best != null;
     String? depthShortfallNote;
     int? maxPlayersSupported;
-    if (!depthFeasible) {
+    if (f15Pick == null && f15Closest == null && best == null) {
       maxPlayersSupported =
           _largestPlayableFieldSize(params: params, minChip: minChip);
       depthShortfallNote = maxPlayersSupported != null && maxPlayersSupported > 0
@@ -1902,6 +2168,15 @@ class TournamentEngine {
           : 'This chip set cannot fund a ${kMinPlayableDepthBB.round()}BB '
               'starting stack for any field size. Add more '
               'low-denomination chips.';
+      warnings.add(depthShortfallNote);
+    } else if (f15Pick == null && f15Closest != null) {
+      // §F1.5 point 5: playable (≥ 20 BB) but the case cannot reach the style's
+      // depth band — say so plainly instead of springing a shallow structure.
+      depthShortfallNote =
+          'Your chip case supports about ${f15Closest.depth.round()} big '
+          'blinds deep for ${params.players} players — short of this style\'s '
+          '${depthBand.min.round()} BB. Add more low-denomination chips, or '
+          'reduce the field, for a deeper start.';
       warnings.add(depthShortfallNote);
     }
 
@@ -1927,7 +2202,20 @@ class TournamentEngine {
       openingBB = niceBB(stack / targetBBDepth, minChip);
       final sbHint = math.max(minChip, (openingBB / 2 / minChip).round() * minChip);
       chipPlan = planFor(stack, params.players, sbHint);
+    } else if (f15Pick != null) {
+      // §F1.5 (T4/T5): the chosen round, bank-fundable stack and its opening.
+      stack = f15Pick.stack;
+      openingBB = f15Pick.bb;
+      chipPlan = f15Pick.plan;
+    } else if (f15Closest != null) {
+      // §F1.5 points 5–7: nothing reached the band, so the closest round §F1.5
+      // candidate stands (with the depth note already recorded). Still a nice
+      // round stack with a niceBB opening — not the legacy greedy result.
+      stack = f15Closest.stack;
+      openingBB = f15Closest.bb;
+      chipPlan = f15Closest.plan;
     } else {
+      // Absolute last resort: even §F1.5's closest candidate was infeasible.
       openingBB = validBlindLevels[startIndex][1];
       stack = best.stack;
       chipPlan = planFor(stack, best.divisor, validBlindLevels[startIndex][0]);
@@ -2143,7 +2431,14 @@ class TournamentEngine {
     // and a ×6–×8 L1→L2 jump (F6). The DP build is payable by construction, so
     // `cmin0` (the smallest dealt chip) is the single `2 × cmin` unit — one
     // consistent list, used everywhere.
-    final cmin0 = minChip > 0 ? minChip : 1;
+    // The smallest chip actually DEALT (§F1.16 step 4), from the §F1.5 pick
+    // when there is one — so the ladder's blinds are multiples of 2×(dealt
+    // smallest) and every blind is postable with a chip the player holds.
+    final cmin0 = (params.forceStack == null && f15Pick != null)
+        ? f15Pick.cmin
+        : (params.forceStack == null && f15Closest != null)
+            ? f15Closest.cmin
+            : (minChip > 0 ? minChip : 1);
     final rawCurve = <double>[openingBB.toDouble()];
     for (var i = 1; i < numLevels; i++) {
       // `i` is 0-based; spec levels are 1-based, so level i+1's premium.
@@ -2317,8 +2612,13 @@ class TournamentEngine {
           mFloor: mFloor,
           anteStyle: params.anteStyle,
         );
-        optimisedRebuyClose =
-            sugg.suggested > 0 ? sugg.suggested : params.rebuysCloseLevel;
+        // Keep the window past the opening levels and short of the finish: a
+        // close at L1 (which a bank-limited shallow stack can trigger, since a
+        // fresh stack already fails the style M-floor by L2) is not a real
+        // rebuy window, and one covering the whole night removes the late-game
+        // pressure (breaks §6 acceptance #10).
+        final raw = sugg.suggested > 0 ? sugg.suggested : params.rebuysCloseLevel;
+        optimisedRebuyClose = raw.clamp(2, math.max(2, plannedLevels - 1));
       }
     } else {
       optimisedRebuyClose = params.rebuysCloseLevel;
@@ -2467,7 +2767,6 @@ class TournamentEngine {
       rbank: rbankForBank,
       addOn: params.addOn,
       addOnStack: addOnStack,
-      addOnPlan: addOnChipPlan,
       bonusEach: bonusEach,
     );
     final bankOk = bank.ok;
@@ -2501,14 +2800,11 @@ class TournamentEngine {
       roundingRemainder: roundingRemainder,
       colorUpInstructions: colorUpInstructions,
       warnings: warnings,
-      // OWNER-DECISION / WP1 sequencing: `feasible` becomes
-      // `depthFeasible && bankOk` once the §F1.5 composition solver (T5) only
-      // accepts bank-passing compositions. Flipping it before T5 makes the
-      // demo night's own composition (which the current greedy chip-plan picks
-      // bank-short: 1×100,3×25,3×5,6×1 vs the spec's 5×1,9×5,2×25,1×100) report
-      // infeasible and drops its pace recommendation. The real bank result is
-      // exposed below regardless, so callers and the UI already have it.
-      feasible: depthFeasible,
+      // §F1.5 point 7 (T6): a night is feasible only when its depth clears the
+      // floor AND the chip case can actually deal it. Now that the §F1.5
+      // composition solver (T5) picks bank-passing compositions, the demo keeps
+      // bankOk=true and its pace recommendation.
+      feasible: depthFeasible && bankOk,
       depthOk: depthFeasible,
       bankOk: bankOk,
       bankShortfall: bank.shortfall,
@@ -2963,46 +3259,68 @@ class TournamentEngine {
     required int rbank,
     required bool addOn,
     required int addOnStack,
-    required List<ChipPlanEntry> addOnPlan,
     required int bonusEach,
   }) {
     final owned = {for (final c in chipSet) c.value: c.quantity};
     final colourOf = {for (final c in chipSet) c.value: c.color};
-    final need = <int, int>{};
+    final valuesDesc = owned.keys.toList()..sort((a, b) => b - a);
     final draws = players + rbank;
+
+    // §F1.5: the starting composition is dealt to `draws` fresh stacks, THEN
+    // every player's add-on and bonus handout (fewestChips) must fit in what is
+    // left — the same sequential check solveChipPlanBounded applies, so a
+    // structure's exposed bankOk matches the composition the solver accepted.
+    final remaining = {...owned};
+    final needStart = <int, int>{};
     for (final e in startPlan) {
-      need[e.value] = (need[e.value] ?? 0) + e.count * draws;
+      needStart[e.value] = (needStart[e.value] ?? 0) + e.count * draws;
+      remaining[e.value] = (remaining[e.value] ?? 0) - e.count * draws;
     }
-    if (addOn && addOnStack > 0) {
-      for (final e in addOnPlan) {
-        need[e.value] = (need[e.value] ?? 0) + e.count * players;
+    int handoutShortColour = 0; // sentinel: a handout the case cannot make
+    for (final amount in [
+      if (addOn && addOnStack > 0) addOnStack,
+      if (bonusEach > 0) bonusEach,
+    ]) {
+      final plan = fewestChips(amount, valuesDesc,
+          limits: {for (final v in valuesDesc) v: math.max(0, remaining[v] ?? 0)});
+      var made = 0;
+      plan.forEach((v, c) => made += v * c);
+      if (made != amount) {
+        handoutShortColour = 1; // could not deal this handout from what's left
+        break;
+      }
+      for (var i = 0; i < players; i++) {
+        plan.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c);
       }
     }
-    if (bonusEach > 0 && owned.isNotEmpty) {
-      final values = owned.keys.toList()..sort((a, b) => b - a);
-      final bonusPlan = fewestChips(
-        bonusEach,
-        values,
-        limits: {for (final v in values) v: owned[v] ?? 0},
-      );
-      bonusPlan.forEach((v, c) {
-        need[v] = (need[v] ?? 0) + c * players;
-      });
-    }
+
     final shortfall = <BankShortfall>[];
-    need.forEach((v, n) {
+    for (final v in valuesDesc) {
       final have = owned[v] ?? 0;
-      if (n > have) {
+      final left = remaining[v] ?? 0;
+      if (left < 0 || (needStart[v] ?? 0) > have) {
         shortfall.add(BankShortfall(
           colour: colourOf[v] ?? '$v',
           value: v,
-          needed: n,
+          needed: have - left,
           owned: have,
         ));
       }
-    });
+    }
+    final ok = shortfall.isEmpty && handoutShortColour == 0;
+    if (!ok && shortfall.isEmpty) {
+      // A handout could not be dealt at all but no single colour overran;
+      // report the smallest colour as the binding constraint.
+      final v = valuesDesc.isNotEmpty ? valuesDesc.last : 0;
+      shortfall.add(BankShortfall(
+        colour: colourOf[v] ?? '$v',
+        value: v,
+        needed: (owned[v] ?? 0) + 1,
+        owned: owned[v] ?? 0,
+      ));
+    }
     shortfall.sort((a, b) => b.value - a.value);
-    return (ok: shortfall.isEmpty, shortfall: shortfall);
+    return (ok: ok, shortfall: shortfall);
   }
 
   /// F2/F19 — regenerate a structure and re-solve it around host pins in one
@@ -3374,9 +3692,10 @@ class TournamentEngine {
         fits: s.fits,
         overBy: s.paceOverByMins,
         finishMins: s.expectedFinishMins,
-        // A structure the chip case cannot actually supply is not a real
-        // option, however well it fits the clock.
-        bankOk: s.feasible,
+        // T7: the clock signal (`fits`) and the chip-case signal (`bankOk`)
+        // are reported separately. `bankOk` is the real §F1.5 bank check, not
+        // the depth-or-bank `feasible`.
+        bankOk: s.bankOk,
       ));
     }
 
@@ -3391,19 +3710,39 @@ class TournamentEngine {
     }
 
     String? warning;
+    String? bankBlocked;
     var choices = const <String>[];
     if (recommended == null) {
-      final regular = options.where((o) => o.pace == PaceMode.regular).firstOrNull;
-      final needed = regular?.finishMins ?? params.effectiveTargetMinutes;
-      final window = params.effectiveTargetMinutes;
-      warning =
-          'At a regular pace this field needs about ${_hhmm(needed)}; '
-          'the night has ${_hhmm(window)}.';
-      choices = [
-        'later',
-        if (params.addOn) 'noAddOn',
-        'turbo',
-      ];
+      final anyFitsOnTime = options.any((o) => o.fits);
+      final anyBankOk = options.any((o) => o.bankOk);
+      if (anyFitsOnTime && !anyBankOk) {
+        // T7/F15: the clock is fine; the chip case is the blocker. Surface the
+        // §F1.5 bank sentence, NOT "no pace fits this night".
+        final sample = structures.values.firstOrNull;
+        bankBlocked = sample?.depthShortfallNote ??
+            (sample != null && sample.bankShortfall.isNotEmpty
+                ? 'Your chip case cannot fund this field with the forecast '
+                    'rebuys and add-ons — short '
+                    '${sample.bankShortfall.map((s) => '${s.short}× ${s.colour}').join(', ')}. '
+                    'Add chips, expect fewer rebuys or add-ons, or play a freeze-out.'
+                : 'Your chip case cannot fund this field with the forecast '
+                    'rebuys and add-ons. Add chips, expect fewer rebuys or '
+                    'add-ons, or play a freeze-out.');
+      } else {
+        // The clock is the blocker: no pace finishes in the window.
+        final regular =
+            options.where((o) => o.pace == PaceMode.regular).firstOrNull;
+        final needed = regular?.finishMins ?? params.effectiveTargetMinutes;
+        final window = params.effectiveTargetMinutes;
+        warning =
+            'At a regular pace this field needs about ${_hhmm(needed)}; '
+            'the night has ${_hhmm(window)}.';
+        choices = [
+          'later',
+          if (params.addOn) 'noAddOn',
+          'turbo',
+        ];
+      }
     }
 
     return (
@@ -3411,6 +3750,7 @@ class TournamentEngine {
       recommended: recommended,
       warning: warning,
       choices: choices,
+      bankBlocked: bankBlocked,
     );
   }
 

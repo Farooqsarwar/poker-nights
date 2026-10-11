@@ -197,7 +197,7 @@ void main() {
                       samples['sbGeBb'] ??= '$tag L${i + 1} ${lv[i].sb}/${lv[i].bb}';
                       break;
                     }
-                    if (lv[i].bb % (2 * cmin) != 0) {
+                    if (s.feasible && lv[i].bb % (2 * cmin) != 0) {
                       counts['bbNotMultipleOf2Cmin'] =
                           counts['bbNotMultipleOf2Cmin']! + 1;
                       break;
@@ -217,9 +217,15 @@ void main() {
                     counts['stepAbove2'] = counts['stepAbove2']! + 1;
                     samples['stepAbove2'] ??= tag;
                   }
-                  if (stepLo) counts['stepBelowMin'] = counts['stepBelowMin']! + 1;
-
-                  if (s.startingStack % _roundUnit(s) != 0) {
+                  // Step-size and roundness are only meaningful for a FEASIBLE
+                  // structure; an infeasible one (§F1.5 point 7 — the case is
+                  // too small for the field) carries a degenerate placeholder
+                  // ladder that is not expected to be round or smooth.
+                  if (s.feasible && stepLo) {
+                    counts['stepBelowMin'] = counts['stepBelowMin']! + 1;
+                    samples['stepBelowMin'] ??= tag;
+                  }
+                  if (s.feasible && s.startingStack % _roundUnit(s) != 0) {
                     counts['stackNotRound'] = counts['stackNotRound']! + 1;
                     samples['stackNotRound'] ??= '$tag stack=${s.startingStack}';
                   }
@@ -279,32 +285,23 @@ void main() {
       print('  $k = $v   ${samples[k] ?? ''}');
     });
 
-    // ── Green after WP1 tasks T2 / T6 / T8 ──────────────────────────────
-    expect(counts['sbGeBb'], 0, reason: 'SB ≥ BB on some level (F6 — fixed T2)');
-    expect(counts['bbNotRising'], 0, reason: 'BB not strictly rising (fixed T2)');
-    expect(counts['stepAbove2'], 0, reason: 'a step > ×2.0 (F6/F7 — fixed T2)');
+    // ── All invariants asserted (WP1 T2–T9 complete) ───────────────────────
+    expect(counts['sbGeBb'], 0, reason: 'SB ≥ BB on some level (F6 — T2)');
+    expect(counts['bbNotRising'], 0, reason: 'BB not strictly rising (T2)');
+    expect(counts['stepAbove2'], 0, reason: 'a step > ×2.0 (F6/F7 — T2/T3)');
+    expect(counts['stepBelowMin'], 0,
+        reason: 'a feasible step < MIN_STEP 1.15 (F7/T3)');
+    expect(counts['bbNotMultipleOf2Cmin'], 0,
+        reason: 'opening/ladder BB not a multiple of 2×cmin (T3/T4)');
+    expect(counts['stackNotRound'], 0,
+        reason: 'feasible stack not a round unit (F32/T5)');
+    expect(counts['feasibleButBroke'], 0,
+        reason: 'feasible=true while the bank cannot fund it (F20/RC10 — T6)');
     expect(counts['bankFalsePositive'], 0,
-        reason: 'engine must never report bankOk=true when the bank is short (F20/RC10 — T6)');
+        reason: 'engine reports bankOk=true when the bank is short (F20/RC10 — T6)');
     expect(counts['addonBreakWrong'], 0,
         reason: 'add-on break not right after rebuy close (F33, §F1.9 — T8)');
     expect(counts['anteStartWrong'], 0,
-        reason: 'ante does not start at close+1 (F33, §F1.8 — fixed T8)');
-
-    // ── Reported-only, pending the §F1.5 stack/composition solver ──────────
-    // These are the invariants T4 (opening rung via niceBB) and T5 (round
-    // stacks + bank-aware composition) will green; until then they are tracked
-    // as counts, not asserted, so the suite stays green mid-WP1. See
-    // docs/analysis/wp1-results.md for the baseline→current numbers.
-    //   - stackNotRound (712): stacks are not yet snapped to a round unit (T5).
-    //   - bbNotMultipleOf2Cmin (194): odd opening BB (125/175) from the legacy
-    //     rung table; T4's niceBB opening removes it.
-    //   - stepBelowMin (27): the DP penalises but does not forbid a <1.15 step;
-    //     MIN_STEP hardening is an OWNER-DECISION tuning item (T3).
-    //   - feasibleButBroke: `feasible` gates on bankOk only once T5 makes the
-    //     composition solver bank-aware (would otherwise drop the demo's pace
-    //     recommendation — see T6).
-    // ignore: avoid_print
-    print('PENDING (reported, not asserted): stackNotRound, '
-        'bbNotMultipleOf2Cmin, stepBelowMin, feasibleButBroke — see T4/T5.');
+        reason: 'ante does not start at close+1 (F33, §F1.8 — T8)');
   });
 }

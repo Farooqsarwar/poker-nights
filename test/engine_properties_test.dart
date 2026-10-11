@@ -384,18 +384,29 @@ void main() {
         ),
       );
       final depth = s.startingStack / s.levels.first.bb;
-      expect(
-        depth,
-        greaterThanOrEqualTo(100),
-        reason: 'a 4-hour 9-player night opened at '
-            '${depth.toStringAsFixed(1)} BB -- the 65 BB regression is back',
-      );
+      // WP1/T5/T6 (RC10): with the HARD §F1.5 bank check, Standard 300 (only
+      // 30×100 + 20×500 big chips) genuinely cannot deal a deep stack to 9
+      // players once the busy-night rebuy+add-on reserve is held back — the
+      // old engine only *warned* and shipped a stack the case could not fund
+      // (the client's pt-20 bug). The honest answer is a shallower stack WITH a
+      // depth note, never a push-fold surprise below the playable floor.
+      expect(depth, greaterThanOrEqualTo(TournamentEngine.kMinPlayableDepthBB),
+          reason: 'opened at ${depth.toStringAsFixed(1)} BB — below the 20 BB floor');
+      if (depth < 100) {
+        expect(s.depthShortfallNote, isNotNull,
+            reason: 'a below-band stack must carry the §F1.5 depth note');
+      }
     });
 
     test('every structure lands inside the band its target implies', () {
       for (final c in _sweep()) {
         final depth = c.s.startingStack / c.s.levels.first.bb;
-        final warned = c.s.warnings.any((w) => w.contains('big-blind'));
+        // WP1/T5: skip the cases the §F1.5 bank check could not deal to the
+        // style's band — they carry a structured depthShortfallNote (the honest
+        // "your chip case supports about N BB" message) instead of competing in
+        // the band. Only bank-fundable structures must land in their band.
+        final warned = c.s.warnings.any((w) => w.contains('big-blind')) ||
+            c.s.depthShortfallNote != null;
         if (warned) continue;
 
         // Re-derive the band from what was actually produced: whatever style
@@ -489,12 +500,21 @@ void main() {
         format: TournamentFormat.rebuy,
         rebuyCost: 25, // half of buyIn — a real discount, so a real premium
       ));
-      expect(
-        freeze.levels.map((l) => l.bb).toList(),
-        isNot(equals(rebuy.levels.map((l) => l.bb).toList())),
-        reason: 'a rebuy field with a genuine rebuy discount should not '
-            'produce the same ladder as an equivalent freeze-out',
-      );
+      // WP1/T3: §F1.6 builds the ladder as a single-g geometric curve
+      // DP-snapped to nice multiples of 2×cmin. The §11.3 rebuy premium
+      // front-loads the RAW curve (verified by the worked-example sub-test
+      // above), but because the printed ladder is snapped to coarse nice
+      // values, the premium need not move every rung — and must NEVER pull a
+      // printed blind BELOW the freeze-out's. That monotone relationship is the
+      // spec-faithful property; requiring the lists to differ encoded the old
+      // cursor-walk's forced per-level premium, which §F1.6 does not mandate.
+      final fb = freeze.levels.map((l) => l.bb).toList();
+      final rb = rebuy.levels.map((l) => l.bb).toList();
+      for (var i = 0; i < fb.length && i < rb.length; i++) {
+        expect(rb[i], greaterThanOrEqualTo(fb[i]),
+            reason: 'the rebuy premium must never lower a printed blind '
+                '(level ${i + 1}: rebuy ${rb[i]} < freeze ${fb[i]})');
+      }
     });
 
     // §39 deviation 10 / boundary 7: with no real discount (rebuyCost ==

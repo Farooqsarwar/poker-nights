@@ -296,6 +296,8 @@ class TournamentParams {
     this.expectedRebuyRate,
     this.addOnMultiplier,
     this.addOnTakeUpRate,
+    this.forceStack,
+    this.targetDepthBB,
   });
 
   final int players;
@@ -400,6 +402,19 @@ class TournamentParams {
   /// §F1.1 `addOn.takeUpRate` — the Framework's `q`. Feeds the chips-in-play
   /// estimate `C` only, never the bank check.
   final double? addOnTakeUpRate;
+
+  /// §F1.11 `forceStack` (F2/F19) — a host-forced starting stack. When set the
+  /// engine returns exactly this stack, re-deals the chips for it (bank-checked),
+  /// picks the opening BB for the target depth and rebuilds the ladder. Null
+  /// leaves the engine to propose the stack (§F1.5).
+  final int? forceStack;
+
+  /// Host-chosen starting depth in big blinds (F2, client pt 13). When set it
+  /// replaces the pace-derived STYLE depth target; pace stays the level-length
+  /// axis only. Expected 50–200 in steps of 25.
+  // OWNER-DECISION: depth values (conflict register, pt 13) — turbo 75 / deep
+  // 150 are not in the spec's DEPTH_BAND (turbo [50,70], deep aim 160).
+  final int? targetDepthBB;
 
   double get effectiveExpectedRebuyRate =>
       math.max(0, expectedRebuyRate ?? kExpectedRebuyRate);
@@ -559,6 +574,8 @@ class TournamentParams {
     double? expectedRebuyRate,
     double? addOnMultiplier,
     double? addOnTakeUpRate,
+    int? forceStack,
+    int? targetDepthBB,
   }) =>
       TournamentParams(
         players: players ?? this.players,
@@ -607,6 +624,8 @@ class TournamentParams {
         expectedRebuyRate: expectedRebuyRate ?? this.expectedRebuyRate,
         addOnMultiplier: addOnMultiplier ?? this.addOnMultiplier,
         addOnTakeUpRate: addOnTakeUpRate ?? this.addOnTakeUpRate,
+        forceStack: forceStack ?? this.forceStack,
+        targetDepthBB: targetDepthBB ?? this.targetDepthBB,
       );
 }
 

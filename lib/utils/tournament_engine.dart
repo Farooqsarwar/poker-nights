@@ -1553,12 +1553,18 @@ class TournamentEngine {
             PaceMode.deep => PaceStyle.deep,
           }
         : paceStyleFor(rawTargetBBDepth);
-    // The band this particular tournament must land in. Derived, not imposed.
-    final depthBand = admissibleDepthBand(paceStyle);
-    final targetBBDepth = math.max(
-      depthBand.min,
-      math.min(depthBand.max, rawTargetBBDepth),
-    );
+    // F2 / client pt 13: a host-chosen `targetDepthBB` replaces the pace-derived
+    // STYLE depth. Pace still sets the level length; depth is now its own axis.
+    // The band opens up around the chosen depth so the solver can actually hit
+    // it (± ~15 %), rather than being re-clamped into the style's own band.
+    // OWNER-DECISION: depth values (conflict register, pt 13).
+    final hostDepth = params.targetDepthBB;
+    final depthBand = hostDepth != null
+        ? (min: hostDepth * 0.85, max: hostDepth * 1.15)
+        : admissibleDepthBand(paceStyle);
+    final targetBBDepth = hostDepth != null
+        ? hostDepth.toDouble()
+        : math.max(depthBand.min, math.min(depthBand.max, rawTargetBBDepth));
 
     final sortedChips = [...params.chipSet]..sort((a, b) => a.value - b.value);
     final minChip = sortedChips.isNotEmpty ? sortedChips.first.value : 1;
@@ -1908,9 +1914,24 @@ class TournamentEngine {
     );
 
     final startIndex = best.index;
-    final openingBB = validBlindLevels[startIndex][1];
-    final stack = best.stack;
-    final chipPlan = planFor(stack, best.divisor, validBlindLevels[startIndex][0]);
+    // F2/F19/§F1.11 `forceStack`: a host-forced stack is returned exactly. The
+    // engine re-deals the chips for it, picks the opening BB for the target
+    // depth via niceBB (a multiple of 2×cmin, so the ladder stays payable) and
+    // the bank check below reports any shortfall — the stack is never silently
+    // changed.
+    final int openingBB;
+    final int stack;
+    final List<ChipPlanEntry> chipPlan;
+    if (params.forceStack != null && params.forceStack! > 0) {
+      stack = params.forceStack!;
+      openingBB = niceBB(stack / targetBBDepth, minChip);
+      final sbHint = math.max(minChip, (openingBB / 2 / minChip).round() * minChip);
+      chipPlan = planFor(stack, params.players, sbHint);
+    } else {
+      openingBB = validBlindLevels[startIndex][1];
+      stack = best.stack;
+      chipPlan = planFor(stack, best.divisor, validBlindLevels[startIndex][0]);
+    }
 
     // Chips handed over for each entry type. The solved starting stack is the
     // default for all three — it is what the engine always used — but a host
@@ -2982,6 +3003,41 @@ class TournamentEngine {
     });
     shortfall.sort((a, b) => b.value - a.value);
     return (ok: shortfall.isEmpty, shortfall: shortfall);
+  }
+
+  /// F2/F19 — regenerate a structure and re-solve it around host pins in one
+  /// call, honouring `params.forceStack`. The provider calls this instead of a
+  /// fresh [generate] so a forced stack and the host's pinned levels both
+  /// survive a recalc (§F1.12). Pins keep their exact values; unpinned levels
+  /// and the tail are re-solved by [resolveAroundPins].
+  static TournamentStructure recalculate(
+    TournamentParams params,
+    List<PinnedLevel> pins,
+  ) {
+    final base = generate(params);
+    if (pins.isEmpty) return base;
+    final existingBB = base.levels.map((l) => l.bb).toList();
+    if (existingBB.isEmpty) return base;
+    final cmin = base.chipPlan.isNotEmpty
+        ? base.chipPlan.map((e) => e.value).reduce(math.min)
+        : 1;
+    final resolved = resolveAroundPins(
+      existingBB: existingBB,
+      cminOfLevel: List<int>.filled(existingBB.length, cmin),
+      pins: pins,
+      bbEnd: existingBB.last.toDouble(),
+    );
+    if (!resolved.feasible) return base;
+    final newLevels = [
+      for (var i = 0; i < base.levels.length; i++)
+        base.levels[i].copyWith(
+          sb: resolved.sbLadder[i],
+          bb: resolved.bbLadder[i],
+          manuallyEdited: base.levels[i].manuallyEdited ||
+              pins.any((p) => p.levelNum == i + 1),
+        ),
+    ];
+    return base.copyWith(levels: newLevels);
   }
 
   /// Spec v3.1 §F1.10/§F1.17 `suggestRebuyClose` — the last level whose

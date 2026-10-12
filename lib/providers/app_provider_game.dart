@@ -527,6 +527,8 @@ extension AppProviderGame on AppProvider {
         prev.rebuysCloseLevel != s.rebuysCloseLevel ||
         prev.reEntry != s.reEntry ||
         prev.addOn != s.addOn ||
+        prev.rebuyLimit != s.rebuyLimit ||
+        prev.expectedRebuyRate != s.expectedRebuyRate ||
         prev.addOnCloseLevel != s.addOnCloseLevel;
 
     final edits = <String>[];
@@ -590,6 +592,8 @@ extension AppProviderGame on AppProvider {
             addOnCost: s.addOnCost,
             breaks: s.breaks,
             expectedRebuys: s.expectedRebuys,
+            rebuyLimit: s.rebuyLimit,
+            expectedRebuyRate: s.expectedRebuyRate,
             expectedReEntries: s.expectedReEntries,
             expectedAddOns: s.expectedAddOns,
             rebuyChips: s.rebuyChips,

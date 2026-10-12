@@ -101,6 +101,13 @@ enum AntePreference { recommend, none, bigBlind, individual }
 /// before.
 const double kExpectedRebuyRate = 0.35;
 
+/// A structure that opens below this many big blinds gets a plain warning (the
+/// reason, and one-tap options that each re-run the engine) — it is still
+/// playable: [TournamentEngine.kMinPlayableDepthBB] (20) remains the hard
+/// floor below which the night is infeasible.
+// OWNER-DECISION: SHALLOW_WARN_BB = 50.
+const double kShallowWarnBB = 50;
+
 /// Build Spec v3.1 §F1.1 default for the re-entry, as a share of the field
 /// expected to take one.
 ///
@@ -821,6 +828,54 @@ class BankShortfall {
   int get short => needed - owned;
 }
 
+/// What a one-tap fix for a shallow start changes.
+enum ShallowFixKind { limitRebuys, lowerRebuyRate, skipAddOn }
+
+/// One option offered when a structure opens below [kShallowWarnBB]: a single
+/// change to the plan, with the opening depth the engine ACTUALLY produces if
+/// it is applied (it is computed by re-running the engine, never estimated).
+///
+/// Offering a fix applies nothing: [applyTo] returns a modified copy of the
+/// params and the host's tap is what puts it in force.
+class ShallowFix {
+  const ShallowFix({
+    required this.kind,
+    required this.label,
+    required this.detail,
+    required this.resultingDepthBB,
+    required this.resultingStack,
+    required this.feasible,
+    this.rebuyLimit,
+    this.expectedRebuyRate,
+    this.addOn,
+  });
+
+  final ShallowFixKind kind;
+
+  /// Short button text, e.g. "Skip the add-on".
+  final String label;
+
+  /// One line saying what changes, e.g. "No add-on chips are reserved".
+  final String detail;
+
+  /// Opening depth in big blinds after the change.
+  final double resultingDepthBB;
+  final int resultingStack;
+  final bool feasible;
+
+  /// The lever(s) this fix sets; null means "leave as is".
+  final int? rebuyLimit;
+  final double? expectedRebuyRate;
+  final bool? addOn;
+
+  TournamentParams applyTo(TournamentParams p) => p.copyWith(
+        rebuyLimit: rebuyLimit,
+        expectedRebuyRate: expectedRebuyRate,
+        addOn: addOn,
+      );
+
+}
+
 /// The generated tournament structure.
 class TournamentStructure {
   const TournamentStructure({
@@ -940,6 +995,15 @@ class TournamentStructure {
   /// An EMPTY ladder is not "blocked" — that is a game whose structure has not
   /// been generated yet (an event posted for RSVP carries no ladder).
   bool get isBlocked => levels.isNotEmpty && !feasible;
+
+  /// True when the night is playable but opens below [kShallowWarnBB] big
+  /// blinds — typically because the chip case has to set chips aside for
+  /// rebuys and add-ons. A warning with options, never a block.
+  bool get isShallow {
+    if (!feasible || levels.isEmpty) return false;
+    final d = openingBBDepth;
+    return d != null && d < kShallowWarnBB;
+  }
 
   /// Plain-language explanation of why the opening stack fell below the
   /// playable floor, and what would fix it. Null unless [feasible] is false.

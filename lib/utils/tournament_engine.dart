@@ -338,6 +338,105 @@ class TournamentEngine {
   static List<int> candidateStacks(double sMaxValue) =>
       niceValuesInRange(1, 1, sMaxValue).reversed.toList();
 
+  /// §F1.5 point 1 — the number of rebuy stacks the chip case must be able to
+  /// cover on a BUSY night: `Rbank = PoissonQuantile(mean = Rforecast, 0.90)`,
+  /// capped at `maxRebuys × N` when rebuys are Limited. One definition for the
+  /// stack search and for the exposed `bankOk`, so they cannot disagree (the
+  /// cap used to apply only to the latter).
+  static int busyNightRebuys(TournamentParams p) {
+    if (!p.rebuys) return 0;
+    var r = poissonQuantile90(p.players * p.effectiveExpectedRebuyRate);
+    final limit = p.rebuyLimit;
+    if (limit != null && limit > 0) r = math.min(r, limit * p.players);
+    return r;
+  }
+
+  /// Options for a shallow start (opening below [kShallowWarnBB]): each is ONE
+  /// change to the plan, with the opening depth the engine really produces if
+  /// it is applied — every candidate is a full re-run, never an estimate.
+  ///
+  /// Only changes that open the night meaningfully deeper (> 0.5 BB) are
+  /// returned, so a button is never offered that would do nothing. (For
+  /// example a per-player rebuy limit of 1 or 2 cannot shrink the reserve at
+  /// a normal 0.35 forecast, because the Poisson-90 forecast is already below
+  /// N × limit; it only appears when it genuinely helps.) Nothing here
+  /// applies a change: callers show the options and the host taps one.
+  ///
+  /// Empty when the night is not shallow, and rebuy/add-on options are only
+  /// considered when those are switched on. "Edit chips" is a navigation, not
+  /// a re-run, so it is not in this list.
+  static List<ShallowFix> shallowFixes(TournamentParams params) {
+    final base = generate(params, findMaxPlayers: false);
+    if (!base.isShallow) return const [];
+    final d0 = base.startingStack / base.levels.first.bb;
+    final fixes = <ShallowFix>[];
+
+    void consider({
+      required ShallowFixKind kind,
+      required String label,
+      required String detail,
+      required TournamentParams changed,
+      int? rebuyLimit,
+      double? expectedRebuyRate,
+      bool? addOn,
+    }) {
+      final s = generate(changed, findMaxPlayers: false);
+      if (!s.feasible || s.levels.isEmpty) return;
+      final d = s.startingStack / s.levels.first.bb;
+      if (d <= d0 + 0.5) return;
+      // Milder-first order: skip a stronger setting of the same kind that
+      // lands on the same depth as one already offered.
+      if (fixes.any((f) => f.kind == kind && (f.resultingDepthBB - d).abs() <= 0.5)) {
+        return;
+      }
+      fixes.add(ShallowFix(
+        kind: kind,
+        label: label,
+        detail: detail,
+        resultingDepthBB: d,
+        resultingStack: s.startingStack,
+        feasible: s.feasible,
+        rebuyLimit: rebuyLimit,
+        expectedRebuyRate: expectedRebuyRate,
+        addOn: addOn,
+      ));
+    }
+
+    if (params.rebuys) {
+      for (final limit in const [2, 1]) {
+        final current = params.rebuyLimit;
+        if (current != null && current > 0 && current <= limit) continue;
+        consider(
+          kind: ShallowFixKind.limitRebuys,
+          label: 'Limit rebuys to $limit each',
+          detail: 'Caps the rebuy chips reserved at $limit per player.',
+          changed: params.copyWith(rebuyLimit: limit),
+          rebuyLimit: limit,
+        );
+      }
+      for (final rate in const [0.2, 0.1]) {
+        if (rate >= params.effectiveExpectedRebuyRate) continue;
+        consider(
+          kind: ShallowFixKind.lowerRebuyRate,
+          label: 'Expect about ${(rate * 100).round()}% rebuys',
+          detail: 'Reserves chips for fewer rebuys on a busy night.',
+          changed: params.copyWith(expectedRebuyRate: rate),
+          expectedRebuyRate: rate,
+        );
+      }
+    }
+    if (params.addOn) {
+      consider(
+        kind: ShallowFixKind.skipAddOn,
+        label: 'Skip the add-on',
+        detail: 'No add-on chips are set aside.',
+        changed: params.copyWith(addOn: false),
+        addOn: false,
+      );
+    }
+    return fixes;
+  }
+
   /// The fewest-chips breakdown of [amount] that EVERY one of [players] can be
   /// handed from what is [remaining] in the box, or null if there is none.
   ///
@@ -1797,9 +1896,7 @@ class TournamentEngine {
     // (§F1.5 points 5–7) when nothing lands in the band.
     final bankValueOwned =
         params.chipSet.fold<int>(0, (a, c) => a + c.value * c.quantity);
-    final rbankForStack = params.rebuys
-        ? poissonQuantile90(params.players * params.effectiveExpectedRebuyRate)
-        : 0;
+    final rbankForStack = busyNightRebuys(params);
     final drawsForStack = params.players + rbankForStack;
     final bonusPctForStack = params.earlyArrivalBonusEnabled
         ? (params.earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct)
@@ -2853,12 +2950,7 @@ class TournamentEngine {
     // deal as "feasible, bank OK". Now the per-colour `count × draws ≤ owned`
     // check (busy-night reserve: 90th-percentile rebuys, every player taking
     // the add-on and the bonus) actually gates `feasible`.
-    final rForecastForBank =
-        params.rebuys ? params.players * params.effectiveExpectedRebuyRate : 0.0;
-    var rbankForBank = poissonQuantile90(rForecastForBank);
-    if (params.rebuys && params.rebuyLimit != null) {
-      rbankForBank = math.min(rbankForBank, params.rebuyLimit! * params.players);
-    }
+    final rbankForBank = busyNightRebuys(params);
     final bonusEach = params.earlyArrivalBonusEnabled
         ? ((params.earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct) * stack).round()
         : 0;
@@ -2879,6 +2971,38 @@ class TournamentEngine {
           '${s.owned}, a busy night needs ${s.needed}.',
         );
       }
+    }
+
+    // SHALLOW_WARN_BB: playable (≥ the 20 BB hard floor) but short of 50 BB.
+    // Say why in plain words — the reason is usually the chips the case has to
+    // set aside for rebuys and add-ons on a busy night — and leave the options
+    // to [shallowFixes]; nothing is changed here.
+    if ((depthFeasible && bankOk) && openingDepth < kShallowWarnBB) {
+      final reasons = <String>[
+        if (params.rebuys && rbankForBank > 0)
+          '$rbankForBank rebuy stack${rbankForBank == 1 ? '' : 's'}',
+        if (params.addOn) '${params.players} add-ons',
+      ];
+      final why = reasons.isEmpty
+          ? 'Your chip case only stretches that far for ${params.players} '
+              'players.'
+          : 'Your chip case has to cover ${reasons.join(' and ')} on a busy '
+              'night, so those chips are set aside before the starting stacks '
+              'are dealt.';
+      explain.add(
+        StructureExplanation(
+          step: 'shallow',
+          text: 'Everyone starts about ${openingDepth.round()} big blinds deep '
+              '— shallower than the ${kShallowWarnBB.round()} we like to see. '
+              '$why',
+          numbers: {
+            'depthBB': openingDepth,
+            'warnBB': kShallowWarnBB.round(),
+            'reserveRebuyStacks': params.rebuys ? rbankForBank : 0,
+            'reserveAddOns': params.addOn ? params.players : 0,
+          },
+        ),
+      );
     }
 
     return TournamentStructure(

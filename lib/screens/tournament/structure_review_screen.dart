@@ -587,8 +587,15 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                 structure.feasible || !(settings.rebuys || settings.addOn)
                     ? null
                     : app.switchToFreezeOut,
+            // SHALLOW_WARN_BB: each option already carries the depth the
+            // engine produces for it; tapping one is the host's decision.
+            // Once play has started the stacks are physical, so no options.
+            shallowFixes: structure.isShallow && !game.stacksLocked
+                ? app.shallowFixesForCurrentGame()
+                : const [],
+            onApplyShallowFix: game.stacksLocked ? null : app.applyShallowFix,
           ),
-          if (!structure.feasible || !structure.fits)
+          if (!structure.feasible || !structure.fits || structure.isShallow)
             const SizedBox(height: AppSpacing.lg),
           AppAlertBanner(
             type: AppAlertType.info,

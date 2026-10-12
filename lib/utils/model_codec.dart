@@ -365,6 +365,7 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'lockedExpectedPlayers': s.lockedExpectedPlayers,
       'breaks': s.breaks.map(scheduledBreakToMap).toList(),
       'expectedRebuys': s.expectedRebuys,
+      'expectedRebuyRate': s.expectedRebuyRate,
       'expectedReEntries': s.expectedReEntries,
       'expectedAddOns': s.expectedAddOns,
       'rebuyChips': s.rebuyChips,
@@ -442,6 +443,7 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
       // and null is exactly "use the engine default" — so an old document
       // regenerates to the same structure it always did.
       expectedRebuys: (m['expectedRebuys'] as num?)?.toInt(),
+      expectedRebuyRate: (m['expectedRebuyRate'] as num?)?.toDouble(),
       expectedReEntries: (m['expectedReEntries'] as num?)?.toInt(),
       expectedAddOns: (m['expectedAddOns'] as num?)?.toInt(),
       rebuyChips: (m['rebuyChips'] as num?)?.toInt(),

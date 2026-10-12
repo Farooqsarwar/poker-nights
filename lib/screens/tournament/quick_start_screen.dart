@@ -56,6 +56,12 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
   int _hours = 4;
   int _buyIn = 15;
   bool _rebuy = false;
+
+  // Shallow-start fixes the host has TAPPED (SHALLOW_WARN_BB). Never set
+  // implicitly: only a tap on a card option puts one in force.
+  bool _skipAddOn = false;
+  double? _rebuyRate;
+  int? _rebuyLimit;
   PaceMode? _pace;
   bool _seeded = false;
   bool _starting = false;
@@ -136,13 +142,14 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       rebuysCloseLevel: 0,
       rebuyCloseChosenByOrganizer: false,
       reEntry: false,
-      addOn: _rebuy,
+      addOn: _rebuy && !_skipAddOn,
+      rebuyLimit: _rebuy ? _rebuyLimit : null,
       anteEnabled: true,
       anteAfterLevel: 6,
       koEnabled: false,
       koAmount: 5,
       organizerPct: 0,
-      expectedRebuyRate: _rebuy ? 0.35 : 0,
+      expectedRebuyRate: _rebuy ? (_rebuyRate ?? 0.35) : 0,
       pace: pace,
     );
   }
@@ -152,6 +159,9 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       _players,
       _hours,
       _rebuy,
+      _skipAddOn,
+      _rebuyRate,
+      _rebuyLimit,
       _chips(app).map((c) => '${c.value}x${c.quantity}').join(','),
     ].join('|');
     if (_optionsKey == key && _optionsCache != null) return _optionsCache!;
@@ -176,6 +186,9 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       _players,
       _hours,
       _rebuy,
+      _skipAddOn,
+      _rebuyRate,
+      _rebuyLimit,
       pace.name,
       _chips(app).map((c) => '${c.value}x${c.quantity}').join(','),
     ].join('|');
@@ -194,7 +207,7 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
     return 'Structure for $_players players over ${_hours}h: '
         '$depth big blinds deep, opening ${o.openingSB}/${o.openingBB}, '
         '${o.levelMinutes}-minute levels (${pace.label}), '
-        '${o.levels} levels. ${_rebuy ? 'Rebuys and one add-on. ' : ''}'
+        '${o.levels} levels. ${_rebuy ? (_skipAddOn ? 'Rebuys, no add-on. ' : 'Rebuys and one add-on. ') : ''}'
         '$_buyIn buy-in. You can still edit any level.';
   }
 
@@ -218,7 +231,9 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       rebuys: _rebuy,
       rebuysCloseLevel: rebuyClose,
       reEntry: false,
-      addOn: _rebuy,
+      addOn: _rebuy && !_skipAddOn,
+      rebuyLimit: _rebuy ? _rebuyLimit : null,
+      expectedRebuyRate: _rebuy ? _rebuyRate : null,
       addOnCloseLevel: rebuyClose,
       anteEnabled: true,
       anteAfterLevel: rebuyClose > 0 ? rebuyClose + 1 : 6,
@@ -621,6 +636,9 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
                   active: _rebuy ? 'rebuy' : 'freeze',
                   onChanged: (id) => setState(() {
                     _rebuy = id == 'rebuy';
+                    _skipAddOn = false;
+                    _rebuyRate = null;
+                    _rebuyLimit = null;
                     _pace = null;
                   }),
                 ),
@@ -670,11 +688,24 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
           // §F1.5 point 7: when the chip case can't deal this night, the card
           // replaces the promise of a structure, and the start button below is
           // off. Its buttons are the spec's three fixes plus "reduce to N".
-          if (blocked) ...[
+          if (blocked || preview.isShallow) ...[
             StructureFeasibilityCard(
               structure: preview,
               players: _players,
               onEditChips: () => context.push(RoutePaths.chipSets),
+              // SHALLOW_WARN_BB: each option carries the depth the engine
+              // produces for it; only the host's tap applies one.
+              shallowFixes: preview.isShallow
+                  ? TournamentEngine.shallowFixes(_params(app, pace: selected))
+                  : const [],
+              onApplyShallowFix: (fix) => setState(() {
+                if (fix.addOn == false) _skipAddOn = true;
+                if (fix.expectedRebuyRate != null) {
+                  _rebuyRate = fix.expectedRebuyRate;
+                }
+                if (fix.rebuyLimit != null) _rebuyLimit = fix.rebuyLimit;
+                _pace = null;
+              }),
               onPlayFreezeOut: _rebuy
                   ? () => setState(() {
                         _rebuy = false;

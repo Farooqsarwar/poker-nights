@@ -1095,6 +1095,7 @@ extension AppProviderTournament on AppProvider {
         addOnCost: s.addOnCost,
         breaks: s.breaks,
         expectedRebuys: s.expectedRebuys,
+        rebuyLimit: s.rebuyLimit,
         expectedReEntries: s.expectedReEntries,
         expectedAddOns: s.expectedAddOns,
         rebuyChips: s.rebuyChips,
@@ -1114,7 +1115,7 @@ extension AppProviderTournament on AppProvider {
         // because §F1.5 point 1 keeps the chip BANK on a different number
         // entirely: every player assumed to take the add-on, so a 70 %
         // forecast can never under-size the box.
-        expectedRebuyRate: s.forecastRebuyRate,
+        expectedRebuyRate: s.expectedRebuyRate ?? s.forecastRebuyRate,
         addOnTakeUpRate: s.forecastAddOnTakeUp,
         format: s.format,
         maxReEntries: s.maxReEntries,
@@ -1401,6 +1402,8 @@ extension AppProviderTournament on AppProvider {
         addOnCost: s.addOnCost,
         breaks: s.breaks,
         expectedRebuys: s.expectedRebuys,
+        rebuyLimit: s.rebuyLimit,
+        expectedRebuyRate: s.expectedRebuyRate,
         expectedReEntries: s.expectedReEntries,
         expectedAddOns: s.expectedAddOns,
         rebuyChips: s.rebuyChips,
@@ -1597,6 +1600,27 @@ extension AppProviderTournament on AppProvider {
     );
   }
 
+  /// Applies ONE shallow-start option the host tapped (SHALLOW_WARN_BB): the
+  /// card only SHOWS options, each with the depth the engine produced for it;
+  /// this is the host's explicit choice taking effect, never run implicitly.
+  /// Regenerates the structure and says what changed. Refused once play has
+  /// started, because the stacks are then physical.
+  void applyShallowFix(ShallowFix fix) {
+    final game = _currentGame;
+    if (game == null || game.stacksLocked) return;
+    _pushUndo();
+    _currentGame = game.copyWith(settings: fix.applyToSettings(game.settings));
+    _recalculateWithPlayers(
+      _currentGame!.settings.players,
+      rebuildStacks: true,
+    );
+    addAnnouncement(
+      '${fix.label} — the night now opens about '
+      '${fix.resultingDepthBB.round()} big blinds deep.',
+      false,
+    );
+  }
+
   /// Suggestion for small field sizes (<= 8 players): enable unlimited rebuys
   /// until level 6 to keep table play continuous.
   void enableUnlimitedRebuys() {
@@ -1619,14 +1643,10 @@ extension AppProviderTournament on AppProvider {
     );
   }
 
-  void _recalculateWithPlayers(int count) {
-    final game = _currentGame!;
-    final s = game.settings;
-    // Same as [generateFinalStructure]: an accepted §10.1 adjustment already
-    // lives in `levelDurationMins`, so every rebuild — including the firm
-    // recalculation at Start — keeps it.
-    final newSettings = s.copyWith(players: count);
-    var structure = TournamentEngine.generate(
+  /// The engine params for [newSettings] at [count] players. The one place the
+  /// recalculation builds them, so [shallowFixesForCurrentGame] explains
+  /// exactly the night that is on screen.
+  TournamentParams _engineParamsFor(GameSettings newSettings, int count) =>
       TournamentParams(
         players: count,
         durationHours: newSettings.durationHours,
@@ -1646,6 +1666,7 @@ extension AppProviderTournament on AppProvider {
         addOnCost: newSettings.addOnCost,
         breaks: newSettings.breaks,
         expectedRebuys: newSettings.expectedRebuys,
+        rebuyLimit: newSettings.rebuyLimit,
         expectedReEntries: newSettings.expectedReEntries,
         expectedAddOns: newSettings.expectedAddOns,
         rebuyChips: newSettings.rebuyChips,
@@ -1653,7 +1674,8 @@ extension AppProviderTournament on AppProvider {
         addOnChips: newSettings.addOnChips,
         levelDurationMins: newSettings.levelDurationMins,
         pace: newSettings.pace,
-        expectedRebuyRate: newSettings.forecastRebuyRate,
+        expectedRebuyRate:
+            newSettings.expectedRebuyRate ?? newSettings.forecastRebuyRate,
         addOnTakeUpRate: newSettings.forecastAddOnTakeUp,
         format: newSettings.format,
         maxReEntries: newSettings.maxReEntries,
@@ -1662,13 +1684,38 @@ extension AppProviderTournament on AppProvider {
         earlyArrivalBonusEnabled: newSettings.earlyArrivalBonusEnabled,
         earlyArrivalCutoffMins: newSettings.earlyArrivalCutoffMins,
         earlyArrivalBonusPctOverride: newSettings.earlyArrivalBonusPctOverride,
-      ),
+      );
+
+  /// Options for the game's shallow start (SHALLOW_WARN_BB): empty unless the
+  /// structure on screen is shallow and the stacks are still changeable. Pure —
+  /// it changes nothing.
+  List<ShallowFix> shallowFixesForCurrentGame() {
+    final game = _currentGame;
+    if (game == null || game.stacksLocked || !game.structure.isShallow) {
+      return const [];
+    }
+    return TournamentEngine.shallowFixes(
+      _engineParamsFor(game.settings, game.settings.players),
     );
+  }
+
+  void _recalculateWithPlayers(int count, {bool rebuildStacks = false}) {
+    final game = _currentGame!;
+    final s = game.settings;
+    // Same as [generateFinalStructure]: an accepted §10.1 adjustment already
+    // lives in `levelDurationMins`, so every rebuild — including the firm
+    // recalculation at Start — keeps it.
+    final newSettings = s.copyWith(players: count);
+    var structure =
+        TournamentEngine.generate(_engineParamsFor(newSettings, count));
     // Starting stacks are frozen once play has started, or when the host
-    // hand-tuned the starting stack.
+    // hand-tuned the starting stack. [rebuildStacks] is the host's explicit
+    // choice of a plan change that MUST change the stacks (a shallow-start
+    // fix): without it the stored stack would silently survive and the option
+    // would advertise a depth it never delivers.
     final hasManualStack = game.structure.startingStack > 0 &&
         game.structure.chipPlan.isNotEmpty;
-    if (game.stacksLocked || hasManualStack) {
+    if (!rebuildStacks && (game.stacksLocked || hasManualStack)) {
       structure = structure.copyWith(
         startingStack: game.structure.startingStack,
         chipPlan: game.structure.chipPlan,

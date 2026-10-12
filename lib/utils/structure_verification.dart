@@ -129,6 +129,7 @@ abstract final class StructureVerification {
           // the structure sheet every player can see — and leaving them out
           // would make an honest custom structure fail its own audit.
           expectedRebuys: s.expectedRebuys,
+          rebuyLimit: s.rebuyLimit,
           expectedReEntries: s.expectedReEntries,
           expectedAddOns: s.expectedAddOns,
           rebuyChips: s.rebuyChips,
@@ -139,7 +140,7 @@ abstract final class StructureVerification {
           // and the two forecast rates feed `C`; all three change the ladder, so
           // leaving them out failed every honest pace-mode structure.
           pace: s.pace,
-          expectedRebuyRate: s.forecastRebuyRate,
+          expectedRebuyRate: s.expectedRebuyRate ?? s.forecastRebuyRate,
           addOnTakeUpRate: s.forecastAddOnTakeUp,
           // Costs nothing here — the audit below compares stacks, blinds and
           // breaks, never the prize split — but the engine consumes it, so

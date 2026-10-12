@@ -157,3 +157,39 @@ is not recreated.
 - Scenario matrix rerun → `engine-scenarios-after.csv`. ✅
 - Full `flutter test` on both branches, failures proven identical — see the
   "Full-suite parity" section below.
+
+## Full-suite parity: `new-implementation` vs `fix/wp1-engine`
+
+Both runs used **clean `git worktree`s of committed state** (no uncommitted edits), same
+Flutter 3.38.9, `flutter test --reporter expanded`. Logs: `scratch/full_base.log`,
+`scratch/full_fix_clean.log`; normalised failing sets: `scratch/fail_base.txt`, `scratch/fail_fix.txt`.
+
+| Run | Passed | Failed | Notes |
+|---|---|---|---|
+| `new-implementation` @ 31a1b40f | 924 | 6 | 6 files fail to **load** |
+| `fix/wp1-engine` @ 5c25783a | 934 | 6 | same 6 files; +10 = the new tests |
+
+**The failing sets are identical** (`diff` empty): `capture_code_screens_test`,
+`flow_f_d_test`, `podium_seasons_badge_test`, `responsive_audit_test`, `route_matrix_test`,
+`screen_smoke_test`. No test fails on `fix/wp1-engine` that passes on the baseline, and no
+golden failed on either (the PNGs under `test/failures/` are stale artefacts from earlier runs).
+
+**Cause (pre-existing, not WP1):** all six are *compilation* failures, not behaviour failures:
+`lib/screens/shell/edit_chip_set_screen.dart:508` passes `onReorderItem:` to
+`ReorderableListView.builder`, which does not exist in the installed Flutter 3.38.9
+(`No named parameter with the name 'onReorderItem'`). Any test that imports that screen
+(directly or via the router) cannot load. `fix/wp1-engine` does not touch the file
+(`git diff new-implementation fix/wp1-engine -- <file>` is empty).
+
+**Consequence worth knowing:** because the committed code does not compile on 3.38.9, the
+**app itself will not build** from either branch as committed, until that line is fixed or a
+newer Flutter is used. The working tree already carries an *uncommitted* one-line change
+(`onReorderItem` → `onReorder`) which fixes it; I deliberately did not commit it (it is not
+mine and not in WP1 scope).
+
+**With that one-line change applied** (the working tree as it stood, i.e. all six files
+loading), the full suite on `fix/wp1-engine` is **1,593 tests, all passed, 0 failed**
+(`scratch/full_fix.log`). That is the evidence the six widget/route/golden-style files — which
+include screens I touched indirectly (structure review, pace cards, quick start) — pass with
+the WP1 changes. The baseline was *not* re-run with the same edit, so "no regressions" for
+those six files rests on that single 1,593/0 run rather than a paired comparison.

@@ -1000,6 +1000,16 @@ extension AppProviderTournament on AppProvider {
     if (!_isGameAuthority) return;
     final game = _currentGame;
     if (game == null) return;
+    // A structure the chip case cannot deal is a placeholder, not a plan — it
+    // cannot be confirmed (the review screen shows the bank/depth card instead).
+    if (game.structure.isBlocked) {
+      addAuditRecord(
+        'structure_confirm_refused',
+        'Structure not confirmed: the chip case cannot deal this night.',
+      );
+      if (!_disposed) notifyListeners();
+      return;
+    }
     _currentGame = game.copyWith(structureConfirmed: true);
     addAuditRecord(
       'structure_confirm',

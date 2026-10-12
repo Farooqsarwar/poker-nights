@@ -1625,9 +1625,21 @@ class _ContextualMainButton extends StatelessWidget {
             size: AppButtonSize.xl,
             onPressed: blocked == null
                 ? () async {
-                    await app.startTournament();
-                    if (context.mounted) {
+                    final started = await app.startTournament();
+                    if (!context.mounted) return;
+                    if (started) {
                       context.go(RoutePaths.hostDashboard);
+                    } else {
+                      // Never open the dashboard on a placeholder ladder: the
+                      // chip case can't deal the night for the final headcount.
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Can’t start: the chip case can’t fund '
+                            'this night. Open Structure to fix it.',
+                          ),
+                        ),
+                      );
                     }
                   }
                 : null,

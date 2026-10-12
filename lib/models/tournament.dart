@@ -931,6 +931,16 @@ class TournamentStructure {
   /// Per-colour shortfall when [bankOk] is false; empty otherwise.
   final List<BankShortfall> bankShortfall;
 
+  /// True when this structure must NOT be confirmed, started on a clock, or
+  /// opened on a dashboard: a ladder exists but the chip case cannot deal it
+  /// (§F1.5 point 7 — [feasible] is false). The ladder in that case is only a
+  /// placeholder so the screen has something to render next to the
+  /// bank/depth card; nothing may be played from it.
+  ///
+  /// An EMPTY ladder is not "blocked" — that is a game whose structure has not
+  /// been generated yet (an event posted for RSVP carries no ladder).
+  bool get isBlocked => levels.isNotEmpty && !feasible;
+
   /// Plain-language explanation of why the opening stack fell below the
   /// playable floor, and what would fix it. Null unless [feasible] is false.
   final String? depthShortfallNote;

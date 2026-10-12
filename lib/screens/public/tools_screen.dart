@@ -23,6 +23,7 @@ import '../../widgets/app_tag.dart';
 import '../../widgets/icon_tile.dart';
 import '../../models/live_game.dart';
 import '../../widgets/count_stepper.dart';
+import '../../widgets/structure_feasibility_card.dart';
 import '../../widgets/tournament_display_block.dart';
 import '../../widgets/glass_styles.dart';
 
@@ -482,7 +483,8 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
       blurb: 'Pick the box of chips you actually own — the denominations decide '
           'the starting stack and the whole ladder.',
       actions: [
-        if (r != null)
+        // Nothing to share from a night the chip box cannot deal.
+        if (r != null && !r.isBlocked)
           AppButton(
             size: AppButtonSize.sm,
             variant: AppButtonVariant.ghost,
@@ -572,7 +574,23 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
             onPressed: _generate,
             child: const Text('Generate structure'),
           ),
-          if (r != null) ...[
+          // §F1.5 point 7: when the box can't deal this field, the ladder is a
+          // placeholder — show why (and the fixes) instead of presenting it as
+          // a structure, a schedule or something to share.
+          if (r != null && r.isBlocked) ...[
+            const SizedBox(height: AppSpacing.xl),
+            StructureFeasibilityCard(
+              structure: r,
+              players: _players,
+              onReduceField: (r.maxPlayersSupported ?? 0) >= 2
+                  ? () {
+                      setState(() => _players = r.maxPlayersSupported!);
+                      _generate();
+                    }
+                  : null,
+            ),
+          ],
+          if (r != null && !r.isBlocked) ...[
             const SizedBox(height: AppSpacing.xl),
 
             // The headline figures first, as their own cards. A schedule is
@@ -1398,6 +1416,10 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
   /// stack and the rebuy window are part of reading a structure, not extras.
   TournamentStructure? _structure;
 
+  /// Set when the last build was refused because the box can't deal the night
+  /// (shown as the feasibility card; no segments, so no clock can run).
+  TournamentStructure? _blocked;
+
   int _players = 9;
   int _hours = 4;
 
@@ -1482,8 +1504,23 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
         organizerPct: 0,
       ),
     );
+    // §F1.5 point 7: a night the box can't deal has only a placeholder ladder.
+    // Don't build a clock from it — keep the setup view and show the card.
+    if (structure.isBlocked) {
+      _ticker?.cancel();
+      setState(() {
+        _blocked = structure;
+        _structure = null;
+        _segments = const [];
+        _running = false;
+        _index = 0;
+        _left = 0;
+      });
+      return;
+    }
     final segments = ClockSequence.build(structure);
     setState(() {
+      _blocked = null;
       _structure = structure;
       _segments = segments;
       _index = 0;
@@ -1536,6 +1573,7 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
     setState(() {
       _segments = const [];
       _structure = null;
+      _blocked = null;
       _running = false;
       _index = 0;
       _left = 0;
@@ -1662,6 +1700,20 @@ _Field(
               onPressed: _build,
               child: const Text('Start a clock'),
             ),
+            // The box can't deal this field: no clock was built (see _build).
+            if (_blocked != null) ...[
+              const SizedBox(height: AppSpacing.lg),
+              StructureFeasibilityCard(
+                structure: _blocked!,
+                players: _players,
+                onReduceField: (_blocked!.maxPlayersSupported ?? 0) >= 2
+                    ? () {
+                        setState(() => _players = _blocked!.maxPlayersSupported!);
+                        _build();
+                      }
+                    : null,
+              ),
+            ],
           ] else ...[
             // The real display block — the same widget driving the TV screen
             // and the host dashboard, not a reproduction of it.

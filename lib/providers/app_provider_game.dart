@@ -677,15 +677,31 @@ extension AppProviderGame on AppProvider {
     final checkedIn = g.players.where((p) => p.checkedIn && p.confirmed).length;
     if (checkedIn < 2) return 'Need at least 2 checked in';
     if (!g.seatingConfirmed) return 'Confirm seating first';
+    // The structure on the game, if one has been generated, must be one the
+    // chip case can deal. (The authoritative check is repeated in
+    // [startTimer] on the structure regenerated for the final headcount; this
+    // one just keeps the button honest before that.)
+    if (g.structure.isBlocked) return kChipCaseBlockedReason;
     return null;
   }
+
+  /// Short label for a start button / hint when the chip case cannot deal the
+  /// night. The full explanation and the fixes live on the feasibility card
+  /// (structure review), so this stays short enough for a button.
+  static const String kChipCaseBlockedReason =
+      'Chip case can’t fund this night — see Structure';
 
   /// Single start fold: freezes the final checked-in headcount into the
   /// settings, then begins the level timer. Thin by design — callers decide
   /// whether the game may start (see [startBlockedReason]).
-  Future<void> startTournament() async {
+  ///
+  /// Returns whether the clock actually started. It can decline even when
+  /// [startBlockedReason] was null, because the structure is regenerated for
+  /// the final headcount inside [startTimer] and may turn out not to be
+  /// dealable; callers must only navigate to the live dashboard on `true`.
+  Future<bool> startTournament() async {
     final game = currentGame;
-    if (game == null) return;
+    if (game == null) return false;
     final checkedInCount =
         game.players.where((p) => p.checkedIn && p.confirmed).length;
     updateEventSettings(game.settings.copyWith(players: checkedInCount));
@@ -697,6 +713,9 @@ extension AppProviderGame on AppProvider {
           .copyWith(settings: _currentGame!.settings.copyWith(players: checkedInCount));
     }
     startTimer();
+    final status = _currentGame?.status;
+    return _currentGame?.timerRunning == true &&
+        (status == LiveGameStatus.running || status == LiveGameStatus.onBreak);
   }
 
   /// Reposts the pinned event card after a published-event edit (User Flow

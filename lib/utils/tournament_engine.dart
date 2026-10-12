@@ -376,7 +376,8 @@ class TournamentEngine {
   /// hard per-colour bank check (start × [draws] + every player's add-on and
   /// bonus handout ≤ owned), and is scored by [scoreComposition] plus the
   /// caller's soft 25 % rule (+12 per chip worth more than stack/4).
-  static ({List<({int value, int count})> used, double score})? solveChipPlanBounded({
+  static Map<int, ({List<({int value, int count})> used, double score})>
+  solveChipPlanVariants({
     required int stack,
     required List<ChipColor> chipSet,
     required int draws,
@@ -385,15 +386,15 @@ class TournamentEngine {
     required int bonusEach,
     required int openingSB,
   }) {
-    if (stack <= 0) return null;
+    if (stack <= 0) return const {};
     final owned = <int, int>{};
     for (final c in chipSet) {
       if (c.value > 0) owned[c.value] = (owned[c.value] ?? 0) + c.quantity;
     }
     final all = owned.keys.toList()..sort();
-    if (all.isEmpty) return null;
+    if (all.isEmpty) return const {};
     final smallest = all.first;
-    if (smallest > openingSB) return null; // cannot post the small blind
+    if (smallest > openingSB) return const {}; // cannot post the small blind
 
     final eligible =
         all.where((v) => v <= stack / 2 || v == smallest).toList()..sort();
@@ -403,7 +404,11 @@ class TournamentEngine {
 
     final valuesDesc = all.reversed.toList();
 
-    ({List<({int value, int count})> used, double score})? best;
+    // Best composition for each distinct SMALLEST DEALT chip. The opening
+    // blind (and so the depth, §F1.5 point 5) is set by that chip, so the best
+    // composition overall is not always the best one for reaching the band.
+    final variants =
+        <int, ({List<({int value, int count})> used, double score})>{};
     final counts = List<int>.filled(free.length, 0);
 
     bool bankOkFor(List<({int value, int count})> used) {
@@ -457,8 +462,10 @@ class TournamentEngine {
       for (final u in used) {
         if (u.value > stack / 4) score += 12.0 * u.count; // soft 25 % rule
       }
-      if (best == null || score < best!.score) {
-        best = (used: List.of(used), score: score);
+      final key = used.first.value;
+      final prev = variants[key];
+      if (prev == null || score < prev.score) {
+        variants[key] = (used: List.of(used), score: score);
       }
     }
 
@@ -476,6 +483,38 @@ class TournamentEngine {
     }
 
     dfs(0);
+    return variants;
+  }
+
+  /// The single best-scoring composition for [stack], or null if none is
+  /// feasible — [solveChipPlanVariants]' overall winner. An exact score tie goes
+  /// to the variant with the smaller smallest-chip (the single-result search
+  /// used to keep whichever it found first; exact ties are vanishingly rare).
+  static ({List<({int value, int count})> used, double score})?
+  solveChipPlanBounded({
+    required int stack,
+    required List<ChipColor> chipSet,
+    required int draws,
+    required int players,
+    required int addOnStack,
+    required int bonusEach,
+    required int openingSB,
+  }) {
+    final variants = solveChipPlanVariants(
+      stack: stack,
+      chipSet: chipSet,
+      draws: draws,
+      players: players,
+      addOnStack: addOnStack,
+      bonusEach: bonusEach,
+      openingSB: openingSB,
+    );
+    if (variants.isEmpty) return null;
+    final keys = variants.keys.toList()..sort();
+    var best = variants[keys.first]!;
+    for (final k in keys.skip(1)) {
+      if (variants[k]!.score < best.score) best = variants[k]!;
+    }
     return best;
   }
 
@@ -1842,7 +1881,13 @@ class TournamentEngine {
         if (bbProv <= 0) continue;
         final addOnForThis = params.addOn ? (params.addOnChips ?? s) : 0;
         final bonusForThis = (bonusPctForStack * s).round();
-        final sol = solveChipPlanBounded(
+        // §F1.5 point 5: depth is judged on the composition's SMALLEST DEALT
+        // chip, so a stack is evaluated on its best composition for each
+        // distinct smallest chip, not only its single best-scoring one. The
+        // best-scoring composition can skip the small chip, forcing a coarse
+        // blind (base25, 20 players: 4,000 as 5×100+3×500+2×1000 opens at a
+        // 200 blind = 20 BB, while 4×25+4×100+3×500+2×1000 opens 25/50 = 80 BB).
+        final variantsForS = solveChipPlanVariants(
           stack: s,
           chipSet: params.chipSet,
           draws: drawsForStack,
@@ -1851,26 +1896,33 @@ class TournamentEngine {
           bonusEach: bonusForThis,
           openingSB: sbOfBB(bbProv),
         );
-        if (sol == null) continue;
-        final open = openingFor(s, sol.used.first.value);
-        final cmin0 = open.cmin;
-        final bb = open.bb;
-        if (bb <= 0) continue;
-        final depth = s / bb;
-        if (depth < kMinPlayableDepthBB) continue;
-        final entry = (
-          stack: s,
-          bb: bb,
-          cmin: cmin0,
-          plan: planFromUsed(sol.used),
-          score: sol.score,
-          depth: depth,
-        );
-        if (depth >= depthBand.min && depth <= depthBand.max) {
-          f15InBand.add(entry);
-        }
-        if (f15Closest == null || bandDist(depth) < bandDist(f15Closest.depth)) {
-          f15Closest = entry;
+        for (final sol in variantsForS.values) {
+          final open = openingFor(s, sol.used.first.value);
+          final cmin0 = open.cmin;
+          final bb = open.bb;
+          if (bb <= 0) continue;
+          final depth = s / bb;
+          if (depth < kMinPlayableDepthBB) continue;
+          final entry = (
+            stack: s,
+            bb: bb,
+            cmin: cmin0,
+            plan: planFromUsed(sol.used),
+            score: sol.score,
+            depth: depth,
+          );
+          if (depth >= depthBand.min && depth <= depthBand.max) {
+            f15InBand.add(entry);
+          }
+          // Nothing in the band: the closest to it competes, and when two sit
+          // equally close the better-scoring composition wins.
+          final closest = f15Closest;
+          if (closest == null ||
+              bandDist(depth) < bandDist(closest.depth) ||
+              (bandDist(depth) == bandDist(closest.depth) &&
+                  entry.score < closest.score)) {
+            f15Closest = entry;
+          }
         }
       }
       if (f15InBand.isNotEmpty) {

@@ -2973,6 +2973,33 @@ class TournamentEngine {
       }
     }
 
+    // The rebuy close, with what a fresh stack is worth there. The M floor
+    // that PICKS the suggestion is unchanged (owner decision); this just shows
+    // the host the trade-off, for the suggested level and for their own pick.
+    if ((params.rebuys || params.reEntry) && optimisedRebuyClose > 0) {
+      final fresh = FreshStack.at(
+        startingStack: stack,
+        levels: levels,
+        level: optimisedRebuyClose,
+      );
+      if (fresh != null) {
+        explain.add(
+          StructureExplanation(
+            step: 'rebuyClose',
+            text: 'Rebuys close after L$optimisedRebuyClose'
+                '${params.rebuyCloseChosenByOrganizer ? ' (your choice)' : ''}. '
+                '${fresh.label}.',
+            numbers: {
+              'level': optimisedRebuyClose,
+              'depthBB': fresh.depthBB,
+              'm': fresh.m,
+              'chosenByHost': params.rebuyCloseChosenByOrganizer ? 1 : 0,
+            },
+          ),
+        );
+      }
+    }
+
     // SHALLOW_WARN_BB: playable (≥ the 20 BB hard floor) but short of 50 BB.
     // Say why in plain words — the reason is usually the chips the case has to
     // set aside for rebuys and add-ons on a busy night — and leave the options

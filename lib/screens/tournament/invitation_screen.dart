@@ -13,6 +13,7 @@ import '../../widgets/clock_authority_notice.dart';
 import '../../models/group.dart';
 import '../../models/live_game.dart';
 import '../../models/user.dart';
+import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/formatters.dart';
 import '../../utils/event_settings_validation.dart';
@@ -1339,6 +1340,7 @@ void _openEditModal(BuildContext context, AppProvider app, LiveGame game) {
     maxWidth: 520,
     child: _EditEventModalBody(
       settings: game.settings,
+      structure: game.structure,
       onSave: (next, {bool clearRsvps = false}) {
         app.updateEventSettings(next, clearRsvps: clearRsvps);
         Navigator.of(context).pop();
@@ -1356,9 +1358,16 @@ void _openEditModal(BuildContext context, AppProvider app, LiveGame game) {
 /// The [initial] seeded into [EventSettingsForm] is the untouched
 /// [GameSettings], never a draft; the parent tracks the draft via [onChanged].
 class _EditEventModalBody extends StatefulWidget {
-  const _EditEventModalBody({required this.settings, required this.onSave});
+  const _EditEventModalBody({
+    required this.settings,
+    required this.structure,
+    required this.onSave,
+  });
 
   final GameSettings settings;
+  /// The structure on the game, so the rebuy-close picker can show what a
+  /// fresh stack is worth at the level picked.
+  final TournamentStructure structure;
   final void Function(GameSettings, {bool clearRsvps}) onSave;
 
   @override
@@ -1464,6 +1473,7 @@ class _EditEventModalBodyState extends State<_EditEventModalBody> {
           },
           showOrganizerPct: true,
           orgPctCeiling: _orgPctCeiling,
+          freshStackAt: widget.structure.freshStackAt,
           onChanged: (draft) => _draft = draft,
         ),
         const SizedBox(height: AppSpacing.sm),

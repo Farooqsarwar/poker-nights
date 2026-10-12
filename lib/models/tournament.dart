@@ -828,6 +828,65 @@ class BankShortfall {
   int get short => needed - owned;
 }
 
+/// What a freshly bought-in stack is worth at a given level: how many big
+/// blinds deep, and its Harrington M (stack ÷ the cost of one orbit).
+///
+/// Shown to the host when they pick the rebuy-close level, so the trade-off is
+/// visible ("a rebuy at L6 buys 20 BB, M 8"). The numbers are the spec's own
+/// (§F1.10 / §F1.16 step 8); nothing about the close rule changes.
+class FreshStack {
+  const FreshStack({
+    required this.level,
+    required this.depthBB,
+    required this.m,
+  });
+
+  /// 1-indexed level.
+  final int level;
+
+  /// Fresh stack ÷ that level's big blind.
+  final double depthBB;
+
+  /// Fresh stack ÷ (SB + BB + the ante total per hand).
+  final double m;
+
+  /// "Fresh stack at L4: 25 BB, M 16.7".
+  String get label =>
+      'Fresh stack at L$level: ${depthBB.round()} BB, M ${m.toStringAsFixed(1)}';
+
+  /// A fresh [startingStack] bought in at 1-indexed [level] of [levels], or
+  /// null if there is no such level.
+  ///
+  /// M is `S / (SB + BB + anteTotal)` (§F1.10). The ante is NOT counted at
+  /// [level] itself by default: in a rebuy format the ante starts the level
+  /// AFTER the close (§F1.8), so a stack bought at the close level is bought
+  /// against the blinds alone — which is also how the spec's own worked table
+  /// reads (§F1.16 step 8: L3/L4/L5 -> M 22.2/16.7/13.3, even though the final
+  /// ladder's ante begins at L5). Pass [anteLive] to count the ante when it
+  /// really is running at that level; a big-blind ante then costs one BB per
+  /// orbit and an individual ante is assumed paid by 8 players whatever the
+  /// headcount, so M reads the same on nights of different sizes.
+  static FreshStack? at({
+    required int startingStack,
+    required List<BlindLevel> levels,
+    required int level,
+    bool anteLive = false,
+  }) {
+    if (startingStack <= 0 || level < 1 || level > levels.length) return null;
+    final l = levels[level - 1];
+    if (l.bb <= 0) return null;
+    final ante = anteLive ? (l.ante ?? 0) : 0;
+    final anteTotal = ante <= 0 ? 0 : (ante == l.bb ? l.bb : ante * 8);
+    final orbit = l.sb + l.bb + anteTotal;
+    if (orbit <= 0) return null;
+    return FreshStack(
+      level: level,
+      depthBB: startingStack / l.bb,
+      m: startingStack / orbit,
+    );
+  }
+}
+
 /// What a one-tap fix for a shallow start changes.
 enum ShallowFixKind { limitRebuys, lowerRebuyRate, skipAddOn }
 
@@ -995,6 +1054,14 @@ class TournamentStructure {
   /// An EMPTY ladder is not "blocked" — that is a game whose structure has not
   /// been generated yet (an event posted for RSVP carries no ladder).
   bool get isBlocked => levels.isNotEmpty && !feasible;
+
+  /// A fresh starting stack at 1-indexed [level], or null if the structure has
+  /// no such level (see [FreshStack.at] for how M is read).
+  FreshStack? freshStackAt(int level) => FreshStack.at(
+        startingStack: startingStack,
+        levels: levels,
+        level: level,
+      );
 
   /// True when the night is playable but opens below [kShallowWarnBB] big
   /// blinds — typically because the chip case has to set chips aside for

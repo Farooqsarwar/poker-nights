@@ -2287,6 +2287,9 @@ bool _unlimitedRebuysDismissed = false;
             key: _formKey,
             initial: _draft,
             sections: const {EventFormSection.rebuys, EventFormSection.money},
+            // Informational: what a rebuy buys at the level picked. Read from the
+            // draft's structure at build time, so it follows every edit.
+            freshStackAt: (level) => _draftStructure(_draft)?.freshStackAt(level),
             onChanged: _onDraftChanged,
           ),
         ),

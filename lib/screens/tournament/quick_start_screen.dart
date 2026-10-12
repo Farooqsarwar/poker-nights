@@ -10,26 +10,23 @@ import '../../models/chip_color.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/structure_builder_controller.dart';
 import '../../utils/tournament_engine.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/app_eyebrow.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
-import '../../widgets/app_tabs.dart';
 import '../../widgets/code_display.dart';
-import '../../widgets/count_stepper.dart';
 import '../../widgets/page_header.dart';
-import '../../widgets/pace_cards.dart';
-import '../../widgets/structure_feasibility_card.dart';
-import '../../widgets/app_text_field.dart';
+import '../../widgets/structure_builder.dart';
 
-/// C0 -- "Start a game now". Friends are already at the table: four answers
-/// and one tap, and the clock runs.
+/// C0 -- "Start a game now". Friends are already at the table.
 ///
-/// It is the same engine and the same game document as the planned wizard
-/// (C1); this screen only fills the inputs in for the host and then walks the
-/// steps the check-in desk would (walk-ins, structure, seating, start).
+/// The shared stack-first [StructureBuilder] (WP2): the host answers the setup,
+/// approves the starting stack, looks at the levels, and only then does the
+/// clock run. It is the same engine and the same game document as the planned
+/// wizard (C1); the final tap walks the steps the check-in desk would
+/// (walk-ins, structure, seating, start).
 class QuickStartScreen extends StatefulWidget {
   const QuickStartScreen({super.key});
 
@@ -40,7 +37,6 @@ class QuickStartScreen extends StatefulWidget {
 class _QuickStartScreenState extends State<QuickStartScreen> {
   /// The wizard's own opening chip set (`presetNames[2]`).
   static const _standardPresetIndex = 2;
-  static const _hoursOptions = [2, 3, 4, 5];
   static const _premiumMaxPlayers = 30;
   static const _weekdays = [
     'Monday',
@@ -52,42 +48,15 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
     'Sunday',
   ];
 
-  int _players = 8;
-  int _hours = 4;
-  int _buyIn = 15;
-  bool _rebuy = false;
-
-  // Shallow-start fixes the host has TAPPED (SHALLOW_WARN_BB). Never set
-  // implicitly: only a tap on a card option puts one in force.
-  bool _skipAddOn = false;
-  double? _rebuyRate;
-  int? _rebuyLimit;
-  PaceMode? _pace;
-  bool _seeded = false;
+  StructureBuilderController? _controller;
   bool _starting = false;
   String? _error;
-  bool _showNameInputs = false;
-  final List<TextEditingController> _nameControllers = [];
-
-  void _syncNameControllers() {
-    while (_nameControllers.length < _players) {
-      _nameControllers.add(TextEditingController());
-    }
-    while (_nameControllers.length > _players) {
-      _nameControllers.removeLast().dispose();
-    }
-  }
 
   @override
   void dispose() {
-    for (final c in _nameControllers) {
-      c.dispose();
-    }
+    _controller?.dispose();
     super.dispose();
   }
-
-  PaceOptions? _optionsCache;
-  String? _optionsKey;
 
   /// The last completed game's headcount in this group, or null.
   int? _lastHeadcount(AppProvider app) {
@@ -132,119 +101,44 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
         : names[_standardPresetIndex.clamp(0, names.length - 1)];
   }
 
-  TournamentParams _params(AppProvider app, {PaceMode? pace}) {
-    return TournamentParams(
-      players: _players < 2 ? 2 : _players,
-      durationHours: _hours.toDouble(),
-      buyIn: _buyIn,
+  StructureBuilderController _controllerFor(AppProvider app) {
+    return _controller ??= StructureBuilderController(
+      mode: BuilderMode.quick,
       chipSet: _chips(app),
-      rebuys: _rebuy,
-      rebuysCloseLevel: 0,
-      rebuyCloseChosenByOrganizer: false,
-      reEntry: false,
-      addOn: _rebuy && !_skipAddOn,
-      rebuyLimit: _rebuy ? _rebuyLimit : null,
-      anteEnabled: true,
-      anteAfterLevel: 6,
-      koEnabled: false,
-      koAmount: 5,
-      organizerPct: 0,
-      expectedRebuyRate: _rebuy ? (_rebuyRate ?? 0.35) : 0,
-      pace: pace,
+      chipSetName: _chipsName(app),
+      players: (_lastHeadcount(app) ?? 8).clamp(2, _cap(app)),
+      durationHours: 4,
+      startMinutes: DateTime.now().hour * 60 + DateTime.now().minute,
     );
   }
 
-  PaceOptions _options(AppProvider app) {
-    final key = [
-      _players,
-      _hours,
-      _rebuy,
-      _skipAddOn,
-      _rebuyRate,
-      _rebuyLimit,
-      _chips(app).map((c) => '${c.value}x${c.quantity}').join(','),
-    ].join('|');
-    if (_optionsKey == key && _optionsCache != null) return _optionsCache!;
-    final opts = TournamentEngine.paceOptions(_params(app));
-    _optionsKey = key;
-    _optionsCache = opts;
-    return opts;
-  }
-
-  PaceMode _effectivePace(PaceOptions opts) =>
-      _pace ?? opts.recommended ?? PaceMode.regular;
-
-  TournamentStructure? _previewCache;
-  String? _previewKey;
-
-  /// The structure this exact setup would start with, generated BEFORE any
-  /// game or group is created. If the chip case cannot deal it, the structure
-  /// is only a placeholder: the card is shown and the start button is off, so
-  /// a clock can never be started from it (§F1.5 point 7).
-  TournamentStructure _preview(AppProvider app, PaceMode pace) {
-    final key = [
-      _players,
-      _hours,
-      _rebuy,
-      _skipAddOn,
-      _rebuyRate,
-      _rebuyLimit,
-      pace.name,
-      _chips(app).map((c) => '${c.value}x${c.quantity}').join(','),
-    ].join('|');
-    if (_previewKey == key && _previewCache != null) return _previewCache!;
-    final s = TournamentEngine.generate(_params(app, pace: pace));
-    _previewKey = key;
-    _previewCache = s;
-    return s;
-  }
-
-  String _sentence(AppProvider app, PaceOptions opts) {
-    final pace = _effectivePace(opts);
-    final o = opts.options.where((o) => o.pace == pace).firstOrNull;
-    if (o == null) return '';
-    final depth = o.startingDepthBB.round();
-    return 'Structure for $_players players over ${_hours}h: '
-        '$depth big blinds deep, opening ${o.openingSB}/${o.openingBB}, '
-        '${o.levelMinutes}-minute levels (${pace.label}), '
-        '${o.levels} levels. ${_rebuy ? (_skipAddOn ? 'Rebuys, no add-on. ' : 'Rebuys and one add-on. ') : ''}'
-        '$_buyIn buy-in. You can still edit any level.';
-  }
-
-  GameSettings _settings(AppProvider app, PaceMode pace) {
+  /// The settings the game is created with: a plain "tonight" night, carrying
+  /// every builder choice.
+  GameSettings _settings(AppProvider app, StructureBuilderController c) {
     final now = DateTime.now();
     String two(int v) => v.toString().padLeft(2, '0');
-    final name = '${_weekdays[now.weekday - 1]} Poker';
-    final structure = TournamentEngine.generate(_params(app, pace: pace));
-    final rebuyClose = _rebuy ? structure.rebuysCloseLevel : 0;
-    return GameSettings(
-      name: name,
+    final base = GameSettings(
+      name: '${_weekdays[now.weekday - 1]} Poker',
       date: '${now.year}-${two(now.month)}-${two(now.day)}',
       time: '${two(now.hour)}:${two(now.minute)}',
       location: '',
-      players: _players,
-      durationHours: _hours.toDouble(),
-      pace: pace,
-      buyIn: _buyIn,
+      players: c.players,
+      durationHours: c.durationHours,
+      buyIn: c.buyIn,
       koEnabled: false,
       koAmount: 5,
-      rebuys: _rebuy,
-      rebuysCloseLevel: rebuyClose,
-      reEntry: false,
-      addOn: _rebuy && !_skipAddOn,
-      rebuyLimit: _rebuy ? _rebuyLimit : null,
-      expectedRebuyRate: _rebuy ? _rebuyRate : null,
-      addOnCloseLevel: rebuyClose,
+      rebuys: false,
+      rebuysCloseLevel: 0,
+      addOn: false,
       anteEnabled: true,
-      anteAfterLevel: rebuyClose > 0 ? rebuyClose + 1 : 6,
-      anteStyle: AnteStyle.bigBlind,
-      antePreference: AntePreference.recommend,
+      anteAfterLevel: 6,
       organizerPct: 0,
-      chipSet: _chips(app),
-      chipSetName: _chipsName(app),
+      chipSet: c.chipSet,
+      chipSetName: c.chipSetName,
       locationPrivate: false,
       breaks: const [],
     );
+    return c.applyTo(base);
   }
 
   /// C0: "Starting a new game ends it." Returns whether to carry on.
@@ -288,11 +182,13 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
     return proceed;
   }
 
-  Future<void> _start(AppProvider app) async {
+  Future<void> _start(AppProvider app, TournamentStructure approved) async {
     if (_starting) return;
-    // Defensive: the button is disabled when blocked, but nothing (game, group,
-    // guest sign-in) may be created for a night the chips cannot deal.
-    if (_preview(app, _effectivePace(_options(app))).isBlocked) return;
+    final c = _controller!;
+    // Defensive: the confirm button is disabled when blocked, but nothing
+    // (game, group, guest sign-in) may be created for a night the chips cannot
+    // deal.
+    if (approved.isBlocked) return;
     final running = app.currentGame;
     if (running != null && running.status.isActiveLive) {
       final proceed = await _confirmReplace(app, running);
@@ -339,15 +235,14 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       if (!mounted) return;
     }
 
-    final pace = _effectivePace(_options(app));
-    final created = app.createGame(_settings(app, pace));
+    final created = app.createGame(_settings(app, c));
     // A quick game is the people at the table, not the group roster.
     app.setCurrentGame(created.copyWith(players: const []));
     app.publishGame(announce: false);
-    final customNames = _nameControllers.map((c) => c.text.trim()).toList();
-    final hasAnyCustomName = customNames.any((n) => n.isNotEmpty);
-    app.addQuickPlayers(_players, names: hasAnyCustomName ? customNames : null);
-    app.generateFinalStructure(_players);
+    app.addQuickPlayers(c.players);
+    // Rebuilds from the saved settings, which carry the approved stack, the
+    // pinned levels and a chosen rebuy close: the structure the host approved.
+    app.generateFinalStructure(c.players);
     app.confirmStructure();
     app.generateSeating(TableSeatingMode.random);
     app.confirmSeating();
@@ -442,23 +337,8 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       );
     }
 
-    final cap = _cap(app);
-    if (!_seeded) {
-      _seeded = true;
-      final last = _lastHeadcount(app);
-      _players = (last ?? 8).clamp(2, cap);
-    }
-    if (_players > cap) _players = cap;
-
-    final opts = _options(app);
-    final selected = _effectivePace(opts);
-    final preview = _preview(app, selected);
-    final blocked = preview.isBlocked;
-    final atFreeCap = !app.canHostPlayers(_premiumMaxPlayers) && _players >= cap;
+    final controller = _controllerFor(app);
     final last = _lastHeadcount(app);
-    final chips = _chips(app);
-    final pieces = chips.fold<int>(0, (sum, c) => sum + c.quantity);
-
     return AppPage(
       maxWidth: 640,
       child: Column(
@@ -469,312 +349,24 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
               app.isAuthenticated ? RoutePaths.home : RoutePaths.landing,
             ),
             title: 'Start a game now',
-            subtitle:
-                'Friends already at the table? Four answers and one tap.',
+            subtitle: 'Friends already at the table? Set it up, check the '
+                'stack, and the clock runs.',
           ),
           const SizedBox(height: AppSpacing.lg),
-          _QuickCard(
-            eyebrow: 'Pace',
-            child: PaceCards(
-              options: opts,
-              selected: selected,
-              onSelected: (p) => setState(() => _pace = p),
-              onChooseLater: () => setState(() {
-                _hours = _hoursOptions.firstWhere(
-                  (h) => h > _hours,
-                  orElse: () => _hoursOptions.last,
-                );
-                _pace = null;
-              }),
-              onDropAddOn: _rebuy
-                  ? () => setState(() {
-                      _rebuy = false;
-                      _pace = null;
-                    })
-                  : null,
-            ),
+          StructureBuilder(
+            controller: controller,
+            confirmLabel: 'Start the clock',
+            maxPlayers: _cap(app),
+            playersHint: last == null ? null : 'Last time: $last players',
+            busy: _starting,
+            error: _error,
+            onEditChips: () => context.push(RoutePaths.chipSets).then((_) {
+              if (mounted) controller.setChipSet(_chips(app));
+            }),
+            onConfirm: (s) => _start(app, s),
           ),
-          const SizedBox(height: AppSpacing.md),
-          _QuickCard(
-            eyebrow: 'Players',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CountStepper(
-                  value: _players,
-                  min: 2,
-                  max: cap,
-                  suffix: 'players',
-                  semanticLabel: 'Players',
-                  onChanged: (v) => setState(() {
-                    _players = v;
-                    _pace = null;
-                    _syncNameControllers();
-                  }),
-                ),
-                if (last != null) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  _Hint(
-                    'Last time at ${app.currentGroup.name}: $last',
-                  ),
-                ],
-                if (atFreeCap) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  _Hint(
-                    'One table seats up to $cap on the free plan. For two '
-                    'tables, plan the night from New tournament.',
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                InkWell(
-                  onTap: () {
-                    _syncNameControllers();
-                    setState(() => _showNameInputs = !_showNameInputs);
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _showNameInputs
-                              ? Icons.keyboard_arrow_up
-                              : Icons.keyboard_arrow_down,
-                          size: 18,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          _showNameInputs
-                              ? 'Hide player names'
-                              : 'Add player names (optional)',
-                          style: AppTypography.bodySm.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (_showNameInputs) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    'Enter your friends’ names for the scoreboard and seating (or leave blank for Player 1, Player 2...)',
-                    style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  for (var i = 0; i < _players; i++) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 28,
-                            child: Text(
-                              '${i + 1}.',
-                              style: AppTypography.bodySm.copyWith(
-                                color: AppColors.mutedForeground,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: AppTextField(
-                              controller: _nameControllers[i],
-                              placeholder: 'Player ${i + 1} name (e.g. Alex)',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _QuickCard(
-            eyebrow: 'How long',
-            child: AppTabs(
-              tabs: [
-                for (final h in _hoursOptions)
-                  AppTabItem(id: '$h', label: '${h}h'),
-              ],
-              active: '$_hours',
-              onChanged: (id) => setState(() {
-                _hours = int.parse(id);
-                _pace = null;
-              }),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _QuickCard(
-            eyebrow: 'Buy-in',
-            child: CountStepper(
-              value: _buyIn,
-              min: 5,
-              max: 100,
-              step: 5,
-              semanticLabel: 'Buy-in',
-              onChanged: (v) => setState(() => _buyIn = v),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _QuickCard(
-            eyebrow: 'Format',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AppTabs(
-                  tabs: const [
-                    AppTabItem(id: 'freeze', label: 'Freeze Out'),
-                    AppTabItem(id: 'rebuy', label: 'Rebuy'),
-                  ],
-                  active: _rebuy ? 'rebuy' : 'freeze',
-                  onChanged: (id) => setState(() {
-                    _rebuy = id == 'rebuy';
-                    _skipAddOn = false;
-                    _rebuyRate = null;
-                    _rebuyLimit = null;
-                    _pace = null;
-                  }),
-                ),
-                if (_rebuy) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  const _Hint(
-                    'Rebuys plan for 35% of the field, with one add-on at '
-                    '125% of a starting stack.',
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          if (chips.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                '${_chipsName(app)} · $pieces pcs',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ),
-          const SizedBox(height: AppSpacing.md),
-          if (chips.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: Text(
-                'No chip set found — add one in Chip sets first.',
-                style: AppTypography.bodySm.copyWith(
-                  color: AppColors.destructiveText,
-                ),
-              ),
-            ),
-          _QuickCard(
-            eyebrow: "What you'll get",
-            child: Text(
-              _sentence(app, opts),
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.foreground,
-                height: 1.4,
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          // §F1.5 point 7: when the chip case can't deal this night, the card
-          // replaces the promise of a structure, and the start button below is
-          // off. Its buttons are the spec's three fixes plus "reduce to N".
-          if (blocked || preview.isShallow) ...[
-            StructureFeasibilityCard(
-              structure: preview,
-              players: _players,
-              onEditChips: () => context.push(RoutePaths.chipSets),
-              // SHALLOW_WARN_BB: each option carries the depth the engine
-              // produces for it; only the host's tap applies one.
-              shallowFixes: preview.isShallow
-                  ? TournamentEngine.shallowFixes(_params(app, pace: selected))
-                  : const [],
-              onApplyShallowFix: (fix) => setState(() {
-                if (fix.addOn == false) _skipAddOn = true;
-                if (fix.expectedRebuyRate != null) {
-                  _rebuyRate = fix.expectedRebuyRate;
-                }
-                if (fix.rebuyLimit != null) _rebuyLimit = fix.rebuyLimit;
-                _pace = null;
-              }),
-              onPlayFreezeOut: _rebuy
-                  ? () => setState(() {
-                        _rebuy = false;
-                        _pace = null;
-                      })
-                  : null,
-              onReduceField: (preview.maxPlayersSupported ?? 0) >= 2
-                  ? () => setState(() {
-                        _players = preview.maxPlayersSupported!;
-                        _pace = null;
-                        _syncNameControllers();
-                      })
-                  : null,
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ],
-          if (_error != null) ...[
-            Text(
-              _error!,
-              style: AppTypography.bodySm.copyWith(color: AppColors.destructiveText),
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ],
-          AppButton(
-            fullWidth: true,
-            size: AppButtonSize.lg,
-            loading: _starting,
-            onPressed: (chips.isEmpty || blocked) ? null : () => _start(app),
-            child: const Text('Generate & start the clock'),
-          ),
-          const SizedBox(height: AppSpacing.xl),
         ],
       ),
-    );
-  }
-}
-
-class _QuickCard extends StatelessWidget {
-  const _QuickCard({required this.eyebrow, required this.child});
-
-  final String eyebrow;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AppEyebrow(eyebrow, muted: true),
-          const SizedBox(height: AppSpacing.md),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _Hint extends StatelessWidget {
-  const _Hint(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
     );
   }
 }

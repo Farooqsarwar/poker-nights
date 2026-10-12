@@ -33,5 +33,29 @@ jobs:
       - name: Analyze
         run: flutter analyze --fatal-infos
 
+      # The engine's correctness gate, run first and reported on its own so a
+      # structure-engine regression is named in the CI summary instead of being
+      # one failure among ~1,600 in the full run, and so it fails fast.
+      #
+      # These files are also picked up by the full `flutter test` below; this
+      # step is deliberate duplication for visibility, not a different check.
+      #   * engine_invariants_test   — sb<bb, steps, round stacks, true bank
+      #                                feasibility, rebuy close/ante/add-on
+      #                                break; ~3,840 runs under BOTH blind
+      #                                families (niceSpec and home25)
+      #   * f1_5_composition_test    — the §F1.15/§F1.16 demo-night control
+      #   * engine_force_stack_test  — forceStack / targetDepthBB / home25
+      #   * infeasible_start_guard_test — a night the chip case can't deal can
+      #                                never start a clock or open a dashboard
+      - name: Engine invariants (WP1 gate)
+        timeout-minutes: 20
+        run: >
+          flutter test
+          test/engine_invariants_test.dart
+          test/f1_5_composition_test.dart
+          test/engine_force_stack_test.dart
+          test/infeasible_start_guard_test.dart
+          test/demo_night_vector_test.dart
+
       - name: Run tests
         run: flutter test

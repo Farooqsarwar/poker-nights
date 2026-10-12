@@ -82,12 +82,18 @@ void main() {
               .where((e) => e.value <= sb)
               .fold<int>(0, (a, e) => a + e.count);
           if (!exhausted) {
+            // WP1/T5: the "seven blue chips" ≥6 floor encoded the old greedy
+            // chip-plan's aesthetic. The §F1.5 composition solver optimises
+            // scoreComposition instead, and the spec's own demo night (§F1.15)
+            // deals only 5×1 of its smallest chip — so the spec-faithful floor
+            // is postability + change (≥2 of a chip ≤ the SB), guaranteed by
+            // solveChipPlanBounded, not an arbitrary 6. See docs/analysis/wp1-results.md.
             expect(
               payable,
-              greaterThanOrEqualTo(6),
+              greaterThanOrEqualTo(2),
               reason:
-                  'only $payable chips of $sb or less — the "seven blue '
-                  'chips" stack. Plan was: $shape',
+                  'only $payable chips of $sb or less — cannot post + make '
+                  'change. Plan was: $shape',
             );
           }
 

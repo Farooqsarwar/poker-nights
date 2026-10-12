@@ -1000,6 +1000,16 @@ extension AppProviderTournament on AppProvider {
     if (!_isGameAuthority) return;
     final game = _currentGame;
     if (game == null) return;
+    // A structure the chip case cannot deal is a placeholder, not a plan — it
+    // cannot be confirmed (the review screen shows the bank/depth card instead).
+    if (game.structure.isBlocked) {
+      addAuditRecord(
+        'structure_confirm_refused',
+        'Structure not confirmed: the chip case cannot deal this night.',
+      );
+      if (!_disposed) notifyListeners();
+      return;
+    }
     _currentGame = game.copyWith(structureConfirmed: true);
     addAuditRecord(
       'structure_confirm',
@@ -1085,6 +1095,7 @@ extension AppProviderTournament on AppProvider {
         addOnCost: s.addOnCost,
         breaks: s.breaks,
         expectedRebuys: s.expectedRebuys,
+        rebuyLimit: s.rebuyLimit,
         expectedReEntries: s.expectedReEntries,
         expectedAddOns: s.expectedAddOns,
         rebuyChips: s.rebuyChips,
@@ -1104,7 +1115,7 @@ extension AppProviderTournament on AppProvider {
         // because §F1.5 point 1 keeps the chip BANK on a different number
         // entirely: every player assumed to take the add-on, so a 70 %
         // forecast can never under-size the box.
-        expectedRebuyRate: s.forecastRebuyRate,
+        expectedRebuyRate: s.expectedRebuyRate ?? s.forecastRebuyRate,
         addOnTakeUpRate: s.forecastAddOnTakeUp,
         format: s.format,
         maxReEntries: s.maxReEntries,
@@ -1138,16 +1149,16 @@ extension AppProviderTournament on AppProvider {
     final pins = <PinnedLevel>[];
     for (final l in game.structure.levels) {
       if (l.manuallyEdited) {
-        pins.add(PinnedLevel(levelNum: l.level, sb: l.safeSb, bb: l.safeBb));
+        pins.add(PinnedLevel(levelNum: l.level, sb: l.sb, bb: l.bb));
       }
     }
     if (pins.isNotEmpty && !force) {
       final cmin = structure.chipPlan.isNotEmpty ? structure.chipPlan.first.value : 25;
       final rebuilt = TournamentEngine.resolveAroundPins(
-        existingBB: structure.levels.map((l) => l.safeBb).toList(),
+        existingBB: structure.levels.map((l) => l.bb).toList(),
         cminOfLevel: List.filled(structure.levels.length, cmin),
         pins: pins,
-        bbEnd: structure.levels.isNotEmpty ? structure.levels.last.safeBb.toDouble() : 1000.0,
+        bbEnd: structure.levels.isNotEmpty ? structure.levels.last.bb.toDouble() : 1000.0,
       );
       if (rebuilt.feasible && rebuilt.bbLadder.length == structure.levels.length) {
         final restored = <BlindLevel>[];
@@ -1156,8 +1167,8 @@ extension AppProviderTournament on AppProvider {
           final wasPinned = pins.any((p) => p.levelNum == oldL.level);
           final oldPinned = game.structure.levels.where((l) => l.level == oldL.level).firstOrNull;
           restored.add(oldL.copyWith(
-            sb: wasPinned && oldPinned != null ? oldPinned.safeSb : rebuilt.sbLadder[i],
-            bb: wasPinned && oldPinned != null ? oldPinned.safeBb : rebuilt.bbLadder[i],
+            sb: wasPinned && oldPinned != null ? oldPinned.sb : rebuilt.sbLadder[i],
+            bb: wasPinned && oldPinned != null ? oldPinned.bb : rebuilt.bbLadder[i],
             manuallyEdited: wasPinned,
           ));
         }
@@ -1391,6 +1402,8 @@ extension AppProviderTournament on AppProvider {
         addOnCost: s.addOnCost,
         breaks: s.breaks,
         expectedRebuys: s.expectedRebuys,
+        rebuyLimit: s.rebuyLimit,
+        expectedRebuyRate: s.expectedRebuyRate,
         expectedReEntries: s.expectedReEntries,
         expectedAddOns: s.expectedAddOns,
         rebuyChips: s.rebuyChips,
@@ -1580,9 +1593,35 @@ extension AppProviderTournament on AppProvider {
         format: TournamentFormat.freezeOut,
       ),
     );
-    _recalculateWithPlayers(_currentGame!.settings.players);
+    // The stored rebuy-night stack must not survive: a freeze-out deals the
+    // whole bank. Once play has started the stacks are physical, so keep them.
+    _recalculateWithPlayers(
+      _currentGame!.settings.players,
+      rebuildStacks: !game.stacksLocked,
+    );
     addAnnouncement(
       'Switched to a freeze-out — rebuys and the add-on are off.',
+      false,
+    );
+  }
+
+  /// Applies ONE shallow-start option the host tapped (SHALLOW_WARN_BB): the
+  /// card only SHOWS options, each with the depth the engine produced for it;
+  /// this is the host's explicit choice taking effect, never run implicitly.
+  /// Regenerates the structure and says what changed. Refused once play has
+  /// started, because the stacks are then physical.
+  void applyShallowFix(ShallowFix fix) {
+    final game = _currentGame;
+    if (game == null || game.stacksLocked) return;
+    _pushUndo();
+    _currentGame = game.copyWith(settings: fix.applyToSettings(game.settings));
+    _recalculateWithPlayers(
+      _currentGame!.settings.players,
+      rebuildStacks: true,
+    );
+    addAnnouncement(
+      '${fix.label} — the night now opens about '
+      '${fix.resultingDepthBB.round()} big blinds deep.',
       false,
     );
   }
@@ -1609,14 +1648,10 @@ extension AppProviderTournament on AppProvider {
     );
   }
 
-  void _recalculateWithPlayers(int count) {
-    final game = _currentGame!;
-    final s = game.settings;
-    // Same as [generateFinalStructure]: an accepted §10.1 adjustment already
-    // lives in `levelDurationMins`, so every rebuild — including the firm
-    // recalculation at Start — keeps it.
-    final newSettings = s.copyWith(players: count);
-    var structure = TournamentEngine.generate(
+  /// The engine params for [newSettings] at [count] players. The one place the
+  /// recalculation builds them, so [shallowFixesForCurrentGame] explains
+  /// exactly the night that is on screen.
+  TournamentParams _engineParamsFor(GameSettings newSettings, int count) =>
       TournamentParams(
         players: count,
         durationHours: newSettings.durationHours,
@@ -1624,6 +1659,7 @@ extension AppProviderTournament on AppProvider {
         chipSet: newSettings.chipSet,
         rebuys: newSettings.rebuys,
         rebuysCloseLevel: newSettings.rebuysCloseLevel,
+        rebuyCloseChosenByOrganizer: newSettings.rebuyCloseChosenByOrganizer,
         reEntry: newSettings.reEntry,
         addOn: newSettings.addOn,
         anteEnabled: newSettings.anteEnabled,
@@ -1636,6 +1672,7 @@ extension AppProviderTournament on AppProvider {
         addOnCost: newSettings.addOnCost,
         breaks: newSettings.breaks,
         expectedRebuys: newSettings.expectedRebuys,
+        rebuyLimit: newSettings.rebuyLimit,
         expectedReEntries: newSettings.expectedReEntries,
         expectedAddOns: newSettings.expectedAddOns,
         rebuyChips: newSettings.rebuyChips,
@@ -1643,7 +1680,8 @@ extension AppProviderTournament on AppProvider {
         addOnChips: newSettings.addOnChips,
         levelDurationMins: newSettings.levelDurationMins,
         pace: newSettings.pace,
-        expectedRebuyRate: newSettings.forecastRebuyRate,
+        expectedRebuyRate:
+            newSettings.expectedRebuyRate ?? newSettings.forecastRebuyRate,
         addOnTakeUpRate: newSettings.forecastAddOnTakeUp,
         format: newSettings.format,
         maxReEntries: newSettings.maxReEntries,
@@ -1652,13 +1690,38 @@ extension AppProviderTournament on AppProvider {
         earlyArrivalBonusEnabled: newSettings.earlyArrivalBonusEnabled,
         earlyArrivalCutoffMins: newSettings.earlyArrivalCutoffMins,
         earlyArrivalBonusPctOverride: newSettings.earlyArrivalBonusPctOverride,
-      ),
+      );
+
+  /// Options for the game's shallow start (SHALLOW_WARN_BB): empty unless the
+  /// structure on screen is shallow and the stacks are still changeable. Pure —
+  /// it changes nothing.
+  List<ShallowFix> shallowFixesForCurrentGame() {
+    final game = _currentGame;
+    if (game == null || game.stacksLocked || !game.structure.isShallow) {
+      return const [];
+    }
+    return TournamentEngine.shallowFixes(
+      _engineParamsFor(game.settings, game.settings.players),
     );
+  }
+
+  void _recalculateWithPlayers(int count, {bool rebuildStacks = false}) {
+    final game = _currentGame!;
+    final s = game.settings;
+    // Same as [generateFinalStructure]: an accepted §10.1 adjustment already
+    // lives in `levelDurationMins`, so every rebuild — including the firm
+    // recalculation at Start — keeps it.
+    final newSettings = s.copyWith(players: count);
+    var structure =
+        TournamentEngine.generate(_engineParamsFor(newSettings, count));
     // Starting stacks are frozen once play has started, or when the host
-    // hand-tuned the starting stack.
+    // hand-tuned the starting stack. [rebuildStacks] is the host's explicit
+    // choice of a plan change that MUST change the stacks (a shallow-start
+    // fix): without it the stored stack would silently survive and the option
+    // would advertise a depth it never delivers.
     final hasManualStack = game.structure.startingStack > 0 &&
         game.structure.chipPlan.isNotEmpty;
-    if (game.stacksLocked || hasManualStack) {
+    if (!rebuildStacks && (game.stacksLocked || hasManualStack)) {
       structure = structure.copyWith(
         startingStack: game.structure.startingStack,
         chipPlan: game.structure.chipPlan,

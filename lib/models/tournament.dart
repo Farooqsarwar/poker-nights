@@ -32,9 +32,6 @@ class BlindLevel {
   /// loads as "all engine-generated", which is what it was.
   final bool manuallyEdited;
 
-  int get safeSb => (bb > 0 && sb > bb) ? bb : sb;
-  int get safeBb => (bb > 0 && sb > bb) ? sb : bb;
-
   bool get hasAnte => ante != null;
 
   BlindLevel copyWith({
@@ -78,6 +75,16 @@ class ChipPlanEntry {
 /// individual ante). The big blind ante is the recommended default.
 enum AnteStyle { bigBlind, individual }
 
+/// Which family of blind values the ladder may use (T3, client pt 13).
+///
+/// `niceSpec` is the §F1.6 default — nice values `m × 10ᵏ` that are multiples
+/// of `2 × cmin`, so a chip set with a small chip opens with fine blinds.
+/// `home25` restricts big blinds to a 25-based home ladder (50/100/150/200/…)
+/// by treating the smallest chip as at least 25, which is what a host who
+/// thinks in 25s wants even when their chips could post finer blinds.
+// OWNER-DECISION: depth/blind values (conflict register, pt 13).
+enum BlindFamily { niceSpec, home25 }
+
 /// The admin's ante choice at creation (checklist 09-010). "recommend" keeps
 /// the system recommendation (big blind ante from a fixed level onward),
 /// while the other values override it explicitly.
@@ -93,6 +100,13 @@ enum AntePreference { recommend, none, bigBlind, individual }
 /// prefilled with, so a host who touches nothing gets exactly what they got
 /// before.
 const double kExpectedRebuyRate = 0.35;
+
+/// A structure that opens below this many big blinds gets a plain warning (the
+/// reason, and one-tap options that each re-run the engine) — it is still
+/// playable: [TournamentEngine.kMinPlayableDepthBB] (20) remains the hard
+/// floor below which the night is infeasible.
+// OWNER-DECISION: SHALLOW_WARN_BB = 50.
+const double kShallowWarnBB = 50;
 
 /// Build Spec v3.1 §F1.1 default for the re-entry, as a share of the field
 /// expected to take one.
@@ -299,6 +313,9 @@ class TournamentParams {
     this.expectedRebuyRate,
     this.addOnMultiplier,
     this.addOnTakeUpRate,
+    this.forceStack,
+    this.targetDepthBB,
+    this.blindFamily = BlindFamily.niceSpec,
   });
 
   final int players;
@@ -403,6 +420,22 @@ class TournamentParams {
   /// §F1.1 `addOn.takeUpRate` — the Framework's `q`. Feeds the chips-in-play
   /// estimate `C` only, never the bank check.
   final double? addOnTakeUpRate;
+
+  /// §F1.11 `forceStack` (F2/F19) — a host-forced starting stack. When set the
+  /// engine returns exactly this stack, re-deals the chips for it (bank-checked),
+  /// picks the opening BB for the target depth and rebuilds the ladder. Null
+  /// leaves the engine to propose the stack (§F1.5).
+  final int? forceStack;
+
+  /// Host-chosen starting depth in big blinds (F2, client pt 13). When set it
+  /// replaces the pace-derived STYLE depth target; pace stays the level-length
+  /// axis only. Expected 50–200 in steps of 25.
+  // OWNER-DECISION: depth values (conflict register, pt 13) — turbo 75 / deep
+  // 150 are not in the spec's DEPTH_BAND (turbo [50,70], deep aim 160).
+  final int? targetDepthBB;
+
+  /// §F1.6 blind-value family (T3). Default [BlindFamily.niceSpec].
+  final BlindFamily blindFamily;
 
   double get effectiveExpectedRebuyRate =>
       math.max(0, expectedRebuyRate ?? kExpectedRebuyRate);
@@ -562,6 +595,9 @@ class TournamentParams {
     double? expectedRebuyRate,
     double? addOnMultiplier,
     double? addOnTakeUpRate,
+    int? forceStack,
+    int? targetDepthBB,
+    BlindFamily? blindFamily,
   }) =>
       TournamentParams(
         players: players ?? this.players,
@@ -610,6 +646,9 @@ class TournamentParams {
         expectedRebuyRate: expectedRebuyRate ?? this.expectedRebuyRate,
         addOnMultiplier: addOnMultiplier ?? this.addOnMultiplier,
         addOnTakeUpRate: addOnTakeUpRate ?? this.addOnTakeUpRate,
+        forceStack: forceStack ?? this.forceStack,
+        targetDepthBB: targetDepthBB ?? this.targetDepthBB,
+        blindFamily: blindFamily ?? this.blindFamily,
       );
 }
 
@@ -771,6 +810,131 @@ class PayoutOption {
       prizePool;
 }
 
+/// One colour's shortfall from the §F1.5 hard bank check: the case holds
+/// [owned] chips of this colour but the night needs [needed].
+class BankShortfall {
+  const BankShortfall({
+    required this.colour,
+    required this.value,
+    required this.needed,
+    required this.owned,
+  });
+
+  final String colour;
+  final int value;
+  final int needed;
+  final int owned;
+
+  int get short => needed - owned;
+}
+
+/// What a freshly bought-in stack is worth at a given level: how many big
+/// blinds deep, and its Harrington M (stack ÷ the cost of one orbit).
+///
+/// Shown to the host when they pick the rebuy-close level, so the trade-off is
+/// visible ("a rebuy at L6 buys 20 BB, M 8"). The numbers are the spec's own
+/// (§F1.10 / §F1.16 step 8); nothing about the close rule changes.
+class FreshStack {
+  const FreshStack({
+    required this.level,
+    required this.depthBB,
+    required this.m,
+  });
+
+  /// 1-indexed level.
+  final int level;
+
+  /// Fresh stack ÷ that level's big blind.
+  final double depthBB;
+
+  /// Fresh stack ÷ (SB + BB + the ante total per hand).
+  final double m;
+
+  /// "Fresh stack at L4: 25 BB, M 16.7".
+  String get label =>
+      'Fresh stack at L$level: ${depthBB.round()} BB, M ${m.toStringAsFixed(1)}';
+
+  /// A fresh [startingStack] bought in at 1-indexed [level] of [levels], or
+  /// null if there is no such level.
+  ///
+  /// M is `S / (SB + BB + anteTotal)` (§F1.10). The ante is NOT counted at
+  /// [level] itself by default: in a rebuy format the ante starts the level
+  /// AFTER the close (§F1.8), so a stack bought at the close level is bought
+  /// against the blinds alone — which is also how the spec's own worked table
+  /// reads (§F1.16 step 8: L3/L4/L5 -> M 22.2/16.7/13.3, even though the final
+  /// ladder's ante begins at L5). Pass [anteLive] to count the ante when it
+  /// really is running at that level; a big-blind ante then costs one BB per
+  /// orbit and an individual ante is assumed paid by 8 players whatever the
+  /// headcount, so M reads the same on nights of different sizes.
+  static FreshStack? at({
+    required int startingStack,
+    required List<BlindLevel> levels,
+    required int level,
+    bool anteLive = false,
+  }) {
+    if (startingStack <= 0 || level < 1 || level > levels.length) return null;
+    final l = levels[level - 1];
+    if (l.bb <= 0) return null;
+    final ante = anteLive ? (l.ante ?? 0) : 0;
+    final anteTotal = ante <= 0 ? 0 : (ante == l.bb ? l.bb : ante * 8);
+    final orbit = l.sb + l.bb + anteTotal;
+    if (orbit <= 0) return null;
+    return FreshStack(
+      level: level,
+      depthBB: startingStack / l.bb,
+      m: startingStack / orbit,
+    );
+  }
+}
+
+/// What a one-tap fix for a shallow start changes.
+enum ShallowFixKind { limitRebuys, lowerRebuyRate, skipAddOn }
+
+/// One option offered when a structure opens below [kShallowWarnBB]: a single
+/// change to the plan, with the opening depth the engine ACTUALLY produces if
+/// it is applied (it is computed by re-running the engine, never estimated).
+///
+/// Offering a fix applies nothing: [applyTo] returns a modified copy of the
+/// params and the host's tap is what puts it in force.
+class ShallowFix {
+  const ShallowFix({
+    required this.kind,
+    required this.label,
+    required this.detail,
+    required this.resultingDepthBB,
+    required this.resultingStack,
+    required this.feasible,
+    this.rebuyLimit,
+    this.expectedRebuyRate,
+    this.addOn,
+  });
+
+  final ShallowFixKind kind;
+
+  /// Short button text, e.g. "Skip the add-on".
+  final String label;
+
+  /// One line saying what changes, e.g. "No add-on chips are reserved".
+  final String detail;
+
+  /// Opening depth in big blinds after the change.
+  final double resultingDepthBB;
+  final int resultingStack;
+  final bool feasible;
+
+  /// The lever(s) this fix sets; null means "leave as is".
+  final int? rebuyLimit;
+  final double? expectedRebuyRate;
+  final bool? addOn;
+
+  TournamentParams applyTo(TournamentParams p) => p.copyWith(
+        rebuyLimit: rebuyLimit,
+        expectedRebuyRate: expectedRebuyRate,
+        addOn: addOn,
+      );
+
+}
+
 /// The generated tournament structure.
 class TournamentStructure {
   const TournamentStructure({
@@ -796,6 +960,9 @@ class TournamentStructure {
     this.rebuysCloseLevel = 0,
     this.engineVersion = '2.1.0',
     this.feasible = true,
+    this.depthOk = true,
+    this.bankOk = true,
+    this.bankShortfall = const [],
     this.depthShortfallNote,
     this.maxPlayersSupported,
     this.pace,
@@ -860,7 +1027,50 @@ class TournamentStructure {
   /// both already refuse to go below the floor. Only the engine's absolute
   /// last-resort branch (an inventory that cannot fund even a 20BB stack for
   /// any blind pair) can set this false.
+  ///
+  /// Build Spec v3.1 §F1.5 point 7: `feasible = depthOk && bankOk`. A stack
+  /// that clears the 20 BB floor but that the chip case cannot actually deal
+  /// to the field (with the busy-night rebuy/add-on/bonus reserve) is NOT
+  /// feasible, even though its depth is fine.
   final bool feasible;
+
+  /// §F1.5 — whether a candidate stack reached the playable depth floor.
+  final bool depthOk;
+
+  /// §F1.5 — whether the chip case can actually deal the night: per colour,
+  /// `count × draws ≤ owned` (draws = N + 90th-percentile rebuys), then every
+  /// player's add-on and bonus handout fits in what is left.
+  final bool bankOk;
+
+  /// Per-colour shortfall when [bankOk] is false; empty otherwise.
+  final List<BankShortfall> bankShortfall;
+
+  /// True when this structure must NOT be confirmed, started on a clock, or
+  /// opened on a dashboard: a ladder exists but the chip case cannot deal it
+  /// (§F1.5 point 7 — [feasible] is false). The ladder in that case is only a
+  /// placeholder so the screen has something to render next to the
+  /// bank/depth card; nothing may be played from it.
+  ///
+  /// An EMPTY ladder is not "blocked" — that is a game whose structure has not
+  /// been generated yet (an event posted for RSVP carries no ladder).
+  bool get isBlocked => levels.isNotEmpty && !feasible;
+
+  /// A fresh starting stack at 1-indexed [level], or null if the structure has
+  /// no such level (see [FreshStack.at] for how M is read).
+  FreshStack? freshStackAt(int level) => FreshStack.at(
+        startingStack: startingStack,
+        levels: levels,
+        level: level,
+      );
+
+  /// True when the night is playable but opens below [kShallowWarnBB] big
+  /// blinds — typically because the chip case has to set chips aside for
+  /// rebuys and add-ons. A warning with options, never a block.
+  bool get isShallow {
+    if (!feasible || levels.isEmpty) return false;
+    final d = openingBBDepth;
+    return d != null && d < kShallowWarnBB;
+  }
 
   /// Plain-language explanation of why the opening stack fell below the
   /// playable floor, and what would fix it. Null unless [feasible] is false.
@@ -1043,6 +1253,9 @@ class TournamentStructure {
     int? rebuysCloseLevel,
     String? engineVersion,
     bool? feasible,
+    bool? depthOk,
+    bool? bankOk,
+    List<BankShortfall>? bankShortfall,
     String? depthShortfallNote,
     int? maxPlayersSupported,
     PaceMode? pace,
@@ -1079,6 +1292,9 @@ class TournamentStructure {
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
       engineVersion: engineVersion ?? this.engineVersion,
       feasible: feasible ?? this.feasible,
+      depthOk: depthOk ?? this.depthOk,
+      bankOk: bankOk ?? this.bankOk,
+      bankShortfall: bankShortfall ?? this.bankShortfall,
       depthShortfallNote: depthShortfallNote ?? this.depthShortfallNote,
       maxPlayersSupported: maxPlayersSupported ?? this.maxPlayersSupported,
       // Same reason as breaks above: a field left out here is silently reset

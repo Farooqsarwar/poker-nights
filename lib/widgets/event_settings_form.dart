@@ -51,6 +51,7 @@ class EventSettingsForm extends StatefulWidget {
     this.showOrganizerPct = false,
     this.orgPctCeiling = GameSettings.maxOrganizerPct,
     this.hideSavePresetButton = false,
+    this.freshStackAt,
   });
 
   /// The settings this form starts from. Seeded once; later edits are never
@@ -59,6 +60,12 @@ class EventSettingsForm extends StatefulWidget {
   final GameSettings initial;
   
   final bool hideSavePresetButton;
+
+  /// Looks up what a fresh stack is worth at a rebuy-close level, for the line
+  /// shown under the close-level picker ("Fresh stack at L6: 20 BB, M 8.3").
+  /// Supplied by a parent that knows the structure; null (or a null answer)
+  /// shows no line, so the form stays usable on its own.
+  final FreshStack? Function(int level)? freshStackAt;
 
   /// Which sections to render, in order of iteration.
   final Set<EventFormSection> sections;
@@ -833,6 +840,18 @@ class _EventSettingsFormState extends State<EventSettingsForm> {
             },
           ),
         ),
+        // What a rebuy buys at the level the host picked, so the trade-off is
+        // visible. Informational only: it never changes the suggestion.
+        if (widget.freshStackAt?.call(_rebuysClose) case final FreshStack fresh)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Text(
+              fresh.label,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ),
         if (!_rebuyUnlimited)
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.xs),

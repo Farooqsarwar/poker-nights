@@ -113,11 +113,18 @@ typedef PaceOptions = ({
   /// Null when nothing qualifies — turbo is never recommended.
   PaceMode? recommended,
 
-  /// Set only when no pace fits. The host picks; nothing is applied silently.
+  /// Set only when no pace fits **on time**. The host picks; nothing is applied
+  /// silently. (F15/T7: a chip-bank shortfall is NOT a time warning — see
+  /// [bankBlocked].)
   String? warning,
 
   /// §F1.3's named choices: `later`, `noAddOn`, `turbo`.
   List<String> choices,
+
+  /// Set only when the blocker is the chip case, not the clock (F15/T7): some
+  /// pace fits on time but no pace's bank is OK. Carries the §F1.5 sentence so
+  /// the UI shows "your chip case cannot fund this" rather than "no pace fits".
+  String? bankBlocked,
 });
 
 /// A host-fixed level for [TournamentEngine.resolveAroundPins] (Build Spec
@@ -322,6 +329,311 @@ class TournamentEngine {
     }
 
     return pen;
+  }
+
+  /// Candidate starting stacks for [sMaxValue] — the "nice" values ≤ S_max,
+  /// deepest first (§F1.5 point 3 / §F1.16 step 3). Not snapped: the §F1.16
+  /// trace evaluates 120/80/60/… and the winner's roundness is enforced by the
+  /// composition/selection, not by pruning the candidate list.
+  static List<int> candidateStacks(double sMaxValue) =>
+      niceValuesInRange(1, 1, sMaxValue).reversed.toList();
+
+  /// Spec §F1.14 — the synthetic "never-binding" bank for a tool that has no
+  /// real chip case: the same denominations, with every quantity raised to at
+  /// least 100 per player, so the bank check cannot be what limits the night.
+  ///
+  /// 100 per player is comfortably above the worst case the engine can ask for
+  /// (≤ 24 of a colour per stack × the starting stacks, a busy night's rebuys
+  /// and every add-on ≈ 60 per player). A quantity that is already larger is
+  /// kept, never shrunk, and the input is not modified.
+  static List<ChipColor> neverBindingBank(
+    List<ChipColor> denominations, {
+    required int players,
+  }) {
+    final floor = math.max(1, players) * 100;
+    return [
+      for (final c in denominations)
+        c.copyWith(quantity: math.max(c.quantity, floor)),
+    ];
+  }
+
+  /// §F1.5 point 1 — the number of rebuy stacks the chip case must be able to
+  /// cover on a BUSY night: `Rbank = PoissonQuantile(mean = Rforecast, 0.90)`,
+  /// capped at `maxRebuys × N` when rebuys are Limited. One definition for the
+  /// stack search and for the exposed `bankOk`, so they cannot disagree (the
+  /// cap used to apply only to the latter).
+  static int busyNightRebuys(TournamentParams p) {
+    if (!p.rebuys) return 0;
+    var r = poissonQuantile90(p.players * p.effectiveExpectedRebuyRate);
+    final limit = p.rebuyLimit;
+    if (limit != null && limit > 0) r = math.min(r, limit * p.players);
+    return r;
+  }
+
+  /// Options for a shallow start (opening below [kShallowWarnBB]): each is ONE
+  /// change to the plan, with the opening depth the engine really produces if
+  /// it is applied — every candidate is a full re-run, never an estimate.
+  ///
+  /// Only changes that open the night meaningfully deeper (> 0.5 BB) are
+  /// returned, so a button is never offered that would do nothing. (For
+  /// example a per-player rebuy limit of 1 or 2 cannot shrink the reserve at
+  /// a normal 0.35 forecast, because the Poisson-90 forecast is already below
+  /// N × limit; it only appears when it genuinely helps.) Nothing here
+  /// applies a change: callers show the options and the host taps one.
+  ///
+  /// Empty when the night is not shallow, and rebuy/add-on options are only
+  /// considered when those are switched on. "Edit chips" is a navigation, not
+  /// a re-run, so it is not in this list.
+  static List<ShallowFix> shallowFixes(TournamentParams params) {
+    final base = generate(params, findMaxPlayers: false);
+    if (!base.isShallow) return const [];
+    final d0 = base.startingStack / base.levels.first.bb;
+    final fixes = <ShallowFix>[];
+
+    void consider({
+      required ShallowFixKind kind,
+      required String label,
+      required String detail,
+      required TournamentParams changed,
+      int? rebuyLimit,
+      double? expectedRebuyRate,
+      bool? addOn,
+    }) {
+      final s = generate(changed, findMaxPlayers: false);
+      if (!s.feasible || s.levels.isEmpty) return;
+      final d = s.startingStack / s.levels.first.bb;
+      if (d <= d0 + 0.5) return;
+      // Milder-first order: skip a stronger setting of the same kind that
+      // lands on the same depth as one already offered.
+      if (fixes.any((f) => f.kind == kind && (f.resultingDepthBB - d).abs() <= 0.5)) {
+        return;
+      }
+      fixes.add(ShallowFix(
+        kind: kind,
+        label: label,
+        detail: detail,
+        resultingDepthBB: d,
+        resultingStack: s.startingStack,
+        feasible: s.feasible,
+        rebuyLimit: rebuyLimit,
+        expectedRebuyRate: expectedRebuyRate,
+        addOn: addOn,
+      ));
+    }
+
+    if (params.rebuys) {
+      for (final limit in const [2, 1]) {
+        final current = params.rebuyLimit;
+        if (current != null && current > 0 && current <= limit) continue;
+        consider(
+          kind: ShallowFixKind.limitRebuys,
+          label: 'Limit rebuys to $limit each',
+          detail: 'Caps the rebuy chips reserved at $limit per player.',
+          changed: params.copyWith(rebuyLimit: limit),
+          rebuyLimit: limit,
+        );
+      }
+      for (final rate in const [0.2, 0.1]) {
+        if (rate >= params.effectiveExpectedRebuyRate) continue;
+        consider(
+          kind: ShallowFixKind.lowerRebuyRate,
+          label: 'Expect about ${(rate * 100).round()}% rebuys',
+          detail: 'Reserves chips for fewer rebuys on a busy night.',
+          changed: params.copyWith(expectedRebuyRate: rate),
+          expectedRebuyRate: rate,
+        );
+      }
+    }
+    if (params.addOn) {
+      consider(
+        kind: ShallowFixKind.skipAddOn,
+        label: 'Skip the add-on',
+        detail: 'No add-on chips are set aside.',
+        changed: params.copyWith(addOn: false),
+        addOn: false,
+      );
+    }
+    return fixes;
+  }
+
+  /// The fewest-chips breakdown of [amount] that EVERY one of [players] can be
+  /// handed from what is [remaining] in the box, or null if there is none.
+  ///
+  /// A host deals one recipe (an add-on or bonus is the same chips for each
+  /// player — the §F1.15 demo's "add-on 250 = 2×100 + 2×25"), so the recipe has
+  /// to be makeable N times over. Searching against the WHOLE remaining bank
+  /// and then multiplying by N (the earlier behaviour) picks a recipe that is
+  /// individually cheapest but cannot be repeated N times, and reports a false
+  /// "short" when a slightly different recipe (more small chips, fewer big
+  /// ones) fits. So each colour is limited to `floor(remaining / players)`.
+  static Map<int, int>? handoutEveryPlayerCanGet({
+    required int amount,
+    required List<int> valuesDesc,
+    required Map<int, int> remaining,
+    required int players,
+  }) {
+    if (amount <= 0) return const {};
+    final n = math.max(1, players);
+    final limits = {
+      for (final v in valuesDesc) v: math.max(0, remaining[v] ?? 0) ~/ n,
+    };
+    final plan = fewestChips(amount, valuesDesc, limits: limits);
+    var made = 0;
+    plan.forEach((v, c) => made += v * c);
+    return made == amount ? plan : null; // {} ⇒ cannot make the amount
+  }
+
+  /// Spec v3.1 §F1.5 point 4 / §F1.16 `solveChipPlanBounded` — the best chip
+  /// composition for one [stack], or null if none is feasible.
+  ///
+  /// Eligible chips are those worth ≤ stack/2 (the smallest is always eligible),
+  /// and the smallest must be ≤ [openingSB] so it can post the blind. The
+  /// larger eligible denominations (up to three — in every realistic home case
+  /// there are at most three after the ≤ S/2 filter) are searched 0–24; the
+  /// smallest takes the remainder. A plan uses 3–5 denominations, passes the
+  /// hard per-colour bank check (start × [draws] + every player's add-on and
+  /// bonus handout ≤ owned), and is scored by [scoreComposition] plus the
+  /// caller's soft 25 % rule (+12 per chip worth more than stack/4).
+  static Map<int, ({List<({int value, int count})> used, double score})>
+  solveChipPlanVariants({
+    required int stack,
+    required List<ChipColor> chipSet,
+    required int draws,
+    required int players,
+    required int addOnStack,
+    required int bonusEach,
+    required int openingSB,
+  }) {
+    if (stack <= 0) return const {};
+    final owned = <int, int>{};
+    for (final c in chipSet) {
+      if (c.value > 0) owned[c.value] = (owned[c.value] ?? 0) + c.quantity;
+    }
+    final all = owned.keys.toList()..sort();
+    if (all.isEmpty) return const {};
+    final smallest = all.first;
+    if (smallest > openingSB) return const {}; // cannot post the small blind
+
+    final eligible =
+        all.where((v) => v <= stack / 2 || v == smallest).toList()..sort();
+    final e0 = eligible.first; // the remainder filler
+    var free = eligible.sublist(1); // larger denominations, searched 0–24
+    if (free.length > 3) free = free.sublist(free.length - 3); // keep the 3 largest
+
+    final valuesDesc = all.reversed.toList();
+
+    // Best composition for each distinct SMALLEST DEALT chip. The opening
+    // blind (and so the depth, §F1.5 point 5) is set by that chip, so the best
+    // composition overall is not always the best one for reaching the band.
+    final variants =
+        <int, ({List<({int value, int count})> used, double score})>{};
+    final counts = List<int>.filled(free.length, 0);
+
+    bool bankOkFor(List<({int value, int count})> used) {
+      final remaining = {...owned};
+      for (final u in used) {
+        final need = u.count * draws;
+        if (need > (remaining[u.value] ?? 0)) return false;
+        remaining[u.value] = (remaining[u.value] ?? 0) - need;
+      }
+      for (final amount in [if (addOnStack > 0) addOnStack, if (bonusEach > 0) bonusEach]) {
+        final plan = handoutEveryPlayerCanGet(
+          amount: amount,
+          valuesDesc: valuesDesc,
+          remaining: remaining,
+          players: players,
+        );
+        if (plan == null) return false; // no single recipe N players can all get
+        plan.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c * players);
+      }
+      return true;
+    }
+
+    void evaluate() {
+      var spent = 0;
+      for (var i = 0; i < free.length; i++) {
+        spent += free[i] * counts[i];
+      }
+      final rem = stack - spent;
+      if (rem < 0) return;
+      if (rem % e0 != 0) return;
+      final c0 = rem ~/ e0;
+      if (c0 < 0 || c0 > 24) return;
+      final used = <({int value, int count})>[];
+      if (c0 > 0) used.add((value: e0, count: c0));
+      for (var i = 0; i < free.length; i++) {
+        if (counts[i] > 0) used.add((value: free[i], count: counts[i]));
+      }
+      used.sort((a, b) => a.value - b.value);
+      if (used.length < 3 || used.length > 5) return;
+      // Postability + change: a player must hold at least two of the smallest
+      // dealt chip (which is ≤ the opening SB), so they can post the blind and
+      // make change, not only pay it exactly (PN-040/PN-045, §F1.6).
+      if (used.first.count < 2) return;
+      if (!bankOkFor(used)) return;
+      final total = used.fold<int>(0, (a, b) => a + b.count);
+      var score = scoreComposition(
+        used.map((u) => u.count).toList(),
+        used.map((u) => u.value).toList(),
+        total,
+      );
+      for (final u in used) {
+        if (u.value > stack / 4) score += 12.0 * u.count; // soft 25 % rule
+      }
+      final key = used.first.value;
+      final prev = variants[key];
+      if (prev == null || score < prev.score) {
+        variants[key] = (used: List.of(used), score: score);
+      }
+    }
+
+    void dfs(int idx) {
+      if (idx == free.length) {
+        evaluate();
+        return;
+      }
+      for (var c = 0; c <= 24; c++) {
+        counts[idx] = c;
+        if (free[idx] * c > stack) break;
+        dfs(idx + 1);
+      }
+      counts[idx] = 0;
+    }
+
+    dfs(0);
+    return variants;
+  }
+
+  /// The single best-scoring composition for [stack], or null if none is
+  /// feasible — [solveChipPlanVariants]' overall winner. An exact score tie goes
+  /// to the variant with the smaller smallest-chip (the single-result search
+  /// used to keep whichever it found first; exact ties are vanishingly rare).
+  static ({List<({int value, int count})> used, double score})?
+  solveChipPlanBounded({
+    required int stack,
+    required List<ChipColor> chipSet,
+    required int draws,
+    required int players,
+    required int addOnStack,
+    required int bonusEach,
+    required int openingSB,
+  }) {
+    final variants = solveChipPlanVariants(
+      stack: stack,
+      chipSet: chipSet,
+      draws: draws,
+      players: players,
+      addOnStack: addOnStack,
+      bonusEach: bonusEach,
+      openingSB: openingSB,
+    );
+    if (variants.isEmpty) return null;
+    final keys = variants.keys.toList()..sort();
+    var best = variants[keys.first]!;
+    for (final k in keys.skip(1)) {
+      if (variants[k]!.score < best.score) best = variants[k]!;
+    }
+    return best;
   }
 
   /// Recommends unique values for unnumbered chips ordered from most-available
@@ -1398,44 +1710,49 @@ class TournamentEngine {
         (totalAddOns * (addOnEnabled ? effectiveAddOnCost : 0));
   }
 
-  /// Build Spec v3.1 §F1.5/§F1.18 support — how large a field this exact
-  /// chip set can still seat at or above [kMinPlayableDepthBB], used only to
-  /// annotate the infeasible case above with a concrete number rather than
-  /// just "add more chips". Deliberately a plain linear scan down from
-  /// `params.players - 1`, reusing [_buildChipPlan] directly rather than the
-  /// full target-band solve above — this runs only on the rare path where
-  /// that solve has already failed outright, so a small, easily-audited
-  /// re-check was preferred over threading a player-count parameter through
-  /// the much larger joint solve in [generate].
-  static int? _largestPlayableFieldSize({
-    required TournamentParams params,
-    required int minChip,
-  }) {
-    for (var testPlayers = params.players - 1; testPlayers >= 2; testPlayers--) {
-      for (final pair in validBlindLevels) {
-        final sb = pair[0];
-        final bb = pair[1];
-        if (minChip <= 0 || sb % minChip != 0 || bb % minChip != 0) continue;
-        final floor = (kMinPlayableDepthBB * bb).round();
-        var candidate = (kMinPlayableDepthBB * bb / sb).round() * sb;
-        while (candidate >= floor) {
-          final plan = _buildChipPlan(
-            candidate,
-            params.chipSet,
-            math.max(1, testPlayers),
-            1.0,
-            smallBlind: sb,
-          );
-          final covered = plan.fold<int>(0, (s, e) => s + e.count * e.value);
-          if (covered >= candidate) return testPlayers;
-          candidate -= sb;
-        }
+  /// Build Spec v3.1 §F1.5 point 7 — the largest field this chip case can
+  /// still deal a playable stack to, found by re-running the SAME feasibility
+  /// (same rebuy rate, add-on and bonus) with fewer players. Used to annotate
+  /// an infeasible night with a concrete number and to power the card's
+  /// "Reduce to N players" button — so every number returned here has itself
+  /// been verified feasible: the button can never offer a field that lands on
+  /// the same card again.
+  ///
+  /// (This used to be a coverage-only re-check built on the legacy greedy chip
+  /// plan, which ignored rebuys, add-ons and the nice-stack rule and so
+  /// advertised fields the real solver then rejected.)
+  ///
+  /// Binary search rather than a linear scan: the free tools allow up to 100
+  /// players, and every probe is a full solve. Feasibility only gets easier as
+  /// the field shrinks, so the boundary is found in ~log₂(N) probes; the value
+  /// returned is always a verified-feasible field (never an over-claim), and
+  /// at worst understates the true maximum if feasibility were ever
+  /// non-monotone.
+  static int? _largestPlayableFieldSize({required TournamentParams params}) {
+    bool dealable(int n) =>
+        generate(params.copyWith(players: n), findMaxPlayers: false).feasible;
+    var lo = 2;
+    var hi = params.players - 1;
+    if (hi < lo || !dealable(lo)) return null;
+    if (dealable(hi)) return hi;
+    // Invariant: dealable(lo) && !dealable(hi).
+    while (hi - lo > 1) {
+      final mid = (lo + hi) ~/ 2;
+      if (dealable(mid)) {
+        lo = mid;
+      } else {
+        hi = mid;
       }
     }
-    return null;
+    return lo;
   }
 
-  static TournamentStructure generate(TournamentParams params) {
+  static TournamentStructure generate(
+    TournamentParams params, {
+    /// Internal: the field-size probe in [_largestPlayableFieldSize] solves
+    /// many smaller fields and must not recurse into another probe.
+    bool findMaxPlayers = true,
+  }) {
     // §11.4. A shootout has no single structure, so this returns the one the
     // room actually sits down to: Stage A, the per-table Freeze Out. Callers
     // that need the final table as well ask [generateShootout] for both.
@@ -1553,12 +1870,18 @@ class TournamentEngine {
             PaceMode.deep => PaceStyle.deep,
           }
         : paceStyleFor(rawTargetBBDepth);
-    // The band this particular tournament must land in. Derived, not imposed.
-    final depthBand = admissibleDepthBand(paceStyle);
-    final targetBBDepth = math.max(
-      depthBand.min,
-      math.min(depthBand.max, rawTargetBBDepth),
-    );
+    // F2 / client pt 13: a host-chosen `targetDepthBB` replaces the pace-derived
+    // STYLE depth. Pace still sets the level length; depth is now its own axis.
+    // The band opens up around the chosen depth so the solver can actually hit
+    // it (± ~15 %), rather than being re-clamped into the style's own band.
+    // OWNER-DECISION: depth values (conflict register, pt 13).
+    final hostDepth = params.targetDepthBB;
+    final depthBand = hostDepth != null
+        ? (min: hostDepth * 0.85, max: hostDepth * 1.15)
+        : admissibleDepthBand(paceStyle);
+    final targetBBDepth = hostDepth != null
+        ? hostDepth.toDouble()
+        : math.max(depthBand.min, math.min(depthBand.max, rawTargetBBDepth));
 
     final sortedChips = [...params.chipSet]..sort((a, b) => a.value - b.value);
     final minChip = sortedChips.isNotEmpty ? sortedChips.first.value : 1;
@@ -1577,6 +1900,167 @@ class TournamentEngine {
     // denominations can post is evaluated, each against the largest stack the
     // inventory can actually supply, and the pair landing closest to the
     // target depth inside the 80-240 band wins.
+
+    // ── §F1.5 starting stack + composition (bank-aware) — T4/T5 ─────────────
+    //
+    // Candidate "nice" stacks ≤ S_max, deepest first; each scored by
+    // [solveChipPlanBounded] (0–24 DFS + [scoreComposition] + soft-25 % + the
+    // hard per-colour bank check); depth is a HARD band filter; the winner is
+    // the best-scoring in-band stack, deeper on a ≤3-point near tie, and a
+    // round-unit stack preferred on a tie (F32). The opening BB is
+    // `niceBB(S / D, cmin)` so the magnitude follows the LOWEST payable rung at
+    // the target depth (F4) and SB < BB holds by construction (T3). This is the
+    // §F1.5 solver that replaces the legacy greedy search below on the normal
+    // path; the greedy block now only serves as the shortage fallback
+    // (§F1.5 points 5–7) when nothing lands in the band.
+    final bankValueOwned =
+        params.chipSet.fold<int>(0, (a, c) => a + c.value * c.quantity);
+    final rbankForStack = busyNightRebuys(params);
+    final drawsForStack = params.players + rbankForStack;
+    final bonusPctForStack = params.earlyArrivalBonusEnabled
+        ? (params.earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct)
+        : 0.0;
+    final sMaxForStack = sMax(
+      bankValue: bankValueOwned,
+      draws: drawsForStack,
+      players: params.players,
+      addOnMult: params.addOn ? params.effectiveAddOnMultiplier : 0.0,
+      bonusPct: bonusPctForStack,
+    );
+    final styleD = hostDepth?.toDouble() ??
+        switch (paceStyle) {
+          PaceStyle.turbo => _turboAim,
+          PaceStyle.standard => _standardAim,
+          PaceStyle.deep => _deepAim,
+        };
+    final roundUnit = math.max(25, minChip);
+    final chipByValue = {for (final c in params.chipSet) c.value: c};
+    int sbOfBB(int bb) {
+      var sb = (bb / 2 / minChip).round() * minChip;
+      if (sb < minChip) sb = minChip;
+      if (sb >= bb) sb = math.max(minChip, bb - minChip);
+      return sb;
+    }
+
+    /// The opening big blind (and the smallest-chip unit the whole ladder is
+    /// built on) for stack [s] whose smallest dealt chip is [dealtCmin].
+    ///
+    /// `niceSpec` is `niceBB(s / D, cmin)` (§F1.6). `home25` prefers a 25-based
+    /// blind (a multiple of 50) — but only while that still reaches the style's
+    /// depth band. A bank-limited stack of, say, 400 cannot open at a 50 big
+    /// blind (8 BB), and declaring that night infeasible would punish the host
+    /// for choosing a ladder style (the first home25 cut did exactly that:
+    /// box500 rebuy nights were 100 % "infeasible"). In that case the stack
+    /// falls back to the spec's `2 × cmin` blinds.
+    // OWNER-DECISION: depth/blind values (pt 13) — confirm the fallback.
+    ({int bb, int cmin}) openingFor(int s, int dealtCmin) {
+      final spec = niceBB(s / styleD, dealtCmin);
+      if (params.blindFamily == BlindFamily.home25) {
+        final cHome = math.max(dealtCmin, 25);
+        final home = niceBB(s / styleD, cHome);
+        if (home > 0 && s / home >= depthBand.min) {
+          return (bb: home, cmin: cHome);
+        }
+      }
+      return (bb: spec, cmin: dealtCmin);
+    }
+
+    List<ChipPlanEntry> planFromUsed(List<({int value, int count})> used) => [
+          for (final u in used)
+            ChipPlanEntry(
+              color: chipByValue[u.value]?.color ?? '${u.value}',
+              hex: chipByValue[u.value]?.hex ?? 0xFF888888,
+              value: u.value,
+              count: u.count,
+            ),
+        ];
+
+    ({int stack, int bb, int cmin, List<ChipPlanEntry> plan, double score, double depth})?
+        f15Pick;
+    ({int stack, int bb, int cmin, List<ChipPlanEntry> plan, double score, double depth})?
+        f15Closest;
+    double bandDist(double depth) => depth < depthBand.min
+        ? depthBand.min - depth
+        : (depth > depthBand.max ? depth - depthBand.max : 0.0);
+    final f15InBand = <({int stack, int bb, int cmin, List<ChipPlanEntry> plan, double score, double depth})>[];
+    if (minChip > 0 && bankValueOwned > 0) {
+      // Candidates are nice values that are ALSO a multiple of roundUnit, so
+      // every chosen stack is a round home value (F32/RC9). The §F1.16 trace's
+      // non-round candidates (120/80/…) are exercised by the direct
+      // solveChipPlanBounded unit test, not by generate().
+      for (final s in candidateStacks(sMaxForStack)
+          .where((s) => s % roundUnit == 0)) {
+        // Provisional opening (owned-smallest) only decides the eligibility
+        // SB passed to the search; the REAL opening BB/cmin come from the
+        // chosen composition's smallest DEALT chip (§F1.16 step 4).
+        final bbProv = niceBB(s / styleD, minChip);
+        if (bbProv <= 0) continue;
+        final addOnForThis = params.addOn ? (params.addOnChips ?? s) : 0;
+        final bonusForThis = (bonusPctForStack * s).round();
+        // §F1.5 point 5: depth is judged on the composition's SMALLEST DEALT
+        // chip, so a stack is evaluated on its best composition for each
+        // distinct smallest chip, not only its single best-scoring one. The
+        // best-scoring composition can skip the small chip, forcing a coarse
+        // blind (base25, 20 players: 4,000 as 5×100+3×500+2×1000 opens at a
+        // 200 blind = 20 BB, while 4×25+4×100+3×500+2×1000 opens 25/50 = 80 BB).
+        final variantsForS = solveChipPlanVariants(
+          stack: s,
+          chipSet: params.chipSet,
+          draws: drawsForStack,
+          players: params.players,
+          addOnStack: addOnForThis,
+          bonusEach: bonusForThis,
+          openingSB: sbOfBB(bbProv),
+        );
+        for (final sol in variantsForS.values) {
+          final open = openingFor(s, sol.used.first.value);
+          final cmin0 = open.cmin;
+          final bb = open.bb;
+          if (bb <= 0) continue;
+          final depth = s / bb;
+          if (depth < kMinPlayableDepthBB) continue;
+          final entry = (
+            stack: s,
+            bb: bb,
+            cmin: cmin0,
+            plan: planFromUsed(sol.used),
+            score: sol.score,
+            depth: depth,
+          );
+          if (depth >= depthBand.min && depth <= depthBand.max) {
+            f15InBand.add(entry);
+          }
+          // Nothing in the band: the closest to it competes, and when two sit
+          // equally close the better-scoring composition wins.
+          final closest = f15Closest;
+          if (closest == null ||
+              bandDist(depth) < bandDist(closest.depth) ||
+              (bandDist(depth) == bandDist(closest.depth) &&
+                  entry.score < closest.score)) {
+            f15Closest = entry;
+          }
+        }
+      }
+      if (f15InBand.isNotEmpty) {
+        final minScore =
+            f15InBand.map((e) => e.score).reduce(math.min);
+        final contenders =
+            f15InBand.where((e) => e.score <= minScore + 3).toList()
+              ..sort((a, b) {
+                final ar = a.stack % roundUnit == 0;
+                final br = b.stack % roundUnit == 0;
+                if (ar != br) return ar ? -1 : 1; // round first (F32)
+                // Then closest to the style's aim depth D — "normal = 100 BB",
+                // so a near-score-tie resolves toward the aim rather than
+                // drifting to the top of the band (client pt 2 / T4 acceptance).
+                final da = (a.depth - styleD).abs();
+                final db = (b.depth - styleD).abs();
+                if ((da - db).abs() > 0.5) return da < db ? -1 : 1;
+                return b.stack - a.stack; // then deeper (§F1.5 point 6)
+              });
+        f15Pick = contenders.first;
+      }
+    }
 
     // Real expected entries rather than a flat `players x 1.2 x 2` buffer —
     // the same figures Technical section 6.3 step 4 uses for the blind curve.
@@ -1882,12 +2366,16 @@ class TournamentEngine {
     // the shortage warning above (which still guarantees >= 20BB) and gets
     // its own explicit, structured signal rather than silently shipping a
     // depth:10 structure with no indication anything was wrong.
-    final depthFeasible = best != null;
+    // §F1.5 point 7: the night is feasible only when the §F1.5 search found a
+    // round, bank-fundable stack (in-band or the closest playable one). The
+    // greedy last-resort `best` is a display placeholder for a case that is
+    // genuinely too small — it does NOT make the night feasible.
+    final depthFeasible = f15Pick != null || f15Closest != null;
     String? depthShortfallNote;
     int? maxPlayersSupported;
-    if (!depthFeasible) {
+    if (f15Pick == null && f15Closest == null) {
       maxPlayersSupported =
-          _largestPlayableFieldSize(params: params, minChip: minChip);
+          findMaxPlayers ? _largestPlayableFieldSize(params: params) : null;
       depthShortfallNote = maxPlayersSupported != null && maxPlayersSupported > 0
           ? 'This chip set cannot fund a ${kMinPlayableDepthBB.round()}BB '
               'starting stack for ${params.players} players. It supports up '
@@ -1896,6 +2384,15 @@ class TournamentEngine {
           : 'This chip set cannot fund a ${kMinPlayableDepthBB.round()}BB '
               'starting stack for any field size. Add more '
               'low-denomination chips.';
+      warnings.add(depthShortfallNote);
+    } else if (f15Pick == null && f15Closest != null) {
+      // §F1.5 point 5: playable (≥ 20 BB) but the case cannot reach the style's
+      // depth band — say so plainly instead of springing a shallow structure.
+      depthShortfallNote =
+          'Your chip case supports about ${f15Closest.depth.round()} big '
+          'blinds deep for ${params.players} players — short of this style\'s '
+          '${depthBand.min.round()} BB. Add more low-denomination chips, or '
+          'reduce the field, for a deeper start.';
       warnings.add(depthShortfallNote);
     }
 
@@ -1908,9 +2405,37 @@ class TournamentEngine {
     );
 
     final startIndex = best.index;
-    final openingBB = validBlindLevels[startIndex][1];
-    final stack = best.stack;
-    final chipPlan = planFor(stack, best.divisor, validBlindLevels[startIndex][0]);
+    // F2/F19/§F1.11 `forceStack`: a host-forced stack is returned exactly. The
+    // engine re-deals the chips for it, picks the opening BB for the target
+    // depth via niceBB (a multiple of 2×cmin, so the ladder stays payable) and
+    // the bank check below reports any shortfall — the stack is never silently
+    // changed.
+    final int openingBB;
+    final int stack;
+    final List<ChipPlanEntry> chipPlan;
+    if (params.forceStack != null && params.forceStack! > 0) {
+      stack = params.forceStack!;
+      openingBB = openingFor(stack, minChip).bb;
+      final sbHint = math.max(minChip, (openingBB / 2 / minChip).round() * minChip);
+      chipPlan = planFor(stack, params.players, sbHint);
+    } else if (f15Pick != null) {
+      // §F1.5 (T4/T5): the chosen round, bank-fundable stack and its opening.
+      stack = f15Pick.stack;
+      openingBB = f15Pick.bb;
+      chipPlan = f15Pick.plan;
+    } else if (f15Closest != null) {
+      // §F1.5 points 5–7: nothing reached the band, so the closest round §F1.5
+      // candidate stands (with the depth note already recorded). Still a nice
+      // round stack with a niceBB opening — not the legacy greedy result.
+      stack = f15Closest.stack;
+      openingBB = f15Closest.bb;
+      chipPlan = f15Closest.plan;
+    } else {
+      // Absolute last resort: even §F1.5's closest candidate was infeasible.
+      openingBB = validBlindLevels[startIndex][1];
+      stack = best.stack;
+      chipPlan = planFor(stack, best.divisor, validBlindLevels[startIndex][0]);
+    }
 
     // Chips handed over for each entry type. The solved starting stack is the
     // default for all three — it is what the engine always used — but a host
@@ -2107,125 +2632,55 @@ class TournamentEngine {
             )
             .toDouble();
 
-    // Only the rungs this chip set can actually post.
+    // §F1.6 blind ladder — ONE spec-faithful build (F6, F7, RC1, X2).
     //
-    // The opening rung was already filtered this way, but the CLIMB was not —
-    // it walked the whole table. Adding the low rungs (1/2 … 6/12) exposed
-    // that: a Home Set whose smallest chip is 5 opened legally at 5/10 and
-    // then climbed to 6/12, which no combination of its chips can post
-    // (23-001). §F1.6 avoids this by generating each level as a multiple of
-    // `2 × cmin` rather than from a fixed table; filtering the table by the
-    // starting chip is the same guarantee within the table.
-    final ladder = [
-      for (final pair in validBlindLevels)
-        if (minChip > 0 && pair[0] % minChip == 0 && pair[1] % minChip == 0)
-          pair,
-    ];
-    if (ladder.isEmpty) ladder.addAll(validBlindLevels);
+    // The opening big blind is the solved [openingBB]; the raw geometric curve
+    // `BB1 × gⁱ` (with the §11.3 rebuy premium folded into g via [rebuyPremium]
+    // / [gBase]) is DP-snapped to a strictly-increasing sequence of nice
+    // multiples of `2 × cmin` by [dpSnapLadder], and each level's small blind
+    // comes from [chooseSBLadder] (`round(BB/2/cmin) × cmin`, ≥ cmin, below BB).
+    //
+    // This replaces the legacy cursor-walk over [validBlindLevels], which
+    // filtered the rung table to the chips in play but then indexed it with the
+    // UNFILTERED [startIndex] at two sites (the opening SB and the walk cursor).
+    // When the smallest chip was ≥ 25 the two lists diverged, printing SB > BB
+    // and a ×6–×8 L1→L2 jump (F6). The DP build is payable by construction, so
+    // `cmin0` (the smallest dealt chip) is the single `2 × cmin` unit — one
+    // consistent list, used everywhere.
+    // The smallest chip actually DEALT (§F1.16 step 4), from the §F1.5 pick
+    // when there is one — so the ladder's blinds are multiples of 2×(dealt
+    // smallest) and every blind is postable with a chip the player holds.
+    final cmin0 = (params.forceStack == null && f15Pick != null)
+        ? f15Pick.cmin
+        : (params.forceStack == null && f15Closest != null)
+            ? f15Closest.cmin
+            : (params.forceStack != null && minChip > 0
+                ? openingFor(stack, minChip).cmin
+                : (minChip > 0 ? minChip : 1));
+    final rawCurve = <double>[openingBB.toDouble()];
+    for (var i = 1; i < numLevels; i++) {
+      // `i` is 0-based; spec levels are 1-based, so level i+1's premium.
+      rawCurve.add(rawCurve[i - 1] * gBase * (1 + rebuyPremium(i + 1)));
+    }
+    final cminByLevel = List<int>.filled(numLevels, cmin0);
+    final bbLadder = dpSnapLadder(
+      raw: rawCurve,
+      cminOfLevel: cminByLevel,
+      pinnedFirst: openingBB,
+    );
+    final sbLadder = chooseSBLadder(
+      bbLadder: bbLadder,
+      cminOfLevel: cminByLevel,
+      g: gFreezeOut,
+    );
     final levels = <BlindLevel>[];
-    // Two walks over the same ladder. `cursor` is the Freeze Out reference —
-    // it is exactly the walk this engine has always done, and it alone decides
-    // the printed blinds when there is no premium. `premCursor` is what is
-    // actually printed: the reference rung, pushed forward by the premium.
-    var cursor = startIndex;
-    var premCursor = startIndex;
-    var prevRefBB = openingBB;
-    var prevBB = openingBB;
-    var rawCurve = openingBB.toDouble();
-    var refCurve = openingBB.toDouble();
-
     for (var i = 0; i < numLevels; i++) {
-      final int sb;
-      final int bb;
-      if (i == 0) {
-        sb = ladder[startIndex][0];
-        bb = openingBB;
-      } else {
-        // `i` is 0-based; spec levels are 1-based. Level index i IS spec level
-        // i+1, so the first multiplication (i == 1) must use rebuyPremium(2).
-        rawCurve *= gBase * (1 + rebuyPremium(i + 1));
-        refCurve *= gFreezeOut;
-        final raw = refCurve;
-
-        // The premium as a MULTIPLE of the Freeze Out curve, not as an absolute
-        // big blind.
-        //
-        // This is the whole fix. The walk below advances at least one rung per
-        // level, and the practical ladder has roughly one rung per level, so
-        // the walk — not `rawCurve` — is what sets the printed blinds: the two
-        // `while` loops below never once fired on the raw value at 6, 9, 12 or
-        // 18 players, and Freeze Out and Rebuy came out byte-identical even at
-        // maximum premium. Chasing the raw value directly would fix that and
-        // simultaneously move every Freeze Out ladder, which boundary 7
-        // forbids. Expressing the premium as a ratio instead leaves the
-        // reference walk untouched (ratio is exactly 1.0 when every
-        // `rebuyPremium` is 0) and still moves the rungs when there is a
-        // premium to apply. The ratio peaks inside the rebuy window and decays
-        // back to 1 by the planned finish — which is `gBase` being solved down,
-        // seen from the other side: the steeper window is handed back so the
-        // ladder still ends where a Freeze Out would.
-        final premiumRatio = refCurve > 0 ? rawCurve / refCurve : 1.0;
-
-        // Extend the ladder for huge fields once the printed end is reached.
-        if (cursor >= ladder.length - 1 && raw > prevRefBB) {
-          final lastSb = ladder.last[0];
-          ladder.add([lastSb + 200, (lastSb + 200) * 2]);
-        }
-
-        // First ladder entry strictly above the previous big blind keeps the
-        // curve monotonically increasing even when growth is nearly flat.
-        while (cursor < ladder.length - 1 && ladder[cursor][1] <= prevRefBB) {
-          cursor++;
-        }
-        // Then track the raw curve: advance whenever the next entry sits
-        // closer to the raw target than the current one.
-        while (cursor < ladder.length - 1 &&
-            ladder[cursor + 1][1] > prevRefBB &&
-            (ladder[cursor + 1][1] - raw).abs() <
-                (raw - ladder[cursor][1]).abs()) {
-          cursor++;
-        }
-        prevRefBB = ladder[cursor][1];
-
-        // Apply the premium on top of the reference rung. The printed cursor
-        // never sits behind the reference one, so the Freeze Out walk remains
-        // the floor and a decaying ratio can never pull the ladder backwards.
-        var idx = math.max(premCursor, cursor);
-        final premiumTarget = ladder[cursor][1] * premiumRatio;
-        // A premium can run past the printed end sooner than the reference
-        // walk does. Bounded: each pass appends a strictly larger rung.
-        var extended = 0;
-        while (idx >= ladder.length - 1 &&
-            premiumTarget > ladder.last[1] &&
-            extended < 64) {
-          final lastSb = ladder.last[0];
-          ladder.add([lastSb + 200, (lastSb + 200) * 2]);
-          extended++;
-        }
-        while (idx < ladder.length - 1 &&
-            (ladder[idx + 1][1] - premiumTarget).abs() <
-                (premiumTarget - ladder[idx][1]).abs()) {
-          idx++;
-        }
-        // 11-009 and the monotonicity invariant: the ladder holds duplicate
-        // big blinds (20/50 and 25/50), so "one rung on" is not automatically
-        // "one big blind up".
-        while (idx < ladder.length - 1 && ladder[idx][1] <= prevBB) {
-          idx++;
-        }
-        premCursor = idx;
-        sb = ladder[idx][0];
-        bb = ladder[idx][1];
-      }
-      prevBB = bb;
-
+      final sb = sbLadder[i];
+      final bb = bbLadder[i];
       final useAnte = params.anteEnabled && i >= params.anteAfterLevel;
       // Big blind ante = one ante per table equal to the big blind (the
       // recommended default). Individual ante = Build Spec v3.1 §F1.8 D7:
-      // 10% of the big blind, rounded to the nearest chip actually in play
-      // (see [individualAnteValue]) — not the big blind divided by an
-      // assumed table size, which drifted with table size instead of blind
-      // size and could snap to a value nobody was holding.
+      // 10% of the big blind, rounded to the nearest chip actually in play.
       final ante = useAnte
           ? (params.anteStyle == AnteStyle.individual
                 ? individualAnteValue(
@@ -2245,7 +2700,9 @@ class TournamentEngine {
       );
     }
 
-    final openingSb = validBlindLevels[startIndex][0];
+    final openingSb = sbLadder.isNotEmpty
+        ? sbLadder.first
+        : validBlindLevels[startIndex][0];
     final rebuyChipPlan = _buildChipPlan(
       rebuyStack,
       params.chipSet,
@@ -2346,25 +2803,68 @@ class TournamentEngine {
     // position to us".
     // Step 5 of the addendum's generation sequence. Done before breaks,
     // because the default break position hangs off where rebuys close.
-    final optimisedRebuyClose = (params.rebuys || params.reEntry)
-        ? optimiseRebuyCloseLevel(
-            requested: params.rebuysCloseLevel,
-            organizerChose: params.rebuyCloseChosenByOrganizer,
-            levelBlinds: [
-              for (final l in levels) [l.sb, l.bb],
-            ],
-            startingStack: stack,
-            plannedLevels: plannedLevels,
-            players: params.players,
-            durationHours: params.durationHours,
-            levelDurationMins: levelDuration,
-            anteEnabled: params.anteEnabled,
-            anteAfterLevel: params.anteAfterLevel,
-            breaks: params.breaks,
-            addOnAvailable: params.addOn,
-            minChipValue: minChip,
-          )
-        : params.rebuysCloseLevel;
+    //
+    // §F1.10 (F33/RC5): the auto-suggestion is the LAST level whose fresh-stack
+    // M still clears the style floor (turbo 10 / standard 15 / deep 20) and
+    // that starts within 40 % of the night — via [suggestRebuyClose]. The
+    // legacy `optimiseRebuyCloseLevel` collapsed to L2 on almost every night,
+    // because its `minChipValue × 4 > bb` guard fires on the small EARLY blinds
+    // (L1's bb < 4×cmin) and drove `viable` to 1. `optimiseRebuyCloseLevel` is
+    // kept (its unit tests still cover it) but is no longer on the generate
+    // path. A host's explicit choice still wins untouched.
+    final mFloor = switch (paceStyle) {
+      PaceStyle.turbo => 10.0,
+      PaceStyle.standard => 15.0,
+      PaceStyle.deep => 20.0,
+    };
+    final int optimisedRebuyClose;
+    if (params.rebuys || params.reEntry) {
+      if (params.rebuyCloseChosenByOrganizer) {
+        optimisedRebuyClose = params.rebuysCloseLevel;
+      } else {
+        final sugg = suggestRebuyClose(
+          startingStack: stack,
+          levels: levels,
+          levelDurationMins: levelDuration,
+          totalNightMinutes: paceTargetMinutes,
+          mFloor: mFloor,
+          anteStyle: params.anteStyle,
+        );
+        // Keep the window past the opening levels and short of the finish: a
+        // close at L1 (which a bank-limited shallow stack can trigger, since a
+        // fresh stack already fails the style M-floor by L2) is not a real
+        // rebuy window, and one covering the whole night removes the late-game
+        // pressure (breaks §6 acceptance #10).
+        final raw = sugg.suggested > 0 ? sugg.suggested : params.rebuysCloseLevel;
+        optimisedRebuyClose = raw.clamp(2, math.max(2, plannedLevels - 1));
+      }
+    } else {
+      optimisedRebuyClose = params.rebuysCloseLevel;
+    }
+
+    // §F1.8 two-pass ante bootstrap: the ladder's antes were placed with the
+    // host's placeholder `anteAfterLevel`; now that the close is known, a
+    // rebuy/re-entry night starts its ante at the level AFTER the close
+    // (level `close + 1`, i.e. 0-indexed `close`), and the levels are
+    // relabelled. This is what makes a host-chosen close actually move the
+    // ante start (F33), and it keeps the demo night's ante at L5 (close 4).
+    if ((params.rebuys || params.reEntry) &&
+        params.anteEnabled &&
+        optimisedRebuyClose > 0) {
+      for (var i = 0; i < levels.length; i++) {
+        final live = i >= optimisedRebuyClose;
+        final l = levels[i];
+        final want = live
+            ? (params.anteStyle == AnteStyle.individual
+                ? individualAnteValue(
+                    l.bb, sortedChips.map((c) => c.value).toList())
+                : l.bb)
+            : null;
+        if ((l.ante ?? 0) != (want ?? 0)) {
+          levels[i] = l.copyWith(ante: want, clearAnte: want == null);
+        }
+      }
+    }
 
     final resolvedBreaks = _placeBreaks(
       requested: params.breaks,
@@ -2464,6 +2964,93 @@ class TournamentEngine {
       ),
     ];
 
+    // §F1.5 point 7 — the real bank check (F20/RC10). `feasible` used to be
+    // depth-only, so the engine happily reported a night the chip case cannot
+    // deal as "feasible, bank OK". Now the per-colour `count × draws ≤ owned`
+    // check (busy-night reserve: 90th-percentile rebuys, every player taking
+    // the add-on and the bonus) actually gates `feasible`.
+    final rbankForBank = busyNightRebuys(params);
+    final bonusEach = params.earlyArrivalBonusEnabled
+        ? ((params.earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct) * stack).round()
+        : 0;
+    final bank = bankFeasibility(
+      chipSet: params.chipSet,
+      startPlan: chipPlan,
+      players: params.players,
+      rbank: rbankForBank,
+      addOn: params.addOn,
+      addOnStack: addOnStack,
+      bonusEach: bonusEach,
+    );
+    final bankOk = bank.ok;
+    if (!bankOk) {
+      for (final s in bank.shortfall) {
+        warnings.add(
+          'Short ${s.short}× ${s.colour} (${s.value}) chips — the case holds '
+          '${s.owned}, a busy night needs ${s.needed}.',
+        );
+      }
+    }
+
+    // The rebuy close, with what a fresh stack is worth there. The M floor
+    // that PICKS the suggestion is unchanged (owner decision); this just shows
+    // the host the trade-off, for the suggested level and for their own pick.
+    if ((params.rebuys || params.reEntry) && optimisedRebuyClose > 0) {
+      final fresh = FreshStack.at(
+        startingStack: stack,
+        levels: levels,
+        level: optimisedRebuyClose,
+      );
+      if (fresh != null) {
+        explain.add(
+          StructureExplanation(
+            step: 'rebuyClose',
+            text: 'Rebuys close after L$optimisedRebuyClose'
+                '${params.rebuyCloseChosenByOrganizer ? ' (your choice)' : ''}. '
+                '${fresh.label}.',
+            numbers: {
+              'level': optimisedRebuyClose,
+              'depthBB': fresh.depthBB,
+              'm': fresh.m,
+              'chosenByHost': params.rebuyCloseChosenByOrganizer ? 1 : 0,
+            },
+          ),
+        );
+      }
+    }
+
+    // SHALLOW_WARN_BB: playable (≥ the 20 BB hard floor) but short of 50 BB.
+    // Say why in plain words — the reason is usually the chips the case has to
+    // set aside for rebuys and add-ons on a busy night — and leave the options
+    // to [shallowFixes]; nothing is changed here.
+    if ((depthFeasible && bankOk) && openingDepth < kShallowWarnBB) {
+      final reasons = <String>[
+        if (params.rebuys && rbankForBank > 0)
+          '$rbankForBank rebuy stack${rbankForBank == 1 ? '' : 's'}',
+        if (params.addOn) '${params.players} add-ons',
+      ];
+      final why = reasons.isEmpty
+          ? 'Your chip case only stretches that far for ${params.players} '
+              'players.'
+          : 'Your chip case has to cover ${reasons.join(' and ')} on a busy '
+              'night, so those chips are set aside before the starting stacks '
+              'are dealt.';
+      explain.add(
+        StructureExplanation(
+          step: 'shallow',
+          text: 'Everyone starts about ${openingDepth.round()} big blinds deep '
+              '— shallower than the ${kShallowWarnBB.round()} we like to see. '
+              '$why',
+          numbers: {
+            'depthBB': openingDepth,
+            'warnBB': kShallowWarnBB.round(),
+            'reserveRebuyStacks': params.rebuys ? rbankForBank : 0,
+            'reserveAddOns': params.addOn ? params.players : 0,
+          },
+        ),
+      );
+    }
+
     return TournamentStructure(
       explain: explain,
       breaks: resolvedBreaks,
@@ -2485,7 +3072,14 @@ class TournamentEngine {
       roundingRemainder: roundingRemainder,
       colorUpInstructions: colorUpInstructions,
       warnings: warnings,
-      feasible: depthFeasible,
+      // §F1.5 point 7 (T6): a night is feasible only when its depth clears the
+      // floor AND the chip case can actually deal it. Now that the §F1.5
+      // composition solver (T5) picks bank-passing compositions, the demo keeps
+      // bankOk=true and its pace recommendation.
+      feasible: depthFeasible && bankOk,
+      depthOk: depthFeasible,
+      bankOk: bankOk,
+      bankShortfall: bank.shortfall,
       depthShortfallNote: depthShortfallNote,
       maxPlayersSupported: maxPlayersSupported,
       engineVersion: engineVersion,
@@ -2923,6 +3517,128 @@ class TournamentEngine {
     return k;
   }
 
+  /// Spec v3.1 §F1.5 point 7 — the hard bank check used to gate `feasible`.
+  ///
+  /// Per colour, the starting composition is dealt to `draws = players + rbank`
+  /// fresh stacks (a rebuy is a fresh starting stack, §F1.11); then every
+  /// player's add-on and early bonus must fit in what the case has left. Any
+  /// colour that comes up short makes the night infeasible and is reported in
+  /// [BankShortfall]. `rbank` is the 90th-percentile rebuy count (busy night).
+  static ({bool ok, List<BankShortfall> shortfall}) bankFeasibility({
+    required List<ChipColor> chipSet,
+    required List<ChipPlanEntry> startPlan,
+    required int players,
+    required int rbank,
+    required bool addOn,
+    required int addOnStack,
+    required int bonusEach,
+  }) {
+    final owned = {for (final c in chipSet) c.value: c.quantity};
+    final colourOf = {for (final c in chipSet) c.value: c.color};
+    final valuesDesc = owned.keys.toList()..sort((a, b) => b - a);
+    final draws = players + rbank;
+
+    // §F1.5: the starting composition is dealt to `draws` fresh stacks, THEN
+    // every player's add-on and bonus handout (fewestChips) must fit in what is
+    // left — the same sequential check solveChipPlanBounded applies, so a
+    // structure's exposed bankOk matches the composition the solver accepted.
+    final remaining = {...owned};
+    final needStart = <int, int>{};
+    for (final e in startPlan) {
+      needStart[e.value] = (needStart[e.value] ?? 0) + e.count * draws;
+      remaining[e.value] = (remaining[e.value] ?? 0) - e.count * draws;
+    }
+    int handoutShortColour = 0; // sentinel: a handout the case cannot make
+    for (final amount in [
+      if (addOn && addOnStack > 0) addOnStack,
+      if (bonusEach > 0) bonusEach,
+    ]) {
+      // One recipe every player can be handed (see handoutEveryPlayerCanGet).
+      final plan = handoutEveryPlayerCanGet(
+        amount: amount,
+        valuesDesc: valuesDesc,
+        remaining: remaining,
+        players: players,
+      );
+      if (plan != null) {
+        plan.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c * players);
+        continue;
+      }
+      // No common recipe exists. Re-deal against the whole remaining bank only
+      // to NAME the colours that run dry, so the shortfall card is specific.
+      final probe = fewestChips(amount, valuesDesc,
+          limits: {for (final v in valuesDesc) v: math.max(0, remaining[v] ?? 0)});
+      var made = 0;
+      probe.forEach((v, c) => made += v * c);
+      handoutShortColour = 1; // no common recipe ⇒ not bank-OK, whatever probe shows
+      if (made != amount) break; // the amount cannot be made at all
+      probe.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c * players);
+    }
+
+    final shortfall = <BankShortfall>[];
+    for (final v in valuesDesc) {
+      final have = owned[v] ?? 0;
+      final left = remaining[v] ?? 0;
+      if (left < 0 || (needStart[v] ?? 0) > have) {
+        shortfall.add(BankShortfall(
+          colour: colourOf[v] ?? '$v',
+          value: v,
+          needed: have - left,
+          owned: have,
+        ));
+      }
+    }
+    final ok = shortfall.isEmpty && handoutShortColour == 0;
+    if (!ok && shortfall.isEmpty) {
+      // A handout could not be dealt at all but no single colour overran;
+      // report the smallest colour as the binding constraint.
+      final v = valuesDesc.isNotEmpty ? valuesDesc.last : 0;
+      shortfall.add(BankShortfall(
+        colour: colourOf[v] ?? '$v',
+        value: v,
+        needed: (owned[v] ?? 0) + 1,
+        owned: owned[v] ?? 0,
+      ));
+    }
+    shortfall.sort((a, b) => b.value - a.value);
+    return (ok: ok, shortfall: shortfall);
+  }
+
+  /// F2/F19 — regenerate a structure and re-solve it around host pins in one
+  /// call, honouring `params.forceStack`. The provider calls this instead of a
+  /// fresh [generate] so a forced stack and the host's pinned levels both
+  /// survive a recalc (§F1.12). Pins keep their exact values; unpinned levels
+  /// and the tail are re-solved by [resolveAroundPins].
+  static TournamentStructure recalculate(
+    TournamentParams params,
+    List<PinnedLevel> pins,
+  ) {
+    final base = generate(params);
+    if (pins.isEmpty) return base;
+    final existingBB = base.levels.map((l) => l.bb).toList();
+    if (existingBB.isEmpty) return base;
+    final cmin = base.chipPlan.isNotEmpty
+        ? base.chipPlan.map((e) => e.value).reduce(math.min)
+        : 1;
+    final resolved = resolveAroundPins(
+      existingBB: existingBB,
+      cminOfLevel: List<int>.filled(existingBB.length, cmin),
+      pins: pins,
+      bbEnd: existingBB.last.toDouble(),
+    );
+    if (!resolved.feasible) return base;
+    final newLevels = [
+      for (var i = 0; i < base.levels.length; i++)
+        base.levels[i].copyWith(
+          sb: resolved.sbLadder[i],
+          bb: resolved.bbLadder[i],
+          manuallyEdited: base.levels[i].manuallyEdited ||
+              pins.any((p) => p.levelNum == i + 1),
+        ),
+    ];
+    return base.copyWith(levels: newLevels);
+  }
+
   /// Spec v3.1 §F1.10/§F1.17 `suggestRebuyClose` — the last level whose
   /// FRESH-STACK Harrington M (a brand-new stack's M at that level's own
   /// orbit cost, ignoring anyone's actual chips) still clears the style's
@@ -3257,9 +3973,10 @@ class TournamentEngine {
         fits: s.fits,
         overBy: s.paceOverByMins,
         finishMins: s.expectedFinishMins,
-        // A structure the chip case cannot actually supply is not a real
-        // option, however well it fits the clock.
-        bankOk: s.feasible,
+        // T7: the clock signal (`fits`) and the chip-case signal (`bankOk`)
+        // are reported separately. `bankOk` is the real §F1.5 bank check, not
+        // the depth-or-bank `feasible`.
+        bankOk: s.bankOk,
       ));
     }
 
@@ -3274,19 +3991,39 @@ class TournamentEngine {
     }
 
     String? warning;
+    String? bankBlocked;
     var choices = const <String>[];
     if (recommended == null) {
-      final regular = options.where((o) => o.pace == PaceMode.regular).firstOrNull;
-      final needed = regular?.finishMins ?? params.effectiveTargetMinutes;
-      final window = params.effectiveTargetMinutes;
-      warning =
-          'At a regular pace this field needs about ${_hhmm(needed)}; '
-          'the night has ${_hhmm(window)}.';
-      choices = [
-        'later',
-        if (params.addOn) 'noAddOn',
-        'turbo',
-      ];
+      final anyFitsOnTime = options.any((o) => o.fits);
+      final anyBankOk = options.any((o) => o.bankOk);
+      if (anyFitsOnTime && !anyBankOk) {
+        // T7/F15: the clock is fine; the chip case is the blocker. Surface the
+        // §F1.5 bank sentence, NOT "no pace fits this night".
+        final sample = structures.values.firstOrNull;
+        bankBlocked = sample?.depthShortfallNote ??
+            (sample != null && sample.bankShortfall.isNotEmpty
+                ? 'Your chip case cannot fund this field with the forecast '
+                    'rebuys and add-ons — short '
+                    '${sample.bankShortfall.map((s) => '${s.short}× ${s.colour}').join(', ')}. '
+                    'Add chips, expect fewer rebuys or add-ons, or play a freeze-out.'
+                : 'Your chip case cannot fund this field with the forecast '
+                    'rebuys and add-ons. Add chips, expect fewer rebuys or '
+                    'add-ons, or play a freeze-out.');
+      } else {
+        // The clock is the blocker: no pace finishes in the window.
+        final regular =
+            options.where((o) => o.pace == PaceMode.regular).firstOrNull;
+        final needed = regular?.finishMins ?? params.effectiveTargetMinutes;
+        final window = params.effectiveTargetMinutes;
+        warning =
+            'At a regular pace this field needs about ${_hhmm(needed)}; '
+            'the night has ${_hhmm(window)}.';
+        choices = [
+          'later',
+          if (params.addOn) 'noAddOn',
+          'turbo',
+        ];
+      }
     }
 
     return (
@@ -3294,6 +4031,7 @@ class TournamentEngine {
       recommended: recommended,
       warning: warning,
       choices: choices,
+      bankBlocked: bankBlocked,
     );
   }
 

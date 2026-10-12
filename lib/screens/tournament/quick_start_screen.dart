@@ -21,6 +21,7 @@ import '../../widgets/code_display.dart';
 import '../../widgets/count_stepper.dart';
 import '../../widgets/page_header.dart';
 import '../../widgets/pace_cards.dart';
+import '../../widgets/structure_feasibility_card.dart';
 import '../../widgets/app_text_field.dart';
 
 /// C0 -- "Start a game now". Friends are already at the table: four answers
@@ -55,6 +56,12 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
   int _hours = 4;
   int _buyIn = 15;
   bool _rebuy = false;
+
+  // Shallow-start fixes the host has TAPPED (SHALLOW_WARN_BB). Never set
+  // implicitly: only a tap on a card option puts one in force.
+  bool _skipAddOn = false;
+  double? _rebuyRate;
+  int? _rebuyLimit;
   PaceMode? _pace;
   bool _seeded = false;
   bool _starting = false;
@@ -135,13 +142,14 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       rebuysCloseLevel: 0,
       rebuyCloseChosenByOrganizer: false,
       reEntry: false,
-      addOn: _rebuy,
+      addOn: _rebuy && !_skipAddOn,
+      rebuyLimit: _rebuy ? _rebuyLimit : null,
       anteEnabled: true,
       anteAfterLevel: 6,
       koEnabled: false,
       koAmount: 5,
       organizerPct: 0,
-      expectedRebuyRate: _rebuy ? 0.35 : 0,
+      expectedRebuyRate: _rebuy ? (_rebuyRate ?? 0.35) : 0,
       pace: pace,
     );
   }
@@ -151,6 +159,9 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       _players,
       _hours,
       _rebuy,
+      _skipAddOn,
+      _rebuyRate,
+      _rebuyLimit,
       _chips(app).map((c) => '${c.value}x${c.quantity}').join(','),
     ].join('|');
     if (_optionsKey == key && _optionsCache != null) return _optionsCache!;
@@ -163,6 +174,31 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
   PaceMode _effectivePace(PaceOptions opts) =>
       _pace ?? opts.recommended ?? PaceMode.regular;
 
+  TournamentStructure? _previewCache;
+  String? _previewKey;
+
+  /// The structure this exact setup would start with, generated BEFORE any
+  /// game or group is created. If the chip case cannot deal it, the structure
+  /// is only a placeholder: the card is shown and the start button is off, so
+  /// a clock can never be started from it (§F1.5 point 7).
+  TournamentStructure _preview(AppProvider app, PaceMode pace) {
+    final key = [
+      _players,
+      _hours,
+      _rebuy,
+      _skipAddOn,
+      _rebuyRate,
+      _rebuyLimit,
+      pace.name,
+      _chips(app).map((c) => '${c.value}x${c.quantity}').join(','),
+    ].join('|');
+    if (_previewKey == key && _previewCache != null) return _previewCache!;
+    final s = TournamentEngine.generate(_params(app, pace: pace));
+    _previewKey = key;
+    _previewCache = s;
+    return s;
+  }
+
   String _sentence(AppProvider app, PaceOptions opts) {
     final pace = _effectivePace(opts);
     final o = opts.options.where((o) => o.pace == pace).firstOrNull;
@@ -171,7 +207,7 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
     return 'Structure for $_players players over ${_hours}h: '
         '$depth big blinds deep, opening ${o.openingSB}/${o.openingBB}, '
         '${o.levelMinutes}-minute levels (${pace.label}), '
-        '${o.levels} levels. ${_rebuy ? 'Rebuys and one add-on. ' : ''}'
+        '${o.levels} levels. ${_rebuy ? (_skipAddOn ? 'Rebuys, no add-on. ' : 'Rebuys and one add-on. ') : ''}'
         '$_buyIn buy-in. You can still edit any level.';
   }
 
@@ -195,7 +231,9 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       rebuys: _rebuy,
       rebuysCloseLevel: rebuyClose,
       reEntry: false,
-      addOn: _rebuy,
+      addOn: _rebuy && !_skipAddOn,
+      rebuyLimit: _rebuy ? _rebuyLimit : null,
+      expectedRebuyRate: _rebuy ? _rebuyRate : null,
       addOnCloseLevel: rebuyClose,
       anteEnabled: true,
       anteAfterLevel: rebuyClose > 0 ? rebuyClose + 1 : 6,
@@ -252,6 +290,9 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
 
   Future<void> _start(AppProvider app) async {
     if (_starting) return;
+    // Defensive: the button is disabled when blocked, but nothing (game, group,
+    // guest sign-in) may be created for a night the chips cannot deal.
+    if (_preview(app, _effectivePace(_options(app))).isBlocked) return;
     final running = app.currentGame;
     if (running != null && running.status.isActiveLive) {
       final proceed = await _confirmReplace(app, running);
@@ -310,8 +351,18 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
     app.confirmStructure();
     app.generateSeating(TableSeatingMode.random);
     app.confirmSeating();
-    await app.startTournament();
+    final started = await app.startTournament();
     if (!mounted) return;
+    if (!started) {
+      // The structure rebuilt for the final headcount can't be dealt: do not
+      // open the dashboard or show a join code for a clock that isn't running.
+      setState(() {
+        _starting = false;
+        _error = 'The chip case can’t fund this night. Change the chips, '
+            'players or format, then try again.';
+      });
+      return;
+    }
     setState(() => _starting = false);
     await _showJoinCode(app.currentGame?.publicCode);
     if (!mounted) return;
@@ -401,6 +452,8 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
 
     final opts = _options(app);
     final selected = _effectivePace(opts);
+    final preview = _preview(app, selected);
+    final blocked = preview.isBlocked;
     final atFreeCap = !app.canHostPlayers(_premiumMaxPlayers) && _players >= cap;
     final last = _lastHeadcount(app);
     final chips = _chips(app);
@@ -583,6 +636,9 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
                   active: _rebuy ? 'rebuy' : 'freeze',
                   onChanged: (id) => setState(() {
                     _rebuy = id == 'rebuy';
+                    _skipAddOn = false;
+                    _rebuyRate = null;
+                    _rebuyLimit = null;
                     _pace = null;
                   }),
                 ),
@@ -629,6 +685,43 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
+          // §F1.5 point 7: when the chip case can't deal this night, the card
+          // replaces the promise of a structure, and the start button below is
+          // off. Its buttons are the spec's three fixes plus "reduce to N".
+          if (blocked || preview.isShallow) ...[
+            StructureFeasibilityCard(
+              structure: preview,
+              players: _players,
+              onEditChips: () => context.push(RoutePaths.chipSets),
+              // SHALLOW_WARN_BB: each option carries the depth the engine
+              // produces for it; only the host's tap applies one.
+              shallowFixes: preview.isShallow
+                  ? TournamentEngine.shallowFixes(_params(app, pace: selected))
+                  : const [],
+              onApplyShallowFix: (fix) => setState(() {
+                if (fix.addOn == false) _skipAddOn = true;
+                if (fix.expectedRebuyRate != null) {
+                  _rebuyRate = fix.expectedRebuyRate;
+                }
+                if (fix.rebuyLimit != null) _rebuyLimit = fix.rebuyLimit;
+                _pace = null;
+              }),
+              onPlayFreezeOut: _rebuy
+                  ? () => setState(() {
+                        _rebuy = false;
+                        _pace = null;
+                      })
+                  : null,
+              onReduceField: (preview.maxPlayersSupported ?? 0) >= 2
+                  ? () => setState(() {
+                        _players = preview.maxPlayersSupported!;
+                        _pace = null;
+                        _syncNameControllers();
+                      })
+                  : null,
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           if (_error != null) ...[
             Text(
               _error!,
@@ -640,7 +733,7 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
             fullWidth: true,
             size: AppButtonSize.lg,
             loading: _starting,
-            onPressed: chips.isEmpty ? null : () => _start(app),
+            onPressed: (chips.isEmpty || blocked) ? null : () => _start(app),
             child: const Text('Generate & start the clock'),
           ),
           const SizedBox(height: AppSpacing.xl),

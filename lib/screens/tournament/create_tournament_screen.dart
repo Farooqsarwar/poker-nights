@@ -2287,6 +2287,9 @@ bool _unlimitedRebuysDismissed = false;
             key: _formKey,
             initial: _draft,
             sections: const {EventFormSection.rebuys, EventFormSection.money},
+            // Informational: what a rebuy buys at the level picked. Read from the
+            // draft's structure at build time, so it follows every edit.
+            freshStackAt: (level) => _draftStructure(_draft)?.freshStackAt(level),
             onChanged: _onDraftChanged,
           ),
         ),
@@ -2311,6 +2314,8 @@ bool _unlimitedRebuysDismissed = false;
       s.rebuys,
       s.reEntry,
       s.addOn,
+      s.rebuyLimit,
+      s.expectedRebuyRate,
       s.anteEnabled,
       s.rebuysCloseLevel,
       s.breaks.fold<int>(0, (a, b) => a + b.durationMins),
@@ -2328,6 +2333,7 @@ bool _unlimitedRebuysDismissed = false;
         rebuys: s.rebuys,
         rebuysCloseLevel: s.rebuysCloseLevel,
         rebuyLimit: s.rebuyLimit,
+        expectedRebuyRate: s.expectedRebuyRate,
         reEntry: s.reEntry,
         addOn: s.addOn,
         anteEnabled: s.anteEnabled,
@@ -2570,6 +2576,8 @@ bool _unlimitedRebuysDismissed = false;
       s.rebuys,
       s.reEntry,
       s.addOn,
+      s.rebuyLimit,
+      s.expectedRebuyRate,
       s.anteEnabled,
       s.rebuysCloseLevel,
       s.pace?.name,
@@ -2583,33 +2591,39 @@ bool _unlimitedRebuysDismissed = false;
     return result;
   }
 
-  TournamentStructure? _generateDraftStructure(GameSettings s) {
+  /// The engine params for a draft — the single place they are built, so the
+  /// structure card and the shallow-start options can never describe different
+  /// nights.
+  TournamentParams _draftParams(GameSettings s) {
     final players = s.expectedPlayersOverride ?? s.players;
+    return TournamentParams(
+      players: players < 2 ? 2 : players,
+      durationHours: s.durationHours,
+      buyIn: s.buyIn,
+      chipSet: s.chipSet,
+      rebuys: s.rebuys,
+      rebuysCloseLevel: s.rebuysCloseLevel,
+      rebuyLimit: s.rebuyLimit,
+      expectedRebuyRate: s.expectedRebuyRate,
+      reEntry: s.reEntry,
+      addOn: s.addOn,
+      anteEnabled: s.anteEnabled,
+      anteAfterLevel: s.anteAfterLevel,
+      anteStyle: s.anteStyle,
+      koEnabled: s.koEnabled,
+      koAmount: s.koAmount,
+      organizerPct: s.organizerPct.clamp(0, GameSettings.maxOrganizerPct),
+      rebuyCost: s.rebuyCost,
+      addOnCost: s.addOnCost,
+      breaks: List.of(s.breaks),
+      format: s.format,
+      pace: s.pace,
+    );
+  }
+
+  TournamentStructure? _generateDraftStructure(GameSettings s) {
     try {
-      return TournamentEngine.generate(
-        TournamentParams(
-          players: players < 2 ? 2 : players,
-          durationHours: s.durationHours,
-          buyIn: s.buyIn,
-          chipSet: s.chipSet,
-          rebuys: s.rebuys,
-          rebuysCloseLevel: s.rebuysCloseLevel,
-          rebuyLimit: s.rebuyLimit,
-          reEntry: s.reEntry,
-          addOn: s.addOn,
-          anteEnabled: s.anteEnabled,
-          anteAfterLevel: s.anteAfterLevel,
-          anteStyle: s.anteStyle,
-          koEnabled: s.koEnabled,
-          koAmount: s.koAmount,
-          organizerPct: s.organizerPct.clamp(0, GameSettings.maxOrganizerPct),
-          rebuyCost: s.rebuyCost,
-          addOnCost: s.addOnCost,
-          breaks: List.of(s.breaks),
-          format: s.format,
-          pace: s.pace,
-        ),
-      );
+      return TournamentEngine.generate(_draftParams(s));
     } on Exception {
       // A draft that cannot be generated at all (duplicate chip values, say)
       // is the existing validation's problem, not this card's.
@@ -2632,6 +2646,13 @@ bool _unlimitedRebuysDismissed = false;
             players: s.expectedPlayersOverride ?? s.players,
             onEditChips: () => setState(() => _step = 2),
             onFewerRebuys: () => setState(() => _step = 3),
+            // SHALLOW_WARN_BB: options re-run the engine and carry the depth
+            // they produce. Showing them applies nothing; the tap does.
+            shallowFixes: structure.isShallow
+                ? TournamentEngine.shallowFixes(_draftParams(s))
+                : const [],
+            onApplyShallowFix: (fix) =>
+                _onDraftChanged(fix.applyToSettings(_draft)),
             onPlayFreezeOut: structure.feasible || !(s.rebuys || s.addOn)
                 ? null
                 : () => _onDraftChanged(
@@ -2643,7 +2664,7 @@ bool _unlimitedRebuysDismissed = false;
                       ),
                     ),
           ),
-          if (!structure.feasible || !structure.fits)
+          if (!structure.feasible || !structure.fits || structure.isShallow)
             const SizedBox(height: AppSpacing.lg),
         ],
         AppCard(

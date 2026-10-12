@@ -236,6 +236,17 @@ Map<String, dynamic> tournamentStructureToMap(TournamentStructure s) => {
       // that their chip case does not cover the field. That is the single most
       // valuable thing the structure engine works out.
       'feasible': s.feasible,
+      'depthOk': s.depthOk,
+      'bankOk': s.bankOk,
+      'bankShortfall': [
+        for (final b in s.bankShortfall)
+          {
+            'colour': b.colour,
+            'value': b.value,
+            'needed': b.needed,
+            'owned': b.owned,
+          },
+      ],
       'depthShortfallNote': s.depthShortfallNote,
       'maxPlayersSupported': s.maxPlayersSupported,
       // §F1.3 `meta.pace` / `meta.fits`.
@@ -282,6 +293,18 @@ TournamentStructure tournamentStructureFromMap(Map<String, dynamic> m) =>
       // put a blocking card in front of every tournament created before this
       // version.
       feasible: (m['feasible'] as bool?) ?? true,
+      // Same safe reading for the T6 split: absent means "fine".
+      depthOk: (m['depthOk'] as bool?) ?? true,
+      bankOk: (m['bankOk'] as bool?) ?? true,
+      bankShortfall: [
+        for (final b in (m['bankShortfall'] as List? ?? const []))
+          BankShortfall(
+            colour: (b as Map)['colour'] as String? ?? '',
+            value: (b['value'] as num?)?.toInt() ?? 0,
+            needed: (b['needed'] as num?)?.toInt() ?? 0,
+            owned: (b['owned'] as num?)?.toInt() ?? 0,
+          ),
+      ],
       depthShortfallNote: m['depthShortfallNote'] as String?,
       maxPlayersSupported: (m['maxPlayersSupported'] as num?)?.toInt(),
       pace: _paceModeFromName(m['pace'] as String?),
@@ -342,6 +365,7 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'lockedExpectedPlayers': s.lockedExpectedPlayers,
       'breaks': s.breaks.map(scheduledBreakToMap).toList(),
       'expectedRebuys': s.expectedRebuys,
+      'expectedRebuyRate': s.expectedRebuyRate,
       'expectedReEntries': s.expectedReEntries,
       'expectedAddOns': s.expectedAddOns,
       'rebuyChips': s.rebuyChips,
@@ -419,6 +443,7 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
       // and null is exactly "use the engine default" — so an old document
       // regenerates to the same structure it always did.
       expectedRebuys: (m['expectedRebuys'] as num?)?.toInt(),
+      expectedRebuyRate: (m['expectedRebuyRate'] as num?)?.toDouble(),
       expectedReEntries: (m['expectedReEntries'] as num?)?.toInt(),
       expectedAddOns: (m['expectedAddOns'] as num?)?.toInt(),
       rebuyChips: (m['rebuyChips'] as num?)?.toInt(),

@@ -587,8 +587,15 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                 structure.feasible || !(settings.rebuys || settings.addOn)
                     ? null
                     : app.switchToFreezeOut,
+            // SHALLOW_WARN_BB: each option already carries the depth the
+            // engine produces for it; tapping one is the host's decision.
+            // Once play has started the stacks are physical, so no options.
+            shallowFixes: structure.isShallow && !game.stacksLocked
+                ? app.shallowFixesForCurrentGame()
+                : const [],
+            onApplyShallowFix: game.stacksLocked ? null : app.applyShallowFix,
           ),
-          if (!structure.feasible || !structure.fits)
+          if (!structure.feasible || !structure.fits || structure.isShallow)
             const SizedBox(height: AppSpacing.lg),
           AppAlertBanner(
             type: AppAlertType.info,
@@ -1004,7 +1011,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                               Expanded(
                                 flex: 3,
                                 child: Text(
-                                  Formatters.chips(l.safeSb),
+                                  Formatters.chips(l.sb),
                                   textAlign: TextAlign.right,
                                   style: AppTypography.monoXs,
                                 ),
@@ -1012,7 +1019,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
                               Expanded(
                                 flex: 3,
                                 child: Text(
-                                  Formatters.chips(l.safeBb),
+                                  Formatters.chips(l.bb),
                                   textAlign: TextAlign.right,
                                   style: AppTypography.monoXs.copyWith(
                                     color: AppColors.foreground,
@@ -1540,8 +1547,8 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
     GameSettings settings,
     bool isAdmin,
   ) {
-    final openingBb = structure.levels.isNotEmpty ? structure.levels.first.safeBb : 20;
-    final openingSb = structure.levels.isNotEmpty ? structure.levels.first.safeSb : 10;
+    final openingBb = structure.levels.isNotEmpty ? structure.levels.first.bb : 20;
+    final openingSb = structure.levels.isNotEmpty ? structure.levels.first.sb : 10;
     final bbDepth = openingBb > 0 ? (structure.startingStack / openingBb).round() : 100;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -1775,7 +1782,7 @@ void _showAdjustModal(
   final step = rawStep <= minChip
       ? minChip
       : (rawStep ~/ minChip) * minChip;
-  final openingBb = structure.levels.isNotEmpty ? structure.levels.first.safeBb : 20;
+  final openingBb = structure.levels.isNotEmpty ? structure.levels.first.bb : 20;
 
   showAppModal(
     context: context,

@@ -74,6 +74,7 @@ class GameSettings {
     this.lockedExpectedPlayers,
     this.breaks = const [],
     this.expectedRebuys,
+    this.expectedRebuyRate,
     this.expectedReEntries,
     this.expectedAddOns,
     this.rebuyChips,
@@ -210,6 +211,11 @@ class GameSettings {
   /// Null throughout means "engine default", which is what every tournament
   /// created before these fields existed reads as.
   final int? expectedRebuys;
+
+  /// The host's forecast of rebuys PER PLAYER (the engine's `r`, default
+  /// 0.35). It sizes the busy-night chip reserve (§F1.5), so lowering it is one
+  /// of the ways to open a shallow start deeper. Null = use the default.
+  final double? expectedRebuyRate;
   final int? expectedReEntries;
   final int? expectedAddOns;
   final int? rebuyChips;
@@ -392,6 +398,7 @@ class GameSettings {
     bool clearLockedExpectedPlayers = false,
     List<ScheduledBreak>? breaks,
     int? expectedRebuys,
+    double? expectedRebuyRate,
     int? expectedReEntries,
     int? expectedAddOns,
     int? rebuyChips,
@@ -476,6 +483,9 @@ class GameSettings {
       expectedRebuys: clearGenerationOverrides
           ? null
           : expectedRebuys ?? this.expectedRebuys,
+      expectedRebuyRate: clearGenerationOverrides
+          ? null
+          : expectedRebuyRate ?? this.expectedRebuyRate,
       expectedReEntries: clearGenerationOverrides
           ? null
           : expectedReEntries ?? this.expectedReEntries,
@@ -1415,4 +1425,13 @@ class LiveGame {
       shootoutStage: shootoutStage ?? this.shootoutStage,
     );
   }
+}
+/// A one-tap shallow-start fix expressed on the host's settings. Lives here
+/// (not on [ShallowFix]) because `tournament.dart` cannot import this file.
+extension ShallowFixSettings on ShallowFix {
+  GameSettings applyToSettings(GameSettings s) => s.copyWith(
+        rebuyLimit: rebuyLimit,
+        expectedRebuyRate: expectedRebuyRate,
+        addOn: addOn,
+      );
 }

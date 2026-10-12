@@ -1089,11 +1089,25 @@ class _CheckInScreenState extends State<CheckInScreen> {
                       ? () async {
                           if (_starting) return;
                           setState(() => _starting = true);
-                          await app.startTournament();
+                          final started = await app.startTournament();
                           if (!mounted) return;
                           setState(() => _starting = false);
-                          if (context.mounted) {
+                          if (!context.mounted) return;
+                          if (started) {
                             context.go(RoutePaths.hostDashboard);
+                          } else {
+                            // The structure regenerated for the final head-
+                            // count can't be dealt from this chip case: stay
+                            // here (never open the dashboard on a placeholder
+                            // ladder) and point at the card that explains it.
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Can’t start: the chip case can’t '
+                                  'fund this night. Open Structure to fix it.',
+                                ),
+                              ),
+                            );
                           }
                         }
                       : null,

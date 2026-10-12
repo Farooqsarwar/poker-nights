@@ -28,10 +28,21 @@ class StructureFeasibilityCard extends StatelessWidget {
     this.onFewerRebuys,
     this.onPlayFreezeOut,
     this.onReduceField,
+    this.shallowFixes = const [],
+    this.onApplyShallowFix,
   });
 
   final TournamentStructure structure;
   final int players;
+
+  /// Options for a shallow start (see [TournamentEngine.shallowFixes]), each
+  /// already carrying the depth the engine produces if it is applied.
+  final List<ShallowFix> shallowFixes;
+
+  /// Called with the option the host TAPPED. Nothing is applied by showing the
+  /// card; a null callback hides the option buttons rather than leaving dead
+  /// controls.
+  final void Function(ShallowFix fix)? onApplyShallowFix;
 
   /// §F1.5's three named buttons. A null callback hides its button, so a
   /// screen that cannot offer a route does not show a dead control.
@@ -45,11 +56,104 @@ class StructureFeasibilityCard extends StatelessWidget {
 
   bool get _blocked => !structure.feasible;
   bool get _overruns => structure.feasible && !structure.fits;
+  bool get _shallow => structure.isShallow;
 
   @override
   Widget build(BuildContext context) {
-    if (!_blocked && !_overruns) return const SizedBox.shrink();
+    final primary = (_blocked || _overruns) ? _buildPrimary(context) : null;
+    final shallow =
+        _shallow ? _buildShallow(context, showEditChips: primary == null) : null;
+    if (primary == null && shallow == null) return const SizedBox.shrink();
+    if (shallow == null) return primary!;
+    if (primary == null) return shallow;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [primary, const SizedBox(height: AppSpacing.md), shallow],
+    );
+  }
 
+  /// SHALLOW_WARN_BB: playable, but opens short of 50 BB. Says why (the
+  /// engine's own words) and offers options that each carry the depth they
+  /// would produce. Warning colour, never the blocking one.
+  Widget _buildShallow(BuildContext context, {required bool showEditChips}) {
+    final depth = structure.openingBBDepth ?? 0;
+    final accent = AppColors.warning;
+    final body = structure.explanationFor('shallow')?.text ??
+        'Everyone starts about ${depth.round()} big blinds deep — shallower '
+            'than the ${kShallowWarnBB.round()} we like to see.';
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: accent.withValues(alpha: 0.55)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.layers_outlined, size: 18, color: accent),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Shallow start — about ${depth.round()} BB',
+                  style: AppTypography.bodySm.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.foreground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            body,
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          if (onApplyShallowFix != null && shallowFixes.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Nothing changes until you tap one:',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ],
+          if ((onApplyShallowFix != null && shallowFixes.isNotEmpty) ||
+              (showEditChips && onEditChips != null)) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                if (onApplyShallowFix != null)
+                  for (final fix in shallowFixes)
+                    AppButton(
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () => onApplyShallowFix!(fix),
+                      child: Text(
+                        '${fix.label} → ${fix.resultingDepthBB.round()} BB',
+                      ),
+                    ),
+                if (showEditChips && onEditChips != null)
+                  AppButton(
+                    variant: AppButtonVariant.secondary,
+                    onPressed: onEditChips,
+                    child: const Text('Edit chips'),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrimary(BuildContext context) {
     final accent =
         _blocked ? AppColors.destructive : AppColors.warning;
     final maxPlayers = structure.maxPlayersSupported;

@@ -54,6 +54,7 @@ class PaceCards extends StatelessWidget {
     if (options.options.isEmpty) return const SizedBox.shrink();
 
     final warning = options.warning;
+    final bankBlocked = options.bankBlocked;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -108,6 +109,23 @@ class PaceCards extends StatelessWidget {
             onChooseLater: onChooseLater,
             onDropAddOn: onDropAddOn,
             onChooseTurbo: () => onSelected(PaceMode.turbo),
+          ),
+        ],
+        // F15/T7: a chip-bank shortfall is shown as its own message, never as
+        // "No pace fits this night" (which is reserved for the clock).
+        if (bankBlocked != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.destructiveSoft,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.destructiveText.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              bankBlocked,
+              style: AppTypography.bodySm.copyWith(color: AppColors.destructiveText),
+            ),
           ),
         ],
       ],

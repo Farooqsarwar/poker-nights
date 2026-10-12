@@ -341,6 +341,24 @@ extension AppProviderTimer on AppProvider {
     // moment the admin presses Start. This supersedes whatever estimate the
     // 30-minute pre-start window may have already shown.
     recalculateStructure();
+
+    // §F1.5 point 7 — the authoritative "can this night be played" check. The
+    // structure was just rebuilt for the REAL headcount, which can differ from
+    // whatever the host saw on the review screen (a late arrival pushes the
+    // field past what the chip case can deal). If the case cannot deal it, the
+    // ladder on the game is only a placeholder: refuse to start, leave the game
+    // un-confirmed and not running, and say why. Every start path
+    // (check-in, invitation, quick start) comes through here.
+    if (_currentGame!.structure.isBlocked) {
+      addAuditRecord(
+        'start_refused',
+        'Start refused: the chip case cannot deal this night for '
+            '${_currentGame!.settings.players} players.',
+      );
+      if (!_disposed) notifyListeners();
+      return;
+    }
+
     _currentGame = _currentGame!.copyWith(structureConfirmed: true);
     addAuditRecord(
       'structure_final',

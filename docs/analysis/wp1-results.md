@@ -352,7 +352,7 @@ fresh stack), D4 (§F1.14 synthetic bank), D5 (no change for pt 13).
 
 ## 12. Full-suite results
 
-See the PR description for the final run. Earlier clean-worktree runs (Flutter 3.38.9):
+**Final tree (round 3, Flutter 3.38.9 + the local `onReorder` workaround): 1,679 / 1,679 pass.** `flutter analyze --fatal-infos`: 14 infos, identical to the `new-implementation` baseline (0 new; the baseline's 2 extra errors are the SDK mismatch in §8). Earlier clean-worktree runs (Flutter 3.38.9):
 `new-implementation` 924 pass / 6 fail; `fix/wp1-engine` 934 pass / 6 fail; **identical failing
 sets** (the six files that fail to *load* because of the SDK mismatch in §8). With the local
 `onReorder` workaround, the round-2 branch was **1,622 / 1,622**.

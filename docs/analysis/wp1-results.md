@@ -365,19 +365,21 @@ sets** (the six files that fail to *load* because of the SDK mismatch in §8). W
 
 ---
 
-## 14. Found along the way — pre-existing, not changed in this PR
+## 14. Found along the way — pre-existing
 
 Each was verified by running it, not inferred. They are the same family as client points 2 and 19
 (*Recalculate ignores / destroys the host's choices*) and belong to WP2.
 
-1. **A stored starting stack silently survives every recalculation.**
+Items 1 and 2 are fixed in the follow-up commit (`switchToFreezeOut` now rebuilds stacks unless play has started; `_engineParamsFor` passes `rebuyCloseChosenByOrganizer`), with `test/wp2_recalc_choices_test.dart` (both failed before the fix: 250 vs 2,000 chips; close L2 vs L6). Full suite: 1,683 / 1,683.
+
+1. **FIXED (follow-up commit): a stored starting stack silently survives every recalculation.**
    `_recalculateWithPlayers` keeps `game.structure.startingStack` whenever a structure already
    exists (`hasManualStack` is true for *any* existing structure). Consequence: the existing
    **"Play a freeze-out" button is inert on a shallow night** — Home Set, 10 players, rebuy keeps
    its 250-chip stack (25 BB) after switching rebuys off, where a fresh freeze-out deals 2,000.
    The new `applyShallowFix` avoids this with an explicit `rebuildStacks: true`; the same one-line
    opt-in would fix `switchToFreezeOut`.
-2. **A host-chosen rebuy close is overridden by Recalculate and by Start.** With
+2. **FIXED (follow-up commit): a host-chosen rebuy close is overridden by Recalculate and by Start.** With
    `rebuyCloseChosenByOrganizer = true` and a close of L6, `generateFinalStructure` returns L6 but
    `recalculateStructure` returns the auto-suggested **L4**, and `startTimer` recalculates. The
    flag is passed to the engine at one provider site only; it is one line in `_engineParamsFor`.

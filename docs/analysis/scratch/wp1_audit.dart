@@ -127,12 +127,6 @@ bool _bankOk(TournamentStructure s, TournamentParams p) {
   return true;
 }
 
-int _roundUnit(TournamentStructure s) {
-  final dealt = s.chipPlan.map((e) => e.value).where((v) => v > 0).toList();
-  final smallestDealt = dealt.isEmpty ? 25 : dealt.reduce(math.min);
-  return math.max(25, smallestDealt);
-}
-
 /// Scratch audit (not a product test): one CSV row per run of the 3,840-run
 /// invariant grid, incl. engine vs independent bank verdicts. Output:
 /// docs/analysis/wp1-audit-runs.csv

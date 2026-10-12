@@ -1593,7 +1593,12 @@ extension AppProviderTournament on AppProvider {
         format: TournamentFormat.freezeOut,
       ),
     );
-    _recalculateWithPlayers(_currentGame!.settings.players);
+    // The stored rebuy-night stack must not survive: a freeze-out deals the
+    // whole bank. Once play has started the stacks are physical, so keep them.
+    _recalculateWithPlayers(
+      _currentGame!.settings.players,
+      rebuildStacks: !game.stacksLocked,
+    );
     addAnnouncement(
       'Switched to a freeze-out — rebuys and the add-on are off.',
       false,
@@ -1654,6 +1659,7 @@ extension AppProviderTournament on AppProvider {
         chipSet: newSettings.chipSet,
         rebuys: newSettings.rebuys,
         rebuysCloseLevel: newSettings.rebuysCloseLevel,
+        rebuyCloseChosenByOrganizer: newSettings.rebuyCloseChosenByOrganizer,
         reEntry: newSettings.reEntry,
         addOn: newSettings.addOn,
         anteEnabled: newSettings.anteEnabled,

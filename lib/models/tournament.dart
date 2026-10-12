@@ -1308,3 +1308,40 @@ class TournamentStructure {
     );
   }
 }
+
+/// A level the host fixed by hand in the structure builder (§F1.12). Stored on
+/// the tournament's settings so the pin survives Recalculate, leaving the
+/// screen and reopening. [durationMins] is the minutes the host typed for the
+/// row; the engine solves blinds around [sb]/[bb] and never touches it.
+class LevelPin {
+  const LevelPin({
+    required this.level,
+    required this.sb,
+    required this.bb,
+    this.durationMins,
+  });
+
+  /// 1-indexed level number.
+  final int level;
+  final int sb;
+  final int bb;
+  final int? durationMins;
+
+  LevelPin copyWith({int? sb, int? bb, int? durationMins}) => LevelPin(
+        level: level,
+        sb: sb ?? this.sb,
+        bb: bb ?? this.bb,
+        durationMins: durationMins ?? this.durationMins,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is LevelPin &&
+      other.level == level &&
+      other.sb == sb &&
+      other.bb == bb &&
+      other.durationMins == durationMins;
+
+  @override
+  int get hashCode => Object.hash(level, sb, bb, durationMins);
+}

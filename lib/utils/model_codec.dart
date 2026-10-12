@@ -366,6 +366,12 @@ Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
       'breaks': s.breaks.map(scheduledBreakToMap).toList(),
       'expectedRebuys': s.expectedRebuys,
       'expectedRebuyRate': s.expectedRebuyRate,
+      'forceStack': s.forceStack,
+      'targetDepthBB': s.targetDepthBB,
+      'levelPins': [
+        for (final p in s.levelPins)
+          {'level': p.level, 'sb': p.sb, 'bb': p.bb, 'durationMins': p.durationMins},
+      ],
       'expectedReEntries': s.expectedReEntries,
       'expectedAddOns': s.expectedAddOns,
       'rebuyChips': s.rebuyChips,
@@ -444,6 +450,17 @@ GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
       // regenerates to the same structure it always did.
       expectedRebuys: (m['expectedRebuys'] as num?)?.toInt(),
       expectedRebuyRate: (m['expectedRebuyRate'] as num?)?.toDouble(),
+      forceStack: (m['forceStack'] as num?)?.toInt(),
+      targetDepthBB: (m['targetDepthBB'] as num?)?.toInt(),
+      levelPins: [
+        for (final p in (m['levelPins'] as List?) ?? const [])
+          LevelPin(
+            level: ((p as Map)['level'] as num).toInt(),
+            sb: (p['sb'] as num).toInt(),
+            bb: (p['bb'] as num).toInt(),
+            durationMins: (p['durationMins'] as num?)?.toInt(),
+          ),
+      ],
       expectedReEntries: (m['expectedReEntries'] as num?)?.toInt(),
       expectedAddOns: (m['expectedAddOns'] as num?)?.toInt(),
       rebuyChips: (m['rebuyChips'] as num?)?.toInt(),

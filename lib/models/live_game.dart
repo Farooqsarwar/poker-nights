@@ -75,6 +75,9 @@ class GameSettings {
     this.breaks = const [],
     this.expectedRebuys,
     this.expectedRebuyRate,
+    this.forceStack,
+    this.targetDepthBB,
+    this.levelPins = const [],
     this.expectedReEntries,
     this.expectedAddOns,
     this.rebuyChips,
@@ -216,6 +219,13 @@ class GameSettings {
   /// 0.35). It sizes the busy-night chip reserve (§F1.5), so lowering it is one
   /// of the ways to open a shallow start deeper. Null = use the default.
   final double? expectedRebuyRate;
+
+  /// Structure-builder choices that must survive Recalculate, leaving the
+  /// screen and reopening (WP2): the host-forced starting stack (§F1.11), the
+  /// host-chosen depth in big blinds, and the levels the host pinned by hand.
+  final int? forceStack;
+  final int? targetDepthBB;
+  final List<LevelPin> levelPins;
   final int? expectedReEntries;
   final int? expectedAddOns;
   final int? rebuyChips;
@@ -399,6 +409,11 @@ class GameSettings {
     List<ScheduledBreak>? breaks,
     int? expectedRebuys,
     double? expectedRebuyRate,
+    int? forceStack,
+    int? targetDepthBB,
+    List<LevelPin>? levelPins,
+    bool clearForceStack = false,
+    bool clearTargetDepthBB = false,
     int? expectedReEntries,
     int? expectedAddOns,
     int? rebuyChips,
@@ -483,6 +498,10 @@ class GameSettings {
       expectedRebuys: clearGenerationOverrides
           ? null
           : expectedRebuys ?? this.expectedRebuys,
+      forceStack: clearForceStack ? null : (forceStack ?? this.forceStack),
+      targetDepthBB:
+          clearTargetDepthBB ? null : (targetDepthBB ?? this.targetDepthBB),
+      levelPins: levelPins ?? this.levelPins,
       expectedRebuyRate: clearGenerationOverrides
           ? null
           : expectedRebuyRate ?? this.expectedRebuyRate,

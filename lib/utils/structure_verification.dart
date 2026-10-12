@@ -1,5 +1,6 @@
 import '../models/live_game.dart';
 import '../models/tournament.dart';
+import 'builder_solve.dart';
 import 'tournament_engine.dart';
 
 /// What an independent recomputation of the structure concluded.
@@ -99,7 +100,7 @@ abstract final class StructureVerification {
 
     final TournamentStructure fresh;
     try {
-      fresh = TournamentEngine.generate(
+      fresh = solveWithPins(
         TournamentParams(
           players: s.players,
           durationHours: s.durationHours,
@@ -108,6 +109,8 @@ abstract final class StructureVerification {
           rebuys: s.rebuys,
           rebuysCloseLevel: s.rebuysCloseLevel,
           rebuyCloseChosenByOrganizer: s.rebuyCloseChosenByOrganizer,
+          forceStack: s.forceStack,
+          targetDepthBB: s.targetDepthBB,
           reEntry: s.reEntry,
           addOn: s.addOn,
           anteEnabled: s.anteEnabled,
@@ -160,6 +163,7 @@ abstract final class StructureVerification {
           earlyArrivalCutoffMins: s.earlyArrivalCutoffMins,
           earlyArrivalBonusPctOverride: s.earlyArrivalBonusPctOverride,
         ),
+        s.levelPins,
       );
     } catch (e) {
       return StructureAudit.cannotVerify('the engine could not rerun: $e');

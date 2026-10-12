@@ -439,12 +439,12 @@ void main() {
     });
   });
 
-  group('free tools: the generator and the clock show the card', () {
-    // The tools deal from a fixed 300-chip box and allow 2-100 players with
-    // rebuys + add-on, so from 14 players the box can't deal the night (17 for
-    // the four-colour box). The default of 9 is fine. These pin that the tools
-    // handle the large fields instead of presenting a placeholder as a
-    // structure, a schedule, something to share, or a running clock.
+  group('free tools: §F1.14 synthetic bank — large fields just work', () {
+    // The tools have no chip case, so they deal from a synthetic bank sized so
+    // it never binds (1·5·25·100·500·1,000). A 14-player night used to land on
+    // the "chip case too small" card; it must now produce a real structure and
+    // a real clock. (The safety net for a placeholder ladder is proven in the
+    // next group, through a deliberately tiny bank.)
     const card = 'Your chip case is too small for this field';
 
     Future<void> tapIncrease(WidgetTester t, int times) async {
@@ -459,74 +459,73 @@ void main() {
       ..setUserForTesting(_host)
       ..setCurrentGroupForTesting(_group);
 
-    testWidgets('blind generator, 14 players: card, no schedule, no Share', (
-      t,
-    ) async {
+    testWidgets('blind generator, 14 players: a structure, Share, no card',
+        (t) async {
       final a = app();
       await _mount(t, a, const ToolBlindsScreen());
       await tapIncrease(t, 5);
       await t.tap(find.text('Generate structure'));
       await t.pump();
 
-      expect(find.text(card), findsOneWidget);
-      expect(
-        find.text('Share'),
-        findsNothing,
-        reason: 'nothing to share from a placeholder',
-      );
-      expect(
-        find.text('Starting stack'),
-        findsNothing,
-        reason: 'the placeholder\'s stack must not be shown as the answer',
-      );
+      expect(find.text(card), findsNothing);
+      expect(find.text('Share'), findsOneWidget);
+      expect(find.text('Starting stack'), findsOneWidget);
       await _unmount(t, a);
     });
 
-    testWidgets(
-      'CONTROL blind generator, 9 players: structure shown, no card',
-      (t) async {
-        final a = app();
-        await _mount(t, a, const ToolBlindsScreen());
-        await t.tap(find.text('Generate structure'));
-        await t.pump();
-
-        expect(find.text(card), findsNothing);
-        expect(find.text('Share'), findsOneWidget);
-        expect(find.text('Starting stack'), findsOneWidget);
-        await _unmount(t, a);
-      },
-    );
-
-    testWidgets('tool clock, 14 players: card shown and NO clock is built', (
-      t,
-    ) async {
+    testWidgets('tool clock, 14 players: the clock is built, no card',
+        (t) async {
       final a = app();
       await _mount(t, a, const ToolClockScreen());
       await tapIncrease(t, 5);
       await t.tap(find.text('Start a clock'));
       await t.pump();
 
+      expect(find.text(card), findsNothing);
+      expect(find.text('Start a clock'), findsNothing,
+          reason: 'setup is replaced by the running clock view');
+      await _unmount(t, a);
+    });
+  });
+
+  group('free tools: the placeholder-ladder guard is kept as a safety net', () {
+    // A tiny bank, injected through the test seam, makes the tools' structure
+    // infeasible exactly as the old fixed 300-chip box did at 14+ players.
+    const card = 'Your chip case is too small for this field';
+    const tiny = [
+      ChipColor(color: 'Red', hex: 0xFFC0392B, value: 25, quantity: 4),
+      ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 100, quantity: 4),
+      ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 500, quantity: 2),
+    ];
+
+    AppProvider app() => AppProvider()
+      ..setUserForTesting(_host)
+      ..setCurrentGroupForTesting(_group);
+
+    testWidgets('blind generator with an undealable bank: card, no Share',
+        (t) async {
+      final a = app();
+      await _mount(t, a, const ToolBlindsScreen(chipBankOverride: tiny));
+      await t.tap(find.text('Generate structure'));
+      await t.pump();
+
       expect(find.text(card), findsOneWidget);
-      expect(
-        find.text('Start a clock'),
-        findsOneWidget,
-        reason: 'still on the setup view — no clock display was built',
-      );
+      expect(find.text('Share'), findsNothing);
+      expect(find.text('Starting stack'), findsNothing,
+          reason: 'the placeholder\'s stack must not be shown as the answer');
       await _unmount(t, a);
     });
 
-    testWidgets('CONTROL tool clock, 9 players: the clock is built', (t) async {
+    testWidgets('tool clock with an undealable bank: card, NO clock built',
+        (t) async {
       final a = app();
-      await _mount(t, a, const ToolClockScreen());
+      await _mount(t, a, const ToolClockScreen(chipBankOverride: tiny));
       await t.tap(find.text('Start a clock'));
       await t.pump();
 
-      expect(find.text(card), findsNothing);
-      expect(
-        find.text('Start a clock'),
-        findsNothing,
-        reason: 'setup is replaced by the running clock view',
-      );
+      expect(find.text(card), findsOneWidget);
+      expect(find.text('Start a clock'), findsOneWidget,
+          reason: 'still on the setup view');
       await _unmount(t, a);
     });
   });

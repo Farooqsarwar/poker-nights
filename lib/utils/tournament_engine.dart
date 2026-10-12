@@ -338,6 +338,25 @@ class TournamentEngine {
   static List<int> candidateStacks(double sMaxValue) =>
       niceValuesInRange(1, 1, sMaxValue).reversed.toList();
 
+  /// Spec §F1.14 — the synthetic "never-binding" bank for a tool that has no
+  /// real chip case: the same denominations, with every quantity raised to at
+  /// least 100 per player, so the bank check cannot be what limits the night.
+  ///
+  /// 100 per player is comfortably above the worst case the engine can ask for
+  /// (≤ 24 of a colour per stack × the starting stacks, a busy night's rebuys
+  /// and every add-on ≈ 60 per player). A quantity that is already larger is
+  /// kept, never shrunk, and the input is not modified.
+  static List<ChipColor> neverBindingBank(
+    List<ChipColor> denominations, {
+    required int players,
+  }) {
+    final floor = math.max(1, players) * 100;
+    return [
+      for (final c in denominations)
+        c.copyWith(quantity: math.max(c.quantity, floor)),
+    ];
+  }
+
   /// §F1.5 point 1 — the number of rebuy stacks the chip case must be able to
   /// cover on a BUSY night: `Rbank = PoissonQuantile(mean = Rforecast, 0.90)`,
   /// capped at `maxRebuys × N` when rebuys are Limited. One definition for the

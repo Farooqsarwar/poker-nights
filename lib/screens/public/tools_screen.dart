@@ -38,17 +38,22 @@ import '../../widgets/glass_styles.dart';
 /// it. A blind structure produced here should be the one the app would
 /// produce, or the tool is advertising a different product.
 
-/// A common home box, used by the tools that need chips to reason about.
+/// The denominations the tools reason with when there is no chip case — spec
+/// §F1.14's synthetic 1 · 5 · 25 · 100 · 500 · 1,000 set.
 ///
-/// The full app asks what you actually own. A public tool that demanded a
-/// chip inventory before showing anything would lose most people at the first
-/// screen, so it assumes the box most people have and says so.
+/// The full app asks what you actually own. A public tool that demanded a chip
+/// inventory before showing anything would lose most people at the first
+/// screen, so it assumes the common denominations. QUANTITIES are not assumed:
+/// the tools run the engine on `TournamentEngine.neverBindingBank`, sized for
+/// the field, so the bank can never be what limits the answer (the quantities
+/// below are only a floor; they are raised per field size at the call sites).
 const kToolChipSet = [
   ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 1, quantity: 100),
   ChipColor(color: 'Red', hex: 0xFFC0392B, value: 5, quantity: 100),
-  ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 25, quantity: 50),
-  ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 100, quantity: 30),
-  ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 500, quantity: 20),
+  ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 25, quantity: 100),
+  ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 100, quantity: 100),
+  ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 500, quantity: 100),
+  ChipColor(color: 'Grey', hex: 0xFF95A5A6, value: 1000, quantity: 100),
 ];
 
 /// The boxes worth offering a stranger. The chip denominations decide the
@@ -56,7 +61,7 @@ const kToolChipSet = [
 /// gives a confidently wrong answer to anybody who owns a different one — and
 /// "which chips do you have" is a question people can answer without thinking.
 const kToolChipSets = <String, List<ChipColor>>{
-  'Standard 300 (1/5/25/100/500)': kToolChipSet,
+  'Standard (1/5/25/100/500/1000)': kToolChipSet,
   'No ones (5/25/100/500/1000)': [
     ChipColor(color: 'Red', hex: 0xFFC0392B, value: 5, quantity: 100),
     ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 25, quantity: 100),
@@ -378,7 +383,12 @@ class ToolsScreen extends StatelessWidget {
 
 /// Blind Structure Generator — the app's own engine, without an account.
 class ToolBlindsScreen extends StatefulWidget {
-  const ToolBlindsScreen({super.key});
+  const ToolBlindsScreen({super.key, @visibleForTesting this.chipBankOverride});
+
+  /// Test seam ONLY: replaces the synthetic bank (for example with one too
+  /// small to deal the night) to prove the placeholder-ladder guard still
+  /// fires. Never set in the app.
+  final List<ChipColor>? chipBankOverride;
 
   @override
   State<ToolBlindsScreen> createState() => _ToolBlindsScreenState();
@@ -409,7 +419,11 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
           players: _players,
           durationHours: _hours,
           buyIn: 20,
-          chipSet: kToolChipSets[_chipSetName] ?? kToolChipSet,
+          chipSet: widget.chipBankOverride ??
+              TournamentEngine.neverBindingBank(
+                kToolChipSets[_chipSetName] ?? kToolChipSet,
+                players: _players,
+              ),
           rebuys: true,
           rebuysCloseLevel: 6,
           reEntry: false,
@@ -1402,7 +1416,10 @@ class _StepperRow extends StatelessWidget {
 /// The ordering — which level, which break, when it ends — belongs to
 /// [ClockSequence] and is tested there. This screen only counts down.
 class ToolClockScreen extends StatefulWidget {
-  const ToolClockScreen({super.key});
+  const ToolClockScreen({super.key, @visibleForTesting this.chipBankOverride});
+
+  /// Test seam ONLY (see [ToolBlindsScreen.chipBankOverride]).
+  final List<ChipColor>? chipBankOverride;
 
   @override
   State<ToolClockScreen> createState() => _ToolClockScreenState();
@@ -1491,7 +1508,8 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
         players: _players,
         durationHours: _hours.toDouble(),
         buyIn: 20,
-        chipSet: kToolChipSet,
+        chipSet: widget.chipBankOverride ??
+            TournamentEngine.neverBindingBank(kToolChipSet, players: _players),
         rebuys: true,
         rebuysCloseLevel: 6,
         reEntry: false,

@@ -77,19 +77,41 @@ void main() {
     expect(dd, greaterThan(ds));
   });
 
-  test('blindFamily.home25 forces a 25-based ladder on a fine chip set (T3)', () {
-    // box500 has a 1-chip, so niceSpec opens with fine blinds; home25 forces
-    // every BB to a multiple of 50 (SB a multiple of 25).
-    final spec = TournamentEngine.generate(base(box500));
-    final home = TournamentEngine.generate(
-        base(box500).copyWith(blindFamily: BlindFamily.home25));
-    expect(spec.levels.first.bb % 50 == 0, isFalse,
-        reason: 'niceSpec may open finer than 25-based');
+  // A deep, fine-chip case (has a 1-chip) so a 6,000 stack is dealable.
+  const deepFine = [
+    ChipColor(color: 'White', hex: 0xFFE8E4D9, value: 1, quantity: 2000),
+    ChipColor(color: 'Red', hex: 0xFFC0392B, value: 5, quantity: 2000),
+    ChipColor(color: 'Blue', hex: 0xFF2980B9, value: 25, quantity: 1500),
+    ChipColor(color: 'Black', hex: 0xFF2C2C2C, value: 100, quantity: 1500),
+  ];
+
+  test('home25 applies a 25-based ladder where the stack is deep enough (T3)', () {
+    // Forced 6,000: spec opens at niceBB(60,1)=60; home25 prefers 50 (120 BB,
+    // still inside the band), so every BB is a multiple of 50, SB of 25.
+    final spec = TournamentEngine.generate(base(deepFine, forceStack: 6000));
+    final home = TournamentEngine.generate(base(deepFine, forceStack: 6000)
+        .copyWith(blindFamily: BlindFamily.home25));
+    expect(spec.levels.first.bb, 60, reason: 'niceSpec opens at 60');
+    expect(home.levels.first.bb, 50, reason: 'home25 prefers the 25-based 50');
     for (final l in home.levels) {
       expect(l.bb % 50, 0, reason: 'home25 BB ${l.bb} not a multiple of 50');
       expect(l.sb % 25, 0, reason: 'home25 SB ${l.sb} not a multiple of 25');
       expect(l.sb, lessThan(l.bb));
     }
+  });
+
+  test('home25 falls back to the spec ladder instead of making a night infeasible',
+      () {
+    // box500 9p rebuy is bank-limited to a ~400 stack: a 25-based BB (>= 50)
+    // would be 8 BB deep. The first home25 cut called every such night
+    // infeasible; the contract is a fallback to the spec's blinds.
+    final spec = TournamentEngine.generate(base(box500, rebuy: true));
+    final home = TournamentEngine.generate(
+        base(box500, rebuy: true).copyWith(blindFamily: BlindFamily.home25));
+    expect(spec.feasible, isTrue);
+    expect(home.feasible, isTrue, reason: 'home25 must not break a dealable night');
+    expect(home.startingStack, spec.startingStack);
+    expect(home.levels.first.bb, spec.levels.first.bb);
   });
 
   test('a forced stack plus one pin survives recalc (stack + pin unchanged, tail rises)',

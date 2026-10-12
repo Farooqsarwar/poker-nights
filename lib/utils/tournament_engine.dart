@@ -338,6 +338,33 @@ class TournamentEngine {
   static List<int> candidateStacks(double sMaxValue) =>
       niceValuesInRange(1, 1, sMaxValue).reversed.toList();
 
+  /// The fewest-chips breakdown of [amount] that EVERY one of [players] can be
+  /// handed from what is [remaining] in the box, or null if there is none.
+  ///
+  /// A host deals one recipe (an add-on or bonus is the same chips for each
+  /// player — the §F1.15 demo's "add-on 250 = 2×100 + 2×25"), so the recipe has
+  /// to be makeable N times over. Searching against the WHOLE remaining bank
+  /// and then multiplying by N (the earlier behaviour) picks a recipe that is
+  /// individually cheapest but cannot be repeated N times, and reports a false
+  /// "short" when a slightly different recipe (more small chips, fewer big
+  /// ones) fits. So each colour is limited to `floor(remaining / players)`.
+  static Map<int, int>? handoutEveryPlayerCanGet({
+    required int amount,
+    required List<int> valuesDesc,
+    required Map<int, int> remaining,
+    required int players,
+  }) {
+    if (amount <= 0) return const {};
+    final n = math.max(1, players);
+    final limits = {
+      for (final v in valuesDesc) v: math.max(0, remaining[v] ?? 0) ~/ n,
+    };
+    final plan = fewestChips(amount, valuesDesc, limits: limits);
+    var made = 0;
+    plan.forEach((v, c) => made += v * c);
+    return made == amount ? plan : null; // {} ⇒ cannot make the amount
+  }
+
   /// Spec v3.1 §F1.5 point 4 / §F1.16 `solveChipPlanBounded` — the best chip
   /// composition for one [stack], or null if none is feasible.
   ///
@@ -386,27 +413,15 @@ class TournamentEngine {
         if (need > (remaining[u.value] ?? 0)) return false;
         remaining[u.value] = (remaining[u.value] ?? 0) - need;
       }
-      if (addOnStack > 0) {
-        final plan = fewestChips(addOnStack, valuesDesc,
-            limits: {for (final v in valuesDesc) v: remaining[v] ?? 0});
-        var made = 0;
-        plan.forEach((v, c) => made += v * c);
-        if (made != addOnStack) return false; // {} ⇒ cannot make it
-        for (var i = 0; i < players; i++) {
-          plan.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c);
-        }
-        if (remaining.values.any((q) => q < 0)) return false;
-      }
-      if (bonusEach > 0) {
-        final plan = fewestChips(bonusEach, valuesDesc,
-            limits: {for (final v in valuesDesc) v: remaining[v] ?? 0});
-        var made = 0;
-        plan.forEach((v, c) => made += v * c);
-        if (made != bonusEach) return false;
-        for (var i = 0; i < players; i++) {
-          plan.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c);
-        }
-        if (remaining.values.any((q) => q < 0)) return false;
+      for (final amount in [if (addOnStack > 0) addOnStack, if (bonusEach > 0) bonusEach]) {
+        final plan = handoutEveryPlayerCanGet(
+          amount: amount,
+          valuesDesc: valuesDesc,
+          remaining: remaining,
+          players: players,
+        );
+        if (plan == null) return false; // no single recipe N players can all get
+        plan.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c * players);
       }
       return true;
     }
@@ -1538,44 +1553,49 @@ class TournamentEngine {
         (totalAddOns * (addOnEnabled ? effectiveAddOnCost : 0));
   }
 
-  /// Build Spec v3.1 §F1.5/§F1.18 support — how large a field this exact
-  /// chip set can still seat at or above [kMinPlayableDepthBB], used only to
-  /// annotate the infeasible case above with a concrete number rather than
-  /// just "add more chips". Deliberately a plain linear scan down from
-  /// `params.players - 1`, reusing [_buildChipPlan] directly rather than the
-  /// full target-band solve above — this runs only on the rare path where
-  /// that solve has already failed outright, so a small, easily-audited
-  /// re-check was preferred over threading a player-count parameter through
-  /// the much larger joint solve in [generate].
-  static int? _largestPlayableFieldSize({
-    required TournamentParams params,
-    required int minChip,
-  }) {
-    for (var testPlayers = params.players - 1; testPlayers >= 2; testPlayers--) {
-      for (final pair in validBlindLevels) {
-        final sb = pair[0];
-        final bb = pair[1];
-        if (minChip <= 0 || sb % minChip != 0 || bb % minChip != 0) continue;
-        final floor = (kMinPlayableDepthBB * bb).round();
-        var candidate = (kMinPlayableDepthBB * bb / sb).round() * sb;
-        while (candidate >= floor) {
-          final plan = _buildChipPlan(
-            candidate,
-            params.chipSet,
-            math.max(1, testPlayers),
-            1.0,
-            smallBlind: sb,
-          );
-          final covered = plan.fold<int>(0, (s, e) => s + e.count * e.value);
-          if (covered >= candidate) return testPlayers;
-          candidate -= sb;
-        }
+  /// Build Spec v3.1 §F1.5 point 7 — the largest field this chip case can
+  /// still deal a playable stack to, found by re-running the SAME feasibility
+  /// (same rebuy rate, add-on and bonus) with fewer players. Used to annotate
+  /// an infeasible night with a concrete number and to power the card's
+  /// "Reduce to N players" button — so every number returned here has itself
+  /// been verified feasible: the button can never offer a field that lands on
+  /// the same card again.
+  ///
+  /// (This used to be a coverage-only re-check built on the legacy greedy chip
+  /// plan, which ignored rebuys, add-ons and the nice-stack rule and so
+  /// advertised fields the real solver then rejected.)
+  ///
+  /// Binary search rather than a linear scan: the free tools allow up to 100
+  /// players, and every probe is a full solve. Feasibility only gets easier as
+  /// the field shrinks, so the boundary is found in ~log₂(N) probes; the value
+  /// returned is always a verified-feasible field (never an over-claim), and
+  /// at worst understates the true maximum if feasibility were ever
+  /// non-monotone.
+  static int? _largestPlayableFieldSize({required TournamentParams params}) {
+    bool dealable(int n) =>
+        generate(params.copyWith(players: n), findMaxPlayers: false).feasible;
+    var lo = 2;
+    var hi = params.players - 1;
+    if (hi < lo || !dealable(lo)) return null;
+    if (dealable(hi)) return hi;
+    // Invariant: dealable(lo) && !dealable(hi).
+    while (hi - lo > 1) {
+      final mid = (lo + hi) ~/ 2;
+      if (dealable(mid)) {
+        lo = mid;
+      } else {
+        hi = mid;
       }
     }
-    return null;
+    return lo;
   }
 
-  static TournamentStructure generate(TournamentParams params) {
+  static TournamentStructure generate(
+    TournamentParams params, {
+    /// Internal: the field-size probe in [_largestPlayableFieldSize] solves
+    /// many smaller fields and must not recurse into another probe.
+    bool findMaxPlayers = true,
+  }) {
     // §11.4. A shootout has no single structure, so this returns the one the
     // room actually sits down to: Stage A, the per-table Freeze Out. Callers
     // that need the final table as well ask [generateShootout] for both.
@@ -1767,6 +1787,29 @@ class TournamentEngine {
       return sb;
     }
 
+    /// The opening big blind (and the smallest-chip unit the whole ladder is
+    /// built on) for stack [s] whose smallest dealt chip is [dealtCmin].
+    ///
+    /// `niceSpec` is `niceBB(s / D, cmin)` (§F1.6). `home25` prefers a 25-based
+    /// blind (a multiple of 50) — but only while that still reaches the style's
+    /// depth band. A bank-limited stack of, say, 400 cannot open at a 50 big
+    /// blind (8 BB), and declaring that night infeasible would punish the host
+    /// for choosing a ladder style (the first home25 cut did exactly that:
+    /// box500 rebuy nights were 100 % "infeasible"). In that case the stack
+    /// falls back to the spec's `2 × cmin` blinds.
+    // OWNER-DECISION: depth/blind values (pt 13) — confirm the fallback.
+    ({int bb, int cmin}) openingFor(int s, int dealtCmin) {
+      final spec = niceBB(s / styleD, dealtCmin);
+      if (params.blindFamily == BlindFamily.home25) {
+        final cHome = math.max(dealtCmin, 25);
+        final home = niceBB(s / styleD, cHome);
+        if (home > 0 && s / home >= depthBand.min) {
+          return (bb: home, cmin: cHome);
+        }
+      }
+      return (bb: spec, cmin: dealtCmin);
+    }
+
     List<ChipPlanEntry> planFromUsed(List<({int value, int count})> used) => [
           for (final u in used)
             ChipPlanEntry(
@@ -1809,13 +1852,9 @@ class TournamentEngine {
           openingSB: sbOfBB(bbProv),
         );
         if (sol == null) continue;
-        // T3 home25: force a 25-based blind family by treating the dealt
-        // smallest as at least 25 (so every BB is a multiple of 50). niceSpec
-        // keeps the composition's true smallest.
-        final cmin0 = params.blindFamily == BlindFamily.home25
-            ? math.max(sol.used.first.value, 25)
-            : sol.used.first.value;
-        final bb = niceBB(s / styleD, cmin0);
+        final open = openingFor(s, sol.used.first.value);
+        final cmin0 = open.cmin;
+        final bb = open.bb;
         if (bb <= 0) continue;
         final depth = s / bb;
         if (depth < kMinPlayableDepthBB) continue;
@@ -2168,7 +2207,7 @@ class TournamentEngine {
     int? maxPlayersSupported;
     if (f15Pick == null && f15Closest == null) {
       maxPlayersSupported =
-          _largestPlayableFieldSize(params: params, minChip: minChip);
+          findMaxPlayers ? _largestPlayableFieldSize(params: params) : null;
       depthShortfallNote = maxPlayersSupported != null && maxPlayersSupported > 0
           ? 'This chip set cannot fund a ${kMinPlayableDepthBB.round()}BB '
               'starting stack for ${params.players} players. It supports up '
@@ -2208,7 +2247,7 @@ class TournamentEngine {
     final List<ChipPlanEntry> chipPlan;
     if (params.forceStack != null && params.forceStack! > 0) {
       stack = params.forceStack!;
-      openingBB = niceBB(stack / targetBBDepth, minChip);
+      openingBB = openingFor(stack, minChip).bb;
       final sbHint = math.max(minChip, (openingBB / 2 / minChip).round() * minChip);
       chipPlan = planFor(stack, params.players, sbHint);
     } else if (f15Pick != null) {
@@ -2447,7 +2486,9 @@ class TournamentEngine {
         ? f15Pick.cmin
         : (params.forceStack == null && f15Closest != null)
             ? f15Closest.cmin
-            : (minChip > 0 ? minChip : 1);
+            : (params.forceStack != null && minChip > 0
+                ? openingFor(stack, minChip).cmin
+                : (minChip > 0 ? minChip : 1));
     final rawCurve = <double>[openingBB.toDouble()];
     for (var i = 1; i < numLevels; i++) {
       // `i` is 0-based; spec levels are 1-based, so level i+1's premium.
@@ -3290,17 +3331,26 @@ class TournamentEngine {
       if (addOn && addOnStack > 0) addOnStack,
       if (bonusEach > 0) bonusEach,
     ]) {
-      final plan = fewestChips(amount, valuesDesc,
+      // One recipe every player can be handed (see handoutEveryPlayerCanGet).
+      final plan = handoutEveryPlayerCanGet(
+        amount: amount,
+        valuesDesc: valuesDesc,
+        remaining: remaining,
+        players: players,
+      );
+      if (plan != null) {
+        plan.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c * players);
+        continue;
+      }
+      // No common recipe exists. Re-deal against the whole remaining bank only
+      // to NAME the colours that run dry, so the shortfall card is specific.
+      final probe = fewestChips(amount, valuesDesc,
           limits: {for (final v in valuesDesc) v: math.max(0, remaining[v] ?? 0)});
       var made = 0;
-      plan.forEach((v, c) => made += v * c);
-      if (made != amount) {
-        handoutShortColour = 1; // could not deal this handout from what's left
-        break;
-      }
-      for (var i = 0; i < players; i++) {
-        plan.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c);
-      }
+      probe.forEach((v, c) => made += v * c);
+      handoutShortColour = 1; // no common recipe ⇒ not bank-OK, whatever probe shows
+      if (made != amount) break; // the amount cannot be made at all
+      probe.forEach((v, c) => remaining[v] = (remaining[v] ?? 0) - c * players);
     }
 
     final shortfall = <BankShortfall>[];

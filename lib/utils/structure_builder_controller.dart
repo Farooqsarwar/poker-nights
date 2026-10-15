@@ -169,6 +169,7 @@ class StructureBuilderController extends ChangeNotifier {
     GameSettings s, {
     int? players,
     BuilderMode mode = BuilderMode.event,
+    bool suggestRebuyLimit = false,
   }) {
     final time = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(s.time);
     final startMinutes = time == null
@@ -192,9 +193,11 @@ class StructureBuilderController extends ChangeNotifier {
       levelMins: s.levelDurationMins ?? pace?.levelMinutes ?? 20,
       format: s.effectiveFormat,
       rebuyLimit: s.rebuyLimit,
-      // What the event says about rebuys is the host's choice, null included
-      // (unlimited), so the player-count suggestion must not overwrite it.
-      rebuyLimitTouched: true,
+      // A light event post carries only the rebuy TYPE. On its first trip into
+      // Create structure, null means "suggest from this invited count". Other
+      // entry points keep the legacy meaning where null is an explicit
+      // Unlimited choice.
+      rebuyLimitTouched: !suggestRebuyLimit || s.rebuyLimit != null,
       addOn: s.addOn,
       anteEnabled: s.anteEnabled,
       anteStyle: s.anteStyle,
@@ -210,7 +213,9 @@ class StructureBuilderController extends ChangeNotifier {
         koEnabled: s.koEnabled,
         koAmount: s.koAmount,
         organizerPct: s.organizerPct,
-        rebuyCost: s.rebuyCost,
+        rebuyCost: s.effectiveFormat == TournamentFormat.rebuy
+            ? (s.rebuyCost ?? s.buyIn)
+            : s.rebuyCost,
         addOnCost: s.addOnCost,
         paidPlaces: s.forcePaidPlaces,
         maxPerTable: s.tableSettingsOverride?.maxPerTable,

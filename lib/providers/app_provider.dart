@@ -787,6 +787,35 @@ class AppProvider extends ChangeNotifier {
   // ── Game ───────────────────────────────────────────────────────────────────
   LiveGame? _currentGame;
 
+  /// In-progress lightweight event posts, keyed by group. The create-event
+  /// screen updates this after every edit so navigating away does not throw
+  /// the host's work away. The same map is mirrored into user preferences
+  /// when a backend session is available.
+  final Map<String, GameSettings> _eventDrafts = {};
+
+  GameSettings? get eventDraftForCurrentGroup =>
+      _eventDrafts[_currentGroup.id];
+
+  void saveEventDraft(GameSettings settings) {
+    final groupId = _currentGroup.id;
+    if (groupId.isEmpty) return;
+    _eventDrafts[groupId] = settings;
+    _persistEventDrafts();
+  }
+
+  void clearEventDraft() {
+    final groupId = _currentGroup.id;
+    if (groupId.isEmpty || _eventDrafts.remove(groupId) == null) return;
+    _persistEventDrafts();
+  }
+
+  void _persistEventDrafts() {
+    _persistPref('eventDrafts', {
+      for (final entry in _eventDrafts.entries)
+        entry.key: gameSettingsToMap(entry.value),
+    });
+  }
+
   /// Elects a single leader among same-browser tabs viewing [_tabLeaderScope]
   /// (a live game id), so the editor-authority check below cannot let two
   /// tabs of one browser both act as the single writer. No-op off the web —

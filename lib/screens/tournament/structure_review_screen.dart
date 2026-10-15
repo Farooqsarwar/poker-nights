@@ -6,6 +6,7 @@ import '../../app/colors.dart';
 import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
+import '../../models/game.dart';
 import '../../models/live_game.dart';
 import '../../models/tournament_format.dart';
 import '../../providers/app_provider.dart';
@@ -46,11 +47,18 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
   StructureBuilderController _controllerFor(AppProvider app, LiveGame game) {
     if (_controller != null && _controllerGameId == game.id) return _controller!;
     _controller?.dispose();
-    final planned = app.plannedHeadcount(game);
+    final invited = game.players
+        .where((player) => !player.isGuest && !player.noShow)
+        .length;
+    final firstBuild = game.structure.levels.isEmpty;
+    final planned = firstBuild
+        ? (invited >= 2 ? invited : game.settings.players)
+        : app.plannedHeadcount(game);
     _controllerGameId = game.id;
     return _controller = StructureBuilderController.fromSettings(
       game.settings,
       players: planned >= 2 ? planned : game.settings.players,
+      suggestRebuyLimit: firstBuild,
     );
   }
 
@@ -167,6 +175,13 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
     }
 
     final controller = _controllerFor(app, game);
+    final invited = game.players
+        .where((player) => !player.isGuest && !player.noShow)
+        .length;
+    final going = game.goingWithGuestsCount;
+    final maybe = game.players
+        .where((player) => !player.isGuest && player.rsvp == Rsvp.maybe)
+        .length;
     return AppPage(
       maxWidth: 640,
       child: Column(
@@ -180,6 +195,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
           StructureBuilder(
             controller: controller,
             confirmLabel: 'Save structure',
+            playersHint: '$invited invited · $going Going · $maybe Maybe',
             onChipCountFixed: (counts) => offerSaveChipSet(
               context,
               app,

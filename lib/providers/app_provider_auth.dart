@@ -16,6 +16,7 @@ extension AppProviderAuth on AppProvider {
       // Nothing to hydrate for a signed-out user — release the router now.
       _authReady = true;
       _teardownUserData();
+      _eventDrafts.clear();
       if (_user != null) {
         _user = null;
         if (!_disposed) notifyListeners();
@@ -183,6 +184,17 @@ extension AppProviderAuth on AppProvider {
       if (sms is bool) _smsEnabled = sms;
       final avatar = prefs['avatarColorIndex'];
       if (avatar is num) _avatarColorIndex = avatar.toInt();
+      _eventDrafts.clear();
+      final eventDrafts = prefs['eventDrafts'];
+      if (eventDrafts is Map) {
+        for (final entry in eventDrafts.entries) {
+          if (entry.key is String && entry.value is Map) {
+            _eventDrafts[entry.key as String] = gameSettingsFromMap(
+              Map<String, dynamic>.from(entry.value as Map),
+            );
+          }
+        }
+      }
       // Restore per-group notification-mirror cursors so history isn't
       // re-mirrored on every sign-in.
       for (final entry in prefs.entries) {

@@ -1111,7 +1111,7 @@ class _StructureStatusCard extends StatelessWidget {
                 ? AppButtonVariant.secondary
                 : AppButtonVariant.primary,
             onPressed: () => context.go(RoutePaths.structureReviewWith(RoutePaths.invitation)),
-            child: Text(hasStructure ? 'Review' : 'Generate'),
+            child: const Text('Create structure'),
           ),
         ],
       ),

@@ -12,7 +12,10 @@ import '../utils/structure_builder_controller.dart';
 import 'app_button.dart';
 import 'app_card.dart';
 import 'app_segmented_control.dart';
+import 'app_modal.dart';
 import 'count_stepper.dart';
+import 'fix_chip_count_sheet.dart';
+import 'structure_builder_options.dart';
 import 'structure_feasibility_card.dart';
 
 /// The one stack-first structure flow (WP2), used by the quick game, the
@@ -35,6 +38,7 @@ class StructureBuilder extends StatelessWidget {
     required this.onConfirm,
     this.onPersist,
     this.onEditChips,
+    this.onChipCountFixed,
     this.chipSetChoices,
     this.chipSetKey,
     this.onChipSetChosen,
@@ -57,6 +61,11 @@ class StructureBuilder extends StatelessWidget {
 
   /// Opens the host's chip set editor (quick / event).
   final VoidCallback? onEditChips;
+
+  /// Called after the host corrected the chip count on the stack step
+  /// ("Fix count"), so the screen can offer to save the set. The button is
+  /// shown for a real chip case (quick / event), never for the free tool.
+  final void Function(List<ChipColor> counts)? onChipCountFixed;
 
   /// The free tool lets the host pick a box; the app modes use their own case.
   final Map<String, List<ChipColor>>? chipSetChoices;
@@ -375,6 +384,8 @@ class _InputsStep extends StatelessWidget {
           label: 'Chips',
           child: _ChipsRow(builder: builder),
         ),
+        if (c.mode == BuilderMode.quick) BuilderNamesSection(controller: c),
+        BuilderMoreOptions(controller: c),
         if (builder.error != null) ...[
           Text(builder.error!,
               style: AppTypography.bodySm.copyWith(color: AppColors.destructive)),
@@ -547,6 +558,28 @@ class _StackStepState extends State<_StackStep> {
         ),
         if (s.isBlocked || s.isShallow || !s.fits)
           const SizedBox(height: AppSpacing.md),
+        if (!c.syntheticBank && b.chipSetChoices == null && c.chipSet.isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const Key('fix-count'),
+              onPressed: () => showAppModal(
+                context: context,
+                title: 'Fix the count',
+                maxWidth: 420,
+                child: FixChipCountSheet(
+                  chips: c.chipSet,
+                  onApply: (counts) {
+                    c.setChipSet(counts);
+                    Navigator.of(context).pop();
+                    b.onChipCountFixed?.call(counts);
+                    b.onPersist?.call();
+                  },
+                ),
+              ),
+              child: const Text('Fix chip count'),
+            ),
+          ),
         Text('Change the stack',
             style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: AppSpacing.sm),

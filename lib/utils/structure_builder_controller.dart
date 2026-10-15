@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/chip_color.dart';
 import '../models/live_game.dart';
+import '../models/table_settings.dart';
 import '../models/tournament.dart';
 import '../models/tournament_format.dart';
 import 'builder_solve.dart';
@@ -54,6 +55,54 @@ const int kCustomDepthStep = 25;
 /// Minutes per level the host can choose (the pace).
 const List<int> kLevelMinuteChoices = [15, 20, 30];
 
+/// The options the old review screen and the event form exposed that are not
+/// part of the setup questions: money, bounty, prize places, table size and the
+/// expectations the engine sizes the blinds against. Plain values; the
+/// controller owns when they re-run the engine.
+class BuilderOptions {
+  BuilderOptions({
+    this.koEnabled = false,
+    this.koAmount = 5,
+    this.organizerPct = 0,
+    this.rebuyCost,
+    this.addOnCost,
+    this.paidPlaces,
+    this.maxPerTable,
+    this.expectedRebuys,
+    this.expectedReEntries,
+    this.expectedAddOns,
+    this.rebuyChips,
+    this.reEntryChips,
+    this.addOnChips,
+  });
+
+  bool koEnabled;
+  int koAmount;
+
+  /// Organiser's contribution, percent of the pool.
+  int organizerPct;
+
+  /// Null = same as the buy-in.
+  int? rebuyCost;
+  int? addOnCost;
+
+  /// Null = automatic (the field size decides).
+  int? paidPlaces;
+
+  /// Null = the group's default table size.
+  int? maxPerTable;
+
+  /// Null = the engine's forecast.
+  int? expectedRebuys;
+  int? expectedReEntries;
+  int? expectedAddOns;
+
+  /// Null = a rebuy / re-entry / add-on is one starting stack.
+  int? rebuyChips;
+  int? reEntryChips;
+  int? addOnChips;
+}
+
 /// All the builder's state and the engine calls behind it. UI-free so it can
 /// be tested directly and so the three entry points cannot drift apart.
 ///
@@ -81,6 +130,7 @@ class StructureBuilderController extends ChangeNotifier {
     int? forceStack,
     List<LevelPin> pins = const [],
     List<ScheduledBreak> breaks = const [],
+    BuilderOptions? options,
     int rebuyClose = 0,
     bool rebuyCloseChosen = false,
     this.startMinutes = 19 * 60,
@@ -101,6 +151,7 @@ class StructureBuilderController extends ChangeNotifier {
         _pins = List.of(pins),
         _appliedPins = List.of(pins),
         _breaks = breaks,
+        options = options ?? BuilderOptions(),
         _rebuyClose = rebuyClose,
         _rebuyCloseChosen = rebuyCloseChosen {
     final d = depthBB ?? TournamentType.normal.depthBB;
@@ -155,6 +206,21 @@ class StructureBuilderController extends ChangeNotifier {
       forceStack: s.forceStack,
       pins: s.levelPins,
       breaks: s.breaks,
+      options: BuilderOptions(
+        koEnabled: s.koEnabled,
+        koAmount: s.koAmount,
+        organizerPct: s.organizerPct,
+        rebuyCost: s.rebuyCost,
+        addOnCost: s.addOnCost,
+        paidPlaces: s.forcePaidPlaces,
+        maxPerTable: s.tableSettingsOverride?.maxPerTable,
+        expectedRebuys: s.expectedRebuys,
+        expectedReEntries: s.expectedReEntries,
+        expectedAddOns: s.expectedAddOns,
+        rebuyChips: s.rebuyChips,
+        reEntryChips: s.reEntryChips,
+        addOnChips: s.addOnChips,
+      ),
       rebuyClose: s.rebuysCloseLevel,
       rebuyCloseChosen: s.rebuyCloseChosenByOrganizer,
       startMinutes: startMinutes,
@@ -163,6 +229,10 @@ class StructureBuilderController extends ChangeNotifier {
 
   final BuilderMode mode;
   final String chipSetName;
+
+  /// Money, bounty, prize places, table size and expectations (see
+  /// [BuilderOptions]); change them through [updateOptions].
+  final BuilderOptions options;
 
   /// Free tools have no chip case: the engine runs against a synthetic
   /// never-binding bank (§F1.14).
@@ -267,6 +337,7 @@ class StructureBuilderController extends ChangeNotifier {
     final n = v.clamp(2, 100);
     if (n == _players) return;
     _players = n;
+    if (_playerNames.length > n) _playerNames.removeRange(n, _playerNames.length);
     if (_format == TournamentFormat.rebuy && !_rebuyLimitTouched) {
       _rebuyLimit = suggestRebuyLimit(n);
     }
@@ -288,11 +359,62 @@ class StructureBuilderController extends ChangeNotifier {
     setDurationHours(((diff / 30).round() * 30) / 60);
   }
 
-  void setBuyIn(int v) {
-    if (v == _buyIn) return;
-    _buyIn = v;
-    _inputChanged();
+
+  /// Changes one of the [options]. [ladder] is true for the ones that change
+  /// how many chips are in play (expected rebuys, add-ons, chip amounts): they
+  /// move the ladder, so a forced stack and pins set against it are dropped.
+  /// Money, bounty, prize places and table size never touch the ladder.
+  void updateOptions(void Function(BuilderOptions o) change,
+      {bool ladder = false}) {
+    change(options);
+    if (ladder) {
+      _inputChanged();
+    } else {
+      _structure = null;
+      notifyListeners();
+    }
   }
+  void setBuyIn(int v) {
+    if (v == _buyIn || v <= 0) return;
+    _buyIn = v;
+    // The buy-in sets prizes and prices, never a blind or a stack.
+    _structure = null;
+    notifyListeners();
+  }
+
+  // ── Player names (quick game) ────────────────────────────────────────────
+
+  final List<String> _playerNames = [];
+
+  /// Optional names for the quick game, positional, never more than the player
+  /// count. Empty means "Player 1, Player 2, …" as before.
+  List<String> get playerNames => List.unmodifiable(_playerNames);
+
+  /// Adds one empty name row; refused once every player has a row.
+  bool addPlayerName() {
+    if (_playerNames.length >= _players) return false;
+    _playerNames.add('');
+    notifyListeners();
+    return true;
+  }
+
+  void removePlayerName(int index) {
+    if (index < 0 || index >= _playerNames.length) return;
+    _playerNames.removeAt(index);
+    notifyListeners();
+  }
+
+  /// Does not notify: the text field already shows what was typed.
+  void setPlayerName(int index, String name) {
+    if (index < 0 || index >= _playerNames.length) return;
+    _playerNames[index] = name;
+  }
+
+  /// The names to seat, trimmed and without blanks.
+  List<String> get namesToSeat => [
+        for (final n in _playerNames)
+          if (n.trim().isNotEmpty) n.trim(),
+      ];
 
   void setType(TournamentType t) {
     if (_type == t && _depthBB == t.depthBB) return;
@@ -317,7 +439,11 @@ class StructureBuilderController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setLevelMins(int m) {
+  void setLevelMins(int min) {
+    final m = min.clamp(
+      TournamentEngine.kMinLevelDurationMins,
+      TournamentEngine.kMaxLevelDurationMins,
+    );
     if (m == _levelMins) return;
     _levelMins = m;
     _inputChanged();
@@ -398,9 +524,17 @@ class StructureBuilderController extends ChangeNotifier {
       anteAfterLevel: 6,
       breaks: breaks,
       anteStyle: _anteStyle,
-      koEnabled: false,
-      koAmount: 0,
-      organizerPct: 0,
+      koEnabled: options.koEnabled,
+      koAmount: options.koAmount,
+      organizerPct: options.organizerPct,
+      rebuyCost: options.rebuyCost,
+      addOnCost: options.addOnCost,
+      expectedRebuys: options.expectedRebuys,
+      expectedReEntries: options.expectedReEntries,
+      expectedAddOns: options.expectedAddOns,
+      rebuyChips: options.rebuyChips,
+      reEntryChips: options.reEntryChips,
+      addOnChips: options.addOnChips,
       levelDurationMins: _levelMins,
       pace: _type?.pace ?? _paceForDepth(_depthBB),
       targetDepthBB: _depthBB,
@@ -597,7 +731,8 @@ class StructureBuilderController extends ChangeNotifier {
   GameSettings applyTo(GameSettings base) {
     final p = params;
     final s = structure;
-    return base.copyWith(
+    final o = options;
+    return base.copyWith(clearBuilderOverrides: true).copyWith(
       players: _players,
       durationHours: _durationHours,
       buyIn: _buyIn,
@@ -630,6 +765,27 @@ class StructureBuilderController extends ChangeNotifier {
       earlyArrivalBonusPctOverride: _bonusPct > 0 ? _bonusPct / 100 : null,
       clearEarlyArrivalBonusPctOverride: _bonusPct == 0,
       chipSet: _chipSet,
+      koEnabled: o.koEnabled,
+      koAmount: o.koAmount,
+      organizerPct: o.organizerPct,
+      rebuyCost: o.rebuyCost,
+      addOnCost: o.addOnCost,
+      expectedRebuys: o.expectedRebuys,
+      expectedReEntries: o.expectedReEntries,
+      expectedAddOns: o.expectedAddOns,
+      rebuyChips: o.rebuyChips,
+      reEntryChips: o.reEntryChips,
+      addOnChips: o.addOnChips,
+      forcePaidPlaces: o.paidPlaces,
+      clearForcePaidPlaces: o.paidPlaces == null,
+      tableSettingsOverride: o.maxPerTable == null
+          ? null
+          : TableSettings(
+              maxPerTable: o.maxPerTable!,
+              randomizeByDefault:
+                  base.tableSettingsOverride?.randomizeByDefault ?? false,
+            ),
+      clearTableSettingsOverride: o.maxPerTable == null,
     );
   }
 }

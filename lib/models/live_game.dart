@@ -452,6 +452,11 @@ class GameSettings {
     /// which is what the Parameters tab's "Reset" does. Individual nulls above
     /// mean "unchanged", so without this there is no way to clear one.
     bool clearGenerationOverrides = false,
+
+    /// Clears exactly the options the structure builder owns (expected
+    /// rebuys, re-entries, add-ons, their chip amounts and the two prices) so
+    /// a blank field really hands the decision back to the default.
+    bool clearBuilderOverrides = false,
   }) {
     return GameSettings(
       name: name ?? this.name,
@@ -482,8 +487,8 @@ class GameSettings {
       announceEliminations: announceEliminations ?? this.announceEliminations,
       forcePaidPlaces:
           clearForcePaidPlaces ? null : (forcePaidPlaces ?? this.forcePaidPlaces),
-      rebuyCost: rebuyCost ?? this.rebuyCost,
-      addOnCost: addOnCost ?? this.addOnCost,
+      rebuyCost: clearBuilderOverrides ? null : (rebuyCost ?? this.rebuyCost),
+      addOnCost: clearBuilderOverrides ? null : (addOnCost ?? this.addOnCost),
       locationPrivate: locationPrivate ?? this.locationPrivate,
       tableSettingsOverride: clearTableSettingsOverride
           ? null
@@ -495,7 +500,7 @@ class GameSettings {
           ? null
           : (lockedExpectedPlayers ?? this.lockedExpectedPlayers),
       breaks: breaks ?? this.breaks,
-      expectedRebuys: clearGenerationOverrides
+      expectedRebuys: clearGenerationOverrides || clearBuilderOverrides
           ? null
           : expectedRebuys ?? this.expectedRebuys,
       forceStack: clearForceStack ? null : (forceStack ?? this.forceStack),
@@ -505,18 +510,18 @@ class GameSettings {
       expectedRebuyRate: clearGenerationOverrides
           ? null
           : expectedRebuyRate ?? this.expectedRebuyRate,
-      expectedReEntries: clearGenerationOverrides
+      expectedReEntries: clearGenerationOverrides || clearBuilderOverrides
           ? null
           : expectedReEntries ?? this.expectedReEntries,
-      expectedAddOns: clearGenerationOverrides
+      expectedAddOns: clearGenerationOverrides || clearBuilderOverrides
           ? null
           : expectedAddOns ?? this.expectedAddOns,
       rebuyChips:
-          clearGenerationOverrides ? null : rebuyChips ?? this.rebuyChips,
+          clearGenerationOverrides || clearBuilderOverrides ? null : rebuyChips ?? this.rebuyChips,
       reEntryChips:
-          clearGenerationOverrides ? null : reEntryChips ?? this.reEntryChips,
+          clearGenerationOverrides || clearBuilderOverrides ? null : reEntryChips ?? this.reEntryChips,
       addOnChips:
-          clearGenerationOverrides ? null : addOnChips ?? this.addOnChips,
+          clearGenerationOverrides || clearBuilderOverrides ? null : addOnChips ?? this.addOnChips,
       levelDurationMins: clearGenerationOverrides
           ? null
           : levelDurationMins ?? this.levelDurationMins,

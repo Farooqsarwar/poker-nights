@@ -653,6 +653,232 @@ void main() {
     });
   });
 
+  group('player names (quick game)', () {
+    test('add / remove rows, never more than the player count', () {
+      final c = StructureBuilderController(
+        mode: BuilderMode.quick,
+        chipSet: kToolChipSets.values.first,
+        players: 3,
+      );
+      expect(c.playerNames, isEmpty);
+      expect(c.addPlayerName(), isTrue);
+      expect(c.addPlayerName(), isTrue);
+      expect(c.addPlayerName(), isTrue);
+      expect(c.addPlayerName(), isFalse, reason: 'a fourth name for 3 players');
+      c.setPlayerName(0, ' Alex ');
+      c.setPlayerName(2, 'Sam');
+      expect(c.namesToSeat, ['Alex', 'Sam'], reason: 'trimmed, blanks skipped');
+      c.removePlayerName(1);
+      expect(c.playerNames.length, 2);
+      c.setPlayers(3);
+      c.addPlayerName();
+      c.setPlayers(2);
+      expect(c.playerNames.length, lessThanOrEqualTo(2),
+          reason: 'shrinking the field trims the rows');
+    });
+
+    testWidgets('typed names reach the game; blank players stay "Player N"',
+        (t) async {
+      final app = AppProvider()
+        ..setUserForTesting(_host)
+        ..setCurrentGroupForTesting(_group);
+      await mount(t, const QuickStartScreen(), app: app);
+      expect(find.text('Player names (optional)'), findsOneWidget);
+      await tapKey(t, 'add-name');
+      await tapKey(t, 'add-name');
+      await t.enterText(find.byKey(const Key('name-field-0-2')), 'Alex');
+      await t.enterText(find.byKey(const Key('name-field-1-2')), 'Sam');
+      await tapKey(t, 'builder-next');
+      await tapKey(t, 'approve-stack');
+      await tapKey(t, 'builder-confirm');
+      await t.pump(const Duration(milliseconds: 500));
+      final names = app.currentGame!.players.map((p) => p.name).toList();
+      expect(names.take(2), ['Alex', 'Sam']);
+      expect(names[2], startsWith('Player'));
+      await unmount(t, app);
+    });
+
+    testWidgets('only the quick game shows the names section', (t) async {
+      await mount(t, const ToolBlindsScreen());
+      expect(find.text('Player names (optional)'), findsNothing);
+      await unmount(t);
+    });
+  });
+
+  group('every control of the old review screen is reachable', () {
+    Future<void> openMore(WidgetTester t) async {
+      final tile = find.byKey(const Key('more-options'));
+      await t.ensureVisible(tile);
+      await t.tap(tile);
+      await t.pumpAndSettle();
+    }
+
+    Future<void> type(WidgetTester t, String key, String text) async {
+      final f = find.byKey(Key(key));
+      await t.ensureVisible(f);
+      await t.enterText(f, text);
+      await t.pump();
+    }
+
+    Future<void> pumpBuilder(
+        WidgetTester t, StructureBuilderController c) async {
+      await t.binding.setSurfaceSize(const Size(800, 6000));
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StructureBuilder(
+                controller: c, confirmLabel: 'Go', onConfirm: (_) {}),
+          ),
+        ),
+      ));
+      await openMore(t);
+    }
+
+    testWidgets('buy-in, level length, organiser, table size, paid places',
+        (t) async {
+      final c = _ctl(players: 8);
+      await pumpBuilder(t, c);
+      await type(t, 'opt-buyin', '40');
+      await type(t, 'opt-level-mins', '25');
+      await type(t, 'opt-organiser', '10');
+      await type(t, 'opt-max-per-table', '7');
+      await type(t, 'opt-paid-places', '3');
+      final s = c.applyTo(_eventSettings(players: 8, rebuys: false));
+      expect(s.buyIn, 40);
+      expect(s.levelDurationMins, 25);
+      expect(s.organizerPct, 10);
+      expect(s.tableSettingsOverride?.maxPerTable, 7);
+      expect(s.forcePaidPlaces, 3);
+      // Blank hands the decision back.
+      await type(t, 'opt-paid-places', '');
+      await type(t, 'opt-max-per-table', '');
+      final back = c.applyTo(s);
+      expect(back.forcePaidPlaces, isNull);
+      expect(back.tableSettingsOverride, isNull);
+      await unmount(t);
+    });
+
+    testWidgets('knockout bounty on / off and its amount', (t) async {
+      final c = _ctl(players: 8);
+      await pumpBuilder(t, c);
+      expect(find.byKey(const Key('opt-ko-amount')), findsNothing);
+      await t.ensureVisible(find.byKey(const Key('opt-ko-toggle')));
+      await t.tap(find.byKey(const Key('opt-ko-toggle')));
+      await t.pump();
+      await type(t, 'opt-ko-amount', '8');
+      final s = c.applyTo(_eventSettings(players: 8, rebuys: false));
+      expect(s.koEnabled, isTrue);
+      expect(s.koAmount, 8);
+      await unmount(t);
+    });
+
+    testWidgets('rebuy + add-on: prices, expected counts and chip amounts',
+        (t) async {
+      final c = _ctl(format: TournamentFormat.rebuy, players: 8)..setAddOn(true);
+      await pumpBuilder(t, c);
+      await type(t, 'opt-rebuy-price', '15');
+      await type(t, 'opt-addon-price', '10');
+      await type(t, 'opt-exp-rebuys', '3');
+      await type(t, 'opt-exp-addons', '5');
+      await type(t, 'opt-rebuy-chips', '1000');
+      await type(t, 'opt-addon-chips', '1500');
+      final s = c.applyTo(_eventSettings(players: 8));
+      expect(s.rebuyCost, 15);
+      expect(s.addOnCost, 10);
+      expect(s.expectedRebuys, 3);
+      expect(s.expectedAddOns, 5);
+      expect(s.rebuyChips, 1000);
+      expect(s.addOnChips, 1500);
+      // Cleared fields really clear (not "unchanged").
+      await type(t, 'opt-rebuy-price', '');
+      await type(t, 'opt-exp-rebuys', '');
+      final back = c.applyTo(s);
+      expect(back.rebuyCost, isNull);
+      expect(back.expectedRebuys, isNull);
+      await unmount(t);
+    });
+
+    testWidgets('re-entry: expected re-entries and re-entry chips', (t) async {
+      final c = _ctl(format: TournamentFormat.reEntry, players: 8);
+      await pumpBuilder(t, c);
+      await type(t, 'opt-exp-reentries', '2');
+      await type(t, 'opt-reentry-chips', '800');
+      final s = c.applyTo(_eventSettings(players: 8, rebuys: false));
+      expect(s.expectedReEntries, 2);
+      expect(s.reEntryChips, 800);
+      await unmount(t);
+    });
+
+    test('every option survives the codec and reopening', () {
+      final c = StructureBuilderController.fromSettings(
+          _eventSettings(players: 8, rebuys: false));
+      c.updateOptions((o) {
+        o.koEnabled = true;
+        o.koAmount = 6;
+        o.organizerPct = 5;
+        o.paidPlaces = 2;
+        o.maxPerTable = 6;
+        o.rebuyCost = 12;
+        o.addOnCost = 9;
+      });
+      c.updateOptions((o) => o.expectedAddOns = 4, ladder: true);
+      final saved = c.applyTo(_eventSettings(players: 8, rebuys: false));
+      final round = gameSettingsFromMap(gameSettingsToMap(saved));
+      final again = StructureBuilderController.fromSettings(round);
+      expect(again.options.koEnabled, isTrue);
+      expect(again.options.koAmount, 6);
+      expect(again.options.organizerPct, 5);
+      expect(again.options.paidPlaces, 2);
+      expect(again.options.maxPerTable, 6);
+      expect(again.options.rebuyCost, 12);
+      expect(again.options.addOnCost, 9);
+      expect(again.options.expectedAddOns, 4);
+    });
+
+    test('money options never move the ladder; expectations do', () {
+      final c = _ctl(format: TournamentFormat.rebuy, players: 8);
+      c.approveStack();
+      final l3 = c.structure.levels[2];
+      c.editLevel(3, sb: l3.sb, bb: l3.bb, mins: l3.durationMins);
+      c.updateOptions((o) => o.organizerPct = 10);
+      c.setBuyIn(50);
+      expect(c.isPinned(3), isTrue, reason: 'prizes are not a ladder input');
+      c.updateOptions((o) => o.expectedRebuys = 6, ladder: true);
+      expect(c.isPinned(3), isFalse,
+          reason: 'expectations change the chips in play, so pins are dropped');
+    });
+
+    testWidgets('Fix chip count is on the stack step for a real chip case',
+        (t) async {
+      final c = _ctl(players: 8, chips: _homeSet);
+      await t.binding.setSurfaceSize(const Size(800, 6000));
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: StructureBuilder(
+              controller: c,
+              confirmLabel: 'Go',
+              onConfirm: (_) {},
+            ),
+          ),
+        ),
+      ));
+      await tapKey(t, 'builder-next');
+      expect(find.byKey(const Key('fix-count')), findsOneWidget);
+      await tapKey(t, 'fix-count');
+      expect(find.text('Fix the count'), findsOneWidget);
+      await unmount(t);
+    });
+
+    testWidgets('the free tool has no Fix chip count (it has no chip case)',
+        (t) async {
+      await mount(t, const ToolBlindsScreen());
+      await tapKey(t, 'builder-next');
+      expect(find.byKey(const Key('fix-count')), findsNothing);
+      await unmount(t);
+    });
+  });
+
   group('suggestions', () {
     test('rebuys: unlimited at a small table, limited above it', () {
       expect(StructureBuilderController.suggestRebuyLimit(6), isNull);

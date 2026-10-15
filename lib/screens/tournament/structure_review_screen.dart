@@ -16,6 +16,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/journey_progress.dart';
+import '../../widgets/save_chip_set_offer.dart';
 import '../../widgets/structure_builder.dart';
 
 /// "Create structure" for a group event (route `/structure-review`, unchanged).
@@ -179,6 +180,12 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
           StructureBuilder(
             controller: controller,
             confirmLabel: 'Save structure',
+            onChipCountFixed: (counts) => offerSaveChipSet(
+              context,
+              app,
+              counts,
+              setName: game.settings.chipSetName,
+            ),
             onEditChips: () => context.push(RoutePaths.chipSets),
             onPersist: () => _persist(app, controller),
             onConfirm: (s) {

@@ -18,6 +18,7 @@ import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/code_display.dart';
 import '../../widgets/page_header.dart';
+import '../../widgets/save_chip_set_offer.dart';
 import '../../widgets/structure_builder.dart';
 
 /// C0 -- "Start a game now". Friends are already at the table.
@@ -239,7 +240,7 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
     // A quick game is the people at the table, not the group roster.
     app.setCurrentGame(created.copyWith(players: const []));
     app.publishGame(announce: false);
-    app.addQuickPlayers(c.players);
+    app.addQuickPlayers(c.players, names: c.namesToSeat);
     // Rebuilds from the saved settings, which carry the approved stack, the
     // pinned levels and a chosen rebuy close: the structure the host approved.
     app.generateFinalStructure(c.players);
@@ -360,6 +361,12 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
             playersHint: last == null ? null : 'Last time: $last players',
             busy: _starting,
             error: _error,
+            onChipCountFixed: (counts) => offerSaveChipSet(
+              context,
+              app,
+              counts,
+              setName: _chipsName(app),
+            ),
             onEditChips: () => context.push(RoutePaths.chipSets).then((_) {
               if (mounted) controller.setChipSet(_chips(app));
             }),

@@ -13,12 +13,10 @@ import 'package:poker_night/screens/tournament/create_tournament_screen.dart';
 import 'package:poker_night/services/payment_service.dart';
 import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/utils/model_codec.dart';
-import 'package:poker_night/widgets/app_toggle.dart';
-import 'package:poker_night/widgets/count_stepper.dart';
 
 /// §C1 step 1 — the KO bounty. Off by default; a toggle, then an amount
-/// (5–50, step  5) and a type, of which Fixed is free and the other two carry
-/// a PREMIUM pill and open G1 when tapped.
+/// (5–50, step 5). The model still preserves older bounty kinds, while the
+/// light event deliberately asks for no structure-only bounty variant.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   // The recovery store is shared between AppProviders and writes into the real
@@ -255,11 +253,12 @@ void main() {
       }
     }
 
-    /// Turns the KO bounty on and waits for the amount + type rows it reveals.
+    /// Turns the KO bounty on and waits for the amount row it reveals.
     Future<void> turnBountyOn(WidgetTester tester) async {
-      await tester.ensureVisible(find.byType(AppToggle));
+      final toggle = find.byKey(const Key('event-ko-toggle'));
+      await tester.ensureVisible(toggle);
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(AppToggle));
+      await tester.tap(toggle);
       await tester.pumpAndSettle();
     }
 
@@ -276,15 +275,8 @@ void main() {
         await turnBountyOn(tester);
 
         expect(find.text('KO bounty'), findsOneWidget);
-        expect(
-          find.text('On top of the buy-in, a separate pot'),
-          findsOneWidget,
-        );
         expect(find.text('Bounty amount'), findsOneWidget);
-        expect(find.text('Bounty type'), findsOneWidget);
-        expect(find.text('Fixed'), findsOneWidget);
-        expect(find.text('Progressive'), findsOneWidget);
-        expect(find.text('Mystery'), findsOneWidget);
+        expect(find.text('Bounty type'), findsNothing);
       });
     });
 
@@ -293,21 +285,25 @@ void main() {
       await screen(tester, provider(), paywall, () async {
         await turnBountyOn(tester);
 
-        expect(find.byType(CountStepper), findsOneWidget);
+        final amount = find.byKey(const Key('event-ko-amount'));
+        expect(amount, findsOneWidget);
         expect(find.text('5'), findsOneWidget);
 
-        await tester.tap(find.byIcon(Icons.add));
+        final plus = find.descendant(of: amount, matching: find.byIcon(Icons.add));
+        final minus =
+            find.descendant(of: amount, matching: find.byIcon(Icons.remove));
+        await tester.tap(plus);
         await tester.pumpAndSettle();
         expect(find.text('10'), findsOneWidget);
 
-        await tester.tap(find.byIcon(Icons.add));
+        await tester.tap(plus);
         await tester.pumpAndSettle();
         expect(find.text('15'), findsOneWidget);
 
         // The top of the range is a hard stop, not a hint: twenty more taps
         // leave the value on 50.
         for (var i = 0; i < 20; i++) {
-          await tester.tap(find.byIcon(Icons.add));
+          await tester.tap(plus);
           await tester.pumpAndSettle();
         }
         expect(find.text('50'), findsOneWidget);
@@ -315,55 +311,50 @@ void main() {
         // And the bottom of it is 5, not 0 — a bounty is never free money
         // nobody is paying into.
         for (var i = 0; i < 20; i++) {
-          await tester.tap(find.byIcon(Icons.remove));
+          await tester.tap(minus);
           await tester.pumpAndSettle();
         }
         expect(find.text('5'), findsOneWidget);
       });
     });
 
-    testWidgets('the amount is shown as buy-in plus bounty', (tester) async {
-      final paywall = ValueNotifier<bool>(false);
-      await screen(tester, provider(), paywall, () async {
-        await turnBountyOn(tester);
-        // The stepper's 5 against the draft's untouched buy-in of 0.
-        expect(find.text('Shown as "0 + 5"'), findsOneWidget);
-      });
-    });
-
-    testWidgets('Fixed is free; the other two carry the PREMIUM pill', (
+    testWidgets('the amount remains visible beside the bounty label', (
       tester,
     ) async {
       final paywall = ValueNotifier<bool>(false);
       await screen(tester, provider(), paywall, () async {
         await turnBountyOn(tester);
-
-        // The pill rides on the two Premium cards and nowhere else: two of the
-        // three, not three of the three.
-        expect(find.text('PREMIUM'), findsNWidgets(2));
-        expect(find.text('Free'), findsOneWidget);
+        expect(find.byKey(const Key('event-ko-amount')), findsOneWidget);
+        expect(find.text('Bounty amount'), findsOneWidget);
       });
     });
 
-    testWidgets('tapping a Premium kind opens the paywall on the free tier', (
+    testWidgets('the light event does not ask for a bounty type', (
       tester,
     ) async {
       final paywall = ValueNotifier<bool>(false);
       await screen(tester, provider(), paywall, () async {
         await turnBountyOn(tester);
+        expect(find.text('Bounty type'), findsNothing);
+        expect(find.text('Progressive'), findsNothing);
+        expect(find.text('Mystery'), findsNothing);
+      });
+    });
 
-        await tester.ensureVisible(find.text('Mystery'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Mystery'));
-        await tester.pumpAndSettle();
+    testWidgets('the bounty toggle never opens a paywall on the free tier', (
+      tester,
+    ) async {
+      final paywall = ValueNotifier<bool>(false);
+      await screen(tester, provider(), paywall, () async {
+        await turnBountyOn(tester);
 
         // G1 — `/premium`, the same route PremiumGate and PremiumLock push.
-        expect(paywall.value, isTrue);
-        expect(find.text('Upgrade'), findsOneWidget);
+        expect(paywall.value, isFalse);
+        expect(find.text('Upgrade'), findsNothing);
       });
     });
 
-    testWidgets('a Premium kind is selectable once the tier allows it', (
+    testWidgets('Premium does not add fields to the light event', (
       tester,
     ) async {
       final paywall = ValueNotifier<bool>(false);
@@ -374,15 +365,10 @@ void main() {
         () async {
           await turnBountyOn(tester);
 
-          await tester.ensureVisible(find.text('Progressive'));
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Progressive'));
-          await tester.pumpAndSettle();
-
           // Stayed on the wizard rather than bouncing to the paywall.
           expect(paywall.value, isFalse);
-          expect(find.text('Upgrade'), findsNothing);
-          expect(find.text('Progressive'), findsOneWidget);
+          expect(find.text('Bounty type'), findsNothing);
+          expect(find.text('Progressive'), findsNothing);
         },
       );
     });

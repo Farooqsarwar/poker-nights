@@ -415,6 +415,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final level = game.currentLevelData;
     final activePlayers = game.activePlayers;
     final eliminatedPlayers = game.eliminatedPlayers;
+    final payoutsRevealed = game.payoutTableRevealed;
 
     // The money bubble, derived rather than stored. It is a fact about two
     // numbers that already exist — how many players are left and how many get
@@ -850,7 +851,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           // Estimated finish — required on the admin control screen
           // (Tech spec §11.1, audit fix B3).
-          if (status.isActiveLive || status == LiveGameStatus.rebuypause) ...[
+          if (!device.isCompact &&
+              (status.isActiveLive || status == LiveGameStatus.rebuypause)) ...[
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: Row(
@@ -876,7 +878,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             // Row 1: Timer full width, top center
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.xl),
-              child: TournamentDisplayBlock(game: game, showStatusChip: true),
+              child: TournamentDisplayBlock(
+                game: game,
+                showStatusChip: true,
+                showPayoutTable: payoutsRevealed,
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
             const SizedBox(height: AppSpacing.lg),
@@ -911,7 +917,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 icon: Icons.play_arrow,
                               ),
                             );
-                          } else if (status == LiveGameStatus.published) {
+                          } else if (status == LiveGameStatus.published ||
+                              status == LiveGameStatus.running) {
                             return AppButton(
                               size: AppButtonSize.lg,
                               variant: AppButtonVariant.primary,
@@ -923,6 +930,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             );
                           } else {
                             final canResume =
+                                status != LiveGameStatus.rebuypause &&
                                 status != LiveGameStatus.finaltable &&
                                 status != LiveGameStatus.completed &&
                                 status != LiveGameStatus.cancelled;
@@ -1224,9 +1232,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               // now" control lives on it rather than being
                               // buried in the quick tools.
                               const AppTabItem(id: 'levels', label: 'Levels'),
-                              const AppTabItem(
+                              AppTabItem(
                                 id: 'prize',
-                                label: 'Prizes (private)',
+                                label: payoutsRevealed
+                                    ? 'Prizes (private)'
+                                    : 'Prize pool',
                               ),
                               const AppTabItem(id: 'audit', label: 'Audit Log'),
                             ],
@@ -1286,7 +1296,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   structure: structure,
                                   settings: settings,
                                   remainingPlayers: activePlayers.length,
-                                  settled: game.settlementConfirmed,
+                                  payoutsRevealed: payoutsRevealed,
                                   structureEnded:
                                       (status == LiveGameStatus.running ||
                                           status == LiveGameStatus.paused ||
@@ -1300,7 +1310,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 // for every non-admin role, so this can never
                                 // reach a player screen -- but it lives on the
                                 // prize tab, which is admin-gated anyway.
-                                if (isAdmin) ...[
+                                if (isAdmin && payoutsRevealed) ...[
                                   const SizedBox(height: AppSpacing.lg),
                                   Builder(
                                     builder: (_) {
@@ -1473,6 +1483,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           );
                         } else {
                           final canResume =
+                              status != LiveGameStatus.rebuypause &&
                               status != LiveGameStatus.finaltable &&
                               status != LiveGameStatus.completed &&
                               status != LiveGameStatus.cancelled;
@@ -1539,7 +1550,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          onTap: currentLevel >= structure.levels.length
+                          onTap: status == LiveGameStatus.rebuypause
+                              ? () => context.push(RoutePaths.rebuySettlement)
+                              : currentLevel >= structure.levels.length
                               ? null
                               : () => app.nextLevel(
                                   idempotencyKey: _idemKey('next'),
@@ -1548,12 +1561,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(
-                                'Next',
-                                style: TextStyle(
-                                  color: AppColors.foreground,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
+                              Flexible(
+                                child: Text(
+                                  status == LiveGameStatus.rebuypause
+                                      ? 'Settlement'
+                                      : 'Next',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: AppColors.foreground,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                               SizedBox(width: 4),
@@ -1673,7 +1692,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     // Spec C6. Same five-plus-one destinations as the desktop
                     // AppTabs: a phone host has the same rebuy control to reach.
                     _buildPillTab('levels', 'Levels'),
-                    _buildPillTab('prize', 'Prizes'),
+                    _buildPillTab(
+                      'prize',
+                      payoutsRevealed ? 'Prizes' : 'Prize pool',
+                    ),
                     _buildPillTab('audit', 'Audit Log'),
                   ],
                 ),
@@ -1705,7 +1727,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 structure: structure,
                 settings: settings,
                 remainingPlayers: activePlayers.length,
-                settled: game.settlementConfirmed,
+                payoutsRevealed: payoutsRevealed,
                 structureEnded:
                     (status == LiveGameStatus.running ||
                         status == LiveGameStatus.paused ||
@@ -1718,7 +1740,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               // strips payments for every non-admin role, so this can never
               // reach a player screen; mobile had every prize-tab element but
               // this one.
-              if (isAdmin) ...[
+              if (isAdmin && payoutsRevealed) ...[
                 const SizedBox(height: AppSpacing.lg),
                 Builder(
                   builder: (_) {
@@ -2174,7 +2196,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             size: AppButtonSize.md,
             variant: AppButtonVariant.secondary,
             onPressed: () => _showAddLatePlayerModal(context, app),
-            child: const Text('+ Add Late Player (Late Reg)'),
+            child: const Text('Add a walk-in player'),
           ),
         ),
       for (final p in game.activePlayers)
@@ -2828,7 +2850,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           padding: const EdgeInsets.only(bottom: AppSpacing.md),
           child: _ShotClockBar(app: app, game: game),
         ),
-      if (app.isAdmin && app.lateRegistrationOpen)
+      if (app.canRunCurrentGame && app.lateRegistrationOpen)
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.md),
           child: AppButton(
@@ -2836,7 +2858,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             size: AppButtonSize.md,
             variant: AppButtonVariant.secondary,
             onPressed: () => _showAddLatePlayerModal(context, app),
-            child: const Text('+ Add Late Player (Late Reg)'),
+            child: const Text('Add a walk-in player'),
           ),
         ),
       for (final p in game.activePlayers)
@@ -4772,14 +4794,14 @@ class _PrizeTab extends StatelessWidget {
     required this.structure,
     required this.settings,
     required this.remainingPlayers,
-    required this.settled,
+    required this.payoutsRevealed,
     this.structureEnded = false,
   });
 
   final TournamentStructure structure;
   final GameSettings settings;
   final int remainingPlayers;
-  final bool settled;
+  final bool payoutsRevealed;
 
   /// True when the structure's final level countdown has reached zero while
   /// players remain — the tournament can still be finished per §4.17.
@@ -4789,103 +4811,40 @@ class _PrizeTab extends StatelessWidget {
   Widget build(BuildContext context) {
     const placeLabel = ['1st', '2nd', '3rd', '4th'];
 
-    // Client rule: the price distribution is only calculated at the end of
-    // the rebuy level, when the exact field and add-ons are known. Until the
-    // settlement is confirmed the admin sees the estimate only.
-    if (!settled) {
-      return Column(
-        children: [
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const AppAlertBanner(
-                  type: AppAlertType.info,
-                  message:
-                      'Prize amounts are private — only visible to you as host.',
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Icon(
-                  Icons.lock_outline,
-                  size: 28,
-                  color: AppColors.mutedForeground,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'Distribution calculated at rebuy close',
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  'Payouts are calculated at the end of Level ${settings.rebuysCloseLevel}, '
-                  'when the exact number of players, actual rebuys and selected add-ons are known.',
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
-                const Divider(height: AppSpacing.lg),
-                Row(
-                  children: [
-                    Text(
-                      'Est. prize pool',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${structure.prizePool}',
-                      style: AppTypography.monoXs.copyWith(
-                        color: AppColors.foreground,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Text(
-                      'Organizational costs · ${settings.organizerPct}%',
-                      style: AppTypography.bodyXs.copyWith(
-                        color: AppColors.mutedForeground,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${structure.organizerAmount}',
-                      style: AppTypography.monoXs.copyWith(
-                        color: AppColors.foreground,
-                      ),
-                    ),
-                  ],
-                ),
-                // 14-010 / 14-011: the residue is a ROUNDING REMAINDER, never an
-                // organizer cut. Shown only when it exists so a 0% game does not
-                // grow a mysterious retained line.
-                if (structure.roundingRemainder > 0)
-                  Row(
-                    children: [
-                      Text(
-                        'Rounding remainder',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${structure.roundingRemainder}',
-                        style: AppTypography.monoXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
+    // The rolling pool is safe to show while entries can still change. The
+    // paid-place ladder appears only after the relevant close boundary.
+    if (!payoutsRevealed) {
+      return AppCard(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Prize pool so far',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.mutedForeground,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              Formatters.prize(structure.prizePool),
+              style: AppTypography.monoLg.copyWith(
+                color: AppColors.foreground,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              settings.effectiveFormat == TournamentFormat.freezeOut
+                  ? 'The payout table appears when late registration closes.'
+                  : 'The payout table appears after rebuy settlement.',
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ],
+        ),
       );
     }
 

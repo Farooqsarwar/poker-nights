@@ -415,6 +415,8 @@ class _TVLayoutState extends State<_TVLayout> {
                                     child: TournamentDisplayBlock(
                                       game: game,
                                       showPayoutAmounts: false,
+                                      showPayoutTable:
+                                          game.payoutTableRevealed,
                                     ),
                                   ),
                                 ),
@@ -474,6 +476,7 @@ class _TVLayoutState extends State<_TVLayout> {
                       TournamentDisplayBlock(
                         game: game,
                         showPayoutAmounts: false,
+                        showPayoutTable: game.payoutTableRevealed,
                       ),
                       const SizedBox(height: AppSpacing.md),
                       Consumer<AppProvider>(
@@ -999,49 +1002,53 @@ class _PayoutsPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Divider(height: 1, color: AppColors.border),
-          const SizedBox(height: AppSpacing.sm),
-          for (var i = 0; i < paidPlaces; i++)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Text(
-                    _ords[i],
-                    style: AppTypography.mono(
-                      size: 12 * scale,
-                      weight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    i < prizes.length ? Formatters.prize(prizes[i].amount) : '—',
-                    style: AppTypography.mono(
-                      size: 12 * scale,
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (game.status == LiveGameStatus.completed)
+          if (game.payoutTableRevealed) ...[
+            Divider(height: 1, color: AppColors.border),
+            const SizedBox(height: AppSpacing.sm),
+            for (var i = 0; i < paidPlaces; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
                     Text(
-                      _podiumName(i + 1),
+                      _ords[i],
                       style: AppTypography.mono(
-                        size: 13 * scale,
-                        color: AppColors.foreground,
+                        size: 12 * scale,
+                        weight: FontWeight.w700,
+                        color: AppColors.primary,
                       ),
-                    )
-                  else if (i < activeLeaders.length)
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
                     Text(
-                      '${activeLeaders[i].name} (${Formatters.chips(activeLeaders[i].stack ?? 0)})',
+                      i < prizes.length
+                          ? Formatters.prize(prizes[i].amount)
+                          : '—',
                       style: AppTypography.mono(
                         size: 12 * scale,
                         color: AppColors.mutedForeground,
                       ),
                     ),
-                ],
+                    const Spacer(),
+                    if (game.status == LiveGameStatus.completed)
+                      Text(
+                        _podiumName(i + 1),
+                        style: AppTypography.mono(
+                          size: 13 * scale,
+                          color: AppColors.foreground,
+                        ),
+                      )
+                    else if (i < activeLeaders.length)
+                      Text(
+                        '${activeLeaders[i].name} (${Formatters.chips(activeLeaders[i].stack ?? 0)})',
+                        style: AppTypography.mono(
+                          size: 12 * scale,
+                          color: AppColors.mutedForeground,
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
+          ],
         ],
       ),
     );

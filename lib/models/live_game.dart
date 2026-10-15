@@ -834,9 +834,7 @@ class LiveGame {
   /// §11.4. See [ShootoutStage].
   final ShootoutStage? shootoutStage;
 
-  /// True once the end-of-rebuy settlement has been confirmed. The public
-  /// label then changes from "Estimated Prize Pool" to "Prize Pool"
-  /// (checklist 12-068, 14-038/14-039, 15-009, 15-030).
+  /// True once the end-of-rebuy settlement has been confirmed.
   final bool settlementConfirmed;
 
   /// The host pressed Next on the add-on step of settlement (Addendum 2).
@@ -1068,9 +1066,9 @@ class LiveGame {
     return changed;
   }
 
-  /// Public prize-pool label: estimated until settlement is confirmed.
+  /// Public prize-pool label while the payout table is gated or revealed.
   String get prizePoolLabel =>
-      settlementConfirmed ? 'Prize Pool' : 'Estimated Prize Pool';
+      payoutTableRevealed ? 'Prize Pool' : 'Prize Pool So Far';
 
   Player? get dealerPlayer => dealerPlayerId == null
       ? null
@@ -1320,6 +1318,18 @@ class LiveGame {
       (settings.rebuysCloseLevel > 0 &&
           currentLevel > settings.rebuysCloseLevel);
 
+  /// The final payout ladder stays private until no more entries can change
+  /// it. Rebuy and re-entry games use the settlement confirmation as that
+  /// boundary; freeze-outs have no settlement, so their existing late-
+  /// registration boundary is the reveal point.
+  bool get payoutTableRevealed {
+    final format = settings.effectiveFormat;
+    if (format == TournamentFormat.rebuy ||
+        format == TournamentFormat.reEntry) {
+      return settlementConfirmed;
+    }
+    return registrationClosed;
+  }
 
   /// Starting stacks are frozen the moment the tournament goes live. Blinds,
   /// levels and the player count stay editable during play (client feedback).

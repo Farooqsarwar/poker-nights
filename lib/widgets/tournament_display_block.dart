@@ -23,6 +23,7 @@ class TournamentDisplayBlock extends StatelessWidget {
     required this.game,
     this.showStatusChip = true,
     this.showPayoutAmounts = true,
+    this.showPayoutTable = true,
   });
 
   final LiveGame game;
@@ -31,6 +32,10 @@ class TournamentDisplayBlock extends StatelessWidget {
   /// Whether individual payout amounts are rendered. The public TV route must
   /// set this to false: payouts are private to the host (§13.1).
   final bool showPayoutAmounts;
+
+  /// Whether the payout ladder exists on this surface at all. Before the
+  /// field is final the live dashboard shows only the rolling prize pool.
+  final bool showPayoutTable;
 
   static final Color _black = AppColors.background;
   static final Color _red = AppColors.primary;
@@ -53,6 +58,7 @@ class TournamentDisplayBlock extends StatelessWidget {
             // screen and should be removed there (see notes below).
             showStatusChip: true,
             showPayoutAmounts: showPayoutAmounts,
+            showPayoutTable: showPayoutTable,
           );
         }
 
@@ -69,6 +75,7 @@ class TournamentDisplayBlock extends StatelessWidget {
             game: game,
             showStatusChip: showStatusChip,
             showPayoutAmounts: showPayoutAmounts,
+            showPayoutTable: showPayoutTable,
           ),
         );
       },
@@ -154,11 +161,13 @@ class _WideLayout extends StatelessWidget {
     required this.game,
     required this.showStatusChip,
     required this.showPayoutAmounts,
+    required this.showPayoutTable,
   });
 
   final LiveGame game;
   final bool showStatusChip;
   final bool showPayoutAmounts;
+  final bool showPayoutTable;
 
   @override
   Widget build(BuildContext context) {
@@ -353,7 +362,7 @@ class _WideLayout extends StatelessWidget {
                 ),
                 const _HorizontalLine(),
 
-                if (game.structure.prizes.isNotEmpty)
+                if (showPayoutTable && game.structure.prizes.isNotEmpty)
                   SizedBox(
                     height: 100 * s,
                     child: _WidePayouts(
@@ -796,11 +805,13 @@ class _CompactLayout extends StatelessWidget {
     required this.game,
     required this.showStatusChip,
     required this.showPayoutAmounts,
+    required this.showPayoutTable,
   });
 
   final LiveGame game;
   final bool showStatusChip;
   final bool showPayoutAmounts;
+  final bool showPayoutTable;
 
   @override
   Widget build(BuildContext context) {
@@ -926,7 +937,7 @@ class _CompactLayout extends StatelessWidget {
                 redSlash: true,
               ),
             ),
-            if (game.structure.prizes.isNotEmpty) ...[
+            if (showPayoutTable && game.structure.prizes.isNotEmpty) ...[
               const _HorizontalLine(),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),

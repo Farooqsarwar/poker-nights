@@ -124,7 +124,8 @@ Future<GoRouter> _mount(
   AppProvider app, {
   Size size = const Size(390, 844),
 }) async {
-  await tester.binding.setSurfaceSize(size);
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
   final router = GoRouter(
     routes: [
       GoRoute(
@@ -155,7 +156,8 @@ Future<void> _unmount(
   await tester.pumpWidget(const SizedBox.shrink());
   router.dispose();
   app.dispose();
-  await tester.binding.setSurfaceSize(null);
+  tester.view.resetPhysicalSize();
+  tester.view.resetDevicePixelRatio();
 }
 
 void main() {
@@ -166,16 +168,19 @@ void main() {
 
   test('rebuy payouts stay hidden until settlement is confirmed', () {
     expect(_game().payoutTableRevealed, isFalse);
+    expect(_game().prizePoolLabel, 'Prize Pool So Far');
     expect(
       _game(status: LiveGameStatus.rebuypause).payoutTableRevealed,
       isFalse,
     );
     expect(_game(level: 3, settled: true).payoutTableRevealed, isTrue);
+    expect(_game(level: 3, settled: true).prizePoolLabel, 'Prize Pool');
   });
 
   test('freeze-out payouts appear when late registration closes', () {
     expect(_game(rebuys: false, level: 2).payoutTableRevealed, isFalse);
     expect(_game(rebuys: false, level: 3).payoutTableRevealed, isTrue);
+    expect(_game(rebuys: false, level: 3).prizePoolLabel, 'Prize Pool');
   });
 
   test('quick game hold to settlement reveals the final payout table', () {
@@ -226,12 +231,43 @@ void main() {
     await _unmount(tester, app, router);
   });
 
+  testWidgets('a running desktop dashboard shows Pause instead of Resume', (
+    tester,
+  ) async {
+    final app = _provider(_game());
+    final router = await _mount(tester, app, size: const Size(1200, 1800));
+
+    expect(find.text('Pause Timer'), findsOneWidget);
+    expect(find.text('Resume Timer'), findsNothing);
+
+    await _unmount(tester, app, router);
+  });
+
+  testWidgets('the compact rebuy hold opens settlement instead of advancing', (
+    tester,
+  ) async {
+    final app = _provider(_game(status: LiveGameStatus.rebuypause, level: 3));
+    final router = await _mount(tester, app, size: const Size(390, 1000));
+
+    expect(find.text('Settlement'), findsOneWidget);
+    expect(find.text('Next'), findsNothing);
+
+    final settlementButton = find.ancestor(
+      of: find.text('Settlement'),
+      matching: find.byType(InkWell),
+    );
+    expect(settlementButton, findsOneWidget);
+    expect(tester.widget<InkWell>(settlementButton).onTap, isNotNull);
+
+    await _unmount(tester, app, router);
+  });
+
   testWidgets('the prize tab shows only the pool until payouts are revealed', (
     tester,
   ) async {
     final game = _game();
     final app = _provider(game);
-    final router = await _mount(tester, app, size: const Size(390, 1800));
+    final router = await _mount(tester, app, size: const Size(1200, 1800));
 
     await tester.tap(find.text('Prize pool'));
     await tester.pump();

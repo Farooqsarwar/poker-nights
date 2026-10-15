@@ -128,7 +128,13 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       targetDepthBB: TournamentType.normal.depthBB,
       breaks: const [],
     );
-    return app.defaultGamePreset.applyTo(starter);
+    final seeded = app.defaultGamePreset.applyTo(starter);
+    return app.defaultGamePresetId == null
+        ? seeded.copyWith(
+            chipSet: starter.chipSet,
+            chipSetName: starter.chipSetName,
+          )
+        : seeded;
   }
 
   GameSettings _normalise(GameSettings settings) {

@@ -136,7 +136,13 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       locationPrivate: false,
       breaks: const [],
     );
-    return app.defaultGamePreset.applyTo(base);
+    final seeded = app.defaultGamePreset.applyTo(base);
+    // A deliberately selected game preset is complete, including its chips.
+    // With no selection, the starter supplies game rules while the host's
+    // existing chip-case default remains the more specific physical choice.
+    return app.defaultGamePresetId == null
+        ? seeded.copyWith(chipSet: base.chipSet, chipSetName: base.chipSetName)
+        : seeded;
   }
 
   /// The settings the game is created with: a plain "tonight" night, carrying

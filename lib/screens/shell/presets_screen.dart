@@ -202,7 +202,10 @@ class _PresetsScreenState extends State<PresetsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.xs,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
                           'Game presets',
@@ -211,7 +214,6 @@ class _PresetsScreenState extends State<PresetsScreen> {
                             weight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.sm),
                         AppTag(
                           app.premiumTier == PremiumTier.premium
                               ? 'UNLIMITED'
@@ -261,46 +263,75 @@ class _PresetsScreenState extends State<PresetsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                p.name,
-                                style: AppTypography.bodyLg.copyWith(
-                                  fontWeight: FontWeight.w600,
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final actions = <Widget>[
+                              if (app.defaultGamePreset.id == p.id)
+                                const AppTag(
+                                  'DEFAULT',
+                                  tone: AppTagTone.success,
+                                )
+                              else
+                                TextButton(
+                                  onPressed: () =>
+                                      app.setDefaultGamePreset(p.id),
+                                  child: const Text('Make default'),
+                                ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Edit',
+                                onPressed: () => _editPreset(app, p),
+                                icon: Icon(
+                                  Icons.edit_outlined,
+                                  size: 18,
+                                  color: AppColors.mutedForeground,
                                 ),
                               ),
-                            ),
-                            if (app.defaultGamePreset.id == p.id)
-                              const AppTag('DEFAULT', tone: AppTagTone.success)
-                            else
-                              TextButton(
-                                onPressed: () => app.setDefaultGamePreset(p.id),
-                                child: const Text('Make default'),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Delete',
+                                onPressed: p.id.startsWith('starter-')
+                                    ? null
+                                    : () => _confirmDelete(p, app),
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                  color: AppColors.mutedForeground,
+                                ),
                               ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              tooltip: 'Edit',
-                              onPressed: () => _editPreset(app, p),
-                              icon: Icon(
-                                Icons.edit_outlined,
-                                size: 18,
-                                color: AppColors.mutedForeground,
-                              ),
-                            ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              tooltip: 'Delete',
-                              onPressed: p.id.startsWith('starter-')
-                                  ? null
-                                  : () => _confirmDelete(p, app),
-                              icon: Icon(
-                                Icons.delete_outline,
-                                size: 18,
-                                color: AppColors.mutedForeground,
-                              ),
-                            ),
-                          ],
+                            ];
+                            if (constraints.maxWidth < 420) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p.name,
+                                    style: AppTypography.bodyLg.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Wrap(
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    children: actions,
+                                  ),
+                                ],
+                              );
+                            }
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    p.name,
+                                    style: AppTypography.bodyLg.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                ...actions,
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Wrap(

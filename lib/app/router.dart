@@ -553,7 +553,11 @@ GoRouter buildAppRouter(AppProvider app) {
     ),
     GoRoute(
       path: RoutePaths.toolClock,
-      builder: (context, state) => const ToolClockScreen(),
+      builder: (context, state) => ToolClockScreen(
+        handoff: state.extra is ToolClockHandoff
+            ? state.extra as ToolClockHandoff
+            : null,
+      ),
     ),
     GoRoute(
       path: RoutePaths.toolIcm,

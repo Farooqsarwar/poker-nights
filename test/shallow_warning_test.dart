@@ -597,8 +597,12 @@ void main() {
         ..premiumTier = PremiumTier.premium;
       await mount(t, app);
 
-      // 8 freeze-out on the default Home Set is a normal 100 BB night: no card.
-      expect(find.textContaining('Shallow start'), findsNothing);
+      Future<void> tapKey(String key) async {
+        final f = find.byKey(Key(key));
+        await t.ensureVisible(f);
+        await t.tap(f);
+        await t.pump(const Duration(milliseconds: 100));
+      }
 
       // Step the player count up to 10 (the stepper is the first 'Increase').
       for (var i = 0; i < 6 && find.text('10 players').evaluate().isEmpty; i++) {
@@ -609,20 +613,28 @@ void main() {
       await t.tap(find.text('Rebuy'));
       await t.pump();
 
+      // WP2: the shallow card lives on the STACK step, before any level.
+      await tapKey('builder-next');
+      expect(find.byKey(const Key('builder-step-stack')), findsOneWidget);
+      expect(find.byKey(const Key('level-row-1')), findsNothing);
       expect(find.textContaining('Shallow start'), findsOneWidget);
-      expect(find.textContaining('Rebuys and one add-on.'), findsOneWidget);
       final skip = find.textContaining('Skip the add-on');
       expect(skip, findsOneWidget);
+      final shallowStack = t.widget<Text>(find.byKey(const Key('stack-value'))).data;
 
       // Showing the option must not have applied it.
-      expect(find.textContaining('Rebuys, no add-on.'), findsNothing);
+      expect(find.textContaining('Shallow start'), findsOneWidget);
+      expect(t.widget<Text>(find.byKey(const Key('stack-value'))).data, shallowStack);
 
+      await t.ensureVisible(skip);
       await t.tap(skip);
       await t.pump();
 
-      expect(find.textContaining('Rebuys, no add-on.'), findsOneWidget,
-          reason: 'the host\'s tap changed the plan');
-      expect(find.textContaining('Rebuys and one add-on.'), findsNothing);
+      expect(t.widget<Text>(find.byKey(const Key('stack-value'))).data,
+          isNot(shallowStack),
+          reason: 'the host\'s tap changed the plan and re-ran the engine');
+      expect(find.textContaining('Skip the add-on'), findsNothing,
+          reason: 'an applied option is no longer on offer');
       await unmount(t, app);
     });
   });

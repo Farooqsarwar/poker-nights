@@ -71,7 +71,8 @@ class AppSegmentedControl<T> extends StatelessWidget {
             if (labelText != null) const SizedBox(width: AppSpacing.xs),
           ],
           if (labelText != null)
-            Text(
+            Flexible(
+              child: Text(
               labelText,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -81,6 +82,7 @@ class AppSegmentedControl<T> extends StatelessWidget {
                     ? AppColors.primaryForeground
                     : AppColors.mutedForeground,
               ),
+            ),
             ),
         ],
       );

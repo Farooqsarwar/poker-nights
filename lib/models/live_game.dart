@@ -75,6 +75,9 @@ class GameSettings {
     this.breaks = const [],
     this.expectedRebuys,
     this.expectedRebuyRate,
+    this.forceStack,
+    this.targetDepthBB,
+    this.levelPins = const [],
     this.expectedReEntries,
     this.expectedAddOns,
     this.rebuyChips,
@@ -216,6 +219,13 @@ class GameSettings {
   /// 0.35). It sizes the busy-night chip reserve (§F1.5), so lowering it is one
   /// of the ways to open a shallow start deeper. Null = use the default.
   final double? expectedRebuyRate;
+
+  /// Structure-builder choices that must survive Recalculate, leaving the
+  /// screen and reopening (WP2): the host-forced starting stack (§F1.11), the
+  /// host-chosen depth in big blinds, and the levels the host pinned by hand.
+  final int? forceStack;
+  final int? targetDepthBB;
+  final List<LevelPin> levelPins;
   final int? expectedReEntries;
   final int? expectedAddOns;
   final int? rebuyChips;
@@ -399,6 +409,11 @@ class GameSettings {
     List<ScheduledBreak>? breaks,
     int? expectedRebuys,
     double? expectedRebuyRate,
+    int? forceStack,
+    int? targetDepthBB,
+    List<LevelPin>? levelPins,
+    bool clearForceStack = false,
+    bool clearTargetDepthBB = false,
     int? expectedReEntries,
     int? expectedAddOns,
     int? rebuyChips,
@@ -437,6 +452,11 @@ class GameSettings {
     /// which is what the Parameters tab's "Reset" does. Individual nulls above
     /// mean "unchanged", so without this there is no way to clear one.
     bool clearGenerationOverrides = false,
+
+    /// Clears exactly the options the structure builder owns (expected
+    /// rebuys, re-entries, add-ons, their chip amounts and the two prices) so
+    /// a blank field really hands the decision back to the default.
+    bool clearBuilderOverrides = false,
   }) {
     return GameSettings(
       name: name ?? this.name,
@@ -467,8 +487,8 @@ class GameSettings {
       announceEliminations: announceEliminations ?? this.announceEliminations,
       forcePaidPlaces:
           clearForcePaidPlaces ? null : (forcePaidPlaces ?? this.forcePaidPlaces),
-      rebuyCost: rebuyCost ?? this.rebuyCost,
-      addOnCost: addOnCost ?? this.addOnCost,
+      rebuyCost: clearBuilderOverrides ? null : (rebuyCost ?? this.rebuyCost),
+      addOnCost: clearBuilderOverrides ? null : (addOnCost ?? this.addOnCost),
       locationPrivate: locationPrivate ?? this.locationPrivate,
       tableSettingsOverride: clearTableSettingsOverride
           ? null
@@ -480,24 +500,28 @@ class GameSettings {
           ? null
           : (lockedExpectedPlayers ?? this.lockedExpectedPlayers),
       breaks: breaks ?? this.breaks,
-      expectedRebuys: clearGenerationOverrides
+      expectedRebuys: clearGenerationOverrides || clearBuilderOverrides
           ? null
           : expectedRebuys ?? this.expectedRebuys,
+      forceStack: clearForceStack ? null : (forceStack ?? this.forceStack),
+      targetDepthBB:
+          clearTargetDepthBB ? null : (targetDepthBB ?? this.targetDepthBB),
+      levelPins: levelPins ?? this.levelPins,
       expectedRebuyRate: clearGenerationOverrides
           ? null
           : expectedRebuyRate ?? this.expectedRebuyRate,
-      expectedReEntries: clearGenerationOverrides
+      expectedReEntries: clearGenerationOverrides || clearBuilderOverrides
           ? null
           : expectedReEntries ?? this.expectedReEntries,
-      expectedAddOns: clearGenerationOverrides
+      expectedAddOns: clearGenerationOverrides || clearBuilderOverrides
           ? null
           : expectedAddOns ?? this.expectedAddOns,
       rebuyChips:
-          clearGenerationOverrides ? null : rebuyChips ?? this.rebuyChips,
+          clearGenerationOverrides || clearBuilderOverrides ? null : rebuyChips ?? this.rebuyChips,
       reEntryChips:
-          clearGenerationOverrides ? null : reEntryChips ?? this.reEntryChips,
+          clearGenerationOverrides || clearBuilderOverrides ? null : reEntryChips ?? this.reEntryChips,
       addOnChips:
-          clearGenerationOverrides ? null : addOnChips ?? this.addOnChips,
+          clearGenerationOverrides || clearBuilderOverrides ? null : addOnChips ?? this.addOnChips,
       levelDurationMins: clearGenerationOverrides
           ? null
           : levelDurationMins ?? this.levelDurationMins,

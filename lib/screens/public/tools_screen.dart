@@ -23,7 +23,10 @@ import '../../widgets/app_tag.dart';
 import '../../widgets/icon_tile.dart';
 import '../../models/live_game.dart';
 import '../../widgets/count_stepper.dart';
+import '../../widgets/structure_builder.dart';
 import '../../widgets/structure_feasibility_card.dart';
+import '../../models/tournament_format.dart';
+import '../../utils/structure_builder_controller.dart';
 import '../../widgets/tournament_display_block.dart';
 import '../../widgets/glass_styles.dart';
 
@@ -83,15 +86,12 @@ class _ToolScaffold extends StatelessWidget {
     required this.title,
     required this.blurb,
     required this.child,
-    this.actions = const [],
   });
 
   final String title;
   final String blurb;
   final Widget child;
 
-  /// One or two compact buttons placed on the title row (e.g. "Share").
-  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -146,14 +146,6 @@ class _ToolScaffold extends StatelessWidget {
                   ],
                 ),
               ),
-              if (actions.isNotEmpty) ...[
-                const SizedBox(width: AppSpacing.md),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: actions,
-                ),
-              ],
             ],
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -381,6 +373,20 @@ class ToolsScreen extends StatelessWidget {
   }
 }
 
+/// Hands a built structure to the tournament clock tool, so the clock plays
+/// exactly the levels the host approved in the builder.
+class ToolClockHandoff {
+  const ToolClockHandoff({
+    required this.structure,
+    required this.players,
+    required this.hours,
+  });
+
+  final TournamentStructure structure;
+  final int players;
+  final int hours;
+}
+
 /// Blind Structure Generator — the app's own engine, without an account.
 class ToolBlindsScreen extends StatefulWidget {
   const ToolBlindsScreen({super.key, @visibleForTesting this.chipBankOverride});
@@ -395,62 +401,41 @@ class ToolBlindsScreen extends StatefulWidget {
 }
 
 class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
-  int _players = 9;
-  double _hours = 4;
+  static const _startMinutes = 19 * 60;
 
-  /// 0 means "let the engine pick from the duration", which is what it does
-  /// for every tournament in the app. Offering only fixed lengths would make
-  /// the tool answer a narrower question than the product does.
-  int _levelMins = 0;
-  bool _antes = false;
+  late final StructureBuilderController _c;
   String _chipSetName = kToolChipSets.keys.first;
 
-  /// Wall-clock start, so the schedule reads as a plan for an evening rather
-  /// than a list of offsets. Presentation only — the engine has no idea what
-  /// time it is and should not.
-  TimeOfDay _startAt = const TimeOfDay(hour: 19, minute: 0);
-
-  TournamentStructure? _result;
-
-  void _generate() {
-    setState(() {
-      _result = TournamentEngine.generate(
-        TournamentParams(
-          players: _players,
-          durationHours: _hours,
-          buyIn: 20,
-          chipSet: widget.chipBankOverride ??
-              TournamentEngine.neverBindingBank(
-                kToolChipSets[_chipSetName] ?? kToolChipSet,
-                players: _players,
-              ),
-          rebuys: true,
-          rebuysCloseLevel: 6,
-          reEntry: false,
-          addOn: true,
-          anteEnabled: _antes,
-          anteAfterLevel: 7,
-          anteStyle: AnteStyle.bigBlind,
-          koEnabled: false,
-          koAmount: 0,
-          organizerPct: 0,
-          levelDurationMins: _levelMins == 0 ? null : _levelMins,
-        ),
-      );
-    });
+  @override
+  void initState() {
+    super.initState();
+    _c = StructureBuilderController(
+      mode: BuilderMode.tool,
+      chipSet: widget.chipBankOverride ??
+          kToolChipSets[_chipSetName] ??
+          kToolChipSet,
+      // §F1.14: no chip case, so the engine runs against a never-binding bank.
+      syntheticBank: widget.chipBankOverride == null,
+      players: 9,
+      durationHours: 4,
+      format: TournamentFormat.rebuy,
+      anteEnabled: false,
+      startMinutes: _startMinutes,
+    );
   }
 
-  /// [_startAt] advanced by [mins], wrapped over midnight.
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  /// [_startMinutes] advanced by [mins], wrapped over midnight.
   String _clockAt(int mins) {
-    final total = (_startAt.hour * 60 + _startAt.minute + mins) % (24 * 60);
+    final total = (_startMinutes + mins) % (24 * 60);
     final h = total ~/ 60;
     final m = total % 60;
     return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
-  }
-
-  Future<void> _pickStart() async {
-    final picked = await showTimePicker(context: context, initialTime: _startAt);
-    if (picked != null && mounted) setState(() => _startAt = picked);
   }
 
   /// The generated schedule as plain text, ready to paste into a group chat.
@@ -489,284 +474,60 @@ class _ToolBlindsScreenState extends State<ToolBlindsScreen> {
     );
   }
 
+  /// "Use this structure in the tournament clock?" — yes opens /tools/clock
+  /// with these exact levels; no leaves the structure on screen.
+  Future<void> _offerClock(TournamentStructure s) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Use this structure in the tournament clock?'),
+        actions: [
+          TextButton(
+            key: const Key('clock-no'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            key: const Key('clock-yes'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    context.go(
+      RoutePaths.toolClock,
+      extra: ToolClockHandoff(
+        structure: s,
+        players: _c.players,
+        hours: _c.durationHours.round(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final r = _result;
     return _ToolScaffold(
       title: 'Blind Structure Generator',
-      blurb: 'Pick the box of chips you actually own — the denominations decide '
-          'the starting stack and the whole ladder.',
-      actions: [
-        // Nothing to share from a night the chip box cannot deal.
-        if (r != null && !r.isBlocked)
-          AppButton(
-            size: AppButtonSize.sm,
-            variant: AppButtonVariant.ghost,
-            onPressed: () => _share(r),
-            child: const Text('Share'),
-          ),
-      ],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _Field(
-            label: 'Players',
-            child: CountStepper(
-              value: _players,
-              min: 2,
-              max: 100,
-              semanticLabel: 'Players',
-              onChanged: (v) => setState(() => _players = v),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _Field(
-            label: 'Hours',
-            child: CountStepper(
-              value: _hours.round(),
-              min: 3,
-              max: 6,
-              semanticLabel: 'Hours',
-              onChanged: (v) => setState(() => _hours = v.toDouble()),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Quick settings',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          // Same _levelMins / _antes state as before, behind pill toggles
-          // instead of a dropdown and a switch — the mockup's quick-settings
-          // row.
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              for (final opt in const [
-                (mins: 0, label: 'AUTO LEVELS'),
-                (mins: 10, label: '10 MIN LEVELS'),
-                (mins: 15, label: '15 MIN LEVELS'),
-                (mins: 20, label: '20 MIN LEVELS'),
-                (mins: 30, label: '30 MIN LEVELS'),
-              ])
-                _TogglePill(
-                  label: opt.label,
-                  selected: _levelMins == opt.mins,
-                  onTap: () => setState(() => _levelMins = opt.mins),
-                ),
-              _TogglePill(
-                label: 'ANTES FROM L7',
-                selected: _antes,
-                onTap: () => setState(() => _antes = !_antes),
+      blurb: 'Set up the night, check the starting stack, then fine-tune any '
+          'level. Nothing is saved.',
+      child: StructureBuilder(
+        controller: _c,
+        confirmLabel: 'Use these blinds',
+        chipSetChoices: widget.chipBankOverride == null ? kToolChipSets : null,
+        chipSetKey: _chipSetName,
+        onChipSetChosen: (k) => setState(() => _chipSetName = k),
+        onConfirm: _offerClock,
+        extraActions: (context, s) => s.isBlocked
+            ? const SizedBox.shrink()
+            : AppButton(
+                key: const Key('tool-share'),
+                fullWidth: true,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => _share(s),
+                child: const Text('Share'),
               ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppSelect<String>(
-            label: 'Chips',
-            value: _chipSetName,
-            items: [
-              for (final name in kToolChipSets.keys)
-                DropdownMenuItem<String>(value: name, child: Text(name)),
-            ],
-            onChanged: (v) => setState(() => _chipSetName = v ?? _chipSetName),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _Field(
-            label: 'Start time',
-            child: AppButton(
-              size: AppButtonSize.sm,
-              variant: AppButtonVariant.secondary,
-              onPressed: _pickStart,
-              child: Text(_clockAt(0)),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          AppButton(
-            fullWidth: true,
-            onPressed: _generate,
-            child: const Text('Generate structure'),
-          ),
-          // §F1.5 point 7: when the box can't deal this field, the ladder is a
-          // placeholder — show why (and the fixes) instead of presenting it as
-          // a structure, a schedule or something to share.
-          if (r != null && r.isBlocked) ...[
-            const SizedBox(height: AppSpacing.xl),
-            StructureFeasibilityCard(
-              structure: r,
-              players: _players,
-              onReduceField: (r.maxPlayersSupported ?? 0) >= 2
-                  ? () {
-                      setState(() => _players = r.maxPlayersSupported!);
-                      _generate();
-                    }
-                  : null,
-            ),
-          ],
-          if (r != null && !r.isBlocked) ...[
-            const SizedBox(height: AppSpacing.xl),
-
-            // The headline figures first, as their own cards. A schedule is
-            // the answer, but "how deep do we start and how long will it run"
-            // is the question people actually arrived with.
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                _StatCard(
-                  label: 'Starting stack',
-                  value: '${r.startingStack}',
-                ),
-                _StatCard(label: 'Levels', value: '${r.plannedLevels}'),
-                _StatCard(
-                  label: 'Level length',
-                  value: '${r.levelDuration}m',
-                ),
-                _StatCard(
-                  label: 'Est. finish',
-                  value: r.expectedFinishMins >= 60
-                      ? '${r.expectedFinishMins ~/ 60}h '
-                            '${(r.expectedFinishMins % 60).toString().padLeft(2, '0')}m'
-                      : '${r.expectedFinishMins}m',
-                ),
-                _StatCard(
-                  label: 'Finishes around',
-                  value: _clockAt(r.expectedFinishMins),
-                ),
-              ],
-            ),
-            if (r.styleNote.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                r.styleNote,
-                style: AppTypography.bodyXs.copyWith(
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Blind schedule',
-                    style: AppTypography.bodySm.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 44,
-                        child: Text(
-                          'Time',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 34,
-                        child: Text(
-                          'Lvl',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          'Blinds / ante',
-                          style: AppTypography.bodyXs.copyWith(
-                            color: AppColors.mutedForeground,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        'Min',
-                        style: AppTypography.bodyXs.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: AppSpacing.md),
-                  // Breaks are segments of the clock, not footnotes on the
-                  // level before them, so the schedule prints them in place
-                  // and the wall-clock column carries their length through.
-                  Builder(
-                    builder: (context) {
-                      var at = 0;
-                      final rows = <Widget>[];
-                      for (final seg in ClockSequence.build(r)) {
-                        final startedAt = at;
-                        at += seg.seconds ~/ 60;
-                        rows.add(
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 44,
-                                  child: Text(
-                                    _clockAt(startedAt),
-                                    style: AppTypography.monoXs.copyWith(
-                                      color: AppColors.mutedForeground,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(
-                                  width: 34,
-                                  child: Text(
-                                    seg.isBreak ? '—' : 'L${seg.level!.level}',
-                                    style: AppTypography.monoXs.copyWith(
-                                      color: AppColors.mutedForeground,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    seg.isBreak
-                                        ? 'Break'
-                                        : '${seg.level!.sb} / ${seg.level!.bb}'
-                                            '${seg.level!.ante != null ? '  ante ${seg.level!.ante}' : ''}',
-                                    style: AppTypography.monoXs.copyWith(
-                                      fontWeight: seg.isBreak
-                                          ? FontWeight.w700
-                                          : FontWeight.w400,
-                                      color: seg.isBreak
-                                          ? AppColors.mutedForeground
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  '${seg.seconds ~/ 60}m',
-                                  style: AppTypography.monoXs.copyWith(
-                                    color: AppColors.mutedForeground,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: rows,
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -1278,66 +1039,6 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/// A small selectable pill for a quick binary/enum setting — the "15 MIN
-/// LEVELS" / "ANTES FROM L7" style controls on the mockup. Purely a visual
-/// alternative to a dropdown or a switch; the caller still owns the state and
-/// decides what selected means.
-class _TogglePill extends StatelessWidget {
-  const _TogglePill({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: label,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 40),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.primary.withValues(alpha: 0.16)
-                : Glass.solidTint(AppColors.secondary),
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(
-              color: selected ? AppColors.primary : AppColors.border,
-            ),
-          ),
-          // Centre without `Container.alignment`, which made each chip take
-          // the full row width and stacked the whole Wrap into a column.
-          child: Center(
-            widthFactor: 1,
-            child: Text(
-            label,
-            style: AppTypography.bodyXs.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
-              color: selected
-                  ? AppColors.primaryText
-                  : AppColors.mutedForeground,
-            ),
-          ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _Field extends StatelessWidget {
   const _Field({required this.label, required this.child});
 
@@ -1416,7 +1117,14 @@ class _StepperRow extends StatelessWidget {
 /// The ordering — which level, which break, when it ends — belongs to
 /// [ClockSequence] and is tested there. This screen only counts down.
 class ToolClockScreen extends StatefulWidget {
-  const ToolClockScreen({super.key, @visibleForTesting this.chipBankOverride});
+  const ToolClockScreen({
+    super.key,
+    @visibleForTesting this.chipBankOverride,
+    this.handoff,
+  });
+
+  /// The structure to play, handed over by the blind generator.
+  final ToolClockHandoff? handoff;
 
   /// Test seam ONLY (see [ToolBlindsScreen.chipBankOverride]).
   final List<ChipColor>? chipBankOverride;
@@ -1502,6 +1210,30 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
     super.dispose();
   }
 
+  /// Puts [structure] on the clock, stopped at the top of level 1.
+  void _loadStructure(TournamentStructure structure) {
+    final segments = ClockSequence.build(structure);
+    _blocked = null;
+    _structure = structure;
+    _segments = segments;
+    _index = 0;
+    _running = false;
+    _left = segments.isEmpty ? 0 : segments.first.seconds;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Arrived from the blind generator with a structure the host approved:
+    // play exactly those levels.
+    final handoff = widget.handoff;
+    if (handoff != null && !handoff.structure.isBlocked) {
+      _players = handoff.players;
+      _hours = handoff.hours;
+      _loadStructure(handoff.structure);
+    }
+  }
+
   void _build() {
     final structure = TournamentEngine.generate(
       TournamentParams(
@@ -1536,15 +1268,7 @@ class _ToolClockScreenState extends State<ToolClockScreen> {
       });
       return;
     }
-    final segments = ClockSequence.build(structure);
-    setState(() {
-      _blocked = null;
-      _structure = structure;
-      _segments = segments;
-      _index = 0;
-      _running = false;
-      _left = segments.isEmpty ? 0 : segments.first.seconds;
-    });
+    setState(() => _loadStructure(structure));
   }
 
   void _toggle() {

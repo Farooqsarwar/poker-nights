@@ -363,9 +363,18 @@ void main() {
   });
 
   group('quick start: card shown, start disabled, nothing created', () {
-    AppButton generate(WidgetTester t) => t.widget<AppButton>(
-      find.widgetWithText(AppButton, 'Generate & start the clock'),
-    );
+    // WP2: the stack-first builder. The blocked card appears on the STACK
+    // step and "Approve stack" is what stays off, so no level, and no clock,
+    // can be reached from a placeholder ladder.
+    AppButton approve(WidgetTester t) =>
+        t.widget<AppButton>(find.byKey(const Key('approve-stack')));
+
+    Future<void> toStackStep(WidgetTester t) async {
+      final next = find.byKey(const Key('builder-next'));
+      await t.ensureVisible(next);
+      await t.tap(next);
+      await t.pump(const Duration(milliseconds: 100));
+    }
 
     // Chips tiny enough that even the default 8-player freeze-out can't be
     // dealt a playable stack, so the screen's first render is the blocked one.
@@ -375,7 +384,7 @@ void main() {
       ChipColor(color: 'Purple', hex: 0xFF8E44AD, value: 500, quantity: 2),
     ];
 
-    testWidgets('blocked: card visible and Generate is disabled', (t) async {
+    testWidgets('blocked: card visible and Approve stack is disabled', (t) async {
       // Precondition on the engine, with the params quick start itself builds
       // (8 players, 4 h, freeze-out, regular pace).
       final pre = TournamentEngine.generate(
@@ -403,6 +412,7 @@ void main() {
         ..saveChipSet('tiny', 'Tiny box', tiny)
         ..setDefaultChipSet('tiny');
       await _mount(t, app, const QuickStartScreen());
+      await toStackStep(t);
 
       expect(find.byType(StructureFeasibilityCard), findsOneWidget);
       expect(
@@ -410,16 +420,18 @@ void main() {
         findsOneWidget,
       );
       expect(
-        generate(t).onPressed,
+        approve(t).onPressed,
         isNull,
-        reason: 'no clock can be started from a placeholder ladder',
+        reason: 'no level, and so no clock, from a placeholder ladder',
       );
+      expect(find.byKey(const Key('level-row-1')), findsNothing);
+      expect(find.byKey(const Key('builder-confirm')), findsNothing);
       expect(app.currentGame, isNull, reason: 'no game was created');
 
       await _unmount(t, app);
     });
 
-    testWidgets('CONTROL: dealable chips → no card and Generate is enabled', (
+    testWidgets('CONTROL: dealable chips → no card and Approve stack is enabled', (
       t,
     ) async {
       final app = AppProvider()
@@ -428,12 +440,13 @@ void main() {
         ..saveChipSet('box', 'Box', _box500)
         ..setDefaultChipSet('box');
       await _mount(t, app, const QuickStartScreen());
+      await toStackStep(t);
 
       expect(
         find.text('Your chip case is too small for this field'),
         findsNothing,
       );
-      expect(generate(t).onPressed, isNotNull);
+      expect(approve(t).onPressed, isNotNull);
 
       await _unmount(t, app);
     });
@@ -464,12 +477,16 @@ void main() {
       final a = app();
       await _mount(t, a, const ToolBlindsScreen());
       await tapIncrease(t, 5);
-      await t.tap(find.text('Generate structure'));
-      await t.pump();
+      for (final key in ['builder-next', 'approve-stack']) {
+        final f = find.byKey(Key(key));
+        await t.ensureVisible(f);
+        await t.tap(f);
+        await t.pump(const Duration(milliseconds: 100));
+      }
 
       expect(find.text(card), findsNothing);
       expect(find.text('Share'), findsOneWidget);
-      expect(find.text('Starting stack'), findsOneWidget);
+      expect(find.byKey(const Key('level-row-1')), findsOneWidget);
       await _unmount(t, a);
     });
 
@@ -506,13 +523,19 @@ void main() {
         (t) async {
       final a = app();
       await _mount(t, a, const ToolBlindsScreen(chipBankOverride: tiny));
-      await t.tap(find.text('Generate structure'));
-      await t.pump();
+      final next = find.byKey(const Key('builder-next'));
+      await t.ensureVisible(next);
+      await t.tap(next);
+      await t.pump(const Duration(milliseconds: 100));
 
       expect(find.text(card), findsOneWidget);
       expect(find.text('Share'), findsNothing);
-      expect(find.text('Starting stack'), findsNothing,
-          reason: 'the placeholder\'s stack must not be shown as the answer');
+      expect(find.byKey(const Key('level-row-1')), findsNothing,
+          reason: 'a placeholder ladder is never shown as the answer');
+      expect(
+        t.widget<AppButton>(find.byKey(const Key('approve-stack'))).onPressed,
+        isNull,
+      );
       await _unmount(t, a);
     });
 

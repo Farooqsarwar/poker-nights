@@ -1074,7 +1074,7 @@ extension AppProviderTournament on AppProvider {
       forecastRebuyRate: forecastRebuyRate,
       forecastAddOnTakeUp: forecastAddOnTakeUp,
     );
-    final structure = TournamentEngine.generate(
+    final structure = solveWithPins(
       TournamentParams(
         players: count,
         durationHours: s.durationHours,
@@ -1083,6 +1083,8 @@ extension AppProviderTournament on AppProvider {
         rebuys: s.rebuys,
         rebuysCloseLevel: s.rebuysCloseLevel,
         rebuyCloseChosenByOrganizer: s.rebuyCloseChosenByOrganizer,
+        forceStack: s.forceStack,
+        targetDepthBB: s.targetDepthBB,
         reEntry: s.reEntry,
         addOn: s.addOn,
         anteEnabled: s.anteEnabled,
@@ -1125,6 +1127,7 @@ extension AppProviderTournament on AppProvider {
         earlyArrivalCutoffMins: s.earlyArrivalCutoffMins,
         earlyArrivalBonusPctOverride: s.earlyArrivalBonusPctOverride,
       ),
+      s.levelPins,
     );
     // Addendum acceptance criterion 10: the engine may move the rebuy cutoff
     // while optimising, and that choice has to reach the settings that gate
@@ -1457,70 +1460,48 @@ extension AppProviderTournament on AppProvider {
     return summary;
   }
 
-  /// Technical section 17 offers THREE actions on the generated estimate:
-  /// Regenerate, **Edit** and Confirm. The blind schedule had an editor;
-  /// the starting stack had none, so a host who liked the structure but
-  /// wanted a rounder stack could only Recalculate — which rebuilds
-  /// everything and discards every manual blind edit. That is the "if I want
-  /// to adjust something I have to start over" the client reported.
+  /// The structure builder's result for the current event (WP2): its settings
+  /// (carrying the forced stack, depth, pinned levels and a chosen rebuy close,
+  /// so they survive Recalculate) and the structure those settings produce.
   ///
-  /// This edits in place: blinds, level lengths, prizes and paid places are
-  /// untouched, and section 21's rule holds — attendance is not disturbed, so
-  /// nobody loses an RSVP or a check-in.
-  ///
-  /// Returns a human summary, or null when nothing changed.
-  String? adjustStructure({required int startingStack}) {
+  /// Replaces the old "Adjust starting stack" edit-in-place, which changed the
+  /// stack but left blinds the stack no longer matched. Saving progress never
+  /// confirms; [confirm] is the host's final tap. A structure the chip case
+  /// cannot deal is refused (a placeholder ladder is not a plan), and once play
+  /// has started the stacks are physical, so nothing changes.
+  bool applyBuilderResult(
+    GameSettings settings,
+    TournamentStructure structure, {
+    bool confirm = false,
+  }) {
     final game = _currentGame;
-    if (game == null) return null;
-    final s = game.structure;
-
-    // Once play has started the stacks in front of people are physical facts.
-    if (game.stacksLocked) {
-      return 'The starting stack is frozen once play has begun.';
-    }
-    if (startingStack <= 0 || startingStack == s.startingStack) return null;
+    if (game == null || game.stacksLocked || structure.isBlocked) return false;
+    _forceClaimEditor();
+    if (!_isGameAuthority) return false;
     _pushUndo();
-
-    final openingSb = s.levels.isNotEmpty ? s.levels.first.sb : 0;
-    final openingBb = s.levels.isNotEmpty ? s.levels.first.bb : 0;
-
-    List<ChipPlanEntry> planFor(int stack) => TournamentEngine.chipPlanAtLevel(
-          stack: stack,
-          chips: game.settings.chipSet,
-          currentBB: openingBb,
-          playersRemaining: game.settings.players,
-        );
-
-    final addOnStack = s.addOnStack > 0 ? startingStack : 0;
-    final structure = s.copyWith(
-      startingStack: startingStack,
-      chipPlan: planFor(startingStack),
-      rebuyStack: startingStack,
-      rebuyChipPlan: planFor(startingStack),
-      addOnStack: addOnStack,
-      addOnChipPlan: addOnStack > 0 ? planFor(addOnStack) : s.addOnChipPlan,
-    );
-
     _currentGame = game.copyWith(
+      settings: settings,
       structure: structure,
-      totalChipsInPlay: startingStack * game.settings.players,
-      // Editing invalidates a previous confirmation — the host has to look at
-      // what they changed before it is locked in (section 17).
+      originalLevels: List.of(structure.levels),
+      totalChipsInPlay: structure.startingStack * settings.players,
+      currentLevel: 1,
+      secondsRemaining: structure.levelDuration * 60,
+      // Editing invalidates a previous confirmation (section 17).
       structureConfirmed: false,
     );
-
     addAuditRecord(
-      'structure_edit',
-      'Starting stack edited: ${s.startingStack} -> $startingStack.',
+      'structure_builder',
+      'Structure set in the builder: stack ${structure.startingStack}, '
+          '${structure.levels.length} levels'
+          '${settings.levelPins.isEmpty ? '' : ', ${settings.levelPins.length} pinned'}.',
     );
     _syncGroupGame();
-    if (!_disposed) notifyListeners();
-
-    final blindNote = openingSb > 0
-        ? ' Opening blinds stay at $openingSb/$openingBb — recalculate if you '
-            'want them rebuilt around the new stack.'
-        : '';
-    return 'Starting stack is now $startingStack.$blindNote';
+    if (confirm) {
+      confirmStructure();
+    } else if (!_disposed) {
+      notifyListeners();
+    }
+    return true;
   }
 
   void updateStructurePlayerCount(int players) {
@@ -1660,6 +1641,8 @@ extension AppProviderTournament on AppProvider {
         rebuys: newSettings.rebuys,
         rebuysCloseLevel: newSettings.rebuysCloseLevel,
         rebuyCloseChosenByOrganizer: newSettings.rebuyCloseChosenByOrganizer,
+        forceStack: newSettings.forceStack,
+        targetDepthBB: newSettings.targetDepthBB,
         reEntry: newSettings.reEntry,
         addOn: newSettings.addOn,
         anteEnabled: newSettings.anteEnabled,
@@ -1713,7 +1696,7 @@ extension AppProviderTournament on AppProvider {
     // recalculation at Start — keeps it.
     final newSettings = s.copyWith(players: count);
     var structure =
-        TournamentEngine.generate(_engineParamsFor(newSettings, count));
+        solveWithPins(_engineParamsFor(newSettings, count), newSettings.levelPins);
     // Starting stacks are frozen once play has started, or when the host
     // hand-tuned the starting stack. [rebuildStacks] is the host's explicit
     // choice of a plan change that MUST change the stacks (a shallow-start

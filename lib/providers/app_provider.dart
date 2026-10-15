@@ -44,6 +44,7 @@ import '../utils/model_codec.dart';
 import '../utils/automations_service.dart';
 import '../utils/sanitization.dart';
 import '../utils/voice_service.dart';
+import '../utils/builder_solve.dart';
 import '../utils/tournament_engine.dart';
 import '../services/browser_notifications.dart';
 import '../services/onesignal_sender.dart';

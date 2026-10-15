@@ -376,9 +376,7 @@ extension AppProviderTournament on AppProvider {
     final live =
         game.status == LiveGameStatus.running ||
         game.status == LiveGameStatus.paused;
-    return live &&
-        !game.settlementConfirmed &&
-        game.currentLevel <= game.settings.rebuysCloseLevel;
+    return live && !game.registrationClosed;
   }
 
   /// Spec C6, entry point 2. "End rebuys now - after Level {n}": pulls the

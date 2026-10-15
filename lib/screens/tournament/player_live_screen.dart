@@ -384,7 +384,10 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                 const AppTabItem(id: 'dashboard', label: 'Dashboard'),
                 if (!isGuest)
                   const AppTabItem(id: 'structure', label: 'Structure'),
-                const AppTabItem(id: 'payouts', label: 'Payouts'),
+                AppTabItem(
+                  id: 'payouts',
+                  label: game.payoutTableRevealed ? 'Payouts' : 'Prize pool',
+                ),
               ],
               active: _tab,
               onChanged: (t) => setState(() => _tab = t),
@@ -839,6 +842,7 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                   child: TournamentDisplayBlock(
                     game: game,
                     showPayoutAmounts: false,
+                    showPayoutTable: game.payoutTableRevealed,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -1282,7 +1286,9 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Payouts',
+                      game.payoutTableRevealed
+                          ? 'Payouts'
+                          : 'Prize pool so far',
                       style: AppTypography.bodyXs.copyWith(
                         color: AppColors.mutedForeground,
                       ),
@@ -1292,69 +1298,71 @@ class _PlayerLiveScreenState extends State<PlayerLiveScreen> {
                     // a paid-place COUNT — the amounts never leave the host's
                     // device. Build the rows from that count so a member still
                     // sees which positions pay, with '—' where money would be.
-                    if (game.structure.paidPlacesForDisplay == 0)
-                      Text(
-                        'No prizes set yet.',
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.mutedForeground,
-                        ),
-                      )
-                    else
-                      for (final p
-                          in (game.structure.prizes.isNotEmpty
-                              ? game.structure.prizes
-                              : [
-                                  for (
-                                    var i = 1;
-                                    i <= game.structure.paidPlacesForDisplay;
-                                    i++
-                                  )
-                                    Prize(place: i, amount: 0),
-                                ]))
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppSpacing.sm,
+                    if (game.payoutTableRevealed) ...[
+                      if (game.structure.paidPlacesForDisplay == 0)
+                        Text(
+                          'No prizes set yet.',
+                          style: AppTypography.bodySm.copyWith(
+                            color: AppColors.mutedForeground,
                           ),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                color: AppColors.border,
-                                width: 0.5,
+                        )
+                      else
+                        for (final p
+                            in (game.structure.prizes.isNotEmpty
+                                ? game.structure.prizes
+                                : [
+                                    for (
+                                      var i = 1;
+                                      i <= game.structure.paidPlacesForDisplay;
+                                      i++
+                                    )
+                                      Prize(place: i, amount: 0),
+                                  ]))
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.sm,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: AppColors.border,
+                                  width: 0.5,
+                                ),
                               ),
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 28,
-                                child: p.place <= 3
-                                    ? MedalIcon(p.place, size: AppFontSizes.lg)
-                                    : Text(
-                                        '${p.place}.',
-                                        style: AppTypography.monoSm.copyWith(
-                                          color: AppColors.mutedForeground,
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 28,
+                                  child: p.place <= 3
+                                      ? MedalIcon(p.place, size: AppFontSizes.lg)
+                                      : Text(
+                                          '${p.place}.',
+                                          style: AppTypography.monoSm.copyWith(
+                                            color: AppColors.mutedForeground,
+                                          ),
                                         ),
-                                      ),
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(
-                                child: Text(
-                                  _ordinalPlace(p.place),
-                                  style: AppTypography.bodySm,
                                 ),
-                              ),
-                              Text(
-                                game.structure.prizes.isNotEmpty
-                                    ? Formatters.prize(p.amount)
-                                    : '—',
-                                style: AppTypography.monoSm.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    _ordinalPlace(p.place),
+                                    style: AppTypography.bodySm,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                Text(
+                                  game.structure.prizes.isNotEmpty
+                                      ? Formatters.prize(p.amount)
+                                      : '—',
+                                  style: AppTypography.monoSm.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                    ],
                     const SizedBox(height: AppSpacing.md),
                     Row(
                       children: [

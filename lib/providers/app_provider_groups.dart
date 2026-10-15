@@ -283,6 +283,16 @@ extension AppProviderGroups on AppProvider {
     if (_user?.id != _currentGroup.ownerId) return;
     _setGroup(_currentGroup.copyWith(learningOptOut: optOut));
     if (!_disposed) notifyListeners();
+    if (_backendUp) {
+      unawaited(
+        _repo
+            .updateGroupLearningOptOut(_currentGroup.id, optOut)
+            .catchError(
+              (Object e) =>
+                  debugPrint('updateGroupLearningOptOut failed: $e'),
+            ),
+      );
+    }
   }
 
   /// Owner-only: points the group at one of the owner's saved chip sets, or

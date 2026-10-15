@@ -36,6 +36,7 @@ class StructureBuilder extends StatelessWidget {
     required this.controller,
     required this.confirmLabel,
     required this.onConfirm,
+    this.onSavePreset,
     this.onPersist,
     this.onEditChips,
     this.onChipCountFixed,
@@ -54,6 +55,9 @@ class StructureBuilder extends StatelessWidget {
 
   /// The host pressed the final button on a night that can be dealt.
   final void Function(TournamentStructure structure) onConfirm;
+
+  /// Saves every current builder choice as one reusable game preference.
+  final VoidCallback? onSavePreset;
 
   /// Event mode saves progress (stack, pins, rebuy close) so it survives
   /// leaving the screen. Called after each committed change.
@@ -77,7 +81,7 @@ class StructureBuilder extends StatelessWidget {
 
   /// Extra buttons under the confirm button on the structure step (Share).
   final Widget Function(BuildContext context, TournamentStructure s)?
-      extraActions;
+  extraActions;
 
   final String? error;
   final bool busy;
@@ -111,13 +115,18 @@ class _Section extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            label,
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
+          ),
           if (hint != null) ...[
             const SizedBox(height: 2),
-            Text(hint!,
-                style: AppTypography.bodyXs
-                    .copyWith(color: AppColors.mutedForeground)),
+            Text(
+              hint!,
+              style: AppTypography.bodyXs.copyWith(
+                color: AppColors.mutedForeground,
+              ),
+            ),
           ],
           const SizedBox(height: AppSpacing.sm),
           child,
@@ -181,10 +190,13 @@ class _InputsStep extends StatelessWidget {
                     onPressed: () => c.setDurationHours(c.durationHours - 0.5),
                     icon: const Icon(Icons.remove),
                   ),
-                  Text(_hoursLabel(c.durationHours),
-                      key: const Key('hours-value'),
-                      style: AppTypography.bodySm
-                          .copyWith(fontWeight: FontWeight.w700)),
+                  Text(
+                    _hoursLabel(c.durationHours),
+                    key: const Key('hours-value'),
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   IconButton(
                     key: const Key('hours-plus'),
                     tooltip: 'Longer',
@@ -285,10 +297,11 @@ class _InputsStep extends StatelessWidget {
         if (c.format == TournamentFormat.rebuy)
           _Section(
             label: 'Rebuys',
-            hint: StructureBuilderController.suggestRebuyLimit(c.players) == null
+            hint:
+                StructureBuilderController.suggestRebuyLimit(c.players) == null
                 ? 'Suggested for ${c.players} players: unlimited'
                 : 'Suggested for ${c.players} players: limited to '
-                    '${StructureBuilderController.suggestRebuyLimit(c.players)} each',
+                      '${StructureBuilderController.suggestRebuyLimit(c.players)} each',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -299,8 +312,9 @@ class _InputsStep extends StatelessWidget {
                   onSelected: (limited) => c.setRebuyLimit(
                     limited
                         ? (StructureBuilderController.suggestRebuyLimit(
-                                c.players) ??
-                            2)
+                                c.players,
+                              ) ??
+                              2)
                         : null,
                   ),
                 ),
@@ -374,8 +388,9 @@ class _InputsStep extends StatelessWidget {
                 c.bonusPct == 0
                     ? 'off'
                     : '= +${Formatters.chips(c.bonusChips)} chips',
-                style: AppTypography.bodySm
-                    .copyWith(color: AppColors.mutedForeground),
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
               ),
             ],
           ),
@@ -387,9 +402,20 @@ class _InputsStep extends StatelessWidget {
         if (c.mode == BuilderMode.quick) BuilderNamesSection(controller: c),
         BuilderMoreOptions(controller: c),
         if (builder.error != null) ...[
-          Text(builder.error!,
-              style: AppTypography.bodySm.copyWith(color: AppColors.destructive)),
+          Text(
+            builder.error!,
+            style: AppTypography.bodySm.copyWith(color: AppColors.destructive),
+          ),
           const SizedBox(height: AppSpacing.md),
+        ],
+        if (builder.onSavePreset != null) ...[
+          AppButton(
+            fullWidth: true,
+            variant: AppButtonVariant.secondary,
+            onPressed: builder.onSavePreset,
+            child: const Text('Save as preset'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
         ],
         AppButton(
           key: const Key('builder-next'),
@@ -498,30 +524,38 @@ class _StackStepState extends State<_StackStep> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Starting stack',
-                  style: AppTypography.bodySm
-                      .copyWith(color: AppColors.mutedForeground)),
+              Text(
+                'Starting stack',
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
               const SizedBox(height: 2),
               Text(
                 '${Formatters.chips(s.startingStack)} chips',
                 key: const Key('stack-value'),
                 style: AppTypography.display(
-                    size: AppFontSizes.xxxl, weight: FontWeight.w700),
+                  size: AppFontSizes.xxxl,
+                  weight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 depth == null
                     ? ''
                     : '${depth.round()} big blinds deep'
-                        '${first == null ? '' : ' · opening ${first.sb}/${first.bb}'}',
+                          '${first == null ? '' : ' · opening ${first.sb}/${first.bb}'}',
                 key: const Key('stack-depth'),
                 style: AppTypography.bodySm,
               ),
               if (s.chipPlan.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.sm),
-                Text('Per player',
-                    style: AppTypography.bodyXs
-                        .copyWith(color: AppColors.mutedForeground)),
+                Text(
+                  'Per player',
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
                 Text(
                   [
                     for (final e in s.chipPlan)
@@ -558,7 +592,9 @@ class _StackStepState extends State<_StackStep> {
         ),
         if (s.isBlocked || s.isShallow || !s.fits)
           const SizedBox(height: AppSpacing.md),
-        if (!c.syntheticBank && b.chipSetChoices == null && c.chipSet.isNotEmpty)
+        if (!c.syntheticBank &&
+            b.chipSetChoices == null &&
+            c.chipSet.isNotEmpty)
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
@@ -580,8 +616,10 @@ class _StackStepState extends State<_StackStep> {
               child: const Text('Fix chip count'),
             ),
           ),
-        Text('Change the stack',
-            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700)),
+        Text(
+          'Change the stack',
+          style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: AppSpacing.sm),
         Row(
           children: [
@@ -590,7 +628,8 @@ class _StackStepState extends State<_StackStep> {
               tooltip: 'Smaller stack',
               onPressed: () {
                 c.setStack(
-                    (s.startingStack - unit).clamp(unit, 100000000).toInt());
+                  (s.startingStack - unit).clamp(unit, 100000000).toInt(),
+                );
                 b.onPersist?.call();
               },
               icon: const Icon(Icons.remove),
@@ -723,13 +762,16 @@ class _StructureStepState extends State<_StructureStep> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${Formatters.chips(s.startingStack)} chips · '
-                        '${s.levelDuration}-minute levels'),
+                    Text(
+                      '${Formatters.chips(s.startingStack)} chips · '
+                      '${s.levelDuration}-minute levels',
+                    ),
                     Text(
                       '$planned levels · about '
                       '${Formatters.duration(s.expectedFinishMins)}',
-                      style: AppTypography.bodyXs
-                          .copyWith(color: AppColors.mutedForeground),
+                      style: AppTypography.bodyXs.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
@@ -802,8 +844,9 @@ class _StructureStepState extends State<_StructureStep> {
                   '${c.addOn && c.rebuyNight && br.afterLevel == close ? ' · add-on' : ''} —',
                   key: Key('break-after-${l.level}'),
                   textAlign: TextAlign.center,
-                  style: AppTypography.bodyXs
-                      .copyWith(color: AppColors.mutedForeground),
+                  style: AppTypography.bodyXs.copyWith(
+                    color: AppColors.mutedForeground,
+                  ),
                 ),
               ),
         ],
@@ -812,15 +855,20 @@ class _StructureStepState extends State<_StructureStep> {
           for (final w in s.warnings)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-              child: Text('• $w',
-                  style: AppTypography.bodyXs
-                      .copyWith(color: AppColors.mutedForeground)),
+              child: Text(
+                '• $w',
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
             ),
         ],
         if (b.error != null) ...[
           const SizedBox(height: AppSpacing.md),
-          Text(b.error!,
-              style: AppTypography.bodySm.copyWith(color: AppColors.destructive)),
+          Text(
+            b.error!,
+            style: AppTypography.bodySm.copyWith(color: AppColors.destructive),
+          ),
         ],
         const SizedBox(height: AppSpacing.lg),
         AppButton(
@@ -902,7 +950,9 @@ class _LevelRow extends StatelessWidget {
       child: Container(
         key: Key('level-row-$n'),
         padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
         decoration: BoxDecoration(
           color: pinned ? AppColors.primary.withValues(alpha: 0.08) : null,
           borderRadius: BorderRadius.circular(AppRadius.md),
@@ -919,9 +969,12 @@ class _LevelRow extends StatelessWidget {
                 runSpacing: AppSpacing.sm,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text('L$n',
-                      style: AppTypography.bodySm
-                          .copyWith(fontWeight: FontWeight.w700)),
+                  Text(
+                    'L$n',
+                    style: AppTypography.bodySm.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   numberField(Key('edit-sb-$n'), 'SB', sb),
                   numberField(Key('edit-bb-$n'), 'BB', bb),
                   numberField(Key('edit-mins-$n'), 'Minutes', mins),
@@ -938,9 +991,12 @@ class _LevelRow extends StatelessWidget {
                 children: [
                   SizedBox(
                     width: 36,
-                    child: Text('L$n',
-                        style: AppTypography.bodySm
-                            .copyWith(fontWeight: FontWeight.w700)),
+                    child: Text(
+                      'L$n',
+                      style: AppTypography.bodySm.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                   Expanded(
                     child: Text(
@@ -952,8 +1008,12 @@ class _LevelRow extends StatelessWidget {
                     ),
                   ),
                   if (pinned) ...[
-                    Icon(Icons.push_pin, size: 16, color: AppColors.primary,
-                        semanticLabel: 'Pinned'),
+                    Icon(
+                      Icons.push_pin,
+                      size: 16,
+                      color: AppColors.primary,
+                      semanticLabel: 'Pinned',
+                    ),
                     IconButton(
                       key: Key('recalc-around-$n'),
                       tooltip: 'Recalculate around this',
@@ -976,20 +1036,30 @@ class _LevelRow extends StatelessWidget {
                 ],
               ),
             if (error != null)
-              Text(error!,
-                  key: Key('level-error-$n'),
-                  style: AppTypography.bodyXs
-                      .copyWith(color: AppColors.destructive)),
+              Text(
+                error!,
+                key: Key('level-error-$n'),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.destructive,
+                ),
+              ),
             if (pinned && !editing)
-              Text('Recalculate around this',
-                  key: Key('recalc-label-$n'),
-                  style: AppTypography.bodyXs
-                      .copyWith(color: AppColors.mutedForeground)),
+              Text(
+                'Recalculate around this',
+                key: Key('recalc-label-$n'),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.mutedForeground,
+                ),
+              ),
             if (isCloseRow)
-              Text('Rebuys close after this level',
-                  key: const Key('close-marker'),
-                  style: AppTypography.bodyXs.copyWith(
-                      color: AppColors.primary, fontWeight: FontWeight.w700))
+              Text(
+                'Rebuys close after this level',
+                key: const Key('close-marker'),
+                style: AppTypography.bodyXs.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              )
             else if (canMoveClose && !editing)
               Align(
                 alignment: Alignment.centerLeft,
@@ -1001,8 +1071,10 @@ class _LevelRow extends StatelessWidget {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: onCloseHere,
-                  child: const Text('Rebuys close after this level',
-                      style: TextStyle(fontSize: 12)),
+                  child: const Text(
+                    'Rebuys close after this level',
+                    style: TextStyle(fontSize: 12),
+                  ),
                 ),
               ),
           ],

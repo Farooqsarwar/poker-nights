@@ -17,8 +17,10 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_page.dart';
 import '../../widgets/code_display.dart';
+import '../../widgets/edit_builder_chip_set.dart';
 import '../../widgets/page_header.dart';
 import '../../widgets/save_chip_set_offer.dart';
+import '../../widgets/save_game_preset_offer.dart';
 import '../../widgets/structure_builder.dart';
 
 /// C0 -- "Start a game now". Friends are already at the table.
@@ -103,29 +105,24 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
   }
 
   StructureBuilderController _controllerFor(AppProvider app) {
-    return _controller ??= StructureBuilderController(
+    return _controller ??= StructureBuilderController.fromSettings(
+      _quickBase(app),
       mode: BuilderMode.quick,
-      chipSet: _chips(app),
-      chipSetName: _chipsName(app),
       players: (_lastHeadcount(app) ?? 8).clamp(2, _cap(app)),
-      durationHours: 4,
-      startMinutes: DateTime.now().hour * 60 + DateTime.now().minute,
     );
   }
 
-  /// The settings the game is created with: a plain "tonight" night, carrying
-  /// every builder choice.
-  GameSettings _settings(AppProvider app, StructureBuilderController c) {
+  GameSettings _quickBase(AppProvider app) {
     final now = DateTime.now();
-    String two(int v) => v.toString().padLeft(2, '0');
+    String two(int value) => value.toString().padLeft(2, '0');
     final base = GameSettings(
       name: '${_weekdays[now.weekday - 1]} Poker',
       date: '${now.year}-${two(now.month)}-${two(now.day)}',
       time: '${two(now.hour)}:${two(now.minute)}',
       location: '',
-      players: c.players,
-      durationHours: c.durationHours,
-      buyIn: c.buyIn,
+      players: (_lastHeadcount(app) ?? 8).clamp(2, _cap(app)),
+      durationHours: 4,
+      buyIn: 20,
       koEnabled: false,
       koAmount: 5,
       rebuys: false,
@@ -134,12 +131,18 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       anteEnabled: true,
       anteAfterLevel: 6,
       organizerPct: 0,
-      chipSet: c.chipSet,
-      chipSetName: c.chipSetName,
+      chipSet: _chips(app),
+      chipSetName: _chipsName(app),
       locationPrivate: false,
       breaks: const [],
     );
-    return c.applyTo(base);
+    return app.defaultGamePreset.applyTo(base);
+  }
+
+  /// The settings the game is created with: a plain "tonight" night, carrying
+  /// every builder choice.
+  GameSettings _settings(AppProvider app, StructureBuilderController c) {
+    return c.applyTo(_quickBase(app));
   }
 
   /// C0: "Starting a new game ends it." Returns whether to carry on.
@@ -225,7 +228,8 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       if (group == null) {
         setState(() {
           _starting = false;
-          _error = 'Could not set up the game. Check your connection and try again.';
+          _error =
+              'Could not set up the game. Check your connection and try again.';
         });
         return;
       }
@@ -254,7 +258,8 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
       // open the dashboard or show a join code for a clock that isn't running.
       setState(() {
         _starting = false;
-        _error = 'The chip case can’t fund this night. Change the chips, '
+        _error =
+            'The chip case can’t fund this night. Change the chips, '
             'players or format, then try again.';
       });
       return;
@@ -287,7 +292,9 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Center(child: CodeDisplay(code: code, label: 'Join code')),
+          Center(
+            child: CodeDisplay(code: code, label: 'Join code'),
+          ),
           const SizedBox(height: AppSpacing.xl),
           AppButton(
             fullWidth: true,
@@ -350,7 +357,8 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
               app.isAuthenticated ? RoutePaths.home : RoutePaths.landing,
             ),
             title: 'Start a game now',
-            subtitle: 'Friends already at the table? Set it up, check the '
+            subtitle:
+                'Friends already at the table? Set it up, check the '
                 'stack, and the clock runs.',
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -361,15 +369,18 @@ class _QuickStartScreenState extends State<QuickStartScreen> {
             playersHint: last == null ? null : 'Last time: $last players',
             busy: _starting,
             error: _error,
+            onSavePreset: () => offerSaveGamePreset(
+              context,
+              app,
+              controller.applyTo(_quickBase(app)),
+            ),
             onChipCountFixed: (counts) => offerSaveChipSet(
               context,
               app,
               counts,
               setName: _chipsName(app),
             ),
-            onEditChips: () => context.push(RoutePaths.chipSets).then((_) {
-              if (mounted) controller.setChipSet(_chips(app));
-            }),
+            onEditChips: () => editBuilderChipSet(context, controller),
             onConfirm: (s) => _start(app, s),
           ),
         ],

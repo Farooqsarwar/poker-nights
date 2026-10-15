@@ -94,20 +94,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         ? null
         : app.presetById(widget.presetId);
     if (preset != null) {
-      settings = settings.copyWith(
-        buyIn: preset.buyIn,
-        koEnabled: preset.koEnabled,
-        koAmount: preset.koAmount,
-        rebuys: preset.rebuys,
-        reEntry: preset.reEntry,
-        format: preset.format,
-        pace: preset.pace,
-        targetDepthBB: _typeForPace(preset.pace).depthBB,
-        earlyArrivalBonusEnabled: preset.earlyArrivalBonusEnabled,
-        earlyArrivalBonusPctOverride: preset.earlyArrivalBonusPctOverride,
-        clearBuilderOverrides: true,
-        clearRebuyLimit: true,
-      );
+      settings = preset.applyTo(settings);
     }
     return _normalise(settings);
   }
@@ -117,7 +104,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     final savedSet = app.savedChipSets.isEmpty ? null : app.savedChipSets.first;
     final chips =
         savedSet?.chips ?? TournamentEngine.getPreset('Home Set (4 colour)');
-    return GameSettings(
+    final starter = GameSettings(
       name: 'Poker Night',
       date: _dateIso(start),
       time: _timeIso(start),
@@ -141,6 +128,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       targetDepthBB: TournamentType.normal.depthBB,
       breaks: const [],
     );
+    return app.defaultGamePreset.applyTo(starter);
   }
 
   GameSettings _normalise(GameSettings settings) {
@@ -161,7 +149,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       reEntry: format == TournamentFormat.reEntry,
       format: format,
       pace: _typeForSettings(settings).pace,
-      targetDepthBB: _typeForSettings(settings).depthBB,
+      targetDepthBB:
+          settings.targetDepthBB ?? _typeForSettings(settings).depthBB,
     );
   }
 
@@ -247,8 +236,6 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         players: _invitedCount(app),
         clearExpectedPlayersOverride: true,
         clearLockedExpectedPlayers: true,
-        clearBuilderOverrides: true,
-        clearRebuyLimit: true,
       );
       final game = app.createGame(posted);
       app.setCurrentGame(game);

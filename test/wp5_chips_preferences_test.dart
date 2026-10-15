@@ -307,7 +307,6 @@ void main() {
       'selected default seeds event, explicit preset wins over draft',
       (tester) async {
         final app = _provider();
-        addTearDown(app.dispose);
         final selected = _preset('selected', buyIn: 41);
         final explicit = _preset('explicit', buyIn: 63);
         app.savePreset(selected);
@@ -331,22 +330,27 @@ void main() {
           tester.widget<CountStepper>(find.byType(CountStepper).first).value,
           63,
         );
+        await tester.pumpWidget(const SizedBox.shrink());
+        app.dispose();
       },
     );
 
     testWidgets('selected default seeds quick game', (tester) async {
       final app = _provider();
-      addTearDown(app.dispose);
       final selected = _preset('selected-quick', buyIn: 44);
       app.savePreset(selected);
       app.setDefaultGamePreset(selected.id);
 
       await _mount(tester, const QuickStartScreen(), app: app);
-      final buyIn = find.byWidgetPredicate(
-        (widget) => widget is CountStepper && widget.semanticLabel == 'Buy-in',
+      await tester.ensureVisible(find.text('More options'));
+      await tester.tap(find.text('More options'));
+      await tester.pumpAndSettle();
+      final buyIn = tester.widget<TextFormField>(
+        find.byKey(const Key('opt-buyin')),
       );
-      expect(buyIn, findsOneWidget);
-      expect(tester.widget<CountStepper>(buyIn).value, 44);
+      expect(buyIn.initialValue, '44');
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.dispose();
     });
   });
 
@@ -367,6 +371,7 @@ void main() {
     );
 
     expect(find.text('Save as preset'), findsOneWidget);
+    await tester.ensureVisible(find.text('Save as preset'));
     await tester.tap(find.text('Save as preset'));
     expect(saved, isNotNull);
     expect(saved!.chipSet, _chips);

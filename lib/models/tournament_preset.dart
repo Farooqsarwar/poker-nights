@@ -57,11 +57,76 @@ class TournamentPreset {
     this.tableSettingsOverride,
     this.lockedExpectedPlayers,
     this.expectedRebuys,
+    this.expectedRebuyRate,
     this.expectedReEntries,
     this.expectedAddOns,
     this.forecastRebuyRate,
     this.forecastAddOnTakeUp,
+    this.forceStack,
+    this.targetDepthBB,
   });
+
+  factory TournamentPreset.fromSettings({
+    required String id,
+    required String name,
+    required GameSettings settings,
+  }) => TournamentPreset(
+    id: id,
+    name: name,
+    buyIn: settings.buyIn,
+    koEnabled: settings.koEnabled,
+    koAmount: settings.koAmount,
+    koKind: settings.koKind,
+    rebuys: settings.rebuys,
+    rebuysCloseLevel: settings.rebuysCloseLevel,
+    rebuyCloseChosenByOrganizer: settings.rebuyCloseChosenByOrganizer,
+    rebuyLimit: settings.rebuyLimit,
+    reEntry: settings.reEntry,
+    addOn: settings.addOn,
+    addOnOvertime: settings.addOnOvertime,
+    addOnCloseLevel: settings.addOnCloseLevel,
+    breaks: settings.breaks,
+    durationHours: settings.durationHours,
+    anteEnabled: settings.anteEnabled,
+    anteAfterLevel: settings.anteAfterLevel,
+    anteStyle: settings.anteStyle,
+    antePreference: settings.antePreference,
+    organizerPct: settings.organizerPct,
+    chipSetName: settings.chipSetName,
+    chipSet: List.of(settings.chipSet),
+    rebuyCost: settings.rebuyCost,
+    addOnCost: settings.addOnCost,
+    format: settings.effectiveFormat,
+    maxReEntries: settings.maxReEntries,
+    earlyArrivalBonusEnabled: settings.earlyArrivalBonusEnabled,
+    earlyArrivalCutoffMins: settings.earlyArrivalCutoffMins,
+    earlyArrivalBonusPctOverride: settings.earlyArrivalBonusPctOverride,
+    rsvpDeadlineHours: settings.rsvpDeadlineHours,
+    hardFinishEnabled: settings.hardFinishEnabled,
+    hardFinishMinsAfterFinish: settings.hardFinishMinsAfterFinish,
+    hardFinishSplit: settings.hardFinishSplit,
+    levelDurationMins: settings.levelDurationMins,
+    pace: settings.pace,
+    shootoutTables: settings.shootoutTables,
+    shootoutTableTargetMins: settings.shootoutTableTargetMins,
+    expectedPlayersOverride: settings.expectedPlayersOverride,
+    announceEliminations: settings.announceEliminations,
+    locationPrivate: settings.locationPrivate,
+    forcePaidPlaces: settings.forcePaidPlaces,
+    rebuyChips: settings.rebuyChips,
+    reEntryChips: settings.reEntryChips,
+    addOnChips: settings.addOnChips,
+    tableSettingsOverride: settings.tableSettingsOverride,
+    lockedExpectedPlayers: settings.lockedExpectedPlayers,
+    expectedRebuys: settings.expectedRebuys,
+        expectedRebuyRate: settings.expectedRebuyRate,
+    expectedReEntries: settings.expectedReEntries,
+    expectedAddOns: settings.expectedAddOns,
+    forecastRebuyRate: settings.forecastRebuyRate,
+    forecastAddOnTakeUp: settings.forecastAddOnTakeUp,
+    forceStack: settings.forceStack,
+    targetDepthBB: settings.targetDepthBB,
+  );
 
   final String id;
   final String name;
@@ -122,10 +187,89 @@ class TournamentPreset {
   final TableSettings? tableSettingsOverride;
   final int? lockedExpectedPlayers;
   final int? expectedRebuys;
+  final double? expectedRebuyRate;
   final int? expectedReEntries;
   final int? expectedAddOns;
   final double? forecastRebuyRate;
   final double? forecastAddOnTakeUp;
+  final int? forceStack;
+  final int? targetDepthBB;
+
+  /// Applies this reusable preference without touching event-only identity,
+  /// date, time, location or attendance on [base].
+  GameSettings applyTo(GameSettings base) => base.copyWith(
+    buyIn: buyIn,
+    koEnabled: koEnabled,
+    koAmount: koAmount,
+    koKind: koKind,
+    rebuys: rebuys,
+    rebuysCloseLevel: rebuysCloseLevel,
+    rebuyCloseChosenByOrganizer: rebuyCloseChosenByOrganizer,
+    rebuyLimit: rebuyLimit,
+    clearRebuyLimit: rebuyLimit == null,
+    reEntry: reEntry,
+    addOn: addOn,
+    addOnOvertime: addOnOvertime,
+    addOnCloseLevel: addOnCloseLevel,
+    breaks: List.of(breaks),
+    durationHours: durationHours,
+    anteEnabled: anteEnabled,
+    anteAfterLevel: anteAfterLevel,
+    anteStyle: anteStyle,
+    antePreference: antePreference,
+    organizerPct: organizerPct,
+    chipSetName: chipSetName,
+    chipSet: List.of(chipSet),
+    rebuyCost: rebuyCost,
+    addOnCost: addOnCost,
+    format:
+        format ??
+        (reEntry
+            ? TournamentFormat.reEntry
+            : rebuys
+            ? TournamentFormat.rebuy
+            : TournamentFormat.freezeOut),
+    maxReEntries: maxReEntries,
+    clearMaxReEntries: maxReEntries == null,
+    earlyArrivalBonusEnabled: earlyArrivalBonusEnabled,
+    earlyArrivalCutoffMins: earlyArrivalCutoffMins,
+    clearEarlyArrivalCutoffMins: earlyArrivalCutoffMins == null,
+    earlyArrivalBonusPctOverride: earlyArrivalBonusPctOverride,
+    clearEarlyArrivalBonusPctOverride: earlyArrivalBonusPctOverride == null,
+    rsvpDeadlineHours: rsvpDeadlineHours,
+    hardFinishEnabled: hardFinishEnabled,
+    hardFinishMinsAfterFinish: hardFinishMinsAfterFinish,
+    hardFinishSplit: hardFinishSplit,
+    levelDurationMins: levelDurationMins,
+    pace: pace,
+    shootoutTables: shootoutTables,
+    clearShootoutTables: shootoutTables == null,
+    shootoutTableTargetMins: shootoutTableTargetMins,
+    clearShootoutTableTargetMins: shootoutTableTargetMins == null,
+    expectedPlayersOverride: expectedPlayersOverride,
+    clearExpectedPlayersOverride: expectedPlayersOverride == null,
+    announceEliminations: announceEliminations,
+    locationPrivate: locationPrivate,
+    forcePaidPlaces: forcePaidPlaces,
+    clearForcePaidPlaces: forcePaidPlaces == null,
+    rebuyChips: rebuyChips,
+    reEntryChips: reEntryChips,
+    addOnChips: addOnChips,
+    tableSettingsOverride: tableSettingsOverride,
+    clearTableSettingsOverride: tableSettingsOverride == null,
+    lockedExpectedPlayers: lockedExpectedPlayers,
+    clearLockedExpectedPlayers: lockedExpectedPlayers == null,
+    expectedRebuys: expectedRebuys,
+        expectedRebuyRate: expectedRebuyRate,
+    expectedReEntries: expectedReEntries,
+    expectedAddOns: expectedAddOns,
+    forecastRebuyRate: forecastRebuyRate,
+    forecastAddOnTakeUp: forecastAddOnTakeUp,
+    forceStack: forceStack,
+    clearForceStack: forceStack == null,
+    targetDepthBB: targetDepthBB,
+    clearTargetDepthBB: targetDepthBB == null,
+  );
 
   TournamentPreset copyWith({
     String? id,
@@ -176,10 +320,13 @@ class TournamentPreset {
     TableSettings? tableSettingsOverride,
     int? lockedExpectedPlayers,
     int? expectedRebuys,
+    double? expectedRebuyRate,
     int? expectedReEntries,
     int? expectedAddOns,
     double? forecastRebuyRate,
     double? forecastAddOnTakeUp,
+    int? forceStack,
+    int? targetDepthBB,
   }) {
     return TournamentPreset(
       id: id ?? this.id,
@@ -190,7 +337,8 @@ class TournamentPreset {
       koKind: koKind ?? this.koKind,
       rebuys: rebuys ?? this.rebuys,
       rebuysCloseLevel: rebuysCloseLevel ?? this.rebuysCloseLevel,
-      rebuyCloseChosenByOrganizer: rebuyCloseChosenByOrganizer ?? this.rebuyCloseChosenByOrganizer,
+      rebuyCloseChosenByOrganizer:
+          rebuyCloseChosenByOrganizer ?? this.rebuyCloseChosenByOrganizer,
       rebuyLimit: rebuyLimit ?? this.rebuyLimit,
       reEntry: reEntry ?? this.reEntry,
       addOn: addOn ?? this.addOn,
@@ -209,18 +357,24 @@ class TournamentPreset {
       addOnCost: addOnCost ?? this.addOnCost,
       format: format ?? this.format,
       maxReEntries: maxReEntries ?? this.maxReEntries,
-      earlyArrivalBonusEnabled: earlyArrivalBonusEnabled ?? this.earlyArrivalBonusEnabled,
-      earlyArrivalCutoffMins: earlyArrivalCutoffMins ?? this.earlyArrivalCutoffMins,
-      earlyArrivalBonusPctOverride: earlyArrivalBonusPctOverride ?? this.earlyArrivalBonusPctOverride,
+      earlyArrivalBonusEnabled:
+          earlyArrivalBonusEnabled ?? this.earlyArrivalBonusEnabled,
+      earlyArrivalCutoffMins:
+          earlyArrivalCutoffMins ?? this.earlyArrivalCutoffMins,
+      earlyArrivalBonusPctOverride:
+          earlyArrivalBonusPctOverride ?? this.earlyArrivalBonusPctOverride,
       rsvpDeadlineHours: rsvpDeadlineHours ?? this.rsvpDeadlineHours,
       hardFinishEnabled: hardFinishEnabled ?? this.hardFinishEnabled,
-      hardFinishMinsAfterFinish: hardFinishMinsAfterFinish ?? this.hardFinishMinsAfterFinish,
+      hardFinishMinsAfterFinish:
+          hardFinishMinsAfterFinish ?? this.hardFinishMinsAfterFinish,
       hardFinishSplit: hardFinishSplit ?? this.hardFinishSplit,
       levelDurationMins: levelDurationMins ?? this.levelDurationMins,
       pace: pace ?? this.pace,
       shootoutTables: shootoutTables ?? this.shootoutTables,
-      shootoutTableTargetMins: shootoutTableTargetMins ?? this.shootoutTableTargetMins,
-      expectedPlayersOverride: expectedPlayersOverride ?? this.expectedPlayersOverride,
+      shootoutTableTargetMins:
+          shootoutTableTargetMins ?? this.shootoutTableTargetMins,
+      expectedPlayersOverride:
+          expectedPlayersOverride ?? this.expectedPlayersOverride,
       announceEliminations: announceEliminations ?? this.announceEliminations,
       locationPrivate: locationPrivate ?? this.locationPrivate,
       forcePaidPlaces: forcePaidPlaces ?? this.forcePaidPlaces,
@@ -232,11 +386,13 @@ class TournamentPreset {
       lockedExpectedPlayers:
           lockedExpectedPlayers ?? this.lockedExpectedPlayers,
       expectedRebuys: expectedRebuys ?? this.expectedRebuys,
+      expectedRebuyRate: expectedRebuyRate ?? this.expectedRebuyRate,
       expectedReEntries: expectedReEntries ?? this.expectedReEntries,
       expectedAddOns: expectedAddOns ?? this.expectedAddOns,
       forecastRebuyRate: forecastRebuyRate ?? this.forecastRebuyRate,
-      forecastAddOnTakeUp:
-          forecastAddOnTakeUp ?? this.forecastAddOnTakeUp,
+      forecastAddOnTakeUp: forecastAddOnTakeUp ?? this.forecastAddOnTakeUp,
+      forceStack: forceStack ?? this.forceStack,
+      targetDepthBB: targetDepthBB ?? this.targetDepthBB,
     );
   }
 }

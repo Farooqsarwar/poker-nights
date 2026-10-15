@@ -48,245 +48,266 @@ DateTime? _isoOrNull(Object? value) =>
     value is String ? DateTime.tryParse(value) : null;
 
 List<Map<String, dynamic>> _mapList(Iterable<Object?> items) => [
-      for (final item in items) Map<String, dynamic>.from(item as Map),
-    ];
+  for (final item in items) Map<String, dynamic>.from(item as Map),
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Users
 // ─────────────────────────────────────────────────────────────────────────────
 
 Map<String, dynamic> userStatsToMap(UserStats s) => {
-      'played': s.played,
-      'wins': s.wins,
-      'podium': s.podium,
-      'avgFinish': s.avgFinish,
-      'knockouts': s.knockouts,
-    };
+  'played': s.played,
+  'wins': s.wins,
+  'podium': s.podium,
+  'avgFinish': s.avgFinish,
+  'knockouts': s.knockouts,
+};
 
 UserStats userStatsFromMap(Map<String, dynamic> m) => UserStats(
-      played: (m['played'] as num?)?.toInt() ?? 0,
-      wins: (m['wins'] as num?)?.toInt() ?? 0,
-      podium: (m['podium'] as num?)?.toInt() ?? 0,
-      avgFinish: (m['avgFinish'] as num?)?.toDouble() ?? 0,
-      knockouts: (m['knockouts'] as num?)?.toInt() ?? 0,
-    );
+  played: (m['played'] as num?)?.toInt() ?? 0,
+  wins: (m['wins'] as num?)?.toInt() ?? 0,
+  podium: (m['podium'] as num?)?.toInt() ?? 0,
+  avgFinish: (m['avgFinish'] as num?)?.toDouble() ?? 0,
+  knockouts: (m['knockouts'] as num?)?.toInt() ?? 0,
+);
 
 Map<String, dynamic> appUserToMap(AppUser u) => {
-      'id': u.id,
-      'name': u.name,
-      'email': u.email,
-      'isAdmin': u.isAdmin,
-      'stats': userStatsToMap(u.stats),
-      'fcmTokens': u.fcmTokens,
-      'isCoAdmin': u.isCoAdmin,
-      // §E10 (3) "stored on the blocker's user document" — carried by the one
-      // codec, so the cloud document and the device-local snapshot agree.
-      'blockedUserIds': u.blockedUserIds,
-    };
+  'id': u.id,
+  'name': u.name,
+  'email': u.email,
+  'isAdmin': u.isAdmin,
+  'stats': userStatsToMap(u.stats),
+  'fcmTokens': u.fcmTokens,
+  'isCoAdmin': u.isCoAdmin,
+  // §E10 (3) "stored on the blocker's user document" — carried by the one
+  // codec, so the cloud document and the device-local snapshot agree.
+  'blockedUserIds': u.blockedUserIds,
+};
 
 AppUser appUserFromMap(Map<String, dynamic> m) => AppUser(
-      id: (m['id'] as String?) ?? '',
-      name: (m['name'] as String?) ?? '',
-      email: (m['email'] as String?) ?? '',
-      isAdmin: (m['isAdmin'] as bool?) ?? false,
-      stats: userStatsFromMap(Map<String, dynamic>.from((m['stats'] as Map?) ?? const {})),
-      fcmTokens: List<String>.from(m['fcmTokens'] as List? ?? const []),
-      isCoAdmin: (m['isCoAdmin'] as bool?) ?? false,
-      // Absent on every profile written before blocking existed. An absent
-      // list reads as "nobody blocked" — the backward-compatible default —
-      // so an added optional field does not need a codec `_v` bump (§E2.1).
-      blockedUserIds: List<String>.from(m['blockedUserIds'] as List? ?? const []),
-    );
+  id: (m['id'] as String?) ?? '',
+  name: (m['name'] as String?) ?? '',
+  email: (m['email'] as String?) ?? '',
+  isAdmin: (m['isAdmin'] as bool?) ?? false,
+  stats: userStatsFromMap(
+    Map<String, dynamic>.from((m['stats'] as Map?) ?? const {}),
+  ),
+  fcmTokens: List<String>.from(m['fcmTokens'] as List? ?? const []),
+  isCoAdmin: (m['isCoAdmin'] as bool?) ?? false,
+  // Absent on every profile written before blocking existed. An absent
+  // list reads as "nobody blocked" — the backward-compatible default —
+  // so an added optional field does not need a codec `_v` bump (§E2.1).
+  blockedUserIds: List<String>.from(m['blockedUserIds'] as List? ?? const []),
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Table settings
 // ─────────────────────────────────────────────────────────────────────────────
 
 Map<String, dynamic> tableSettingsToMap(TableSettings s) => {
-      'maxPerTable': s.maxPerTable,
-      'randomizeByDefault': s.randomizeByDefault,
-    };
+  'maxPerTable': s.maxPerTable,
+  'randomizeByDefault': s.randomizeByDefault,
+};
 
 TableSettings tableSettingsFromMap(Map<String, dynamic> m) => TableSettings(
-      maxPerTable: (m['maxPerTable'] as num?)?.toInt() ??
-          TableSettings.fallback.maxPerTable,
-      randomizeByDefault: (m['randomizeByDefault'] as bool?) ??
-          TableSettings.fallback.randomizeByDefault,
-    );
+  maxPerTable:
+      (m['maxPerTable'] as num?)?.toInt() ?? TableSettings.fallback.maxPerTable,
+  randomizeByDefault:
+      (m['randomizeByDefault'] as bool?) ??
+      TableSettings.fallback.randomizeByDefault,
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Chips
 // ─────────────────────────────────────────────────────────────────────────────
 
 Map<String, dynamic> chipColorToMap(ChipColor c) => {
-      'color': c.color,
-      'hex': c.hex,
-      'value': c.value,
-      'quantity': c.quantity,
-    };
+  'color': c.color,
+  'hex': c.hex,
+  'value': c.value,
+  'quantity': c.quantity,
+};
 
 ChipColor chipColorFromMap(Map<String, dynamic> m) => ChipColor(
-      color: (m['color'] as String?) ?? '',
-      hex: (m['hex'] as num?)?.toInt() ?? 0,
-      value: (m['value'] as num?)?.toInt() ?? 0,
-      quantity: (m['quantity'] as num?)?.toInt() ?? 0,
-    );
+  color: (m['color'] as String?) ?? '',
+  hex: (m['hex'] as num?)?.toInt() ?? 0,
+  value: (m['value'] as num?)?.toInt() ?? 0,
+  quantity: (m['quantity'] as num?)?.toInt() ?? 0,
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tournament structure
 // ─────────────────────────────────────────────────────────────────────────────
 
 Map<String, dynamic> blindLevelToMap(BlindLevel l) => {
-      'level': l.level,
-      'sb': l.sb,
-      'bb': l.bb,
-      'ante': l.ante,
-      'durationMins': l.durationMins,
-      'manuallyEdited': l.manuallyEdited,
-    };
+  'level': l.level,
+  'sb': l.sb,
+  'bb': l.bb,
+  'ante': l.ante,
+  'durationMins': l.durationMins,
+  'manuallyEdited': l.manuallyEdited,
+};
 
 BlindLevel blindLevelFromMap(Map<String, dynamic> m) => BlindLevel(
-      level: (m['level'] as num?)?.toInt() ?? 1,
-      sb: (m['sb'] as num?)?.toInt() ?? 0,
-      bb: (m['bb'] as num?)?.toInt() ?? 0,
-      ante: (m['ante'] as num?)?.toInt(),
-      durationMins: (m['durationMins'] as num?)?.toInt() ?? 15,
-      // Absent on every structure written before the marker existed, which is
-      // correct: those levels were all engine-generated.
-      manuallyEdited: (m['manuallyEdited'] as bool?) ?? false,
-    );
+  level: (m['level'] as num?)?.toInt() ?? 1,
+  sb: (m['sb'] as num?)?.toInt() ?? 0,
+  bb: (m['bb'] as num?)?.toInt() ?? 0,
+  ante: (m['ante'] as num?)?.toInt(),
+  durationMins: (m['durationMins'] as num?)?.toInt() ?? 15,
+  // Absent on every structure written before the marker existed, which is
+  // correct: those levels were all engine-generated.
+  manuallyEdited: (m['manuallyEdited'] as bool?) ?? false,
+);
 
 Map<String, dynamic> paymentRecordToMap(PaymentRecord p) => {
-      'id': p.id,
-      'playerId': p.playerId,
-      'purpose': p.purpose.name,
-      'amount': p.amount,
-      'status': p.status.name,
-      'timestamp': p.timestamp.toIso8601String(),
-      'idempotencyKey': p.idempotencyKey,
-      'failureReason': p.failureReason,
-    };
+  'id': p.id,
+  'playerId': p.playerId,
+  'purpose': p.purpose.name,
+  'amount': p.amount,
+  'status': p.status.name,
+  'timestamp': p.timestamp.toIso8601String(),
+  'idempotencyKey': p.idempotencyKey,
+  'failureReason': p.failureReason,
+};
 
 PaymentRecord paymentRecordFromMap(Map<String, dynamic> m) => PaymentRecord(
-      id: (m['id'] as String?) ?? '',
-      playerId: (m['playerId'] as String?) ?? '',
-      purpose: _enumByName(
-          PaymentPurpose.values, m['purpose'], PaymentPurpose.buyIn),
-      amount: (m['amount'] as num?)?.toInt() ?? 0,
-      status:
-          _enumByName(PaymentStatus.values, m['status'], PaymentStatus.failed),
-      timestamp:
-          DateTime.tryParse((m['timestamp'] as String?) ?? '') ?? DateTime.now(),
-      idempotencyKey: (m['idempotencyKey'] as String?) ?? '',
-      failureReason: m['failureReason'] as String?,
-    );
+  id: (m['id'] as String?) ?? '',
+  playerId: (m['playerId'] as String?) ?? '',
+  purpose: _enumByName(
+    PaymentPurpose.values,
+    m['purpose'],
+    PaymentPurpose.buyIn,
+  ),
+  amount: (m['amount'] as num?)?.toInt() ?? 0,
+  status: _enumByName(PaymentStatus.values, m['status'], PaymentStatus.failed),
+  timestamp:
+      DateTime.tryParse((m['timestamp'] as String?) ?? '') ?? DateTime.now(),
+  idempotencyKey: (m['idempotencyKey'] as String?) ?? '',
+  failureReason: m['failureReason'] as String?,
+);
 
 Map<String, dynamic> scheduledBreakToMap(ScheduledBreak b) => {
-      'afterLevel': b.afterLevel,
-      'durationMins': b.durationMins,
-    };
+  'afterLevel': b.afterLevel,
+  'durationMins': b.durationMins,
+};
 
 ScheduledBreak scheduledBreakFromMap(Map<String, dynamic> m) => ScheduledBreak(
-      afterLevel: (m['afterLevel'] as num?)?.toInt() ?? 0,
-      durationMins: (m['durationMins'] as num?)?.toInt() ?? 10,
-    );
+  afterLevel: (m['afterLevel'] as num?)?.toInt() ?? 0,
+  durationMins: (m['durationMins'] as num?)?.toInt() ?? 10,
+);
 
-Map<String, dynamic> chipPlanEntryToMap(ChipPlanEntry c) =>
-    {'color': c.color, 'hex': c.hex, 'value': c.value, 'count': c.count};
+Map<String, dynamic> chipPlanEntryToMap(ChipPlanEntry c) => {
+  'color': c.color,
+  'hex': c.hex,
+  'value': c.value,
+  'count': c.count,
+};
 
 ChipPlanEntry chipPlanEntryFromMap(Map<String, dynamic> m) => ChipPlanEntry(
-      color: (m['color'] as String?) ?? '',
-      hex: (m['hex'] as num?)?.toInt() ?? 0,
-      value: (m['value'] as num?)?.toInt() ?? 0,
-      count: (m['count'] as num?)?.toInt() ?? 0,
-    );
+  color: (m['color'] as String?) ?? '',
+  hex: (m['hex'] as num?)?.toInt() ?? 0,
+  value: (m['value'] as num?)?.toInt() ?? 0,
+  count: (m['count'] as num?)?.toInt() ?? 0,
+);
 
-Map<String, dynamic> prizeToMap(Prize p) => {'place': p.place, 'amount': p.amount};
+Map<String, dynamic> prizeToMap(Prize p) => {
+  'place': p.place,
+  'amount': p.amount,
+};
 
 Prize prizeFromMap(Map<String, dynamic> m) => Prize(
-      place: (m['place'] as num?)?.toInt() ?? 0,
-      amount: (m['amount'] as num?)?.toInt() ?? 0,
-    );
+  place: (m['place'] as num?)?.toInt() ?? 0,
+  amount: (m['amount'] as num?)?.toInt() ?? 0,
+);
 
 Map<String, dynamic> tournamentStructureToMap(TournamentStructure s) => {
-      'startingStack': s.startingStack,
-      'chipPlan': s.chipPlan.map(chipPlanEntryToMap).toList(),
-      'rebuyStack': s.rebuyStack,
-      'rebuyChipPlan': s.rebuyChipPlan.map(chipPlanEntryToMap).toList(),
-      'addOnStack': s.addOnStack,
-      'addOnChipPlan': s.addOnChipPlan.map(chipPlanEntryToMap).toList(),
-      'levels': s.levels.map(blindLevelToMap).toList(),
-      'breaks': s.breaks.map(scheduledBreakToMap).toList(),
-      'levelDuration': s.levelDuration,
-      'plannedLevels': s.plannedLevels,
-      'expectedFinishMins': s.expectedFinishMins,
-      'prizes': s.prizes.map(prizeToMap).toList(),
-      'prizePool': s.prizePool,
-      'organizerAmount': s.organizerAmount,
-      'roundingRemainder': s.roundingRemainder,
-      'paidPlaces': s.paidPlaces,
-      'colorUpInstructions': List<String>.from(s.colorUpInstructions),
-      'warnings': List<String>.from(s.warnings),
-      'styleNote': s.styleNote,
-      'rebuysCloseLevel': s.rebuysCloseLevel,
-      'engineVersion': s.engineVersion,
-      // §F1.5 point 7 / §E17 row 88. These were computed by the engine and
-      // then dropped on the floor: the codec never wrote them, so the moment a
-      // structure was saved and read back the app could no longer tell a host
-      // that their chip case does not cover the field. That is the single most
-      // valuable thing the structure engine works out.
-      'feasible': s.feasible,
-      'depthOk': s.depthOk,
-      'bankOk': s.bankOk,
-      'bankShortfall': [
-        for (final b in s.bankShortfall)
-          {
-            'colour': b.colour,
-            'value': b.value,
-            'needed': b.needed,
-            'owned': b.owned,
-          },
-      ],
-      'depthShortfallNote': s.depthShortfallNote,
-      'maxPlayersSupported': s.maxPlayersSupported,
-      // §F1.3 `meta.pace` / `meta.fits`.
-      'pace': s.pace?.name,
-      'fits': s.fits,
-      'paceOverByMins': s.paceOverByMins,
-      // §F1.1 `explain[]` — what the "Why?" disclosures read (§B4 rule 10).
-      'explain': s.explain.map((e) => e.toMap()).toList(),
-    };
+  'startingStack': s.startingStack,
+  'chipPlan': s.chipPlan.map(chipPlanEntryToMap).toList(),
+  'rebuyStack': s.rebuyStack,
+  'rebuyChipPlan': s.rebuyChipPlan.map(chipPlanEntryToMap).toList(),
+  'addOnStack': s.addOnStack,
+  'addOnChipPlan': s.addOnChipPlan.map(chipPlanEntryToMap).toList(),
+  'levels': s.levels.map(blindLevelToMap).toList(),
+  'breaks': s.breaks.map(scheduledBreakToMap).toList(),
+  'levelDuration': s.levelDuration,
+  'plannedLevels': s.plannedLevels,
+  'expectedFinishMins': s.expectedFinishMins,
+  'prizes': s.prizes.map(prizeToMap).toList(),
+  'prizePool': s.prizePool,
+  'organizerAmount': s.organizerAmount,
+  'roundingRemainder': s.roundingRemainder,
+  'paidPlaces': s.paidPlaces,
+  'colorUpInstructions': List<String>.from(s.colorUpInstructions),
+  'warnings': List<String>.from(s.warnings),
+  'styleNote': s.styleNote,
+  'rebuysCloseLevel': s.rebuysCloseLevel,
+  'engineVersion': s.engineVersion,
+  // §F1.5 point 7 / §E17 row 88. These were computed by the engine and
+  // then dropped on the floor: the codec never wrote them, so the moment a
+  // structure was saved and read back the app could no longer tell a host
+  // that their chip case does not cover the field. That is the single most
+  // valuable thing the structure engine works out.
+  'feasible': s.feasible,
+  'depthOk': s.depthOk,
+  'bankOk': s.bankOk,
+  'bankShortfall': [
+    for (final b in s.bankShortfall)
+      {
+        'colour': b.colour,
+        'value': b.value,
+        'needed': b.needed,
+        'owned': b.owned,
+      },
+  ],
+  'depthShortfallNote': s.depthShortfallNote,
+  'maxPlayersSupported': s.maxPlayersSupported,
+  // §F1.3 `meta.pace` / `meta.fits`.
+  'pace': s.pace?.name,
+  'fits': s.fits,
+  'paceOverByMins': s.paceOverByMins,
+  // §F1.1 `explain[]` — what the "Why?" disclosures read (§B4 rule 10).
+  'explain': s.explain.map((e) => e.toMap()).toList(),
+};
 
 TournamentStructure tournamentStructureFromMap(Map<String, dynamic> m) =>
     TournamentStructure(
       startingStack: (m['startingStack'] as num?)?.toInt() ?? 0,
-      chipPlan: _mapList(m['chipPlan'] as List? ?? const []).map(chipPlanEntryFromMap).toList(),
+      chipPlan: _mapList(
+        m['chipPlan'] as List? ?? const [],
+      ).map(chipPlanEntryFromMap).toList(),
       rebuyStack: (m['rebuyStack'] as num?)?.toInt() ?? 0,
-      rebuyChipPlan: _mapList(m['rebuyChipPlan'] as List? ?? const [])
-          .map(chipPlanEntryFromMap)
-          .toList(),
+      rebuyChipPlan: _mapList(
+        m['rebuyChipPlan'] as List? ?? const [],
+      ).map(chipPlanEntryFromMap).toList(),
       addOnStack: (m['addOnStack'] as num?)?.toInt() ?? 0,
-      addOnChipPlan: _mapList(m['addOnChipPlan'] as List? ?? const [])
-          .map(chipPlanEntryFromMap)
-          .toList(),
-      levels: _mapList(m['levels'] as List? ?? const []).map(blindLevelFromMap).toList(),
-      breaks: _mapList(m['breaks'] as List? ?? const [])
-          .map(scheduledBreakFromMap)
-          .toList(),
+      addOnChipPlan: _mapList(
+        m['addOnChipPlan'] as List? ?? const [],
+      ).map(chipPlanEntryFromMap).toList(),
+      levels: _mapList(
+        m['levels'] as List? ?? const [],
+      ).map(blindLevelFromMap).toList(),
+      breaks: _mapList(
+        m['breaks'] as List? ?? const [],
+      ).map(scheduledBreakFromMap).toList(),
       styleNote: (m['styleNote'] as String?) ?? '',
-      rebuysCloseLevel: (m['rebuysCloseLevel'] as num?)?.toInt() ??
-          (m['structureRebuysCloseLevel'] as num?)?.toInt() ?? 0,
+      rebuysCloseLevel:
+          (m['rebuysCloseLevel'] as num?)?.toInt() ??
+          (m['structureRebuysCloseLevel'] as num?)?.toInt() ??
+          0,
       engineVersion: (m['engineVersion'] as String?) ?? '2.1.0',
       levelDuration: (m['levelDuration'] as num?)?.toInt() ?? 15,
       plannedLevels: (m['plannedLevels'] as num?)?.toInt() ?? 0,
       expectedFinishMins: (m['expectedFinishMins'] as num?)?.toInt() ?? 0,
-      prizes: _mapList(m['prizes'] as List? ?? const []).map(prizeFromMap).toList(),
+      prizes: _mapList(
+        m['prizes'] as List? ?? const [],
+      ).map(prizeFromMap).toList(),
       prizePool: (m['prizePool'] as num?)?.toInt() ?? 0,
       organizerAmount: (m['organizerAmount'] as num?)?.toInt() ?? 0,
       roundingRemainder: (m['roundingRemainder'] as num?)?.toInt() ?? 0,
       paidPlaces: (m['paidPlaces'] as num?)?.toInt() ?? 0,
-      colorUpInstructions:
-          List<String>.from(m['colorUpInstructions'] as List? ?? const []),
+      colorUpInstructions: List<String>.from(
+        m['colorUpInstructions'] as List? ?? const [],
+      ),
       warnings: List<String>.from(m['warnings'] as List? ?? const []),
       // A structure written before these fields existed has no opinion on
       // feasibility, and "feasible" is the safe reading: the alternative would
@@ -310,9 +331,9 @@ TournamentStructure tournamentStructureFromMap(Map<String, dynamic> m) =>
       pace: _paceModeFromName(m['pace'] as String?),
       fits: (m['fits'] as bool?) ?? true,
       paceOverByMins: (m['paceOverByMins'] as num?)?.toInt() ?? 0,
-      explain: _mapList(m['explain'] as List? ?? const [])
-          .map(StructureExplanation.fromMap)
-          .toList(),
+      explain: _mapList(
+        m['explain'] as List? ?? const [],
+      ).map(StructureExplanation.fromMap).toList(),
     );
 
 PaceMode? _paceModeFromName(String? name) {
@@ -328,318 +349,325 @@ PaceMode? _paceModeFromName(String? name) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 Map<String, dynamic> gameSettingsToMap(GameSettings s) => {
-      'name': s.name,
-      'date': s.date,
-      'time': s.time,
-      'location': s.location,
-      'players': s.players,
-      'durationHours': s.durationHours,
-      'buyIn': s.buyIn,
-      'koEnabled': s.koEnabled,
-      'koAmount': s.koAmount,
-      'koKind': s.koKind.name,
-      'rebuys': s.rebuys,
-      'rebuysCloseLevel': s.rebuysCloseLevel,
-      'rebuyCloseChosenByOrganizer': s.rebuyCloseChosenByOrganizer,
-      'rebuyLimit': s.rebuyLimit,
-      'reEntry': s.reEntry,
-      'addOn': s.addOn,
-      'addOnOvertime': s.addOnOvertime,
-      'addOnCloseLevel': s.addOnCloseLevel,
-      'anteEnabled': s.anteEnabled,
-      'anteAfterLevel': s.anteAfterLevel,
-      'anteStyle': s.anteStyle.name,
-      'antePreference': s.antePreference.name,
-      'organizerPct': s.organizerPct,
-      'chipSet': s.chipSet.map(chipColorToMap).toList(),
-      'chipSetName': s.chipSetName,
-      'announceEliminations': s.announceEliminations,
-      'forcePaidPlaces': s.forcePaidPlaces,
-      'rebuyCost': s.rebuyCost,
-      'addOnCost': s.addOnCost,
-      'locationPrivate': s.locationPrivate,
-      'tableSettingsOverride': s.tableSettingsOverride == null
-          ? null
-          : tableSettingsToMap(s.tableSettingsOverride!),
-      'expectedPlayersOverride': s.expectedPlayersOverride,
-      'lockedExpectedPlayers': s.lockedExpectedPlayers,
-      'breaks': s.breaks.map(scheduledBreakToMap).toList(),
-      'expectedRebuys': s.expectedRebuys,
-      'expectedRebuyRate': s.expectedRebuyRate,
-      'forceStack': s.forceStack,
-      'targetDepthBB': s.targetDepthBB,
-      'levelPins': [
-        for (final p in s.levelPins)
-          {'level': p.level, 'sb': p.sb, 'bb': p.bb, 'durationMins': p.durationMins},
-      ],
-      'expectedReEntries': s.expectedReEntries,
-      'expectedAddOns': s.expectedAddOns,
-      'rebuyChips': s.rebuyChips,
-      'reEntryChips': s.reEntryChips,
-      'addOnChips': s.addOnChips,
-      'levelDurationMins': s.levelDurationMins,
-      'pace': s.pace?.name,
-      'forecastRebuyRate': s.forecastRebuyRate,
-      'forecastAddOnTakeUp': s.forecastAddOnTakeUp,
-      'format': s.format?.name,
-      'maxReEntries': s.maxReEntries,
-      'shootoutTables': s.shootoutTables,
-      'shootoutTableTargetMins': s.shootoutTableTargetMins,
-      'earlyArrivalBonusEnabled': s.earlyArrivalBonusEnabled,
-      'earlyArrivalCutoffMins': s.earlyArrivalCutoffMins,
-      'rsvpDeadlineHours': s.rsvpDeadlineHours,
-      'earlyArrivalBonusPctOverride': s.earlyArrivalBonusPctOverride,
-      'hardFinishEnabled': s.hardFinishEnabled,
-      'hardFinishMinsAfterFinish': s.hardFinishMinsAfterFinish,
-      'hardFinishSplit': s.hardFinishSplit,
-    };
+  'name': s.name,
+  'date': s.date,
+  'time': s.time,
+  'location': s.location,
+  'players': s.players,
+  'durationHours': s.durationHours,
+  'buyIn': s.buyIn,
+  'koEnabled': s.koEnabled,
+  'koAmount': s.koAmount,
+  'koKind': s.koKind.name,
+  'rebuys': s.rebuys,
+  'rebuysCloseLevel': s.rebuysCloseLevel,
+  'rebuyCloseChosenByOrganizer': s.rebuyCloseChosenByOrganizer,
+  'rebuyLimit': s.rebuyLimit,
+  'reEntry': s.reEntry,
+  'addOn': s.addOn,
+  'addOnOvertime': s.addOnOvertime,
+  'addOnCloseLevel': s.addOnCloseLevel,
+  'anteEnabled': s.anteEnabled,
+  'anteAfterLevel': s.anteAfterLevel,
+  'anteStyle': s.anteStyle.name,
+  'antePreference': s.antePreference.name,
+  'organizerPct': s.organizerPct,
+  'chipSet': s.chipSet.map(chipColorToMap).toList(),
+  'chipSetName': s.chipSetName,
+  'announceEliminations': s.announceEliminations,
+  'forcePaidPlaces': s.forcePaidPlaces,
+  'rebuyCost': s.rebuyCost,
+  'addOnCost': s.addOnCost,
+  'locationPrivate': s.locationPrivate,
+  'tableSettingsOverride': s.tableSettingsOverride == null
+      ? null
+      : tableSettingsToMap(s.tableSettingsOverride!),
+  'expectedPlayersOverride': s.expectedPlayersOverride,
+  'lockedExpectedPlayers': s.lockedExpectedPlayers,
+  'breaks': s.breaks.map(scheduledBreakToMap).toList(),
+  'expectedRebuys': s.expectedRebuys,
+  'expectedRebuyRate': s.expectedRebuyRate,
+  'forceStack': s.forceStack,
+  'targetDepthBB': s.targetDepthBB,
+  'levelPins': [
+    for (final p in s.levelPins)
+      {
+        'level': p.level,
+        'sb': p.sb,
+        'bb': p.bb,
+        'durationMins': p.durationMins,
+      },
+  ],
+  'expectedReEntries': s.expectedReEntries,
+  'expectedAddOns': s.expectedAddOns,
+  'rebuyChips': s.rebuyChips,
+  'reEntryChips': s.reEntryChips,
+  'addOnChips': s.addOnChips,
+  'levelDurationMins': s.levelDurationMins,
+  'pace': s.pace?.name,
+  'forecastRebuyRate': s.forecastRebuyRate,
+  'forecastAddOnTakeUp': s.forecastAddOnTakeUp,
+  'format': s.format?.name,
+  'maxReEntries': s.maxReEntries,
+  'shootoutTables': s.shootoutTables,
+  'shootoutTableTargetMins': s.shootoutTableTargetMins,
+  'earlyArrivalBonusEnabled': s.earlyArrivalBonusEnabled,
+  'earlyArrivalCutoffMins': s.earlyArrivalCutoffMins,
+  'rsvpDeadlineHours': s.rsvpDeadlineHours,
+  'earlyArrivalBonusPctOverride': s.earlyArrivalBonusPctOverride,
+  'hardFinishEnabled': s.hardFinishEnabled,
+  'hardFinishMinsAfterFinish': s.hardFinishMinsAfterFinish,
+  'hardFinishSplit': s.hardFinishSplit,
+};
 
 GameSettings gameSettingsFromMap(Map<String, dynamic> m) => GameSettings(
-      name: (m['name'] as String?) ?? '',
-      date: (m['date'] as String?) ?? '',
-      time: (m['time'] as String?) ?? '',
-      location: (m['location'] as String?) ?? '',
-      players: (m['players'] as num?)?.toInt() ?? 2,
-      durationHours: (m['durationHours'] as num?)?.toDouble() ?? 3,
-      buyIn: (m['buyIn'] as num?)?.toInt() ?? 0,
-      koEnabled: (m['koEnabled'] as bool?) ?? false,
-      koAmount: (m['koAmount'] as num?)?.toInt() ?? 0,
-      // Absent on every game saved before bounty kinds existed, and those all
-      // ran a fixed bounty — which is the free one. An unrecognised name from a
-      // newer build lands on the same reading rather than throwing.
-      koKind: _enumByName(BountyKind.values, m['koKind'], BountyKind.fixed),
-      rebuys: (m['rebuys'] as bool?) ?? false,
-      rebuysCloseLevel: (m['rebuysCloseLevel'] as num?)?.toInt() ?? 0,
-      rebuyCloseChosenByOrganizer: (m['rebuyCloseChosenByOrganizer'] as bool?) ?? false,
-      rebuyLimit: (m['rebuyLimit'] as num?)?.toInt(),
-      reEntry: (m['reEntry'] as bool?) ?? false,
-      addOn: (m['addOn'] as bool?) ?? false,
-      addOnCloseLevel: (m['addOnCloseLevel'] as num?)?.toInt() ?? 6,
-      anteEnabled: (m['anteEnabled'] as bool?) ?? false,
-      anteAfterLevel: (m['anteAfterLevel'] as num?)?.toInt() ?? 0,
-      anteStyle:
-          _enumByName(AnteStyle.values, m['anteStyle'], AnteStyle.bigBlind),
-      antePreference: _enumByName(
-          AntePreference.values, m['antePreference'], AntePreference.recommend),
-      organizerPct: (m['organizerPct'] as num?)?.toInt() ?? 0,
-      chipSet: _mapList(m['chipSet'] as List? ?? const [])
-          .map(chipColorFromMap)
-          .toList(),
-      chipSetName: (m['chipSetName'] as String?) ?? '',
-      announceEliminations: (m['announceEliminations'] as bool?) ?? false,
-      forcePaidPlaces: (m['forcePaidPlaces'] as num?)?.toInt(),
-      rebuyCost: (m['rebuyCost'] as num?)?.toInt(),
-      addOnCost: (m['addOnCost'] as num?)?.toInt(),
-      locationPrivate: (m['locationPrivate'] as bool?) ?? false,
-      tableSettingsOverride: m['tableSettingsOverride'] == null
-          ? null
-          : tableSettingsFromMap(
-              Map<String, dynamic>.from(m['tableSettingsOverride'] as Map)),
-      expectedPlayersOverride:
-          (m['expectedPlayersOverride'] as num?)?.toInt(),
-      // Absent on everything written before section 6's Locked concept
-      // existed, which reads correctly as "not locked".
-      lockedExpectedPlayers: (m['lockedExpectedPlayers'] as num?)?.toInt(),
-      // Absent on everything written before section 8's breaks existed, and
-      // an empty list reads correctly as "runs straight through".
-      breaks: _mapList(m['breaks'] as List? ?? const [])
-          .map(scheduledBreakFromMap)
-          .toList(),
-      // All absent on anything written before the host could override them,
-      // and null is exactly "use the engine default" — so an old document
-      // regenerates to the same structure it always did.
-      expectedRebuys: (m['expectedRebuys'] as num?)?.toInt(),
-      expectedRebuyRate: (m['expectedRebuyRate'] as num?)?.toDouble(),
-      forceStack: (m['forceStack'] as num?)?.toInt(),
-      targetDepthBB: (m['targetDepthBB'] as num?)?.toInt(),
-      levelPins: [
-        for (final p in (m['levelPins'] as List?) ?? const [])
-          LevelPin(
-            level: ((p as Map)['level'] as num).toInt(),
-            sb: (p['sb'] as num).toInt(),
-            bb: (p['bb'] as num).toInt(),
-            durationMins: (p['durationMins'] as num?)?.toInt(),
-          ),
-      ],
-      expectedReEntries: (m['expectedReEntries'] as num?)?.toInt(),
-      expectedAddOns: (m['expectedAddOns'] as num?)?.toInt(),
-      rebuyChips: (m['rebuyChips'] as num?)?.toInt(),
-      reEntryChips: (m['reEntryChips'] as num?)?.toInt(),
-      addOnChips: (m['addOnChips'] as num?)?.toInt(),
-      levelDurationMins: (m['levelDurationMins'] as num?)?.toInt(),
-      pace: _paceModeFromName(m['pace'] as String?),
-      forecastRebuyRate: (m['forecastRebuyRate'] as num?)?.toDouble(),
-      forecastAddOnTakeUp: (m['forecastAddOnTakeUp'] as num?)?.toDouble(),
-      format: _enumByNameOrNull(TournamentFormat.values, m['format']),
-      maxReEntries: (m['maxReEntries'] as num?)?.toInt(),
-      shootoutTables: (m['shootoutTables'] as num?)?.toInt(),
-      shootoutTableTargetMins: (m['shootoutTableTargetMins'] as num?)?.toInt(),
-      // Absent on every game written before the bonus existed, and those games
-      // did not grant one — false is the honest default, not merely the safe.
-      earlyArrivalBonusEnabled:
-          (m['earlyArrivalBonusEnabled'] as bool?) ?? false,
-      earlyArrivalCutoffMins: (m['earlyArrivalCutoffMins'] as num?)?.toInt(),
-      rsvpDeadlineHours: (m['rsvpDeadlineHours'] as num?)?.toInt(),
-      earlyArrivalBonusPctOverride:
-          (m['earlyArrivalBonusPctOverride'] as num?)?.toDouble(),
-      hardFinishEnabled: (m['hardFinishEnabled'] as bool?) ?? false,
-      hardFinishMinsAfterFinish:
-          (m['hardFinishMinsAfterFinish'] as num?)?.toInt() ?? 60,
-      hardFinishSplit: (m['hardFinishSplit'] as String?) ?? 'icm',
-    );
+  name: (m['name'] as String?) ?? '',
+  date: (m['date'] as String?) ?? '',
+  time: (m['time'] as String?) ?? '',
+  location: (m['location'] as String?) ?? '',
+  players: (m['players'] as num?)?.toInt() ?? 2,
+  durationHours: (m['durationHours'] as num?)?.toDouble() ?? 3,
+  buyIn: (m['buyIn'] as num?)?.toInt() ?? 0,
+  koEnabled: (m['koEnabled'] as bool?) ?? false,
+  koAmount: (m['koAmount'] as num?)?.toInt() ?? 0,
+  // Absent on every game saved before bounty kinds existed, and those all
+  // ran a fixed bounty — which is the free one. An unrecognised name from a
+  // newer build lands on the same reading rather than throwing.
+  koKind: _enumByName(BountyKind.values, m['koKind'], BountyKind.fixed),
+  rebuys: (m['rebuys'] as bool?) ?? false,
+  rebuysCloseLevel: (m['rebuysCloseLevel'] as num?)?.toInt() ?? 0,
+  rebuyCloseChosenByOrganizer:
+      (m['rebuyCloseChosenByOrganizer'] as bool?) ?? false,
+  rebuyLimit: (m['rebuyLimit'] as num?)?.toInt(),
+  reEntry: (m['reEntry'] as bool?) ?? false,
+  addOn: (m['addOn'] as bool?) ?? false,
+  addOnCloseLevel: (m['addOnCloseLevel'] as num?)?.toInt() ?? 6,
+  anteEnabled: (m['anteEnabled'] as bool?) ?? false,
+  anteAfterLevel: (m['anteAfterLevel'] as num?)?.toInt() ?? 0,
+  anteStyle: _enumByName(AnteStyle.values, m['anteStyle'], AnteStyle.bigBlind),
+  antePreference: _enumByName(
+    AntePreference.values,
+    m['antePreference'],
+    AntePreference.recommend,
+  ),
+  organizerPct: (m['organizerPct'] as num?)?.toInt() ?? 0,
+  chipSet: _mapList(
+    m['chipSet'] as List? ?? const [],
+  ).map(chipColorFromMap).toList(),
+  chipSetName: (m['chipSetName'] as String?) ?? '',
+  announceEliminations: (m['announceEliminations'] as bool?) ?? false,
+  forcePaidPlaces: (m['forcePaidPlaces'] as num?)?.toInt(),
+  rebuyCost: (m['rebuyCost'] as num?)?.toInt(),
+  addOnCost: (m['addOnCost'] as num?)?.toInt(),
+  locationPrivate: (m['locationPrivate'] as bool?) ?? false,
+  tableSettingsOverride: m['tableSettingsOverride'] == null
+      ? null
+      : tableSettingsFromMap(
+          Map<String, dynamic>.from(m['tableSettingsOverride'] as Map),
+        ),
+  expectedPlayersOverride: (m['expectedPlayersOverride'] as num?)?.toInt(),
+  // Absent on everything written before section 6's Locked concept
+  // existed, which reads correctly as "not locked".
+  lockedExpectedPlayers: (m['lockedExpectedPlayers'] as num?)?.toInt(),
+  // Absent on everything written before section 8's breaks existed, and
+  // an empty list reads correctly as "runs straight through".
+  breaks: _mapList(
+    m['breaks'] as List? ?? const [],
+  ).map(scheduledBreakFromMap).toList(),
+  // All absent on anything written before the host could override them,
+  // and null is exactly "use the engine default" — so an old document
+  // regenerates to the same structure it always did.
+  expectedRebuys: (m['expectedRebuys'] as num?)?.toInt(),
+  expectedRebuyRate: (m['expectedRebuyRate'] as num?)?.toDouble(),
+  forceStack: (m['forceStack'] as num?)?.toInt(),
+  targetDepthBB: (m['targetDepthBB'] as num?)?.toInt(),
+  levelPins: [
+    for (final p in (m['levelPins'] as List?) ?? const [])
+      LevelPin(
+        level: ((p as Map)['level'] as num).toInt(),
+        sb: (p['sb'] as num).toInt(),
+        bb: (p['bb'] as num).toInt(),
+        durationMins: (p['durationMins'] as num?)?.toInt(),
+      ),
+  ],
+  expectedReEntries: (m['expectedReEntries'] as num?)?.toInt(),
+  expectedAddOns: (m['expectedAddOns'] as num?)?.toInt(),
+  rebuyChips: (m['rebuyChips'] as num?)?.toInt(),
+  reEntryChips: (m['reEntryChips'] as num?)?.toInt(),
+  addOnChips: (m['addOnChips'] as num?)?.toInt(),
+  levelDurationMins: (m['levelDurationMins'] as num?)?.toInt(),
+  pace: _paceModeFromName(m['pace'] as String?),
+  forecastRebuyRate: (m['forecastRebuyRate'] as num?)?.toDouble(),
+  forecastAddOnTakeUp: (m['forecastAddOnTakeUp'] as num?)?.toDouble(),
+  format: _enumByNameOrNull(TournamentFormat.values, m['format']),
+  maxReEntries: (m['maxReEntries'] as num?)?.toInt(),
+  shootoutTables: (m['shootoutTables'] as num?)?.toInt(),
+  shootoutTableTargetMins: (m['shootoutTableTargetMins'] as num?)?.toInt(),
+  // Absent on every game written before the bonus existed, and those games
+  // did not grant one — false is the honest default, not merely the safe.
+  earlyArrivalBonusEnabled: (m['earlyArrivalBonusEnabled'] as bool?) ?? false,
+  earlyArrivalCutoffMins: (m['earlyArrivalCutoffMins'] as num?)?.toInt(),
+  rsvpDeadlineHours: (m['rsvpDeadlineHours'] as num?)?.toInt(),
+  earlyArrivalBonusPctOverride: (m['earlyArrivalBonusPctOverride'] as num?)
+      ?.toDouble(),
+  hardFinishEnabled: (m['hardFinishEnabled'] as bool?) ?? false,
+  hardFinishMinsAfterFinish:
+      (m['hardFinishMinsAfterFinish'] as num?)?.toInt() ?? 60,
+  hardFinishSplit: (m['hardFinishSplit'] as String?) ?? 'icm',
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Players / chat / slots / announcements / audit / polls
 // ─────────────────────────────────────────────────────────────────────────────
 
 Map<String, dynamic> playerToMap(Player p) => {
-      'id': p.id,
-      'name': p.name,
-      'isGuest': p.isGuest,
-      'inviterId': p.inviterId,
-      'guestSlot': p.guestSlot,
-      'rsvp': p.rsvp?.name,
-      'checkedIn': p.checkedIn,
-      'noShow': p.noShow,
-      'confirmed': p.confirmed,
-      'eliminated': p.eliminated,
-      'eliminationPos': p.eliminationPos,
-      'eliminatedAtLevel': p.eliminatedAtLevel,
-      // §3 / §34a. Sampled at elimination time from [stack] — see both
-      // fields' doc comments on [Player].
-      'lowestStackBB': p.lowestStackBB,
-      'stack': p.stack,
-      // §25.1a.
-      'earlyArrivalBonusEligible': p.earlyArrivalBonusEligible,
-      'earlyArrivalBonusChips': p.earlyArrivalBonusChips,
-      'rebuys': p.rebuys,
-      'reEntries': p.reEntries,
-      'hasAddOn': p.hasAddOn,
-      'knockouts': p.knockouts,
-      'table': p.table,
-      'seat': p.seat,
-      'active': p.active,
-    };
+  'id': p.id,
+  'name': p.name,
+  'isGuest': p.isGuest,
+  'inviterId': p.inviterId,
+  'guestSlot': p.guestSlot,
+  'rsvp': p.rsvp?.name,
+  'checkedIn': p.checkedIn,
+  'noShow': p.noShow,
+  'confirmed': p.confirmed,
+  'eliminated': p.eliminated,
+  'eliminationPos': p.eliminationPos,
+  'eliminatedAtLevel': p.eliminatedAtLevel,
+  // §3 / §34a. Sampled at elimination time from [stack] — see both
+  // fields' doc comments on [Player].
+  'lowestStackBB': p.lowestStackBB,
+  'stack': p.stack,
+  // §25.1a.
+  'earlyArrivalBonusEligible': p.earlyArrivalBonusEligible,
+  'earlyArrivalBonusChips': p.earlyArrivalBonusChips,
+  'rebuys': p.rebuys,
+  'reEntries': p.reEntries,
+  'hasAddOn': p.hasAddOn,
+  'knockouts': p.knockouts,
+  'table': p.table,
+  'seat': p.seat,
+  'active': p.active,
+};
 
 Player playerFromMap(Map<String, dynamic> m) => Player(
-      id: (m['id'] as String?) ?? '',
-      name: (m['name'] as String?) ?? '',
-      isGuest: (m['isGuest'] as bool?) ?? false,
-      inviterId: m['inviterId'] as String?,
-      guestSlot: (m['guestSlot'] as num?)?.toInt(),
-      rsvp: m['rsvp'] == null
-          ? null
-          : _enumByName(Rsvp.values, m['rsvp'], Rsvp.maybe),
-      checkedIn: (m['checkedIn'] as bool?) ?? false,
-      noShow: (m['noShow'] as bool?) ?? false,
-      confirmed: (m['confirmed'] as bool?) ?? false,
-      eliminated: (m['eliminated'] as bool?) ?? false,
-      eliminationPos: (m['eliminationPos'] as num?)?.toInt(),
-      eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
-      lowestStackBB: (m['lowestStackBB'] as num?)?.toInt(),
-      stack: (m['stack'] as num?)?.toInt(),
-      earlyArrivalBonusEligible:
-          (m['earlyArrivalBonusEligible'] as bool?) ?? false,
-      earlyArrivalBonusChips: (m['earlyArrivalBonusChips'] as num?)?.toInt(),
-      rebuys: (m['rebuys'] as num?)?.toInt() ?? 0,
-      reEntries: (m['reEntries'] as num?)?.toInt() ?? 0,
-      hasAddOn: (m['hasAddOn'] as bool?) ?? false,
-      knockouts: (m['knockouts'] as num?)?.toInt() ?? 0,
-      table: (m['table'] as num?)?.toInt() ?? 0,
-      seat: (m['seat'] as num?)?.toInt() ?? 0,
-      active: (m['active'] as bool?) ?? true,
-    );
+  id: (m['id'] as String?) ?? '',
+  name: (m['name'] as String?) ?? '',
+  isGuest: (m['isGuest'] as bool?) ?? false,
+  inviterId: m['inviterId'] as String?,
+  guestSlot: (m['guestSlot'] as num?)?.toInt(),
+  rsvp: m['rsvp'] == null
+      ? null
+      : _enumByName(Rsvp.values, m['rsvp'], Rsvp.maybe),
+  checkedIn: (m['checkedIn'] as bool?) ?? false,
+  noShow: (m['noShow'] as bool?) ?? false,
+  confirmed: (m['confirmed'] as bool?) ?? false,
+  eliminated: (m['eliminated'] as bool?) ?? false,
+  eliminationPos: (m['eliminationPos'] as num?)?.toInt(),
+  eliminatedAtLevel: (m['eliminatedAtLevel'] as num?)?.toInt(),
+  lowestStackBB: (m['lowestStackBB'] as num?)?.toInt(),
+  stack: (m['stack'] as num?)?.toInt(),
+  earlyArrivalBonusEligible: (m['earlyArrivalBonusEligible'] as bool?) ?? false,
+  earlyArrivalBonusChips: (m['earlyArrivalBonusChips'] as num?)?.toInt(),
+  rebuys: (m['rebuys'] as num?)?.toInt() ?? 0,
+  reEntries: (m['reEntries'] as num?)?.toInt() ?? 0,
+  hasAddOn: (m['hasAddOn'] as bool?) ?? false,
+  knockouts: (m['knockouts'] as num?)?.toInt() ?? 0,
+  table: (m['table'] as num?)?.toInt() ?? 0,
+  seat: (m['seat'] as num?)?.toInt() ?? 0,
+  active: (m['active'] as bool?) ?? true,
+);
 
 Map<String, dynamic> chatMessageToMap(ChatMessage msg) => {
-      'id': msg.id,
-      'authorId': msg.authorId,
-      'authorName': msg.authorName,
-      'body': msg.body,
-      'timestamp': msg.timestamp.toIso8601String(),
-      'deleted': msg.deleted,
-      'pinned': msg.pinned,
-      'gameId': msg.gameId,
-    };
+  'id': msg.id,
+  'authorId': msg.authorId,
+  'authorName': msg.authorName,
+  'body': msg.body,
+  'timestamp': msg.timestamp.toIso8601String(),
+  'deleted': msg.deleted,
+  'pinned': msg.pinned,
+  'gameId': msg.gameId,
+};
 
 ChatMessage chatMessageFromMap(Map<String, dynamic> m) => ChatMessage(
-      id: (m['id'] as String?) ?? '',
-      authorId: (m['authorId'] as String?) ?? '',
-      authorName: (m['authorName'] as String?) ?? '',
-      body: (m['body'] as String?) ?? '',
-      timestamp: _isoOrNull(m['timestamp']) ?? DateTime.now(),
-      deleted: (m['deleted'] as bool?) ?? false,
-      pinned: (m['pinned'] as bool?) ?? false,
-      gameId: m['gameId'] as String?,
-    );
+  id: (m['id'] as String?) ?? '',
+  authorId: (m['authorId'] as String?) ?? '',
+  authorName: (m['authorName'] as String?) ?? '',
+  body: (m['body'] as String?) ?? '',
+  timestamp: _isoOrNull(m['timestamp']) ?? DateTime.now(),
+  deleted: (m['deleted'] as bool?) ?? false,
+  pinned: (m['pinned'] as bool?) ?? false,
+  gameId: m['gameId'] as String?,
+);
 
 Map<String, dynamic> guestSlotToMap(GuestSlot s) => {
-      'id': s.id,
-      'inviterId': s.inviterId,
-      'slot': s.slot,
-      'guestName': s.guestName,
-      'status': s.status.name,
-    };
+  'id': s.id,
+  'inviterId': s.inviterId,
+  'slot': s.slot,
+  'guestName': s.guestName,
+  'status': s.status.name,
+};
 
 GuestSlot guestSlotFromMap(Map<String, dynamic> m) => GuestSlot(
-      id: (m['id'] as String?) ?? '',
-      inviterId: (m['inviterId'] as String?) ?? '',
-      slot: (m['slot'] as num?)?.toInt() ?? 1,
-      guestName: m['guestName'] as String?,
-      status: _enumByName(
-          GuestSlotStatus.values, m['status'], GuestSlotStatus.unclaimed),
-    );
+  id: (m['id'] as String?) ?? '',
+  inviterId: (m['inviterId'] as String?) ?? '',
+  slot: (m['slot'] as num?)?.toInt() ?? 1,
+  guestName: m['guestName'] as String?,
+  status: _enumByName(
+    GuestSlotStatus.values,
+    m['status'],
+    GuestSlotStatus.unclaimed,
+  ),
+);
 
 Map<String, dynamic> announcementToMap(Announcement a) => {
-      'id': a.id,
-      'text': a.text,
-      'timestamp': a.timestamp.toIso8601String(),
-    };
+  'id': a.id,
+  'text': a.text,
+  'timestamp': a.timestamp.toIso8601String(),
+};
 
 Announcement announcementFromMap(Map<String, dynamic> m) => Announcement(
-      id: (m['id'] as String?) ?? '',
-      text: (m['text'] as String?) ?? '',
-      timestamp: _isoOrNull(m['timestamp']) ?? DateTime.now(),
-    );
+  id: (m['id'] as String?) ?? '',
+  text: (m['text'] as String?) ?? '',
+  timestamp: _isoOrNull(m['timestamp']) ?? DateTime.now(),
+);
 
 Map<String, dynamic> auditRecordToMap(AuditRecord r) => {
-      'id': r.id,
-      'timestamp': r.timestamp.toIso8601String(),
-      'type': r.type,
-      'actor': r.actor,
-      'details': r.details,
-    };
+  'id': r.id,
+  'timestamp': r.timestamp.toIso8601String(),
+  'type': r.type,
+  'actor': r.actor,
+  'details': r.details,
+};
 
 AuditRecord auditRecordFromMap(Map<String, dynamic> m) => AuditRecord(
-      id: (m['id'] as String?) ?? '',
-      timestamp: _isoOrNull(m['timestamp']) ?? DateTime.now(),
-      type: (m['type'] as String?) ?? '',
-      actor: (m['actor'] as String?) ?? '',
-      details: (m['details'] as String?) ?? '',
-    );
+  id: (m['id'] as String?) ?? '',
+  timestamp: _isoOrNull(m['timestamp']) ?? DateTime.now(),
+  type: (m['type'] as String?) ?? '',
+  actor: (m['actor'] as String?) ?? '',
+  details: (m['details'] as String?) ?? '',
+);
 
 Map<String, dynamic> pollToMap(Poll p) => {
-      'id': p.id,
-      'question': p.question,
-      'options': List<String>.from(p.options),
-      'votes': {
-        for (final e in p.votes.entries) e.key: List<String>.from(e.value),
-      },
-      'closed': p.closed,
-      'createdAt': p.createdAt.toIso8601String(),
-      'multi': p.multi,
-    };
+  'id': p.id,
+  'question': p.question,
+  'options': List<String>.from(p.options),
+  'votes': {for (final e in p.votes.entries) e.key: List<String>.from(e.value)},
+  'closed': p.closed,
+  'createdAt': p.createdAt.toIso8601String(),
+  'multi': p.multi,
+};
 
 Poll pollFromMap(Map<String, dynamic> m) => Poll(
-      id: (m['id'] as String?) ?? '',
-      question: (m['question'] as String?) ?? '',
-      options: List<String>.from(m['options'] as List? ?? const []),
-      votes: (m['votes'] as Map? ?? const {}).map(
-        (k, v) => MapEntry(k as String, List<String>.from(v as List)),
-      ),
-      closed: (m['closed'] as bool?) ?? false,
-      createdAt: _isoOrNull(m['createdAt']) ?? DateTime.now(),
-      multi: (m['multi'] as bool?) ?? false,
-    );
+  id: (m['id'] as String?) ?? '',
+  question: (m['question'] as String?) ?? '',
+  options: List<String>.from(m['options'] as List? ?? const []),
+  votes: (m['votes'] as Map? ?? const {}).map(
+    (k, v) => MapEntry(k as String, List<String>.from(v as List)),
+  ),
+  closed: (m['closed'] as bool?) ?? false,
+  createdAt: _isoOrNull(m['createdAt']) ?? DateTime.now(),
+  multi: (m['multi'] as bool?) ?? false,
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LiveGame
@@ -681,12 +709,13 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
     'chat': game.chat.map(chatMessageToMap).toList(),
     'announcements': announcements.length > kMaxEncodedAnnouncements
         ? announcements
-            .sublist(announcements.length - kMaxEncodedAnnouncements)
-            .map(announcementToMap)
-            .toList()
+              .sublist(announcements.length - kMaxEncodedAnnouncements)
+              .map(announcementToMap)
+              .toList()
         : announcements.map(announcementToMap).toList(),
     'auditHistory': audit.length > kMaxEncodedAuditRecords
-        ? audit.sublist(audit.length - kMaxEncodedAuditRecords)
+        ? audit
+              .sublist(audit.length - kMaxEncodedAuditRecords)
               .map(auditRecordToMap)
               .toList()
         : audit.map(auditRecordToMap).toList(),
@@ -732,107 +761,113 @@ Map<String, dynamic> liveGameToMap(LiveGame game) {
 }
 
 LiveGame liveGameFromMap(Map<String, dynamic> map) => LiveGame(
-      codecVersion: (map['_v'] as num?)?.toInt() ?? 1,
-      id: (map['id'] as String?) ?? '',
-      groupId: (map['groupId'] as String?) ?? '',
-      settings:
-          gameSettingsFromMap(Map<String, dynamic>.from(map['settings'] as Map)),
-      payments: _mapList(map['payments'] as List? ?? const [])
-          .map(paymentRecordFromMap)
-          .toList(),
-      // The per-game co-host list. Absent on every tournament written before
-      // the role existed, which reads correctly as "admin only" — and a missing
-      // key must stay that way rather than throwing, because a decode failure
-      // here loses the whole game, not just this field.
-      organizerIds:
-          List<String>.from(map['organizerIds'] as List? ?? const []),
-      shotClock: map['shotClock'] == null
-          ? null
-          : () {
-              final sc = Map<String, dynamic>.from(map['shotClock'] as Map);
-              final endsAt = DateTime.tryParse((sc['endsAt'] as String?) ?? '');
-              if (endsAt == null) return null;
-              return ShotClock(
-                playerId: (sc['playerId'] as String?) ?? '',
-                endsAt: endsAt,
-                seconds: (sc['seconds'] as num?)?.toInt() ??
-                    ShotClock.defaultSeconds,
-              );
-            }(),
-      structure: tournamentStructureFromMap(
-          Map<String, dynamic>.from(map['structure'] as Map)),
-      status: _enumByName(
-          LiveGameStatus.values, map['status'], LiveGameStatus.draft),
-      publicCode: (map['publicCode'] as String?) ?? '',
-      tvCode: (map['tvCode'] as String?) ?? '',
-      currentLevel: (map['currentLevel'] as num?)?.toInt() ?? 1,
-      timerRunning: (map['timerRunning'] as bool?) ?? false,
-      secondsRemaining: (map['secondsRemaining'] as num?)?.toInt() ?? 0,
-      players: _mapList(map['players'] as List? ?? const [])
-          .map(playerFromMap)
-          .toList(),
-      chat: _mapList(map['chat'] as List? ?? const [])
-          .map(chatMessageFromMap)
-          .toList(),
-      announcements: _mapList(map['announcements'] as List? ?? const [])
-          .map(announcementFromMap)
-          .toList(),
-      auditHistory: _mapList(map['auditHistory'] as List? ?? const [])
-          .map(auditRecordFromMap)
-          .toList(),
-      totalChipsInPlay: (map['totalChipsInPlay'] as num?)?.toInt() ?? 0,
-      pendingGuests: _mapList(map['pendingGuests'] as List? ?? const [])
-          .map(playerFromMap)
-          .toList(),
-      waitlist: List<String>.from(map['waitlist'] as List? ?? const []),
-      finishOrder: List<String>.from(map['finishOrder'] as List? ?? const []),
-      // Not `_mapList` — that casts each element to a Map, and these are bare
-      // numbers. Casting a list of doubles through it throws on read, which is
-      // how a deal recorded on one device became unreadable on the next.
-      dealAmounts: (map['dealAmounts'] as List?)
-          ?.map((e) => (e as num).toDouble())
-          .toList(),
-      speedRecommendation: map['speedRecommendation'] == null
-          ? null
-          : _enumByName(SpeedRecommendation.values, map['speedRecommendation'],
-              SpeedRecommendation.speedUp),
-      settlementConfirmed: (map['settlementConfirmed'] as bool?) ?? false,
-      addOnWindowClosed: (map['addOnWindowClosed'] as bool?) ?? false,
-      addOnDeclined: List<String>.from(map['addOnDeclined'] as List? ?? const []),
-      seatingConfirmed: (map['seatingConfirmed'] as bool?) ?? false,
-      checkInClosed: (map['checkInClosed'] as bool?) ?? false,
-      structureConfirmed: (map['structureConfirmed'] as bool?) ?? false,
-      finalTableRedrawCompleted: (map['finalTableRedrawCompleted'] as bool?) ?? false,
-      handForHandActive: (map['handForHandActive'] as bool?) ?? false,
-      handForHandHand: (map['handForHandHand'] as num?)?.toInt() ?? 1,
-      handForHandDoneTables: (map['handForHandDoneTables'] as List?)
-              ?.map((e) => (e as num).toInt())
-              .toList() ??
-          const [],
-      bubbleSaveRecorded: (map['bubbleSaveRecorded'] as bool?) ?? false,
-      dealerPlayerId: map['dealerPlayerId'] as String?,
-      guestSlots: _mapList(map['guestSlots'] as List? ?? const [])
-          .map(guestSlotFromMap)
-          .toList(),
-      originalLevels: (map['originalLevels'] as List?)
-          ?.map((e) => blindLevelFromMap(Map<String, dynamic>.from(e as Map)))
-          .toList(),
-      rebuyRequests:
-          List<String>.from(map['rebuyRequests'] as List? ?? const []),
-      addOnRequests: List<String>.from(map['addOnRequests'] as List? ?? const []),
-      levelEndTime: _isoOrNull(map['levelEndTime']),
-      startedAt: _isoOrNull(map['startedAt']),
-      actualDurationMins: (map['actualDurationMins'] as num?)?.toInt(),
-      changeLog:
-          List<String>.from(map['changeLog'] as List? ?? const []),
-      revision: (map['revision'] as num?)?.toInt() ?? 0,
-      lastIdempotencyKey: map['lastIdempotencyKey'] as String?,
-      editorDeviceId: (map['editorDeviceId'] as String?) ?? '',
-      editorClaimedAt: _isoOrNull(map['editorClaimedAt']),
-      audioMasterDeviceId: (map['audioMasterDeviceId'] as String?) ?? '',
-      shootoutStage:
-          _enumByNameOrNull(ShootoutStage.values, map['shootoutStage']),
-    );
+  codecVersion: (map['_v'] as num?)?.toInt() ?? 1,
+  id: (map['id'] as String?) ?? '',
+  groupId: (map['groupId'] as String?) ?? '',
+  settings: gameSettingsFromMap(
+    Map<String, dynamic>.from(map['settings'] as Map),
+  ),
+  payments: _mapList(
+    map['payments'] as List? ?? const [],
+  ).map(paymentRecordFromMap).toList(),
+  // The per-game co-host list. Absent on every tournament written before
+  // the role existed, which reads correctly as "admin only" — and a missing
+  // key must stay that way rather than throwing, because a decode failure
+  // here loses the whole game, not just this field.
+  organizerIds: List<String>.from(map['organizerIds'] as List? ?? const []),
+  shotClock: map['shotClock'] == null
+      ? null
+      : () {
+          final sc = Map<String, dynamic>.from(map['shotClock'] as Map);
+          final endsAt = DateTime.tryParse((sc['endsAt'] as String?) ?? '');
+          if (endsAt == null) return null;
+          return ShotClock(
+            playerId: (sc['playerId'] as String?) ?? '',
+            endsAt: endsAt,
+            seconds:
+                (sc['seconds'] as num?)?.toInt() ?? ShotClock.defaultSeconds,
+          );
+        }(),
+  structure: tournamentStructureFromMap(
+    Map<String, dynamic>.from(map['structure'] as Map),
+  ),
+  status: _enumByName(
+    LiveGameStatus.values,
+    map['status'],
+    LiveGameStatus.draft,
+  ),
+  publicCode: (map['publicCode'] as String?) ?? '',
+  tvCode: (map['tvCode'] as String?) ?? '',
+  currentLevel: (map['currentLevel'] as num?)?.toInt() ?? 1,
+  timerRunning: (map['timerRunning'] as bool?) ?? false,
+  secondsRemaining: (map['secondsRemaining'] as num?)?.toInt() ?? 0,
+  players: _mapList(
+    map['players'] as List? ?? const [],
+  ).map(playerFromMap).toList(),
+  chat: _mapList(
+    map['chat'] as List? ?? const [],
+  ).map(chatMessageFromMap).toList(),
+  announcements: _mapList(
+    map['announcements'] as List? ?? const [],
+  ).map(announcementFromMap).toList(),
+  auditHistory: _mapList(
+    map['auditHistory'] as List? ?? const [],
+  ).map(auditRecordFromMap).toList(),
+  totalChipsInPlay: (map['totalChipsInPlay'] as num?)?.toInt() ?? 0,
+  pendingGuests: _mapList(
+    map['pendingGuests'] as List? ?? const [],
+  ).map(playerFromMap).toList(),
+  waitlist: List<String>.from(map['waitlist'] as List? ?? const []),
+  finishOrder: List<String>.from(map['finishOrder'] as List? ?? const []),
+  // Not `_mapList` — that casts each element to a Map, and these are bare
+  // numbers. Casting a list of doubles through it throws on read, which is
+  // how a deal recorded on one device became unreadable on the next.
+  dealAmounts: (map['dealAmounts'] as List?)
+      ?.map((e) => (e as num).toDouble())
+      .toList(),
+  speedRecommendation: map['speedRecommendation'] == null
+      ? null
+      : _enumByName(
+          SpeedRecommendation.values,
+          map['speedRecommendation'],
+          SpeedRecommendation.speedUp,
+        ),
+  settlementConfirmed: (map['settlementConfirmed'] as bool?) ?? false,
+  addOnWindowClosed: (map['addOnWindowClosed'] as bool?) ?? false,
+  addOnDeclined: List<String>.from(map['addOnDeclined'] as List? ?? const []),
+  seatingConfirmed: (map['seatingConfirmed'] as bool?) ?? false,
+  checkInClosed: (map['checkInClosed'] as bool?) ?? false,
+  structureConfirmed: (map['structureConfirmed'] as bool?) ?? false,
+  finalTableRedrawCompleted:
+      (map['finalTableRedrawCompleted'] as bool?) ?? false,
+  handForHandActive: (map['handForHandActive'] as bool?) ?? false,
+  handForHandHand: (map['handForHandHand'] as num?)?.toInt() ?? 1,
+  handForHandDoneTables:
+      (map['handForHandDoneTables'] as List?)
+          ?.map((e) => (e as num).toInt())
+          .toList() ??
+      const [],
+  bubbleSaveRecorded: (map['bubbleSaveRecorded'] as bool?) ?? false,
+  dealerPlayerId: map['dealerPlayerId'] as String?,
+  guestSlots: _mapList(
+    map['guestSlots'] as List? ?? const [],
+  ).map(guestSlotFromMap).toList(),
+  originalLevels: (map['originalLevels'] as List?)
+      ?.map((e) => blindLevelFromMap(Map<String, dynamic>.from(e as Map)))
+      .toList(),
+  rebuyRequests: List<String>.from(map['rebuyRequests'] as List? ?? const []),
+  addOnRequests: List<String>.from(map['addOnRequests'] as List? ?? const []),
+  levelEndTime: _isoOrNull(map['levelEndTime']),
+  startedAt: _isoOrNull(map['startedAt']),
+  actualDurationMins: (map['actualDurationMins'] as num?)?.toInt(),
+  changeLog: List<String>.from(map['changeLog'] as List? ?? const []),
+  revision: (map['revision'] as num?)?.toInt() ?? 0,
+  lastIdempotencyKey: map['lastIdempotencyKey'] as String?,
+  editorDeviceId: (map['editorDeviceId'] as String?) ?? '',
+  editorClaimedAt: _isoOrNull(map['editorClaimedAt']),
+  audioMasterDeviceId: (map['audioMasterDeviceId'] as String?) ?? '',
+  shootoutStage: _enumByNameOrNull(ShootoutStage.values, map['shootoutStage']),
+);
 
 /// Firestore representation: list-like collections that benefit from targeted
 /// per-element updates are stored as maps keyed by element id, each entry
@@ -845,7 +880,10 @@ Map<String, dynamic> liveGameToFirestoreDoc(LiveGame game) {
       for (var i = 0; i < items.length; i++)
         ((items[i]['id'] as String?)?.isNotEmpty ?? false)
             ? items[i]['id'] as String
-            : 'row-$i': {...items[i], 'orderIndex': i},
+            : 'row-$i': {
+          ...items[i],
+          'orderIndex': i,
+        },
     };
   }
 
@@ -866,8 +904,11 @@ LiveGame liveGameFromFirestoreDoc(Map<String, dynamic> doc) {
         item.putIfAbsent('id', () => key as String);
         entries.add(item);
       });
-      entries.sort((a, b) => ((a['orderIndex'] as num?) ?? 0)
-          .compareTo((b['orderIndex'] as num?) ?? 0));
+      entries.sort(
+        (a, b) => ((a['orderIndex'] as num?) ?? 0).compareTo(
+          (b['orderIndex'] as num?) ?? 0,
+        ),
+      );
       return entries;
     }
     if (raw is List) return _mapList(raw);
@@ -886,20 +927,20 @@ LiveGame liveGameFromFirestoreDoc(Map<String, dynamic> doc) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 Map<String, dynamic> cashSessionSettingsToMap(CashSessionSettings s) => {
-      'name': s.name,
-      'date': s.date,
-      'location': s.location,
-      'smallBlind': s.smallBlind,
-      'bigBlind': s.bigBlind,
-      'minBuyIn': s.minBuyIn,
-      'maxBuyIn': s.maxBuyIn,
-      'currency': s.currency,
-      'maxPlayers': s.maxPlayers,
-      'rakePct': s.rakePct,
-      'chipValue': s.chipValue,
-      'trackSettlement': s.trackSettlement,
-      if (s.chipSetId != null) 'chipSetId': s.chipSetId,
-    };
+  'name': s.name,
+  'date': s.date,
+  'location': s.location,
+  'smallBlind': s.smallBlind,
+  'bigBlind': s.bigBlind,
+  'minBuyIn': s.minBuyIn,
+  'maxBuyIn': s.maxBuyIn,
+  'currency': s.currency,
+  'maxPlayers': s.maxPlayers,
+  'rakePct': s.rakePct,
+  'chipValue': s.chipValue,
+  'trackSettlement': s.trackSettlement,
+  if (s.chipSetId != null) 'chipSetId': s.chipSetId,
+};
 
 CashSessionSettings cashSessionSettingsFromMap(Map<String, dynamic> m) =>
     CashSessionSettings(
@@ -919,197 +960,201 @@ CashSessionSettings cashSessionSettingsFromMap(Map<String, dynamic> m) =>
     );
 
 Map<String, dynamic> cashPlayerToMap(CashPlayer p) => {
-      'id': p.id,
-      'name': p.name,
-      'stack': p.stack,
-      'totalBuyIns': p.totalBuyIns,
-      'buyInCount': p.buyInCount,
-      'cashedOut': p.cashedOut,
-      'hasCashedOut': p.hasCashedOut,
-    };
+  'id': p.id,
+  'name': p.name,
+  'stack': p.stack,
+  'totalBuyIns': p.totalBuyIns,
+  'buyInCount': p.buyInCount,
+  'cashedOut': p.cashedOut,
+  'hasCashedOut': p.hasCashedOut,
+};
 
 CashPlayer cashPlayerFromMap(Map<String, dynamic> m) => CashPlayer(
-      id: (m['id'] as String?) ?? '',
-      name: (m['name'] as String?) ?? '',
-      stack: (m['stack'] as num?)?.toDouble() ?? 0,
-      totalBuyIns: (m['totalBuyIns'] as num?)?.toDouble() ?? 0,
-      buyInCount: (m['buyInCount'] as num?)?.toInt() ?? 1,
-      cashedOut: (m['cashedOut'] as num?)?.toDouble() ?? 0,
-      hasCashedOut: m.containsKey('hasCashedOut') 
-          ? m['hasCashedOut'] as bool
-          : ((m['cashedOut'] as num?)?.toDouble() ?? 0) > 0,
-    );
+  id: (m['id'] as String?) ?? '',
+  name: (m['name'] as String?) ?? '',
+  stack: (m['stack'] as num?)?.toDouble() ?? 0,
+  totalBuyIns: (m['totalBuyIns'] as num?)?.toDouble() ?? 0,
+  buyInCount: (m['buyInCount'] as num?)?.toInt() ?? 1,
+  cashedOut: (m['cashedOut'] as num?)?.toDouble() ?? 0,
+  hasCashedOut: m.containsKey('hasCashedOut')
+      ? m['hasCashedOut'] as bool
+      : ((m['cashedOut'] as num?)?.toDouble() ?? 0) > 0,
+);
 
 Map<String, dynamic> cashSessionToMap(CashSession session) => {
-      'id': session.id,
-      'settings': cashSessionSettingsToMap(session.settings),
-      'isCompleted': session.isCompleted,
-      'startTime': session.startTime.toIso8601String(),
-      'unresolvedNote': session.unresolvedNote,
-      'players': session.players.map(cashPlayerToMap).toList(),
-    };
+  'id': session.id,
+  'settings': cashSessionSettingsToMap(session.settings),
+  'isCompleted': session.isCompleted,
+  'startTime': session.startTime.toIso8601String(),
+  'unresolvedNote': session.unresolvedNote,
+  'players': session.players.map(cashPlayerToMap).toList(),
+};
 
 CashSession cashSessionFromMap(Map<String, dynamic> m) => CashSession(
-      id: (m['id'] as String?) ?? '',
-      settings: cashSessionSettingsFromMap(
-          Map<String, dynamic>.from(m['settings'] as Map)),
-      isCompleted: (m['isCompleted'] as bool?) ?? false,
-      startTime: _isoOrNull(m['startTime']) ?? DateTime.now(),
-      unresolvedNote: m['unresolvedNote'] as String?,
-      players: _mapList(m['players'] as List? ?? const [])
-          .map(cashPlayerFromMap)
-          .toList(),
-    );
+  id: (m['id'] as String?) ?? '',
+  settings: cashSessionSettingsFromMap(
+    Map<String, dynamic>.from(m['settings'] as Map),
+  ),
+  isCompleted: (m['isCompleted'] as bool?) ?? false,
+  startTime: _isoOrNull(m['startTime']) ?? DateTime.now(),
+  unresolvedNote: m['unresolvedNote'] as String?,
+  players: _mapList(
+    m['players'] as List? ?? const [],
+  ).map(cashPlayerFromMap).toList(),
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Presets / notifications / groups
 // ─────────────────────────────────────────────────────────────────────────────
 
 Map<String, dynamic> tournamentPresetToMap(TournamentPreset p) => {
-      'id': p.id,
-      'name': p.name,
-      'buyIn': p.buyIn,
-      'koEnabled': p.koEnabled,
-      'koAmount': p.koAmount,
-      'koKind': p.koKind.name,
-      'rebuys': p.rebuys,
-      'rebuysCloseLevel': p.rebuysCloseLevel,
-      'rebuyCloseChosenByOrganizer': p.rebuyCloseChosenByOrganizer,
-      'rebuyLimit': p.rebuyLimit,
-      'reEntry': p.reEntry,
-      'addOn': p.addOn,
-      'addOnOvertime': p.addOnOvertime,
-      'addOnCloseLevel': p.addOnCloseLevel,
-      'breaks': p.breaks.map(scheduledBreakToMap).toList(),
-      'durationHours': p.durationHours,
-      'anteEnabled': p.anteEnabled,
-      'anteAfterLevel': p.anteAfterLevel,
-      'anteStyle': p.anteStyle.name,
-      'antePreference': p.antePreference.name,
-      'organizerPct': p.organizerPct,
-      'chipSetName': p.chipSetName,
-      'chipSet': p.chipSet.map(chipColorToMap).toList(),
-      'rebuyCost': p.rebuyCost,
-      'addOnCost': p.addOnCost,
-      if (p.format != null) 'format': p.format!.name,
-      if (p.maxReEntries != null) 'maxReEntries': p.maxReEntries,
-      'earlyArrivalBonusEnabled': p.earlyArrivalBonusEnabled,
-      if (p.earlyArrivalCutoffMins != null)
-        'earlyArrivalCutoffMins': p.earlyArrivalCutoffMins,
-      if (p.earlyArrivalBonusPctOverride != null)
-        'earlyArrivalBonusPctOverride': p.earlyArrivalBonusPctOverride,
-      if (p.rsvpDeadlineHours != null)
-        'rsvpDeadlineHours': p.rsvpDeadlineHours,
-      'hardFinishEnabled': p.hardFinishEnabled,
-      'hardFinishMinsAfterFinish': p.hardFinishMinsAfterFinish,
-      'hardFinishSplit': p.hardFinishSplit,
-      if (p.levelDurationMins != null)
-        'levelDurationMins': p.levelDurationMins,
-      if (p.pace != null) 'pace': p.pace!.name,
-      if (p.shootoutTables != null) 'shootoutTables': p.shootoutTables,
-      if (p.shootoutTableTargetMins != null)
-        'shootoutTableTargetMins': p.shootoutTableTargetMins,
-      if (p.expectedPlayersOverride != null)
-        'expectedPlayersOverride': p.expectedPlayersOverride,
-      'announceEliminations': p.announceEliminations,
-      'locationPrivate': p.locationPrivate,
-      if (p.forcePaidPlaces != null) 'forcePaidPlaces': p.forcePaidPlaces,
-      if (p.rebuyChips != null) 'rebuyChips': p.rebuyChips,
-      if (p.reEntryChips != null) 'reEntryChips': p.reEntryChips,
-      if (p.addOnChips != null) 'addOnChips': p.addOnChips,
-      if (p.tableSettingsOverride != null)
-        'tableSettingsOverride':
-            tableSettingsToMap(p.tableSettingsOverride!),
-      if (p.lockedExpectedPlayers != null)
-        'lockedExpectedPlayers': p.lockedExpectedPlayers,
-      if (p.expectedRebuys != null) 'expectedRebuys': p.expectedRebuys,
-      if (p.expectedReEntries != null)
-        'expectedReEntries': p.expectedReEntries,
-      if (p.expectedAddOns != null) 'expectedAddOns': p.expectedAddOns,
-      if (p.forecastRebuyRate != null)
-        'forecastRebuyRate': p.forecastRebuyRate,
-      if (p.forecastAddOnTakeUp != null)
-        'forecastAddOnTakeUp': p.forecastAddOnTakeUp,
-    };
+  'id': p.id,
+  'name': p.name,
+  'buyIn': p.buyIn,
+  'koEnabled': p.koEnabled,
+  'koAmount': p.koAmount,
+  'koKind': p.koKind.name,
+  'rebuys': p.rebuys,
+  'rebuysCloseLevel': p.rebuysCloseLevel,
+  'rebuyCloseChosenByOrganizer': p.rebuyCloseChosenByOrganizer,
+  'rebuyLimit': p.rebuyLimit,
+  'reEntry': p.reEntry,
+  'addOn': p.addOn,
+  'addOnOvertime': p.addOnOvertime,
+  'addOnCloseLevel': p.addOnCloseLevel,
+  'breaks': p.breaks.map(scheduledBreakToMap).toList(),
+  'durationHours': p.durationHours,
+  'anteEnabled': p.anteEnabled,
+  'anteAfterLevel': p.anteAfterLevel,
+  'anteStyle': p.anteStyle.name,
+  'antePreference': p.antePreference.name,
+  'organizerPct': p.organizerPct,
+  'chipSetName': p.chipSetName,
+  'chipSet': p.chipSet.map(chipColorToMap).toList(),
+  'rebuyCost': p.rebuyCost,
+  'addOnCost': p.addOnCost,
+  if (p.format != null) 'format': p.format!.name,
+  if (p.maxReEntries != null) 'maxReEntries': p.maxReEntries,
+  'earlyArrivalBonusEnabled': p.earlyArrivalBonusEnabled,
+  if (p.earlyArrivalCutoffMins != null)
+    'earlyArrivalCutoffMins': p.earlyArrivalCutoffMins,
+  if (p.earlyArrivalBonusPctOverride != null)
+    'earlyArrivalBonusPctOverride': p.earlyArrivalBonusPctOverride,
+  if (p.rsvpDeadlineHours != null) 'rsvpDeadlineHours': p.rsvpDeadlineHours,
+  'hardFinishEnabled': p.hardFinishEnabled,
+  'hardFinishMinsAfterFinish': p.hardFinishMinsAfterFinish,
+  'hardFinishSplit': p.hardFinishSplit,
+  if (p.levelDurationMins != null) 'levelDurationMins': p.levelDurationMins,
+  if (p.pace != null) 'pace': p.pace!.name,
+  if (p.shootoutTables != null) 'shootoutTables': p.shootoutTables,
+  if (p.shootoutTableTargetMins != null)
+    'shootoutTableTargetMins': p.shootoutTableTargetMins,
+  if (p.expectedPlayersOverride != null)
+    'expectedPlayersOverride': p.expectedPlayersOverride,
+  'announceEliminations': p.announceEliminations,
+  'locationPrivate': p.locationPrivate,
+  if (p.forcePaidPlaces != null) 'forcePaidPlaces': p.forcePaidPlaces,
+  if (p.rebuyChips != null) 'rebuyChips': p.rebuyChips,
+  if (p.reEntryChips != null) 'reEntryChips': p.reEntryChips,
+  if (p.addOnChips != null) 'addOnChips': p.addOnChips,
+  if (p.tableSettingsOverride != null)
+    'tableSettingsOverride': tableSettingsToMap(p.tableSettingsOverride!),
+  if (p.lockedExpectedPlayers != null)
+    'lockedExpectedPlayers': p.lockedExpectedPlayers,
+  if (p.expectedRebuys != null) 'expectedRebuys': p.expectedRebuys,
+      if (p.expectedRebuyRate != null)
+        'expectedRebuyRate': p.expectedRebuyRate,
+  if (p.expectedReEntries != null) 'expectedReEntries': p.expectedReEntries,
+  if (p.expectedAddOns != null) 'expectedAddOns': p.expectedAddOns,
+  if (p.forecastRebuyRate != null) 'forecastRebuyRate': p.forecastRebuyRate,
+  if (p.forecastAddOnTakeUp != null)
+    'forecastAddOnTakeUp': p.forecastAddOnTakeUp,
+  if (p.forceStack != null) 'forceStack': p.forceStack,
+  if (p.targetDepthBB != null) 'targetDepthBB': p.targetDepthBB,
+};
 
-TournamentPreset tournamentPresetFromMap(Map<String, dynamic> m) =>
-    TournamentPreset(
-      id: (m['id'] as String?) ?? '',
-      name: (m['name'] as String?) ?? '',
-      buyIn: (m['buyIn'] as num?)?.toInt() ?? 0,
-      koEnabled: (m['koEnabled'] as bool?) ?? false,
-      koAmount: (m['koAmount'] as num?)?.toInt() ?? 0,
-      koKind: _enumByName(BountyKind.values, m['koKind'], BountyKind.fixed),
-      rebuys: (m['rebuys'] as bool?) ?? false,
-      rebuysCloseLevel: (m['rebuysCloseLevel'] as num?)?.toInt() ?? 0,
-      rebuyCloseChosenByOrganizer:
-          (m['rebuyCloseChosenByOrganizer'] as bool?) ?? false,
-      rebuyLimit: (m['rebuyLimit'] as num?)?.toInt(),
-      reEntry: (m['reEntry'] as bool?) ?? false,
-      addOn: (m['addOn'] as bool?) ?? false,
-      addOnOvertime: (m['addOnOvertime'] as bool?) ?? false,
-      addOnCloseLevel: (m['addOnCloseLevel'] as num?)?.toInt() ?? 6,
-      breaks: _mapList(m['breaks'] as List? ?? const [])
-          .map(scheduledBreakFromMap)
-          .toList(),
-      durationHours: (m['durationHours'] as num?)?.toDouble() ?? 3,
-      anteEnabled: (m['anteEnabled'] as bool?) ?? false,
-      anteAfterLevel: (m['anteAfterLevel'] as num?)?.toInt() ?? 0,
-      anteStyle: _enumByName(AnteStyle.values, m['anteStyle'], AnteStyle.bigBlind),
-      antePreference: _enumByName(AntePreference.values, m['antePreference'], AntePreference.recommend),
-      organizerPct: (m['organizerPct'] as num?)?.toInt() ?? 0,
-      chipSetName: (m['chipSetName'] as String?) ?? '',
-      chipSet: _mapList(m['chipSet'] as List? ?? const [])
-          .map(chipColorFromMap)
-          .toList(),
-      rebuyCost: (m['rebuyCost'] as num?)?.toInt(),
-      addOnCost: (m['addOnCost'] as num?)?.toInt(),
-      format: m['format'] != null
-          ? _enumByName(TournamentFormat.values, m['format'], TournamentFormat.freezeOut)
-          : null,
-      maxReEntries: (m['maxReEntries'] as num?)?.toInt(),
-      earlyArrivalBonusEnabled:
-          (m['earlyArrivalBonusEnabled'] as bool?) ?? false,
-      earlyArrivalCutoffMins:
-          (m['earlyArrivalCutoffMins'] as num?)?.toInt(),
-      earlyArrivalBonusPctOverride:
-          (m['earlyArrivalBonusPctOverride'] as num?)?.toDouble(),
-      rsvpDeadlineHours: (m['rsvpDeadlineHours'] as num?)?.toInt(),
-      hardFinishEnabled: (m['hardFinishEnabled'] as bool?) ?? false,
-      hardFinishMinsAfterFinish:
-          (m['hardFinishMinsAfterFinish'] as num?)?.toInt() ?? 60,
-      hardFinishSplit: (m['hardFinishSplit'] as String?) ?? 'icm',
-      levelDurationMins: (m['levelDurationMins'] as num?)?.toInt(),
-      pace: m['pace'] != null
-          ? _enumByName(PaceMode.values, m['pace'], PaceMode.regular)
-          : null,
-      shootoutTables: (m['shootoutTables'] as num?)?.toInt(),
-      shootoutTableTargetMins:
-          (m['shootoutTableTargetMins'] as num?)?.toInt(),
-      expectedPlayersOverride:
-          (m['expectedPlayersOverride'] as num?)?.toInt(),
-      announceEliminations:
-          (m['announceEliminations'] as bool?) ?? false,
-      locationPrivate: (m['locationPrivate'] as bool?) ?? false,
-      forcePaidPlaces: (m['forcePaidPlaces'] as num?)?.toInt(),
-      rebuyChips: (m['rebuyChips'] as num?)?.toInt(),
-      reEntryChips: (m['reEntryChips'] as num?)?.toInt(),
-      addOnChips: (m['addOnChips'] as num?)?.toInt(),
-      tableSettingsOverride: m['tableSettingsOverride'] == null
-          ? null
-          : tableSettingsFromMap(
-              Map<String, dynamic>.from(
-                  m['tableSettingsOverride'] as Map)),
-      lockedExpectedPlayers:
-          (m['lockedExpectedPlayers'] as num?)?.toInt(),
-      expectedRebuys: (m['expectedRebuys'] as num?)?.toInt(),
-      expectedReEntries: (m['expectedReEntries'] as num?)?.toInt(),
-      expectedAddOns: (m['expectedAddOns'] as num?)?.toInt(),
-      forecastRebuyRate:
-          (m['forecastRebuyRate'] as num?)?.toDouble(),
-      forecastAddOnTakeUp:
-          (m['forecastAddOnTakeUp'] as num?)?.toDouble(),
-    );
+TournamentPreset tournamentPresetFromMap(
+  Map<String, dynamic> m,
+) => TournamentPreset(
+  id: (m['id'] as String?) ?? '',
+  name: (m['name'] as String?) ?? '',
+  buyIn: (m['buyIn'] as num?)?.toInt() ?? 0,
+  koEnabled: (m['koEnabled'] as bool?) ?? false,
+  koAmount: (m['koAmount'] as num?)?.toInt() ?? 0,
+  koKind: _enumByName(BountyKind.values, m['koKind'], BountyKind.fixed),
+  rebuys: (m['rebuys'] as bool?) ?? false,
+  rebuysCloseLevel: (m['rebuysCloseLevel'] as num?)?.toInt() ?? 0,
+  rebuyCloseChosenByOrganizer:
+      (m['rebuyCloseChosenByOrganizer'] as bool?) ?? false,
+  rebuyLimit: (m['rebuyLimit'] as num?)?.toInt(),
+  reEntry: (m['reEntry'] as bool?) ?? false,
+  addOn: (m['addOn'] as bool?) ?? false,
+  addOnOvertime: (m['addOnOvertime'] as bool?) ?? false,
+  addOnCloseLevel: (m['addOnCloseLevel'] as num?)?.toInt() ?? 6,
+  breaks: _mapList(
+    m['breaks'] as List? ?? const [],
+  ).map(scheduledBreakFromMap).toList(),
+  durationHours: (m['durationHours'] as num?)?.toDouble() ?? 3,
+  anteEnabled: (m['anteEnabled'] as bool?) ?? false,
+  anteAfterLevel: (m['anteAfterLevel'] as num?)?.toInt() ?? 0,
+  anteStyle: _enumByName(AnteStyle.values, m['anteStyle'], AnteStyle.bigBlind),
+  antePreference: _enumByName(
+    AntePreference.values,
+    m['antePreference'],
+    AntePreference.recommend,
+  ),
+  organizerPct: (m['organizerPct'] as num?)?.toInt() ?? 0,
+  chipSetName: (m['chipSetName'] as String?) ?? '',
+  chipSet: _mapList(
+    m['chipSet'] as List? ?? const [],
+  ).map(chipColorFromMap).toList(),
+  rebuyCost: (m['rebuyCost'] as num?)?.toInt(),
+  addOnCost: (m['addOnCost'] as num?)?.toInt(),
+  format: m['format'] != null
+      ? _enumByName(
+          TournamentFormat.values,
+          m['format'],
+          TournamentFormat.freezeOut,
+        )
+      : null,
+  maxReEntries: (m['maxReEntries'] as num?)?.toInt(),
+  earlyArrivalBonusEnabled: (m['earlyArrivalBonusEnabled'] as bool?) ?? false,
+  earlyArrivalCutoffMins: (m['earlyArrivalCutoffMins'] as num?)?.toInt(),
+  earlyArrivalBonusPctOverride: (m['earlyArrivalBonusPctOverride'] as num?)
+      ?.toDouble(),
+  rsvpDeadlineHours: (m['rsvpDeadlineHours'] as num?)?.toInt(),
+  hardFinishEnabled: (m['hardFinishEnabled'] as bool?) ?? false,
+  hardFinishMinsAfterFinish:
+      (m['hardFinishMinsAfterFinish'] as num?)?.toInt() ?? 60,
+  hardFinishSplit: (m['hardFinishSplit'] as String?) ?? 'icm',
+  levelDurationMins: (m['levelDurationMins'] as num?)?.toInt(),
+  pace: m['pace'] != null
+      ? _enumByName(PaceMode.values, m['pace'], PaceMode.regular)
+      : null,
+  shootoutTables: (m['shootoutTables'] as num?)?.toInt(),
+  shootoutTableTargetMins: (m['shootoutTableTargetMins'] as num?)?.toInt(),
+  expectedPlayersOverride: (m['expectedPlayersOverride'] as num?)?.toInt(),
+  announceEliminations: (m['announceEliminations'] as bool?) ?? false,
+  locationPrivate: (m['locationPrivate'] as bool?) ?? false,
+  forcePaidPlaces: (m['forcePaidPlaces'] as num?)?.toInt(),
+  rebuyChips: (m['rebuyChips'] as num?)?.toInt(),
+  reEntryChips: (m['reEntryChips'] as num?)?.toInt(),
+  addOnChips: (m['addOnChips'] as num?)?.toInt(),
+  tableSettingsOverride: m['tableSettingsOverride'] == null
+      ? null
+      : tableSettingsFromMap(
+          Map<String, dynamic>.from(m['tableSettingsOverride'] as Map),
+        ),
+  lockedExpectedPlayers: (m['lockedExpectedPlayers'] as num?)?.toInt(),
+  expectedRebuys: (m['expectedRebuys'] as num?)?.toInt(),
+  expectedRebuyRate: (m['expectedRebuyRate'] as num?)?.toDouble(),
+  expectedReEntries: (m['expectedReEntries'] as num?)?.toInt(),
+  expectedAddOns: (m['expectedAddOns'] as num?)?.toInt(),
+  forecastRebuyRate: (m['forecastRebuyRate'] as num?)?.toDouble(),
+  forecastAddOnTakeUp: (m['forecastAddOnTakeUp'] as num?)?.toDouble(),
+  forceStack: (m['forceStack'] as num?)?.toInt(),
+  targetDepthBB: (m['targetDepthBB'] as num?)?.toInt(),
+);
 
 /// Public [NotificationType] parser for callers outside this file (the
 /// notification outbox stream in the repository).
@@ -1117,15 +1162,15 @@ NotificationType notificationTypeByName(Object? raw) =>
     _enumByName(NotificationType.values, raw, NotificationType.system);
 
 Map<String, dynamic> appNotificationToMap(AppNotification n) => {
-      'id': n.id,
-      'title': n.title,
-      'body': n.body,
-      'type': n.type.name,
-      'link': n.link,
-      'read': n.read,
-      'timestamp': n.timestamp.toIso8601String(),
-      if (n.audience != null && n.audience!.isNotEmpty) 'audience': n.audience,
-    };
+  'id': n.id,
+  'title': n.title,
+  'body': n.body,
+  'type': n.type.name,
+  'link': n.link,
+  'read': n.read,
+  'timestamp': n.timestamp.toIso8601String(),
+  if (n.audience != null && n.audience!.isNotEmpty) 'audience': n.audience,
+};
 
 AppNotification appNotificationFromMap(Map<String, dynamic> m) =>
     AppNotification(
@@ -1133,7 +1178,10 @@ AppNotification appNotificationFromMap(Map<String, dynamic> m) =>
       title: (m['title'] as String?) ?? '',
       body: (m['body'] as String?) ?? '',
       type: _enumByName(
-          NotificationType.values, m['type'], NotificationType.system),
+        NotificationType.values,
+        m['type'],
+        NotificationType.system,
+      ),
       link: m['link'] as String?,
       read: (m['read'] as bool?) ?? false,
       timestamp: _isoOrNull(m['timestamp']) ?? DateTime.now(),
@@ -1141,46 +1189,47 @@ AppNotification appNotificationFromMap(Map<String, dynamic> m) =>
     );
 
 Map<String, dynamic> groupToMap(Group g) => {
-      'id': g.id,
-      'name': g.name,
-      'joinCode': g.joinCode,
-      'ownerId': g.ownerId,
-      'members': g.members.map(appUserToMap).toList(),
-      'games': g.games.map(liveGameToMap).toList(),
-      'chat': g.chat.map(chatMessageToMap).toList(),
-      'polls': g.polls.map(pollToMap).toList(),
-      'notifications': g.notifications.map(appNotificationToMap).toList(),
-      'icon': g.icon,
-      'pinned': g.pinned,
-      'tableSettings': tableSettingsToMap(g.tableSettings),
-      'learningOptOut': g.learningOptOut,
-      if (g.defaultChipSetId != null) 'defaultChipSetId': g.defaultChipSetId,
-    };
+  'id': g.id,
+  'name': g.name,
+  'joinCode': g.joinCode,
+  'ownerId': g.ownerId,
+  'members': g.members.map(appUserToMap).toList(),
+  'games': g.games.map(liveGameToMap).toList(),
+  'chat': g.chat.map(chatMessageToMap).toList(),
+  'polls': g.polls.map(pollToMap).toList(),
+  'notifications': g.notifications.map(appNotificationToMap).toList(),
+  'icon': g.icon,
+  'pinned': g.pinned,
+  'tableSettings': tableSettingsToMap(g.tableSettings),
+  'learningOptOut': g.learningOptOut,
+  if (g.defaultChipSetId != null) 'defaultChipSetId': g.defaultChipSetId,
+};
 
 Group groupFromMap(Map<String, dynamic> m) => Group(
-      id: (m['id'] as String?) ?? '',
-      name: (m['name'] as String?) ?? '',
-      joinCode: (m['joinCode'] as String?) ?? '',
-      ownerId: (m['ownerId'] as String?) ?? '',
-      members: _mapList(m['members'] as List? ?? const [])
-          .map(appUserFromMap)
-          .toList(),
-      games: _mapList(m['games'] as List? ?? const [])
-          .map(liveGameFromMap)
-          .toList(),
-      chat: _mapList(m['chat'] as List? ?? const [])
-          .map(chatMessageFromMap)
-          .toList(),
-      polls: _mapList(m['polls'] as List? ?? const []).map(pollFromMap).toList(),
-      notifications: _mapList(m['notifications'] as List? ?? const [])
-          .map(appNotificationFromMap)
-          .toList(),
-      icon: (m['icon'] as String?) ?? 'Spade',
-      pinned: (m['pinned'] as bool?) ?? false,
-      learningOptOut: (m['learningOptOut'] as bool?) ?? false,
-      tableSettings: m['tableSettings'] == null
-          ? TableSettings.fallback
-          : tableSettingsFromMap(
-              Map<String, dynamic>.from(m['tableSettings'] as Map)),
-      defaultChipSetId: m['defaultChipSetId'] as String?,
-    );
+  id: (m['id'] as String?) ?? '',
+  name: (m['name'] as String?) ?? '',
+  joinCode: (m['joinCode'] as String?) ?? '',
+  ownerId: (m['ownerId'] as String?) ?? '',
+  members: _mapList(
+    m['members'] as List? ?? const [],
+  ).map(appUserFromMap).toList(),
+  games: _mapList(
+    m['games'] as List? ?? const [],
+  ).map(liveGameFromMap).toList(),
+  chat: _mapList(
+    m['chat'] as List? ?? const [],
+  ).map(chatMessageFromMap).toList(),
+  polls: _mapList(m['polls'] as List? ?? const []).map(pollFromMap).toList(),
+  notifications: _mapList(
+    m['notifications'] as List? ?? const [],
+  ).map(appNotificationFromMap).toList(),
+  icon: (m['icon'] as String?) ?? 'Spade',
+  pinned: (m['pinned'] as bool?) ?? false,
+  learningOptOut: (m['learningOptOut'] as bool?) ?? false,
+  tableSettings: m['tableSettings'] == null
+      ? TableSettings.fallback
+      : tableSettingsFromMap(
+          Map<String, dynamic>.from(m['tableSettings'] as Map),
+        ),
+  defaultChipSetId: m['defaultChipSetId'] as String?,
+);

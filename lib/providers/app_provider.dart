@@ -763,6 +763,7 @@ class AppProvider extends ChangeNotifier {
   ];
 
   final List<TournamentPreset> _presets = List.of(seedPresets);
+  String? _defaultGamePresetId;
 
   // ── Group ──────────────────────────────────────────────────────────────────
   /// Neutral placeholder until the first group of the signed-in user is
@@ -793,8 +794,7 @@ class AppProvider extends ChangeNotifier {
   /// when a backend session is available.
   final Map<String, GameSettings> _eventDrafts = {};
 
-  GameSettings? get eventDraftForCurrentGroup =>
-      _eventDrafts[_currentGroup.id];
+  GameSettings? get eventDraftForCurrentGroup => _eventDrafts[_currentGroup.id];
 
   void saveEventDraft(GameSettings settings) {
     final groupId = _currentGroup.id;
@@ -1109,7 +1109,9 @@ class AppProvider extends ChangeNotifier {
 
   /// True when the signed-in user is an assigned organizer for the active game.
   bool get isCurrentGameOrganizer =>
-      _currentGame != null && _user != null && _currentGame!.isOrganizer(_user!.id);
+      _currentGame != null &&
+      _user != null &&
+      _currentGame!.isOrganizer(_user!.id);
 
   /// Structure edits require host authority (§3, §12).
   bool get canEditStructure => isAdmin;

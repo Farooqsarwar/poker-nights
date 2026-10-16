@@ -154,8 +154,10 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
             draft: draft,
             dirty: dirty,
             canEdit: isOwner,
+            groupName: group.name,
             learningOptOut: group.learningOptOut,
-            onLearningOptOutChanged: (optOut) => app.setGroupLearningOptOut(optOut),
+            onLearningOptOutChanged: (optOut) =>
+                app.setGroupLearningOptOut(optOut),
             onChanged: (next) => _edit(stored, next),
             onSave: () {
               app.updateGroupTableSettings(draft);
@@ -209,6 +211,7 @@ class _TableSettingsCard extends StatelessWidget {
     required this.draft,
     required this.dirty,
     required this.canEdit,
+    required this.groupName,
     required this.learningOptOut,
     required this.onLearningOptOutChanged,
     required this.onChanged,
@@ -218,6 +221,7 @@ class _TableSettingsCard extends StatelessWidget {
   final TableSettings draft;
   final bool dirty;
   final bool canEdit;
+  final String groupName;
   final bool learningOptOut;
   final ValueChanged<bool> onLearningOptOutChanged;
   final ValueChanged<TableSettings> onChanged;
@@ -274,24 +278,25 @@ class _TableSettingsCard extends StatelessWidget {
                   : (_) {},
             ),
           ),
-          const _Divider(),
-          _Row(
-            icon: Icons.psychology_outlined,
-            title: 'Group pace adaptation',
-            subtitle: 'Learn from historical games to adjust level schedules',
-            trailing: AppToggle(
-              value: !learningOptOut,
-              label: 'Group pace adaptation',
-              onChanged: canEdit
-                  ? (v) => onLearningOptOutChanged(!v)
-                  : (_) {},
+          if (canEdit) ...[
+            const _Divider(),
+            _Row(
+              icon: Icons.psychology_outlined,
+              title: "Learn from $groupName's past games",
+              subtitle: 'Use game history to adjust future level schedules',
+              trailing: AppToggle(
+                value: !learningOptOut,
+                label: "Learn from $groupName's past games",
+                onChanged: (v) => onLearningOptOutChanged(!v),
+              ),
             ),
-          ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           if (!canEdit)
             const AppAlertBanner(
               type: AppAlertType.info,
-              message: 'Only the group owner can change the table settings. '
+              message:
+                  'Only the group owner can change the table settings. '
                   'Hand over ownership from Members to take this on.',
             )
           else
@@ -361,7 +366,11 @@ class _ReportsCard extends StatelessWidget {
 }
 
 class _Report extends StatelessWidget {
-  const _Report({required this.report, required this.isOwner, required this.app});
+  const _Report({
+    required this.report,
+    required this.isOwner,
+    required this.app,
+  });
 
   final ChatReport report;
   final bool isOwner;
@@ -397,7 +406,9 @@ class _Report extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface2,
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.destructive.withValues(alpha: 0.30)),
+        border: Border.all(
+          color: AppColors.destructive.withValues(alpha: 0.30),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -513,8 +524,7 @@ class _GroupCodeCard extends StatelessWidget {
             fullWidth: true,
             size: AppButtonSize.lg,
             variant: AppButtonVariant.secondary,
-            onPressed:
-                canReroll ? () => _reroll(context) : null,
+            onPressed: canReroll ? () => _reroll(context) : null,
             child: const Text('Re-roll the code'),
           ),
         ],
@@ -575,9 +585,7 @@ class _GroupCodeCard extends StatelessWidget {
     // The code on screen is unchanged, so say why rather than leaving the host
     // wondering whether the tap registered.
     messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Could not re-roll the code. Try again.'),
-      ),
+      const SnackBar(content: Text('Could not re-roll the code. Try again.')),
     );
     router.go(RoutePaths.groupSettings);
   }
@@ -832,9 +840,7 @@ class _Principle extends StatelessWidget {
               'game — set once here; every tournament in this group starts '
               'from them, and a single game can still override them in '
               'Configure.',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.foreground,
-              ),
+              style: AppTypography.bodySm.copyWith(color: AppColors.foreground),
             ),
           ),
         ],
@@ -956,11 +962,7 @@ class _Divider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Divider(
-      height: 1,
-      thickness: 1,
-      color: AppColors.borderSubtle,
-    );
+    return Divider(height: 1, thickness: 1, color: AppColors.borderSubtle);
   }
 }
 

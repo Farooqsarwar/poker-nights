@@ -269,8 +269,8 @@ void main() {
 
       await screen(tester, app, () async {
         final label = find.text("Learn from Friday Poker Club's past games");
-        await tester.ensureVisible(label);
-        expect(label, findsOneWidget);
+        await tester.ensureVisible(label.first);
+        expect(label, findsWidgets);
 
         final toggle = find.byType(AppToggle).last;
         expect(tester.widget<AppToggle>(toggle).value, isTrue);

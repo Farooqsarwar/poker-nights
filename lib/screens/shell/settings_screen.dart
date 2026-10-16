@@ -379,15 +379,6 @@ class SettingsScreen extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    showDivider: true,
-                  ),
-                  _buildSettingRow(
-                    title: 'Pace adaptation (Spec H5)',
-                    subtitle: 'Learn from past games to adjust level duration',
-                    trailing: AppToggle(
-                      value: !app.currentGroup.learningOptOut,
-                      onChanged: (value) => app.setGroupLearningOptOut(!value),
-                    ),
                     showDivider: false,
                   ),
                 ],

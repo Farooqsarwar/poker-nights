@@ -207,18 +207,17 @@ void main() {
     expect((active.decoration! as BoxDecoration).border, isNotNull);
     expect(_scale(tester, 'level-label-pulse'), 1);
 
-    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 3001));
     final ended = tester.widget<Container>(
       find.byKey(const ValueKey('level-label-pulse-outline')),
     );
-    expect((ended.decoration! as BoxDecoration).border, isNull);
+    expect(ended.decoration, isNull);
   });
 
   testWidgets('dashboard and TV use the shared per-digit timer', (
     tester,
   ) async {
     final app = AppProvider();
-    addTearDown(app.dispose);
 
     Future<void> pump(Widget child, Size size) => tester.pumpWidget(
       ChangeNotifierProvider<AppProvider>.value(
@@ -239,5 +238,8 @@ void main() {
     await pump(TournamentDisplayBlock(game: _game()), const Size(1280, 800));
     expect(find.byType(AnimatedTimerDigits), findsOneWidget);
     expect(find.byType(RepaintBoundary), findsWidgets);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    app.dispose();
   });
 }

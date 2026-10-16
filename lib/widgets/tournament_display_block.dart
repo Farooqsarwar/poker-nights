@@ -245,15 +245,21 @@ class _WideLayout extends StatelessWidget {
                                 ante: data.level?.ante,
                                 durationMins: data.level?.durationMins ?? 0,
                               ),
-                        child: Text(
-                          data.isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
-                          textAlign: TextAlign.center,
-                          style: AppTypography.mono(
-                            size: 40 * s,
-                            weight: FontWeight.w400,
-                            color: TournamentDisplayBlock._red,
-                            letterSpacing: 5 * s,
-                            height: 1,
+                        child: LevelEventPulse(
+                          level: game.currentLevel,
+                          pulseKey: 'level-label-pulse',
+                          child: Text(
+                            data.isBreak
+                                ? 'BREAK'
+                                : 'LEVEL ${game.currentLevel}',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.mono(
+                              size: 40 * s,
+                              weight: FontWeight.w400,
+                              color: TournamentDisplayBlock._red,
+                              letterSpacing: 5 * s,
+                              height: 1,
+                            ),
                           ),
                         ),
                       ),
@@ -272,40 +278,46 @@ class _WideLayout extends StatelessWidget {
                         ),
                       ),
                       SizedBox(height: 8 * s), // Reduced from 16
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _BlindValue(
-                              label: 'SB',
-                              value: data.level == null
-                                  ? '—'
-                                  : Formatters.chips(data.level!.sb),
-                              labelSize: 27 * s,
-                              valueSize: 57 * s,
-                            ),
+                      RepaintBoundary(
+                        child: LevelEventPulse(
+                          level: game.currentLevel,
+                          pulseKey: 'blinds-pulse',
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _BlindValue(
+                                  label: 'SB',
+                                  value: data.level == null
+                                      ? '—'
+                                      : Formatters.chips(data.level!.sb),
+                                  labelSize: 27 * s,
+                                  valueSize: 57 * s,
+                                ),
+                              ),
+                              Expanded(
+                                child: _BlindValue(
+                                  label: 'ANTE',
+                                  value: data.level?.ante == null
+                                      ? '—'
+                                      : Formatters.chips(data.level!.ante!),
+                                  highlighted: true,
+                                  labelSize: 27 * s,
+                                  valueSize: 57 * s,
+                                ),
+                              ),
+                              Expanded(
+                                child: _BlindValue(
+                                  label: 'BB',
+                                  value: data.level == null
+                                      ? '—'
+                                      : Formatters.chips(data.level!.bb),
+                                  labelSize: 27 * s,
+                                  valueSize: 57 * s,
+                                ),
+                              ),
+                            ],
                           ),
-                          Expanded(
-                            child: _BlindValue(
-                              label: 'ANTE',
-                              value: data.level?.ante == null
-                                  ? '—'
-                                  : Formatters.chips(data.level!.ante!),
-                              highlighted: true,
-                              labelSize: 27 * s,
-                              valueSize: 57 * s,
-                            ),
-                          ),
-                          Expanded(
-                            child: _BlindValue(
-                              label: 'BB',
-                              value: data.level == null
-                                  ? '—'
-                                  : Formatters.chips(data.level!.bb),
-                              labelSize: 27 * s,
-                              valueSize: 57 * s,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                       SizedBox(height: 16 * s), // Reduced from 24
                     ],
@@ -412,48 +424,16 @@ class _PlainNumberTimer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final value = Formatters.time(secondsRemaining);
-    final colon = value.lastIndexOf(':');
-    final left = colon < 0 ? value : value.substring(0, colon + 1);
-    final right = colon < 0 ? '' : value.substring(colon + 1);
-
-    final style = AppTypography.mono(
-      size: fontSize,
-      weight: FontWeight.w400,
-      color: danger ? TournamentDisplayBlock._red : AppColors.foreground,
-      letterSpacing: -fontSize * .035,
-      height:
-          1.1, // <-- FIX: Increased slightly so native bounding box is generous
-    );
-
     return Center(
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.center,
-        // <-- FIX: Added padding *inside* the FittedBox. This ensures the text
-        // bounding box used for scaling includes extra safe space at the top/bottom
-        // so ascenders are never chopped off by the FittedBox constraints.
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20.0),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 160),
-            child: RichText(
-              key: ValueKey(value),
-              maxLines: 1,
-              softWrap: false,
-              text: TextSpan(
-                style: style,
-                children: [
-                  TextSpan(text: left),
-                  TextSpan(
-                    text: right,
-                    style: style.copyWith(color: TournamentDisplayBlock._red),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+      child: AnimatedTimerDigits(
+        secondsRemaining: secondsRemaining,
+        size: fontSize,
+        minutesColor: danger
+            ? TournamentDisplayBlock._red
+            : AppColors.foreground,
+        secondsColor: TournamentDisplayBlock._red,
+        glow: danger,
+        verticalPadding: 20,
       ),
     );
   }
@@ -881,13 +861,17 @@ class _CompactLayout extends StatelessWidget {
                       ante: data.level?.ante,
                       durationMins: data.level?.durationMins ?? 0,
                     ),
-              child: Text(
-                data.isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
-                textAlign: TextAlign.center,
-                style: AppTypography.mono(
-                  size: 17,
-                  color: TournamentDisplayBlock._red,
-                  letterSpacing: 3,
+              child: LevelEventPulse(
+                level: game.currentLevel,
+                pulseKey: 'level-label-pulse',
+                child: Text(
+                  data.isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.mono(
+                    size: 17,
+                    color: TournamentDisplayBlock._red,
+                    letterSpacing: 3,
+                  ),
                 ),
               ),
             ),
@@ -904,40 +888,46 @@ class _CompactLayout extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: _BlindValue(
-                    label: 'SB',
-                    value: data.level == null
-                        ? '—'
-                        : Formatters.chips(data.level!.sb),
-                    labelSize: 11,
-                    valueSize: 23,
-                  ),
+            RepaintBoundary(
+              child: LevelEventPulse(
+                level: game.currentLevel,
+                pulseKey: 'blinds-pulse',
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _BlindValue(
+                        label: 'SB',
+                        value: data.level == null
+                            ? '—'
+                            : Formatters.chips(data.level!.sb),
+                        labelSize: 11,
+                        valueSize: 23,
+                      ),
+                    ),
+                    Expanded(
+                      child: _BlindValue(
+                        label: 'ANTE',
+                        value: data.level?.ante == null
+                            ? '—'
+                            : Formatters.chips(data.level!.ante!),
+                        highlighted: true,
+                        labelSize: 11,
+                        valueSize: 23,
+                      ),
+                    ),
+                    Expanded(
+                      child: _BlindValue(
+                        label: 'BB',
+                        value: data.level == null
+                            ? '—'
+                            : Formatters.chips(data.level!.bb),
+                        labelSize: 11,
+                        valueSize: 23,
+                      ),
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: _BlindValue(
-                    label: 'ANTE',
-                    value: data.level?.ante == null
-                        ? '—'
-                        : Formatters.chips(data.level!.ante!),
-                    highlighted: true,
-                    labelSize: 11,
-                    valueSize: 23,
-                  ),
-                ),
-                Expanded(
-                  child: _BlindValue(
-                    label: 'BB',
-                    value: data.level == null
-                        ? '—'
-                        : Formatters.chips(data.level!.bb),
-                    labelSize: 11,
-                    valueSize: 23,
-                  ),
-                ),
-              ],
+              ),
             ),
             const SizedBox(height: 22),
             LiveTimerBuilder(

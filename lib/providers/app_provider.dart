@@ -334,7 +334,14 @@ class AppProvider extends ChangeNotifier {
 
   /// Plays a test speech announcement for the Sound & Voice settings.
   Future<void> testVoice() async {
-    await VoiceService.instance.speak('Level 1. Blinds 25 and 50.');
+    await VoiceService.instance.speak(
+      VoiceService.levelChangeMessage(
+        level: 1,
+        sb: 25,
+        bb: 50,
+        durationMins: 15,
+      ),
+    );
   }
 
   /// Resolves the effective Premium tier.

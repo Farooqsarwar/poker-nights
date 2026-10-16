@@ -161,7 +161,6 @@ void main() {
       ..setCurrentGroupForTesting(_group)
       ..setCurrentGameForTesting(_game(level: 2));
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
 
     await tester.pumpWidget(
       ChangeNotifierProvider<AppProvider>.value(
@@ -178,14 +177,13 @@ void main() {
     );
 
     expect(
-      find.bySemanticsLabel(
-        'Level two. Small blind fifty, big blind one hundred, ante twenty five. '
-        'Duration twenty minutes.',
-      ),
-      findsOneWidget,
+      tester.getSemantics(find.text('LEVEL 2')).label,
+      'Level two. Small blind fifty, big blind one hundred, ante twenty five. '
+      'Duration twenty minutes.',
     );
 
     await tester.pumpWidget(const SizedBox.shrink());
+    semantics.dispose();
     app.dispose();
   });
 

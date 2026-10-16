@@ -129,20 +129,20 @@ const _group = Group(
 );
 
 Player _player(String id, {String? name, bool checkedIn = true}) => Player(
-      id: id,
-      name: name ?? id.toUpperCase(),
-      isGuest: false,
-      rsvp: Rsvp.going,
-      checkedIn: checkedIn,
-      confirmed: checkedIn,
-      eliminated: false,
-      rebuys: 0,
-      hasAddOn: false,
-      knockouts: 0,
-      table: 1,
-      seat: 1,
-      active: true,
-    );
+  id: id,
+  name: name ?? id.toUpperCase(),
+  isGuest: false,
+  rsvp: Rsvp.going,
+  checkedIn: checkedIn,
+  confirmed: checkedIn,
+  eliminated: false,
+  rebuys: 0,
+  hasAddOn: false,
+  knockouts: 0,
+  table: 1,
+  seat: 1,
+  active: true,
+);
 
 /// A running game whose clock is held by [editorDeviceId].
 ///
@@ -157,50 +157,47 @@ LiveGame _runningGame({
   List<String> coHosts = const ['u2'],
   int currentLevel = 1,
   DateTime? levelEndsAt,
-}) =>
-    LiveGame(
-      id: id,
-      groupId: 'g1',
-      settings: _settings,
-      structure: _structure,
-      status: LiveGameStatus.running,
-      publicCode: 'ABC123',
-      tvCode: 'TV7890',
-      currentLevel: currentLevel,
-      timerRunning: true,
-      secondsRemaining: 1200,
-      levelEndTime: levelEndsAt,
-      players: [
-        _player('u1', name: 'Alex Morgan'),
-        _player('u2', name: 'Costa Marchetti'),
-        _player('u3', name: 'Nina Kowalski'),
-      ],
-      chat: const [],
-      announcements: const [],
-      auditHistory: operatorName == ''
-          ? const []
-          : [
-              AuditRecord(
-                id: 'audit-claim-1',
-                timestamp: DateTime(2026, 9, 8, 20, 30),
-                type: AppProviderCloudSync.clockTakeoverAuditType,
-                actor: operatorName,
-                details: '$operatorName is running the clock on this phone.',
-              ),
-            ],
-      totalChipsInPlay: 15000,
-      pendingGuests: const [],
-      finishOrder: const [],
-      organizerIds: coHosts,
-      editorDeviceId: editorDeviceId,
-      editorClaimedAt:
-          silentFor == null ? null : DateTime.now().subtract(silentFor),
-    );
+}) => LiveGame(
+  id: id,
+  groupId: 'g1',
+  settings: _settings,
+  structure: _structure,
+  status: LiveGameStatus.running,
+  publicCode: 'ABC123',
+  tvCode: 'TV7890',
+  currentLevel: currentLevel,
+  timerRunning: true,
+  secondsRemaining: 1200,
+  levelEndTime: levelEndsAt,
+  players: [
+    _player('u1', name: 'Alex Morgan'),
+    _player('u2', name: 'Costa Marchetti'),
+    _player('u3', name: 'Nina Kowalski'),
+  ],
+  chat: const [],
+  announcements: const [],
+  auditHistory: operatorName == ''
+      ? const []
+      : [
+          AuditRecord(
+            id: 'audit-claim-1',
+            timestamp: DateTime(2026, 9, 8, 20, 30),
+            type: AppProviderCloudSync.clockTakeoverAuditType,
+            actor: operatorName,
+            details: '$operatorName is running the clock on this phone.',
+          ),
+        ],
+  totalChipsInPlay: 15000,
+  pendingGuests: const [],
+  finishOrder: const [],
+  organizerIds: coHosts,
+  editorDeviceId: editorDeviceId,
+  editorClaimedAt: silentFor == null
+      ? null
+      : DateTime.now().subtract(silentFor),
+);
 
-AppProvider _provider({
-  required AppUser user,
-  required LiveGame game,
-}) =>
+AppProvider _provider({required AppUser user, required LiveGame game}) =>
     AppProvider()
       ..setUserForTesting(user)
       ..setCurrentGroupForTesting(_group)
@@ -223,9 +220,7 @@ Future<void> notice(
       value: app,
       child: MaterialApp(
         home: Scaffold(
-          body: SingleChildScrollView(
-            child: const ClockAuthorityNotice(),
-          ),
+          body: SingleChildScrollView(child: const ClockAuthorityNotice()),
         ),
       ),
     ),
@@ -256,8 +251,9 @@ void main() {
   tearDown(() => RecoveryService.enabled = true);
 
   group('a second host/co-host device', () {
-    testWidgets('is told who runs the clock and gets both choices',
-        (tester) async {
+    testWidgets('is told who runs the clock and gets both choices', (
+      tester,
+    ) async {
       final app = _provider(
         user: _cohost,
         game: _runningGame(
@@ -292,8 +288,9 @@ void main() {
       });
     });
 
-    testWidgets('is told who runs the clock even when the name is unknown',
-        (tester) async {
+    testWidgets('is told who runs the clock even when the name is unknown', (
+      tester,
+    ) async {
       // A game written before claims were audited carries a device id and no
       // person. The notice still has to say something true.
       final app = _provider(
@@ -316,8 +313,9 @@ void main() {
   });
 
   group('Watch only', () {
-    testWidgets('leaves this device unable to operate the clock',
-        (tester) async {
+    testWidgets('leaves this device unable to operate the clock', (
+      tester,
+    ) async {
       final app = _provider(
         user: _cohost,
         game: _runningGame(
@@ -341,8 +339,9 @@ void main() {
       });
     });
 
-    testWidgets('stops the device reclaiming the clock when it goes stale',
-        (tester) async {
+    testWidgets('stops the device reclaiming the clock when it goes stale', (
+      tester,
+    ) async {
       // §E9's automatic 90-second claim is an answer to "nobody has this
       // yet", not to "somebody asked me and I declined". A phone told to watch
       // that starts writing the game anyway has not been asked.
@@ -419,8 +418,9 @@ void main() {
       });
     });
 
-    testWidgets('a co-host takes the clock over without group-admin rights',
-        (tester) async {
+    testWidgets('a co-host takes the clock over without group-admin rights', (
+      tester,
+    ) async {
       // A tournament co-host is an ORGANIZER, not a group admin — `isAdmin` is
       // the group role. Every gate on the take-over path therefore has to ask
       // `canOperateTheClock` / `canRunCurrentGame` rather than `isAdmin`, or a
@@ -501,8 +501,9 @@ void main() {
       });
     });
 
-    testWidgets('the device that already holds the clock is never asked',
-        (tester) async {
+    testWidgets('the device that already holds the clock is never asked', (
+      tester,
+    ) async {
       // Alex's own phone, mid-game. The provider's own id is the claim, so the
       // notice must not tell Alex to take over from Alex.
       final app = AppProvider()
@@ -524,8 +525,7 @@ void main() {
       });
     });
 
-    testWidgets('a game nobody has claimed is not a take-over',
-        (tester) async {
+    testWidgets('a game nobody has claimed is not a take-over', (tester) async {
       // Before the first host action there is no holder to take anything from.
       final app = _provider(
         user: _host,
@@ -544,8 +544,9 @@ void main() {
   });
 
   group('§E9 — the clock phone has gone silent', () {
-    testWidgets('a host/co-host is offered the rescue after 30 minutes',
-        (tester) async {
+    testWidgets('a host/co-host is offered the rescue after 30 minutes', (
+      tester,
+    ) async {
       final app = _provider(
         user: _cohost,
         game: _runningGame(
@@ -570,8 +571,9 @@ void main() {
       });
     });
 
-    testWidgets('at 29 minutes the clock is not yet declared gone',
-        (tester) async {
+    testWidgets('at 29 minutes the clock is not yet declared gone', (
+      tester,
+    ) async {
       final app = _provider(
         user: _cohost,
         game: _runningGame(
@@ -595,8 +597,9 @@ void main() {
       });
     });
 
-    testWidgets('taking the rescue clock makes this device the operator',
-        (tester) async {
+    testWidgets('taking the rescue clock makes this device the operator', (
+      tester,
+    ) async {
       final app = _provider(
         user: _host,
         game: _runningGame(
@@ -624,99 +627,101 @@ void main() {
 
   group('only one device runs the clock', () {
     testWidgets(
-        'the level that just ran out is advanced by the clock device alone',
-        (tester) async {
-      // The regression: the previous bug let every member / guest / TV device
-      // take the same branch in the 1-second ticker, so the level moved on
-      // screens that were supposed to be read-only, each firing its own
-      // announcement, notification and undo entry.
-      //
-      // Both providers below read the SAME document. `FirebaseRepository` is a
-      // process singleton, so two `AppProvider`s in one test share a device
-      // id; the device identity that decides the role is therefore modelled
-      // through the document itself — the game the provider holds names a
-      // device, and only the provider whose own id that device is operates the
-      // clock. The second provider below stands for the phone the document
-      // does NOT name, which after a take-over is precisely the phone that
-      // used to run the clock.
-      final scratch = _provider(
-        user: _host,
-        game: _runningGame(
-          id: 'g-invariants-scratch',
-          editorDeviceId: 'dev-the-clock',
-          operatorName: 'Costa Marchetti',
-        ),
-      );
-      await tester.pumpWidget(const SizedBox.shrink());
-      final deviceId = scratch.thisDeviceId;
-      scratch.dispose();
-      await tester.pump();
-
-      // The level is already spent, so the next tick of the 1-second ticker is
-      // the transition.
-      final expired = DateTime.now().subtract(const Duration(seconds: 1));
-
-      final clockDevice = _provider(
-        user: _host,
-        game: _runningGame(
-          id: 'g-invariants',
-          editorDeviceId: deviceId,
-          operatorName: 'Alex Morgan',
-          levelEndsAt: expired,
-        ),
-      );
-      final otherDevice = _provider(
-        user: _member,
-        game: _runningGame(
-          id: 'g-invariants',
-          editorDeviceId: deviceId,
-          operatorName: 'Alex Morgan',
-          levelEndsAt: expired,
-        ),
-      );
-
-      try {
-        expect(clockDevice.thisDeviceRunsTheClock, isTrue);
-        expect(otherDevice.thisDeviceRunsTheClock, isFalse);
-
-        await tester.pump(const Duration(seconds: 1));
-
-        // The clock device OPERATED the transition: it burned a revision,
-        // announced the new level and pushed an undo entry.
-        expect(clockDevice.currentGame!.currentLevel, 2);
-        expect(clockDevice.currentGame!.revision, greaterThan(0));
-        expect(
-          clockDevice.currentGame!.announcements.any(
-            (a) => a.text.startsWith('Start of level 2'),
+      'the level that just ran out is advanced by the clock device alone',
+      (tester) async {
+        // The regression: the previous bug let every member / guest / TV device
+        // take the same branch in the 1-second ticker, so the level moved on
+        // screens that were supposed to be read-only, each firing its own
+        // announcement, notification and undo entry.
+        //
+        // Both providers below read the SAME document. `FirebaseRepository` is a
+        // process singleton, so two `AppProvider`s in one test share a device
+        // id; the device identity that decides the role is therefore modelled
+        // through the document itself — the game the provider holds names a
+        // device, and only the provider whose own id that device is operates the
+        // clock. The second provider below stands for the phone the document
+        // does NOT name, which after a take-over is precisely the phone that
+        // used to run the clock.
+        final scratch = _provider(
+          user: _host,
+          game: _runningGame(
+            id: 'g-invariants-scratch',
+            editorDeviceId: 'dev-the-clock',
+            operatorName: 'Costa Marchetti',
           ),
-          isTrue,
         );
-        expect(clockDevice.canUndo, isTrue);
-
-        // The other device moved the DISPLAY on, so the countdown keeps
-        // running, and did nothing else: no revision, no announcement, no undo
-        // entry, nothing written.
-        expect(otherDevice.currentGame!.currentLevel, 2);
-        expect(
-          otherDevice.currentGame!.revision,
-          0,
-          reason: 'a read-only device must not burn a revision',
-        );
-        expect(
-          otherDevice.currentGame!.announcements,
-          isEmpty,
-          reason: 'a read-only device must not speak for the host',
-        );
-        expect(otherDevice.canUndo, isFalse);
-      } finally {
-        clockDevice.dispose();
-        otherDevice.dispose();
+        await tester.pumpWidget(const SizedBox.shrink());
+        final deviceId = scratch.thisDeviceId;
+        scratch.dispose();
         await tester.pump();
-      }
-    });
 
-    testWidgets('a stale claim is not taken by a co-host nobody asked',
-        (tester) async {
+        // The level is already spent, so the next tick of the 1-second ticker is
+        // the transition.
+        final expired = DateTime.now().subtract(const Duration(seconds: 1));
+
+        final clockDevice = _provider(
+          user: _host,
+          game: _runningGame(
+            id: 'g-invariants',
+            editorDeviceId: deviceId,
+            operatorName: 'Alex Morgan',
+            levelEndsAt: expired,
+          ),
+        );
+        final otherDevice = _provider(
+          user: _member,
+          game: _runningGame(
+            id: 'g-invariants',
+            editorDeviceId: deviceId,
+            operatorName: 'Alex Morgan',
+            levelEndsAt: expired,
+          ),
+        );
+
+        try {
+          expect(clockDevice.thisDeviceRunsTheClock, isTrue);
+          expect(otherDevice.thisDeviceRunsTheClock, isFalse);
+
+          await tester.pump(const Duration(seconds: 1));
+
+          // The clock device OPERATED the transition: it burned a revision,
+          // announced the new level and pushed an undo entry.
+          expect(clockDevice.currentGame!.currentLevel, 2);
+          expect(clockDevice.currentGame!.revision, greaterThan(0));
+          expect(
+            clockDevice.currentGame!.announcements.any(
+              (a) => a.text.startsWith('Level two.'),
+            ),
+            isTrue,
+          );
+          expect(clockDevice.canUndo, isTrue);
+
+          // The other device moved the DISPLAY on, so the countdown keeps
+          // running, and did nothing else: no revision, no announcement, no undo
+          // entry, nothing written.
+          expect(otherDevice.currentGame!.currentLevel, 2);
+          expect(
+            otherDevice.currentGame!.revision,
+            0,
+            reason: 'a read-only device must not burn a revision',
+          );
+          expect(
+            otherDevice.currentGame!.announcements,
+            isEmpty,
+            reason: 'a read-only device must not speak for the host',
+          );
+          expect(otherDevice.canUndo, isFalse);
+        } finally {
+          clockDevice.dispose();
+          otherDevice.dispose();
+          await tester.pump();
+        }
+      },
+    );
+
+    testWidgets('a stale claim is not taken by a co-host nobody asked', (
+      tester,
+    ) async {
       // §E9 lets any admin device take over a claim older than 90 seconds. The
       // C-ops take-over is the USER-FACING half of that and it is a choice:
       // until the co-host presses the button, this phone is a live view of

@@ -10,6 +10,7 @@ import '../models/live_game.dart';
 import '../models/tournament.dart';
 import '../responsive/responsive.dart';
 import '../utils/formatters.dart';
+import '../utils/voice_service.dart';
 import '../constants/app_constants.dart';
 
 /// Responsive tournament display.
@@ -116,15 +117,15 @@ TextStyle _numberStyle({
 
 class _GameValues {
   _GameValues(this.game, Duration offset)
-      : level = game.currentLevelData,
-        next = game.nextLevelData,
-        isBreak = game.status == LiveGameStatus.rebuypause,
-        active = game.activePlayers.length,
-        total = game.activePlayers.length + game.eliminatedPlayers.length,
-        average = Formatters.averageStack(
-          game.totalChipsInPlay,
-          game.activePlayers.length,
-        ) {
+    : level = game.currentLevelData,
+      next = game.nextLevelData,
+      isBreak = game.status == LiveGameStatus.rebuypause,
+      active = game.activePlayers.length,
+      total = game.activePlayers.length + game.eliminatedPlayers.length,
+      average = Formatters.averageStack(
+        game.totalChipsInPlay,
+        game.activePlayers.length,
+      ) {
     for (int i = 0; i < game.currentLevel - 1; i++) {
       if (i < game.structure.levels.length) {
         totalSeconds += game.structure.levels[i].durationMins * 60;
@@ -139,8 +140,8 @@ class _GameValues {
     progress = level == null
         ? 0
         : ((levelSeconds - game.currentSecondsRemaining(offset)) / levelSeconds)
-        .clamp(0.0, 1.0)
-        .toDouble();
+              .clamp(0.0, 1.0)
+              .toDouble();
   }
 
   final LiveGame game;
@@ -232,15 +233,28 @@ class _WideLayout extends StatelessWidget {
                     children: [
                       // Drastically reduced vertical spacing to maximize timer space
                       SizedBox(height: (showStatusChip ? 12 : 4) * s),
-                      Text(
-                        data.isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.mono(
-                          size: 40 * s,
-                          weight: FontWeight.w400,
-                          color: TournamentDisplayBlock._red,
-                          letterSpacing: 5 * s,
-                          height: 1,
+                      Semantics(
+                        liveRegion: true,
+                        excludeSemantics: true,
+                        label: data.isBreak
+                            ? 'Break'
+                            : VoiceService.levelChangeMessage(
+                                level: game.currentLevel,
+                                sb: data.level?.sb ?? 0,
+                                bb: data.level?.bb ?? 0,
+                                ante: data.level?.ante,
+                                durationMins: data.level?.durationMins ?? 0,
+                              ),
+                        child: Text(
+                          data.isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.mono(
+                            size: 40 * s,
+                            weight: FontWeight.w400,
+                            color: TournamentDisplayBlock._red,
+                            letterSpacing: 5 * s,
+                            height: 1,
+                          ),
                         ),
                       ),
                       SizedBox(height: 8 * s), // Reduced from 16
@@ -304,7 +318,9 @@ class _WideLayout extends StatelessWidget {
                     game: game,
                     builder: (context, remaining) {
                       final duration = data.level?.durationMins ?? 1;
-                      final progress = (duration * 60) > 0 ? 1.0 - (remaining / (duration * 60)) : 0.0;
+                      final progress = (duration * 60) > 0
+                          ? 1.0 - (remaining / (duration * 60))
+                          : 0.0;
                       return _ProgressBar(
                         value: progress.clamp(0.0, 1.0),
                         height: 14 * s,
@@ -406,7 +422,8 @@ class _PlainNumberTimer extends StatelessWidget {
       weight: FontWeight.w400,
       color: danger ? TournamentDisplayBlock._red : AppColors.foreground,
       letterSpacing: -fontSize * .035,
-      height: 1.1, // <-- FIX: Increased slightly so native bounding box is generous
+      height:
+          1.1, // <-- FIX: Increased slightly so native bounding box is generous
     );
 
     return Center(
@@ -459,7 +476,9 @@ class _BlindValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = highlighted ? TournamentDisplayBlock._red : AppColors.foreground;
+    final color = highlighted
+        ? TournamentDisplayBlock._red
+        : AppColors.foreground;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -582,18 +601,18 @@ class _StatValue extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: redSlash && slash >= 0
                 ? Text.rich(
-              TextSpan(
-                style: valueStyle,
-                children: [
-                  TextSpan(text: value.substring(0, slash)),
-                  TextSpan(
-                    text: '/',
-                    style: TextStyle(color: TournamentDisplayBlock._red),
-                  ),
-                  TextSpan(text: value.substring(slash + 1)),
-                ],
-              ),
-            )
+                    TextSpan(
+                      style: valueStyle,
+                      children: [
+                        TextSpan(text: value.substring(0, slash)),
+                        TextSpan(
+                          text: '/',
+                          style: TextStyle(color: TournamentDisplayBlock._red),
+                        ),
+                        TextSpan(text: value.substring(slash + 1)),
+                      ],
+                    ),
+                  )
                 : Text(value, maxLines: 1, style: valueStyle),
           ),
         ],
@@ -633,7 +652,10 @@ class _NextLevelValue extends StatelessWidget {
         if (next == null)
           Text(
             'END',
-            style: AppTypography.mono(size: 28 * scale, color: AppColors.foreground),
+            style: AppTypography.mono(
+              size: 28 * scale,
+              color: AppColors.foreground,
+            ),
           )
         else
           FittedBox(
@@ -847,13 +869,26 @@ class _CompactLayout extends StatelessWidget {
               const _HorizontalLine(),
               const SizedBox(height: 18),
             ],
-            Text(
-              data.isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
-              textAlign: TextAlign.center,
-              style: AppTypography.mono(
-                size: 17,
-                color: TournamentDisplayBlock._red,
-                letterSpacing: 3,
+            Semantics(
+              liveRegion: true,
+              excludeSemantics: true,
+              label: data.isBreak
+                  ? 'Break'
+                  : VoiceService.levelChangeMessage(
+                      level: game.currentLevel,
+                      sb: data.level?.sb ?? 0,
+                      bb: data.level?.bb ?? 0,
+                      ante: data.level?.ante,
+                      durationMins: data.level?.durationMins ?? 0,
+                    ),
+              child: Text(
+                data.isBreak ? 'BREAK' : 'LEVEL ${game.currentLevel}',
+                textAlign: TextAlign.center,
+                style: AppTypography.mono(
+                  size: 17,
+                  color: TournamentDisplayBlock._red,
+                  letterSpacing: 3,
+                ),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -909,11 +944,10 @@ class _CompactLayout extends StatelessWidget {
               game: game,
               builder: (context, remaining) {
                 final duration = data.level?.durationMins ?? 1;
-                final progress = (duration * 60) > 0 ? 1.0 - (remaining / (duration * 60)) : 0.0;
-                return _ProgressBar(
-                  value: progress.clamp(0.0, 1.0),
-                  height: 5,
-                );
+                final progress = (duration * 60) > 0
+                    ? 1.0 - (remaining / (duration * 60))
+                    : 0.0;
+                return _ProgressBar(value: progress.clamp(0.0, 1.0), height: 5);
               },
             ),
             const SizedBox(height: 18),
@@ -957,23 +991,22 @@ class _CompactLayout extends StatelessWidget {
                   return Wrap(
                     children: [
                       for (
-                      int i = 0;
-                      i < game.structure.prizes.length && i < 4;
-                      i++
+                        int i = 0;
+                        i < game.structure.prizes.length && i < 4;
+                        i++
                       )
                         SizedBox(
                           width: narrow
                               ? constraints.maxWidth
                               : constraints.maxWidth / 2,
                           child: ConstrainedBox(
-                            constraints:
-                                const BoxConstraints(minHeight: 70),
+                            constraints: const BoxConstraints(minHeight: 70),
                             child: _PayoutValue(
                               label: const ['1ST', '2ND', '3RD', '4TH'][i],
                               value: showPayoutAmounts
                                   ? Formatters.chips(
-                                game.structure.prizes[i].amount,
-                              )
+                                      game.structure.prizes[i].amount,
+                                    )
                                   : '—',
                               scale: .55,
                             ),
@@ -1049,18 +1082,18 @@ class _CompactStat extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: redSlash && slash >= 0
                 ? Text.rich(
-              TextSpan(
-                style: style,
-                children: [
-                  TextSpan(text: value.substring(0, slash)),
-                  TextSpan(
-                    text: '/',
-                    style: TextStyle(color: TournamentDisplayBlock._red),
-                  ),
-                  TextSpan(text: value.substring(slash + 1)),
-                ],
-              ),
-            )
+                    TextSpan(
+                      style: style,
+                      children: [
+                        TextSpan(text: value.substring(0, slash)),
+                        TextSpan(
+                          text: '/',
+                          style: TextStyle(color: TournamentDisplayBlock._red),
+                        ),
+                        TextSpan(text: value.substring(slash + 1)),
+                      ],
+                    ),
+                  )
                 : Text(value, style: style),
           ),
         ],
@@ -1138,7 +1171,8 @@ class _StatusSpade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logoPath = 'assets/logo_${AppColors.currentPalette.id.replaceAll("-", "_")}.png';
+    final logoPath =
+        'assets/logo_${AppColors.currentPalette.id.replaceAll("-", "_")}.png';
     return Image.asset(
       logoPath,
       width: width,

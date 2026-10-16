@@ -68,12 +68,38 @@ class VoiceService {
     if (n < 0) return 'minus ${numberToWords(-n)}';
     if (n == 0) return 'zero';
     const small = [
-      '', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
-      'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
-      'seventeen', 'eighteen', 'nineteen'
+      '',
+      'one',
+      'two',
+      'three',
+      'four',
+      'five',
+      'six',
+      'seven',
+      'eight',
+      'nine',
+      'ten',
+      'eleven',
+      'twelve',
+      'thirteen',
+      'fourteen',
+      'fifteen',
+      'sixteen',
+      'seventeen',
+      'eighteen',
+      'nineteen',
     ];
     const tens = [
-      '', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'
+      '',
+      '',
+      'twenty',
+      'thirty',
+      'forty',
+      'fifty',
+      'sixty',
+      'seventy',
+      'eighty',
+      'ninety',
     ];
     if (n < 20) return small[n];
     if (n < 100) {
@@ -93,6 +119,35 @@ class VoiceService {
     return n.toString();
   }
 
+  /// Canonical level-change copy shared by TTS, the announcement feed and
+  /// screen-reader live regions (spec §B4 rule 14, Addendum 2 #2).
+  static String levelChangeMessage({
+    required int level,
+    required int sb,
+    required int bb,
+    int? ante,
+    required int durationMins,
+  }) {
+    final anteText = ante != null && ante > 0
+        ? ', ante ${numberToWords(ante)}'
+        : '';
+    return 'Level ${numberToWords(level)}. '
+        'Small blind ${numberToWords(sb)}, big blind ${numberToWords(bb)}'
+        '$anteText. Duration ${numberToWords(durationMins)} minutes.';
+  }
+
+  /// Canonical one-minute copy. The final generated level has no successor,
+  /// so that edge case truthfully stops after the warning sentence.
+  static String oneMinuteMessage({int? nextSb, int? nextBb, int? nextAnte}) {
+    if (nextSb == null || nextBb == null) return 'One minute left.';
+    final anteText = nextAnte != null && nextAnte > 0
+        ? ', ante ${numberToWords(nextAnte)}'
+        : '';
+    return 'One minute left. Next level: small blind '
+        '${numberToWords(nextSb)}, big blind ${numberToWords(nextBb)}'
+        '$anteText.';
+  }
+
   /// Plays a chime sound before an announcement (§E11).
   Future<void> playChime() async {
     if (!shouldAnnounce) return;
@@ -102,7 +157,10 @@ class VoiceService {
   }
 
   /// Announces a 5-minute warning before a level or break ends.
-  Future<void> announceFiveMinuteWarning(int level, {bool isBreak = false}) async {
+  Future<void> announceFiveMinuteWarning(
+    int level, {
+    bool isBreak = false,
+  }) async {
     if (!shouldAnnounce) return;
     await playChime();
     final levelW = numberToWords(level);
@@ -118,18 +176,19 @@ class VoiceService {
     bool isBreak = false,
     int? nextSb,
     int? nextBb,
+    int? nextAnte,
   }) async {
     if (!shouldAnnounce) return;
     await playChime();
-    final levelW = numberToWords(level);
     String message;
     if (isBreak) {
       message = 'One minute remaining in break.';
-    } else if (nextSb != null && nextBb != null) {
-      message =
-          'One minute remaining in Level $levelW. Next blinds ${numberToWords(nextSb)} and ${numberToWords(nextBb)}.';
     } else {
-      message = 'One minute remaining in Level $levelW.';
+      message = oneMinuteMessage(
+        nextSb: nextSb,
+        nextBb: nextBb,
+        nextAnte: nextAnte,
+      );
     }
     await speak(message);
   }
@@ -140,14 +199,19 @@ class VoiceService {
     required int sb,
     required int bb,
     int? ante,
+    required int durationMins,
   }) async {
     if (!shouldAnnounce) return;
     await playChime();
-    final levelW = numberToWords(level);
-    final sbW = numberToWords(sb);
-    final bbW = numberToWords(bb);
-    final anteText = ante != null && ante > 0 ? ', ante ${numberToWords(ante)}' : '';
-    await speak('Level $levelW. Blinds $sbW and $bbW$anteText.');
+    await speak(
+      levelChangeMessage(
+        level: level,
+        sb: sb,
+        bb: bb,
+        ante: ante,
+        durationMins: durationMins,
+      ),
+    );
   }
 
   /// Announces the start of a break with chime.

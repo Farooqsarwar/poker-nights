@@ -66,7 +66,9 @@ Future<void> registerGoogleFonts() async {
   if (!fontFile.existsSync()) return;
 
   final regBytes = fontFile.readAsBytesSync();
-  final boldBytes = boldFile.existsSync() ? boldFile.readAsBytesSync() : regBytes;
+  final boldBytes = boldFile.existsSync()
+      ? boldFile.readAsBytesSync()
+      : regBytes;
 
   final fontNames = [
     'SpaceGrotesk',
@@ -84,17 +86,41 @@ Future<void> registerGoogleFonts() async {
 
   for (final name in fontNames) {
     final loader = FontLoader(name);
-    final bytes = name.contains('bold') || name.contains('700') || name.contains('600') ? boldBytes : regBytes;
+    final bytes =
+        name.contains('bold') || name.contains('700') || name.contains('600')
+        ? boldBytes
+        : regBytes;
     loader.addFont(Future.value(ByteData.view(bytes.buffer)));
     await loader.load();
   }
 }
 
 AppProvider createMockProvider() {
-  const stats = UserStats(played: 14, wins: 4, podium: 8, avgFinish: 2.8, knockouts: 12);
-  const host = AppUser(id: 'u1', name: 'Alex Morgan', email: 'alex@pokernight.app', isAdmin: true, stats: stats);
+  const stats = UserStats(
+    played: 14,
+    wins: 4,
+    podium: 8,
+    avgFinish: 2.8,
+    knockouts: 12,
+  );
+  const host = AppUser(
+    id: 'u1',
+    name: 'Alex Morgan',
+    email: 'alex@pokernight.app',
+    isAdmin: true,
+    stats: stats,
+  );
 
-  final names = ['Alex M.', 'Marcus L.', 'Ava R.', 'Devi K.', 'Jordan P.', 'Chris T.', 'Sam B.', 'Taylor W.'];
+  final names = [
+    'Alex M.',
+    'Marcus L.',
+    'Ava R.',
+    'Devi K.',
+    'Jordan P.',
+    'Chris T.',
+    'Sam B.',
+    'Taylor W.',
+  ];
   final players = [
     for (var i = 0; i < names.length; i++)
       Player(
@@ -181,8 +207,20 @@ AppProvider createMockProvider() {
     ownerId: 'u1',
     members: [
       host,
-      const AppUser(id: 'u2', name: 'Marcus L.', email: 'marcus@test.com', isAdmin: false, stats: stats),
-      const AppUser(id: 'u3', name: 'Ava R.', email: 'ava@test.com', isAdmin: false, stats: stats),
+      const AppUser(
+        id: 'u2',
+        name: 'Marcus L.',
+        email: 'marcus@test.com',
+        isAdmin: false,
+        stats: stats,
+      ),
+      const AppUser(
+        id: 'u3',
+        name: 'Ava R.',
+        email: 'ava@test.com',
+        isAdmin: false,
+        stats: stats,
+      ),
     ],
     games: [game],
     chat: const [],
@@ -207,9 +245,30 @@ AppProvider createMockProvider() {
     isCompleted: false,
     startTime: DateTime.now(),
     players: const [
-      CashPlayer(id: 'u1', name: 'Alex M.', stack: 200, totalBuyIns: 200, buyInCount: 1, cashedOut: 0),
-      CashPlayer(id: 'u2', name: 'Marcus L.', stack: 300, totalBuyIns: 200, buyInCount: 1, cashedOut: 0),
-      CashPlayer(id: 'u3', name: 'Ava R.', stack: 100, totalBuyIns: 200, buyInCount: 1, cashedOut: 0),
+      CashPlayer(
+        id: 'u1',
+        name: 'Alex M.',
+        stack: 200,
+        totalBuyIns: 200,
+        buyInCount: 1,
+        cashedOut: 0,
+      ),
+      CashPlayer(
+        id: 'u2',
+        name: 'Marcus L.',
+        stack: 300,
+        totalBuyIns: 200,
+        buyInCount: 1,
+        cashedOut: 0,
+      ),
+      CashPlayer(
+        id: 'u3',
+        name: 'Ava R.',
+        stack: 100,
+        totalBuyIns: 200,
+        buyInCount: 1,
+        cashedOut: 0,
+      ),
     ],
   );
 
@@ -221,15 +280,25 @@ AppProvider createMockProvider() {
 }
 
 void main() {
+  late Directory outDir;
+
   setUpAll(() async {
     await registerGoogleFonts();
-    final outDir = Directory(r'D:\StudioProjects\poker_night\doc\spec_mappings\code_screens');
-    if (!outDir.existsSync()) outDir.createSync(recursive: true);
+    outDir = await Directory.systemTemp.createTemp(
+      'poker_nights_code_screens_',
+    );
+  });
+
+  tearDownAll(() async {
+    if (await outDir.exists()) await outDir.delete(recursive: true);
   });
 
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.navigation, (MethodCall methodCall) async => null);
+        .setMockMethodCallHandler(
+          SystemChannels.navigation,
+          (MethodCall methodCall) async => null,
+        );
     AppColors.currentPalette = ThemePalettes.forId('red');
     RecoveryService.enabled = false;
     FlutterError.onError = (details) {
@@ -361,15 +430,21 @@ void main() {
 
       await t.pump(const Duration(milliseconds: 100));
 
-      final boundary = repaintKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      final boundary =
+          repaintKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
       if (boundary != null) {
         final image = await boundary.toImage(pixelRatio: 1.0);
         await t.runAsync(() async {
-          final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+          final byteData = await image.toByteData(
+            format: ui.ImageByteFormat.png,
+          );
           image.dispose();
           if (byteData != null) {
             final pngBytes = byteData.buffer.asUint8List();
-            final outFile = File('D:/StudioProjects/poker_night/doc/spec_mappings/code_screens/$key.png');
+            final outFile = File(
+              '${outDir.path}${Platform.pathSeparator}$key.png',
+            );
             outFile.writeAsBytesSync(pngBytes);
             print('  [CODE TO PNG] $key.png (${pngBytes.length} bytes)');
           }

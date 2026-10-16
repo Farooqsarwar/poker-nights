@@ -1000,6 +1000,11 @@ class FirebaseRepository {
         'tableSettings': tableSettingsToMap(settings),
       });
 
+  Future<void> updateGroupLearningOptOut(String gid, bool optOut) => _db
+      .collection('groups')
+      .doc(gid)
+      .update({'learningOptOut': optOut});
+
   /// B10: points the group at one of the owner's saved chip sets.
   ///
   /// Passing null clears the pointer, which is what the Standard box on the

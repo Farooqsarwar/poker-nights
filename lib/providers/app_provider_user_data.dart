@@ -24,50 +24,58 @@ extension AppProviderUserData on AppProvider {
     loadPremiumTier();
 
     _groupsSub?.cancel();
-    _groupsSub = _repo.groupsIndexStream(uid).listen((rows) {
-      // Rebuild from the lightweight index, but keep the already-loaded rich
-      // bundle for the selected group (its members/games) so the sidebar count
-      // doesn't flip back to 0 on every index re-delivery — apply the index's
-      // pinned/name/icon on top.
-      _groups = [
-        for (final r in rows)
-          if (r.groupId == _currentGroupId &&
-              _currentGroup.id == r.groupId &&
-              _currentGroup.members.isNotEmpty)
-            _currentGroup.copyWith(
-              name: r.name.isNotEmpty ? r.name : null,
-              icon: r.icon,
-              pinned: r.pinned,
-            )
-          else
-            _groupFromMembership(r),
-      ];
-      // Additionally keep live member rosters for every group so home/sidebar
-      // counts stay real-time even when no rich bundle is loaded yet.
-      _syncGroupMembersSubs();
-      // Mirror every group's notification outbox into this user's inbox
-      // (free-plan fan-out — replaces the Cloud Function).
-      _syncGroupOutboxSubs();
-      // First group after sign-in is auto-selected (pinned first, then
-      // alphabetical — same ordering the sidebar uses).
-      if (_currentGroupId == null && rows.isNotEmpty) {
-        final sorted = [...rows]
-          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-        sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-        _selectGroup(sorted.first.groupId);
-      }
-      // The index has loaded; if it picked a group, chain readiness to that
-      // group's bundle so callers land on a populated dashboard.
-      if (_currentGroupId != null) {
-        groupReady.then((_) => bootstrapDone());
-      } else {
-        bootstrapDone();
-      }
-      if (!_disposed) notifyListeners();
-    }, onError: (Object e) {
-      debugPrint('groupsIndex stream error: $e');
-      bootstrapDone();
-    });
+    _groupsSub = _repo
+        .groupsIndexStream(uid)
+        .listen(
+          (rows) {
+            // Rebuild from the lightweight index, but keep the already-loaded rich
+            // bundle for the selected group (its members/games) so the sidebar count
+            // doesn't flip back to 0 on every index re-delivery — apply the index's
+            // pinned/name/icon on top.
+            _groups = [
+              for (final r in rows)
+                if (r.groupId == _currentGroupId &&
+                    _currentGroup.id == r.groupId &&
+                    _currentGroup.members.isNotEmpty)
+                  _currentGroup.copyWith(
+                    name: r.name.isNotEmpty ? r.name : null,
+                    icon: r.icon,
+                    pinned: r.pinned,
+                  )
+                else
+                  _groupFromMembership(r),
+            ];
+            // Additionally keep live member rosters for every group so home/sidebar
+            // counts stay real-time even when no rich bundle is loaded yet.
+            _syncGroupMembersSubs();
+            // Mirror every group's notification outbox into this user's inbox
+            // (free-plan fan-out — replaces the Cloud Function).
+            _syncGroupOutboxSubs();
+            // First group after sign-in is auto-selected (pinned first, then
+            // alphabetical — same ordering the sidebar uses).
+            if (_currentGroupId == null && rows.isNotEmpty) {
+              final sorted = [...rows]
+                ..sort(
+                  (a, b) =>
+                      a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+                );
+              sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+              _selectGroup(sorted.first.groupId);
+            }
+            // The index has loaded; if it picked a group, chain readiness to that
+            // group's bundle so callers land on a populated dashboard.
+            if (_currentGroupId != null) {
+              groupReady.then((_) => bootstrapDone());
+            } else {
+              bootstrapDone();
+            }
+            if (!_disposed) notifyListeners();
+          },
+          onError: (Object e) {
+            debugPrint('groupsIndex stream error: $e');
+            bootstrapDone();
+          },
+        );
 
     _presetsSub?.cancel();
     _presetsSub = _repo.presetsStream(uid).listen((list) {
@@ -75,8 +83,7 @@ extension AppProviderUserData on AppProvider {
         ..clear()
         ..addAll(list);
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('presets stream error: $e'));
+    }, onError: (Object e) => debugPrint('presets stream error: $e'));
 
     _chipSetsSub?.cancel();
     _chipSetsSub = _repo.chipSetsStream(uid).listen((list) {
@@ -84,16 +91,14 @@ extension AppProviderUserData on AppProvider {
         ..clear()
         ..addAll(list);
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('chipSets stream error: $e'));
+    }, onError: (Object e) => debugPrint('chipSets stream error: $e'));
 
     _notificationsSub?.cancel();
     _notificationsSub = _repo.notificationsStream(uid).listen((list) {
       _deliverBrowserNotifications(list);
       _notifications = list;
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('notifications stream error: $e'));
+    }, onError: (Object e) => debugPrint('notifications stream error: $e'));
 
     // Lifetime stats: recompute whenever a result lands (this device wrote it
     // or another device did — same source of truth either way).
@@ -106,22 +111,19 @@ extension AppProviderUserData on AppProvider {
         _pushStatsSummaries();
       }
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('results stream error: $e'));
+    }, onError: (Object e) => debugPrint('results stream error: $e'));
 
     _soloSub?.cancel();
     _soloSub = _repo.soloSessionsStream(uid).listen((list) {
       _soloHistory = list;
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('soloGames stream error: $e'));
+    }, onError: (Object e) => debugPrint('soloGames stream error: $e'));
 
     _soloTournamentsSub?.cancel();
     _soloTournamentsSub = _repo.soloTournamentsStream(uid).listen((list) {
       _soloTournaments = list;
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('soloTournaments stream error: $e'));
+    }, onError: (Object e) => debugPrint('soloTournaments stream error: $e'));
 
     // Free-plan: accept pending admin-by-email invites by self-writing the
     // user's own membership index (there is no Cloud Function to mirror it).
@@ -132,16 +134,34 @@ extension AppProviderUserData on AppProvider {
         if (gid == null) continue;
         if (_groups.any((g) => g.id == gid)) continue;
         final joinCode = invite['joinCode'] as String? ?? '';
-        unawaited(_repo.joinGroup(gid, _user!, groupName: invite['name'] as String? ?? '', groupIcon: invite['icon'] as String? ?? '', joinCode: joinCode).catchError((Object e) { debugPrint('accept invite failed: $e'); return null; }));
-        final inviteId = invite['id'] as String? ?? invite['__inviteId'] as String?;
+        unawaited(
+          _repo
+              .joinGroup(
+                gid,
+                _user!,
+                groupName: invite['name'] as String? ?? '',
+                groupIcon: invite['icon'] as String? ?? '',
+                joinCode: joinCode,
+              )
+              .catchError((Object e) {
+                debugPrint('accept invite failed: $e');
+                return null;
+              }),
+        );
+        final inviteId =
+            invite['id'] as String? ?? invite['__inviteId'] as String?;
         if (inviteId != null) {
-          unawaited(_repo.removePendingInvite(inviteId).catchError(
-              (Object e) => debugPrint('remove invite failed: $e')));
+          unawaited(
+            _repo
+                .removePendingInvite(inviteId)
+                .catchError(
+                  (Object e) => debugPrint('remove invite failed: $e'),
+                ),
+          );
         }
       }
       if (!_disposed) notifyListeners();
-    },
-        onError: (Object e) => debugPrint('pendingInvites stream error: $e'));
+    }, onError: (Object e) => debugPrint('pendingInvites stream error: $e'));
   }
 
   /// Mirrors the lifetime stats summary onto this user's roster row in every
@@ -157,8 +177,11 @@ extension AppProviderUserData on AppProvider {
     if (key == _lastPushedStatsKey) return;
     _lastPushedStatsKey = key;
     for (final g in _groups) {
-      unawaited(_repo.saveMemberStats(g.id, uid, stats)
-          .catchError((Object e) => debugPrint('saveMemberStats failed: $e')));
+      unawaited(
+        _repo
+            .saveMemberStats(g.id, uid, stats)
+            .catchError((Object e) => debugPrint('saveMemberStats failed: $e')),
+      );
     }
   }
 
@@ -188,8 +211,7 @@ extension AppProviderUserData on AppProvider {
     final uid = _user?.id;
     if (uid == null || game.finishOrder.isEmpty) return;
     if (_resultsRecorded.contains(game.id)) return;
-    final me =
-        game.players.where((p) => p.id == uid && !p.isGuest).firstOrNull;
+    final me = game.players.where((p) => p.id == uid && !p.isGuest).firstOrNull;
     if (me == null) return;
     final index = game.finishOrder.indexOf(uid);
     if (index == -1) return;
@@ -223,31 +245,31 @@ extension AppProviderUserData on AppProvider {
       return;
     }
     if (_resultsRecorded.contains(game.id)) return;
-    final me =
-        game.players.where((p) => p.id == uid && !p.isGuest).firstOrNull;
+    final me = game.players.where((p) => p.id == uid && !p.isGuest).firstOrNull;
     if (me == null) return;
     final index = game.finishOrder.indexOf(uid);
     if (index == -1) return;
     _resultsRecorded.add(game.id);
-    unawaited(_repo
-        .saveGameResult(
-          uid,
-          game.id,
-          GameResultRow(
-            gameId: game.id,
-            groupId: game.groupId,
-            position: finishPositionFromIndex(
-              index: index,
-              listLength: game.finishOrder.length,
+    unawaited(
+      _repo
+          .saveGameResult(
+            uid,
+            game.id,
+            GameResultRow(
+              gameId: game.id,
+              groupId: game.groupId,
+              position: finishPositionFromIndex(
+                index: index,
+                listLength: game.finishOrder.length,
+              ),
+              playerCount: game.finishOrder.length,
+              knockouts: me.knockouts,
+              finishedAt: DateTime.now(),
+              eliminatedAtLevel: me.eliminatedAtLevel,
             ),
-            playerCount: game.finishOrder.length,
-            knockouts: me.knockouts,
-            finishedAt: DateTime.now(),
-            eliminatedAtLevel: me.eliminatedAtLevel,
-          ),
-        )
-        .catchError(
-            (Object e) => debugPrint('saveGameResult failed: $e')));
+          )
+          .catchError((Object e) => debugPrint('saveGameResult failed: $e')),
+    );
   }
 
   /// Cancels all user/group-scoped subscriptions and clears derived state.
@@ -397,65 +419,81 @@ extension AppProviderUserData on AppProvider {
       markReady();
       return;
     }
-    _bundleSub = _repo.groupBundleStream(gid).listen((g) {
-      // _setGroup (not a bare `_currentGroup = g`) so the full group — members,
-      // games, code — is also written into `_groups`, which backs the sidebar
-      // / drawer / orderedGroups (they'd otherwise show the lightweight index
-      // row with 0 members).
-      // Keep the member's own not-yet-acked RSVP visible on the hub's game
-      // cards too, not just the game screen (see [_pendingOwnRsvp]).
-      final hydrated = _pendingOwnRsvp.isEmpty
-          ? g
-          : g.copyWith(
-              games: g.games
-                  .map((gm) => _withPendingCheckInOverlay(_withOwnRsvpOverlay(gm)))
-                  .toList());
-      _setGroup(hydrated);
+    _bundleSub = _repo
+        .groupBundleStream(gid)
+        .listen(
+          (g) {
+            // _setGroup (not a bare `_currentGroup = g`) so the full group — members,
+            // games, code — is also written into `_groups`, which backs the sidebar
+            // / drawer / orderedGroups (they'd otherwise show the lightweight index
+            // row with 0 members).
+            // Keep the member's own not-yet-acked RSVP visible on the hub's game
+            // cards too, not just the game screen (see [_pendingOwnRsvp]).
+            final hydrated = _pendingOwnRsvp.isEmpty
+                ? g
+                : g.copyWith(
+                    games: g.games
+                        .map(
+                          (gm) => _withPendingCheckInOverlay(
+                            _withOwnRsvpOverlay(gm),
+                          ),
+                        )
+                        .toList(),
+                  );
+            _setGroup(hydrated);
 
-      // The bundle is the first place a member's role becomes known, so retire
-      // any stale local crash-resume snapshot here too.
-      _dropRecoveryIfNotAuthority();
-      // F-001 Fix: Keep the currently viewed game screen in sync for members
-      // (and admins receiving RSVPs/Check-ins) without clobbering the admin's local timer.
-      if (_currentGame != null) {
-        if (isAdmin && (_pendingGameSave || _localGameDirty || _restoredFromRecovery)) {
-          // Do not overwrite local edits with stale bundle data during debounce or recovery.
-        } else {
-          final updatedGame = hydrated.games.where((x) => x.id == _currentGame!.id).firstOrNull;
-          if (updatedGame != null) {
-            if (isAdmin) {
-              // Same restore the game-doc stream applies, so both sources
-              // produce an identical game for identical server state. Without
-              // it the bundle copy (scrubbed) and the doc copy (restored)
-              // alternated, the content signature flipped on every emit and
-              // the admin stayed permanently "dirty" — which is what stopped
-              // members' RSVPs from ever reaching the admin's screen.
-              _currentGame = _restoreAdminPrivateFields(updatedGame).copyWith(
-                secondsRemaining: _currentGame!.secondsRemaining,
-                timerRunning: _currentGame!.timerRunning,
-                levelEndTime: _currentGame!.levelEndTime,
-              );
-            } else {
-              _currentGame = updatedGame;
+            // The bundle is the first place a member's role becomes known, so retire
+            // any stale local crash-resume snapshot here too.
+            _dropRecoveryIfNotAuthority();
+            // F-001 Fix: Keep the currently viewed game screen in sync for members
+            // (and admins receiving RSVPs/Check-ins) without clobbering the admin's local timer.
+            if (_currentGame != null) {
+              if (isAdmin &&
+                  (_pendingGameSave ||
+                      _localGameDirty ||
+                      _restoredFromRecovery)) {
+                // Do not overwrite local edits with stale bundle data during debounce or recovery.
+              } else {
+                final updatedGame = hydrated.games
+                    .where((x) => x.id == _currentGame!.id)
+                    .firstOrNull;
+                if (updatedGame != null) {
+                  if (isAdmin) {
+                    // Same restore the game-doc stream applies, so both sources
+                    // produce an identical game for identical server state. Without
+                    // it the bundle copy (scrubbed) and the doc copy (restored)
+                    // alternated, the content signature flipped on every emit and
+                    // the admin stayed permanently "dirty" — which is what stopped
+                    // members' RSVPs from ever reaching the admin's screen.
+                    _currentGame = _restoreAdminPrivateFields(updatedGame)
+                        .copyWith(
+                          secondsRemaining: _currentGame!.secondsRemaining,
+                          timerRunning: _currentGame!.timerRunning,
+                          levelEndTime: _currentGame!.levelEndTime,
+                        );
+                  } else {
+                    _currentGame = updatedGame;
+                  }
+                }
+              }
             }
-          }
-        }
-      }
-      _bundleLoaded = true;
-      markReady();
-      _syncReportsSub(gid);
-      _syncImportedSub(gid);
-      _syncInvitePreview(g);
-      // Catch results of games this device never followed live (e.g. the
-      // player sat out or never opened the game screen).
-      for (final finished in g.pastGames) {
-        _maybeRecordOwnResult(finished);
-      }
-      if (!_disposed) notifyListeners();
-    }, onError: (Object e) {
-      debugPrint('groupBundle stream error: $e');
-      markReady();
-    });
+            _bundleLoaded = true;
+            markReady();
+            _syncReportsSub(gid);
+            _syncImportedSub(gid);
+            _syncInvitePreview(g);
+            // Catch results of games this device never followed live (e.g. the
+            // player sat out or never opened the game screen).
+            for (final finished in g.pastGames) {
+              _maybeRecordOwnResult(finished);
+            }
+            if (!_disposed) notifyListeners();
+          },
+          onError: (Object e) {
+            debugPrint('groupBundle stream error: $e');
+            markReady();
+          },
+        );
     if (row?.ownerId == _user?.id) {
       _cashSub = _repo.completedCashSessionsStream(gid).listen((list) {
         _cashHistory = list;
@@ -470,22 +508,21 @@ extension AppProviderUserData on AppProvider {
   bool get groupBundleLoading => _currentGroupId != null && !_bundleLoaded;
 
   /// Completes once the selected group's bundle has loaded (or errored).
-  Future<void> get groupReady =>
-      _bundleReady?.future ?? Future<void>.value();
+  Future<void> get groupReady => _bundleReady?.future ?? Future<void>.value();
 
   Group _groupFromMembership(GroupMembership r) => Group(
-        id: r.groupId,
-        name: r.name,
-        joinCode: '',
-        ownerId: '',
-        members: const [],
-        games: const [],
-        chat: const [],
-        polls: const [],
-        notifications: const [],
-        icon: r.icon,
-        pinned: r.pinned,
-      );
+    id: r.groupId,
+    name: r.name,
+    joinCode: '',
+    ownerId: '',
+    members: const [],
+    games: const [],
+    chat: const [],
+    polls: const [],
+    notifications: const [],
+    icon: r.icon,
+    pinned: r.pinned,
+  );
 
   /// Subscribes each group's notification outbox and mirrors unseen items into
   /// the signed-in user's own inbox — the free-plan replacement for a Cloud
@@ -503,23 +540,25 @@ extension AppProviderUserData on AppProvider {
       if (_groupOutboxSubs.containsKey(g.id)) continue;
       final gid = g.id;
       _mirrorCursors[gid] ??= -1;
-      _groupOutboxSubs[gid] = _repo.groupOutboxStream(gid).listen(
-        (docs) => _mirrorOutbox(gid, docs),
-        onError: (Object e) {
-          debugPrint('outbox stream error: $e');
-          // A brand-new listener can reach the server just ahead of a
-          // just-committed joinGroup batch (the index doc that triggered
-          // this subscription arrives via local-cache optimism before the
-          // server has the matching membership row), so isMember(gid) is
-          // transiently false. Retry once the write has had time to land.
-          if (_isRetriablePermissionError(e)) {
-            _groupOutboxSubs.remove(gid)?.cancel();
-            Future.delayed(const Duration(milliseconds: 800), () {
-              if (!_disposed) _syncGroupOutboxSubs();
-            });
-          }
-        },
-      );
+      _groupOutboxSubs[gid] = _repo
+          .groupOutboxStream(gid)
+          .listen(
+            (docs) => _mirrorOutbox(gid, docs),
+            onError: (Object e) {
+              debugPrint('outbox stream error: $e');
+              // A brand-new listener can reach the server just ahead of a
+              // just-committed joinGroup batch (the index doc that triggered
+              // this subscription arrives via local-cache optimism before the
+              // server has the matching membership row), so isMember(gid) is
+              // transiently false. Retry once the write has had time to land.
+              if (_isRetriablePermissionError(e)) {
+                _groupOutboxSubs.remove(gid)?.cancel();
+                Future.delayed(const Duration(milliseconds: 800), () {
+                  if (!_disposed) _syncGroupOutboxSubs();
+                });
+              }
+            },
+          );
     }
   }
 
@@ -551,9 +590,11 @@ extension AppProviderUserData on AppProvider {
         if (d.updatedAtMillis <= cursor) continue;
         cursor = max(cursor, d.updatedAtMillis);
         if (!d.isFor(uid)) continue;
-        unawaited(_repo
-            .mirrorInboxNotification(uid, d.toAppNotification(read: false))
-            .catchError((Object e) => debugPrint('mirror inbox failed: $e')));
+        unawaited(
+          _repo
+              .mirrorInboxNotification(uid, d.toAppNotification(read: false))
+              .catchError((Object e) => debugPrint('mirror inbox failed: $e')),
+        );
       }
     }
 
@@ -579,23 +620,28 @@ extension AppProviderUserData on AppProvider {
     for (final g in _groups) {
       if (_groupMembersSubs.containsKey(g.id)) continue;
       final gid = g.id;
-      _groupMembersSubs[gid] =
-          _repo.groupMembersStream(gid).listen((members) {
-        final i = _groups.indexWhere((x) => x.id == gid);
-        if (i == -1) return;
-        _groups = [..._groups]..[i] = _groups[i].copyWith(members: members);
-        if (!_disposed) notifyListeners();
-      }, onError: (Object e) {
-        debugPrint('group members stream error: $e');
-        // See _syncGroupOutboxSubs: a fresh listener can lose the race
-        // against the server-side commit of a just-created membership row.
-        if (_isRetriablePermissionError(e)) {
-          _groupMembersSubs.remove(gid)?.cancel();
-          Future.delayed(const Duration(milliseconds: 800), () {
-            if (!_disposed) _syncGroupMembersSubs();
-          });
-        }
-      });
+      _groupMembersSubs[gid] = _repo
+          .groupMembersStream(gid)
+          .listen(
+            (members) {
+              final i = _groups.indexWhere((x) => x.id == gid);
+              if (i == -1) return;
+              _groups = [..._groups]
+                ..[i] = _groups[i].copyWith(members: members);
+              if (!_disposed) notifyListeners();
+            },
+            onError: (Object e) {
+              debugPrint('group members stream error: $e');
+              // See _syncGroupOutboxSubs: a fresh listener can lose the race
+              // against the server-side commit of a just-created membership row.
+              if (_isRetriablePermissionError(e)) {
+                _groupMembersSubs.remove(gid)?.cancel();
+                Future.delayed(const Duration(milliseconds: 800), () {
+                  if (!_disposed) _syncGroupMembersSubs();
+                });
+              }
+            },
+          );
     }
   }
 
@@ -658,7 +704,8 @@ extension AppProviderUserData on AppProvider {
     // Only a conflict if cloud has strictly advanced past local or another
     // device took over the clock authority while this device was offline.
     final cloudIsAhead = cloudGame.revision > _currentGame!.revision;
-    final otherDeviceTookClock = cloudGame.editorDeviceId.isNotEmpty &&
+    final otherDeviceTookClock =
+        cloudGame.editorDeviceId.isNotEmpty &&
         cloudGame.editorDeviceId != _repo.deviceId &&
         cloudGame.revision >= _currentGame!.revision;
 
@@ -729,8 +776,11 @@ extension AppProviderUserData on AppProvider {
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null && id != AppProvider.seedChipSet.id) {
-      unawaited(_repo.saveChipSet(uid, id, name, chips)
-          .catchError((Object e) => debugPrint('saveChipSet failed: $e')));
+      unawaited(
+        _repo
+            .saveChipSet(uid, id, name, chips)
+            .catchError((Object e) => debugPrint('saveChipSet failed: $e')),
+      );
     }
   }
 
@@ -740,8 +790,11 @@ extension AppProviderUserData on AppProvider {
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
-      unawaited(_repo.deleteChipSet(uid, id)
-          .catchError((Object e) => debugPrint('deleteChipSet failed: $e')));
+      unawaited(
+        _repo
+            .deleteChipSet(uid, id)
+            .catchError((Object e) => debugPrint('deleteChipSet failed: $e')),
+      );
     }
   }
 
@@ -750,16 +803,23 @@ extension AppProviderUserData on AppProvider {
   void updateProfile({String? name, String? email}) {
     final current = _user;
     if (current == null) return;
-    final nextName =
-        name?.trim().isNotEmpty == true ? name!.trim() : current.name;
-    final nextEmail =
-        email?.trim().isNotEmpty == true ? email!.trim() : current.email;
+    final nextName = name?.trim().isNotEmpty == true
+        ? name!.trim()
+        : current.name;
+    final nextEmail = email?.trim().isNotEmpty == true
+        ? email!.trim()
+        : current.email;
     _user = current.copyWith(name: nextName, email: nextEmail);
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
-      unawaited(_repo.updateUserProfile(uid, name: nextName, email: nextEmail)
-          .catchError((Object e) => debugPrint('updateUserProfile failed: $e')));
+      unawaited(
+        _repo
+            .updateUserProfile(uid, name: nextName, email: nextEmail)
+            .catchError(
+              (Object e) => debugPrint('updateUserProfile failed: $e'),
+            ),
+      );
     }
   }
 
@@ -772,7 +832,8 @@ extension AppProviderUserData on AppProvider {
   /// members, group chat, or anyone else's results — those are other people's
   /// data that happen to be visible to this user, which is not the same thing
   /// as theirs to export.
-  String exportMyData() { // Fixed: add calls
+  String exportMyData() {
+    // Fixed: add calls
     final u = _user;
     return const JsonEncoder.withIndent('  ').convert({
       'exportedAt': DateTime.now().toUtc().toIso8601String(),
@@ -819,6 +880,21 @@ extension AppProviderUserData on AppProvider {
 
   List<TournamentPreset> get presets => List.unmodifiable(_presets);
 
+  String? get defaultGamePresetId => _defaultGamePresetId;
+
+  TournamentPreset get defaultGamePreset =>
+      presetById(_defaultGamePresetId) ??
+      presetById('starter-freezeout') ??
+      AppProvider.seedPresets.first;
+
+  void setDefaultGamePreset(String? id) {
+    final next = presetById(id) == null ? null : id;
+    if (_defaultGamePresetId == next) return;
+    _defaultGamePresetId = next;
+    _persistPref('defaultGamePresetId', next);
+    if (!_disposed) notifyListeners();
+  }
+
   TournamentPreset? presetById(String? id) {
     if (id == null) return null;
     for (final p in _presets) {
@@ -835,32 +911,44 @@ extension AppProviderUserData on AppProvider {
   int get userSavedPresetCount =>
       _presets.where((p) => !p.id.startsWith('starter-')).length;
 
-  void savePreset(TournamentPreset preset) { // Fixed: 3-free cap
+  bool savePreset(TournamentPreset preset) {
+    // Fixed: 3-free cap
     final idx = _presets.indexWhere((p) => p.id == preset.id);
     if (idx >= 0) {
       _presets[idx] = preset;
     } else {
       if (premiumTier != PremiumTier.premium &&
           userSavedPresetCount >= PremiumBoundary.freeMaxSavedPresets) {
-        return;
+        return false;
       }
       _presets.add(preset);
     }
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
-      unawaited(_repo.savePreset(uid, preset)
-          .catchError((Object e) => debugPrint('savePreset failed: $e')));
+      unawaited(
+        _repo
+            .savePreset(uid, preset)
+            .catchError((Object e) => debugPrint('savePreset failed: $e')),
+      );
     }
+    return true;
   }
 
   void deletePreset(String id) {
     _presets.removeWhere((p) => p.id == id);
+    if (_defaultGamePresetId == id) {
+      _defaultGamePresetId = null;
+      _persistPref('defaultGamePresetId', null);
+    }
     if (!_disposed) notifyListeners();
     final uid = _repo.currentUid;
     if (_backendUp && uid != null) {
-      unawaited(_repo.deletePreset(uid, id)
-          .catchError((Object e) => debugPrint('deletePreset failed: $e')));
+      unawaited(
+        _repo
+            .deletePreset(uid, id)
+            .catchError((Object e) => debugPrint('deletePreset failed: $e')),
+      );
     }
   }
 
@@ -895,5 +983,3 @@ extension AppProviderUserData on AppProvider {
     return scored.take(2).map((e) => e.preset).toList();
   }
 }
-
-

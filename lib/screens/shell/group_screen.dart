@@ -335,7 +335,7 @@ class _GroupScreenState extends State<GroupScreen> {
           Row(
             children: [
               _SecondaryChip(
-                label: 'Presets',
+                label: 'Game presets',
                 onTap: () => context.push(RoutePaths.presets),
               ),
               const SizedBox(width: AppSpacing.sm),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 import '../app/colors.dart';
 import '../app/typography.dart';
@@ -106,8 +107,11 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
     required String initialName,
     required String title,
     required String confirmLabel,
+    bool? startCustom,
   }) async {
     var picked = initialColor;
+    var custom = startCustom ??
+        !kChipPalette.any((entry) => entry.hex == picked.toARGB32());
     final nameController = TextEditingController(text: initialName);
     final dialogInsets = appDialogInsets(context);
 
@@ -128,47 +132,66 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
         title: Text(title, style: AppTypography.bodyLg),
-        content: SizedBox(
-          width: bodyWidth,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Addendum 1 §2 row 2 — the fixed palette of ten named chip
-                // colours, replacing the free colour wheel. The wheel let a
-                // host pick any hue at all (its placeholder suggested "Gold")
-                // and produced swatches matching no real chip; a named set is
-                // also what lets §B5 print the colour's NAME beside it, which
-                // §B4 rule 16 requires because colour must never carry meaning
-                // on its own.
-                StatefulBuilder(
-                  builder: (context, setSwatchState) => Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      for (final entry in kChipPalette)
-                        ChipPaletteSwatch(
-                          entry: entry,
-                          size: swatchSize,
-                          selected: picked.toARGB32() == entry.hex,
-                          onTap: () {
-                            setSwatchState(() {
-                              picked = Color(entry.hex);
-                              nameController.text = entry.name;
-                            });
-                          },
-                        ),
-                    ],
+        content: StatefulBuilder(
+          builder: (context, setDialogState) => SizedBox(
+            width: bodyWidth,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Addendum 1 §2 row 2 — the fixed palette of ten named chip
+                  // colours, replacing the free colour wheel. The wheel let a
+                  // host pick any hue at all (its placeholder suggested "Gold")
+                  // and produced swatches matching no real chip; a named set is
+                  // also what lets §B5 print the colour's NAME beside it, which
+                  // §B4 rule 16 requires because colour must never carry meaning
+                  // on its own.
+                  if (!custom)
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        for (final entry in kChipPalette)
+                          ChipPaletteSwatch(
+                            entry: entry,
+                            size: swatchSize,
+                            selected: picked.toARGB32() == entry.hex,
+                            onTap: () {
+                              setDialogState(() {
+                                picked = Color(entry.hex);
+                                nameController.text = entry.name;
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                  if (custom)
+                    ColorPicker(
+                      pickerColor: picked,
+                      onColorChanged: (color) => picked = color,
+                      enableAlpha: false,
+                      displayThumbColor: true,
+                      paletteType: PaletteType.hueWheel,
+                      pickerAreaHeightPercent: 0.7,
+                      portraitOnly: true,
+                    ),
+                  TextButton.icon(
+                    onPressed: () => setDialogState(() => custom = !custom),
+                    icon: Icon(
+                      custom ? Icons.grid_view : Icons.palette_outlined,
+                    ),
+                    label: Text(custom ? 'Named colours' : 'Custom colour'),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                AppTextField(
-                  controller: nameController,
-                  label: 'Colour name',
-                  placeholder: 'e.g. Red, Blue, Green',
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    key: const Key('custom-chip-colour-name'),
+                    controller: nameController,
+                    label: 'Colour name',
+                    placeholder: 'e.g. Red, Blue, Green',
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -182,9 +205,9 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
               final typed = nameController.text.trim();
               final hexName =
                   '#${picked.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-              Navigator.of(dialogContext).pop(
-                (color: picked, name: typed.isEmpty ? hexName : typed),
-              );
+              Navigator.of(
+                dialogContext,
+              ).pop((color: picked, name: typed.isEmpty ? hexName : typed));
             },
             child: Text(confirmLabel),
           ),
@@ -192,7 +215,6 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
       ),
     );
 
-    nameController.dispose();
     return result;
   }
 
@@ -227,6 +249,7 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
       initialName: '',
       title: 'Pick a chip colour',
       confirmLabel: 'Add colour',
+      startCustom: false,
     );
     if (result == null || !mounted) return;
     setState(() {
@@ -287,9 +310,9 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
             // two colours are not removable.
             onRemove: _chips.length > 2
                 ? () => setState(() {
-                      _chips.removeAt(i);
-                      _emit();
-                    })
+                    _chips.removeAt(i);
+                    _emit();
+                  })
                 : null,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -298,7 +321,9 @@ class _ChipSetEditorState extends State<ChipSetEditor> {
           Text(
             'Two colours share the same value. Give each colour its own '
             'denomination.',
-            style: AppTypography.bodyXs.copyWith(color: AppColors.destructiveText),
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.destructiveText,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
         ],
@@ -406,7 +431,7 @@ class _ChipRow extends StatelessWidget {
                     min: 1,
                     max: 1000,
                     step: 5,
-                    quickSteps: const [25, 50, 100],
+                    stepSizes: const [1, 5, 25, 100],
                     semanticLabel: '${chip.color} chips owned',
                     onChanged: onQuantity,
                   ),

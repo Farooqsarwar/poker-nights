@@ -7,6 +7,8 @@ import '../../app/route_paths.dart';
 import '../../app/typography.dart';
 import '../../constants/app_constants.dart';
 import '../../models/chip_color.dart';
+import '../../models/tournament.dart';
+import '../../models/tournament_format.dart';
 import '../../models/tournament_preset.dart';
 import '../../providers/app_provider.dart';
 import '../../services/payment_service.dart';
@@ -75,7 +77,8 @@ class _PresetsScreenState extends State<PresetsScreen> {
       child: PremiumGate(
         tier: app.premiumTier,
         feature: PremiumFeature.savedPresets,
-        blurb: 'Free covers ${PremiumBoundary.freeMaxSavedPresets} saved '
+        blurb:
+            'Free covers ${PremiumBoundary.freeMaxSavedPresets} saved '
             'presets. Premium removes the limit — save as many tournament '
             'setups as you like.',
         child: const SizedBox.shrink(),
@@ -93,7 +96,8 @@ class _PresetsScreenState extends State<PresetsScreen> {
     TournamentPreset? existing,
     _PresetDraft data,
   ) {
-    return TournamentPreset(
+    final base = existing ?? app.defaultGamePreset;
+    return base.copyWith(
       id: existing?.id ?? 'pr-${DateTime.now().millisecondsSinceEpoch}',
       name: data.name,
       buyIn: data.buyIn,
@@ -112,6 +116,11 @@ class _PresetsScreenState extends State<PresetsScreen> {
       rebuyLimit: data.rebuyLimit,
       rebuyCost: data.rebuyCost,
       addOnCost: data.addOnCost,
+      format: data.reEntry
+          ? TournamentFormat.reEntry
+          : data.rebuys
+          ? TournamentFormat.rebuy
+          : TournamentFormat.freezeOut,
     );
   }
 
@@ -175,13 +184,15 @@ class _PresetsScreenState extends State<PresetsScreen> {
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: AppBackButton(onTap: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go(RoutePaths.home);
-              }
-            }),
+            child: AppBackButton(
+              onTap: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(RoutePaths.home);
+                }
+              },
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
@@ -191,20 +202,22 @@ class _PresetsScreenState extends State<PresetsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.xs,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
-                          'Presets',
+                          'Game presets',
                           style: AppTypography.display(
                             size: AppFontSizes.xxl,
                             weight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.sm),
                         AppTag(
                           app.premiumTier == PremiumTier.premium
                               ? 'UNLIMITED'
-                              : '${presets.length}/3 FREE',
+                              : '${app.userSavedPresetCount}/3 FREE',
                           tone: app.premiumTier == PremiumTier.premium
                               ? AppTagTone.success
                               : AppTagTone.neutral,
@@ -215,7 +228,8 @@ class _PresetsScreenState extends State<PresetsScreen> {
                     Text(
                       app.premiumTier == PremiumTier.premium
                           ? 'One-tap tournament setups · Unlimited on Premium'
-                          : 'One-tap tournament setups · 3 saved templates free (${presets.length}/3 used)',
+                          : 'Complete game preferences · 3 saved free '
+                                '(${app.userSavedPresetCount}/3 used)',
                       style: AppTypography.bodySm.copyWith(
                         color: AppColors.mutedForeground,
                       ),
@@ -249,37 +263,75 @@ class _PresetsScreenState extends State<PresetsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                p.name,
-                                style: AppTypography.bodyLg.copyWith(
-                                  fontWeight: FontWeight.w600,
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final actions = <Widget>[
+                              if (app.defaultGamePreset.id == p.id)
+                                const AppTag(
+                                  'DEFAULT',
+                                  tone: AppTagTone.success,
+                                )
+                              else
+                                TextButton(
+                                  onPressed: () =>
+                                      app.setDefaultGamePreset(p.id),
+                                  child: const Text('Make default'),
+                                ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Edit',
+                                onPressed: () => _editPreset(app, p),
+                                icon: Icon(
+                                  Icons.edit_outlined,
+                                  size: 18,
+                                  color: AppColors.mutedForeground,
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              tooltip: 'Edit',
-                              onPressed: () => _editPreset(app, p),
-                              icon: Icon(
-                                Icons.edit_outlined,
-                                size: 18,
-                                color: AppColors.mutedForeground,
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Delete',
+                                onPressed: p.id.startsWith('starter-')
+                                    ? null
+                                    : () => _confirmDelete(p, app),
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                  color: AppColors.mutedForeground,
+                                ),
                               ),
-                            ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              tooltip: 'Delete',
-                              onPressed: () => _confirmDelete(p, app),
-                              icon: Icon(
-                                Icons.delete_outline,
-                                size: 18,
-                                color: AppColors.mutedForeground,
-                              ),
-                            ),
-                          ],
+                            ];
+                            if (constraints.maxWidth < 420) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p.name,
+                                    style: AppTypography.bodyLg.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Wrap(
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    children: actions,
+                                  ),
+                                ],
+                              );
+                            }
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    p.name,
+                                    style: AppTypography.bodyLg.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                ...actions,
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Wrap(
@@ -288,6 +340,21 @@ class _PresetsScreenState extends State<PresetsScreen> {
                           children: [
                             _Tag(text: 'Buy-in ${p.buyIn}'),
                             _Tag(text: '${_hours(p.durationHours)}h'),
+                            _Tag(
+                              text:
+                                  p.format?.label ??
+                                  (p.reEntry
+                                      ? 'Re-entry'
+                                      : p.rebuys
+                                      ? 'Rebuy'
+                                      : 'Freeze-out'),
+                            ),
+                            if (p.pace != null)
+                              _Tag(text: '${p.pace!.label} pace'),
+                            if (p.targetDepthBB != null)
+                              _Tag(text: '${p.targetDepthBB} BB deep'),
+                            if (p.forceStack != null)
+                              _Tag(text: '${p.forceStack} stack'),
                             _Tag(
                               text: p.rebuys
                                   ? 'Rebuys to L${p.rebuysCloseLevel}'
@@ -303,6 +370,18 @@ class _PresetsScreenState extends State<PresetsScreen> {
                                   : 'No ante',
                             ),
                             _Tag(text: '${p.organizerPct}% org costs'),
+                            if (p.earlyArrivalBonusEnabled)
+                              _Tag(
+                                text:
+                                    '${((p.earlyArrivalBonusPctOverride ?? kEarlyArrivalBonusPct) * 100).round()}% on-time bonus',
+                              ),
+                            if (p.forcePaidPlaces != null)
+                              _Tag(text: '${p.forcePaidPlaces} paid'),
+                            if (p.tableSettingsOverride != null)
+                              _Tag(
+                                text:
+                                    '${p.tableSettingsOverride!.maxPerTable}/table',
+                              ),
                             _Tag(text: p.chipSetName),
                           ],
                         ),
@@ -768,7 +847,9 @@ class _PresetFormState extends State<_PresetForm> {
           const SizedBox(height: AppSpacing.sm),
           Text(
             _error!,
-            style: AppTypography.bodyXs.copyWith(color: AppColors.destructiveText),
+            style: AppTypography.bodyXs.copyWith(
+              color: AppColors.destructiveText,
+            ),
           ),
         ],
         const SizedBox(height: AppSpacing.lg),

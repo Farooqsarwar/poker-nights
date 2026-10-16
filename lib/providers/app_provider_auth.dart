@@ -103,15 +103,18 @@ extension AppProviderAuth on AppProvider {
         } catch (_) {}
       }
 
-      await _retryRead(() => _repo.ensureUserDoc(
-            uid: fbUser.uid,
-            name: fbUser.displayName ?? 'Player',
-            email: fbUser.email ?? '',
-            starterPresets: AppProvider.seedPresets,
-            starterChipSet: AppProvider.seedChipSet,
-          ));
+      await _retryRead(
+        () => _repo.ensureUserDoc(
+          uid: fbUser.uid,
+          name: fbUser.displayName ?? 'Player',
+          email: fbUser.email ?? '',
+          starterPresets: AppProvider.seedPresets,
+          starterChipSet: AppProvider.seedChipSet,
+        ),
+      );
       final loaded = await _retryRead(() => _repo.loadUser(fbUser.uid));
-      _user = loaded ??
+      _user =
+          loaded ??
           _user ?? // never downgrade an already-hydrated profile
           AppUser(
             id: fbUser.uid,
@@ -176,6 +179,10 @@ extension AppProviderAuth on AppProvider {
       if (themePref is String) _themePreference = themePref;
       final defaultChipSet = prefs['defaultChipSetId'];
       if (defaultChipSet is String) _defaultChipSetId = defaultChipSet;
+      final defaultGamePreset = prefs['defaultGamePresetId'];
+      if (defaultGamePreset is String && defaultGamePreset.isNotEmpty) {
+        _defaultGamePresetId = defaultGamePreset;
+      }
       final sounds = prefs['soundsEnabled'];
       if (sounds is bool) _soundsEnabled = sounds;
       final compact = prefs['compactSummary'];
@@ -238,8 +245,7 @@ extension AppProviderAuth on AppProvider {
       return switch (e.code) {
         'invalid-credential' ||
         'wrong-password' ||
-        'user-not-found' =>
-          'Incorrect email or password.',
+        'user-not-found' => 'Incorrect email or password.',
         'invalid-email' => 'Enter a valid email address.',
         'user-disabled' => 'This account has been disabled.',
         'too-many-requests' => 'Too many attempts. Please try again later.',
@@ -268,7 +274,8 @@ extension AppProviderAuth on AppProvider {
         // lagged during hydration's ensureUserDoc.
         if (_user != null && _user!.name != name) {
           await _retryRead(
-              () => _repo.updateUserProfile(cred.user!.uid, name: name));
+            () => _repo.updateUserProfile(cred.user!.uid, name: name),
+          );
           _user = _user!.copyWith(name: name);
           if (!_disposed) notifyListeners();
         }
@@ -278,7 +285,8 @@ extension AppProviderAuth on AppProvider {
     } on fa.FirebaseAuthException catch (e) {
       return switch (e.code) {
         'email-already-in-use' => 'An account already exists for that email.',
-        'weak-password' => 'That password is too weak — use at least 8 characters.',
+        'weak-password' =>
+          'That password is too weak — use at least 8 characters.',
         'invalid-email' => 'Enter a valid email address.',
         'network-request-failed' => 'Network error. Check your connection.',
         _ => e.message ?? 'Registration failed. Please try again.',
@@ -291,7 +299,10 @@ extension AppProviderAuth on AppProvider {
   /// a guest carry over automatically (user-flow spec §6.7). Returns `null`
   /// on success or a friendly error message for the UI.
   Future<String?> convertGuestAccount(
-      String name, String email, String password) async {
+    String name,
+    String email,
+    String password,
+  ) async {
     if (!_repo.isSignedInAsGuest) return 'Not a guest session.';
     try {
       final cred = await _repo.linkGuestAccount(
@@ -303,8 +314,7 @@ extension AppProviderAuth on AppProvider {
       return null;
     } on fa.FirebaseAuthException catch (e) {
       return switch (e.code) {
-        'email-already-in-use' ||
-        'credential-already-in-use' =>
+        'email-already-in-use' || 'credential-already-in-use' =>
           'An account already exists for that email.',
         'weak-password' =>
           'That password is too weak — use at least 8 characters.',
@@ -380,8 +390,7 @@ extension AppProviderAuth on AppProvider {
       return null;
     } on fa.FirebaseAuthException catch (e) {
       return switch (e.code) {
-        'credential-already-in-use' ||
-        'email-already-in-use' =>
+        'credential-already-in-use' || 'email-already-in-use' =>
           'A Google account already exists for this email.',
         'network-request-failed' => 'Network error. Check your connection.',
         _ => e.message ?? 'Google sign-in failed. Please try again.',
@@ -420,9 +429,9 @@ extension AppProviderAuth on AppProvider {
     if (live != null &&
         isAdmin &&
         (live.status == LiveGameStatus.running ||
-         live.status == LiveGameStatus.paused ||
-         live.status == LiveGameStatus.onBreak ||
-         live.status == LiveGameStatus.finaltable)) {
+            live.status == LiveGameStatus.paused ||
+            live.status == LiveGameStatus.onBreak ||
+            live.status == LiveGameStatus.finaltable)) {
       return 'End or hand over your live games first.';
     }
     try {

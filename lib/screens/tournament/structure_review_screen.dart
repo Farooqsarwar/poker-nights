@@ -16,8 +16,10 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_page.dart';
+import '../../widgets/edit_builder_chip_set.dart';
 import '../../widgets/journey_progress.dart';
 import '../../widgets/save_chip_set_offer.dart';
+import '../../widgets/save_game_preset_offer.dart';
 import '../../widgets/structure_builder.dart';
 
 /// "Create structure" for a group event (route `/structure-review`, unchanged).
@@ -45,7 +47,9 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
   }
 
   StructureBuilderController _controllerFor(AppProvider app, LiveGame game) {
-    if (_controller != null && _controllerGameId == game.id) return _controller!;
+    if (_controller != null && _controllerGameId == game.id) {
+      return _controller!;
+    }
     _controller?.dispose();
     final invited = game.players
         .where((player) => !player.isGuest && !player.noShow)
@@ -96,7 +100,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
     // returns there; a bare link falls back to the invitation default.
     final backTo =
         RoutePaths.structureReviewFrom(GoRouterState.of(context).uri) ??
-            RoutePaths.invitation;
+        RoutePaths.invitation;
 
     final header = <Widget>[
       JourneyProgress(
@@ -149,10 +153,10 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
               child: Text(
                 frozen
                     ? 'Starting stacks are frozen once play has started. '
-                        'Blinds and level lengths stay editable from the '
-                        'dashboard.'
+                          'Blinds and level lengths stay editable from the '
+                          'dashboard.'
                     : 'A shootout structure is generated per table from the '
-                        'event settings.',
+                          'event settings.',
                 style: AppTypography.bodySm.copyWith(
                   color: AppColors.mutedForeground,
                 ),
@@ -195,6 +199,11 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
           StructureBuilder(
             controller: controller,
             confirmLabel: 'Save structure',
+            onSavePreset: () => offerSaveGamePreset(
+              context,
+              app,
+              controller.applyTo(game.settings),
+            ),
             playersHint: '$invited invited · $going Going · $maybe Maybe',
             onChipCountFixed: (counts) => offerSaveChipSet(
               context,
@@ -202,7 +211,7 @@ class _StructureReviewScreenState extends State<StructureReviewScreen> {
               counts,
               setName: game.settings.chipSetName,
             ),
-            onEditChips: () => context.push(RoutePaths.chipSets),
+            onEditChips: () => editBuilderChipSet(context, controller),
             onPersist: () => _persist(app, controller),
             onConfirm: (s) {
               final saved = app.applyBuilderResult(

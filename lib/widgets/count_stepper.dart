@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../app/colors.dart';
@@ -16,7 +18,7 @@ import 'glass_styles.dart';
 /// [onChanged] is called with the clamped result; it is never called with a
 /// value outside [min]..[max], and the disabled arrow is dimmed rather than
 /// hidden so the limit is visible rather than mysterious.
-class CountStepper extends StatelessWidget {
+class CountStepper extends StatefulWidget {
   const CountStepper({
     super.key,
     required this.value,
@@ -24,6 +26,7 @@ class CountStepper extends StatelessWidget {
     this.min = 0,
     this.max = 999,
     this.step = 1,
+    this.stepSizes = const [],
     this.quickSteps = const [],
     this.suffix,
     this.semanticLabel,
@@ -34,6 +37,7 @@ class CountStepper extends StatelessWidget {
   final int min;
   final int max;
   final int step;
+  final List<int> stepSizes;
   final List<int> quickSteps;
 
   /// Rendered after the number, e.g. "players".
@@ -41,16 +45,67 @@ class CountStepper extends StatelessWidget {
 
   final String? semanticLabel;
 
+  @override
+  State<CountStepper> createState() => _CountStepperState();
+}
+
+class _CountStepperState extends State<CountStepper> {
+  late int _workingValue = widget.value;
+  late int _step = widget.stepSizes.contains(widget.step)
+      ? widget.step
+      : (widget.stepSizes.isEmpty ? widget.step : widget.stepSizes.first);
+
+  @override
+  void didUpdateWidget(covariant CountStepper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _workingValue = widget.value;
+  }
+
   void _nudge(int delta) {
-    final next = (value + delta).clamp(min, max);
-    if (next != value) onChanged(next);
+    final next = (_workingValue + delta).clamp(widget.min, widget.max);
+    if (next != _workingValue) {
+      _workingValue = next;
+      widget.onChanged(next);
+    }
+  }
+
+  Future<void> _enterNumber() async {
+    final controller = TextEditingController(text: '${widget.value}');
+    final next = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter number'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          selectAllOnFocus: true,
+          onSubmitted: (_) =>
+              Navigator.pop(context, int.tryParse(controller.text)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, int.tryParse(controller.text)),
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+    if (next == null) return;
+    _workingValue = next.clamp(widget.min, widget.max);
+    widget.onChanged(_workingValue);
   }
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: semanticLabel,
-      value: '$value',
+      label: widget.semanticLabel,
+      value: '${widget.value}',
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -65,8 +120,8 @@ class CountStepper extends StatelessWidget {
               children: [
                 _StepperButton(
                   icon: Icons.remove,
-                  enabled: value > min,
-                  onTap: () => _nudge(-step),
+                  enabled: widget.value > widget.min,
+                  onTap: () => _nudge(-_step),
                   tooltip: 'Decrease',
                 ),
                 ConstrainedBox(
@@ -75,28 +130,50 @@ class CountStepper extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm,
                     ),
-                    child: Text(
-                      suffix == null ? '$value' : '$value $suffix',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodyStyle.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.foreground,
+                    child: InkWell(
+                      onTap: _enterNumber,
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          widget.suffix == null
+                              ? '${widget.value}'
+                              : '${widget.value} ${widget.suffix}',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.bodyStyle.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.foreground,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
                 _StepperButton(
                   icon: Icons.add,
-                  enabled: value < max,
-                  onTap: () => _nudge(step),
+                  enabled: widget.value < widget.max,
+                  onTap: () => _nudge(_step),
                   tooltip: 'Increase',
                 ),
               ],
             ),
           ),
-          if (quickSteps.isNotEmpty) ...[
+          if (widget.stepSizes.isNotEmpty) ...[
             const SizedBox(width: AppSpacing.xs),
-            for (final qs in quickSteps)
+            for (final candidate in widget.stepSizes)
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: ChoiceChip(
+                  label: Text('×$candidate'),
+                  selected: _step == candidate,
+                  onSelected: (_) => setState(() => _step = candidate),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+          ],
+          if (widget.quickSteps.isNotEmpty) ...[
+            const SizedBox(width: AppSpacing.xs),
+            for (final qs in widget.quickSteps)
               Padding(
                 padding: const EdgeInsets.only(left: 4),
                 child: InkWell(
@@ -129,7 +206,7 @@ class CountStepper extends StatelessWidget {
   }
 }
 
-class _StepperButton extends StatelessWidget {
+class _StepperButton extends StatefulWidget {
   const _StepperButton({
     required this.icon,
     required this.enabled,
@@ -143,23 +220,58 @@ class _StepperButton extends StatelessWidget {
   final String tooltip;
 
   @override
+  State<_StepperButton> createState() => _StepperButtonState();
+}
+
+class _StepperButtonState extends State<_StepperButton> {
+  Timer? _repeat;
+
+  void _startRepeat() {
+    if (!widget.enabled) return;
+    widget.onTap();
+    _repeat?.cancel();
+    _repeat = Timer.periodic(
+      const Duration(milliseconds: 120),
+      (_) => widget.onTap(),
+    );
+  }
+
+  void _stopRepeat() {
+    _repeat?.cancel();
+    _repeat = null;
+  }
+
+  @override
+  void dispose() {
+    _stopRepeat();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        onTap: enabled ? onTap : null,
-        // 48x48 is Material's minimum touch target (Apple's is 44pt). The
-        // client operates this one-handed at a poker table, often standing,
-        // and Addendum §8 calls for exactly that — so take the larger of the
-        // two floors rather than the smaller.
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Icon(
-            icon,
-            size: 20,
-            color: enabled ? AppColors.primary : AppColors.mutedForeground,
+      message: widget.tooltip,
+      child: Listener(
+        onPointerUp: (_) => _stopRepeat(),
+        onPointerCancel: (_) => _stopRepeat(),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          onTap: widget.enabled ? widget.onTap : null,
+          onLongPress: widget.enabled ? _startRepeat : null,
+          // 48x48 is Material's minimum touch target (Apple's is 44pt). The
+          // client operates this one-handed at a poker table, often standing,
+          // and Addendum §8 calls for exactly that — so take the larger of the
+          // two floors rather than the smaller.
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: Icon(
+              widget.icon,
+              size: 20,
+              color: widget.enabled
+                  ? AppColors.primary
+                  : AppColors.mutedForeground,
+            ),
           ),
         ),
       ),

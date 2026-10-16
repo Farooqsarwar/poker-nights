@@ -215,26 +215,36 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   showDivider: !app.voiceEnabled,
                 ),
-                  if (app.voiceEnabled)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Row(
-                        children: [
-                          Icon(Icons.volume_down, size: 20, color: AppColors.mutedForeground),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: AppSlider(
-                              value: app.voiceVolume,
-                              onChanged: (v) => app.setVoiceVolume(v),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Icon(Icons.volume_up, size: 20, color: AppColors.mutedForeground),
-                        ],
-                      ),
+                if (app.voiceEnabled)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                  if (app.voiceEnabled)
-                    const Divider(height: 1),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.volume_down,
+                          size: 20,
+                          color: AppColors.mutedForeground,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: AppSlider(
+                            value: app.voiceVolume,
+                            onChanged: (v) => app.setVoiceVolume(v),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Icon(
+                          Icons.volume_up,
+                          size: 20,
+                          color: AppColors.mutedForeground,
+                        ),
+                      ],
+                    ),
+                  ),
+                if (app.voiceEnabled) const Divider(height: 1),
                 _buildSettingRow(
                   title: 'Sound effects & chimes',
                   subtitle: 'Audio cues and 1-minute warning chimes',
@@ -245,7 +255,10 @@ class SettingsScreen extends StatelessWidget {
                   showDivider: true,
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -365,15 +378,6 @@ class SettingsScreen extends StatelessWidget {
                       style: AppTypography.monoSm.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
-                    ),
-                    showDivider: true,
-                  ),
-                  _buildSettingRow(
-                    title: 'Pace adaptation (Spec H5)',
-                    subtitle: 'Learn from past games to adjust level duration',
-                    trailing: AppToggle(
-                      value: true,
-                      onChanged: (v) {},
                     ),
                     showDivider: false,
                   ),
@@ -963,14 +967,15 @@ class SettingsScreen extends StatelessWidget {
                                   onPressed: () {
                                     if (app.unblockUser(id)) {
                                       setSheetState(() {});
-                                      ScaffoldMessenger.maybeOf(context)
-                                        ?.showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              '${nameOf(id)} is unblocked.',
-                                            ),
+                                      ScaffoldMessenger.maybeOf(
+                                        context,
+                                      )?.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '${nameOf(id)} is unblocked.',
                                           ),
-                                        );
+                                        ),
+                                      );
                                     }
                                   },
                                   style: TextButton.styleFrom(
@@ -1117,7 +1122,9 @@ class SettingsScreen extends StatelessWidget {
         title: Text('Sign out?', style: TextStyle(color: AppColors.foreground)),
         content: Text(
           'You will need to log in again to see your games.',
-          style: AppTypography.bodySm.copyWith(color: AppColors.mutedForeground),
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.mutedForeground,
+          ),
         ),
         actions: [
           TextButton(
@@ -1148,4 +1155,3 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 }
-

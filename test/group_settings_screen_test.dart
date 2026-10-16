@@ -9,6 +9,7 @@ import 'package:poker_night/screens/shell/group_settings_screen.dart';
 import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/widgets/app_button.dart';
 import 'package:poker_night/widgets/app_text_field.dart';
+import 'package:poker_night/widgets/app_toggle.dart';
 import 'package:provider/provider.dart';
 
 /// Spec B9 — group settings.
@@ -71,32 +72,40 @@ void main() {
   );
 
   Group groupWith({
+    String name = 'Friday Poker Club',
     List<AppUser> members = const [host],
     TableSettings tableSettings = TableSettings.fallback,
-  }) =>
-      Group(
-        id: 'g1',
-        name: 'Friday Poker Club',
-        joinCode: 'FP2608',
-        ownerId: 'u1',
-        members: members,
-        games: const [],
-        chat: const [],
-        polls: const [],
-        notifications: const [],
-        tableSettings: tableSettings,
-      );
+    bool learningOptOut = false,
+  }) => Group(
+    id: 'g1',
+    name: name,
+    joinCode: 'FP2608',
+    ownerId: 'u1',
+    members: members,
+    games: const [],
+    chat: const [],
+    polls: const [],
+    notifications: const [],
+    tableSettings: tableSettings,
+    learningOptOut: learningOptOut,
+  );
 
   AppProvider provider({
     AppUser user = host,
+    String groupName = 'Friday Poker Club',
     List<AppUser> members = const [host],
     TableSettings tableSettings = TableSettings.fallback,
-  }) =>
-      AppProvider()
-        ..setUserForTesting(user)
-        ..setCurrentGroupForTesting(
-          groupWith(members: members, tableSettings: tableSettings),
-        );
+    bool learningOptOut = false,
+  }) => AppProvider()
+    ..setUserForTesting(user)
+    ..setCurrentGroupForTesting(
+      groupWith(
+        name: groupName,
+        members: members,
+        tableSettings: tableSettings,
+        learningOptOut: learningOptOut,
+      ),
+    );
 
   /// Pumps the screen, runs [body], then always unmounts and disposes.
   ///
@@ -159,7 +168,9 @@ void main() {
   }
 
   group('gating', () {
-    testWidgets('a non-host gets the lock screen, not the rows', (tester) async {
+    testWidgets('a non-host gets the lock screen, not the rows', (
+      tester,
+    ) async {
       // The router already bounces non-hosts, but the screen is reachable by
       // deep link and by a stale back stack, so it guards itself the way
       // ImportResultsScreen does.
@@ -170,6 +181,25 @@ void main() {
         expect(find.text('Leave group'), findsNothing);
         expect(find.text('Save table settings'), findsNothing);
         expect(find.text('FP2608'), findsNothing);
+        expect(
+          find.text("Learn from Friday Poker Club's past games"),
+          findsNothing,
+        );
+        app.setGroupLearningOptOut(true);
+        expect(app.currentGroup.learningOptOut, isFalse);
+      });
+    });
+
+    testWidgets('a co-host cannot see or change pace learning', (tester) async {
+      final app = provider(user: coHost, members: [host, coHost]);
+
+      await screen(tester, app, () async {
+        expect(
+          find.text("Learn from Friday Poker Club's past games"),
+          findsNothing,
+        );
+        app.setGroupLearningOptOut(true);
+        expect(app.currentGroup.learningOptOut, isFalse);
       });
     });
   });
@@ -201,7 +231,9 @@ void main() {
       });
     });
 
-    testWidgets('the Reports row only appears when there is one', (tester) async {
+    testWidgets('the Reports row only appears when there is one', (
+      tester,
+    ) async {
       // §B9: "the row appears when there is one". A Reports card parked on
       // every host's settings screen would be a standing alarm for a group
       // with nothing reported.
@@ -233,6 +265,49 @@ void main() {
   });
 
   group('table settings', () {
+    testWidgets('the host controls pace learning for this group', (
+      tester,
+    ) async {
+      final app = provider();
+
+      await screen(tester, app, () async {
+        final label = find.text("Learn from Friday Poker Club's past games");
+        await tester.ensureVisible(label.first);
+        expect(label, findsWidgets);
+
+        final toggle = find.byType(AppToggle).last;
+        expect(tester.widget<AppToggle>(toggle).value, isTrue);
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+
+        expect(app.currentGroup.learningOptOut, isTrue);
+        expect(tester.widget<AppToggle>(toggle).value, isFalse);
+      });
+    });
+
+    testWidgets(
+      'a long group name wraps at 320px without shrinking the toggle',
+      (tester) async {
+        const groupName = 'The Exceptionally Long Riverside Poker Association';
+        final app = provider(groupName: groupName);
+        await tester.binding.setSurfaceSize(const Size(320, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await screen(tester, app, () async {
+          final label = find.text("Learn from $groupName's past games");
+          await tester.ensureVisible(label);
+          await tester.pumpAndSettle();
+
+          expect(label, findsOneWidget);
+          expect(tester.widget<Text>(label).softWrap, isTrue);
+          final toggleSize = tester.getSize(find.byType(AppToggle).last);
+          expect(toggleSize.width, greaterThanOrEqualTo(44));
+          expect(toggleSize.height, greaterThanOrEqualTo(44));
+          expect(tester.takeException(), isNull);
+        });
+      },
+    );
+
     testWidgets('nothing reaches the group before Save', (tester) async {
       final app = provider();
 
@@ -240,7 +315,7 @@ void main() {
         // The stepper starts at the stored 9 and the range is 4..10, so one
         // tap down is 8.
         await tapStepper(tester, Icons.remove);
-        expect(find.text('8 seats'), findsOneWidget);
+        expect(find.text('8'), findsOneWidget);
         // Still the stored value: the stepper edits a draft.
         expect(app.currentGroup.tableSettings.maxPerTable, 9);
 
@@ -270,14 +345,15 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Save table settings'), findsNothing);
-        expect(find.text('6 seats'), findsOneWidget);
+        expect(find.text('6'), findsOneWidget);
       });
     });
   });
 
   group('leaving', () {
-    testWidgets('Leave group asks before it calls the provider',
-        (tester) async {
+    testWidgets('Leave group asks before it calls the provider', (
+      tester,
+    ) async {
       // A co-host is the one person who can both open this screen and use
       // `leaveGroup` — the owner is refused by the provider.
       final app = provider(user: coHost, members: [host, coHost]);
@@ -309,24 +385,28 @@ void main() {
       });
     });
 
-    testWidgets('an owner cannot leave, and is offered Delete group',
-        (tester) async {
+    testWidgets('an owner cannot leave, and is offered Delete group', (
+      tester,
+    ) async {
       final app = provider(members: [host, member]);
 
       await screen(tester, app, () async {
         expect(find.text('Delete group'), findsOneWidget);
         expect(find.text('Leave group'), findsNothing);
         // Live now, not inert: there is a write behind it.
-        final button = tester.widget<AppButton>(find.ancestor(
-          of: find.text('Delete group'),
-          matching: find.byType(AppButton),
-        ));
+        final button = tester.widget<AppButton>(
+          find.ancestor(
+            of: find.text('Delete group'),
+            matching: find.byType(AppButton),
+          ),
+        );
         expect(button.onPressed, isNotNull);
       });
     });
 
-    testWidgets('Delete group names the consequence and needs the name typed',
-        (tester) async {
+    testWidgets('Delete group names the consequence and needs the name typed', (
+      tester,
+    ) async {
       final app = provider(members: [host, member]);
 
       await screen(tester, app, () async {
@@ -356,8 +436,9 @@ void main() {
       });
     });
 
-    testWidgets('cancelling Delete group leaves the group alone',
-        (tester) async {
+    testWidgets('cancelling Delete group leaves the group alone', (
+      tester,
+    ) async {
       final app = provider(members: [host, member]);
 
       await screen(tester, app, () async {
@@ -389,16 +470,19 @@ void main() {
   });
 
   group('group code', () {
-    testWidgets('the code is shown and the host can re-roll it',
-        (tester) async {
+    testWidgets('the code is shown and the host can re-roll it', (
+      tester,
+    ) async {
       final app = provider();
 
       await screen(tester, app, () async {
         expect(find.text('FP2608'), findsOneWidget);
-        final button = tester.widget<AppButton>(find.ancestor(
-          of: find.text('Re-roll the code'),
-          matching: find.byType(AppButton),
-        ));
+        final button = tester.widget<AppButton>(
+          find.ancestor(
+            of: find.text('Re-roll the code'),
+            matching: find.byType(AppButton),
+          ),
+        );
         expect(button.onPressed, isNotNull);
         // Nothing claims to be missing any more.
         expect(find.textContaining('Not available yet'), findsNothing);
@@ -415,8 +499,11 @@ void main() {
         // "the old code and link stop working at once" -- anyone already
         // holding the old one is about to have a dead link.
         expect(find.textContaining('stop working immediately'), findsOneWidget);
-        expect(app.currentGroup.joinCode, 'FP2608',
-            reason: 'nothing is retired before the host confirms');
+        expect(
+          app.currentGroup.joinCode,
+          'FP2608',
+          reason: 'nothing is retired before the host confirms',
+        );
 
         await tap(tester, 'Cancel');
         await tester.pumpAndSettle();
@@ -424,18 +511,21 @@ void main() {
       });
     });
 
-    testWidgets('a non-owner sees the code but cannot re-roll it',
-        (tester) async {
+    testWidgets('a non-owner sees the code but cannot re-roll it', (
+      tester,
+    ) async {
       // The code is how a member gets in, so it is shown; retiring it is the
       // host's call.
       final app = provider(user: coHost, members: [host, coHost]);
 
       await screen(tester, app, () async {
         expect(find.text('FP2608'), findsOneWidget);
-        final button = tester.widget<AppButton>(find.ancestor(
-          of: find.text('Re-roll the code'),
-          matching: find.byType(AppButton),
-        ));
+        final button = tester.widget<AppButton>(
+          find.ancestor(
+            of: find.text('Re-roll the code'),
+            matching: find.byType(AppButton),
+          ),
+        );
         expect(button.onPressed, isNull);
       });
     });

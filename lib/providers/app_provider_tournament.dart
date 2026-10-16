@@ -65,11 +65,7 @@ class RecapAward {
 /// Every award excludes players whose finishing position is <= 0 (§34): a row
 /// with no position never played, and a no-show cannot win "fastest bust".
 class GameRecap {
-  const GameRecap({
-    this.biggestComeback,
-    this.fastestBust,
-    this.mostKnockouts,
-  });
+  const GameRecap({this.biggestComeback, this.fastestBust, this.mostKnockouts});
 
   /// Lowest [Player.lowestStackBB] among the top-3 finishers.
   ///
@@ -218,11 +214,13 @@ extension AppProviderTournament on AppProvider {
   List<LiveGame> _paceHistory() {
     final currentId = _currentGame?.id;
     final rows = _currentGroup.pastGames
-        .where((g) =>
-            g.id != currentId &&
-            g.actualDurationMins != null &&
-            g.actualDurationMins! > 0 &&
-            g.settings.durationHours > 0)
+        .where(
+          (g) =>
+              g.id != currentId &&
+              g.actualDurationMins != null &&
+              g.actualDurationMins! > 0 &&
+              g.settings.durationHours > 0,
+        )
         .toList();
     rows.sort((a, b) {
       final at = a.startedAt, bt = b.startedAt;
@@ -240,6 +238,7 @@ extension AppProviderTournament on AppProvider {
   /// Pure: reading this changes nothing. §10.1 forbids silent application, so
   /// the proposal only becomes real through [acceptPaceAdjustment].
   PaceProposal? get paceProposal {
+    if (_currentGroup.learningOptOut) return null;
     final game = _currentGame;
     if (game == null) return null;
     final history = _paceHistory();
@@ -310,7 +309,9 @@ extension AppProviderTournament on AppProvider {
 
     final base = _paceBaseLevelMins(game);
     if (base <= 0) return null;
-    final scaled = proposal.scaledLevelMins(base).clamp(
+    final scaled = proposal
+        .scaledLevelMins(base)
+        .clamp(
           TournamentEngine.kMinLevelDurationMins,
           TournamentEngine.kMaxLevelDurationMins,
         );
@@ -366,7 +367,6 @@ extension AppProviderTournament on AppProvider {
     _acceptedPaceAdjustmentPct = null;
     _paceProposalAnswered = false;
   }
-
 
   /// Late registration stays open until the rebuy period ends — the configured
   /// closing level, normally the end of Level 6 (07-039, 12-028, 20-023).
@@ -465,8 +465,9 @@ extension AppProviderTournament on AppProvider {
     if (!lateRegistrationOpen) return;
     // Same free-hosting limit as check-in (addendum §3). A late arrival is
     // still an active player.
-    final active =
-        _currentGame!.players.where((p) => p.active && !p.eliminated).length;
+    final active = _currentGame!.players
+        .where((p) => p.active && !p.eliminated)
+        .length;
     if (!canHostPlayers(active + 1)) {
       lastRsvpError = hostingBlockedReason(active + 1);
       if (!_disposed) notifyListeners();
@@ -566,8 +567,10 @@ extension AppProviderTournament on AppProvider {
       counts[p.table] = (counts[p.table] ?? 0) + 1;
     }
     final maxPerTable = effectiveTableSettings.maxPerTable.clamp(2, 999);
-    final tableCount =
-        (game.activePlayers.length / maxPerTable).ceil().clamp(1, maxPerTable);
+    final tableCount = (game.activePlayers.length / maxPerTable).ceil().clamp(
+      1,
+      maxPerTable,
+    );
     var bestTable = 1;
     var bestCount = 1 << 30;
     for (var t = 1; t <= tableCount; t++) {
@@ -626,16 +629,16 @@ extension AppProviderTournament on AppProvider {
       effectiveAddOnCost: s.effectiveAddOnCost,
     );
 
-  // Delegate the organizer-cut and prize-split maths to the shared helper in
-  // TournamentEngine so the rules stay consistent everywhere.
-  final recalculated = PayoutBridge.recalculate(
-    grossEligible: grossEligible,
-    players: confirmedCount,
-    organizerPct: _effectiveLegalFeePct(s.effectiveOrganizerPct),
-    buyIn: s.buyIn,
-    forcePaidPlaces: s.forcePaidPlaces,
-    extraEntries: totalRebuys + totalReEntries,
-  );
+    // Delegate the organizer-cut and prize-split maths to the shared helper in
+    // TournamentEngine so the rules stay consistent everywhere.
+    final recalculated = PayoutBridge.recalculate(
+      grossEligible: grossEligible,
+      players: confirmedCount,
+      organizerPct: _effectiveLegalFeePct(s.effectiveOrganizerPct),
+      buyIn: s.buyIn,
+      forcePaidPlaces: s.forcePaidPlaces,
+      extraEntries: totalRebuys + totalReEntries,
+    );
 
     // Patch only the financial fields; levels and all other structure data
     // remain exactly as they were (including any StructureEditor overrides).
@@ -765,8 +768,12 @@ extension AppProviderTournament on AppProvider {
         ? 10
         : (newDuration > 20 ? 20 : newDuration);
 
-    final pastLevels = structure.levels.where((l) => l.level <= game.currentLevel).toList();
-    var futureLevels = structure.levels.where((l) => l.level > game.currentLevel).toList();
+    final pastLevels = structure.levels
+        .where((l) => l.level <= game.currentLevel)
+        .toList();
+    var futureLevels = structure.levels
+        .where((l) => l.level > game.currentLevel)
+        .toList();
 
     if (futureLevels.isNotEmpty) {
       final chips = game.settings.chipSet;
@@ -794,7 +801,10 @@ extension AppProviderTournament on AppProvider {
 
         // 2. Increase future blinds (steepen curve)
         futureLevels = futureLevels.map((l) {
-          final newBB = TournamentEngine.snapToPracticalBlind(l.bb * 1.25, chips);
+          final newBB = TournamentEngine.snapToPracticalBlind(
+            l.bb * 1.25,
+            chips,
+          );
           final newSB = TournamentEngine.snapToPracticalBlind(newBB / 2, chips);
           return BlindLevel(
             level: l.level,
@@ -829,25 +839,35 @@ extension AppProviderTournament on AppProvider {
         final newFuture = <BlindLevel>[];
         for (var i = 0; i < futureLevels.length; i++) {
           final current = futureLevels[i];
-          newFuture.add(BlindLevel(
-            level: current.level,
-            sb: current.sb,
-            bb: current.bb,
-            ante: current.ante,
-            durationMins: clamped,
-          ));
+          newFuture.add(
+            BlindLevel(
+              level: current.level,
+              sb: current.sb,
+              bb: current.bb,
+              ante: current.ante,
+              durationMins: clamped,
+            ),
+          );
           if (!inserted && i < futureLevels.length - 1) {
             final next = futureLevels[i + 1];
             if (next.bb >= current.bb * 2) {
-              final midBB = TournamentEngine.snapToPracticalBlind(current.bb * 1.5, chips);
-              final midSB = TournamentEngine.snapToPracticalBlind(midBB / 2, chips);
-              newFuture.add(BlindLevel(
-                level: 0, // will re-index later
-                sb: midSB,
-                bb: midBB,
-                ante: current.ante,
-                durationMins: clamped,
-              ));
+              final midBB = TournamentEngine.snapToPracticalBlind(
+                current.bb * 1.5,
+                chips,
+              );
+              final midSB = TournamentEngine.snapToPracticalBlind(
+                midBB / 2,
+                chips,
+              );
+              newFuture.add(
+                BlindLevel(
+                  level: 0, // will re-index later
+                  sb: midSB,
+                  bb: midBB,
+                  ante: current.ante,
+                  durationMins: clamped,
+                ),
+              );
               inserted = true;
             }
           }
@@ -879,10 +899,12 @@ extension AppProviderTournament on AppProvider {
     final oldFuture = structure.levels
         .where((l) => l.level > game.currentLevel)
         .toList();
-    final newFuture =
-        allLevels.where((l) => l.level > game.currentLevel).toList();
+    final newFuture = allLevels
+        .where((l) => l.level > game.currentLevel)
+        .toList();
     final durationChanged = clamped != structure.levelDuration;
-    final blindsChanged = oldFuture.length != newFuture.length ||
+    final blindsChanged =
+        oldFuture.length != newFuture.length ||
         [
           for (var i = 0; i < oldFuture.length && i < newFuture.length; i++)
             if (oldFuture[i].bb != newFuture[i].bb ||
@@ -923,10 +945,7 @@ extension AppProviderTournament on AppProvider {
     _currentGame = game.copyWith(
       speedRecommendation: null,
       clearSpeedRecommendation: true,
-      structure: structure.copyWith(
-        levelDuration: clamped,
-        levels: allLevels,
-      ),
+      structure: structure.copyWith(levelDuration: clamped, levels: allLevels),
     );
 
     final parts = <String>[
@@ -989,7 +1008,9 @@ extension AppProviderTournament on AppProvider {
         total += 1 + p.rsvp!.guestCount;
       }
     }
-    return total >= 2 ? total : game.players.where((p) => !p.isGuest && !p.noShow).length;
+    return total >= 2
+        ? total
+        : game.players.where((p) => !p.isGuest && !p.noShow).length;
   }
 
   /// Admin has reviewed the generated structure (30-minute estimate).
@@ -1018,7 +1039,8 @@ extension AppProviderTournament on AppProvider {
       AppNotification(
         id: 'n-${DateTime.now().millisecondsSinceEpoch}',
         title: 'Structure ready',
-        body: '${_currentGame!.settings.name} - final structure has been generated and locked.',
+        body:
+            '${_currentGame!.settings.name} - final structure has been generated and locked.',
         type: NotificationType.game,
         link: '/structure-review',
         read: false,
@@ -1048,8 +1070,8 @@ extension AppProviderTournament on AppProvider {
     final expected = confirmedCount > 0
         ? confirmedCount
         : (game.goingWithGuestsCount > 0
-            ? game.goingWithGuestsCount
-            : game.settings.players);
+              ? game.goingWithGuestsCount
+              : game.settings.players);
     // Section 6's precedence: Locked beats the admin override, which beats
     // the RSVP-derived figure. When the host has said "prepare for 20", plan
     // for 20 — but never for fewer people than have already checked in, since
@@ -1057,8 +1079,7 @@ extension AppProviderTournament on AppProvider {
     final locked = game.settings.lockedExpectedPlayers;
     final override = game.settings.expectedPlayersOverride;
     final stated = locked ?? override;
-    final planned =
-        stated != null ? max(stated, confirmedCount) : expected;
+    final planned = stated != null ? max(stated, confirmedCount) : expected;
     final count = planned < 2 ? 2 : planned;
     // §10.1: an ACCEPTED pace adjustment has already been folded into
     // `settings.levelDurationMins` by [acceptPaceAdjustment], so it reaches
@@ -1142,9 +1163,9 @@ extension AppProviderTournament on AppProvider {
     // that, on the host's own say-so (boundary #9).
     final shootoutStage =
         s.effectiveFormat == TournamentFormat.shootout &&
-                game.shootoutStage != ShootoutStage.stageB
-            ? ShootoutStage.stageA
-            : null;
+            game.shootoutStage != ShootoutStage.stageB
+        ? ShootoutStage.stageA
+        : null;
 
     var finalStructure = structure;
     final pins = <PinnedLevel>[];
@@ -1154,31 +1175,48 @@ extension AppProviderTournament on AppProvider {
       }
     }
     if (pins.isNotEmpty && !force) {
-      final cmin = structure.chipPlan.isNotEmpty ? structure.chipPlan.first.value : 25;
+      final cmin = structure.chipPlan.isNotEmpty
+          ? structure.chipPlan.first.value
+          : 25;
       final rebuilt = TournamentEngine.resolveAroundPins(
         existingBB: structure.levels.map((l) => l.bb).toList(),
         cminOfLevel: List.filled(structure.levels.length, cmin),
         pins: pins,
-        bbEnd: structure.levels.isNotEmpty ? structure.levels.last.bb.toDouble() : 1000.0,
+        bbEnd: structure.levels.isNotEmpty
+            ? structure.levels.last.bb.toDouble()
+            : 1000.0,
       );
-      if (rebuilt.feasible && rebuilt.bbLadder.length == structure.levels.length) {
+      if (rebuilt.feasible &&
+          rebuilt.bbLadder.length == structure.levels.length) {
         final restored = <BlindLevel>[];
         for (var i = 0; i < structure.levels.length; i++) {
           final oldL = structure.levels[i];
           final wasPinned = pins.any((p) => p.levelNum == oldL.level);
-          final oldPinned = game.structure.levels.where((l) => l.level == oldL.level).firstOrNull;
-          restored.add(oldL.copyWith(
-            sb: wasPinned && oldPinned != null ? oldPinned.sb : rebuilt.sbLadder[i],
-            bb: wasPinned && oldPinned != null ? oldPinned.bb : rebuilt.bbLadder[i],
-            manuallyEdited: wasPinned,
-          ));
+          final oldPinned = game.structure.levels
+              .where((l) => l.level == oldL.level)
+              .firstOrNull;
+          restored.add(
+            oldL.copyWith(
+              sb: wasPinned && oldPinned != null
+                  ? oldPinned.sb
+                  : rebuilt.sbLadder[i],
+              bb: wasPinned && oldPinned != null
+                  ? oldPinned.bb
+                  : rebuilt.bbLadder[i],
+              manuallyEdited: wasPinned,
+            ),
+          );
         }
         finalStructure = structure.copyWith(
           levels: restored,
-          startingStack: game.structure.startingStack > 0 ? game.structure.startingStack : structure.startingStack,
+          startingStack: game.structure.startingStack > 0
+              ? game.structure.startingStack
+              : structure.startingStack,
         );
       }
-    } else if (game.structure.startingStack > 0 && !force && game.structure.levels.any((l) => l.manuallyEdited)) {
+    } else if (game.structure.startingStack > 0 &&
+        !force &&
+        game.structure.levels.any((l) => l.manuallyEdited)) {
       finalStructure = structure.copyWith(
         startingStack: game.structure.startingStack,
       );
@@ -1298,11 +1336,11 @@ extension AppProviderTournament on AppProvider {
         : const <int, BlindLevel>{};
 
     final confirmed = game.players.where((p) => p.confirmed).length;
-    final derived =
-        confirmed >= 2 ? confirmed : expectedPlayersFromRsvps(game);
+    final derived = confirmed >= 2 ? confirmed : expectedPlayersFromRsvps(game);
     // Same precedence as `generateFinalStructure`: Locked, then the admin
     // override, then the derived figure — floored at whoever is confirmed.
-    final stated = game.settings.lockedExpectedPlayers ??
+    final stated =
+        game.settings.lockedExpectedPlayers ??
         game.settings.expectedPlayersOverride;
     final count = stated != null ? max(stated, confirmed) : derived;
     _recalculateWithPlayers(count < 2 ? 2 : count);
@@ -1315,7 +1353,9 @@ extension AppProviderTournament on AppProvider {
         .map((l) => PinnedLevel(levelNum: l.level, sb: l.sb, bb: l.bb))
         .toList();
     final existingBB = rebuilt.levels.map((l) => l.bb).toList();
-    final minChipVal = rebuilt.chipPlan.isNotEmpty ? rebuilt.chipPlan.first.value : 25;
+    final minChipVal = rebuilt.chipPlan.isNotEmpty
+        ? rebuilt.chipPlan.first.value
+        : 25;
     final cminOfLevel = List<int>.filled(existingBB.length, minChipVal);
     final resolved = TournamentEngine.resolveAroundPins(
       existingBB: existingBB,
@@ -1332,10 +1372,9 @@ extension AppProviderTournament on AppProvider {
       } else if (preserved.containsKey(l.level)) {
         restored.add(preserved[l.level]!);
       } else if (resolved.feasible && i < resolved.bbLadder.length) {
-        restored.add(l.copyWith(
-          sb: resolved.sbLadder[i],
-          bb: resolved.bbLadder[i],
-        ));
+        restored.add(
+          l.copyWith(sb: resolved.sbLadder[i], bb: resolved.bbLadder[i]),
+        );
       } else {
         restored.add(l);
       }
@@ -1439,8 +1478,9 @@ extension AppProviderTournament on AppProvider {
       structure: stageB,
       shootoutStage: ShootoutStage.stageB,
       currentLevel: 1,
-      secondsRemaining:
-          stageB.levels.isNotEmpty ? stageB.levels.first.durationMins * 60 : 0,
+      secondsRemaining: stageB.levels.isNotEmpty
+          ? stageB.levels.first.durationMins * 60
+          : 0,
       // Clears the OLD structure's countdown so the clock does not read as
       // mid-level against a level that no longer exists — mirrors how a
       // structure edit already leaves `timerRunning` untouched (whatever
@@ -1449,7 +1489,8 @@ extension AppProviderTournament on AppProvider {
       clearLevelEndTime: true,
     );
 
-    final summary = 'Final table seated: ${finalists.length} player'
+    final summary =
+        'Final table seated: ${finalists.length} player'
         '${finalists.length == 1 ? '' : 's'}, ${stageB.levels.length} '
         'level${stageB.levels.length == 1 ? '' : 's'} ahead.';
     addAuditRecord('shootout_final_table', summary);
@@ -1621,10 +1662,7 @@ extension AppProviderTournament on AppProvider {
       ),
     );
     _recalculateWithPlayers(_currentGame!.settings.players);
-    addAnnouncement(
-      'Updated to unlimited rebuys until level 6.',
-      false,
-    );
+    addAnnouncement('Updated to unlimited rebuys until level 6.', false);
   }
 
   /// The engine params for [newSettings] at [count] players. The one place the
@@ -1648,7 +1686,9 @@ extension AppProviderTournament on AppProvider {
         anteStyle: newSettings.anteStyle,
         koEnabled: newSettings.koEnabled,
         koAmount: newSettings.koAmount,
-        organizerPct: _effectiveLegalFeePct(newSettings.effectiveOrganizerPct), // Fixed H4 legal gate
+        organizerPct: _effectiveLegalFeePct(
+          newSettings.effectiveOrganizerPct,
+        ), // Fixed H4 legal gate
         rebuyCost: newSettings.rebuyCost,
         addOnCost: newSettings.addOnCost,
         breaks: newSettings.breaks,
@@ -1693,23 +1733,33 @@ extension AppProviderTournament on AppProvider {
     // lives in `levelDurationMins`, so every rebuild — including the firm
     // recalculation at Start — keeps it.
     final newSettings = s.copyWith(players: count);
-    var structure =
-        solveWithPins(_engineParamsFor(newSettings, count), newSettings.levelPins);
+    var structure = solveWithPins(
+      _engineParamsFor(newSettings, count),
+      newSettings.levelPins,
+    );
     // Starting stacks are frozen once play has started, or when the host
     // hand-tuned the starting stack. [rebuildStacks] is the host's explicit
     // choice of a plan change that MUST change the stacks (a shallow-start
     // fix): without it the stored stack would silently survive and the option
     // would advertise a depth it never delivers.
-    final hasManualStack = game.structure.startingStack > 0 &&
-        game.structure.chipPlan.isNotEmpty;
+    final hasManualStack =
+        game.structure.startingStack > 0 && game.structure.chipPlan.isNotEmpty;
     if (!rebuildStacks && (game.stacksLocked || hasManualStack)) {
       structure = structure.copyWith(
         startingStack: game.structure.startingStack,
         chipPlan: game.structure.chipPlan,
-        rebuyStack: game.structure.rebuyStack > 0 ? game.structure.rebuyStack : structure.rebuyStack,
-        rebuyChipPlan: game.structure.rebuyChipPlan.isNotEmpty ? game.structure.rebuyChipPlan : structure.rebuyChipPlan,
-        addOnStack: game.structure.addOnStack > 0 ? game.structure.addOnStack : structure.addOnStack,
-        addOnChipPlan: game.structure.addOnChipPlan.isNotEmpty ? game.structure.addOnChipPlan : structure.addOnChipPlan,
+        rebuyStack: game.structure.rebuyStack > 0
+            ? game.structure.rebuyStack
+            : structure.rebuyStack,
+        rebuyChipPlan: game.structure.rebuyChipPlan.isNotEmpty
+            ? game.structure.rebuyChipPlan
+            : structure.rebuyChipPlan,
+        addOnStack: game.structure.addOnStack > 0
+            ? game.structure.addOnStack
+            : structure.addOnStack,
+        addOnChipPlan: game.structure.addOnChipPlan.isNotEmpty
+            ? game.structure.addOnChipPlan
+            : structure.addOnChipPlan,
       );
     }
 
@@ -1720,9 +1770,9 @@ extension AppProviderTournament on AppProvider {
     // may set Stage A here but must never undo a host's move to Stage B.
     final shootoutStage =
         newSettings.effectiveFormat == TournamentFormat.shootout &&
-                game.shootoutStage != ShootoutStage.stageB
-            ? ShootoutStage.stageA
-            : null;
+            game.shootoutStage != ShootoutStage.stageB
+        ? ShootoutStage.stageA
+        : null;
     _currentGame = game.copyWith(
       settings: newSettings,
       structure: structure,
@@ -2086,8 +2136,10 @@ extension AppProviderTournament on AppProvider {
     }
 
     final leftToPay = dealTotalLeftToPay();
-    final agreed = amountsByPlayerId.values
-        .fold<double>(0, (sum, a) => sum + a);
+    final agreed = amountsByPlayerId.values.fold<double>(
+      0,
+      (sum, a) => sum + a,
+    );
     final mismatch = PayoutsEngine.dealAmountsError(agreed, leftToPay);
     if (mismatch != null) return mismatch;
 
@@ -2104,11 +2156,11 @@ extension AppProviderTournament on AppProvider {
     // A figure for somebody who already busted is equally wrong: they were
     // paid from the ladder when they went out, not from the deal.
     final strays = amountsByPlayerId.keys
-        .where((id) => game.players
-            .where((p) => p.id == id)
-            .firstOrNull
-            ?.eliminated ??
-            true)
+        .where(
+          (id) =>
+              game.players.where((p) => p.id == id).firstOrNull?.eliminated ??
+              true,
+        )
         .toList();
     if (strays.isNotEmpty) {
       return 'The deal covers only the players still at the table.';
@@ -2162,13 +2214,12 @@ extension AppProviderTournament on AppProvider {
     // at the bottom of the results. Same comparator as [validateCompletion] and
     // the C8 finish screen, which build the same list.
     final out = game.players.where((p) => p.eliminated).toList()
-      ..sort((a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0));
+      ..sort(
+        (a, b) => (b.eliminationPos ?? 0).compareTo(a.eliminationPos ?? 0),
+      );
     final table = game.activePlayers.toList()
       ..sort((a, b) => (a.stack ?? 0).compareTo(b.stack ?? 0));
-    return [
-      for (final p in out) p.id,
-      for (final p in table) p.id,
-    ];
+    return [for (final p in out) p.id, for (final p in table) p.id];
   }
 
   /// What the player in that slot actually received: the agreed figure for
@@ -2182,7 +2233,8 @@ extension AppProviderTournament on AppProvider {
   ) {
     final agreed = amountsByPlayerId[playerId];
     if (agreed != null) return agreed;
-    final pos = game.players
+    final pos =
+        game.players
             .where((p) => p.id == playerId)
             .firstOrNull
             ?.eliminationPos ??
@@ -2216,9 +2268,7 @@ extension AppProviderTournament on AppProvider {
     if (_currentGame == null) return;
     _pushUndo();
     _currentGame = _currentGame!.copyWith(
-      structure: _currentGame!.structure.copyWith(
-        prizes: customPrizes,
-      ),
+      structure: _currentGame!.structure.copyWith(prizes: customPrizes),
     );
     _syncGroupGame();
     if (!_disposed) notifyListeners();
@@ -2268,7 +2318,10 @@ extension AppProviderTournament on AppProvider {
       'to finish hand 1.',
       true,
     );
-    addAuditRecord('hand_for_hand_start', 'Hand-for-hand started on the bubble.');
+    addAuditRecord(
+      'hand_for_hand_start',
+      'Hand-for-hand started on the bubble.',
+    );
     _syncGroupGame();
     if (!_disposed) notifyListeners();
     return null;
@@ -2291,11 +2344,11 @@ extension AppProviderTournament on AppProvider {
         handForHandHand: next,
         handForHandDoneTables: const <int>[],
       );
-      addAnnouncement(
-        'All tables finished — deal hand $next.',
-        true,
+      addAnnouncement('All tables finished — deal hand $next.', true);
+      addAuditRecord(
+        'hand_for_hand_hand',
+        'Hand ${game.handForHandHand} done — hand $next.',
       );
-      addAuditRecord('hand_for_hand_hand', 'Hand ${game.handForHandHand} done — hand $next.');
     } else {
       _currentGame = game.copyWith(handForHandDoneTables: done);
       if (!_disposed) notifyListeners();
@@ -2318,7 +2371,10 @@ extension AppProviderTournament on AppProvider {
     );
     if (auto) {
       addAnnouncement('Everyone left is in the money.', true);
-      addAuditRecord('hand_for_hand_end', 'Hand-for-hand ended automatically — in the money.');
+      addAuditRecord(
+        'hand_for_hand_end',
+        'Hand-for-hand ended automatically — in the money.',
+      );
     } else {
       addAuditRecord('hand_for_hand_end', 'Hand-for-hand stopped by the host.');
     }
@@ -2372,7 +2428,7 @@ extension AppProviderTournament on AppProvider {
     addAuditRecord(
       'bubble_save',
       'Bubble save recorded: ${ladder.map((a) => '${a ~/ 100}').join('/')} '
-      '(places 1-${ladder.length}).',
+          '(places 1-${ladder.length}).',
     );
     _syncGroupGame();
     if (!_disposed) notifyListeners();
@@ -2448,7 +2504,7 @@ extension AppProviderTournament on AppProvider {
     addAuditRecord(
       'tied_bust',
       'Tied bust in one hand ($names): places ${covered.first}-${covered.last} '
-      'split ${sortedSplit.map((a) => '${a ~/ 100}').join('/')} via roundDeal.',
+          'split ${sortedSplit.map((a) => '${a ~/ 100}').join('/')} via roundDeal.',
     );
     _syncGroupGame();
     if (!_disposed) notifyListeners();
@@ -2494,10 +2550,7 @@ extension AppProviderTournament on AppProvider {
   /// before calling — `confirmDealAndEnd` records the agreed amounts first,
   /// because the completion's `copyWith` preserves them — and so pushed the
   /// undo entry before that write. Without it a single host tap would push two.
-  bool recordFinishOrder(
-    List<String> order, {
-    bool undoAlreadyPushed = false,
-  }) {
+  bool recordFinishOrder(List<String> order, {bool undoAlreadyPushed = false}) {
     _forceClaimEditor();
     final game = _currentGame;
     if (game == null) return false;
@@ -2534,9 +2587,13 @@ extension AppProviderTournament on AppProvider {
       _soloTournaments = [_currentGame!, ..._soloTournaments];
       final uid = user?.id;
       if (uid != null) {
-        unawaited(_repo.saveSoloTournament(uid, _currentGame!).catchError(
-          (Object e) => debugPrint('saveSoloTournament failed: $e'),
-        ));
+        unawaited(
+          _repo
+              .saveSoloTournament(uid, _currentGame!)
+              .catchError(
+                (Object e) => debugPrint('saveSoloTournament failed: $e'),
+              ),
+        );
       }
     }
     // Framework §14 — measure the night that just finished, so the next one

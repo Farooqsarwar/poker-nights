@@ -72,12 +72,13 @@ void main() {
   );
 
   Group groupWith({
+    String name = 'Friday Poker Club',
     List<AppUser> members = const [host],
     TableSettings tableSettings = TableSettings.fallback,
     bool learningOptOut = false,
   }) => Group(
     id: 'g1',
-    name: 'Friday Poker Club',
+    name: name,
     joinCode: 'FP2608',
     ownerId: 'u1',
     members: members,
@@ -91,6 +92,7 @@ void main() {
 
   AppProvider provider({
     AppUser user = host,
+    String groupName = 'Friday Poker Club',
     List<AppUser> members = const [host],
     TableSettings tableSettings = TableSettings.fallback,
     bool learningOptOut = false,
@@ -98,6 +100,7 @@ void main() {
     ..setUserForTesting(user)
     ..setCurrentGroupForTesting(
       groupWith(
+        name: groupName,
         members: members,
         tableSettings: tableSettings,
         learningOptOut: learningOptOut,
@@ -281,6 +284,29 @@ void main() {
         expect(tester.widget<AppToggle>(toggle).value, isFalse);
       });
     });
+
+    testWidgets(
+      'a long group name wraps at 320px without shrinking the toggle',
+      (tester) async {
+        const groupName = 'The Exceptionally Long Riverside Poker Association';
+        final app = provider(groupName: groupName);
+        await tester.binding.setSurfaceSize(const Size(320, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await screen(tester, app, () async {
+          final label = find.text("Learn from $groupName's past games");
+          await tester.ensureVisible(label);
+          await tester.pumpAndSettle();
+
+          expect(label, findsOneWidget);
+          expect(tester.widget<Text>(label).softWrap, isTrue);
+          final toggleSize = tester.getSize(find.byType(AppToggle).last);
+          expect(toggleSize.width, greaterThanOrEqualTo(44));
+          expect(toggleSize.height, greaterThanOrEqualTo(44));
+          expect(tester.takeException(), isNull);
+        });
+      },
+    );
 
     testWidgets('nothing reaches the group before Save', (tester) async {
       final app = provider();

@@ -1,4 +1,5 @@
 import 'app_timer.dart';
+import 'brand_lockup.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -1161,13 +1162,13 @@ class _StatusSpade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logoPath =
-        'assets/logo_${AppColors.currentPalette.id.replaceAll("-", "_")}.png';
-    return Image.asset(
-      logoPath,
+    return SizedBox(
       width: width,
       height: height,
-      fit: BoxFit.contain,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: PokerNightLogo(size: height < width ? height : width),
+      ),
     );
   }
 }

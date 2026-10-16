@@ -831,14 +831,9 @@ class _KnockoutBand extends StatelessWidget {
 /// The `AssetImage` behind [PokerNightLogo] — the app's own PNT lockup,
 /// `assets/logo_<palette>.png`.
 ///
-/// [PokerNightLogo] derives that path from `AppColors.currentPalette` inline
-/// (`widgets/brand_lockup.dart`), so the two have to agree for [shareResults]'s
-/// `precacheImage` to be warming the image the card actually draws. It is
-/// duplicated rather than extracted because that widget is outside this
-/// feature's files; the comment there is the contract.
-AssetImage brandLockupImage() => AssetImage(
-  'assets/logo_${AppColors.currentPalette.id.replaceAll('-', '_')}.png',
-);
+/// Both rendering and precaching use [brandLogoAssetPath], so palette changes
+/// cannot make the share capture warm a different asset from the one it draws.
+AssetImage brandLockupImage() => AssetImage(brandLogoAssetPath());
 
 /// §C9's last line, "the PNT logo": the app's real lockup, sized to the card.
 ///

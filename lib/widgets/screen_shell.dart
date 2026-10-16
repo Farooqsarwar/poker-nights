@@ -11,6 +11,7 @@ import '../constants/app_constants.dart';
 import '../providers/app_provider.dart';
 import '../responsive/responsive.dart';
 import 'glass_styles.dart';
+import 'group_switcher.dart';
 import 'app_avatar.dart';
 import 'app_button.dart';
 import 'bottom_nav.dart';
@@ -61,6 +62,34 @@ class ScreenShell extends StatelessWidget {
   /// group before anyone signs in. They draw their own header, so a signed-out
   /// visitor gets the page with no navigation chrome.
   static const _openToSignedOut = {RoutePaths.quick, RoutePaths.joinGroup};
+
+  static const _groupContextPaths = {
+    RoutePaths.home,
+    RoutePaths.group,
+    RoutePaths.chat,
+    RoutePaths.members,
+    RoutePaths.polls,
+    RoutePaths.reports,
+    RoutePaths.notifications,
+    RoutePaths.history,
+    RoutePaths.standings,
+    RoutePaths.createTournament,
+    RoutePaths.structureReview,
+    RoutePaths.invitation,
+    RoutePaths.checkIn,
+    RoutePaths.hostDashboard,
+    RoutePaths.playerLive,
+    RoutePaths.rebuySettlement,
+    RoutePaths.finalTable,
+    RoutePaths.completeTournament,
+    RoutePaths.deal,
+    RoutePaths.importResults,
+    RoutePaths.groupSettings,
+    RoutePaths.groupChips,
+    RoutePaths.resultPodium,
+    RoutePaths.cashGame,
+    RoutePaths.cashGameLive,
+  };
 
   static void _showExitDialog(BuildContext context) {
     showDialog(
@@ -126,6 +155,9 @@ class ScreenShell extends StatelessWidget {
       );
     }
     final guestOk = isGuest && guestAllowed.contains(requiredPath);
+    final showGroupContext = context.select<AppProvider, bool>(
+      (app) => app.hasCurrentGroup && _groupContextPaths.contains(requiredPath),
+    );
 
     // Route guard: block access when the user cannot enter this path.
     if (!isRegisteredUser && !guestOk) {
@@ -165,10 +197,15 @@ class ScreenShell extends StatelessWidget {
     return ResponsiveBuilder(
       builder: (context, device) {
         if (device.isCompact) {
-          return _MobileShell(requiredPath: requiredPath, child: child);
+          return _MobileShell(
+            requiredPath: requiredPath,
+            showGroupContext: showGroupContext,
+            child: child,
+          );
         }
         return Scaffold(
-          backgroundColor: Colors.transparent, // Background provided by ThemedAppBackground
+          backgroundColor:
+              Colors.transparent, // Background provided by ThemedAppBackground
           body: ThemedAppBackground(
             child: Row(
               children: [
@@ -182,6 +219,8 @@ class ScreenShell extends StatelessWidget {
                     left: kSidebarWidth + 1,
                     child: Column(
                       children: [
+                        if (showGroupContext)
+                          const _GroupContextBar(desktop: true),
                         const ConnectionBanner(
                           padding: EdgeInsets.fromLTRB(
                             AppSpacing.lg,
@@ -261,7 +300,9 @@ class _Gate extends StatelessWidget {
                       fullWidth: true,
                       variant: AppButtonVariant.secondary,
                       onPressed: () => context.go(
-                        app.isAdmin ? RoutePaths.hostDashboard : RoutePaths.playerLive,
+                        app.isAdmin
+                            ? RoutePaths.hostDashboard
+                            : RoutePaths.playerLive,
                       ),
                       child: const Text('Return to live game'),
                     ),
@@ -284,10 +325,15 @@ class _Gate extends StatelessWidget {
 }
 
 class _MobileShell extends StatelessWidget {
-  const _MobileShell({required this.child, required this.requiredPath});
+  const _MobileShell({
+    required this.child,
+    required this.requiredPath,
+    required this.showGroupContext,
+  });
 
   final Widget child;
   final String requiredPath;
+  final bool showGroupContext;
 
   static const _hasCustomTopBarPaths = {
     RoutePaths.home,
@@ -315,6 +361,8 @@ class _MobileShell extends StatelessWidget {
             Column(
               children: [
                 if (!hasCustomBar) _MobileTopBar(onMenu: app.toggleDrawer),
+                if (showGroupContext)
+                  _GroupContextBar(addTopSafeArea: hasCustomBar),
                 const ConnectionBanner(
                   padding: EdgeInsets.fromLTRB(
                     AppSpacing.lg,
@@ -335,7 +383,11 @@ class _MobileShell extends StatelessWidget {
                       bottom: kBottomNavHeight + bottomInset,
                     ),
                     child: hasCustomBar
-                        ? SafeArea(bottom: false, child: child)
+                        ? SafeArea(
+                            top: !showGroupContext,
+                            bottom: false,
+                            child: child,
+                          )
                         : child,
                   ),
                 ),
@@ -344,6 +396,38 @@ class _MobileShell extends StatelessWidget {
             const Positioned(left: 0, right: 0, bottom: 0, child: BottomNav()),
             const NavDrawer(),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupContextBar extends StatelessWidget {
+  const _GroupContextBar({this.addTopSafeArea = false, this.desktop = false});
+
+  final bool addTopSafeArea;
+  final bool desktop;
+
+  @override
+  Widget build(BuildContext context) {
+    final top = addTopSafeArea ? MediaQuery.paddingOf(context).top : 0.0;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        desktop ? AppSpacing.xl : AppSpacing.lg,
+        top + AppSpacing.xs,
+        desktop ? AppSpacing.xl : AppSpacing.lg,
+        AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.background.withValues(alpha: 0.88),
+        border: Border(bottom: BorderSide(color: AppColors.borderSubtle)),
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: desktop ? 360 : 420),
+          child: const CurrentGroupChip(),
         ),
       ),
     );
@@ -391,10 +475,7 @@ class _MobileTopBar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  const PokerNightBrand(
-                    logoSize: 22,
-                    fontSize: 16,
-                  ),
+                  const PokerNightBrand(logoSize: 22, fontSize: 16),
                   const Spacer(),
                   const SizedBox(width: AppSpacing.sm),
                   if (user != null)
@@ -420,6 +501,5 @@ class _MobileTopBar extends StatelessWidget {
         ),
       ),
     );
-
   }
 }

@@ -89,14 +89,26 @@ void main() {
   ) async {
     var mounted = await _mount(tester, path: RoutePaths.group, width: 390);
     expect(find.byType(CurrentGroupChip), findsOneWidget);
-    expect(find.text('Friday Poker Club'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(CurrentGroupChip),
+        matching: find.text('Friday Poker Club'),
+      ),
+      findsOneWidget,
+    );
     await tester.pumpWidget(const SizedBox.shrink());
     mounted.$1.dispose();
     mounted.$2.dispose();
 
     mounted = await _mount(tester, path: RoutePaths.hostDashboard, width: 390);
     expect(find.byType(CurrentGroupChip), findsOneWidget);
-    expect(find.text('Friday Poker Club'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(CurrentGroupChip),
+        matching: find.text('Friday Poker Club'),
+      ),
+      findsOneWidget,
+    );
     await tester.pumpWidget(const SizedBox.shrink());
     mounted.$1.dispose();
     mounted.$2.dispose();

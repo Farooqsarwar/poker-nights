@@ -1216,6 +1216,18 @@ class AppProvider extends ChangeNotifier {
   }
 
   @visibleForTesting
+  void setGroupsForTesting(List<Group> groups, {String? currentGroupId}) {
+    _groups = List<Group>.of(groups);
+    final selectedId = currentGroupId ?? groups.firstOrNull?.id;
+    _currentGroupId = selectedId;
+    _currentGroup =
+        groups.where((group) => group.id == selectedId).firstOrNull ??
+        AppProvider._kEmptyGroup;
+    _bundleLoaded = selectedId != null;
+    if (!_disposed) notifyListeners();
+  }
+
+  @visibleForTesting
   void setCurrentGameForTesting(LiveGame? game) {
     _currentGame = game;
     if (!_disposed) notifyListeners();

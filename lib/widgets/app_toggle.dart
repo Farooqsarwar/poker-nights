@@ -14,17 +14,19 @@ class AppToggle extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.label,
+    this.semanticLabel,
   });
 
   final bool value;
   final ValueChanged<bool> onChanged;
   final String? label;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       toggled: value,
-      label: label ?? 'Toggle',
+      label: semanticLabel ?? label ?? 'Toggle',
       button: true,
       child: InkWell(
         onTap: () => onChanged(!value),
@@ -64,7 +66,9 @@ class AppToggle extends StatelessWidget {
                     width: 22,
                     height: 22,
                     decoration: BoxDecoration(
-                      color: value ? AppColors.foreground : AppColors.mutedForeground,
+                      color: value
+                          ? AppColors.foreground
+                          : AppColors.mutedForeground,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(

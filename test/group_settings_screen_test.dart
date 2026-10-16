@@ -315,7 +315,7 @@ void main() {
         // The stepper starts at the stored 9 and the range is 4..10, so one
         // tap down is 8.
         await tapStepper(tester, Icons.remove);
-        expect(find.text('8 seats'), findsOneWidget);
+        expect(find.text('8'), findsOneWidget);
         // Still the stored value: the stepper edits a draft.
         expect(app.currentGroup.tableSettings.maxPerTable, 9);
 
@@ -345,7 +345,7 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Save table settings'), findsNothing);
-        expect(find.text('6 seats'), findsOneWidget);
+        expect(find.text('6'), findsOneWidget);
       });
     });
   });

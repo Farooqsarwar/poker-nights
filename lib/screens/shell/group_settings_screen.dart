@@ -250,12 +250,12 @@ class _TableSettingsCard extends StatelessWidget {
           _Row(
             icon: Icons.table_restaurant_outlined,
             title: 'Players per table',
+            stackTrailingOnNarrow: true,
             subtitle: '4 to 10 seats — above this the field splits',
             trailing: CountStepper(
               value: seats,
               min: 4,
               max: 10,
-              suffix: 'seats',
               semanticLabel: 'Players per table',
               onChanged: canEdit
                   ? (v) => onChanged(draft.copyWith(maxPerTable: v))
@@ -272,7 +272,7 @@ class _TableSettingsCard extends StatelessWidget {
             subtitle: 'Seating generation starts fully random',
             trailing: AppToggle(
               value: draft.randomizeByDefault,
-              label: 'Randomise seats by default',
+              semanticLabel: 'Randomise seats by default',
               onChanged: canEdit
                   ? (v) => onChanged(draft.copyWith(randomizeByDefault: v))
                   : (_) {},
@@ -286,7 +286,7 @@ class _TableSettingsCard extends StatelessWidget {
               subtitle: 'Use game history to adjust future level schedules',
               trailing: AppToggle(
                 value: !learningOptOut,
-                label: "Learn from $groupName's past games",
+                semanticLabel: "Learn from $groupName's past games",
                 onChanged: (v) => onLearningOptOutChanged(!v),
               ),
             ),
@@ -899,6 +899,7 @@ class _Row extends StatelessWidget {
     required this.subtitle,
     this.onTap,
     this.trailing,
+    this.stackTrailingOnNarrow = false,
   });
 
   final IconData icon;
@@ -906,46 +907,71 @@ class _Row extends StatelessWidget {
   final String subtitle;
   final VoidCallback? onTap;
   final Widget? trailing;
+  final bool stackTrailingOnNarrow;
 
   @override
   Widget build(BuildContext context) {
+    Widget textBlock() => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          softWrap: true,
+          style: AppTypography.bodySm.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppColors.foreground,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          softWrap: true,
+          style: AppTypography.bodyXs.copyWith(
+            color: AppColors.mutedForeground,
+          ),
+        ),
+      ],
+    );
+
     final content = Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: AppColors.mutedForeground),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final leadingText = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 20, color: AppColors.mutedForeground),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(child: textBlock()),
+            ],
+          );
+          if (stackTrailingOnNarrow &&
+              trailing != null &&
+              constraints.maxWidth < 280) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  title,
-                  style: AppTypography.bodySm.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.foreground,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: AppTypography.bodyXs.copyWith(
-                    color: AppColors.mutedForeground,
-                  ),
-                ),
+                leadingText,
+                const SizedBox(height: AppSpacing.sm),
+                Align(alignment: Alignment.centerRight, child: trailing!),
               ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          if (trailing != null)
-            trailing!
-          else
-            Icon(
-              Icons.chevron_right,
-              size: 20,
-              color: AppColors.mutedForeground,
-            ),
-        ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: leadingText),
+              const SizedBox(width: AppSpacing.sm),
+              if (trailing != null)
+                trailing!
+              else
+                Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: AppColors.mutedForeground,
+                ),
+            ],
+          );
+        },
       ),
     );
     if (onTap == null) return content;

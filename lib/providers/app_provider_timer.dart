@@ -328,8 +328,10 @@ extension AppProviderTimer on AppProvider {
   }
 
   void startTimer({List<String> noShowIds = const []}) {
-    if (_currentGame == null || (!isAdmin && !isCoAdmin && !canOperateTheClock))
+    if (_currentGame == null ||
+        (!isAdmin && !isCoAdmin && !canOperateTheClock)) {
       return;
+    }
     _startTick();
     _forceClaimEditor();
 

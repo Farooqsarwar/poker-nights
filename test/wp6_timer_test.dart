@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:poker_night/models/game.dart';
 import 'package:poker_night/models/live_game.dart';
 import 'package:poker_night/models/tournament.dart';
 import 'package:poker_night/providers/app_provider.dart';

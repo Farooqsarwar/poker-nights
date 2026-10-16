@@ -463,10 +463,17 @@ class StructureBuilderController extends ChangeNotifier {
 
   void setFormat(TournamentFormat f) {
     if (f == _format) return;
+    final wasFreezeOut = _format == TournamentFormat.freezeOut;
     _format = f;
     if (f == TournamentFormat.freezeOut) {
       _rebuyClose = 0;
       _rebuyCloseChosen = false;
+    }
+    // A freeze-out preset has no meaningful add-on choice. When the host
+    // changes it into a rebuy night, restore the builder's established
+    // default instead of carrying the freeze-out's false value across.
+    if (wasFreezeOut && f == TournamentFormat.rebuy) {
+      _addOn = true;
     }
     if (f == TournamentFormat.rebuy && !_rebuyLimitTouched) {
       _rebuyLimit = suggestRebuyLimit(_players);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:poker_night/app/route_paths.dart';
 import 'package:poker_night/models/game.dart';
 import 'package:poker_night/models/group.dart';
 import 'package:poker_night/models/live_game.dart';
@@ -8,6 +9,7 @@ import 'package:poker_night/models/tournament.dart';
 import 'package:poker_night/models/user.dart';
 import 'package:poker_night/providers/app_provider.dart';
 import 'package:poker_night/screens/tournament/admin_dashboard_screen.dart';
+import 'package:poker_night/screens/tournament/rebuy_settlement_screen.dart';
 import 'package:poker_night/services/recovery_service.dart';
 import 'package:poker_night/widgets/tournament_timer_card.dart';
 import 'package:provider/provider.dart';
@@ -20,7 +22,7 @@ const _host = AppUser(
   stats: UserStats(played: 0, wins: 0, podium: 0, avgFinish: 0, knockouts: 0),
 );
 
-GameSettings _settings({bool rebuys = true}) => GameSettings(
+GameSettings _settings({bool rebuys = true, bool addOn = false}) => GameSettings(
   name: 'Quick game',
   date: '2026-10-15',
   time: '20:00',
@@ -32,7 +34,7 @@ GameSettings _settings({bool rebuys = true}) => GameSettings(
   koAmount: 0,
   rebuys: rebuys,
   rebuysCloseLevel: 2,
-  addOn: false,
+  addOn: addOn,
   anteEnabled: false,
   anteAfterLevel: 3,
   organizerPct: 0,
@@ -79,14 +81,15 @@ Player _player(int index) => Player(
 
 LiveGame _game({
   bool rebuys = true,
+  bool addOn = false,
   int level = 1,
   bool settled = false,
   LiveGameStatus status = LiveGameStatus.running,
 }) => LiveGame(
   id: 'quick-game',
   groupId: 'group',
-  settings: _settings(rebuys: rebuys),
-  structure: _structure,
+  settings: _settings(rebuys: rebuys, addOn: addOn),
+  structure: addOn ? _structure.copyWith(addOnStack: 5000) : _structure,
   status: status,
   publicCode: 'ABC123',
   tvCode: 'TV1234',
@@ -196,6 +199,88 @@ void main() {
     expect(app.currentGame!.settlementConfirmed, isTrue);
     expect(app.currentGame!.payoutTableRevealed, isTrue);
     expect(app.currentGame!.structure.prizes, isNotEmpty);
+  });
+
+  testWidgets(
+      'rebuy close keeps payouts hidden through add-ons until settlement confirms',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 5000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final app = _provider(_game(level: 2, addOn: true));
+    addTearDown(app.dispose);
+    final router = GoRouter(routes: [
+      GoRoute(
+        path: '/',
+        builder: (_, _) => const Scaffold(body: AdminDashboardScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.rebuySettlement,
+        builder: (_, _) => const Scaffold(body: RebuySettlementScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.hostDashboard,
+        builder: (_, _) => const Scaffold(body: AdminDashboardScreen()),
+      ),
+    ]);
+    addTearDown(router.dispose);
+    await tester.pumpWidget(ChangeNotifierProvider<AppProvider>.value(
+      value: app,
+      child: MaterialApp.router(routerConfig: router),
+    ));
+    await tester.pump();
+
+    void expectPayoutsHidden() {
+      expect(app.currentGame!.payoutTableRevealed, isFalse);
+    }
+
+    expectPayoutsHidden();
+    app.nextLevel(idempotencyKey: 'end-to-end-rebuy-close');
+    await tester.pump();
+    expect(app.currentGame!.status, LiveGameStatus.rebuypause);
+    expectPayoutsHidden();
+
+    await tester.tap(find.text('Settlement').first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Step 1'), findsOneWidget);
+    expectPayoutsHidden();
+
+    final confirmPlayers = find.textContaining('Confirm player count');
+    await tester.ensureVisible(confirmPlayers);
+    await tester.tap(confirmPlayers);
+    await tester.pump();
+    expect(find.text('Add-ons'), findsOneWidget);
+    expectPayoutsHidden();
+
+    final firstAddOn = find.text('Add-on').first;
+    await tester.ensureVisible(firstAddOn);
+    await tester.tap(firstAddOn);
+    await tester.pump();
+    final confirmAddOns = find.text('Confirm add-ons');
+    await tester.ensureVisible(confirmAddOns);
+    await tester.tap(confirmAddOns);
+    await tester.pump();
+    expect(find.text('Add-ons selected: 1'), findsOneWidget);
+    expectPayoutsHidden();
+
+    final colorUpComplete = find.text('Color-up complete');
+    await tester.ensureVisible(colorUpComplete);
+    await tester.tap(colorUpComplete);
+    await tester.pump();
+    expect(find.textContaining('Step 4'), findsOneWidget);
+    expectPayoutsHidden();
+
+    final confirmPool = find.text('Confirm prize pool & resume play');
+    await tester.ensureVisible(confirmPool);
+    await tester.tap(confirmPool);
+    await tester.pumpAndSettle();
+    expect(app.currentGame!.settlementConfirmed, isTrue);
+    expect(app.currentGame!.payoutTableRevealed, isTrue);
+
+    await tester.tap(find.text('Prizes').first);
+    await tester.pump();
+    expect(find.text('Paid places'), findsOneWidget);
   });
 
   test('a quick game can add a walk-in after the clock starts', () {

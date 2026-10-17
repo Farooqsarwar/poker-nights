@@ -207,6 +207,12 @@ void main() {
       await tapKey(t, 'builder-next');
       expect(find.byKey(const Key('builder-step-stack')), findsOneWidget);
       expect(find.byKey(const Key('stack-value')), findsOneWidget);
+      final chipDistribution = find.byKey(const Key('stack-chips'));
+      expect(chipDistribution, findsOneWidget,
+          reason: 'the per-player chip distribution is visible before approval');
+      expect(t.widget<Text>(chipDistribution).data, isNot(isEmpty),
+          reason: 'the distribution describes the chips per player');
+      expect(find.byKey(const Key('approve-stack')), findsOneWidget);
       expect(find.byKey(const Key('level-row-1')), findsNothing,
           reason: 'no level is shown before the stack is approved');
       await tapKey(t, 'approve-stack');
